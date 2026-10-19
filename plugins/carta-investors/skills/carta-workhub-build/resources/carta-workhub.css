@@ -689,21 +689,21 @@ HvkPz+rKZ6Wq+ELmAQAAAA==") format("woff2");
 .far-chip-count { color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
 .far-chip-active .far-chip-count { color: inherit; opacity: 0.7; }
 
-/* Each tab tints its category icons, as the design does. */
+/* Each tab tints its display-group icons, as the design does. */
 .far-groups { --far-accent: #9C9F9F; }
 .far-groups.far-tab-todo { --far-accent: #FF7D55; }
 .far-groups.far-tab-progress { --far-accent: #8BABD6; }
 
-.far-cat { margin-top: 28px; }
+.far-display-group { margin-top: 28px; }
 
-.far-cat-label {
+.far-display-group-label {
   padding-bottom: 10px;
   font-size: 14px;
   font-weight: 600;
   color: var(--ink-color-global-text-subtle);
 }
 
-.far-cat-icon { flex: 0 0 auto; color: var(--far-accent); }
+.far-display-group-icon { flex: 0 0 auto; color: var(--far-accent); }
 
 .far-cards {
   display: grid;

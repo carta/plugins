@@ -2407,12 +2407,14 @@ function ccrIsReviewTask(t) {
 // queue even when a list read before the release committed still carries it; one
 // still releasing is Carta's work, not the reviewer's. A build that names an
 // activity gets one card for it, so the panel is reachable without a live review
-// task to open it from.
+// task to open it from. The card sits in the group fund-admin sent for the activity
+// (Distributions for a distribution); Capital calls only when no row for it was read.
 function ccrQueueRows(rows) {
   const seed = CCR_TARGET.activityId;
   // Without the review flag the live review is a Carta-link card; the seed replaces it.
   // Later rows for the activity stay.
-  const seeded = (r) => Boolean(CCR_TARGET.fundUuid && seed) && !r.ccr && r.group === "todo" && r.objectId === seed;
+  const seeded = (r) => Boolean(CCR_TARGET.fundUuid && seed) && !r.ccr && r.tab === "todo" && r.objectId === seed;
+  const live = (rows || []).find(seeded) ?? (rows || []).find((r) => seed && r.objectId === seed);
   const out = (rows || []).filter((r) => !(r.ccr && _ccrReleased.has(r.ccr.activityId)) && !seeded(r));
   if (CCR_TARGET.fundUuid && seed && !_ccrReleased.has(seed) && !out.some((r) => r.ccr && r.ccr.activityId === seed)) {
     out.unshift({
@@ -2420,8 +2422,8 @@ function ccrQueueRows(rows) {
       title: CCR_CARD_TITLE,
       subtitle: _ccrFundName,
       firm: null,
-      group: "todo",
-      displayGroup: TASK_GROUP_CAPITAL_CALLS,
+      tab: "todo",
+      displayGroup: live?.displayGroup ?? TASK_GROUP_CAPITAL_CALLS,
       // The GP owes the decision, so the card reads as waiting on them.
       state: "pending-customer",
       canceled: false,
@@ -2433,6 +2435,6 @@ function ccrQueueRows(rows) {
     });
   }
   return out.map((r) => r.ccr && _ccrReleasing[r.ccr.activityId]
-    ? Object.assign({}, r, { group: "progress", state: "pending-carta" })
+    ? Object.assign({}, r, { tab: "progress", state: "pending-carta" })
     : r);
 }

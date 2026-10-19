@@ -544,7 +544,7 @@ function frtCardFor(p, payload, seeded) {
     title: `${FRT_CARD_TITLE} — ${label}`,
     subtitle: summary || (seeded ? "Nothing needs your action" : null),
     firm: null,
-    group: "todo",
+    tab: "todo",
     displayGroup: TASK_GROUP_FINANCIAL_REPORTING,
     // The GP owes a step on at least one row.
     state: "pending-customer",

@@ -2,8 +2,8 @@
 // Depends on carta-workhub.app.js: _mcp, escHtml, showToast, trackWorkhub,
 // _mcpResultCandidates, _benchmarkFirmId.
 
-// Group by the open task's pending_actor; an unknown value shows as with Carta.
-const FAR_GROUP_BY_PENDING = {
+// The tab for the open task's pending_actor; an unknown value shows as with Carta.
+const FAR_TAB_BY_PENDING = {
   'pending-customer': 'todo',
   'pending-carta': 'progress',
 };
@@ -441,7 +441,7 @@ function farNormalizeWorkflow(w, reviews = true, appViews = new Set()) {
     id: w.workflow_id,
     title: isRequest ? farRequestTitle(w) : (farTaskTitle(w) ?? (ccr ? CCR_CARD_TITLE : 'Task from Carta')),
     subtitle: String(w.entity_name ?? '').trim() || null,
-    group: closed ? 'done' : (FAR_GROUP_BY_PENDING[pending] ?? 'progress'),
+    tab: closed ? 'done' : (FAR_TAB_BY_PENDING[pending] ?? 'progress'),
     displayGroup: farDisplayGroupOf(w),
     state: pending,
     canceled: w.status === 'canceled',
@@ -661,7 +661,7 @@ function farPlanRows() {
     id: p.planId,
     planId: p.planId,
     title: farTitleFrom(p.message),
-    group: 'planned',
+    tab: 'planned',
     displayGroup: TASK_GROUP_OTHER,
     state: 'planned',
     requested: p.requested,
@@ -671,7 +671,7 @@ function farPlanRows() {
 }
 
 // Hydrate ids this artifact created by reading each thread. No workflow state is
-// available here, so the group comes from who spoke last and nothing reads "done".
+// available here, so the tab comes from who spoke last and nothing reads "done".
 async function farFetchFromIds() {
   const ids = farReadIds();
   const rows = [];
@@ -682,7 +682,7 @@ async function farFetchFromIds() {
     rows.push({
       id,
       title: farTitleFrom(msgs[0].text),
-      group: last.isStaff ? 'todo' : 'progress',
+      tab: last.isStaff ? 'todo' : 'progress',
       displayGroup: TASK_GROUP_OTHER,
       state: last.isStaff ? 'pending-customer' : 'pending-carta',
       thread: true,
@@ -694,7 +694,7 @@ async function farFetchFromIds() {
   return rows;
 }
 
-// One card per workflow; the task waiting on the GP decides its group.
+// One card per workflow; the task waiting on the GP decides its tab.
 function farOneTaskPerWorkflow(tasks) {
   const waitsOnGp = (t) => farPendingState(t) === 'pending-customer';
   const byWorkflow = new Map();
@@ -788,7 +788,7 @@ async function farFetchQueue(onPart, failures = {}) {
 function farPaintParts(parts, reviews, appViews) {
   if (_farRows !== null) return;
   const rows = ccrQueueRows(farComposeQueue(parts).map(w => farNormalizeWorkflow(w, reviews, appViews)))
-    .filter(r => farTabRead(parts, r.group));
+    .filter(r => farTabRead(parts, r.tab));
   _farEarly = { parts, rows };
   farPickFirstTab();
   renderFarSection();
@@ -1003,13 +1003,13 @@ function farPickFirstTab() {
   if (_farTabChosen) return;
   // Before the full queue lands only Needs Action is known, and only work there decides.
   if (_farRows === null) {
-    if (_farTab === 'todo' && _farEarly?.rows.some(r => r.group === 'todo')) _farTabChosen = true;
+    if (_farTab === 'todo' && _farEarly?.rows.some(r => r.tab === 'todo')) _farTabChosen = true;
     return;
   }
   _farTabChosen = true;
   const rows = _farRows.concat(farPlanRows());
-  if (rows.some(r => r.group === _farTab)) return;
-  _farTab = FAR_TAB_OPEN_ORDER.find(k => rows.some(r => r.group === k)) ?? _farTab;
+  if (rows.some(r => r.tab === _farTab)) return;
+  _farTab = FAR_TAB_OPEN_ORDER.find(k => rows.some(r => r.tab === k)) ?? _farTab;
 }
 
 function farSetTab(key) {
@@ -1036,7 +1036,7 @@ function farShowMore(groupId) {
 // The date a row is filed under: when it finished for Completed, else when it
 // started. Sorting and the card's date line read the same one.
 function farRowDate(r) {
-  return r.group === 'done' ? (r.completed ?? r.lastActivity ?? r.requested) : r.requested;
+  return r.tab === 'done' ? (r.completed ?? r.lastActivity ?? r.requested) : r.requested;
 }
 
 function farSorted(rows) {
@@ -1077,7 +1077,7 @@ function farDisplayGroupSections(rows, catalog) {
 
 function farDisplayGroupIcon(id, size) {
   const icon = Object.hasOwn(TASK_GROUP_ICONS, id) ? TASK_GROUP_ICONS[id] : TASK_GROUP_DEFAULT_ICON;
-  return `<svg class="far-cat-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"`
+  return `<svg class="far-display-group-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"`
     + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
     + ` aria-hidden="true">${icon}</svg>`;
 }
@@ -1152,7 +1152,7 @@ function farSameDayKeys(rows) {
 // "As of 4 Oct · Due 9 Oct": the tab's date word, then any footnote the row carries.
 function farDateLine(r, withTime) {
   const ts = farRowDate(r);
-  const label = r.canceled ? 'Canceled' : (FAR_TABS.find(t => t.key === r.group) ?? FAR_TABS[2]).date;
+  const label = r.canceled ? 'Canceled' : (FAR_TABS.find(t => t.key === r.tab) ?? FAR_TABS[2]).date;
   const parts = [ts ? `${label} ${withTime ? farStamp(ts) : farDate(ts)}` : null, r.footnote].filter(Boolean);
   return parts.join(' · ');
 }
@@ -1187,7 +1187,7 @@ function farOutLabel(r, external) {
 }
 
 function farCard(r, withTime) {
-  if (r.group === 'planned') return farPlanCard(r);
+  if (r.tab === 'planned') return farPlanCard(r);
   const { el, external } = farItemShell(r, 'far-card');
   el.innerHTML = `
     <span class="far-card-head">
@@ -1233,7 +1233,7 @@ function farPlanCard(r) {
 }
 
 function farListRow(r, withTime) {
-  const planned = r.group === 'planned';
+  const planned = r.tab === 'planned';
   const { el, external } = planned
     ? { el: Object.assign(document.createElement('div'), { className: 'far-row far-row-planned' }), external: false }
     : farItemShell(r, 'far-row');
@@ -1290,11 +1290,11 @@ function farRenderGroups(groups, withLabels) {
     const shown = expanded ? g.rows : g.rows.slice(0, FAR_GROUP_PREVIEW);
     const hidden = g.rows.length - shown.length;
     const section = document.createElement('div');
-    section.className = 'far-cat';
+    section.className = 'far-display-group';
     section.dataset.farDisplayGroup = key;
     if (withLabels) {
       const label = document.createElement('div');
-      label.className = 'far-cat-label';
+      label.className = 'far-display-group-label';
       label.textContent = g.displayGroup.name;
       section.appendChild(label);
     }
@@ -1461,7 +1461,7 @@ function renderFarSection() {
   section.style.display = '';
 
   const rows = farSorted(farShownRows().concat(farPlanRows()));
-  const byTab = Object.fromEntries(FAR_TABS.map(t => [t.key, rows.filter(r => r.group === t.key)]));
+  const byTab = Object.fromEntries(FAR_TABS.map(t => [t.key, rows.filter(r => r.tab === t.key)]));
   const tab = FAR_TABS.find(t => t.key === _farTab);
   const tabRows = byTab[tab.key];
   const groups = farDisplayGroupSections(tabRows, farDisplayGroupCatalog(rows));
@@ -1712,7 +1712,7 @@ async function submitFarCompose() {
     _farRows = (_farRows ?? []).concat({
       id,
       title: label ?? farTitleFrom(message),
-      group: 'progress',
+      tab: 'progress',
       displayGroup: TASK_GROUP_OTHER,
       state: 'pending-carta',
       thread: true,
@@ -2106,7 +2106,7 @@ async function submitFarReply() {
     });
     _farThreadCache[workflowId] = msgs;
     const row = farShownRows().find(r => String(r.id) === String(workflowId));
-    if (row) { row.group = 'progress'; row.state = 'pending-carta'; row.lastActivity = new Date().toISOString(); }
+    if (row) { row.tab = 'progress'; row.state = 'pending-carta'; row.lastActivity = new Date().toISOString(); }
 
     if (box) box.value = '';
     _farPicked.reply = [];

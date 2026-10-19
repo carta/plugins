@@ -166,15 +166,14 @@ const TASK_GROUP_ICONS = {
   'management-fees': '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
   'soi-review': '<path d="M16 5H3"/><path d="M16 12H3"/><path d="M16 19H3"/><path d="M21 5h.01"/><path d="M21 12h.01"/><path d="M21 19h.01"/>',
   'financial-reporting': '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/>',
-  'kyc-compliance': '<circle cx="10" cy="8" r="5"/><path d="M2 21a8 8 0 0 1 10.434-7.62"/><circle cx="18" cy="18" r="3"/><path d="m22 22-1.9-1.9"/>',
   'intercompany-payment': '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
 };
 // Other, and any group without an icon of its own.
 const TASK_GROUP_DEFAULT_ICON = '<path d="M10.1 2.18a9.93 9.93 0 0 1 3.8 0"/><path d="M17.6 3.71a9.95 9.95 0 0 1 2.69 2.7"/><path d="M21.82 10.1a9.93 9.93 0 0 1 0 3.8"/><path d="M20.28 17.6a9.95 9.95 0 0 1-2.7 2.69"/><path d="M13.9 21.82a9.94 9.94 0 0 1-3.8 0"/><path d="M6.4 20.28a9.95 9.95 0 0 1-2.69-2.7"/><path d="M2.18 13.9a9.93 9.93 0 0 1 0-3.8"/><path d="M3.72 6.4a9.95 9.95 0 0 1 2.7-2.69"/>';
 
 // The groups for rows the queue builds before fund-admin has sent them: a draft or
-// a just-sent request (uncategorized, so Other), a seeded review and a seeded tracker
-// period. A row from the payload with the same id supplies the name and order shown.
+// a just-sent request (uncategorized, so Other), a seeded review with no row read for
+// its activity, and a seeded tracker period. A row from the payload with the same id supplies the name and order shown.
 const TASK_GROUP_OTHER = { id: 'other', name: 'Other' };
 const TASK_GROUP_CAPITAL_CALLS = { id: 'capital-calls', name: 'Capital calls' };
 const TASK_GROUP_FINANCIAL_REPORTING = { id: 'financial-reporting', name: 'Financial reporting' };
