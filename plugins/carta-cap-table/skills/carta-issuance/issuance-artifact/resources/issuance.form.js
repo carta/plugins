@@ -187,10 +187,12 @@ function ingest(data) {
   // A resume: saveArgs() then updates this set instead of minting a second one.
   S.draftSetId = d.draftSetId ?? d.draft_set_id ?? S.draftSetId;
   S.counts = d.counts || {};
-  // The server's prefill never carries the document's terms, so they outlive its arrival.
-  const terms = S.prefill.terms;
+  // The server's prefill never carries the document's terms or what the prompt's
+  // quantity counts, so they outlive its arrival.
+  const { terms, quantityBasis } = S.prefill;
   S.prefill = d.prefill || {};
   if (terms && !S.prefill.terms) S.prefill.terms = terms;
+  if (quantityBasis && !S.prefill.quantityBasis) S.prefill.quantityBasis = quantityBasis;
   if (S.prefill.source && typeof S.prefill.source === "object") S.source = S.prefill.source;
   S.blockers = objs(d.blockers);
   S.narrowed = d._narrowed || null;
@@ -772,9 +774,15 @@ function fillDefaults(sh) {
   if (S.type === "option_grant" && !sh.option_plan_id) sh.option_plan_id = latestPlanId();
   pickDocSet();
   if (S.type === "certificate" && !sh.legend_id && S.legends.length === 1) sh.legend_id = String(S.legends[0].id);
-  // A class is preselected ONLY when there is exactly one. Two or more and none
-  // named stays unselected — which class a holder lands in is the user's decision.
-  if (S.type !== "option_grant" && !sh.prefix && S.classes.length === 1) sh.prefix = S.classes[0].prefix || "";
+  // A class is preselected ONLY when there is exactly one that can hold the quantity.
+  // Two or more and none named stays unselected — which class a holder lands in is the
+  // user's decision. A percentage only fits a percentage-based class.
+  const fits = wantsPercent() ? pctClasses() : S.classes;
+  // Carta's own prefill picks a class without knowing the quantity is a percentage.
+  const server = wantsPercent() && sh.prefix === S.prefill.shareClassPrefix && !seedTerm("share_class")
+    && !S.touchedShared.has("prefix") && S.classes.some((c) => c.prefix === sh.prefix);
+  if (server && !isPctClass(sh.prefix)) sh.prefix = "";
+  if (S.type !== "option_grant" && !sh.prefix && fits.length === 1) sh.prefix = fits[0].prefix || "";
   if (S.type === "option_grant" && !sh.exercise_price) {
     const v = fmv();
     if (v.price != null) sh.exercise_price = tidyPrice(v.price);
@@ -942,8 +950,13 @@ function classSemantics(prefix) {
   return (c && c.quantity_semantics) || "UNIT";
 }
 const rowPrefix = (r) => ("prefix" in r.ov && r.ov.prefix !== "" ? r.ov.prefix : S.shared.prefix);
+/** The prompt gave its quantity as a percentage. Decided at boot, never on a resume. */
+const wantsPercent = () => S.type !== "option_grant" && S.prefill.quantityBasis === "percent";
+const isPctClass = (prefix) => classSemantics(prefix) === "PERCENT";
+const pctClasses = () => objs(S.classes).filter((c) => isPctClass(c.prefix));
+const issuesByPercent = () => objs(S.classes).some((c) => c.quantity_semantics);
 /** The quantity is percentage points, 0 to 100: 2.75 is 2.75%. */
-const isPct = (r) => classSemantics(rowPrefix(r)) === "PERCENT";
+const isPct = (r) => isPctClass(rowPrefix(r));
 /** Invested capital sets the ownership, so the row carries no quantity: carta-web stores
     it as null, and a stored one would read as a unit count. */
 const isCapital = (r) => classSemantics(rowPrefix(r)) === "INVESTED_CAPITAL";
@@ -1058,7 +1071,13 @@ const planOpts = () => {
     && objs(S.plans).find((x) => String(x.id) === String(cur));
   return p ? opts.concat([[String(p.id), p.name || "Unnamed plan"]]) : opts;
 };
-const classOpts = () => S.classes.map((c) => [c.prefix, `${c.name || c.prefix} (${c.prefix})`]);
+/** A percentage offers only the classes that hold one, plus any class already on the form. */
+const classOpts = () => {
+  const pct = wantsPercent() ? pctClasses() : [];
+  const held = (c) => c.prefix === S.shared.prefix || S.rows.some((r) => r.ov.prefix === c.prefix);
+  const pool = pct.length ? objs(S.classes).filter((c) => pct.includes(c) || held(c)) : S.classes;
+  return pool.map((c) => [c.prefix, `${c.name || c.prefix} (${c.prefix})`]);
+};
 /** The unit class a PIU plan issues from — Carta refuses a draft on any other. By
     prefix, else by a name only one class here carries; null when neither says. */
 function planClassPrefix(id) {
@@ -1540,7 +1559,31 @@ function localBlockers() {
     out.push({ key: "piu.not_an_llc", severity: "warn",
       message: "Profits interest units are an LLC instrument and this company is not an LLC." });
   }
+  out.push(...percentBlockers());
   return out;
+}
+/** Judged once the classes are in: an empty list is a load still running or failed,
+    not a company with no percentage class. */
+function percentBlockers() {
+  if (!wantsPercent() || S.termsLoading || !S.classes.length) return [];
+  const noun = classNoun().toLowerCase();
+  const pct = pctClasses();
+  if (!issuesByPercent()) {
+    return [{ key: "quantity.percent_not_enabled", severity: "hard_stop",
+      message: "Carta does not issue this company's classes by percentage, so a percentage "
+        + "can't be issued here. Tell Claude the number to issue instead." }];
+  }
+  if (!pct.length) {
+    return [{ key: "quantity.no_percent_class", severity: "hard_stop",
+      message: `Issuing a percentage needs a percentage-based ${noun}, and this company `
+        + `has none. Add one in Carta, or tell Claude the number to issue instead.` }];
+  }
+  if (pct.length > 1 && !S.shared.prefix) {
+    return [{ key: "quantity.choose_percent_class", severity: "needs_decision",
+      message: `This company has ${pct.length} percentage-based ${noun}es. Pick the one `
+        + "these go in." }];
+  }
+  return [];
 }
 const allBlockers = () => objs(S.blockers).concat(localBlockers());
 /** Every command is addressed by corporation id, so without one nothing can be read
@@ -2630,6 +2673,17 @@ function validate(write) {
       need(r.touched.has("document_set_id") ? rowFieldId(i, "document_set_id") : "shared-document_set_id",
         "a document set Carta already holds", false, SAVED_SET_LOCKED);
       if (write && r.touched.has("document_set_id") && !coreKeys().includes("document_set_id")) r.open = true;
+    }
+    // Only a PERCENT class holds the prompt's percentage; on any other it goes out as a
+    // count, whoever put the class there: Carta's prefill, a plan, or the prompt naming it.
+    const pre = rowPrefix(r);
+    if (wantsPercent() && pre && pre !== MIXED && !isPct(r)) {
+      const noun = classNoun().toLowerCase();
+      const plan = S.type === "piu"
+        && planClassPrefix("option_plan" in r.ov ? r.ov.option_plan : S.shared.option_plan);
+      need(rowFieldId(i, "prefix"), `a percentage-based ${noun}`, false, plan
+        ? `This plan's ${noun} doesn't hold a percentage. Clear the plan, then pick a percentage-based ${noun}.`
+        : `This ${noun} doesn't hold a percentage. Pick a percentage-based one.`);
     }
     const q = String(r.quantity == null ? "" : r.quantity).trim();
     if (isPct(r)) {

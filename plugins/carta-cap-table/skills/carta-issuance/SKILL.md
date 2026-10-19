@@ -48,7 +48,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.8</carta-plugin>
 
 # Issue Securities
 
@@ -226,7 +226,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-artifact/scripts/bu
   when you already hold a bare numeric id — from the fallback lookup, or from a resume.
 - `--seed` takes a **path**, never an inline blob. Omit it entirely when the prompt named
   nobody and no terms; the page then opens with one blank recipient row.
-- Seed keys: `stakeholders` (names verbatim), `quantity`, `issue_date`, `terms`, `source`,
+- Seed keys: `stakeholders` (names verbatim), `quantity`, `quantity_basis`, `issue_date`, `terms`, `source`,
   and `rows` from the import sub-skill. An unknown key fails the build.
 - **`terms` carries every term the document or prompt states**, in its words; the page
   matches names to Carta's lists and asks only for what matches nothing:
@@ -235,7 +235,8 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-artifact/scripts/bu
   `price_per_share`, `threshold_value`. Omit unstated ones.
 - **Different quantities per person** go on each entry, never dropped:
   `{"stakeholders": [{"name": "Tagg Palmer", "quantity": 100}, {"name": "Emily Wilson", "quantity": 50}]}`.
-  Top-level `quantity` covers everyone else. A percentage stays one: 2.75% is `"2.75"`.
+  Top-level `quantity` covers everyone else. A percentage stays one: 2.75% is `"2.75"`,
+  plus `"quantity_basis": "percent"` (certificates and PIUs) so the page picks a percentage class.
 - **Different terms per person** go on that entry's own `terms`, only `grant_type`,
   `exercise_price`, `price_per_share`, `threshold_value`, `board_approval_date`:
   `{"name": "Emil Vaselvee", "quantity": 1250, "terms": {"grant_type": "ISO"}}`. Rows
@@ -267,7 +268,7 @@ Artifact({
   description: "Collect and review the option grants before issuing them.",
   icon: "grant",            // "certificate" | "grant" | "units", per security_type
   capabilities: {
-    mcp: { servers: [{ server: "<the connector's display name — see below>", tools: ["call_tool"] }] },
+    mcp: { servers: [{ server: "<the connector's display name — see below>", tools: ["call_tool", "read_tool"] }] },
     db: {}
   }
 })
@@ -296,7 +297,7 @@ connector was renamed: republish with step 3.
 - Restate the **whole** `capabilities` object on any redeploy that passes it: a non-empty
   object replaces the stored grant, so an omitted capability is revoked. Omit the field
   entirely to carry the grant forward — the cheaper redeploy.
-- Keep `tools` at that one: every Carta command goes through the `call_tool` proxy.
+- Keep `tools` at those two: the page reads through `read_tool`, which asks nobody, and writes through `call_tool`.
 - **Every attached file goes up as an asset**, so the page can add it to Carta: add
   `assets: {}` to the first publish, then `upload_asset` each file, rebuild with each
   `source` entry's `url` set to its returned `url`, and republish with `capabilities` omitted.

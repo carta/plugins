@@ -24,7 +24,8 @@ unmatched names, build one table (User-supplied / Suggested match / Confidence) 
 never per-row.
 
 **No class named or implied → the builders pre-select a class only when the corp has
-exactly one.** With two or more the control renders **required and unselected**, and
+exactly one** (for a quantity given as a percentage, exactly one `PERCENT` class; see the
+[chat-surface.md](chat-surface.md) defaults table). With two or more the control renders **required and unselected**, and
 `missingFields()` holds **Review** on `a share class` until a human picks. Nothing is ranked:
 which class a holder lands in sets their liquidation preference, their price and their
 economics, so a ranked default hides the decision the field exists to capture — and the

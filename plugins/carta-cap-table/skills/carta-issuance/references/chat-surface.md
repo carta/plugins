@@ -130,7 +130,7 @@ belongs in the §1 batch here.
 | Vesting — option grant | **not a default.** A grant's schedule is required server-side, so it goes in the §1 batch as a picker. "No vesting" is a real answer, and an atypical one — accept it and warn ([engine.md § Vesting resolution](engine.md#vesting-resolution)) | — |
 | Board approval | today | `(default)` |
 | Board approval (PIU) | today, and clearable — the field is optional | `(default — today)` |
-| Share class / PIU unit class | the only class when there is one | `(default — only class)` |
+| Share class / PIU unit class | the only class when there is one; for a quantity given as a percentage, the only class whose `quantity_semantics` is `PERCENT` — two or more go in the §1 batch as a picker of those alone, none is a stop: say issuing a percentage needs a percentage-based class (or, when no class carries `quantity_semantics`, that this company does not issue by percentage); a named class, or a PIU plan's unit class, that is not `PERCENT` goes back to the user (ask for a percentage-based class, and to clear the plan) — never send the percentage as a count | `(default — only class)` |
 | PIU equity plan | **none** — never the only plan | — |
 | PIU threshold value / type | **never defaulted** — terms of the grant | — |
 | Exemption / currency | the `so_type` autofill ([payload-reference.md](payload-reference.md#so_type-auto-fill-rules)) | `(autofill — <so_type> rule)` |

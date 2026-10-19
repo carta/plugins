@@ -68,8 +68,9 @@ ownership (PBO) issuance.
 | `INVESTED_CAPITAL` | Never sent — omit the key, even when the user gives one. Invested capital sets the ownership and carta-web stores the quantity as null; a stored one reads as a unit count |
 | `UNIT`, or no key | A positive count of shares or units, as before |
 
-Each row reads its own class, so one draft set can mix `UNIT` and `PERCENT` rows. Option
-grants have no share class and are always `UNIT`.
+Each row reads its own class, so one draft set can mix `UNIT` and `PERCENT` rows. A
+percentage on any other class: [chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask).
+Option grants have no share class and are always `UNIT`.
 
 On a `PERCENT` or `INVESTED_CAPITAL` class, `authorized` and `available` do not limit the
 issuance. Do not add percentages to unit counts.

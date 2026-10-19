@@ -1,6 +1,6 @@
 /* ---------- bring-up ---------- */
-// Baked at build time. SEED is what the prompt supplied — stakeholders, quantity,
-// issue_date, rows, a document's terms — never a server payload. Identity comes from the
+// Baked at build time. SEED is what the prompt supplied — stakeholders, quantity and
+// what it counts, issue_date, rows, a document's terms — never a server payload. Identity comes from the
 // build, because the page's title and build id are per company and per security type.
 const CORP_ID = {{CORPORATION_ID}};
 const COMPANY_NAME = {{COMPANY_NAME_JSON}};
@@ -33,6 +33,8 @@ function promptPrefill() {
   const p = {};
   if (rows.length) p.rows = rows;
   if (SEED.issue_date) p.issueDate = SEED.issue_date;
+  // A resumed set's classes are Carta's; a fresh page keeps the basis past its first save.
+  if (SEED.quantity_basis && !RESUMING) p.quantityBasis = SEED.quantity_basis;
   if (SEED.terms && typeof SEED.terms === "object") p.terms = SEED.terms;
   if (SEED.source && typeof SEED.source === "object") p.source = SEED.source;
   return p;

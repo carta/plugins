@@ -81,7 +81,12 @@ SECURITY_TYPES = ("option_grant", "certificate", "piu")
 
 # Everything the seed may carry — the prompt's own knowns, per
 # skills/carta-issuance/references/artifact-surface.md. Not a server payload.
-SEED_KEYS = ("stakeholders", "quantity", "issue_date", "rows", "draft_set_id", "terms", "source")
+SEED_KEYS = ("stakeholders", "quantity", "quantity_basis", "issue_date", "rows", "draft_set_id",
+             "terms", "source")
+
+# What the prompt's quantity counts. "percent" — the prompt said "%" — sends the page to
+# the company's percentage-based classes. Absent means a count.
+QUANTITY_BASES = ("percent",)
 
 # What an award document or the prompt stated about the security itself. The page matches
 # the named ones (plan, class, vesting) against the company's own lists.
@@ -371,6 +376,10 @@ def check_seed_shape(seed):
         sys.exit("ERROR: seed 'rows' must be a list of row objects")
     if not isinstance(seed.get("quantity", ""), (str, int, float)):
         sys.exit("ERROR: seed 'quantity' must be a number or a string")
+    basis = seed.get("quantity_basis")
+    if basis is not None and basis not in QUANTITY_BASES:
+        sys.exit("ERROR: seed 'quantity_basis' must be one of {}".format(
+            ", ".join(QUANTITY_BASES)))
     if not isinstance(seed.get("issue_date", ""), str):
         sys.exit("ERROR: seed 'issue_date' must be a YYYY-MM-DD string")
     if "terms" in seed:
@@ -393,6 +402,10 @@ def build(corporation_id, company_name, security_type, seed, preview=False, nonc
         sys.exit("ERROR: --security-type must be one of {}".format(
             ", ".join(SECURITY_TYPES)))
     check_seed_shape(seed)
+    # An option is always a count of shares, so a percentage has no class to land in.
+    if seed.get("quantity_basis") == "percent" and security_type == "option_grant" and not preview:
+        sys.exit("ERROR: seed 'quantity_basis' \"percent\" applies to certificates and "
+                 "PIUs only — an option grant is always a number of options")
     seed = normalize_seed(seed)
 
     template = (RES / TEMPLATE).read_text()
@@ -460,10 +473,9 @@ def main():
                          "security types, their review stages and the validation-error "
                          "state, with every write to Carta refused in the transport")
     ap.add_argument("--seed",
-                    help="PATH to a JSON file holding what the prompt supplied: "
-                         "stakeholders (names verbatim), quantity, issue_date, terms, rows, "
-                         "and draft_set_id on a resume. Omit it when the prompt named nobody "
-                         "and no terms")
+                    help="PATH to a JSON file holding what the prompt supplied, any of: "
+                         + ", ".join(SEED_KEYS) + " (draft_set_id on a resume only). Omit it "
+                         "when the prompt named nobody and no terms")
     ap.add_argument("--out", required=True, help="output HTML path")
     args = ap.parse_args()
 

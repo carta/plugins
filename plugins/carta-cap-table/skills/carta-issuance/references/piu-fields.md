@@ -85,7 +85,10 @@ differences:
 The default rule is the same one, and deliberately so: a sole class is pre-selected, two or
 more leave the control **required and unselected** with `missingFields()` holding **Review**
 on `a unit class`. An explicitly named class is still honoured, row-level or via
-the prefix the prompt named; carry one in **only when the prompt actually named one.**
+the prefix the prompt named, except where a percentage meets a class or plan class that is
+not `PERCENT` ([chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask));
+carry one in **only when the prompt actually named one.**
+A defaulted class still leaves the plan empty.
 
 ### Equity-plan reconciliation — per row, optional, prefix-matched
 
@@ -206,7 +209,8 @@ use to pre-select one (`default_share_class_prefix`), in order:
 
 1. the row's own `share_class_prefix`,
 2. a prefix the prompt named,
-3. the sole class, when the corp has exactly one,
+3. the sole class that can hold the quantity (for a percentage, the sole `PERCENT` class),
+   when there is exactly one,
 4. otherwise nothing — several classes and none named leaves the field unselected.
 
 Step 3 is load-bearing: the skill carries no prefix in unless the prompt named

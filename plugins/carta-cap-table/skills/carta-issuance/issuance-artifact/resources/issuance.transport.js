@@ -4,7 +4,7 @@
       `.mcp`, `.db` — reads `undefined` at every moment, so `use()` is the only
       check, and a call must never be used to probe for one.
    2. Carta's generated command tools are not in the host's tool list. Every
-      command goes through the GATEWAY proxy below, never by its own name.
+      command goes through one of the two gateway proxies below, never by its own name.
    3. A capability this view does not serve resolves `null` after about 10s. So
       `use()` is resolved once at bring-up and kept — never per call. */
 
@@ -13,10 +13,15 @@
     level, so this stamp is the only record of origin. */
 const UI_CALL = { skills: ["carta-cap-table:carta-issuance"], from_ui: true };
 
-/** The gateway proxy every Carta command is addressed through. */
+/** The gateway proxy every Carta connector has, and every write is addressed through.
+    The host asks the viewer before each call to it. */
 const GATEWAY = "call_tool";
+/** The read-only gateway. The host runs it without asking, and Carta refuses through it
+    any command that changes data. A page granted only GATEWAY, or a connector without
+    this tool, sends its reads through GATEWAY instead. */
+const READ_GATEWAY = "read_tool";
 
-const T = { mcp: null, server: null, db: null, reason: "no_capability" };
+const T = { mcp: null, server: null, db: null, reason: "no_capability", readGateway: false };
 
 /* ---------- error vocabulary ----------
    long-comment-ok: the contract these sets encode, which no name here can carry.
@@ -99,11 +104,11 @@ function connReason(kind) {
     Both arrive as a server-side rejection, so the message has to name the command or
     the tool — otherwise a deployed command's own "corporation not found" would be
     swallowed as "not deployed here". */
+const MISSING_WORDS = /(unknown|not found|no such|unrecognized|not available|not registered)/i;
 function isMissingCommand(err) {
   if (!err || !err.fromServer) return false;
   const m = errText(err);
-  return /(unknown|not found|no such|unrecognized|not available|not registered)/i.test(m)
-    && /(tool|command|_get__|issuance_bootstrap)/i.test(m);
+  return MISSING_WORDS.test(m) && /(tool|command|_get__|issuance_bootstrap)/i.test(m);
 }
 
 /** A deployed command that does not know `name`. The refusal happens before the call
@@ -218,6 +223,7 @@ async function connect() {
   // page the transport has given up on cannot still be calling Carta per keystroke.
   T.mcp = mcp;
   T.server = carta.server;
+  T.readGateway = toolNames(carta).includes(READ_GATEWAY);
   T.reason = "";
   return true;
 }
@@ -263,6 +269,30 @@ async function store() {
     allowlist rather than a mutate-blocklist, so a name nobody anticipated is a write. */
 const isRead = (name) => /^cap_table__(get|list)__/.test(String(name));
 
+/** Sent through READ_GATEWAY: every read, plus each `__mutate__` command carta-mcp marks
+    `read_only` (engine.md § Validate without issuing). Apart from isRead(), which also sets
+    the read deadline and retry: validate_drafts runs up to 90s server-side. */
+const READ_ONLY_MUTATES = new Set(["cap_table__mutate__validate_drafts"]);
+const readOnly = (name) => isRead(name) || READ_ONLY_MUTATES.has(String(name));
+
+/** READ_GATEWAY is refused for every read on this page: the host holds a grant for
+    GATEWAY alone (a republish that kept an older grant), or the connector has no such
+    tool. */
+const READ_GATEWAY_GRANT = new Set(["not_in_manifest", "not_granted"]);
+const namesReadGateway = (m) => new RegExp(`\\b${READ_GATEWAY}\\b`).test(m);
+function readGatewayGone(err) {
+  if (READ_GATEWAY_GRANT.has(code(err))) return true;
+  const m = errText(err);
+  return namesReadGateway(m) && MISSING_WORDS.test(m);
+}
+/** READ_GATEWAY itself was refused, not the command it carried, so nothing ran: either
+    of the above, or Carta would not class this one command as read-only. */
+function readGatewayRefused(err) {
+  if (readGatewayGone(err)) return true;
+  const m = errText(err);
+  return namesReadGateway(m) && /cannot run/i.test(m);
+}
+
 /** A hung call otherwise sits on the host's ~130s reply budget, which the page shows as
     a grey skeleton and the word "Loading…". Writes never carry a signal: an aborted
     write is an unknown outcome, and this page must never create one.
@@ -298,18 +328,29 @@ async function one(name, args) {
     try { performance.measure("carta-issuance:bridge:" + name, { start: t0 }); }
     catch { /* measure with a start option is not universal; timing is optional */ }
   };
-  const send = (retry) => {
+  const call = (gateway, retry) => {
     const opts = { cache: false };
     const signal = isRead(name)
       ? readSignal(retry ? READ_RETRY_DEADLINE_MS : READ_DEADLINE_MS) : undefined;
     if (signal) opts.signal = signal;
     // The stamp lands on the proxy call AND on the target command's own arguments,
     // both from UI_CALL, so the gateway records the origin of each.
-    return T.mcp.callTool(T.server, GATEWAY, {
+    return T.mcp.callTool(T.server, gateway, {
       name,
       arguments: Object.assign({}, args, { _instrumentation_v2: UI_CALL }),
       _instrumentation_v2: UI_CALL,
     }, opts);
+  };
+  const send = async (retry) => {
+    if (!readOnly(name) || !T.readGateway) return call(GATEWAY, retry);
+    try { return await call(READ_GATEWAY, retry); }
+    catch (err) {
+      if (!readGatewayRefused(err)) throw err;
+      // Refused before Carta ran anything, so the same read is safe on the other gateway.
+      // Only a refusal that holds for every read stops later reads trying READ_GATEWAY.
+      if (readGatewayGone(err)) T.readGateway = false;
+      return call(GATEWAY, retry);
+    }
   };
   let res;
   try {
