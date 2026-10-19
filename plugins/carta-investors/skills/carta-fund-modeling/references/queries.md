@@ -5,8 +5,8 @@ Read commands run through the MCP gateway: `read_tool({"name": "<domain>__<verb>
 DWH queries: `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "limit": 5000}})`.
 `dwh__execute__query` accepts **only** `sql` (+ optional `limit`, `offset`, `format`) — there is **no
 `schema` argument** (passing one errors). Fully-qualify every table as `FUND_ADMIN.<TABLE>` in the SQL.
-**Do NOT write `LIMIT`/`OFFSET` inside the SQL** — pass them as the `limit`/`offset` arguments (the `LIMIT N`
-shown in the examples below is the value for the `limit` arg, not literal SQL). For large results (monthly
+**Do NOT write `LIMIT`/`OFFSET` inside the SQL** — pass them as the `limit`/`offset` arguments (the emitter
+prints each stem's `limit`). For large results (monthly
 NAV series, per-deal, LP base, financing history) pass `"format": "ndjson"`. Then capture whatever the result
 was — the small inline result, or the file path the harness prints when it persists a large one (location is
 client/config-dependent — read it from the "Output has been saved to …" message, don't reconstruct it) — by
@@ -20,12 +20,12 @@ Rules: **SELECT-only**, bound rows via the `limit` argument, never `INFORMATION_
 with `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1`.
 Show **names, not UUIDs**. Resolve fund currency from the data — never assume USD.
 
-**The SQL in the DWH sections below is mirrored verbatim in `scripts/stem_queries.py`** — that manifest is the
-**executable source of truth** the fetch actually runs (via `scripts/emit_stem_sql.py`, which fills the
-`fund_uuid` / `corporation_id` IN-list). The sections here are the human reference/rationale; keep the two in
-lockstep — the `stem_queries` drift-guard test asserts each manifest SELECT still covers the builder's
-load-bearing columns, but the prose is on you. Do **not** hand-author or hand-template a stem query in a
-first-build; run the emitter (SKILL.md Step 2).
+**The SQL for every DWH section below lives only in `queries.json`** (the skill root) — the single source of
+truth that both the local fetch (`scripts/stem_queries.py`, printed by `scripts/emit_stem_sql.py`, which fills the
+`fund_uuid` IN-list) and the hosted app (`server/worker.js`) read. The sections here are the rationale and the
+output mapping for each stem, and "Hosted variants" at the end covers the hosted app's own three; the drift-guard tests assert each stem's SELECT still covers the builder's
+load-bearing columns. Do **not** hand-author or hand-template a stem query in a first-build; run the emitter
+(SKILL.md Step 2).
 
 **Save each query's output to `<raw_dir>/<stem>.ndjson`** (or `.md`), then run
 `uv run scripts/build_datadir.py --raw <raw_dir> --out <dashboard_dir> --meta meta.json` — the deterministic, firm-agnostic
@@ -76,34 +76,12 @@ scenario; the booked history comes from dated LP flows and NAV marks (§5 `snaps
 list_contexts                        {"firm_name": "<firm words>"}  # resolve the FIRM by name → firm_uuid (see SKILL.md Step 1)
 set_context                          {"firm_id": "<firm_uuid>"}
 ```
-Then enumerate the firm's entities with the **firm directory query below — NOT the fund-admin entity-list
+Then enumerate the firm's entities with the **firm directory query — NOT the fund-admin entity-list
 command**. The fund-admin entity/fund list commands return verbose per-entity objects and **blow the MCP 40k-char
 response limit on large firms** (e.g. a firm with ~100+ SPVs → the list errors out). This query returns just three
 columns and **excludes SPVs**, so it stays tiny (that same firm → ~18 rows) and never trips the limit. Print it
-filled in with `uv run scripts/emit_stem_sql.py --directory --firm-uuid <firm_uuid>` (the executable copy is
-`stem_queries.DIRECTORY_SQL`; keep this block in lockstep):
-```sql
-WITH entities AS (
-  SELECT fund_uuid, fund_name, entity_type_name
-  FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
-  WHERE firm_id = '<firm_uuid>' AND is_firm_rollup = FALSE
-  UNION
-  SELECT fund_uuid, fund_name, fund_entity_type_name
-  FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
-  WHERE firm_id = '<firm_uuid>'
-  UNION
-  SELECT fund_uuid, fund_name, entity_type_name
-  FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
-  WHERE firm_id = '<firm_uuid>'
-)
-SELECT fund_uuid, MAX(fund_name) AS fund_name, MAX(entity_type_name) AS entity_type_name
-FROM entities
-WHERE fund_uuid IS NOT NULL
-GROUP BY fund_uuid
-HAVING COALESCE(MAX(entity_type_name), '') NOT ILIKE '%SPV%'
-ORDER BY entity_type_name, fund_name, fund_uuid
-LIMIT 2000
-```
+filled in with `uv run scripts/emit_stem_sql.py --directory --firm-uuid <firm_uuid>` (the `directory` query in
+`queries.json`): a three-table UNION, deduplicated per `fund_uuid`, with SPV-typed entities dropped.
 `firm_id` is the `firm_uuid` from `list_contexts`. **No single table is a complete census.**
 `MONTHLY_NAV_CALCULATIONS` lists only funds with a month-end NAV close; a fund can hold booked investments
 (`AGGREGATE_INVESTMENTS`, whose type column is `fund_entity_type_name`) or carry a metrics row
@@ -125,15 +103,7 @@ distributions, nav, dryPowder, tvpi, dpi, rvpi, grossMoic, netIrr, mgmtFees, num
 from queries 1 (AGGREGATE_FUND_METRICS) + 2 (MONTHLY_NAV_CALCULATIONS). Sum/rollup into `totals`.
 
 ## 1. Fund metrics / dry powder  → `AGGREGATE_FUND_METRICS`
-```sql
-SELECT fund_name, fund_size, dry_powder, perc_capital_remaining,
-       total_cost_of_investments, total_opx, total_mgmt_fees, fund_reporting_currency
-FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
-WHERE fund_uuid = '<fund_uuid>'
-QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1
-LIMIT 1
-```
-→ `capital.dryPowder`, `capital.fundSize`, `capital.totalMgmtFees`.
+See §12, the `fund_metrics` stem.
 
 ## 2. NAV / committed / called / distributions (+ series) → `MONTHLY_NAV_CALCULATIONS`
 This is the **`nav_latest` stem** — the builder's headline per-fund row. The SELECT must carry **all** columns
@@ -143,17 +113,7 @@ ending_lp_nav, ending_gp_nav, lp_dpi, lp_rvpi, lp_tvpi`. Use the real **`cumulat
 (NOT `cumulative_total_distributions` — the two diverge on GP/manager entities, where *total* includes non-LP
 distributions and would overstate LP DPI/distributions). `cumulative_gp_contributions` is also carried: it feeds
 `snapshot.funds[].gpCommit` (the GP paid-in co-investment) as a fallback when the `gp_partners` stem (§9) records no GP-partner commitment.
-```sql
-SELECT fund_uuid, fund_name, entity_type_name,
-       cumulative_commitment_amount, cumulative_lp_contributions,
-       cumulative_gp_contributions,
-       cumulative_lp_distributions, ending_lp_nav, ending_gp_nav,
-       lp_dpi, lp_rvpi, lp_tvpi, month_end_date
-FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
-WHERE fund_uuid IN ('<uuid1>','<uuid2>', …) AND is_firm_rollup = FALSE
-QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1
-LIMIT 200
-```
+SQL: the `nav_latest` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem nav_latest`).
 → `snapshot.funds[].{committed,lpPaidIn,lpDistributed,overviewLpNav,gpCapitalNav,lpDpi,lpRvpi,lpTvpi}` and
 `snapshot.baseLpNav`. The firm NAV/TVPI **trend** (`navSeries`) comes from the §5 cashflows stem, not here.
 
@@ -162,24 +122,7 @@ LIMIT 200
 dropped → empty Companies tab). Group by it too so one query covers the whole firm. `entity_link_id`
 is the cap-table bridge key — resolved to a corporation via the §16 `corporations` stem, replacing the
 display-name/alias join. `general_ledger_issuer_id` is also carried for GL-side reconciliation.
-```sql
-SELECT fund_uuid, issuer_name, entity_link_id, general_ledger_issuer_id,
-       asset_name, asset_class_type, investment_date,
-       SUM(total_cost) AS total_cost,
-       SUM(remaining_value) AS remaining_value,
-       SUM(total_proceeds) AS total_proceeds,
-       SUM(count_remaining_shares) AS count_remaining_shares,
-       MAX(is_active_investment) AS is_active_investment,
-       MAX(is_public_asset) AS is_public_asset,
-       MAX(latest_fmv_effective_date) AS latest_fmv_effective_date,
-       MAX(latest_update_effective_date) AS latest_update_effective_date
-FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
-WHERE fund_uuid IN ('<uuid1>','<uuid2>', …)
-GROUP BY fund_uuid, issuer_name, entity_link_id, general_ledger_issuer_id,
-         asset_name, asset_class_type, investment_date
-ORDER BY remaining_value DESC NULLS LAST
-LIMIT 5000
-```
+SQL: the `investments` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem investments`).
 `asset_name` (the specific security, e.g. "Series E-2 Preferred") and `count_remaining_shares` (the fund's
 share holding in that security) are the join keys the §15 cap-table stem uses to make the liquidation-preference
 waterfall **fund-specific** (which classes the fund holds, and how many shares).
@@ -200,12 +143,7 @@ the fund's DPI (§2/§5), so do not re-add proceeds to fund totals.
 Column semantics (verified): `PERCENTAGE` (TEXT) is the ownership **fraction** (0–1, e.g. `0.0578…`; it is
 often `0E-39` = 0 → treat as missing). `FULLY_DILUTED` (NUMBER) is a **fully-diluted share count, NOT a
 fraction** — never use it as ownership %. There is **no** `ownership_pct_calc` column.
-```sql
-SELECT FUND_ID, CORPORATION_ID, PERCENTAGE, AS_OF_DATE
-FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP
-WHERE FUND_ID IN ('<uuid1>','<uuid2>', …)
-QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, FUND_ID ORDER BY AS_OF_DATE DESC)=1
-```
+SQL: the `ownership` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem ownership`).
 → ownership fraction = `CAST(PERCENTAGE AS FLOAT)` when `> 0`, else unavailable. `markBasisB` (implied
 company valuation) = `FMV / ownership_fraction ÷ 1e9` (**billions** — §3 mapping). `CORPORATION_ID` is
 joined directly to the company that resolved to that `corpUuid` via the entity_link bridge
@@ -224,16 +162,10 @@ BOTH the per-fund LP flows/IRR **and** the firm NAV & TVPI trend chart from it, 
 drops every row (`if u not in funds: continue`); one missing `ending_lp_nav` / `cumulative_*` renders the
 Overview NAV chart at **$0**. Firm-level `JOURNAL_ENTRIES.amount` nets to zero when summed (double-entry), so
 these per-month LP columns are the right source.
-```sql
-SELECT fund_uuid, month_end_date, lp_contributions, lp_distributions,
-       ending_lp_nav, cumulative_lp_contributions, cumulative_lp_distributions
-FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
-WHERE fund_uuid IN ('<uuid1>','<uuid2>', …) AND is_firm_rollup = FALSE
-ORDER BY month_end_date
-LIMIT 10000
-```
-**Do not** add `AND (lp_contributions <> 0 OR lp_distributions <> 0)` — the builder needs every month-end row
-for the NAV trend (it filters zero-flow months for IRR internally). Save to `<raw_dir>/cashflows.ndjson` (large →
+SQL: the `cashflows` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem cashflows`).
+**Do not** add `AND (lp_contributions <> 0 OR lp_distributions <> 0)` to this local stem — the builder needs every
+month-end row for the NAV trend (it filters zero-flow months for IRR internally). The hosted app's own
+`cashflows` variant does filter; see "Hosted variants". Save to `<raw_dir>/cashflows.ndjson` (large →
 use `"format":"ndjson"` then `save_query_result.py`; see the intro + SKILL Step 2).
 → `cashflows[fundId].flows[]`: one entry per month, `amount = lp_distributions − lp_contributions` (LP-net:
 negative when contributing, positive when distributing). `paidInTotal` = cumulative LP contributions (§2).
@@ -249,13 +181,7 @@ DWH description). **This is read over the MCP.** A fund can have multiple config
 side-letter variants); each is a row. `build_datadir.py` keeps the recommended (rank-1) config and seeds
 per-fund carry/pref/catch-up; a fund with no automated waterfall legitimately returns 0 rows and falls back to
 the flat `carryRate` default (0.20) with pref/catch-up disabled.
-```sql
-SELECT fund_id, fund_name, config_name, carry_rate, preferred_return,
-       gp_catchup_rate, gp_catchup_limit, recommended_config_rank, is_automated
-FROM FUND_ADMIN.PROFIT_ALLOCATION_WATERFALL_CONFIG
-WHERE fund_id IN ('<uuid1>','<uuid2>', …)
-LIMIT 2000
-```
+SQL: the `waterfall` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem waterfall`).
 Rates are decimals (`0.30` = 30%). Optional stem — record an empty file (`fm_paths.py touch-empty "<raw_dir>/waterfall.ndjson"`) when a
 firm has no automated waterfall so the fetch gate passes.
 
@@ -271,15 +197,7 @@ config also returned is not consumed by the app, so it is intentionally dropped.
 ## 7. Accrued carry today (real, from Carta books) → `ALLOCATIONS`
 Carried interest accrued is booked as a reallocation: it nets to zero across all partners, so take the
 **GP side** (`IS_GENERAL_PARTNER = TRUE`) as the GP's accrued balance.
-```sql
-SELECT fund_uuid, SUM(ACTUAL_AMOUNT) AS accrued_carry, MAX(EFFECTIVE_DATE) AS as_of
-FROM FUND_ADMIN.ALLOCATIONS
-WHERE ALLOCATION_BUCKET_NAME = 'Carried interest accrued'
-  AND IS_GENERAL_PARTNER = TRUE
-  AND fund_uuid IN ('<uuid1>','<uuid2>', …)
-GROUP BY fund_uuid
-LIMIT 200
-```
+SQL: the `accrued_carry` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem accrued_carry`).
 → `snapshot.baseAccruedCarry[fundId]` and `snapshot.gpEconomics[fundId].accruedCarryToday` = the GP-side
 sum (the carry standing on Carta's books at today's marks). `snapshot.accruedCarryAsOf` (and per-fund
 `gpEconomics[].accruedCarryAsOf`) = `MAX(EFFECTIVE_DATE)` — accrual is booked quarterly, so this is often a
@@ -290,15 +208,7 @@ booked number, not 0. Funds with no accrual return $0.
 **Carry DISTRIBUTED (realized).** The realized counterpart is the `'Carried interest earned'` bucket — carry
 actually paid out to the GP (vs. `'Carried interest accrued'`, which is unrealized). Same GP-side pattern; save
 as the `distributed_carry` stem (columns `fund_uuid, carry_distributed, as_of`):
-```sql
-SELECT fund_uuid, ABS(SUM(ACTUAL_AMOUNT)) AS carry_distributed, MAX(EFFECTIVE_DATE) AS as_of
-FROM FUND_ADMIN.ALLOCATIONS
-WHERE ALLOCATION_BUCKET_NAME = 'Carried interest earned'
-  AND IS_GENERAL_PARTNER = TRUE
-  AND fund_uuid IN ('<uuid1>','<uuid2>', …)
-GROUP BY fund_uuid
-LIMIT 200
-```
+SQL: the `distributed_carry` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem distributed_carry`).
 **Sign convention (important):** unlike accrued carry (booked **positive**), realized `'Carried interest earned'`
 is booked on the GP side as an **outflow — negative** `ACTUAL_AMOUNT` (the GP capital account is relieved when
 carry is paid), exactly like LP distributions. So take `ABS(SUM(...))` — the realized carry paid to the GP is a
@@ -317,25 +227,7 @@ per-partner split; they sum to the firm's total accrued carry. We map each GP en
 the **fund-level** GP allocation (`GP_ENTITY_NAME` on the `Fund` rows = the GP-entity name = `FUND_NAME` on the
 `GP` rows), so the per-partner carry lands on the right `fund_uuid`. Save as the `gp_carry` stem (columns
 `fund_uuid, fund_name, gp_entity_name, partner_name, partner_type, accrued_carry`):
-```sql
-WITH gp_map AS (
-  SELECT DISTINCT GP_ENTITY_NAME, FUND_UUID, FUND_NAME
-  FROM FUND_ADMIN.ALLOCATIONS
-  WHERE ALLOCATION_BUCKET_NAME = 'Carried interest accrued'
-    AND ENTITY_TYPE_NAME = 'Fund' AND IS_GENERAL_PARTNER = TRUE
-    AND GP_ENTITY_NAME IS NOT NULL
-)
-SELECT m.FUND_UUID AS fund_uuid, m.FUND_NAME AS fund_name,
-       a.FUND_NAME AS gp_entity_name, a.PARTNER_NAME AS partner_name,
-       MAX(a.PARTNER_TYPE) AS partner_type,
-       ROUND(SUM(a.ACTUAL_AMOUNT)) AS accrued_carry
-FROM FUND_ADMIN.ALLOCATIONS a
-JOIN gp_map m ON m.GP_ENTITY_NAME = a.FUND_NAME
-WHERE a.ALLOCATION_BUCKET_NAME = 'Carried interest accrued'
-  AND a.ENTITY_TYPE_NAME = 'GP'
-GROUP BY 1, 2, 3, 4
-LIMIT 500
-```
+SQL: the `gp_carry` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem gp_carry`).
 → `gp-base.json[fundId].partners[]` with each partner's `accruedCarry` (real booked) and `carryShare`
 (`accruedCarry ÷ GP entity total`). The app applies `carryShare` to the fund's **scenario** GP carry, so
 partner-level carry reacts to reprices deterministically. A GP entity may back **two** funds (e.g. a main fund
@@ -353,19 +245,7 @@ The **newest** performance quarter is frequently not-yet-benchmarked (all percen
 a recent **window** (not just the latest quarter) and let `build_datadir.py` select, per fund, the most recent
 quarter that actually has a cohort. `fund_uuid` and `performance_quarter_start_date` **must** be in the SELECT
 (the builder keys on `fund_uuid` and picks by quarter).
-```sql
-SELECT fund_uuid, performance_quarter_start_date,
-       vintage_year, fund_aum_bucket, entity_type_name, fund_count,
-       tvpi, net_irr, dpi, moic,
-       tvpi_5, tvpi_10, tvpi_25, tvpi_50, tvpi_75, tvpi_90, tvpi_95,
-       net_irr_50th, net_irr_75th, net_irr_90th,
-       dpi_5, dpi_10, dpi_25, dpi_50, dpi_75, dpi_90, dpi_95,
-       moic_5, moic_10, moic_25, moic_50, moic_75, moic_90, moic_95
-FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
-WHERE fund_uuid IN ('<uuid1>','<uuid2>', …)
-QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY performance_quarter_start_date DESC) <= 8
-LIMIT 2000
-```
+SQL: the `cohort` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem cohort`).
 → `snapshot.benchmarks[fundId]`: `tvpi/dpi/moic = {p5,p10,p25,p50,p75,p90,p95}`, `irr = {p50,p75,p90}`,
 `fundMoic = moic` (the fund's own MOIC, since `src/model/funds.js` doesn't compute fund MOIC), `cohortSize
 = fund_count`. The builder picks the latest quarter whose cohort is populated; a fund whose every recent
@@ -379,18 +259,7 @@ leave the file absent — `cohort` is a file-required stem, so a missing file ha
 gate treats "no file" as "query never run"). An empty file is the correct signal for "fetched, none available".
 
 ## 9. LP base (limited partners) → `PARTNER_DATA`  → `lp-base.json`
-```sql
-SELECT partner_name, partner_country, partner_state, fund_uuid,
-       PARTNER_CLASS_NAME AS partner_class_name,
-       TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment,
-       TOTAL_CAP_CONTRIBUTION                   AS contributed,
-       TOTAL_DISTRIBUTION                       AS distributed,
-       TOTAL_NET_ASSET_BALANCE                  AS nav
-FROM FUND_ADMIN.PARTNER_DATA
-WHERE fund_uuid IN ('<uuid1>','<uuid2>', …) AND IS_LIMITED_PARTNER = TRUE
-ORDER BY commitment DESC NULLS LAST
-LIMIT 5000
-```
+SQL: the `partners` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem partners`).
 Aggregate **by `partner_name` across funds** (an LP in several funds collapses to one row): sum
 commitment/contributed/distributed/nav; `funds` = distinct fund count; `region` bucketed from
 `partner_country` (else `partner_state`, else "Unknown"). Then `pct = commitment / Σcommitment`,
@@ -403,7 +272,7 @@ commitments, not per-fund cap-table ownership. Treat LP names as confidential �
 data dir only.
 
 **GP partners (`gp_partners` stem) — optional commitment enrichment for `gp-base.json`.** Same query as
-above but `WHERE … AND IS_GENERAL_PARTNER = TRUE` (see `stem_queries.py`; captured as the `gp_partners` stem).
+above but `WHERE … AND IS_GENERAL_PARTNER = TRUE` (the `gp_partners` stem in `queries.json`).
 This is now **secondary**: the GP Economics partner-carry table is driven by the **real per-partner carry
 shares** from §7b (`gp_carry`), not by GP commitment. When present, `gp_partners` only enriches each partner
 row with `commitment`/`contributed`; when absent the table still renders from `gp_carry` alone. `gp-base.json`
@@ -414,13 +283,7 @@ GP-partner rows, in which case the GP tab simply hides the partner-carry table. 
 local data dir only.
 
 ## 10. Per-deal IRR (company-level) → `TEMPORAL_DEAL_IRR`
-```sql
-SELECT fund_uuid, issuer_name, deal_irr, performance_quarter_end_date
-FROM FUND_ADMIN.TEMPORAL_DEAL_IRR
-WHERE fund_uuid IN ('<uuid1>', …)
-QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid, issuer_id ORDER BY performance_quarter_end_date DESC)=1
-LIMIT 2000
-```
+SQL: the `deal_irr` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem deal_irr`).
 → per company, take the primary fund's latest `deal_irr`; write `portfolio.companies[].dealIrr`. **Sanitize:**
 `0.0` → null (held-at-cost / no IRR), `≤ -0.999` → -1.0 (total write-off, shows -100%), `> 5` → null
 (tiny/recent basis → unrealistic). Shown as a Deal IRR column on Companies and beside each holding in the
@@ -431,13 +294,7 @@ Overview concentration list.
 firm-context-limited, so an unfiltered query returns cross-firm rows and the `LIMIT` can truncate before your
 companies' rounds are reached. The scope is expressed as a **subquery** over the same ownership table §4 reads,
 so this stem takes only `fund_uuid`s and needs no previously-fetched stem:
-```sql
-SELECT investment_name, round, post_money_valuation, COALESCE(closing_date, raised_date) AS round_date, corporation_id
-FROM FUND_ADMIN.FINANCING_HISTORY
-WHERE corporation_id IN (SELECT DISTINCT CORPORATION_ID FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP
-                        WHERE FUND_ID IN ('<fund_uuid1>','<fund_uuid2>', …))
-QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST)=1
-```
+SQL: the `financing` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem financing`).
 Do **not** replace that subquery with a pasted `corporation_id` list. It resolves to ~1,150 UUIDs on a mid-size
 firm — too long for one call, so it has to be hand-chunked, and each chunk costs minutes of token emission.
 §4's `QUALIFY` only dedupes to the latest `AS_OF_DATE` per `(CORPORATION_ID, FUND_ID)`, so the subquery yields the
@@ -452,14 +309,7 @@ partial.
 This is the **`fund_metrics` stem**. Besides fees/opex/dry-powder it is the builder's source for the firm
 **display currency** (`fund_reporting_currency` — omit it and currency labels render blank) and the
 authoritative per-fund **vintage** (`vintage_year`/`vintage_date`, falls back to the cohort table, else "—").
-```sql
-SELECT fund_uuid, dry_powder, total_mgmt_fees, total_opx,
-       fund_reporting_currency, vintage_year, vintage_date, total_moic
-FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
-WHERE fund_uuid IN ('<uuid1>', …)
-QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1
-LIMIT 50
-```
+SQL: the `fund_metrics` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem fund_metrics`).
 → `snapshot.fundMetrics[fundId] = {mgmtFees, opex, dryPowder}` (+ `source.currency`, per-fund `vintage`).
 `total_moic` (the fund-total, **gross-of-carry** MOIC — value ÷ invested capital, before the LP/GP carry
 split; distinct from net LP TVPI) → `snapshot.funds[fundId].grossMoic`, surfaced as the **Gross MOIC** column
@@ -476,19 +326,7 @@ once, with all seven columns, and the trend is built from it. Kept as §13 only 
 Per-share-class cap table **with liquidation-preference terms** — the source for the Companies-tab preference
 waterfall. Corporation-filtered like §11 financing, scoped by the same ownership subquery — it takes only
 `fund_uuid`s. Keep the latest snapshot per `(CORPORATION_ID, SECURITY_CLASS_ID)`:
-```sql
-SELECT CORPORATION_ID, SECURITY_CLASS_ID, SECURITY_CLASS_NAME,
-       SECURITY_CLASS_TYPE_DETAILED, SENIORITY, MULTIPLIER,
-       PARTICIPATING_PREFERRED, PREFERENCE_CAP, ORIGINAL_ISSUE_PRICE,
-       CONVERSION_RATIO, CONVERSION_PRICE, OUTSTANDING_SHARES,
-       FULLY_DILUTED_QUANTITY, FULLY_DILUTED_OWNERSHIP, CASH_RAISED,
-       DIVIDEND_TYPE, DIVIDEND_COUPON, IS_COMPOUNDING, AS_OF_DATE
-FROM FUND_ADMIN.SUMMARY_CAP_TABLE
-WHERE CORPORATION_ID IN (SELECT DISTINCT CORPORATION_ID FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP
-                        WHERE FUND_ID IN ('<fund_uuid1>','<fund_uuid2>', …))
-QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, SECURITY_CLASS_ID ORDER BY AS_OF_DATE DESC)=1
-LIMIT 10000
-```
+SQL: the `captable` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem captable`).
 **This is the heaviest stem.** `SUMMARY_CAP_TABLE` scans ~1.04M rows for a 15-fund firm before the `QUALIFY`
 collapses it to ~5,200. Note also that the `20000` limit is silently clamped to **10,000** server-side, so a firm
 with roughly double that share-class count truncates without warning.
@@ -514,12 +352,7 @@ is itself row-scoped to the active firm context, so the filter is belt-and-brace
 stays because the manifest has no firm-context/no-IN-list mechanism. Scoped like §11 financing / §15 captable,
 by the ownership subquery. Note the join key: this table's `corporation_uuid` **is** ownership's
 `CORPORATION_ID`.
-```sql
-SELECT entity_link_id, corporation_uuid, corporation_name
-FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2
-WHERE corporation_uuid IN (SELECT DISTINCT CORPORATION_ID FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP
-                        WHERE FUND_ID IN ('<fund_uuid1>','<fund_uuid2>', …))
-```
+SQL: the `corporations` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem corporations`).
 → save to `<raw_dir>/corporations.ndjson`. Expect **fewer** rows than the corporation scope — only Carta
 cap-table customers appear here (695 of 1,149 on a reference 15-fund firm). Optional / non-gating: a firm whose
 portcos aren't Carta cap-table customers has no rows — write an empty file (`fm_paths.py touch-empty`) to record
@@ -529,37 +362,14 @@ the attempt, exactly like the other optional stems.
 Each fund's management-fee periods, so Fund Construction can start a new fund from a past fund's terms.
 `fee_rate` is the annual rate on `calculation_base`; a waived period is written with a 0 rate. Optional: a
 missing or empty `fee_schedules.ndjson` still builds, and the "start from a past fund" helper stays hidden.
-```sql
-SELECT fund_id AS fund_uuid, period_name, period_order, start_date, end_date,
-       fee_rate, calculation_base, frequency, waived,
-       minimum_fee_amount, fixed_fee_amount, fee_currency
-FROM FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES
-WHERE fund_id IN ({fund_uuids})
-ORDER BY fund_id, period_order
-```
+SQL: the `fee_schedules` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem fee_schedules`).
 → `fee-history.json` `{ asOf, funds: { <fundId>: [{ order, name, start, end, rate, base, frequency, waived, minFee, fixedFee, currency }] } }`.
 
 ## 18. Market ranges for fees and expenses (optional) → `FUND_OPS_BENCHMARKS_V2` → `ops-benchmarks.json`
 One row per cohort (vintage year x fund-size bucket): aggregate percentiles of lifetime-to-date management fees and
 operating expenses as a share of fund size, and of legal, software and payroll costs as a share of contributions.
 No fund or firm names. Cohorts too small to rank have NULL percentiles and are dropped. Optional, like §17.
-```sql
-SELECT DISTINCT vintage_year, fund_aum_bucket,
-       NET_PERC_MGMT_FEES_TO_FUNDSIZE_10TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_25TH,
-       NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_75TH,
-       NET_PERC_MGMT_FEES_TO_FUNDSIZE_90TH, CT_COMPANIES_MGMT_FEES,
-       NET_PERC_OPEX_TO_FUNDSIZE_10TH, NET_PERC_OPEX_TO_FUNDSIZE_25TH,
-       NET_PERC_OPEX_TO_FUNDSIZE_50TH, NET_PERC_OPEX_TO_FUNDSIZE_75TH,
-       NET_PERC_OPEX_TO_FUNDSIZE_90TH, CT_COMPANIES_OPEX,
-       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_50TH,
-       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_75TH,
-       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_TECH_TO_CONTRIBUTIONS_50TH,
-       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_75TH,
-       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_25TH, NET_PERC_PAYROLL_TO_CONTRIBUTIONS_50TH,
-       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_75TH
-FROM FUND_ADMIN.FUND_OPS_BENCHMARKS_V2
-WHERE entity_type_name = 'Fund' AND NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH IS NOT NULL
-```
+SQL: the `ops_benchmarks` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem ops_benchmarks`).
 → `ops-benchmarks.json` `{ asOf, cohorts: [{ vintage, bucket, mgmtFees: {p10..p90, n}, opex, legal, tech, payroll }] }`.
 
 ## 19. Expense history (optional) → general-ledger expense accounts → `expense-history.json`
@@ -567,15 +377,7 @@ What each fund actually booked to its expense accounts, by account and calendar 
 new fund's expenses from the client's own spend (audit, administration, legal, tax, one-time launch costs).
 Management fees are left out (they come from §17). Account types 6000 to 6999 are the expense accounts. `AMOUNT` can
 be in the entry's own currency, so the fund's base-currency amount is used where it is set. Optional, like §17.
-```sql
-SELECT fund_uuid, account_name, YEAR(effective_date) AS year,
-       SUM(COALESCE(base_currency_amount, amount)) AS amount
-FROM FUND_ADMIN.JOURNAL_ENTRIES
-WHERE fund_uuid IN ({fund_uuids}) AND account_type BETWEEN 6000 AND 6999
-  AND account_name NOT ILIKE '%management fee%'
-GROUP BY fund_uuid, account_name, YEAR(effective_date)
-ORDER BY fund_uuid, account_name, year
-```
+SQL: the `expense_ledger` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem expense_ledger`).
 → `expense-history.json` `{ asOf, funds: { <fundId>: [{ name, byYear: { "<year>": amount } }] } }`, biggest account first.
 
 ## 14. Portfolio-company financials (attempt-required) → `COMPANY_FINANCIALS`
@@ -585,24 +387,7 @@ Carta **Data Collection** financials (revenue / ARR / KPIs reported *by the port
 must run it EVERY time. It legitimately returns **0 rows** for a firm whose portcos don't report into Data
 Collection — that's fine (write an empty file to record the attempt), but you may not skip the fetch. Fetch only
 the latest actuals for the metrics the dashboard renders:
-```sql
-SELECT legal_name, name, mnemonic, report_type, float_value, unit_type, currency, period_end
-FROM FUND_ADMIN.COMPANY_FINANCIALS
-WHERE instance_type = 'Actual'
-  AND (UPPER(TRIM(mnemonic)) IN ('FS_REVENUE', 'FS_ARR_END', 'ARR', 'FS_EBITDA', 'FS_GROSS_PROFIT',
-                                 'FS_COGS', 'FS_NET_INCOME', 'FS_CASH_AND_CASH_EQUIVALENTS', 'FS_HEADCOUNT')
-       OR LOWER(TRIM(name)) = 'revenue'
-       OR LOWER(name) LIKE '%recurring revenue%')
-  AND LOWER(COALESCE(name, '')) NOT LIKE '%deferred%'
-  AND LOWER(COALESCE(name, '')) NOT LIKE '%forecast%'
-QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),
-                 period_end, mnemonic, frequency, report_type, instance_type
-    ORDER BY DATE(as_of_date) DESC, instance_id DESC
-) = 1 AND float_value IS NOT NULL
-ORDER BY legal_name, mnemonic, name, period_end, report_type
-LIMIT 10000
-```
+SQL: the `financials` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem financials`).
 The `QUALIFY` keeps the latest submission per data point (newest `as_of_date`, then `instance_id`).
 `float_value IS NOT NULL` sits in the `QUALIFY`, after the ranking, so a blank latest submission drops the
 point instead of surfacing an older value.
@@ -618,7 +403,19 @@ in Step 1. Do **not** add a `firm_id`/`firm_name` filter: it is redundant with t
 that doesn't match the row's own `firm_id` silently returns zero rows. Rely on the Step-1 `set_context`. (This
 scoping is also why a cross-firm `COUNT(*)` looks "empty" when run from a different firm's context — it is not
 empty, it is filtered.)
-Captured as the `financials` stem: it is in `stem_queries.py` with no IN-list slot, so the emitter includes it
+Captured as the `financials` stem: it is in `queries.json` with no IN-list slot, so the emitter includes it
 in the batch without substitution → `<raw_dir>/financials.ndjson`. The builder matches `legal_name` to the issuer-name slug and surfaces
 revenue / ARR in the Companies expand. Coverage is **partial** — only portcos that report into Carta Data
 Collection appear, and a company must also be a tracked holding to surface on its card; render only when present.
+
+## Hosted variants → `queries.json` `hosted`
+The hosted app (`server/worker.js`) runs the local `nav_latest`, `fund_metrics`, `cohort`, `ownership` and
+`corporations` stems, each scoped to the firm's funds through the §0 directory query. It reads every result as
+**one 10,000-row page**: it cannot page, and it rejects any result that reports `next_offset` rather than save a
+partial snapshot. So three queries are its own, each trimmed to fit that one page:
+- `nav_history` — `MONTHLY_NAV_CALCULATIONS` at quarter-ends plus each fund's latest month only: the months its
+  NAV trend keeps. Locally the trend comes from every month-end row of the §5 `cashflows` stem.
+- `cashflows` — only months with a non-zero LP contribution or distribution, and only the flow columns: the
+  dated flows behind net LP IRR (the NAV trend comes from `nav_history`). The local §5 stem keeps every month.
+- `investments` — one row per lot, ungrouped, with `remaining_value_per_share`, which the hosted snapshot
+  reads per lot. The local §3 stem groups by asset.

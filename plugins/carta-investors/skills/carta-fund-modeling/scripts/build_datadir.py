@@ -2,7 +2,7 @@
 """
 build_datadir.py — firm-agnostic Fund Admin -> console-schema transform.
 
-Reads the raw outputs of the SKILL's Fund-Admin queries (references/queries.md)
+Reads the raw outputs of the SKILL's Fund-Admin queries (queries.json; prose in references/queries.md)
 plus a small meta.json, and writes the scenario-planning data dir that serve.py
 serves. NO firm-specific data is embedded — every value comes from the raw query
 files; missing optional data degrades to empty / "not available" states. Reusable
@@ -799,8 +799,9 @@ def build(rawdir, out, meta):
     # Curated metrics surfaced on the company card + time-series chart. Matched by
     # mnemonic (preferred) or lowercased name; ORDER drives the UI metric dropdown.
     # (key, label, unit, matcher(mnemonic_upper, name_lower)). Forecast/deferred
-    # variants are excluded — operating actuals only. Mirrored in queries.md §14's
-    # WHERE so the fetch only pulls rows this matcher keeps — change both together.
+    # variants are excluded — operating actuals only. Mirrored in the WHERE of the
+    # `financials` stem in queries.json so the fetch only pulls rows this matcher keeps —
+    # change both together.
     METRIC_DEFS = [
         ("revenue",     "Revenue",      "Dollar", lambda mn, nm: mn == "FS_REVENUE" or nm == "revenue"),
         ("arr",         "ARR",          "Dollar", lambda mn, nm: mn in ("FS_ARR_END", "ARR") or "recurring revenue" in nm),

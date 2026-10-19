@@ -31,7 +31,7 @@ of coming back inline and needing a stdin pipe.
 Prints JSON: for --stem, one ``{"sql","limit","format"}`` object; otherwise a
 ``{stem: {...}}`` map (optionally filtered by --wave).
 
-Stdlib-only, Python 3.9-safe. The SQL itself lives in stem_queries.py.
+Stdlib-only, Python 3.9-safe. The SQL itself lives in queries.json, which stem_queries.py loads.
 """
 import argparse
 import json

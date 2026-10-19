@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.89.0</carta-plugin>
+<carta-plugin>carta-investors:6.90.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -299,7 +299,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/save_query_resu
 entity-list command** (verbose per-entity objects that **exceed the MCP 40k-char limit on large firms** — a firm
 with ~100+ SPVs breaks it); the directory **excludes SPVs** and returns only Fund/GP entities, so no SPV is ever
 fetched. From here the queries are generated deterministically: **do NOT hand-write SQL or paste an IN-list.**
-Get every stem's ready-to-run query from the emitter (`scripts/stem_queries.py` is the source of truth for stem SQL).
+Get every stem's ready-to-run query from the emitter (`queries.json` holds every stem's SQL).
 
 **Zero rows means a lapsed firm context, not an empty firm.** These tables are row-scoped by `set_context`; when
 the context lapses every query returns 0 rows with no error. If the directory query — or, later, a rows-required

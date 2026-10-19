@@ -1,0 +1,459 @@
+{
+  "corp_scope": [
+    "(SELECT DISTINCT CORPORATION_ID FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP",
+    "                        WHERE FUND_ID IN ({fund_uuids}))"
+  ],
+  "directory": {
+    "limit": 2000,
+    "format": "ndjson",
+    "sql": [
+      "WITH entities AS (",
+      "  SELECT fund_uuid, fund_name, entity_type_name",
+      "  FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
+      "  WHERE firm_id = '{firm_uuid}' AND is_firm_rollup = FALSE",
+      "  UNION",
+      "  SELECT fund_uuid, fund_name, fund_entity_type_name",
+      "  FROM FUND_ADMIN.AGGREGATE_INVESTMENTS",
+      "  WHERE firm_id = '{firm_uuid}'",
+      "  UNION",
+      "  SELECT fund_uuid, fund_name, entity_type_name",
+      "  FROM FUND_ADMIN.AGGREGATE_FUND_METRICS",
+      "  WHERE firm_id = '{firm_uuid}'",
+      ")",
+      "SELECT fund_uuid, MAX(fund_name) AS fund_name, MAX(entity_type_name) AS entity_type_name",
+      "FROM entities",
+      "WHERE fund_uuid IS NOT NULL",
+      "GROUP BY fund_uuid",
+      "HAVING COALESCE(MAX(entity_type_name), '') NOT ILIKE '%SPV%'",
+      "ORDER BY entity_type_name, fund_name, fund_uuid"
+    ]
+  },
+  "stems": {
+    "nav_latest": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 200,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, fund_name, entity_type_name,",
+        "       cumulative_commitment_amount, cumulative_lp_contributions,",
+        "       cumulative_gp_contributions,",
+        "       cumulative_lp_distributions, ending_lp_nav, ending_gp_nav,",
+        "       lp_dpi, lp_rvpi, lp_tvpi, month_end_date",
+        "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
+        "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1",
+        "ORDER BY fund_name"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
+        "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1"
+      ]
+    },
+    "investments": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 5000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, issuer_name, entity_link_id, general_ledger_issuer_id,",
+        "       asset_name, asset_class_type, investment_date,",
+        "       SUM(total_cost) AS total_cost,",
+        "       SUM(remaining_value) AS remaining_value,",
+        "       SUM(total_proceeds) AS total_proceeds,",
+        "       SUM(count_remaining_shares) AS count_remaining_shares,",
+        "       MAX(is_active_investment) AS is_active_investment,",
+        "       MAX(is_public_asset) AS is_public_asset,",
+        "       MAX(latest_fmv_effective_date) AS latest_fmv_effective_date,",
+        "       MAX(latest_update_effective_date) AS latest_update_effective_date",
+        "FROM FUND_ADMIN.AGGREGATE_INVESTMENTS",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "GROUP BY fund_uuid, issuer_name, entity_link_id, general_ledger_issuer_id,",
+        "         asset_name, asset_class_type, investment_date",
+        "ORDER BY remaining_value DESC NULLS LAST"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.AGGREGATE_INVESTMENTS",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "ORDER BY remaining_value DESC NULLS LAST"
+      ]
+    },
+    "cashflows": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 10000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, month_end_date, lp_contributions, lp_distributions,",
+        "       ending_lp_nav, cumulative_lp_contributions, cumulative_lp_distributions",
+        "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
+        "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
+        "ORDER BY month_end_date"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
+        "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
+        "ORDER BY month_end_date"
+      ]
+    },
+    "fund_metrics": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 50,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, dry_powder, total_mgmt_fees, total_opx,",
+        "       fund_reporting_currency, vintage_year, vintage_date, total_moic",
+        "FROM FUND_ADMIN.AGGREGATE_FUND_METRICS",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.AGGREGATE_FUND_METRICS",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1"
+      ]
+    },
+    "accrued_carry": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 200,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, SUM(ACTUAL_AMOUNT) AS accrued_carry, MAX(EFFECTIVE_DATE) AS as_of",
+        "FROM FUND_ADMIN.ALLOCATIONS",
+        "WHERE ALLOCATION_BUCKET_NAME = 'Carried interest accrued'",
+        "  AND IS_GENERAL_PARTNER = TRUE",
+        "  AND fund_uuid IN ({fund_uuids})",
+        "GROUP BY fund_uuid"
+      ]
+    },
+    "distributed_carry": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 200,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, ABS(SUM(ACTUAL_AMOUNT)) AS carry_distributed, MAX(EFFECTIVE_DATE) AS as_of",
+        "FROM FUND_ADMIN.ALLOCATIONS",
+        "WHERE ALLOCATION_BUCKET_NAME = 'Carried interest earned'",
+        "  AND IS_GENERAL_PARTNER = TRUE",
+        "  AND fund_uuid IN ({fund_uuids})",
+        "GROUP BY fund_uuid"
+      ]
+    },
+    "cohort": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 2000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, performance_quarter_start_date,",
+        "       vintage_year, fund_aum_bucket, entity_type_name, fund_count,",
+        "       tvpi, net_irr, dpi, moic,",
+        "       tvpi_5, tvpi_10, tvpi_25, tvpi_50, tvpi_75, tvpi_90, tvpi_95,",
+        "       net_irr_50th, net_irr_75th, net_irr_90th,",
+        "       dpi_5, dpi_10, dpi_25, dpi_50, dpi_75, dpi_90, dpi_95,",
+        "       moic_5, moic_10, moic_25, moic_50, moic_75, moic_90, moic_95",
+        "FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY performance_quarter_start_date DESC) <= 8"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY performance_quarter_start_date DESC) <= 8"
+      ]
+    },
+    "fee_schedules": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 2000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_id AS fund_uuid, period_name, period_order, start_date, end_date,",
+        "       fee_rate, calculation_base, frequency, waived,",
+        "       minimum_fee_amount, fixed_fee_amount, fee_currency",
+        "FROM FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES",
+        "WHERE fund_id IN ({fund_uuids})",
+        "ORDER BY fund_id, period_order"
+      ]
+    },
+    "expense_ledger": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 5000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, account_name, YEAR(effective_date) AS year,",
+        "       SUM(COALESCE(base_currency_amount, amount)) AS amount",
+        "FROM FUND_ADMIN.JOURNAL_ENTRIES",
+        "WHERE fund_uuid IN ({fund_uuids}) AND account_type BETWEEN 6000 AND 6999",
+        "  AND account_name NOT ILIKE '%management fee%'",
+        "GROUP BY fund_uuid, account_name, YEAR(effective_date)",
+        "ORDER BY fund_uuid, account_name, year"
+      ]
+    },
+    "ops_benchmarks": {
+      "id_param": null,
+      "wave": 1,
+      "limit": 2000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT DISTINCT vintage_year, fund_aum_bucket,",
+        "       NET_PERC_MGMT_FEES_TO_FUNDSIZE_10TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_25TH,",
+        "       NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_75TH,",
+        "       NET_PERC_MGMT_FEES_TO_FUNDSIZE_90TH, CT_COMPANIES_MGMT_FEES,",
+        "       NET_PERC_OPEX_TO_FUNDSIZE_10TH, NET_PERC_OPEX_TO_FUNDSIZE_25TH,",
+        "       NET_PERC_OPEX_TO_FUNDSIZE_50TH, NET_PERC_OPEX_TO_FUNDSIZE_75TH,",
+        "       NET_PERC_OPEX_TO_FUNDSIZE_90TH, CT_COMPANIES_OPEX,",
+        "       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_50TH,",
+        "       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_75TH,",
+        "       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_TECH_TO_CONTRIBUTIONS_50TH,",
+        "       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_75TH,",
+        "       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_25TH, NET_PERC_PAYROLL_TO_CONTRIBUTIONS_50TH,",
+        "       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_75TH",
+        "FROM FUND_ADMIN.FUND_OPS_BENCHMARKS_V2",
+        "WHERE entity_type_name = 'Fund' AND NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH IS NOT NULL"
+      ]
+    },
+    "partners": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 5000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT partner_name, partner_country, partner_state, fund_uuid,",
+        "       PARTNER_CLASS_NAME AS partner_class_name,",
+        "       TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment,",
+        "       TOTAL_CAP_CONTRIBUTION                   AS contributed,",
+        "       TOTAL_DISTRIBUTION                       AS distributed,",
+        "       TOTAL_NET_ASSET_BALANCE                  AS nav",
+        "FROM FUND_ADMIN.PARTNER_DATA",
+        "WHERE fund_uuid IN ({fund_uuids}) AND IS_LIMITED_PARTNER = TRUE",
+        "ORDER BY commitment DESC NULLS LAST"
+      ],
+      "wide": [
+        "SELECT *, TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment,",
+        "       TOTAL_CAP_CONTRIBUTION AS contributed,",
+        "       TOTAL_DISTRIBUTION AS distributed,",
+        "       TOTAL_NET_ASSET_BALANCE AS nav",
+        "FROM FUND_ADMIN.PARTNER_DATA",
+        "WHERE fund_uuid IN ({fund_uuids}) AND IS_LIMITED_PARTNER = TRUE",
+        "ORDER BY commitment DESC NULLS LAST"
+      ]
+    },
+    "gp_partners": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 5000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT partner_name, partner_country, partner_state, fund_uuid,",
+        "       TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment,",
+        "       TOTAL_CAP_CONTRIBUTION                   AS contributed,",
+        "       TOTAL_DISTRIBUTION                       AS distributed,",
+        "       TOTAL_NET_ASSET_BALANCE                  AS nav",
+        "FROM FUND_ADMIN.PARTNER_DATA",
+        "WHERE fund_uuid IN ({fund_uuids}) AND IS_GENERAL_PARTNER = TRUE",
+        "ORDER BY commitment DESC NULLS LAST"
+      ],
+      "wide": [
+        "SELECT *, TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment,",
+        "       TOTAL_CAP_CONTRIBUTION AS contributed,",
+        "       TOTAL_DISTRIBUTION AS distributed,",
+        "       TOTAL_NET_ASSET_BALANCE AS nav",
+        "FROM FUND_ADMIN.PARTNER_DATA",
+        "WHERE fund_uuid IN ({fund_uuids}) AND IS_GENERAL_PARTNER = TRUE",
+        "ORDER BY commitment DESC NULLS LAST"
+      ]
+    },
+    "gp_carry": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 500,
+      "format": "ndjson",
+      "sql": [
+        "WITH gp_map AS (",
+        "  SELECT DISTINCT GP_ENTITY_NAME, FUND_UUID, FUND_NAME",
+        "  FROM FUND_ADMIN.ALLOCATIONS",
+        "  WHERE ALLOCATION_BUCKET_NAME = 'Carried interest accrued'",
+        "    AND ENTITY_TYPE_NAME = 'Fund' AND IS_GENERAL_PARTNER = TRUE",
+        "    AND GP_ENTITY_NAME IS NOT NULL",
+        "    AND FUND_UUID IN ({fund_uuids})",
+        ")",
+        "SELECT m.FUND_UUID AS fund_uuid, m.FUND_NAME AS fund_name,",
+        "       a.FUND_NAME AS gp_entity_name, a.PARTNER_NAME AS partner_name,",
+        "       MAX(a.PARTNER_TYPE) AS partner_type,",
+        "       ROUND(SUM(a.ACTUAL_AMOUNT)) AS accrued_carry",
+        "FROM FUND_ADMIN.ALLOCATIONS a",
+        "JOIN gp_map m ON m.GP_ENTITY_NAME = a.FUND_NAME",
+        "WHERE a.ALLOCATION_BUCKET_NAME = 'Carried interest accrued'",
+        "  AND a.ENTITY_TYPE_NAME = 'GP'",
+        "GROUP BY 1, 2, 3, 4"
+      ]
+    },
+    "waterfall": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 2000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_id, fund_name, config_name, carry_rate, preferred_return,",
+        "       gp_catchup_rate, gp_catchup_limit, recommended_config_rank, is_automated",
+        "FROM FUND_ADMIN.PROFIT_ALLOCATION_WATERFALL_CONFIG",
+        "WHERE fund_id IN ({fund_uuids})"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.PROFIT_ALLOCATION_WATERFALL_CONFIG",
+        "WHERE fund_id IN ({fund_uuids})"
+      ]
+    },
+    "deal_irr": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 2000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, issuer_name, deal_irr, performance_quarter_end_date",
+        "FROM FUND_ADMIN.TEMPORAL_DEAL_IRR",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid, issuer_id ORDER BY performance_quarter_end_date DESC)=1"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.TEMPORAL_DEAL_IRR",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid, issuer_id ORDER BY performance_quarter_end_date DESC)=1"
+      ]
+    },
+    "ownership": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 5000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT FUND_ID, CORPORATION_ID, PERCENTAGE, AS_OF_DATE",
+        "FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP",
+        "WHERE FUND_ID IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, FUND_ID ORDER BY AS_OF_DATE DESC)=1"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP",
+        "WHERE FUND_ID IN ({fund_uuids})",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, FUND_ID ORDER BY AS_OF_DATE DESC)=1"
+      ]
+    },
+    "financing": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 3000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT investment_name, round, post_money_valuation, COALESCE(closing_date, raised_date) AS round_date, corporation_id",
+        "FROM FUND_ADMIN.FINANCING_HISTORY",
+        "WHERE corporation_id IN {corp_scope}",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST)=1"
+      ],
+      "wide": [
+        "SELECT *, COALESCE(closing_date, raised_date) AS round_date",
+        "FROM FUND_ADMIN.FINANCING_HISTORY",
+        "WHERE corporation_id IN {corp_scope}",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST)=1"
+      ]
+    },
+    "captable": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 10000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT CORPORATION_ID, SECURITY_CLASS_ID, SECURITY_CLASS_NAME,",
+        "       SECURITY_CLASS_TYPE_DETAILED, SENIORITY, MULTIPLIER,",
+        "       PARTICIPATING_PREFERRED, PREFERENCE_CAP, ORIGINAL_ISSUE_PRICE,",
+        "       CONVERSION_RATIO, CONVERSION_PRICE, OUTSTANDING_SHARES,",
+        "       FULLY_DILUTED_QUANTITY, FULLY_DILUTED_OWNERSHIP, CASH_RAISED,",
+        "       DIVIDEND_TYPE, DIVIDEND_COUPON, IS_COMPOUNDING, AS_OF_DATE",
+        "FROM FUND_ADMIN.SUMMARY_CAP_TABLE",
+        "WHERE CORPORATION_ID IN {corp_scope}",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, SECURITY_CLASS_ID ORDER BY AS_OF_DATE DESC)=1"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.SUMMARY_CAP_TABLE",
+        "WHERE CORPORATION_ID IN {corp_scope}",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, SECURITY_CLASS_ID ORDER BY AS_OF_DATE DESC)=1"
+      ]
+    },
+    "corporations": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 10000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT entity_link_id, corporation_uuid, corporation_name",
+        "FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2",
+        "WHERE corporation_uuid IN {corp_scope}"
+      ],
+      "wide": [
+        "SELECT * FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2",
+        "WHERE corporation_uuid IN {corp_scope}"
+      ]
+    },
+    "financials": {
+      "id_param": null,
+      "wave": 1,
+      "limit": 10000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT legal_name, name, mnemonic, report_type, float_value, unit_type, currency, period_end",
+        "FROM FUND_ADMIN.COMPANY_FINANCIALS",
+        "WHERE instance_type = 'Actual'",
+        "  AND (UPPER(TRIM(mnemonic)) IN ('FS_REVENUE', 'FS_ARR_END', 'ARR', 'FS_EBITDA', 'FS_GROSS_PROFIT',",
+        "                                 'FS_COGS', 'FS_NET_INCOME', 'FS_CASH_AND_CASH_EQUIVALENTS', 'FS_HEADCOUNT')",
+        "       OR LOWER(TRIM(name)) = 'revenue'",
+        "       OR LOWER(name) LIKE '%recurring revenue%')",
+        "  AND LOWER(COALESCE(name, '')) NOT LIKE '%deferred%'",
+        "  AND LOWER(COALESCE(name, '')) NOT LIKE '%forecast%'",
+        "QUALIFY ROW_NUMBER() OVER (",
+        "    PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),",
+        "                 period_end, mnemonic, frequency, report_type, instance_type",
+        "    ORDER BY DATE(as_of_date) DESC, instance_id DESC",
+        ") = 1 AND float_value IS NOT NULL",
+        "ORDER BY legal_name, mnemonic, name, period_end, report_type"
+      ]
+    }
+  },
+  "hosted": {
+    "nav_history": {
+      "sql": [
+        "SELECT fund_uuid, month_end_date, ending_lp_nav,",
+        "       cumulative_lp_contributions, cumulative_lp_distributions",
+        "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
+        "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
+        "QUALIFY MONTH(month_end_date) IN (3, 6, 9, 12)",
+        "     OR month_end_date = MAX(month_end_date) OVER (PARTITION BY fund_uuid)",
+        "ORDER BY month_end_date DESC"
+      ]
+    },
+    "cashflows": {
+      "sql": [
+        "SELECT fund_uuid, month_end_date, lp_contributions, lp_distributions",
+        "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
+        "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
+        "  AND (COALESCE(lp_contributions, 0) <> 0 OR COALESCE(lp_distributions, 0) <> 0)",
+        "ORDER BY month_end_date DESC"
+      ]
+    },
+    "investments": {
+      "sql": [
+        "SELECT issuer_name, entity_link_id, fund_uuid, fund_name, fund_entity_type_name, asset_name, asset_class_type,",
+        "       count_remaining_shares, remaining_value, remaining_value_per_share,",
+        "       total_cost, total_proceeds, total_unrealized_gain_loss, investment_date,",
+        "       is_active_investment, is_public_asset",
+        "FROM FUND_ADMIN.AGGREGATE_INVESTMENTS",
+        "WHERE fund_uuid IN ({fund_uuids})",
+        "ORDER BY issuer_name, fund_uuid"
+      ]
+    }
+  }
+}
