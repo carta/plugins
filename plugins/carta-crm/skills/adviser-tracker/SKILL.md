@@ -24,7 +24,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.17</carta-plugin>
+<carta-plugin>carta-crm:1.16.18</carta-plugin>
 
 # Adviser Tracker
 
@@ -174,8 +174,9 @@ save. For the people answer, drop the people view as the people rules say.
 6. Get the logos. The logos call needs the rows of the results, so it follows them in the next turn.
    Take the `domain` and `companyId` of every row of both results, once for each domain, and call
    the logos tool once with all of them. Its answer holds a data URI for each bank that has a logo,
-   and it is under 100 000 characters. Use the saved path when the answer returns one. Otherwise, on
-   the next turn, write the answer to its own file with `Write`, exactly as it came back.
+   about 300 characters each. Use the saved path when the answer returns one. Otherwise, on the next
+   turn, write the answer to its own file with `Write`, exactly as it came back. Always write it and
+   pass it as `--logos`: it is small enough to copy, so never leave the logos out because of its size.
    When a row of a result already carries a `logo.dataUri` that is not null, the server is older and
    has sent its logos inside the result: skip this call. When the tool is unknown, or it fails, skip
    it and go on: the errors above do not apply to this call, and the page shows empty tiles. Never
