@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.11</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.12</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -161,6 +161,7 @@ rejects with `not_in_manifest`:
   for the Skill Directory, and remains the legacy
   dispatch path for environments without `call_tool`
 - `get_current_user` — `recommendations` for the Capabilities cards
+- `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
 
 ## Source layout — the artifact is BUILT, not hand-edited
 
@@ -375,7 +376,7 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["cap_table_chart", "call_tool", "fetch", "get_current_user"]
+          tools: ["cap_table_chart", "call_tool", "fetch", "get_current_user", "track_ui_event"]
         }
       ]
     }
