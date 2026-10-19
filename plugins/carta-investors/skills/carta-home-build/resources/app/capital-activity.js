@@ -88,7 +88,7 @@ function renderCapActivitySection() {
   const container = document.getElementById('ca-section-cards');
   if (!section || !container) return;
 
-  const { allActive, visible } = visibleCapActivities();
+  const { visible } = visibleCapActivities();
   section.style.display = visible.length > 0 ? '' : 'none';
   container.innerHTML = '';
 
@@ -156,13 +156,24 @@ function renderCapActivitySection() {
     container.appendChild(card);
   });
 
-  // "View all capital activity" link — shown when there are more than 6 items
-  if (allActive.length > 6) {
+  renderCapActivityViewAll(container);
+}
+
+// "View all capital activity" — shown when there are more items than cards. Carta has
+// no firm-wide capital activity list; the Firm Dashboard's Spotlight shows every fund's
+// active calls and distributions. Its URL takes the firm's numeric id, so the link waits
+// for that id, is left out when it is unknown, and re-checks the count because cards
+// can be dismissed while it waits.
+function renderCapActivityViewAll(container) {
+  return fetchFirmCartaId().then(firmCartaId => {
+    const { allActive, visible } = visibleCapActivities();
+    if (firmCartaId == null || allActive.length <= visible.length) return;
+    if (container.querySelector('.ca-view-all-wrap')) return;
     const wrap = document.createElement('div');
     wrap.className = 'ca-view-all-wrap';
-    wrap.innerHTML = `<a class="ca-view-all-link" href="https://app.carta.com/investors/${_benchmarkFirmId}/fund-admin/capital-activity/" target="_blank">View all capital activity →</a>`;
+    wrap.innerHTML = `<a class="ca-view-all-link" href="https://app.carta.com/investors/firm/${firmCartaId}/portfolio/gp-activity/" target="_blank" rel="noopener">View all capital activity →</a>`;
     container.appendChild(wrap);
-  }
+  });
 }
 
 function dismissCapCard(activityId) {
@@ -1190,10 +1201,11 @@ async function openEmailPreview(fundUuid, activityId, partnerId, partnerName) {
   renderEmailPreview(body, view, logoDataUri);
 }
 
-// The firm's own logo as a data: URI, or null. Cached for the session because every
-// reminder in the firm carries the same logo.
+// The firm's fa:get:firm_logo payload, or null. Cached for the session because every
+// reminder in the firm carries the same logo, and it is also where a non-staff caller
+// can read the firm's numeric id.
 let _firmLogoPromise = null;
-function fetchFirmLogoDataUri() {
+function fetchFirmLogo() {
   if (!_benchmarkFirmId) return Promise.resolve(null);
   if (!_firmLogoPromise) {
     _firmLogoPromise = _mcp("fetch", {
@@ -1201,13 +1213,24 @@ function fetchFirmLogoDataUri() {
       params: { firm_uuid: _benchmarkFirmId },
     }).then(res => {
       if (res.isError) return null;
-      return JSON.parse(res.content?.[0]?.text ?? '{}').data_uri ?? null;
+      return JSON.parse(res.content?.[0]?.text ?? '{}');
     }).catch(e => {
       console.error('[firm logo error]', e);
       return null;
     });
   }
   return _firmLogoPromise;
+}
+
+// The firm's own logo as a data: URI, or null.
+function fetchFirmLogoDataUri() {
+  return fetchFirmLogo().then(logo => logo?.data_uri ?? null);
+}
+
+// The firm's numeric id that Carta's web URLs take (/investors/firm/<id>/), or null.
+function fetchFirmCartaId() {
+  return fetchFirmLogo().then(logo =>
+    Number.isInteger(logo?.firm_carta_id) ? logo.firm_carta_id : null);
 }
 
 // The sandbox CSP is img-src 'self' data:, so an email image served from a URL shows
