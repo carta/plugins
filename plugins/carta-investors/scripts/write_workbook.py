@@ -27,6 +27,8 @@ Operations supported:
     add_image                   — anchor a PNG at a cell, sized to N rows tall
     set_comment                 — attach a native cell comment (used for sparse-history flagging)
     merge_cells                 — merge a cell range (used for period header rows in tag-view layout)
+    set_fill                    — solid background colour on a range, e.g. C6:C6 for an input cell
+    define_name                 — workbook-level named range; replaces a name already defined
 
 Payload shape:
     {
@@ -70,6 +72,7 @@ Notes for the budget skills:
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -77,13 +80,14 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.formula.translate import Translator
-from openpyxl.styles import Font
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import (
     column_index_from_string,
     coordinate_to_tuple,
     get_column_letter,
     range_boundaries,
 )
+from openpyxl.workbook.defined_name import DefinedName
 from PIL import Image as PILImage
 
 # Default row height in openpyxl is 15 points (Excel's default for Calibri 11).
@@ -109,6 +113,38 @@ def _autofit_width_for_cell(cell) -> int:
     if "$" in fmt or "(#,##0" in fmt:
         n = max(n, 12)
     return n
+
+
+# openpyxl stores any name and any refers_to text without checking either, so a
+# bad one only surfaces when Excel opens the saved file and offers to repair it.
+_DEFINED_NAME = re.compile(r"[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}")
+_CELL_LIKE_NAME = re.compile(r"[A-Za-z]{1,3}[0-9]+|[RrCc]|[Rr][0-9]*[Cc][0-9]*")
+_SHEET_QUALIFIED_RANGE = re.compile(
+    r"(?:'(?P<quoted>(?:[^']|'')+)'|(?P<bare>[A-Za-z0-9_.]+))"
+    r"!(?P<cells>\$?[A-Z]{1,3}\$?[0-9]+(?::\$?[A-Z]{1,3}\$?[0-9]+)?)"
+)
+_EXCEL_MAX_COLUMN = 16384
+_EXCEL_MAX_ROW = 1048576
+
+
+def _checked_defined_name(wb, name, refers_to) -> DefinedName:
+    """A DefinedName for `name` -> `refers_to`, or ValueError when Excel would
+    reject the name or the reference does not point at a sheet in `wb`."""
+    if not isinstance(name, str) or not _DEFINED_NAME.fullmatch(name) \
+            or _CELL_LIKE_NAME.fullmatch(name):
+        raise ValueError(f"{name!r} is not a valid Excel name")
+    match = _SHEET_QUALIFIED_RANGE.fullmatch(refers_to) if isinstance(refers_to, str) else None
+    if match is None:
+        raise ValueError(f"refers_to {refers_to!r} is not a sheet-qualified range "
+                         "such as 'Sheet'!$A$1 or 'Sheet'!$A$1:$B$4")
+    sheet = match["bare"] or match["quoted"].replace("''", "'")
+    if sheet not in wb.sheetnames:
+        raise ValueError(f"refers_to {refers_to!r} names sheet {sheet!r}, "
+                         "which is not in the workbook")
+    _, _, max_col, max_row = range_boundaries(match["cells"].replace("$", ""))
+    if max_col > _EXCEL_MAX_COLUMN or max_row > _EXCEL_MAX_ROW:
+        raise ValueError(f"refers_to {refers_to!r} is outside Excel's grid")
+    return DefinedName(name, attr_text=refers_to)
 
 
 def apply_operations(payload: dict) -> dict:
@@ -298,6 +334,27 @@ def apply_operations(payload: dict) -> dict:
                                 "status": "ok"})
             except Exception as exc:
                 results.append({"op": kind, "sheet": op["sheet"], "ref": ref,
+                                "status": "error", "error": str(exc)})
+        elif kind == "set_fill":
+            try:
+                ws = wb[op["sheet"]]
+                color = op["color"].lstrip("#")
+                fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+                for row in ws[op["ref"]]:
+                    for cell in row:
+                        cell.fill = fill
+                results.append({"op": kind, "sheet": op["sheet"], "ref": op["ref"],
+                                "status": "ok"})
+            except Exception as exc:
+                results.append({"op": kind, "sheet": op.get("sheet"), "ref": op.get("ref"),
+                                "status": "error", "error": str(exc)})
+        elif kind == "define_name":
+            try:
+                defined = _checked_defined_name(wb, op.get("name"), op.get("refers_to"))
+                wb.defined_names[defined.name] = defined
+                results.append({"op": kind, "name": defined.name, "status": "ok"})
+            except Exception as exc:
+                results.append({"op": kind, "name": op.get("name"),
                                 "status": "error", "error": str(exc)})
         else:
             results.append({"op": kind, "status": "unknown_op"})
