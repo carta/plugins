@@ -24,7 +24,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.16</carta-plugin>
+<carta-plugin>carta-crm:1.16.17</carta-plugin>
 
 # Adviser Tracker
 
@@ -64,13 +64,15 @@ the user is never asked to approve a write. Use `crm_call_tool` only in a sessio
 `crm_read_tool`.
 
 1. Call `crm:get_deal_fields`.
-2. Pick the bank field by a fixed rule. Look only at company and company-list fields. Take the
-   first level that has a match:
+2. Pick the bank field by a fixed rule. Look only at company and company-list fields. Never pick a
+   field whose label mentions introducer, buy-side, buy side or pitched: a pitched field lists banks
+   that were asked, not the bank with the mandate. Take the first level that has a match:
    1. the label mentions Mandate or bank, for example "Mandate (bank)";
-   2. the label mentions adviser, advisor, sell-side, sell side or M&A.
+   2. the label mentions sell-side or sell side, for example "M&A adviser (sell-side)";
+   3. the label mentions adviser, advisor or M&A.
 
    When several fields match at the same level, take the one with the shortest label, then the
-   first in field order. Never pick an introducer field.
+   first in field order.
 3. Plan two runs in ONE message, as two parallel calls. The Mandate run takes that field's id as
    `dealFieldId`. The people run takes `linkBy` `dealPeople` and no `dealFieldId`. Each answer
    holds `runId` and `shards`:
@@ -155,6 +157,11 @@ company field.
 Use the saved path when the answer returns one, for the Mandate result and for the people result
 when it succeeded. When an answer comes back without a saved path, write it to its own file in the
 outputs directory with `Write`, exactly as it came back.
+
+When you cannot write an answer to its file exactly as it came back, for example because it has no
+saved path and its rows still carry logos, so it is cut, never rebuild it from memory. For the Mandate
+answer, stop. Tell the user the tracker could not be built because the CRM answer is too large to
+save. For the people answer, drop the people view as the people rules say.
 
 - **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, or an
   unknown-tool error on the single call. Build and publish nothing. Tell the user adviser
