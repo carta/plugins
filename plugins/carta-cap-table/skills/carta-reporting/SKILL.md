@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.10</carta-plugin>
 
 # Custom Reports
 
@@ -63,7 +63,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - "List our SAFEs"
 - "Who are our stakeholders?"
 - "Show me convertible notes"
-- "Show me vesting schedules"
+- "Show me vesting schedules" (company-wide: see the vesting note in step 3)
 - "Show me preferred holders"
 - "What's the liquidation seniority stack?"
 - "Show me rights and preferences"
@@ -223,6 +223,8 @@ Run each script only in the one-line form shown below, as its own command: write
    company.
 
 3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `cat` command) and look up the matched report type in its **REQUIRED params by report_type** table. **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
+
+   **Vesting without a named person.** `vesting_details_report` covers one stakeholder at a time and needs an issuance date range, so it cannot answer a company-wide "show me vesting schedules". When the request names no stakeholder, call `AskUserQuestion` before running it: "Schedule-level vesting detail is per person — which stakeholder, and which grant issue dates? Or I can show company-wide outstanding awards instead." If they choose company-wide, call `reporting__search__report_types` again with the query `"outstanding equity awards"` and run `equity_awards_outstanding` if it is in `reports`; if it is not, give step 2a's unavailable-type message.
 
    **Filters** — many report types accept filter params; the same reference file lists which filters each report type supports and the ID-lookup commands to resolve them. If the user mentions specific stakeholders, share classes, equity plans, securities, or a date range, resolve their IDs/values and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"CERTIFICATE:42,OPTION:7"`); valid types: `CERTIFICATE`, `RSA`, `RSU`, `OPTION`, `SAR`, `CBU`, `PIU`, `WARRANT`, `CONVERTIBLE_NOTE`. Passing unsupported filters for a report type has no effect.
 
