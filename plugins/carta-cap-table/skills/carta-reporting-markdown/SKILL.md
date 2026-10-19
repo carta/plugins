@@ -14,7 +14,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.8</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.9</carta-plugin>
 
 # Transform Configuration
 
@@ -232,7 +232,7 @@ Always check `stats` after running:
 
 ## Output Preview
 
-After the Customization Checkpoint, check if `/tmp/carta_report_<user_report_pk>.json` exists. If ready, use it as `local_file`. If not, poll every 5 s up to 5 more attempts.
+After the Customization Checkpoint, check if `carta-reporting/carta_report_<user_report_pk>.json` exists. If ready, use it as `local_file`. If not, poll every 5 s up to 5 more attempts.
 
 Run the script with `"preview": 5`:
 
@@ -274,6 +274,6 @@ If the user chooses **Excel**, invoke `Skill(carta-cap-table:carta-reporting-exc
 - **One table per sheet** — label with the sheet name as a heading.
 - **Summary line above each table** — e.g. "89 of 212 grants matched (Vested % > 50%)."
 - **Money columns** — format as `$1,234.56`.
-- **Percentage columns** — format as `12.34%` (script stores as decimal; multiply × 100 for display).
+- **Percentage columns** — format as `12.34%` (script stores as decimal, including percentage totals and formula columns; multiply × 100 for display. A cell that already reads like `5%` is already formatted).
 - **Date columns** — format as `MMM D, YYYY` (e.g. `May 3, 2026`) — the Carta brand standard.
 - If multiple sheets are returned and only one has data after filtering, hide the empty sheets.

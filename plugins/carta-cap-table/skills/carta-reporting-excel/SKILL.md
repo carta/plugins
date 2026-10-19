@@ -18,7 +18,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.8</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.9</carta-plugin>
 
 # Excel Export
 
@@ -67,7 +67,7 @@ Use the column list confirmed during the Customization Checkpoint (resolved in `
 
 ## Running the export
 
-Check if `/tmp/carta_report_<user_report_pk>.json` is available (use `user_report_pk` from this session):
+Check if `carta-reporting/carta_report_<user_report_pk>.json` is available (use `user_report_pk` from this session):
 - **File ready** → pass it as `"local_file"` to `report_processor.py`.
 - **Not ready** → call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})` to get a fresh presigned URL and pass it as `"download_url"` instead.
 

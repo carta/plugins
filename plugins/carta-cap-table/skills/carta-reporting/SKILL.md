@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.8</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.9</carta-plugin>
 
 # Custom Reports
 
@@ -99,6 +99,8 @@ If the file exists, its instructions override the defaults in this skill for any
 **Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The only exceptions are the two reconnect retries, each after the user says "ready": the FAIL outcome in step 0b and a failed access check in step 0c. Each re-runs this discovery and replaces `_tool_results`.
 
 **Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls.)
+
+**Working files:** downloaded report data lives under `carta-reporting/` in the working directory (the same folder as `config.json`), never `/tmp`, so the paths work on macOS and Windows alike. Background agents run in that same working directory and create the folder (with a `.gitignore` of `*`, so nothing in it can be committed) before they write anything.
 
 **Script paths:** they are fixed — never search for them.
 - `report_processor.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`
@@ -252,15 +254,16 @@ Run each script only in the one-line form shown below, as its own command: write
    **4b. Background subagent — poll and download the full report** — call the `Agent` tool with `run_in_background: true` in the **same message as 4c** so both background agents start simultaneously. Use this prompt, substituting real values:
 
    ```
-   Poll and download a Carta report. Do not interact with the user. Do not output anything. Do not use isolation — this agent only downloads files, it does not modify the working tree.
+   Poll and download a Carta report. Do not interact with the user. Do not output anything. Do not use isolation — this agent must write into the working directory, and it only writes download files under the git-ignored `carta-reporting/` folder.
 
    user_report_pk: <pk>
    corporation_id: <corp_id>
    carta_prefix:   <_carta_prefix>
-   output_path:    /tmp/carta_report_<pk>.json
+   output_path:    carta-reporting/carta_report_<pk>.json
    Every write to output_path (error JSON or the download) goes to <output_path>.part first, then `mv <output_path>.part <output_path>` — the main thread treats the file's existence as "ready", so it must only ever appear complete.
 
    Steps:
+   0. If `carta-reporting/.gitignore` does not exist, create it with the Write tool (which also creates `carta-reporting/`) containing `*`, so downloaded report data can never be committed. If it already exists, or the Write fails because it now exists, leave it and continue. Write every error JSON below to <output_path>.part with the Write tool, then `mv <output_path>.part <output_path>`.
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
       20 attempts.
       - Status "complete" → proceed to step 2.
@@ -268,22 +271,23 @@ Run each script only in the one-line form shown below, as its own command: write
       - 20 attempts without complete → write {"error":"timeout"} to output_path and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
       → presigned URL.
-   3. Run, as one command: curl -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
+   3. Run, as one command: curl --create-dirs -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
       If it exits non-zero, write {"error":"download failed"} to output_path and stop.
    ```
 
    **4c. Background subagent — poll and download the preview report** — call the `Agent` tool with `run_in_background: true` in the **same message as 4b**. Use this prompt, substituting real values:
 
    ```
-   Poll and download a Carta preview report. Do not interact with the user. Do not output anything. Do not use isolation — this agent only downloads files, it does not modify the working tree.
+   Poll and download a Carta preview report. Do not interact with the user. Do not output anything. Do not use isolation — this agent must write into the working directory, and it only writes download files under the git-ignored `carta-reporting/` folder.
 
    user_report_pk_preview: <pk_preview>
    corporation_id:         <corp_id>
    carta_prefix:           <_carta_prefix>
-   output_path:            /tmp/carta_preview_<pk_preview>.json
+   output_path:            carta-reporting/carta_preview_<pk_preview>.json
    Every write to output_path (error JSON or the download) goes to <output_path>.part first, then `mv <output_path>.part <output_path>` — the main thread treats the file's existence as "ready", so it must only ever appear complete.
 
    Steps:
+   0. If `carta-reporting/.gitignore` does not exist, create it with the Write tool (which also creates `carta-reporting/`) containing `*`, so downloaded report data can never be committed. If it already exists, or the Write fails because it now exists, leave it and continue. Write every error JSON below to <output_path>.part with the Write tool, then `mv <output_path>.part <output_path>`.
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
       up to 10 attempts.
       - Status "complete" → proceed to step 2.
@@ -291,7 +295,7 @@ Run each script only in the one-line form shown below, as its own command: write
       - 10 attempts without complete → write {"error":"preview timeout"} to output_path and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
       → presigned URL. If this call fails, write {"error":"download_url failed"} to output_path and stop.
-   3. Run, as one command: curl -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
+   3. Run, as one command: curl --create-dirs -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
       If it exits non-zero, write {"error":"download failed"} to output_path and stop.
    ```
 
@@ -299,9 +303,9 @@ Run each script only in the one-line form shown below, as its own command: write
 
    If the build or the publish fails, say so — do **not** fall back to the xlsx skill or generate Excel directly.
 
-   Check for `/tmp/carta_preview_<pk_preview>.json` every 5 s (up to 12 attempts = 60 s):
+   Check for `carta-reporting/carta_preview_<pk_preview>.json` every 5 s (up to 12 attempts = 60 s):
    - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source. The preview holds partial data, so add `["Status", "Preview — full report loading"]` to the artifact's `metaRows` and do not present its row count as final. If `build_report_page.py` exits with "No rows matched" on a build that used any preview file, treat it as **Preview failed** and run the full-report wait: the partial data says nothing about the final result.
-   - **Preview failed** (file contains `"error"`, or 12 attempts elapse without the file appearing) → switch to the full-report fallback: poll for `/tmp/carta_report_<pk>.json` every 5 s, up to 20 attempts (the **full-report wait**).
+   - **Preview failed** (file contains `"error"`, or 12 attempts elapse without the file appearing) → switch to the full-report fallback: poll for `carta-reporting/carta_report_<pk>.json` every 5 s, up to 20 attempts (the **full-report wait**).
 
    **Mid-wait check-in (emit exactly once per report request):** If 30 seconds elapse during the preview poll (i.e., after 6 failed attempts) with no data yet available, output this message to the user before continuing to poll:
 
@@ -313,7 +317,7 @@ Run each script only in the one-line form shown below, as its own command: write
    - **MARKDOWN mode (Claude Code):** invoke `Skill(carta-cap-table:carta-reporting-markdown)`. The following context is available in this session: data file path, `corporation_id`, `user_report_pk`.
    - **ARTIFACT mode (Cowork):** build the artifact inline (no subskill invocation — see below).
 
-   **Swap in the full report (when any data source was a preview).** After publishing the preview artifact, run the full-report wait in this same turn: for each corporation whose data came from its preview, wait for its `/tmp/carta_report_<pk>.json`. The wait is bounded, because the 4b agent writes data or an error within its own limit. Then:
+   **Swap in the full report (when any data source was a preview).** After publishing the preview artifact, run the full-report wait in this same turn: for each corporation whose data came from its preview, wait for its `carta-reporting/carta_report_<pk>.json`. The wait is bounded, because the 4b agent writes data or an error within its own limit. Then:
    - **Every full report landed without an `"error"` key** → run `report_processor.py` on the full files with the same config (including `label_overrides`) as the preview build, rebuild the artifact without the `Status` row(s) and with the normal description, and republish in place by passing the existing artifact `url`. Every sheet in it must come from a full report.
    - **Any failed or timed out** → keep that corporation's preview sheets, set `["Status", "Preview only — {Corp Name}'s full report didn't finish"]` for each such corporation (a single corporation: `["Status", "Preview only — full report didn't finish"]`), rebuild with the full sheets for the rest, republish in place with a preview description, then say plainly: "The full report didn't finish for {Corp Name}, so that part shows only a preview of the data — tell me to retry."
    Then show the customization checkpoint below. Never present a preview as the final report.
@@ -322,7 +326,7 @@ Run each script only in the one-line form shown below, as its own command: write
 
    **Multi-corporation (when step 1 resolved more than one corporation_id):**
 
-   Steps 4a–4c run independently per corporation — trigger N×2 report pairs in parallel. Each corporation produces its own data file at `/tmp/carta_preview_<pk>.json` (or `/tmp/carta_report_<pk>.json` on fallback).
+   Steps 4a–4c run independently per corporation — trigger N×2 report pairs in parallel. Each corporation produces its own data file at `carta-reporting/carta_preview_<pk>.json` (or `carta-reporting/carta_report_<pk>.json` on fallback).
 
    Once all data files are ready, collect them as a list: `[(corp_legal_name, data_file_path), ...]`. In ARTIFACT mode, any file that is a preview is covered by the swap step above, per corporation.
    - **MARKDOWN mode:** invoke `Skill(carta-cap-table:carta-reporting-markdown)` with each corporation's data file in turn, presenting one markdown table block per corporation.

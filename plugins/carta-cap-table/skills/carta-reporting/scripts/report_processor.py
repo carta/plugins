@@ -81,6 +81,7 @@ import json
 import re
 import sys
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 # The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
@@ -99,15 +100,39 @@ def _parse_numeric(val):
     return parse_number(val)
 
 
+def _parse_percentage(val):
+    """Parse a percentage cell or threshold to a fraction: "46.81%" -> 0.4681, 0.5 -> 0.5.
+
+    The percent form is divided in decimal arithmetic so "14.28%" is the same float as 0.1428."""
+    if isinstance(val, str) and val.strip().endswith("%"):
+        try:
+            return float(Decimal(val.replace(",", "").replace("%", "").strip()) / 100)
+        except InvalidOperation:
+            return None
+    return _parse_numeric(val)
+
+
+def _numeric_parser(ctype):
+    """The reader for a column's cells: percentage columns hold fractions, every other
+    numeric column its plain number. Filters, sorts, formulas and aggregations all use it."""
+    return _parse_percentage if ctype == "percentage" else _parse_numeric
+
+
 def _parse_date(val):
     if val is None:
         return None
+    text = str(val).strip()
     for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%b %d, %Y", "%B %d, %Y"):
         try:
-            return datetime.strptime(str(val).strip(), fmt)
+            return datetime.strptime(text, fmt)
         except (ValueError, TypeError):
             continue
-    return None
+    # ISO-8601 timestamps ("2024-03-01T00:00:00Z"): compare by calendar day.
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return datetime(parsed.year, parsed.month, parsed.day)
 
 
 def _normalize_columns(columns):
@@ -254,8 +279,9 @@ def _make_filter_predicate(columns, filters):
             keep  = True
             try:
                 if ctype in ("money", "decimal", "percentage", "integer"):
-                    v, t = _parse_numeric(val), float(thr)
-                    if v is None:
+                    parse = _numeric_parser(ctype)
+                    v, t = parse(val), parse(thr)
+                    if v is None or t is None:
                         keep = False
                     elif op == ">":        keep = v > t
                     elif op == "<":        keep = v < t
@@ -263,7 +289,7 @@ def _make_filter_predicate(columns, filters):
                     elif op == "<=":       keep = v <= t
                     elif op == "=":        keep = v == t
                     elif op == "!=":       keep = v != t
-                    elif op == "contains": keep = str(thr).lower() in str(v).lower()
+                    elif op == "contains": keep = str(thr).lower() in str(val).lower()
                 elif ctype == "date":
                     v, t = _parse_date(val), _parse_date(thr)
                     if v is None or t is None:
@@ -378,7 +404,8 @@ def apply_formulas(columns, rows, formulas):
                 skipped.append(name)
                 continue
             idx  = idx_map[src]
-            vals = [(_parse_numeric(r[idx]) if idx < len(r) else None) or 0.0 for r in new_rows]
+            parse = _numeric_parser(new_cols[idx].get("type"))
+            vals = [(parse(r[idx]) if idx < len(r) else None) or 0.0 for r in new_rows]
             total = sum(vals) or 1.0
             new_cols.append({"name": name, "type": "percentage"})
             for r, v in zip(new_rows, vals):
@@ -391,9 +418,10 @@ def apply_formulas(columns, rows, formulas):
                 continue
             idx     = idx_map[src]
             running = 0.0
+            parse   = _numeric_parser(new_cols[idx].get("type"))
             new_cols.append({"name": name, "type": "decimal"})
             for r in new_rows:
-                running += (_parse_numeric(r[idx]) if idx < len(r) else None) or 0.0
+                running += (parse(r[idx]) if idx < len(r) else None) or 0.0
                 r.append(round(running, 4))
 
         elif op == "ratio":
@@ -403,10 +431,12 @@ def apply_formulas(columns, rows, formulas):
                 skipped.append(name)
                 continue
             ni, di = idx_map[num_col], idx_map[den_col]
+            parse_n = _numeric_parser(new_cols[ni].get("type"))
+            parse_d = _numeric_parser(new_cols[di].get("type"))
             new_cols.append({"name": name, "type": "decimal"})
             for r in new_rows:
-                n = _parse_numeric(r[ni]) if ni < len(r) else None
-                d = _parse_numeric(r[di]) if di < len(r) else None
+                n = parse_n(r[ni]) if ni < len(r) else None
+                d = parse_d(r[di]) if di < len(r) else None
                 r.append(round(n / d, 6) if n is not None and d else None)
 
         elif op == "delta":
@@ -416,9 +446,10 @@ def apply_formulas(columns, rows, formulas):
                 continue
             idx  = idx_map[src]
             prev = None
+            parse = _numeric_parser(new_cols[idx].get("type"))
             new_cols.append({"name": name, "type": "decimal"})
             for r in new_rows:
-                curr = _parse_numeric(r[idx]) if idx < len(r) else None
+                curr = parse(r[idx]) if idx < len(r) else None
                 r.append(round(curr - prev, 4) if curr is not None and prev is not None else None)
                 prev = curr
 
@@ -447,13 +478,13 @@ def _agg_values(vals, op):
     return None
 
 
-def _agg_inputs(rows, idx, op):
+def _agg_inputs(rows, idx, op, parse):
     """Cell values to aggregate. `count` counts non-empty cells of any type;
-    every other op needs numbers."""
+    every other op needs numbers, read with `parse` (the column's `_numeric_parser`)."""
     cells = [r[idx] for r in rows if idx < len(r)]
     if op == "count":
         return [c for c in cells if c not in (None, "")]
-    return [_parse_numeric(c) for c in cells]
+    return [parse(c) for c in cells]
 
 
 def apply_aggregations(columns, rows, agg_spec):
@@ -478,7 +509,7 @@ def apply_aggregations(columns, rows, agg_spec):
             if i == 0:
                 summary.append("Total")
             elif op:
-                summary.append(_agg_values(_agg_inputs(rows, i, op), op))
+                summary.append(_agg_values(_agg_inputs(rows, i, op, _numeric_parser(col.get("type"))), op))
             else:
                 summary.append(None)
         return columns, rows + [summary], {"count": 1, "ops": agg_cols}
@@ -503,13 +534,13 @@ def apply_aggregations(columns, rows, agg_spec):
                 op       = agg_cols[col["name"]]
                 out_type = "integer" if op == "count" else col["type"]
                 out_cols.append({"name": col["name"], "type": out_type})
-                agg_specs.append((idx_map[col["name"]], op))
+                agg_specs.append((idx_map[col["name"]], op, _numeric_parser(col["type"])))
 
         out_rows = []
         for key, group_rows in groups.items():
             out_row = [key]
-            for cidx, op in agg_specs:
-                out_row.append(_agg_values(_agg_inputs(group_rows, cidx, op), op))
+            for cidx, op, parse in agg_specs:
+                out_row.append(_agg_values(_agg_inputs(group_rows, cidx, op, parse), op))
             out_rows.append(out_row)
 
         return out_cols, out_rows, None
@@ -541,7 +572,7 @@ def sort_rows(columns, rows, sort_spec):
         def key_fn(row, idx=idx, ctype=ctype):
             val = row[idx] if idx < len(row) else None
             if ctype in ("money", "decimal", "percentage", "integer"):
-                v = _parse_numeric(val)
+                v = _numeric_parser(ctype)(val)
                 return (1, v) if v is not None else (0, 0.0)
             if ctype == "date":
                 d = _parse_date(val)
@@ -574,7 +605,7 @@ def sort_rows_with_indices(columns, rows, orig_indices, sort_spec):
             row = pair[1]
             val = row[ci] if ci < len(row) else None
             if ctype in ("money", "decimal", "percentage", "integer"):
-                v = _parse_numeric(val)
+                v = _numeric_parser(ctype)(val)
                 return (1, v) if v is not None else (0, 0.0)
             if ctype == "date":
                 d = _parse_date(val)
