@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.91.3</carta-plugin>
+<carta-plugin>carta-investors:6.91.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -179,6 +179,7 @@ rejects with `not_in_manifest`:
   their Skill Directory categories (see `fetchUserEnrichment`)
 - `mutate` — the legacy write dispatcher, granted as a fallback; nothing in `resources/`
   calls it
+- `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
 - `call_tool` — the gateway dispatcher, carrying both the Capital Activity reminder sends
   (`fa__mutate__send-capital-call-reminder`) and the Plugin news live-content cards
 
@@ -281,18 +282,16 @@ Two things that follow from the published tree being the source of truth:
   local build — it correctly stays silent when your version is newer. To see it, stub
   the command's response or temporarily lower your local entry.
 
-## Analytics — currently inert, by platform constraint
+## Analytics
 
 Keep calling `trackHome(action, elementId)` on new interactive elements (top of the
 handler), IDs as `CartaHome.<Area>.<Specific>` (e.g. `CartaHome.Tour.Start`) — skip sort
-clicks, keystrokes, dropdown changes. The calls are harmless and cost nothing.
+clicks, keystrokes, dropdown changes.
 
-**No event currently reaches Snowplow, and rebuilding the tracker will not change that.**
 The runtime CSP is `connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com`,
-so the collector host is unreachable from the artifact — the browser blocks the request
-before the tracker's transport matters. Restoring analytics means routing events through an
-MCP tool call (which goes over the runtime bridge, not the network, and so is not
-CSP-limited), not fixing the bundle.
+so the artifact cannot reach the collector host. The vendored tracker instead relays each
+event through the `track_ui_event` MCP tool over the runtime bridge, which the CSP does not
+limit. That needs `track_ui_event` in the publish call's `capabilities.mcp` grant.
 
 ## Deploy steps
 
@@ -547,7 +546,7 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool"]
+          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool", "track_ui_event"]
         }
       ]
     }

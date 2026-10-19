@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.91.3</carta-plugin>
+<carta-plugin>carta-investors:6.91.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -363,6 +363,7 @@ rejects with `not_in_manifest`:
 - `welcome` — re-initializes an expired MCP session
 - `discover` — asks whether this viewer may attach files at all
 - `get_current_user` — whose messages are whose in a thread
+- `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
 
 `fa:create:document-content` is staff-gated, so the composer probes `discover` and
 stays text-only when the viewer may not attach. Publish without `discover` and every
@@ -511,7 +512,7 @@ Artifact({
         {
           server: "<CARTA_MCP_SERVER>",
           tools: ["list_contexts", "set_context", "fetch", "mutate", "welcome", "discover",
-                  "get_current_user"]
+                  "get_current_user", "track_ui_event"]
         }
       ]
     }
@@ -553,11 +554,3 @@ queue shows its no-connector state.
   the URL). It lists the last ten loads: each milestone, and each Carta call's send time,
   duration and wall-clock start. **Copy** gives the JSON to match against carta-mcp's
   `POST /mcp` access log.
-
-## Known gap
-
-Snowplow UI events do not fire. `resources/carta-workhub.tracker.js` is a build artifact of
-`@carta/mcp-ui-tracker` and probes `cowork?.callMcpTool`, which no longer resolves; hand-
-patching a minified bundle would be overwritten by the next `build:browser`. Upstream needs
-a `claude.use("mcp")` transport. `test_vendored_tracker_still_carries_the_dead_cowork_transport`
-pins the gap so it fails once upstream ships and this caveat can be dropped.

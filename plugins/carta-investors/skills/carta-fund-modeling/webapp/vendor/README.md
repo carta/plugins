@@ -6,7 +6,7 @@ Third-party libraries are checked in as minified bundles so the console runs wit
 | --- | --- | --- | --- | --- |
 | `react.esm.js` | React and ReactDOM in one ES module | 18.3.1 | [`react`](https://www.npmjs.com/package/react), [`react-dom`](https://www.npmjs.com/package/react-dom) on npm (MIT) | Rendering the UI. The import map in `index.html` points `react`, `react-dom`, `react-dom/client` and `react/jsx-runtime` here. |
 | `sucrase.esm.js` | JSX transpiler | 3.35.1 | [`sucrase`](https://www.npmjs.com/package/sucrase) on npm (MIT) | `sw.js` uses it to turn the JSX in `src/` into JavaScript inside the browser. |
-| `mcp-ui-tracker.global.js` | Carta's UI event tracker | 0.2.0, plus the local edit below | Carta's `@carta/mcp-ui-tracker` package, maintained in Carta's internal frontend platform repository | Sets `window.mcpUiTracker`, which `app/src/analytics.js` uses to report UI events. |
+| `mcp-ui-tracker.global.js` | Carta's UI event tracker | 0.2.57+ (the build with the `claude.use('mcp')` bridge), plus the local edit below | Carta's `@carta/mcp-ui-tracker` package, maintained in Carta's internal frontend platform repository | Sets `window.mcpUiTracker`, which `app/src/analytics.js` uses to report UI events. |
 
 `react.esm.js` and `sucrase.esm.js` are unmodified upstream code, bundled and minified with esbuild 0.25.12 (`npm run build` in `app/`).
 
