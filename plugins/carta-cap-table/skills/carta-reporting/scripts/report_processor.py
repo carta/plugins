@@ -64,8 +64,9 @@ Output JSON: {"data", "stats", "warnings"} — the full shape is the Output bloc
 "Script Reference" in the carta-reporting SKILL.md.
 
   kept_row_count is the data rows in the result, before the preview cut: after grouping,
-  without a summary totals row. displayed_row_count < kept_row_count exactly when a preview
-  truncated it.
+  without a summary totals row. displayed_row_count counts the displayed rows other than
+  section headings and `_t` totals rows (a summary aggregation's Total row is counted), so it
+  is < kept_row_count exactly when a preview cut data rows.
 
   Each column dict may carry "hidden": true — set automatically by
   detect_hidden_columns() for technical identifier columns (ID-suffixed names,
@@ -86,10 +87,11 @@ from pathlib import Path
 
 # The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
 for _root in Path(__file__).resolve().parents:
-    if (_root / "lib" / "report_numbers.py").is_file():
+    if (_root / "lib" / "report_rows.py").is_file() and (_root / "lib" / "report_numbers.py").is_file():
         sys.path.insert(0, str(_root / "lib"))
         break
 from report_numbers import parse_number  # noqa: E402
+from report_rows import is_structural, relabel_structural  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -727,10 +729,14 @@ def main():
                 cell_currency_map[(cell[0], cell[1])] = ov_info
 
         cols           = _normalize_columns(sheet["columns"])
-        rows           = sheet["rows"]
-        cols           = detect_hidden_columns(cols, rows)
+        all_rows       = sheet["rows"]
+        # Section and total rows are set aside: every transform below assumes plain data rows.
+        n_cols         = len(sheet["columns"])
+        structural     = [(i, r) for i, r in enumerate(all_rows) if is_structural(r, n_cols)]
+        orig_indices   = [i for i, r in enumerate(all_rows) if not is_structural(r, n_cols)]
+        rows           = [all_rows[i] for i in orig_indices]
         original_count = len(rows)
-        orig_indices   = list(range(len(rows)))  # track original row positions
+        cols           = detect_hidden_columns(cols, rows)
 
         # Record original column name→index before any selection/reorder
         orig_col_name_to_idx = {col["name"]: i for i, col in enumerate(cols)}
@@ -738,6 +744,7 @@ def main():
         # Replace raw security type labels (e.g. "CBU") with configured display names
         # before filtering so filters against display names (e.g. "Phantom Units") work.
         rows = apply_label_overrides(cols, rows, label_overrides)
+        structural = [(i, relabel_structural(r, label_overrides)) for i, r in structural]
 
         # Filter with index tracking
         unknown_filter_cols: list = []
@@ -812,6 +819,17 @@ def main():
             ]
             return cell_entries if any(e is not None for e in cell_entries) else None
 
+        # Structural rows only keep their meaning while the data rows are untouched:
+        # a filter, sort, column pick, formula or aggregation would strand them.
+        structural_dropped = 0
+        if structural:
+            if filters or sort_spec or formulas or aggregations or columns:
+                structural_dropped = len(structural)
+            else:
+                merged = sorted(list(zip(orig_indices, rows)) + structural, key=lambda p: p[0])
+                orig_indices = [p[0] for p in merged]
+                rows         = [p[1] for p in merged]
+
         row_currencies = [_row_currency_entry(oi) for oi in orig_indices]
 
         displayed      = rows[:preview_n] if preview_n is not None else rows
@@ -826,10 +844,11 @@ def main():
             "filtered_row_count":    filtered_count,
             "empty_rows_dropped":    empty_rows_dropped,
             "kept_row_count":        kept_count,
-            "displayed_row_count":   len(displayed),
+            "displayed_row_count":   sum(1 for r in displayed if not is_structural(r, len(cols))),
             "missing_columns":       missing_cols,
             "unknown_filter_columns": unknown_filter_cols,
             "skipped_formulas":      skipped_fmls,
+            "structural_rows_dropped": structural_dropped,
         }
 
     # merge_sheets: {"Target Tab Name": ["Source Sheet A", "Source Sheet B"]}
@@ -843,7 +862,8 @@ def main():
         merged_summary = None
         schema_warnings: list = []
         counts = {"original_row_count": 0, "filtered_row_count": 0,
-                  "empty_rows_dropped": 0, "kept_row_count": 0}
+                  "empty_rows_dropped": 0, "kept_row_count": 0,
+                  "structural_rows_dropped": 0}
         for src in sources:
             if src not in result:
                 warnings.setdefault("merge_sources_missing", []).append(
@@ -875,9 +895,9 @@ def main():
                                    "row_currencies": merged_row_currencies,
                                    "summary_meta": merged_summary}
             # Count stats are sums over the sources actually merged; only the displayed
-            # count is the merged tab's own length.
+            # count is computed from the merged tab's own rows.
             stats[target_name] = {**counts,
-                                  "displayed_row_count": len(merged_rows),
+                                  "displayed_row_count": sum(1 for r in merged_rows if not is_structural(r, len(merged_cols))),
                                   "missing_columns": [], "unknown_filter_columns": [],
                                   "skipped_formulas": [],
                                   "merged_from": sources,

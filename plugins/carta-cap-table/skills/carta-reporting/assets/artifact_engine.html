@@ -282,11 +282,12 @@ function initSheet(sName) {
 
 function isVis(sh, ci) { return !sh._hidden.has(ci); }
 
-// Row classification helpers
-// "Section" = {_s:"..."} object OR single-element string array ["label"]
-// "Total"   = {_t:[...]} object only — plain arrays that happen to say "Total" are data rows
-function rowIsSection(r) {
-  return r && (r._s || (Array.isArray(r) && r.length === 1 && typeof r[0] === 'string'));
+// Row classification helpers — lib/report_rows.py holds the Python side; change them together.
+// "Section" = {_s:"..."} object OR single-element string array ["label"] — the array form only
+//             when the sheet has more than one column (in a one-column sheet it is a data row)
+// "Total"   = {_t:[...]} object, OR (engine only) a 2+ cell array whose first cell starts with "Total"
+function rowIsSection(r, nCols) {
+  return r && (r._s || (nCols > 1 && Array.isArray(r) && r.length === 1 && typeof r[0] === 'string'));
 }
 function rowIsTotal(r)   { return r && (!!r._t || (Array.isArray(r) && r.length > 1 && typeof r[0] === 'string' && r[0].startsWith('Total'))); }
 function sectionText(r)  { return r._s || r[0]; }
@@ -295,7 +296,7 @@ function totalArray(r)   { return r._t || r; }
 function buildSheet(sName, idx) {
   const sh       = data[sName];
   initSheet(sName);
-  const dataRows = sh.rows.filter(r => !rowIsSection(r));
+  const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length));
   const div      = document.createElement('div');
   div.className  = 'sheet';
   div.id         = 'sheet-' + idx;
@@ -455,12 +456,12 @@ function renderBody(idx) {
     return tr;
   };
 
-  const dataRows = sh.rows.filter(r => !rowIsSection(r) && !rowIsTotal(r)); // exclude totals from sort pool
+  const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length) && !rowIsTotal(r)); // exclude totals from sort pool
   const sorted   = sh._sort.length ? applySort(sh, dataRows) : null;
   let   di       = 0; // pointer into sorted array when sorting
 
   sh.rows.forEach(row => {
-    if (rowIsSection(row)) {
+    if (rowIsSection(row, sh.columns.length)) {
       const tr = document.createElement('tr'); tr.className = 'section-hdr';
       const td = document.createElement('td'); td.colSpan = Math.max(1, nVis); td.textContent = sectionText(row);
       tr.appendChild(td); tbody.appendChild(tr);
@@ -489,7 +490,7 @@ function renderTotalsBar(idx) {
   foot.innerHTML = '';
   if (!visCis.length) return;
 
-  const dataRows = sh.rows.filter(r => !rowIsSection(r) && !rowIsTotal(r));
+  const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length) && !rowIsTotal(r));
   const hasAny   = visCis.some(ci => sh._totals[ci]);
   const tr       = document.createElement('tr');
 
@@ -606,7 +607,7 @@ function exportExcel(idx) {
     `<Cell ss:StyleID="header"><Data ss:Type="String">${esc(cols[ci]._synthetic ? '' : cols[ci].name)}</Data></Cell>`
   ).join('');
 
-  const dataRows = sh.rows.filter(r => !rowIsSection(r)).map(row => {
+  const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length)).map(row => {
     const isTotal = rowIsTotal(row);
     const rd      = totalArray(row);
     const cells   = visCis.map(ci => {

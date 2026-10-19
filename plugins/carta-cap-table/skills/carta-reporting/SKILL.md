@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.10</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.11</carta-plugin>
 
 # Custom Reports
 
@@ -475,6 +475,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `user_report_pk` missing from response | Transient API error | "Something went wrong generating this report — it may be a temporary issue. Try again in a moment, or contact your Carta team if it keeps happening." |
 | `missing_columns` or `skipped_formulas` non-empty | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
 | `unknown_filter_columns` non-empty | A filter named a column this sheet does not have, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't filter on '[Column]' — it isn't in this report, so these rows are unfiltered. Here are the columns I can filter on: […]" Offer to re-run against a real column. |
+| `structural_rows_dropped` > 0 | The sheet has section headings or total rows, and a filter, sort, column pick, formula or aggregation was applied, which cannot keep them in place. | "Section headings and totals were left out because of the filters/sort — say so if you want them back unsorted." |
 | `warnings.unknown_sheets` present | A name in `warnings.unknown_sheets.requested` is not in this report, so it was left out. | "This report has no sheet called '[Name]'. Its sheets are: […]" (list `warnings.unknown_sheets.available`) Offer to re-run with a real sheet. |
 | `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty | A sheet to merge was missing (`warnings.merge_sources_missing[].source`), or its columns differ (`schema_warnings`), so its rows are not in the merged tab. | Name the sheet that was left out and why; never present the merged tab as complete. |
 | `filtered_row_count` == `original_row_count` with filters set | The filters matched every row. Legitimate, but confirm it is not a mis-typed filter before presenting. | State plainly that the filter matched all N rows. |
@@ -583,7 +584,7 @@ All fields except the file source are optional — omit or set to `null` to skip
                          "empty_rows_dropped": N, "kept_row_count": N,
                          "displayed_row_count": N,
                          "missing_columns": [], "unknown_filter_columns": [],
-                         "skipped_formulas": [],
+                         "skipped_formulas": [], "structural_rows_dropped": N,
                          "merged_from": [...], "schema_warnings": [...]}},   // last two: merged tabs only
   "warnings": {"unknown_sheets": {"requested": [...], "available": [...]},
                "merge_sources_missing": [{"target": ..., "source": ...}]}   // keys present only when raised
@@ -592,7 +593,7 @@ All fields except the file source are optional — omit or set to `null` to skip
 
 With `--out <file>`, this JSON is written to the file and stdout carries `{"out": <file>, "stats": {...}}`, plus `"warnings"` when non-empty.
 
-`kept_row_count` is the data rows in the result, before the preview cut: after grouping, without a summary totals row. `displayed_row_count` < `kept_row_count` exactly when a preview truncated it.
+`kept_row_count` is the data rows in the result, before the preview cut: after grouping, without a summary totals row. `displayed_row_count` counts the displayed rows other than section headings and `_t` totals rows (a summary aggregation's Total row is counted), so it is < `kept_row_count` exactly when a preview cut data rows.
 
 ---
 

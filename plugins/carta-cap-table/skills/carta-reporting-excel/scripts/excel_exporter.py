@@ -23,17 +23,18 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
+for _root in Path(__file__).resolve().parents:
+    if (_root / "lib" / "report_rows.py").is_file() and (_root / "lib" / "report_numbers.py").is_file():
+        sys.path.insert(0, str(_root / "lib"))
+        break
+from report_numbers import parse_number  # noqa: E402
+from report_rows import is_section_list  # noqa: E402
+
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
-
-# The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
-for _root in Path(__file__).resolve().parents:
-    if (_root / "lib" / "report_numbers.py").is_file():
-        sys.path.insert(0, str(_root / "lib"))
-        break
-from report_numbers import parse_number  # noqa: E402
 
 HEADER_BG  = "C6EBF4"
 HEADER_FG  = "2F3943"
@@ -119,6 +120,7 @@ def _prepare_sheet(sheet):
     default) are dropped, except the first, which is the row label (summary "Total", group key).
     Rows, totals and per-cell currencies stay aligned."""
     columns = sheet["columns"]
+    n_cols = len(columns)  # before the pick: a one-column sheet has no section headings
     keep = [i for i, col in enumerate(columns) if i == 0 or not col.get("hidden")]
 
     def pick(cells):
@@ -128,7 +130,7 @@ def _prepare_sheet(sheet):
     for row in sheet["rows"]:
         if isinstance(row, dict):
             row = {**row, "_t": pick(row["_t"])} if isinstance(row.get("_t"), list) else row
-        elif len(row) == 1 and isinstance(row[0], str):
+        elif is_section_list(row, n_cols):
             row = {"_s": row[0]}
         else:
             row = pick(row)
