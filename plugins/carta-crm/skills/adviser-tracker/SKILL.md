@@ -13,6 +13,8 @@ allowed-tools:
   - mcp__claude_ai_Carta__crm_read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_read_tool
   - mcp__claude_ai_Carta__crm_call_tool
+  - mcp__Carta__crm_call_tool
+  - mcp__Carta__crm_read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
   - Artifact
   - Write
@@ -22,7 +24,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.15</carta-plugin>
+<carta-plugin>carta-crm:1.16.16</carta-plugin>
 
 # Adviser Tracker
 
@@ -54,6 +56,13 @@ gate is this one rule: `Artifact` is in this session. Pass silently.
 
 ## Step 1: Fetch the advisers
 
+The Carta tools may be deferred. Load `crm_call_tool` and `crm_read_tool` with one tool search in the
+same turn that opens this skill, before the first call.
+
+Every call in this skill only reads. Send each one through `crm_read_tool`, which refuses a write, so
+the user is never asked to approve a write. Use `crm_call_tool` only in a session that has no
+`crm_read_tool`.
+
 1. Call `crm:get_deal_fields`.
 2. Pick the bank field by a fixed rule. Look only at company and company-list fields. Take the
    first level that has a match:
@@ -67,8 +76,8 @@ gate is this one rule: `Artifact` is in this session. Pass silently.
    holds `runId` and `shards`:
 
 ```
-crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
-crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
 ```
 
    The people run counts a deal for a bank when an introducer or adviser on the deal works at
@@ -83,24 +92,25 @@ crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 
    shard again redoes that shard.
 
 ```
-crm_call_tool({ "name": "crm:get_adviser_tracker_relationships", "arguments": { "runId": "<runId>", "shard": <a number from shards> } })
-crm_call_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId": "<runId>" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker_relationships", "arguments": { "runId": "<runId>", "shard": <a number from shards> } })
+crm_read_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId": "<runId>" } })
 ```
 
    An error from a `crm:get_adviser_tracker_relationships` call or a
    `crm:get_adviser_tracker_details` call, here or in the retry below, does not stop the run
    unless its text is listed below. Go on to the result call below. It decides.
 
-5. Collect the results. In ONE message, call the result once for each run. The answer carries the logos,
-   so it can be large. Every call whose answer becomes `--result` or `--people-result` goes through
-   `crm_read_tool` when it is in the session: these two calls and the single calls below. It
-   saves a large answer to a file and returns the path. `crm_call_tool` cuts a large answer and
-   returns no path, so use it only when there is no `crm_read_tool`. Pass the saved file to the
-   build script as it is. Each answer has the shape the build script reads:
+5. Collect the results. In ONE message, call the result once for each run, with `includeLogos` false.
+   The answer then has no logos and stays small. An answer of a tool is cut when it is longer than
+   100 000 characters, so never ask for a long answer that you have to copy. `crm_read_tool` returns
+   a saved path when the surface saves an answer to a file. Each answer has the shape the build script reads:
 
 ```
-crm_read_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>", "includeLogos": false } })
 ```
+
+   Each answer carries a `checksum` of its deal counts. The build script checks it. Never retype a
+   count or edit an answer.
 
 An error comes back as the plain text of the tool answer, not as JSON. Find it by the text it
 contains. Handle these, from whichever Mandate call returns them:
@@ -144,7 +154,7 @@ company field.
 
 Use the saved path when the answer returns one, for the Mandate result and for the people result
 when it succeeded. When an answer comes back without a saved path, write it to its own file in the
-outputs directory with `Write`.
+outputs directory with `Write`, exactly as it came back.
 
 - **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, or an
   unknown-tool error on the single call. Build and publish nothing. Tell the user adviser
@@ -154,23 +164,45 @@ outputs directory with `Write`.
   tracker could not be loaded right now. Never fill a gap from `search_deals`,
   `search_companies` or any other tool.
 
-## Step 2: Check the top bank
+6. Get the logos. The logos call needs the rows of the results, so it follows them in the next turn.
+   Take the `domain` and `companyId` of every row of both results, once for each domain, and call
+   the logos tool once with all of them. Its answer holds a data URI for each bank that has a logo,
+   and it is under 100 000 characters. Use the saved path when the answer returns one. Otherwise, on
+   the next turn, write the answer to its own file with `Write`, exactly as it came back.
+   When a row of a result already carries a `logo.dataUri` that is not null, the server is older and
+   has sent its logos inside the result: skip this call. When the tool is unknown, or it fails, skip
+   it and go on: the errors above do not apply to this call, and the page shows empty tiles. Never
+   fetch a logo from any other source.
 
-The check stays on the Mandate view. Take the bank with the most deals in the current year: the
-sum of its `dealsByMonth` counts for that year. Check it with the calls below, once each. Do not retry any of them. When a call fails, skip its check:
+```
+crm_read_tool({ "name": "crm:get_adviser_tracker_logos", "arguments": { "banks": [ { "domain": "<a row's domain>", "companyId": "<its companyId>" } ] } })
+```
 
-- its deals created this year, with `crm:aggregate_deals`. Call `crm:get_deal_fields` first if its
-  answer is not in the conversation. Pass `group_by` as the bank field id in an array. Pass
-  `filters` with two items: the bank field `eq` the bank name, and the deal created-date field
-  `between` the first day of the year and today. Leave `metric` out: every group already carries
-  a `count`;
-- its fees, only when that count is 25 or fewer. Call `crm:search_deals` once with the same two
-  filters and that count as `limit`. Then call `crm:get_fees_by_deal` once for each returned deal, with its
-  `deal_id`, all in one message. Add the fee totals per currency. When any call in this sequence
-  fails, skip the whole fees check.
+## Step 2: Check the banks
 
-When a number disagrees with the tracker, write one plain line that says what the CRM shows. Step 4
-carries it in the notice.
+The check stays on the Mandate view. Send its call in the same message as the fan-out of Step 1, so
+it costs no turn. Do not retry it. When it fails, skip the check.
+
+- Deals created this year for every bank at once, with `crm:aggregate_deals`. Pass `group_by` as the
+  bank field id in an array. Pass one filter: the deal created-date field `between` the first day
+  of the year and today. A filter has `field_id`, `operator` and `value`. Leave `metric` out: every
+  group already carries a `count`:
+
+```
+crm_read_tool({ "name": "crm:aggregate_deals", "arguments": { "group_by": ["<bank field id>"], "filters": [ { "field_id": "createdAt", "operator": "between", "value": ["<YYYY>-01-01", "<today YYYY-MM-DD>"] } ] } })
+```
+
+Compare each group's `count` with the sum of that bank's `dealsByMonth` counts for the current year
+in the Mandate result. Compare by bank name. When a bank is not in the CRM answer, or the counts
+differ, write one plain line that names up to three banks with the largest gap and says what the
+CRM shows for each. Step 4 carries it in the notice.
+
+- Its fees, only for the bank with the most deals this year, and only when its CRM count is 25 or
+  fewer. Call `crm:search_deals` once with the bank field `eq` the bank name and the created-date
+  filter above, with that count as `limit`. Then call `crm:get_fees_by_deal` once for the first
+  returned deal alone. When its answer says the `fees` module is disabled, or the call fails, skip
+  the whole fees check and add nothing about fees to the page. Otherwise call it for the other deals
+  in one message and add the fee totals per currency.
 
 ## Step 3: Split the tiers
 
@@ -180,21 +212,28 @@ created over the three years, Tier 2 is the rest. Do not choose, change or overr
 ## Step 4: Build the page
 
 ```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --people-result <people file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --people-result <people file> --logos <logos file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
 ```
 
 The notice belongs to the Mandate view. The script gives the introducer and adviser view its own fixed line that says banks are counted from the introducers and advisers on each deal.
 
-Leave out `--people-result` when the people run failed. The page then has no view toggle. When
+When `${CLAUDE_PLUGIN_ROOT}` is empty in this session, run the script by its path in the directory that
+holds this SKILL.md, for example `uv run "<the directory that holds this SKILL.md>/scripts/build_tracker.py" --result <file> ...`.
+That command is not in `allowed-tools`, so the user may be asked to approve it once.
+
+Leave out `--logos` when Step 1 skipped the logos call. Leave out `--people-result` when the people run failed. The page then has no view toggle. When
 the script drops a people file it cannot use, it adds its own line to the notice and builds the
 Mandate view. The notice also carries the plain line from Step 1 when the people run failed.
 
 `<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`.
 
 The script exits with a typed code when the input is wrong (`result_not_json`, `result_empty`,
-`result_invalid`, `row_invalid`, `not_configured`, `no_result`,
-`template_invalid`). Tell the user the tracker could not be built and stop. Do not repair the
-data by hand.
+`result_invalid`, `result_corrupt`, `row_invalid`, `not_configured`, `no_result`,
+`template_invalid`). A `result_corrupt` means a file differs from the tool answer.
+Write that file again from the answer, exactly as it came back, and build one more time. Any other
+code, or a second `result_corrupt`: tell the user the tracker could not be built and stop. Do not
+repair the data by hand. A logos file the script cannot use (`logos_invalid`) is left out with a line on stderr, and
+the page shows empty tiles.
 
 ## Step 5: Publish
 

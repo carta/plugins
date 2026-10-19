@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+import hashlib
 import html
 import json
 import re
@@ -76,9 +77,19 @@ def fit_to_tile(data_uri: str) -> str:
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("ascii")).decode("ascii")
 
 
+def _decodes(data_uri: str) -> bool:
+    """Whether the base64 payload has a whole length and padding. A copy that lost characters fails here, and the tile stays empty."""
+    try:
+        base64.b64decode(data_uri.split(",", 1)[1], validate=True)
+    except ValueError:
+        return False
+    return True
+
+
 def clean_logo(raw: object) -> dict:
     uri = raw.get("dataUri") if isinstance(raw, dict) else None
-    return {"dataUri": fit_to_tile(uri) if isinstance(uri, str) and _DATA_URI.match(uri) else None}
+    usable = isinstance(uri, str) and _DATA_URI.match(uri) and _decodes(uri)
+    return {"dataUri": fit_to_tile(uri) if usable else None}
 
 
 def _count(value: object, where: str) -> int:
@@ -174,6 +185,18 @@ def clean_row(row: object, index: int) -> dict:
     }
 
 
+def tracker_checksum(rows: list[dict]) -> str:
+    """SHA-256 over each row's domain and monthly counts, the formula crm-api puts in the payload's `checksum`.
+
+    One line per row, in row order: `<domain>\t<month>=<count>,<month>=<count>`.
+    """
+    text = "\n".join(
+        row["adviser"]["domain"] + "\t" + ",".join(f"{m['month']}={m['count']}" for m in row["dealsByMonth"])
+        for row in rows
+    )
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def split_tiers(rows: list[dict], last_year: int) -> dict:
     """Tier 1 is the top half of the banks, rounded up, by deals created over the whole window.
 
@@ -202,6 +225,9 @@ def build_data(payload: object, as_of: dt.date, notice: str | None) -> dict:
     if not (isinstance(window, dict) and all(isinstance(window.get(k), int) for k in ("from", "to")) and window["from"] <= window["to"]):
         raise fail("result_invalid", "`window` must carry integer `from` and `to`")
     rows = [clean_row(r, i) for i, r in enumerate(payload["rows"])]
+    checksum = payload.get("checksum")
+    if isinstance(checksum, str) and checksum != tracker_checksum(rows):
+        raise fail("result_corrupt", "the deal counts differ from the tool answer, so the copy lost or changed data")
     tenant = payload.get("tenant") if isinstance(payload.get("tenant"), dict) else {}
     title = payload["title"] if isinstance(payload.get("title"), str) and payload["title"] else "M&A Adviser Tracker"
     return {
@@ -218,6 +244,47 @@ def build_data(payload: object, as_of: dt.date, notice: str | None) -> dict:
 def json_for_script(data: dict) -> str:
     """JSON that cannot end its own script element or open an HTML comment."""
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+
+def _logo_map(raw: object) -> tuple[dict, dict]:
+    """The tenant logo and the logos by lowercase domain, from the logos tool answer."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("logos"), list):
+        raise fail("logos_invalid", "the logos answer has no `logos` list")
+    by_domain = {}
+    for entry in raw["logos"]:
+        if isinstance(entry, dict) and isinstance(entry.get("domain"), str):
+            logo = clean_logo(entry)
+            if logo["dataUri"]:
+                by_domain[entry["domain"].lower()] = logo
+    return clean_logo({"dataUri": raw.get("tenant")}), by_domain
+
+
+def with_logos(view: dict, tenant_logo: dict, by_domain: dict) -> dict:
+    """`view` with each missing logo filled from the logos answer. A logo the result already carries stays."""
+    rows = [
+        {**row, "adviser": {**row["adviser"], "logo": row["adviser"]["logo"] if row["adviser"]["logo"]["dataUri"] else by_domain.get(row["adviser"]["domain"].lower(), row["adviser"]["logo"])}}
+        for row in view["rows"]
+    ]
+    tenant = view["tenant"] if view["tenant"]["logo"]["dataUri"] else {**view["tenant"], "logo": tenant_logo}
+    return {**view, "tenant": tenant, "rows": rows}
+
+
+def drop_logos(data: dict, detail: str) -> dict:
+    """`data` unchanged. The detail goes to stderr for the agent, not into the page."""
+    print(f"logos dropped: {detail}", file=sys.stderr)
+    return data
+
+
+def apply_logos(data: dict, logos_raw: str) -> dict:
+    """`data`, and each of its views, with the logos of the logos answer. An unusable answer leaves empty tiles."""
+    try:
+        tenant_logo, by_domain = _logo_map(parse_result(logos_raw))
+    except SystemExit as exc:
+        return drop_logos(data, str(exc))
+    out = with_logos(data, tenant_logo, by_domain)
+    if "views" in data:
+        out["views"] = [with_logos(view, tenant_logo, by_domain) for view in data["views"]]
+    return out
 
 
 MANDATE_VIEW = ("mandate", "By mandate")
@@ -267,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result", type=Path, help="the saved adviser tracker result")
     parser.add_argument("--people-result", type=Path, help="the saved result of the introducer and adviser call, for a second view")
+    parser.add_argument("--logos", type=Path, help="the saved answer of the logos call, for banks whose result carries no logo")
     parser.add_argument("--notice", help="one line shown above the table, such as a check that disagreed")
     parser.add_argument("--as-of", type=dt.date.fromisoformat, default=dt.date.today(), help="the date the data is as of (default today)")
     parser.add_argument("--out", type=Path, required=True)
@@ -282,6 +350,11 @@ def main(argv: list[str] | None = None) -> int:
             data = drop_people_view(data, str(exc.strerror))
         else:
             data = with_people_view(data, people_raw, args.as_of)
+    if args.logos:
+        try:
+            data = apply_logos(data, args.logos.read_text(encoding="utf-8"))
+        except OSError as exc:
+            data = drop_logos(data, str(exc.strerror))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(data), encoding="utf-8")
     print(f"wrote {args.out}")
