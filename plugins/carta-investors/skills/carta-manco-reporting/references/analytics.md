@@ -77,6 +77,7 @@ Every row spells the full id, prefix included.
 | `MancoReporting.App.ToggleTheme` | click | Light/dark toggle, on either page. |
 | `MancoReporting.App.ImportBudget` | click | "Import budget" in the sidebar (hosted app only): opens the file picker for an exported budget bundle. |
 | `MancoReporting.App.RemoveBudget` | click | "Remove" beside an uploaded budget: restores Carta's stored budget. |
+| `MancoReporting.App.DownloadBudget` | click | The download icon beside an uploaded budget's note: saves the stored bundle as JSON, to fix and import again. |
 
 ### Navigation
 

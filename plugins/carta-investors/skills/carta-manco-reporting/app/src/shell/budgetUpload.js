@@ -2,6 +2,8 @@
 // message so the user sees why a file was refused.
 
 const URL_PATH = "/api/budget-upload";
+// The stored bundle as a file download (the Worker sets Content-Disposition).
+export const BUDGET_DOWNLOAD_URL = `${URL_PATH}?download=1`;
 
 // null when the server has no upload route (the local server answers 404), so the
 // control stays hidden there.

@@ -518,6 +518,7 @@ the operator picks "Nothing".
 **Only when the operator asks** to put their workbook budget in the hosted app ("upload my
 budget to the hosted version", "export the budget"). The hosted app does not read a workbook.
 The operator uploads one JSON file with **Import budget** in the hosted app's sidebar.
+The download icon beside the uploaded budget's note saves that file back, to fix and import again.
 
 The dashboard must be built (Step 4) from a workbook budget. Then:
 

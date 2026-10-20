@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { Download } from "lucide-react";
 import { sans, FS, FAINT, RED, LINE, INK } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
-import { fetchUploadState, uploadBudget, removeBudget, describeUpload, attempt } from "./budgetUpload.js";
+import { fetchUploadState, uploadBudget, removeBudget, describeUpload, attempt, BUDGET_DOWNLOAD_URL } from "./budgetUpload.js";
 
 // Sidebar control for the hosted app: import the budget file exported from the local flow.
 export default function BudgetImport({ budgetUpload, onChanged }) {
@@ -32,7 +33,19 @@ export default function BudgetImport({ budgetUpload, onChanged }) {
 
   return (
     <div style={{ ...sans, fontSize: FS.small, color: FAINT, lineHeight: 1.4, display: "grid", gap: 6, marginBottom: 10 }}>
-      {note && <div style={{ color: note.warn ? RED : FAINT }}>{note.text}</div>}
+      {note && (
+        <div style={{ color: note.warn ? RED : FAINT }}>
+          {note.text}{" "}
+          <a
+            href={BUDGET_DOWNLOAD_URL} download
+            aria-label="Download the uploaded budget file" title="Download the uploaded budget file"
+            style={{ color: FAINT, verticalAlign: "middle" }}
+            onClick={() => trackClick("MancoReporting.App.DownloadBudget")}
+          >
+            <Download size={12} aria-hidden="true" />
+          </a>
+        </div>
+      )}
       {error && <div role="alert" style={{ color: RED }}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button
