@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.16</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.17</carta-plugin>
 
 # Benchmark Query
 
@@ -612,6 +612,10 @@ read_tool({"name": "compensation__get__benchmark", "arguments": {
 
 > **Always pass the four-year-grant `equity_quantity` explicitly.** When `equity_quantity` is omitted, the backend default applies (Step 2b's `params.equity_quantity.default`: next-12-months vesting), which is ~25% of the four-year grant the CTC product UI shows. That's a hard tie-out failure, not a stylistic preference. Applies to every benchmark call: single role, bulk CSV, live artifact panel, Excel export. If the user asks for "one year of equity" or "annual equity value", send the next-12-months value instead. Both values are in `params.equity_quantity.values`; send only those.
 
+> **Accepted params — nothing else.** `compensation:get:benchmark` takes `corporation_id`, `job`, `level`, `focus`, `location`, `convert_to_local_currency`, `is_leader`, `benchmark_version_id`, `post_money_bucket`, `capital_raised_bucket`, `headcount_bucket`, `equity_quantity`, `equity_competitiveness_percentile`, `salary_competitiveness_percentile`, `industry` and `raw`. Any other param fails the whole call with `unknown_param`. In particular there is **no `job_title`** (nor `title`, `role` or `job_area`) and **no `detail_mode`**. A title the user typed goes through the rolematcher (Step 3a) and reaches the API only as the `job`, `level` and `focus` values it maps to in Step 2b — `job` never carries free text such as `"Software Engineer"` or `"Director of Growth"`, which returns HTTP 400.
+>
+> **On `unknown_param` or `invalid_argument`**: read the error's `allowed_params` and `did_you_mean`, drop or rename the offending param to one of those, and resend once. Never resend the same call. If the corrected call fails too, stop and report the error.
+
 **Peer-group override (user-driven sensitivity analysis).** When the user explicitly asks to see a different peer group than the corp's plan default (*"show me $10M-$25M benchmarks instead"* or *"what would this look like for a 100-500 person company"*), **DROP the plan-default bucket param entirely and replace it with the override**. Do not include both — the API's behavior when more than one bucket is non-null is undefined and may change.
 
 Pick the override from Step 2b:
@@ -815,6 +819,7 @@ A `compensation:*` read can fail for two unrelated reasons that must NOT be conf
 | Rolematcher returns `UNKNOWN` for `job_area` | Role description too vague or not in CTC taxonomy | "Could you clarify the role? For example: job area (Engineering, Sales), seniority level, and whether it's an IC or manager track." |
 | Rolematcher returns `UNKNOWN` for `track` | Level is also UNKNOWN — no seniority signals present | "Is this an individual contributor (IC), manager, or executive role? This determines which benchmark track to use." |
 | Benchmark response has no data for role/level (subscribed corp) | Data coverage gap — no snapshot for that exact slice | Look at Step 2b first: the job's `levels` and its `coverage` entry's `focuses` (for the industry in use) are what exists. Ask with `AskUserQuestion`, offering only those levels and focuses by label: "No benchmark data is available for [role] at [level] in this benchmark version. Which of these would you like instead?" |
+| `unknown_param` or `invalid_argument` on a compensation command | A param outside the command's accepted list | Follow Step 4's **On `unknown_param` or `invalid_argument`** rule. A `job` / `level` / bucket value that is not a Step 2b `value` is an HTTP 400 instead: follow Step 4's **On HTTP 400** rule. |
 | Gate → **FAIL — no subscription** | Corp doesn't have an active CTC subscription | See **Subscription gating** — stop and send the subscription message. No further compensation calls. |
 | Gate → **FAIL — no access**, OR gate → **PASS** but a `plan`/`benchmark` read returns **403** | The current user lacks a CTC role on this corp | See **Access gating** — send the gate's no-access message, stop. No demo link; do NOT re-authenticate (won't grant a missing role). |
 

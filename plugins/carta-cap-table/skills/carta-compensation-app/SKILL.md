@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.16</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.17</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -1148,6 +1148,13 @@ shares left", so neither is ever rendered as a zero balance.
 > reads a different (compensation-service Redis) snapshot warmed by an out-of-band
 > job — it can drift from the product UI. The `reports-insights` command is still
 > useful for the two `num_employees` counts it also returns, but not for the pool.
+>
+> ```
+> read_tool({"name": "compensation__get__reports-insights",
+>            "arguments": {"corporation_id": <corporation_pk>}})
+> ```
+>
+> **Accepted params — nothing else.** The command takes only `corporation_id` and `raw`. It has no `detail_mode` (nor any other size or detail param): a call carrying one fails with `unknown_param`. On `unknown_param` or `invalid_argument`, read the error's `allowed_params` / `did_you_mean`, correct the call from them and resend once — never resend the same call. If the corrected call fails too, stop and report the error.
 
 **2d-iii. Corporation equity units (optional).** The planner can show grants as
 shares, fully diluted ownership or an equity value, matching CTC's own Equity Unit

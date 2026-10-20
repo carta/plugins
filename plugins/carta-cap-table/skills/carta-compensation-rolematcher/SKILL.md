@@ -10,7 +10,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.16</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.17</carta-plugin>
 
 # CTC RoleMatcher
 
@@ -465,6 +465,8 @@ Flagged for review:
 ### Display → API enum tables (for downstream API calls only)
 
 When a downstream skill (e.g. `carta-compensation-benchmarks`) needs to call the compensation API with this classification, convert each display value to the API enum using the tables below. Do NOT surface the API enum form to the user — it is for machine handoff only.
+
+> **Never send the title or a display name as a value.** This skill makes no tool calls: the calling skill maps the classified job area and level to `compensation:get:filter_options` by its own Step 2b rule 2 and sends the `value` listed there. A job title (`Software Engineer`, `Director of Growth`) is never sent as `job`, and the compensation commands have no `job_title` param — `job_title` is only a column name in batch input. The tables below name the expected `value`; when `filter_options` lists a different one, send the listed one.
 
 > **First, rename the fields. This skill's output labels are NOT the API parameter names.**
 >

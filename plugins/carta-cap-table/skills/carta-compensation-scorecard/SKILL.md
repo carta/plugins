@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.16</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.17</carta-plugin>
 
 # CTC Scorecard
 
@@ -334,7 +334,7 @@ Use the labels in narration even when passing the raw value to the API. Example:
 >
 > **Mapping a level the user named.** Match their wording to the Title Case of a level's `value` (`Senior 1` ↔ `SENIOR1`), or to its `ic_label` / `manager_label` when they give a role code (`IC 4`, `MGR 4`). For "up to VP 2" or "below Staff", take the `rank` of the named level and use the cap slot, or list the levels of that job with a lower `rank`. Use `executive` to recognise executive levels — never a hardcoded rank cutoff. If the named level is not in the chosen job's `levels`, tell the user that job has no such level and ask.
 >
-> **Send the `value`, never the label** (`"Engineering"`, `"Senior 1"` are display names and 400 as API values). **There is no `compensation:list:job_types` / `list:jobs` / `list:levels` command — do not invent one; it returns `Unknown tool`.** The only source of filter values is `compensation:get:filter_options` (Step 2b).
+> **Send the `value`, never the label or a free-text role** (`"Engineering"`, `"Senior 1"`, `"Software Engineer"` are not API values and 400 in `job_filters`). **There is no `compensation:list:job_types` / `list:jobs` / `list:levels` command — do not invent one; it returns `Unknown tool`.** The only source of filter values is `compensation:get:filter_options` (Step 2b).
 >
 > **On HTTP 400** (its fix text points to `compensation:get:filter_options`): compare every value you sent with Step 2b's `params` and resend the listed `value`. Retry at most once; if it 400s again, stop and report the error.
 
@@ -602,7 +602,7 @@ Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do
 | `corporation-scorecard` errors with *"Cannot compare active plan to itself"* | You passed the **active** plan id to a comparison-only endpoint. Expected — don't surface it to the user. Fall back to the employee-derived rollup (Step 4a, Path 1). Only use `corporation-scorecard` with a **draft** plan id. |
 | Scorecard regeneration is in flight (response carries `task_status.state: PENDING` / `RUNNING`) | Surface the partial data if present, append: *"The scorecard is currently regenerating in the background. Numbers may shift in the next few minutes."* |
 | Unknown band value (not in `params.score`) | Render verbatim in chat; don't substitute. The set of bands may have grown. |
-| `unknown_param` (*"does not accept …"*) on `employee-scorecard` | You sent a param outside **Accepted params** (Step 4b). Drop it, resend once, and do what **Accepted params** says for that param instead. Do not try a renamed variant of the param. |
+| `unknown_param` (*"does not accept …"*) or `invalid_argument` on `employee-scorecard` | You sent a param outside **Accepted params** (Step 4b). Drop it, or rename it to a param the error's `allowed_params` / `did_you_mean` lists, resend once, and do what **Accepted params** says for that param instead. Never resend the same call, and do not guess other variants of the param. |
 | HTTP 400 on a `job_filters`, `score` or `sort_field` value | Compare the values you sent with Step 2b's `params`, resend the listed `value` once, then stop and report. Do not guess a variation. |
 | `compensation:get:filter_options` fails | Stop (Step 2b, rule 4): 403 → no-access message, 404 → no active CTC plan, `Unknown tool` → the connected Carta MCP is too old. Do not fall back to typed values. |
 | *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `read_tool`, and retry once. Do not switch to `fetch` / `discover`, and do not guess name variations. |
