@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.92.0</carta-plugin>
+<carta-plugin>carta-investors:6.93.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -152,7 +152,7 @@ Artifact({
   file_path: "<path printed by render_artifact.py>",
   url: "<url from the list — omit entirely on a first publish>",
   title: "LP Portfolio Dashboard",
-  description: "LP portfolio dashboard — fund allocations, NAV trend, capital activity and quarterly movers, loaded live from Carta.",
+  description: "LP portfolio dashboard — fund allocations by firm, capital activity, NAV and quarterly fund performance, loaded live from Carta.",
   icon: "dashboard",
   label: "Refreshed for <partner_name>",
   capabilities: {

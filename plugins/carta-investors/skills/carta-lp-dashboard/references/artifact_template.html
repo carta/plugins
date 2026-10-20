@@ -290,6 +290,7 @@
     tbody td:last-child { padding-right: 0; }
     tbody tr:last-child td { border-bottom: none; }
     .zero { color: var(--gray-30); }
+    .fund-firm { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--gray-50); }
     .nav-wrap { position: relative; }
     .nav-sub { position: absolute; top: 100%; right: 0; font-size: 9px; color: var(--gray-40); font-weight: 400; margin-top: 1px; white-space: nowrap; }
     .more-link {
@@ -299,7 +300,7 @@
     }
     .more-link:hover { background: var(--gray-20); }
 
-    /* ── Top Movers ── */
+    /* ── Fund performance by quarter ── */
     .movers-title { font-size: 15px; font-weight: 600; }
     .movers-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
     .quarter-picker {
@@ -539,12 +540,12 @@
 
     <hr class="section-sep">
 
-    <!-- Top movers by fund -->
+    <!-- Fund performance by quarter -->
     <div class="section is-loading" id="section-fund-movers">
-      <div class="section-loading"><span class="section-spinner"></span><span>Loading fund movers…</span></div>
+      <div class="section-loading"><span class="section-spinner"></span><span>Loading fund performance…</span></div>
       <div class="movers-header">
         <div>
-          <div class="movers-title">Top movers by fund</div>
+          <div class="movers-title">Fund performance by quarter</div>
           <div class="movers-sub" id="fund-movers-sub">Total quarterly NAV change per fund, including fund level items.</div>
         </div>
         <select class="quarter-picker" id="quarter-picker" aria-label="Quarter">
@@ -976,7 +977,8 @@ function renderFunds(summary) {
       const c=f.committed_cents;
       const amount=v=>'<td'+(z(v)?' class="zero"':'')+'>'+esc(fmtCents(v, ccy))+'</td>';
       tr.innerHTML=
-        '<td>'+esc(f.fund_name)+'</td>'+
+        // The firm sits under the fund name: a column of its own would push the table wider than the page.
+        '<td>'+esc(f.fund_name)+(f.firm_name ? '<span class="fund-firm">'+esc(f.firm_name)+'</span>' : '')+'</td>'+
         '<td>'+(g.nav_cents>0?PCT_FMT.format(f.allocation_pct||0):'<span class="zero">—</span>')+'</td>'+
         amount(c)+amount(k)+amount(f.contributed_cents)+amount(u)+amount(f.distributed_cents)+
         '<td>'+(z(n)?'<span class="zero">'+esc(fmtCents(0, ccy))+'</span>':'<span class="nav-wrap">'+esc(fmtCents(n, ccy))+'<span class="nav-sub">'+fmtShort(f.as_of_date||asOf)+'</span></span>')+'</td>'+
