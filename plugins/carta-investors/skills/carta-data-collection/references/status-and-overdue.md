@@ -70,12 +70,12 @@ order they sort in:
 | `overdue` | Sent, past its due date, nothing back | Outstanding |
 | `requested` | Sent, nothing back yet | Outstanding |
 | `collecting` | The company has started, or nobody was ever asked | With a `sent_date`, Outstanding. Without one, Not sent yet |
-| `processing` | Carta is working on what arrived | Outstanding |
-| `requires review` | Something needs a person to look at it | Needs your review |
+| `processing` | The company responded; Carta is working on what arrived | Outstanding |
+| `requires review` | The company responded; what it sent waits for someone at the firm to review | Needs your review |
 | `updated` | Answered | Complete |
 | `not updated` | The period closed with nothing submitted | Closed without data |
 
-**`collecting` and `processing` are Outstanding even though the company has done its part.** The
+**`collecting` and `processing` are Outstanding although the company has started or already sent its data.** The
 request is not finished and the firm is still waiting, which is what the user is scanning that
 table for. A status that means "not done" belongs with the others that mean "not done", however far
 along it is.
@@ -97,6 +97,15 @@ user chasing companies would email people who already sent their numbers.
 **`overdue` is a real status, not something to compute.** Do not compare due dates yourself — read
 what the API says, or a request that is a day late by your arithmetic and not by Carta's will be
 reported wrongly.
+
+**Who has responded is read from the status, not from Complete alone.** A company has responded
+when its request is `processing`, `requires review` or `updated`: each means it sent something.
+`collecting` with a `sent_date` means it has started in the portal and sent nothing yet, so it has
+not responded.
+Never say no company has responded, or that nobody has answered, while any row holds one of those
+three — a request waiting on the firm's review is a company that did its part, and telling the user
+otherwise sends them chasing people who are waiting on them. When the user asks who has responded,
+count those three together and name them, saying which still need the firm's review.
 
 Say the status in the user's words. "Nothing back yet" and "past due" read better than `requested`
 and `overdue`; the raw values stay on the wire.
@@ -140,7 +149,7 @@ date inside each status:
 | Meetly | Q2 2026 | Aug 15, 2026 | Past due |
 ```
 
-**Needs your review** — waiting on somebody at the firm:
+**Needs your review** — the company responded, and what it sent waits on somebody at the firm:
 
 ```
 | Company | Period | Due |
@@ -274,12 +283,12 @@ Step 4.
 ## Step 4 — Chase
 
 Only for `requested` and `overdue`. Those are the two statuses a firm may still chase; anything
-else means the company has already responded or Carta is mid-way through the answer. A request the
+else means the company has started, has already responded, or Carta is mid-way through the answer. A request the
 company answered, or one that closed with nothing, is reopened instead —
 `references/reopen-request.md`.
 
-**The Outstanding table is wider than what can be chased.** It also holds `collecting` and
-`processing`, where the company has already sent something. "Chase the outstanding ones" therefore
+**The Outstanding table is wider than what can be chased.** It also holds `collecting`, where the company has
+started, and `processing`, where it has already sent something. "Chase the outstanding ones" therefore
 does not mean every row of that table — take the two chaseable statuses, and say which companies
 you dropped and why before confirming, so a count that shrinks from six to three is not a surprise.
 

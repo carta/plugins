@@ -93,7 +93,7 @@ you write the table yourself.
 | Northwind Robotics | Answered | Balance sheet, P&L, Cash flow statement, Board deck / investor update | — |
 
 - Status in the user's words, per the status reference: "Past due", "Nothing back yet",
-  "Started", "Answered", "Needs your review", "Closed without data".
+  "Started", "Sent, being processed", "Answered", "Needs your review", "Closed without data".
 - An item in `missing_required` is marked **(required)**; the rest of `missing` is not.
 - A company with nothing missing shows a dash, not an empty cell.
 - Metrics and firm-defined documents by their names from `names`; a custom KPI is its name, never

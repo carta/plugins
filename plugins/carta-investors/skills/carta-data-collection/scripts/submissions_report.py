@@ -40,7 +40,8 @@ STATUS_LABELS = {
     "overdue": "Past due",
     "requested": "Nothing back yet",
     "collecting": "Started",
-    "processing": "Started",
+    # The company sent its data; "Started" is only for a company that has not sent anything yet.
+    "processing": "Sent, being processed",
     "requires review": "Needs your review",
     "updated": "Answered",
     "not updated": "Closed without data",
