@@ -71,11 +71,12 @@ export default function useReports({ onChanged } = {}) {
   const can = useCallback((action) => !Array.isArray(listing.actions) || listing.actions.includes(action), [listing.actions]);
   const [shareJob, setShareJob] = useState(null);
   // The hosted Worker answers /api/reports for real once REPORT_SHARING is on and Carta's
-  // probe allows it for this user; a local serve.py without that route, the Worker's own
-  // SPA fallback, or a network error all leave this false instead — a GET that doesn't come
-  // back as {reports: [...]} never flips `available`, so nothing renders a control for an
-  // action the server can't perform. Once it is true, the sidebar's controls come from each
-  // report's editable/read_only fields (ReportActions.jsx), not from the listing's actions.
+  // probe allows it for this user; a local serve.py without that route, a 404, or a network
+  // error all leave this false instead — a GET that doesn't come back as {reports: [...]}
+  // never flips `available`, so nothing renders a control for an action the server can't
+  // perform. Once it is true, every report/share control still goes through `can()` above —
+  // editable/read_only decide which controls a given report is eligible for, `actions`
+  // decides which of those this server actually serves.
   const [available, setAvailable] = useState(false);
   const etagRef = useRef(null);
 
