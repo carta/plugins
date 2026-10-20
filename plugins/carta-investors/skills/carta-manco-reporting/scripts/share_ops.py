@@ -138,11 +138,13 @@ def share(
     emit: Emit,
     force: bool = False,
     people: Optional[List[Dict[str, Any]]] = None,
+    updating: bool = False,
 ) -> Dict[str, Any]:
     """Publish a report, or push its changes when it is already shared (see _share). When Carta
     refuses a recipient, the saved list of people is out of date, so it is dropped."""
     try:
-        return _share(bridge, store, data_dir, report_id, shared_with, emit, force=force, people=people)
+        return _share(bridge, store, data_dir, report_id, shared_with, emit,
+                      force=force, people=people, updating=updating)
     except ShareError as e:
         if e.code == "invalid_recipient":
             forget_shareable_users(data_dir)
@@ -158,6 +160,7 @@ def _share(
     emit: Emit,
     force: bool = False,
     people: Optional[List[Dict[str, Any]]] = None,
+    updating: bool = False,
 ) -> Dict[str, Any]:
     """Publish a report, or push its changes when it is already shared.
 
@@ -169,6 +172,11 @@ def _share(
     entity's ledger); None on an update leaves the recipients alone. An update
     refuses to overwrite a newer version unless `force` — it returns
     {"status": "stale", ...} for the app to ask about instead.
+
+    A new share with no list goes to everyone, so it is never created by accident: with no
+    share record, an update (`updating`: the app showed this report as already shared, or
+    `shared_with` is None) returns {"status": "deleted"} without calling Carta, for the app
+    to ask about. Only publish_as_new, or a share made with an explicit list, creates one.
     """
     ctx = _context(data_dir)
     doc = store.load()
@@ -185,6 +193,10 @@ def _share(
     # changed: re-sending an unchanged one makes a change of recipients slow
     # for nothing. A create always sends both — there's nothing to compare to yet.
     is_update = bool(link.get("uuid") and link.get("is_owner"))
+    if not is_update and (updating or shared_with is None):
+        # Sharing was stopped (maybe from another tab) after the app drew this report as
+        # shared; re-creating it from a stale view would reach everyone with ledger access.
+        return {"status": "deleted"}
     sends_payload = (not is_update) or link.get("dirty") or shared_with is None
     try:
         report_payload.validate(payload)

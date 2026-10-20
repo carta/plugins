@@ -68,13 +68,14 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, onOpe
   };
 
   // Pushes the report's changes to the people it already reaches. Leaving
-  // shared_with out keeps the audience exactly as it is on Carta.
+  // shared_with out keeps the audience exactly as it is on Carta; `updating` makes the
+  // server refuse, not create a new share, when sharing was stopped from another tab.
   const shareUpdate = async () => {
     trackClick("MancoReporting.ReportNotice.ShareUpdate");
     setUpdating(true);
     setUpdateError(null);
     try {
-      const outcome = shareOutcome(await reportsApi.runShareOp(REPORT_ACTIONS.SHARE, { report_id: report.id }));
+      const outcome = shareOutcome(await reportsApi.runShareOp(REPORT_ACTIONS.SHARE, { report_id: report.id, updating: true }));
       if (outcome.kind === "decide") setUpdateError(`Couldn't share the update. ${NEEDS_DECISION[outcome.status]}`);
       else if (outcome.kind === "partial") setUpdateError(outcome.message);
       else onShareDone?.(UPDATED);

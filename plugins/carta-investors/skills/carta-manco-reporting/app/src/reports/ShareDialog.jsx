@@ -234,7 +234,7 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
 
   const onShare = (force = false) => {
     trackClick(force ? "MancoReporting.ShareDialog.Overwrite" : "MancoReporting.ShareDialog.Share");
-    run(REPORT_ACTIONS.SHARE, { shared_with: recipients, people: people(), force });
+    run(REPORT_ACTIONS.SHARE, { shared_with: recipients, people: people(), force, updating: !!link });
   };
 
   const progress = busy ? reportsApi.shareJob?.progress : null;

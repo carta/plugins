@@ -282,7 +282,7 @@ def _run_share_op(op, params):
         elif op == "share":
             result = share_ops.share(bridge, store, DATA_DIR, params["report_id"],
                                      params.get("shared_with"), emit, force=bool(params.get("force")),
-                                     people=params.get("people"))
+                                     people=params.get("people"), updating=bool(params.get("updating")))
         elif op == "publish-as-new":
             result = share_ops.publish_as_new(bridge, store, DATA_DIR, params["report_id"],
                                               params.get("shared_with"), emit, people=params.get("people"))

@@ -14,7 +14,7 @@ All from the report controls beside **Export**, and none of it needs Claude in t
 |---|---|
 | Rename / Duplicate / Hide | Local only. A duplicate holds its own copy of the budget and keeps the report's budget mapping. Hidden reports come back from the sidebar's **Show N hidden**. |
 | Share | Only the people you add (where a new share starts), or everyone who can view the entity's accounting. People are picked from that same list, which the dashboard saves for a day in `.shareable-users.json` (**Refresh** under the list asks Carta again; a recipient Carta refuses clears it). |
-| Update | Sends the owner's later changes. Until then recipients keep the version they have. |
+| Update | Sends the owner's later changes. Until then recipients keep the version they have. When the report has no share (sharing was stopped, maybe in another tab), nothing is sent: the app is told the shared copy was deleted and asks whether to share it as new or keep it private. A share reaches everyone only when the Share dialog sends an explicit choice of everyone. |
 | Stop sharing | Deletes the shared copy for everyone; the owner's local report stays. |
 | Load shared reports | Pulls reports others shared. They are read-only; **Duplicate** makes a copy of your own. |
 
