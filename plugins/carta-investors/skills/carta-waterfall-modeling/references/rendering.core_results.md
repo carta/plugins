@@ -94,3 +94,30 @@ Format per `SKILL.md` §Formatting rules; null-dropped — never fabricate.
 `colType`: `Description` text; all others currency.
 
 Apply `SKILL.md` §Formatting rules. Single-node — one table, no subheader.
+
+## Sensitivity tables (a batch, per `results.core_results.md` §Sensitivity analysis)
+
+One column per run, ascending by `EQUITY_VALUE`, headed by that value as currency; a value a run did
+not return renders `—`. Single-node — no subheader.
+
+**Payout by exit value** — one row per `allocations[i].organization_name` found in any run, sorted by
+its payout in the highest run, descending. Columns: `Stakeholder` (text), then each run (currency).
+
+| Column | Source |
+| --- | --- |
+| Stakeholder | `allocations[i].organization_name` |
+| {exit value} | that run's `allocations[i].value_of_holdings` |
+
+**Total row** — final row, bolded: `"Total"`, then each run's `grand_totals.value_of_holdings`.
+
+**Breakpoints by exit value** — the highest run's `breakpoints[]` in declared order; each run's cell is
+its own tier at the same position. Columns: `Breakpoint` (text), `From`, `To`, then each run (currency).
+
+| Column | Source |
+| --- | --- |
+| Breakpoint | `breakpoints[i].description` (highest run) |
+| From | `breakpoints[i].from_value` (highest run) |
+| To | `breakpoints[i].to_value` (highest run) |
+| {exit value} | that run's `breakpoints[i].value_in_tier` |
+
+Apply `SKILL.md` §Formatting rules.

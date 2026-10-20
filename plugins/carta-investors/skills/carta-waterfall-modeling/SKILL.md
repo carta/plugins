@@ -2,7 +2,7 @@
 name: carta-waterfall-modeling
 description: >
   Run a waterfall (allocation) against a portfolio company in the investor firm
-  context. TRIGGER, "run a waterfall", "create an allocation", "exit scenario",
+  context. TRIGGER, "run a waterfall", "create an allocation", "exit scenario", "sensitivity analysis",
   "exit distribution", "who gets paid if...". Firm context only; access is controlled server-side.
   Use instead: carta-explore-data for read-only fund/investment/valuation data —
   this skill MODELS exit waterfalls/allocations (who gets paid on exit), it does
@@ -33,11 +33,12 @@ allowed-tools:
   - mcp__claude_ai_Carta__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/build_artifact.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/sensitivity_tables.py" *)
   - Artifact
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.99.2</carta-plugin>
+<carta-plugin>carta-investors:6.99.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -379,6 +380,10 @@ shared date), then run them as a batch: dispatch each value (Step 5) and render 
 reuse rule (in the cap-table detail doc for the active noun, §Step 6a.5) handles this; never
 re-fetch or re-print it per value.
 Different dates → each date is its own cap table (fetched once).
+
+**Sensitivity analysis.** When the user asks to compare the values (e.g. _"run a sensitivity
+analysis at $50M, $100M and $200M"_), run the batch as above, then — after the last run's results,
+before the follow-up menu — run the command's results doc §Sensitivity analysis.
 
 ## Step 6 — Fetch and render results
 

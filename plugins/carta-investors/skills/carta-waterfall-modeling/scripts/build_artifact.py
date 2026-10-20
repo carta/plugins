@@ -240,6 +240,11 @@ LEFTOVER_RE = re.compile(r"__WF_[A-Z_]+__|\{\{[A-Z_]+\}\}")
 def build(cfg, demo=False):
     """Return the assembled HTML for a validated-or-raw config. Raises ConfigError."""
     cfg = validate(cfg)
+    return assemble(cfg, page_title(cfg), demo)
+
+
+def assemble(cfg, title, demo=False):
+    """Return the page for an already-validated config and an escaped `<title>`. Raises ConfigError."""
     template = (RES / TEMPLATE).read_text(encoding="utf-8")
     font = base64.b64encode((RES / SANGBLEU_FONT).read_bytes()).decode("ascii")
     css = (RES / CSS).read_text(encoding="utf-8").replace("__WF_SANGBLEU_WOFF2__", "data:font/woff2;base64," + font)
@@ -259,7 +264,7 @@ def build(cfg, demo=False):
     if leftover:
         raise ConfigError("unresolved placeholder(s) after assembly: {}".format(sorted(set(leftover))))
 
-    values = {"{{PAGE_TITLE}}": page_title(cfg), "{{CONFIG_JSON}}": config_json(cfg)}
+    values = {"{{PAGE_TITLE}}": title, "{{CONFIG_JSON}}": config_json(cfg)}
     out = re.sub(r"\{\{PAGE_TITLE\}\}|\{\{CONFIG_JSON\}\}", lambda m: values[m.group(0)], out)
 
     for rx, what in ((EXTERNAL_SCRIPT_RE, "<script src=>"), (EXTERNAL_IMG_RE, "an external image or frame"),

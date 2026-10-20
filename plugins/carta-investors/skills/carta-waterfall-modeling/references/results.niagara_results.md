@@ -297,3 +297,48 @@ render the entity sections as empty under their headers with a single line:
 - `501 firm_holders_route_not_supported` → tell the user firm filtering
   isn't supported for this issuer kind yet. Keep the unfiltered table.
 - `403` → permission denied. Stop the filter; keep the unfiltered table.
+
+## Sensitivity analysis (a batch, on request)
+
+Reached from `SKILL.md` §Step 5 (Running several scenarios at once) once every run's fetch loop is
+done. It adds to each run's output — never replaces it. Tables per `rendering.niagara_results.md`
+§Sensitivity tables.
+
+- `excel` → write the **Sensitivity** tab per `excel-output.md` §"Sensitivity" tab.
+- `chat` → the three steps below.
+
+1. **Breakpoint holders** — fetch every breakpoint of the highest run per §Breakpoint drill (same
+   gate; that run's `execution_id`, `grouping: "BY_HOLDER"`), reusing any already fetched. Set
+   `breakpoints[i].allocations` on that run's cached tiers to the accumulated rows, verbatim.
+2. **Config** — `Write` one JSON object to `<outputs-directory>/sensitivity-<slug>.json` (`<slug>` as
+   in `artifact-output.md` §Build), exactly in this shape:
+
+   ```
+   {
+     "get_command": "<get_command from Step 3, exactly>",
+     "target_name": "<company name from Step 2>",
+     "root_name": "<root.name, else the company name>",
+     "is_multi_entity": <true or false, from Step 3>,
+     "waterfall_date": "<WATERFALL_DATE, ISO>",
+     "currency": "<currency from Step 3>",
+     "entities": [
+       {"display_name": "<name>", "is_root": true, "runs": [
+         {"equity_value": "<EQUITY_VALUE as the raw decimal you sent in Step 5>", "allocations": [ … ], "breakpoints": [ … ], "proceeds": "<decimal>", "grand_totals": { … }}
+       ]}
+     ]
+   }
+   ```
+
+   - `currency` — leave the key out when Step 3 returned none.
+   - `entities` — each run's `per_entity`, in `ordered` order (root first, `is_root: true` on it
+     only); `runs` — one per run: its accumulated `BY_HOLDER` rows, cached `breakpoints` (or `null`),
+     `proceeds` and `grand_totals`, verbatim.
+3. **Print or publish** — with the `Artifact` tool, publish per `artifact-output.md` §Sensitivity
+   page. Otherwise run, on one line, exactly as written, and print its output as is:
+
+   ```
+   uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/sensitivity_tables.py" --config "<outputs-directory>/sensitivity-<slug>.json"
+   ```
+
+   Then print the highest run's breakpoint holders per `rendering.niagara_results.md` §Breakpoint
+   drill table. If the script fails, render the tables inline from the runs already held.

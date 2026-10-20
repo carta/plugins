@@ -146,3 +146,43 @@ If no row matches, render once:
 > "No firm-scoped holdings on this waterfall — your portfolios don't hold this company."
 
 and return to the follow-up prompt without altering the table.
+
+## Sensitivity analysis (a batch, on request)
+
+Reached from `SKILL.md` §Step 5 (Running several scenarios at once) once every run's fetch loop is
+done. It adds to each run's output — never replaces it. Tables per `rendering.core_results.md`
+§Sensitivity tables.
+
+- `excel` → write the **Sensitivity** tab per `excel-output.md` §"Sensitivity" tab.
+- `chat` → the two steps below.
+
+1. **Config** — `Write` one JSON object to `<outputs-directory>/sensitivity-<slug>.json` (`<slug>` as
+   in `artifact-output.md` §Build), exactly in this shape:
+
+   ```
+   {
+     "get_command": "<get_command from Step 3, exactly>",
+     "target_name": "<company name from Step 2>",
+     "root_name": "<company name from Step 2>",
+     "is_multi_entity": false,
+     "waterfall_date": "<WATERFALL_DATE, ISO>",
+     "currency": "<currency from Step 3>",
+     "entities": [
+       {"display_name": "<company name>", "is_root": true, "runs": [
+         {"equity_value": "<EQUITY_VALUE as the raw decimal you sent in Step 5>", "allocations": [ … ], "breakpoints": [ … ], "proceeds": null, "grand_totals": { … }}
+       ]}
+     ]
+   }
+   ```
+
+   - `currency` — leave the key out when Step 3 returned none.
+   - `runs` — one per run: its accumulated `BY_HOLDER` rows, cached `breakpoints` (or `null`) and
+     `grand_totals`, verbatim.
+2. **Print or publish** — with the `Artifact` tool, publish per `artifact-output.md` §Sensitivity
+   page. Otherwise run, on one line, exactly as written, and print its output as is:
+
+   ```
+   uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/sensitivity_tables.py" --config "<outputs-directory>/sensitivity-<slug>.json"
+   ```
+
+   If the script fails, render the tables inline from the runs already held.

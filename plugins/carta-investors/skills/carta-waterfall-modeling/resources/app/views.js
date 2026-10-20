@@ -25,6 +25,7 @@ function loadEntities(entities) {
       proceeds: e.proceeds || null,
       grand_totals: e.grand_totals || null,
       breakpoints: Array.isArray(e.breakpoints) ? e.breakpoints : null,
+      payout: e.payout || null,
     };
   });
   S.nodeId = S.nodes.length ? S.nodes[0].node_id : null;
@@ -222,37 +223,44 @@ function bpHolderRow(a) {
     '</tr>';
 }
 
-function niagaraBpBody(bp, i) {
+// One breakpoint's group: its row (caret + `cells`) and, when open, a `childRow` per holder.
+function bpGroupBody(bp, i, cells, childRow, span) {
   const holders = bpHolders(bp);
   const open = holders !== null && isBpOpen(i);
   const caret = holders === null ? '' :
     '<button type="button" class="wf-tw" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="' +
     (open ? 'Collapse' : 'Expand') + ' ' + esc(bp.name) + '"><span class="wf-caret" aria-hidden="true"></span></button>';
   const head = '<tr class="wf-group-row' + (holders === null ? ' wf-static' : '') + '"' + (holders === null ? '' : ' data-bi="' + i + '"') + '>' +
-    '<td class="wf-tw-cell">' + caret + '</td>' +
-    td('name', esc(bp.name)) +
-    td('from', esc(fmtCurrency(bp.from)), 'num') +
+    '<td class="wf-tw-cell">' + caret + '</td>' + td('name', esc(bp.name)) + cells + '</tr>';
+  const kids = open ? (holders.length ? holders.map(childRow).join('')
+    : '<tr class="wf-child"><td></td><td colspan="' + span + '" data-col="name">No holders take part in this breakpoint</td></tr>') : '';
+  return '<tbody class="wf-group' + (open ? ' is-open' : '') + '">' + head + kids + '</tbody>';
+}
+
+// The breakpoints header's Expand all / Collapse all button, when more than one breakpoint expands.
+function bpExpandAll(d) {
+  const rows = expandableBps(d);
+  const allOpen = rows.length > 0 && rows.every(function (r) { return isBpOpen(r.i); });
+  return rows.length > 1
+    ? '<button type="button" class="wf-expand-all" data-action="bp-expand-all" aria-pressed="' + (allOpen ? 'true' : 'false') + '">' +
+      '<span class="wf-caret' + (allOpen ? ' is-open' : '') + '" aria-hidden="true"></span>' + (allOpen ? 'Collapse all' : 'Expand all') + '</button>'
+    : '';
+}
+
+function niagaraBpBody(bp, i) {
+  const cells = td('from', esc(fmtCurrency(bp.from)), 'num') +
     td('to', esc(fmtCurrency(bp.to)), 'num') +
     td('proceeds', esc(fmtCurrency(bp.proceeds_in_tier)), 'num') +
     td('pct', '', 'num') +
     td('units', esc(fmtQty(bp.participating_units)), 'num') +
-    td('ppu', esc(fmtCurrency(bp.proceeds_per_unit)), 'num') +
-    '</tr>';
-  const kids = open ? (holders.length ? holders.map(bpHolderRow).join('')
-    : '<tr class="wf-child"><td></td><td colspan="7" data-col="name">No holders take part in this breakpoint</td></tr>') : '';
-  return '<tbody class="wf-group' + (open ? ' is-open' : '') + '">' + head + kids + '</tbody>';
+    td('ppu', esc(fmtCurrency(bp.proceeds_per_unit)), 'num');
+  return bpGroupBody(bp, i, cells, bpHolderRow, 7);
 }
 
 function renderNiagaraBreakpoints(d) {
   const bps = d && d.breakpoints;
   if (!bps || !bps.length) return '<p class="wf-empty">No breakpoints for this entity</p>';
-  const rows = expandableBps(d);
-  const allOpen = rows.length > 0 && rows.every(function (r) { return isBpOpen(r.i); });
-  const expandAll = rows.length > 1
-    ? '<button type="button" class="wf-expand-all" data-action="bp-expand-all" aria-pressed="' + (allOpen ? 'true' : 'false') + '">' +
-      '<span class="wf-caret' + (allOpen ? ' is-open' : '') + '" aria-hidden="true"></span>' + (allOpen ? 'Collapse all' : 'Expand all') + '</button>'
-    : '';
-  const head = '<thead><tr><th class="wf-tw-cell">' + expandAll + '</th><th>Breakpoint</th>' +
+  const head = '<thead><tr><th class="wf-tw-cell">' + bpExpandAll(d) + '</th><th>Breakpoint</th>' +
     '<th class="num">From</th><th class="num">To</th><th class="num">Proceeds</th><th class="num">% of Breakpoint</th>' +
     '<th class="num">Participating Quantity</th><th class="num">Proceeds per unit</th></tr></thead>';
   return tableWrap('<table class="wf-table wf-bp">' + head + bps.map(niagaraBpBody).join('') + '</table>');
@@ -271,6 +279,41 @@ function renderCoreBreakpoints(d) {
   return tableWrap('<table class="wf-table wf-flat">' + head + '<tbody>' + rows + '</tbody></table>');
 }
 
+// ── Sensitivity page: one column per exit value ──
+function exitValueHeads() {
+  return (Array.isArray(CFG.exit_values) ? CFG.exit_values : []).map(function (v) {
+    return '<th class="num">' + esc(fmtCurrency(v)) + '</th>';
+  }).join('');
+}
+function valueCells(values) {
+  return (values || []).map(function (v, i) { return td('v' + i, num(v) === null ? '—' : esc(fmtCurrency(v)), 'num'); }).join('');
+}
+
+function renderSensitivityPayout(d) {
+  const p = d && d.payout;
+  if (!p || !p.rows.length) return emptyState(false);
+  const head = '<thead><tr><th>Stakeholder</th>' + exitValueHeads() + '</tr></thead>';
+  const rows = p.rows.map(function (r) { return '<tr>' + td('name', esc(r.name)) + valueCells(r.values) + '</tr>'; }).join('');
+  const foot = '<tfoot><tr class="wf-total">' + td('name', 'Total') + valueCells(p.totals) + '</tr></tfoot>';
+  return tableWrap('<table class="wf-table wf-flat">' + head + '<tbody>' + rows + '</tbody>' + foot + '</table>');
+}
+
+function sensitivityBpBody(bp, i) {
+  const span = 3 + (bp.values || []).length;
+  const cells = td('from', esc(fmtCurrency(bp.from)), 'num') + td('to', esc(fmtCurrency(bp.to)), 'num') + valueCells(bp.values);
+  return bpGroupBody(bp, i, cells, function (a) {
+    return '<tr class="wf-child"><td></td><td colspan="' + span + '" data-col="name">' + esc(a.group_name) + '</td></tr>';
+  }, span);
+}
+
+function renderSensitivityBreakpoints(d) {
+  const bps = d && d.breakpoints;
+  if (!bps || !bps.length) return '<p class="wf-empty">No breakpoints for this entity</p>';
+  const head = '<thead><tr><th class="wf-tw-cell">' + bpExpandAll(d) + '</th><th>Breakpoint</th>' +
+    '<th class="num">From</th><th class="num">To</th>' + exitValueHeads() + '</tr></thead>';
+  return tableWrap('<table class="wf-table wf-bp">' + head + bps.map(sensitivityBpBody).join('') + '</table>');
+}
+
 function renderTabs() {
   if (!hasBreakpoints()) return '';
   const v = currentView();
@@ -278,7 +321,7 @@ function renderTabs() {
     return '<button type="button" class="wf-tab" role="tab" data-action="view" data-view="' + id + '" aria-selected="' +
       (v === id ? 'true' : 'false') + '">' + label + '</button>';
   };
-  return '<div class="wf-tabs" role="tablist" aria-label="Results view">' + tab('proceeds', 'Proceeds') + tab('breakpoints', 'Breakpoints') + '</div>';
+  return '<div class="wf-tabs" role="tablist" aria-label="Results view">' + tab('proceeds', IS_SENSITIVITY ? 'Payout' : 'Proceeds') + tab('breakpoints', 'Breakpoints') + '</div>';
 }
 
 // ── Page chrome ──
@@ -295,7 +338,7 @@ function renderHeader() {
   const open = CFG.carta_url
     ? '<a class="wf-open" href="' + esc(CFG.carta_url) + '" target="_blank" rel="noopener noreferrer">Open in Carta</a>'
     : '';
-  return '<header class="wf-head">' + CARTA_LOGO + '<div class="wf-title-row"><h1>' + esc(CFG.target_name) + ' waterfall</h1>' + open + '</div>' + chain +
+  return '<header class="wf-head">' + CARTA_LOGO + '<div class="wf-title-row"><h1>' + esc(CFG.target_name) + (IS_SENSITIVITY ? ' sensitivity analysis' : ' waterfall') + '</h1>' + open + '</div>' + chain +
     (inputs ? '<dl class="wf-inputs">' + inputs + '</dl>' : '') + '</header>';
 }
 
@@ -327,16 +370,18 @@ function renderBelt(d) {
 }
 
 function renderResultsTitle() {
-  if (S.nodes.length < 2) return '<h2 class="wf-results-title">Waterfall results</h2>';
+  const title = IS_SENSITIVITY ? 'Sensitivity analysis' : 'Waterfall results';
+  if (S.nodes.length < 2) return '<h2 class="wf-results-title">' + title + '</h2>';
   const opts = S.nodes.map(function (n) {
     return '<option value="' + esc(n.node_id) + '"' + (n.node_id === S.nodeId ? ' selected' : '') + '>' + esc(n.label) + '</option>';
   }).join('');
-  return '<div class="wf-results-title"><h2>Waterfall results:</h2>' +
+  return '<div class="wf-results-title"><h2>' + title + ':</h2>' +
     '<select class="wf-select" id="wf-entity" data-action="entity" aria-label="Entity">' + opts + '</select></div>';
 }
 
 function renderBody() {
   const d = S.data[currentKey()];
+  if (IS_SENSITIVITY) return currentView() === 'breakpoints' ? renderSensitivityBreakpoints(d) : renderSensitivityPayout(d);
   if (currentView() === 'breakpoints') return IS_CORE ? renderCoreBreakpoints(d) : renderNiagaraBreakpoints(d);
   return IS_CORE ? renderCoreProceeds(d) : renderNiagaraProceeds(d);
 }
@@ -344,7 +389,7 @@ function renderBody() {
 function renderApp() {
   const d = S.data[currentKey()];
   // The holder filter narrows the proceeds table only.
-  const belt = currentView() === 'proceeds' ? renderBelt(d) : '';
+  const belt = currentView() === 'proceeds' && !IS_SENSITIVITY ? renderBelt(d) : '';
   return renderHeader() +
     '<section class="wf-results" aria-label="Waterfall results">' + renderResultsTitle() + belt + '</section>' +
     renderTabs() +

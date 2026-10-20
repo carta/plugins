@@ -105,3 +105,24 @@ the links together, each labelled by its equity value; one BLUF line per run.
 **If the build or the publish fails**, say one line — _"Couldn't open the results page, so here
 are the tables."_ — and render this run's allocations tables inline per the results doc from the
 pages already fetched.
+
+## Sensitivity page
+
+Reached from the results doc's §Sensitivity analysis, after every run's page is published. Build from
+the config that step wrote, on one line, exactly as written:
+
+```
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/sensitivity_tables.py" --config "<outputs-directory>/sensitivity-<slug>.json" --out "<outputs-directory>/sensitivity-<slug>.html"
+```
+
+```
+Artifact({
+  file_path: "<path the build printed>",
+  description: "Sensitivity analysis for <company name>.",
+  icon: "chart"
+})
+```
+
+List its link after the run links, labelled **Sensitivity analysis**. If the build or the publish
+fails, say one line — _"Couldn't open the sensitivity page, so here are the tables."_ — and print the
+tables per the results doc's §Sensitivity analysis.

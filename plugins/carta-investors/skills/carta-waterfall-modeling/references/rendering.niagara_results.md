@@ -132,3 +132,31 @@ multi-entity). Sort `allocations` by
 unit` currency.
 
 Apply `SKILL.md` §Formatting rules.
+
+## Sensitivity tables (a batch, per `results.niagara_results.md` §Sensitivity analysis)
+
+One pair of tables per entity in `ordered`, under the same `### {display name}` subheader rule as the
+Allocations table. One column per run, ascending by `EQUITY_VALUE`, headed by that value as currency;
+a value a run did not return renders `—`.
+
+**Payout by exit value** — one row per `allocations[i].group_name` found in any run, sorted by its
+proceeds in the highest run, descending. Columns: `Stakeholder` (text), then each run (currency).
+
+| Column | Source |
+| --- | --- |
+| Stakeholder | `allocations[i].group_name` |
+| {exit value} | that run's `allocations[i].allocated_proceeds.proceeds` |
+
+**Total row** — final row, bolded: `"Total"`, then each run's top-level `proceeds`.
+
+**Breakpoints by exit value** — the highest run's `breakpoints[]` in declared order; each run's cell is
+its own tier at the same position. Columns: `Breakpoint` (text), `From`, `To`, then each run (currency).
+
+| Column | Source |
+| --- | --- |
+| Breakpoint | `breakpoints[i].name` (highest run) |
+| From | `breakpoints[i].from` (highest run) |
+| To | `breakpoints[i].to` (highest run) |
+| {exit value} | that run's `breakpoints[i].proceeds_in_tier` |
+
+Apply `SKILL.md` §Formatting rules.

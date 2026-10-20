@@ -102,6 +102,7 @@ const CAP_TABLE_COLS = [
   { label: "Rank" },
   { label: "Liquidation preference", align: "left" },
   { label: "Invested" },
+  { label: "Outstanding shares" },
   { label: "Fund holds" },
 ];
 
@@ -112,6 +113,10 @@ function PrefStackTable({ company }) {
   for (const h of entry.fundHoldings || []) holdBy[normClass(h.className)] = h;
   const rank = (c) => (c.seniority != null ? c.seniority : String(c.kind || "").toLowerCase() === "preferred" ? 1 : 999);
   const classes = [...entry.classes].sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
+  const total = (pick) => {
+    const vals = classes.map(pick).filter((v) => v > 0);
+    return vals.length ? vals.reduce((a, v) => a + v, 0) : null;
+  };
   return (
     <table className="ledger">
       <TableHead cols={CAP_TABLE_COLS} />
@@ -128,10 +133,22 @@ function PrefStackTable({ company }) {
               <td style={{ ...inkNum, textAlign: "right" }}>{cl.seniority != null ? cl.seniority : "—"}</td>
               <td style={{ color: isPref ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-text-subtle)" }}>{prefDescriptor(cl)}</td>
               <td style={{ ...inkNum, textAlign: "right" }}>{fmtMoney(cl.cashRaised, ccy)}</td>
+              <td style={{ ...inkNum, textAlign: "right" }}>{cl.shares > 0 ? fmtShares(cl.shares) : "—"}</td>
               <td style={{ ...inkNum, textAlign: "right", color: h ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-text-subtle)" }}>{h && h.shares > 0 ? fmtShares(h.shares) : "—"}</td>
             </tr>
           );
         })}
+        {classes.length > 1 && (
+          <tr className="totrow">
+            <td>Total</td>
+            <td />
+            <td />
+            {/* classes can raise in different currencies, so Invested is not summed */}
+            <td />
+            <td style={{ ...inkNum, textAlign: "right" }}>{fmtShares(total((cl) => cl.shares))}</td>
+            <td style={{ ...inkNum, textAlign: "right" }}>{fmtShares(total((cl) => holdBy[normClass(cl.name)]?.shares))}</td>
+          </tr>
+        )}
       </tbody>
     </table>
   );

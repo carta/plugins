@@ -5,7 +5,7 @@ for Excel). The run flow and strict cap-table-first order live in `SKILL.md`; th
 table column/row definitions in the **command-matched** `references/rendering.<noun>.md`
 (cap table by `cap_table_command`'s noun, results by `get_command`'s noun);
 this file covers only the workbook write — mechanics, the metadata band, and the
-two tabs (**Cap Table** and **Waterfall**).
+two tabs (**Cap Table** and **Waterfall**), plus **Sensitivity** for a sensitivity analysis.
 
 `carta-valuations-excel` writes with the same conventions, from its own
 [`references/excel-output.md`](../../carta-valuations-excel/references/excel-output.md) —
@@ -222,10 +222,12 @@ A 4-row text band in **column B**, rows 1–4 (row 5 blank):
 
 - **B1** — firm name; bold.
 - **B2** — `"{company} — Cap Table"` (Cap Table) / `"{company} —
-  Waterfall Results"` (Waterfall) / `"{company} — Vesting"` (Vesting).
+  Waterfall Results"` (Waterfall) / `"{company} — Vesting"` (Vesting) / `"{company} —
+  Sensitivity Analysis"` (Sensitivity).
 - **B3** — Cap Table & Vesting: `"Source: Carta — Waterfall Modeling"`. Waterfall:
-  `"Exit value: {EQUITY_VALUE, compact currency} | Date: {WATERFALL_DATE, ISO}"`.
-- **B4** — Cap Table: execution timestamp (when the run executed). Waterfall & Vesting:
+  `"Exit value: {EQUITY_VALUE, compact currency} | Date: {WATERFALL_DATE, ISO}"`. Sensitivity:
+  `"Exit values: {each EQUITY_VALUE, compact currency, comma-separated} | Date: {WATERFALL_DATE, ISO}"`.
+- **B4** — Cap Table: execution timestamp (when the run executed). Waterfall, Vesting & Sensitivity:
   retrieved timestamp (when the tab was written).
 
 ## "Cap Table" tab
@@ -355,3 +357,18 @@ The **Carta-standard** layout (empty / Carta's own tab):
   [`references/follow-up.md`](follow-up.md) — its **excel** option set
   (already omits "Show breakpoints", since they're on the Waterfall tab). Never
   ask in prose.
+
+## "Sensitivity" tab
+
+Reached from the results doc's §Sensitivity analysis, after the last run's write. Its own tab — it
+never touches the Cap Table or Waterfall tabs; classify and write it per §Write mechanics. Provenance
+range: `CartaTab__Sensitivity`.
+
+- One self-contained section per entity in `ordered` (root-first), as on the Waterfall tab, in order:
+  1. the **Breakpoints by exit value** table;
+  2. the **Payout by exit value** table below it
+  (`references/rendering.<get_command noun>.md` §Sensitivity tables) — from the runs already held,
+  no extra fetch.
+- After writing, state **one line** citing the tab (e.g. _"Wrote the sensitivity analysis to the
+  **Sensitivity** tab — `<citation:Sensitivity!A1>`."_), then the follow-up prompt as on the
+  Waterfall tab.

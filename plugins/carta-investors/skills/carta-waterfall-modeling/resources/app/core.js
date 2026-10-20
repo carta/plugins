@@ -4,6 +4,8 @@ const CFG = WF_CONFIG;
 // The page branches on the noun of the baked command; the two shapes differ.
 const GET_NOUN = String(CFG.get_command || '').split(':').pop();
 const IS_CORE = GET_NOUN === 'core_results';
+// A sensitivity page compares a batch of runs: one column per exit value.
+const IS_SENSITIVITY = CFG.mode === 'sensitivity';
 // A run whose options carry no currency is USD, like llc-ui.
 const CURRENCY = /^[A-Z]{3}$/.test(String(CFG.currency || '')) ? CFG.currency : 'USD';
 
