@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.15</carta-plugin>
 
 # CTC Scorecard
 
@@ -276,7 +276,7 @@ You are **reading** the band the API already returns per row — never recompute
 **Optional filters (either path)** — pass through verbatim if the user specified them:
 - `job_filters`: narrow by job area and/or level — a list of comma-delimited strings `"JobArea,Level,LimitingLevel"`, built from Step 2b's values. See the `job_filters` format box in Step 4b for the exact encoding — it's the #1 thing agents get wrong.
 - `leader`: `true` for managers/executives only, `false` for ICs only
-- There is **no** `location` or top-level `level` filter (level only via `job_filters`). For location, filter the fetched rows client-side and say so.
+- Only the params in **Accepted params** (Step 4b) exist.
 
 > **When to use `corporation-scorecard` instead.** Only when the user is comparing a **draft / in-flight plan** against the active plan ("how would our positioning change under the new plan?"). It requires the **draft** plan's `plan_id` (a non-active plan), never the active plan's id:
 >
@@ -300,6 +300,11 @@ read_tool({"name": "compensation__get__employee-scorecard",
 
 > The param is `page_size` (snake_case) — camelCase `pageSize` is silently dropped by the tool layer, leaving you on the default page size. And keep `page_size` small (~10): the endpoint returns *"response too large"* at `page_size` ≥ ~25 on larger rosters.
 
+> **Accepted params — nothing else.** Besides `corporation_id`, the command takes only `score`, `job_filters`, `leader`, `current`, `sort_field`, `page` and `page_size`. Any other param fails the whole call with `unknown_param` (*"does not accept …"*). In particular there is:
+> - **no `reverse_sort`** (or any other sort-direction param) and **no `name` / `employee_id`** — sort direction and person lookups are handled on the collected rows (see **Sorting a list** and **Single-employee lookup** below);
+> - **no top-level `level`** — level is reachable only through the `job_filters` CSV;
+> - **no `location`** — location cannot be filtered server-side. If the user asks to filter by location (e.g. "show me below-market employees in Austin"), fetch the roster, filter client-side on `location.home_location` / `location.work_location`, and tell the user you filtered locally.
+
 Optional filters (pass through verbatim — translate user phrasing to the values in Step 2b):
 
 | User phrasing | Param | Value |
@@ -312,8 +317,6 @@ Optional filters (pass through verbatim — translate user phrasing to the value
 | one level across every job | `job_filters` | `[",<level value>,"]` |
 | "managers", "leaders", "people managers" | `leader` | `true` |
 | "ICs", "individual contributors" | `leader` | `false` |
-| a specific person by name ("show me Ada Lovelace's scorecard") | `name` | `"Ada Lovelace"` |
-| a specific person by employee UUID | `employee_id` | `<uuid>` |
 
 Use the labels in narration even when passing the raw value to the API. Example: *"Pulling the Engineering roster scorecard for Acme — filtering to Below market employees."*
 
@@ -334,8 +337,6 @@ Use the labels in narration even when passing the raw value to the API. Example:
 > **Send the `value`, never the label** (`"Engineering"`, `"Senior 1"` are display names and 400 as API values). **There is no `compensation:list:job_types` / `list:jobs` / `list:levels` command — do not invent one; it returns `Unknown tool`.** The only source of filter values is `compensation:get:filter_options` (Step 2b).
 >
 > **On HTTP 400** (its fix text points to `compensation:get:filter_options`): compare every value you sent with Step 2b's `params` and resend the listed `value`. Retry at most once; if it 400s again, stop and report the error.
->
-> **There is NO top-level `level` filter and NO `location` filter on this endpoint** — `level` is only reachable through the `job_filters` CSV (above), and a top-level `level` param is silently ignored. Location cannot be filtered server-side at all. If the user asks to filter by location (e.g. "show me below-market employees in Austin"), fetch the roster and filter client-side on `location.home_location` / `location.work_location`, and tell the user you filtered locally.
 
 > **CRITICAL — the `score` filter keys on the OVERALL band only, and it is nullable.**
 >
@@ -348,27 +349,23 @@ Use the labels in narration even when passing the raw value to the API. Example:
 
 **Percentile asks.** A band is not a percentile: `Low` means below the market range, not below P50. When the user asks for a specific percentile ("below P50", "above P75"), do not map it to a band filter. Sweep the roster per Step 4a → Path 2 and read each row's `percentile` from the rating they asked about (`salary_rating.percentile`, `total_cash_rating.percentile`, `ntm_equity_rating.percentile`), then keep the rows on the requested side of that percentile and say you filtered locally. If they only said "below market", use the band.
 
-**Sorting a list.** When the user asks for an *ordered* roster ("worst compa-ratios first", "sort by name"), pass `sort_field` plus `reverse_sort` (`true`/`false`). `sort_field` is a value from Step 2b's `params.sort_field`; if none fits the ask, sort the collected rows locally instead. Sorting orders a list the user wants to see — it is never a substitute for filtering to a specific person (see Single-employee lookup).
+**Sorting a list.** When the user asks for an *ordered* roster ("worst compa-ratios first", "sort by name"), pass `sort_field` with a value from Step 2b's `params.sort_field`. The endpoint always sorts that field **ascending** (A→Z, lowest first) and has no direction param (see **Accepted params** in Step 4b). For a **descending** ask ("highest paid first", "best compa-ratio first", "Z→A"), or when no `sort_field` value fits, sweep the roster per Step 4a → Path 2 (capped), sort the deduped rows locally in the order asked — rows with no value for that field go last in either direction — and say you sorted locally. Sorting orders a list the user wants to see — it is never a substitute for finding a specific person (see Single-employee lookup).
 
 #### Single-employee lookup
 
-There is **no single-employee scorecard endpoint** — an individual's compa-ratio and percentile only exist as a row inside the corporation's batch-computed scorecard, scored relative to the whole roster. To answer *"show me [person]'s scorecard"*, query the same `compensation__get__employee-scorecard` tool **filtered to that one person**:
+There is **no single-employee scorecard endpoint**, and the scorecard command has no `name` or `employee_id` filter (see **Accepted params** in Step 4b). An individual's compa-ratio and percentile only exist as a row inside the corporation's batch-computed scorecard, scored relative to the whole roster. To answer *"show me [person]'s scorecard"*, find that person's row in the roster:
 
-- If you have their employee UUID, pass `employee_id` (exact match — returns at most one row).
-- Otherwise pass `name` (substring match against full / first / last name — may return more than one person).
-
-```
-read_tool({"name": "compensation__get__employee-scorecard",
-           "arguments": {"corporation_id": <corporation_pk>,
-                         "name": "Ada Lovelace"}})
-```
+1. If the user gave the person's job area or level, narrow with `job_filters` (Step 2b values) to cut the pages; otherwise use no filter.
+2. Sweep per Step 4a → Path 2 — same `page_size` ≈ 10, dedupe by `ids.external_id`, same **25-page hard cap**.
+3. Match locally: a name the user gave against `personal_info.full_name` / `first_name` / `last_name` (case-insensitive substring), or an employee id against the values in `ids`.
 
 Then:
 - **Exactly one match** → render that single row (you can use the per-employee table with one row, or narrate the fields inline).
 - **Multiple matches** (common with a partial/common name) → list the matches and ask which one with `AskUserQuestion`; do not assume the first.
-- **Zero matches** → *"No employee named '[name]' is in this corporation's scorecard. Check the spelling, or ask for the full roster."*
+- **Zero matches after a complete sweep** (`unique_rows == total_results`) → *"No employee named '[name]' is in this corporation's scorecard. Check the spelling, or ask for the full roster."* If you narrowed with `job_filters`, say the search covered only that job area / level and offer to search the whole roster.
+- **Zero matches, sweep stopped at the 25-page cap** → do not say the person is absent; follow the **HARD PAGE CAP** rule in Step 4a → Path 2 (say the roster was too large to search in full, offer to narrow, and wait).
 
-> **Anti-pattern — never sort-and-pick to answer an individual question.** Do NOT pull the unfiltered roster, sort by `NAME`, and read off the top row — that returns whoever sorts first alphabetically (e.g. "A Robot"), not the person asked about. Always filter by `name` or `employee_id`. `sort_field` is for ordering a *list* the user asked to see, not for locating one person.
+> **Anti-pattern — never sort-and-pick to answer an individual question.** Do NOT pull one page sorted by `NAME` and read off the top row — that returns whoever sorts first alphabetically (e.g. "A Robot"), not the person asked about. Always match the person's name or id against every collected row. `sort_field` is for ordering a *list* the user asked to see, not for locating one person.
 
 Also fetch the active plan once (for the citation footer):
 
@@ -605,6 +602,7 @@ Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do
 | `corporation-scorecard` errors with *"Cannot compare active plan to itself"* | You passed the **active** plan id to a comparison-only endpoint. Expected — don't surface it to the user. Fall back to the employee-derived rollup (Step 4a, Path 1). Only use `corporation-scorecard` with a **draft** plan id. |
 | Scorecard regeneration is in flight (response carries `task_status.state: PENDING` / `RUNNING`) | Surface the partial data if present, append: *"The scorecard is currently regenerating in the background. Numbers may shift in the next few minutes."* |
 | Unknown band value (not in `params.score`) | Render verbatim in chat; don't substitute. The set of bands may have grown. |
+| `unknown_param` (*"does not accept …"*) on `employee-scorecard` | You sent a param outside **Accepted params** (Step 4b). Drop it, resend once, and do what **Accepted params** says for that param instead. Do not try a renamed variant of the param. |
 | HTTP 400 on a `job_filters`, `score` or `sort_field` value | Compare the values you sent with Step 2b's `params`, resend the listed `value` once, then stop and report. Do not guess a variation. |
 | `compensation:get:filter_options` fails | Stop (Step 2b, rule 4): 403 → no-access message, 404 → no active CTC plan, `Unknown tool` → the connected Carta MCP is too old. Do not fall back to typed values. |
 | *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `read_tool`, and retry once. Do not switch to `fetch` / `discover`, and do not guess name variations. |
