@@ -9,6 +9,7 @@ import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
+import { useHostedApp } from "./shell/hostedApp.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
 import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
 import ShareStatus, { pulledMessage } from "./reports/ShareStatus.jsx";
@@ -106,6 +107,7 @@ export default function App() {
       .catch(() => trackRender("MancoReporting.App.AccountsUnavailable")),
   ]), []);
   const reportsApi = useReports({ onChanged: fetchData });
+  const hostedApp = useHostedApp();
   const hiddenReports = reportsApi.reports.filter(r => r.hidden);
   const [shareNotice, setShareNotice] = useState(null); // see ShareStatus
   // One run at a time: each unhide moves the listing's version, so a second run would send a stale one.
@@ -249,7 +251,7 @@ export default function App() {
     // this exact line, moved off the topbar entirely once "Powered by
     // Carta" was dropped from it and left it with nothing else to show.
     asOf: snapshot?.asOf,
-    footerAction: snapshot && <BudgetImport budgetUpload={snapshot.budgetUpload} onChanged={fetchData} />,
+    footerAction: snapshot && <BudgetImport hosted={hostedApp} budgetUpload={snapshot.budgetUpload} onChanged={fetchData} />,
     shared: (() => {
       const onPull = reportsApi.can(REPORT_ACTIONS.PULL) ? loadShared : null;
       const onShowHidden = hiddenReports.length > 0 && reportsApi.can(REPORT_ACTIONS.HIDE) ? unhideAll : null;
@@ -320,6 +322,7 @@ export default function App() {
         notice={shareNotice}
         progress={reportsApi.shareJob?.progress}
         firmName={displayFirmName(snapshot?.firmName)}
+        hosted={hostedApp}
         onDismiss={() => setShareNotice(null)}
       />
 

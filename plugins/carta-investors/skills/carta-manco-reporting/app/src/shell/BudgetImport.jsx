@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { sans, FS, FAINT, RED, LINE, INK } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
-import { fetchUploadState, uploadBudget, removeBudget, describeUpload, attempt, BUDGET_DOWNLOAD_URL } from "./budgetUpload.js";
+import { uploadBudget, removeBudget, describeUpload, attempt, BUDGET_DOWNLOAD_URL } from "./budgetUpload.js";
 
 // Sidebar control for the hosted app: import the budget file exported from the local flow.
-export default function BudgetImport({ budgetUpload, onChanged }) {
-  const [available, setAvailable] = useState(false);
+// `hosted` (App.jsx's useHostedApp()) hides it on the local server, which never implements
+// /api/budget-upload — the route this control itself calls through budgetUpload.js.
+export default function BudgetImport({ hosted, budgetUpload, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const input = useRef(null);
 
-  useEffect(() => { fetchUploadState().then((s) => setAvailable(Boolean(s))); }, []);
-  if (!available) return null;
+  if (!hosted) return null;
 
   const run = async (action) => {
     setBusy(true);

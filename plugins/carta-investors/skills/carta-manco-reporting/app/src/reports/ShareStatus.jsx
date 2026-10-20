@@ -14,7 +14,7 @@ const RUNNING = {
 // Floating status panel for sharing with Carta, the one carta-fund-modeling
 // shows for shared scenarios: what is running and how far it got, then how it
 // ended. `notice` is { status: "running"|"done"|"error", op, message }.
-export default function ShareStatus({ notice, progress, firmName, onDismiss }) {
+export default function ShareStatus({ notice, progress, firmName, hosted, onDismiss }) {
   if (!notice) return null;
   let body;
   if (notice.status === "running") {
@@ -29,7 +29,14 @@ export default function ShareStatus({ notice, progress, firmName, onDismiss }) {
     body = (
       <>
         <strong>{notice.status === "error" ? "Couldn't finish" : "Done"}</strong>
-        {notice.status === "error" && notice.op === REPORT_ACTIONS.PULL ? (
+        {/* A failed pull's "ask Claude" fallback (`hosted` is App.jsx's useHostedApp()):
+            locally, Load shared reports itself runs through a background Claude session
+            (references/report-sharing.md), so the manual prompt is a real retry path when
+            that session can't reach Carta. Hosted calls Carta directly from the Worker,
+            with no Claude session to ask — the prompt would write into the user's own
+            local report store, never this dashboard — so it falls to the plain error
+            message and Dismiss below, same as any other failure. */}
+        {notice.status === "error" && notice.op === REPORT_ACTIONS.PULL && !hosted ? (
           <>
             <div style={S.sub}>The app couldn’t load them from Carta. Try again, or ask Claude:</div>
             <ClaudePrompt text={pullPrompt(firmName)} />

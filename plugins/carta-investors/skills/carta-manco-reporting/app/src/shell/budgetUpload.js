@@ -5,18 +5,6 @@ const URL_PATH = "/api/budget-upload";
 // The stored bundle as a file download (the Worker sets Content-Disposition).
 export const BUDGET_DOWNLOAD_URL = `${URL_PATH}?download=1`;
 
-// null when the server has no upload route (the local server answers 404), so the
-// control stays hidden there.
-export async function fetchUploadState() {
-  try {
-    const res = await fetch(URL_PATH);
-    if (!res.ok) return null;
-    return { meta: await res.json() };
-  } catch {
-    return null;
-  }
-}
-
 async function outcome(res) {
   if (res.ok) return { ok: true };
   let message = `Upload failed (${res.status}).`;
