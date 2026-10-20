@@ -310,6 +310,7 @@
       min-width: 140px;
     }
     .portfolio-picker { margin-top: 8px; max-width: 320px; }
+    .scope-pickers { display: flex; flex-wrap: wrap; gap: 8px; }
     .quarter-picker:disabled, .portfolio-picker:disabled { background: var(--gray-10); color: var(--gray-40); cursor: not-allowed; }
     .movers-loading {
       padding: 24px 0; text-align: center; font-size: 12px; color: var(--gray-40);
@@ -400,6 +401,10 @@
           <div class="header-welcome">Welcome back,</div>
           <div class="header-name" id="lp-name">—</div>
           <select class="portfolio-picker" id="portfolio-picker" aria-label="Portfolio" style="display:none" onchange="onPortfolioPickerChange()"></select>
+          <div class="scope-pickers">
+            <select class="portfolio-picker" id="firm-picker" aria-label="Firm" style="display:none" onchange="onScopePickerChange('firm')"></select>
+            <select class="portfolio-picker" id="fund-picker" aria-label="Fund" style="display:none" onchange="onScopePickerChange('fund')"></select>
+          </div>
           <div class="ccy-chip" id="ccy-chip" style="display:none"></div>
         </div>
         <div class="header-logo-box">
@@ -709,7 +714,7 @@ let dataBusy = false;
 function setDataBusy(busy) {
   dataBusy = busy;
   document.getElementById('quarter-picker').disabled = busy;
-  document.getElementById('portfolio-picker').disabled = busy;
+  ['portfolio-picker', 'firm-picker', 'fund-picker'].forEach(id => { document.getElementById(id).disabled = busy; });
   Array.from(document.getElementById('ccy-select').children).forEach(b => { b.disabled = busy; });
 }
 // Dates and plain numbers follow the viewer's own locale (`undefined`), never a fixed one.
@@ -1216,7 +1221,7 @@ async function onQuarterPickerChange(){
   setDataBusy(true);
   setSectionLoading('section-fund-movers', true);
   try {
-    const params = { portfolio_id: portfolioId, quarter_start: startISO, ...currencyParam() };
+    const params = { portfolio_id: portfolioId, quarter_start: startISO, ...currencyParam(), ...scopeParam() };
     const q = await fetchCmd(QUARTERLY_CMD, params);
     currentData.quarterly = q;
     noteTruncation(q, 'funds');
@@ -1247,6 +1252,13 @@ const PORTFOLIO_ID    = __PORTFOLIO_ID__;
 const LOOKUP_CMD      = 'lp_portfolio:lookup:portfolio';
 // The portfolio on screen: the one the skill opened, until the viewer picks another.
 let portfolioId = PORTFOLIO_ID;
+// The funds the page is narrowed to by the firm and fund pickers; empty reads every fund.
+let fundFilter = [];
+// The portfolio's funds as its unfiltered summary lists them, so a narrowed reload
+// never shrinks the pickers' choices.
+let scopeFunds = [];
+// Every data call reads the same funds.
+function scopeParam() { return fundFilter.length ? { fund_uuids: fundFilter.join(',') } : {}; }
 
 let currentData = { summary: null, timeseries: null, quarterly: null };
 
@@ -1498,7 +1510,7 @@ async function loadCurrencyData(){
   setSectionsLoading([...CHART_SECTIONS, 'section-fund-movers'], true);
   try {
     try {
-      const ts = await fetchCmd(TIMESERIES_CMD, { portfolio_id: portfolioId, ...currencyParam() });
+      const ts = await fetchCmd(TIMESERIES_CMD, { portfolio_id: portfolioId, ...currencyParam(), ...scopeParam() });
       currentData.timeseries = ts;
       noteTruncation(ts, 'months');
       try { renderCharts({ timeseries: ts }); } catch(e) { debugLog('renderCharts threw', e); }
@@ -1514,7 +1526,7 @@ async function loadCurrencyData(){
     try {
       const latest = latestDataQuarter();
       const latestParam = latest ? { quarter_start: latest.startISO } : {};
-      const q = await fetchCmd(QUARTERLY_CMD, { portfolio_id: portfolioId, ...latestParam, ...currencyParam() });
+      const q = await fetchCmd(QUARTERLY_CMD, { portfolio_id: portfolioId, ...latestParam, ...currencyParam(), ...scopeParam() });
       currentData.quarterly = q;
       noteTruncation(q, 'funds');
       try { initQuarterPicker((q && q.current_quarter && q.current_quarter.label) || (latest && latest.label)); } catch(e) { debugLog('initQuarterPicker threw', e); }
@@ -1541,8 +1553,9 @@ async function loadPortfolio(){
   const staleNote = document.getElementById('dashboard').querySelector('.truncation-banner');
   if (staleNote) staleNote.remove();
   try {
-    const summary = await fetchCmd(SUMMARY_CMD, { portfolio_id: portfolioId });
+    const summary = await fetchCmd(SUMMARY_CMD, { portfolio_id: portfolioId, ...scopeParam() });
     currentData.summary = summary;
+    if (!fundFilter.length) initScopePickers(summary);
     initCurrencies(summary);
     document.getElementById('dashboard').style.display = 'block';
     hideLoading();
@@ -1587,11 +1600,49 @@ async function onPortfolioPickerChange(){
   const picked = document.getElementById('portfolio-picker').value;
   if (dataBusy || !picked || picked === portfolioId) return;
   // A portfolio that fails to load is not kept: Retry goes back to the one that worked.
-  const previous = portfolioId;
+  const previous = { portfolioId, fundFilter };
   portfolioId = picked;
+  fundFilter = [];
   setDataBusy(true);
   try {
-    if (!(await loadPortfolio())) portfolioId = previous;
+    if (!(await loadPortfolio())) ({ portfolioId, fundFilter } = previous);
+  } finally { setDataBusy(false); }
+}
+
+// The firm picker lists the firms of a portfolio spread across 2+ of them; the fund
+// picker lists the chosen firm's funds (or all of them) when there are 2+ to choose from.
+function initScopePickers(summary) {
+  scopeFunds = (summary.fund_breakdown || []).filter(f => f.fund_uuid);
+  const firmPicker = document.getElementById('firm-picker');
+  const firms = [...new Set(scopeFunds.map(f => f.firm_name).filter(Boolean))].sort();
+  firmPicker.innerHTML = '<option value="">All firms</option>' +
+    firms.map(name => '<option value="' + esc(name) + '">' + esc(name) + '</option>').join('');
+  firmPicker.value = '';
+  firmPicker.style.display = firms.length > 1 ? '' : 'none';
+  renderFundPicker();
+}
+
+function renderFundPicker() {
+  const firm = document.getElementById('firm-picker').value;
+  const funds = scopeFunds.filter(f => !firm || f.firm_name === firm);
+  const picker = document.getElementById('fund-picker');
+  picker.innerHTML = '<option value="">All funds</option>' +
+    funds.map(f => '<option value="' + esc(f.fund_uuid) + '">' + esc(f.fund_name || '—') + '</option>').join('');
+  picker.value = '';
+  picker.style.display = funds.length > 1 ? '' : 'none';
+}
+
+async function onScopePickerChange(changed){
+  if (dataBusy) return;
+  if (changed === 'firm') renderFundPicker();
+  const firm = document.getElementById('firm-picker').value;
+  const fund = document.getElementById('fund-picker').value;
+  const previous = fundFilter;
+  fundFilter = fund ? [fund]
+    : firm ? scopeFunds.filter(f => f.firm_name === firm).map(f => f.fund_uuid) : [];
+  setDataBusy(true);
+  try {
+    if (!(await loadPortfolio())) fundFilter = previous;
   } finally { setDataBusy(false); }
 }
 
