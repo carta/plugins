@@ -14,6 +14,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__crm_call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
   - Artifact
+  - ToolSearch
   # Prefix-agnostic: outside claude.ai web chat the mail connector's prefix is a session
   # UUID. Both cases, because glob matching is case-sensitive.
   - mcp__*Gmail*__create_draft
@@ -23,12 +24,12 @@ allowed-tools:
   - Read
   - Edit
   - Write
-version: 1.0.0
+version: 1.0.1
 model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.17.0</carta-plugin>
+<carta-plugin>carta-crm:1.17.1</carta-plugin>
 
 ## Overview
 

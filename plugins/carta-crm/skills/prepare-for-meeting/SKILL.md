@@ -21,17 +21,18 @@ allowed-tools:
   # resolved. It never resolves a meeting, a company or a person. The CRM does that.
   - WebSearch
   - Artifact
+  - ToolSearch
   - AskUserQuestion
   - Bash(cp "${CLAUDE_PLUGIN_ROOT}/skills/prepare-for-meeting/assets/brief-template.html" *)
   - Read
   - Edit
   - Write
-version: 1.0.0
+version: 1.0.1
 model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.17.0</carta-plugin>
+<carta-plugin>carta-crm:1.17.1</carta-plugin>
 
 ## Overview
 

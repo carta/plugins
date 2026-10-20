@@ -17,14 +17,15 @@ allowed-tools:
   - mcp__Carta__crm_read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
   - Artifact
+  - ToolSearch
   - Write
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" *)
-version: 1.0.0
+version: 1.0.1
 model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.17.0</carta-plugin>
+<carta-plugin>carta-crm:1.17.1</carta-plugin>
 
 # Adviser Tracker
 

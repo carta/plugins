@@ -7,7 +7,11 @@ Run this once, before any real work, in every skill that publishes an artifact.
 
 **PASS:** `Artifact` is in this session. Continue, and say nothing about having checked.
 
-**FAIL:** `Artifact` is absent. Stop immediately and tell the user:
+**Not loaded yet:** a session can list `Artifact` as a deferred tool, named but not callable
+until its schema is loaded. If `Artifact` isn't loaded and `ToolSearch` is available, load
+it with `ToolSearch` `select:Artifact`, once, and check again. Only then decide it is absent.
+
+**FAIL:** `Artifact` is still absent. Stop immediately and tell the user:
 
 > Your version of Claude is out of date, so I can't publish this. Update Claude —
 > **Help → Check for Updates** in the desktop app, or `claude update` in the CLI — then
