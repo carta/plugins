@@ -96,9 +96,11 @@ Companies report KPIs at different cadences — some monthly, some quarterly, so
 - The Metrics tab's **"Quarter-ends only"** toggle (on by default) aligns everyone onto a common quarterly grid; the Company page's forecast card detects each company's cadence and projects at the right spacing.
 
 ## Use it
-This ships as part of the `carta-investors` plugin — no separate install. You need the Carta MCP connector enabled in your Claude Code session, `uv` installed, and access in Carta to the Investment Firm Account you want to look at. The app pulls data live using *your* Carta permissions, so you only see firms you're authorized for.
+This ships as part of the `carta-investors` plugin — no separate install. Claude first offers the hosted app at **https://analytics.carta.cloud** — sign in with Carta and pick a firm, nothing to install. The firm prompt, the Carta MCP connector and `uv` below apply only when you build it locally.
 
-Just ask Claude to open the dashboard. **If you don't name a firm, Claude prompts you for an Investment Firm Account first** (firm name or Carta firm URL) — nothing runs until you pick one. You can also name it up front: **"portfolio analytics for Acme Ventures"**. A warm cache reopens with no MCP call. Inside the app, the **Update data** button shows how fresh each dataset is and refreshes one dataset or all of them in the background; you can also just say "refresh KPI data".
+For a local build you need the Carta MCP connector enabled in your Claude Code session, `uv` installed, and access in Carta to the Investment Firm Account you want to look at. The app pulls data live using *your* Carta permissions, so you only see firms you're authorized for.
+
+Just ask Claude to open the dashboard. **For a local build, if you don't name a firm, Claude prompts you for an Investment Firm Account** (firm name or Carta firm URL) — nothing runs until you pick one. You can also name it up front: **"portfolio analytics for Acme Ventures"**. A warm cache reopens with no MCP call. Inside the app, the **Update data** button shows how fresh each dataset is and refreshes one dataset or all of them in the background; you can also just say "refresh KPI data".
 
 > KPI coverage is partial — only portfolio companies that report into Carta Data Collection appear. Firms with no coverage open to a clean empty state. Returns, cap tables and the SOI performance chart need Fund Administration data; the app hides what a firm doesn't have rather than showing empty panels.
 

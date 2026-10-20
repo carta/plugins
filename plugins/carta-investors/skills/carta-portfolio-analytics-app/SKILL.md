@@ -11,9 +11,10 @@ description: >
   Click any company name for its own one-page Company page (returns, cap table, peers,
   credit & leverage, data quality; PDF tearsheet). Surfaces EVERY KPI a company
   reports (revenue, ARR, EBITDA, headcount, custom KPIs…), not a fixed list. Invoke with a
-  firm name, e.g. "portfolio analytics for Acme Ventures". For scenario modeling,
+  firm name, e.g. "portfolio analytics for Acme Ventures". Offers the hosted app at
+  analytics.carta.cloud as an alternative to the local build. For scenario modeling,
   repricing and exit/reserve planning use carta-fund-modeling.
-argument-hint: "<firm name or Carta firm URL — required>"
+argument-hint: "<firm name or Carta firm URL — required for a local build>"
 version: 0.1.0
 model: inherit
 allowed-tools:
@@ -53,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.99.3</carta-plugin>
+<carta-plugin>carta-investors:6.99.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -67,12 +68,34 @@ Collection** (`COMPANY_FINANCIALS`), plus valuation, returns, and cap-table data
 a prebuilt React app via `serve.py`. **The browser never calls the Carta MCP** — this
 skill fetches the data; the server only serves JSON + the built app.
 
+## Gate 0 — Hosted or local (ask first)
+
+Carta hosts this app at **https://analytics.carta.cloud**. The user signs in with Carta there and the app
+shows only the firms their Carta login can open, so the hosted path needs no firm name, no Carta MCP and no
+local cache. Before anything else — before the firm prompt, any cache scan or any MCP call — ask with
+`AskUserQuestion`:
+
+> **Header:** "Where to run"
+> **Question:** "Open the hosted Portfolio Analytics app, or build it locally on this machine?"
+> - **"Open hosted app"** — analytics.carta.cloud: sign in with Carta and pick a firm; nothing to build.
+> - **"Build locally"** — pulls the firm's data through the Carta MCP into a local cache and serves the app
+>   from this machine.
+
+Skip the question when the invocation already chose: "hosted", "online" or analytics.carta.cloud → hosted; "local", "build",
+"refresh", or reopening a local dashboard → local. A pasted Carta firm URL chooses
+neither, so ask as usual.
+
+- **Hosted** → reply with the link, then end the turn: "Open **https://analytics.carta.cloud** in your
+  browser, sign in with Carta, and pick your firm." Do **not** ask for a firm, scan caches, touch the MCP or
+  launch `serve.py`.
+- **Local** → continue with the firm check below and Step 0.
+
 ## No demo data — an Investment Firm Account is required
 Never fabricate, synthesize, or fall back to demo data. Every dashboard runs
 against **one real Carta Investment Firm Account's** Data Collection KPIs —
 fetched fresh or served from a prior local cache.
 
-**Always confirm the Investment Firm Account before doing anything else.** If the
+**For a local build, confirm the Investment Firm Account before doing anything else.** If the
 invocation does not name a firm (or names one ambiguously), do **not** auto-pick and
 do **not** silently open a cache — **prompt the user with `AskUserQuestion`**:
 
@@ -82,9 +105,8 @@ do **not** silently open a cache — **prompt the user with `AskUserQuestion`**:
 > Offer any locally-cached firms as options (from `list-dashboards`), plus an "Other"
 > free-text path for a new firm name / URL.
 
-Only proceed once a firm is chosen. This prompt is mandatory on every fresh
-invocation that doesn't unambiguously name a firm — it is the first thing the user
-sees.
+Only proceed once a firm is chosen. This prompt is mandatory on every local build
+that doesn't unambiguously name a firm — it follows the hosted-or-local choice.
 
 ## Launch order — cache-first, MCP-lazy
 Launching a warm cache needs **no MCP**. Resolve the firm name and check the local

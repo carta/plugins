@@ -4,15 +4,15 @@ description: >
   Spin up an interactive local web console for FIRM-LEVEL scenario modeling over Carta Fund Admin data — a
   React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES. Tabs: Overview
   (fund-family rollup, pacing, concentration), Companies (per-company repricing, LP make-whole
-  waterfall, carry banking, dated partial sales), Exit & IRR (exit scenarios, XIRR, GP &
+  waterfall, carry banking, partial sales), Exit & IRR (exit scenarios, XIRR, GP &
   LP returns, per-fund DPI/RVPI/TVPI glidepath), Reserves (dry-powder planning), Cohort Standing
   (peer-cohort + S&P-equivalent benchmarking), and Fund Construction (beta: model a NEW fund step by step —
-  sectors, allocations, fees, recycling, waterfall, LPs — into projected TVPI/DPI/IRR). Scenarios and plans
-  persist locally. Invoke with a firm name, e.g. "fund modeling for Demo Capital" or "model portfolio
-  scenarios for a firm". Fund Admin only. NOT for reading existing Tactyc/Fund Forecasting funds — use
-  carta-fund-forecasting. NOT for single-exit waterfalls on one company. NOT read-only fund data queries —
+  sectors, allocations, fees, recycling, waterfall, LPs — into projected TVPI/DPI/IRR). Also hosted at
+  fund-modeling.carta.cloud. Invoke with a firm name, e.g. "fund modeling for Demo Capital" or "model
+  portfolio scenarios for a firm". Fund Admin only. NOT for reading existing Tactyc/Fund Forecasting funds —
+  use carta-fund-forecasting. NOT for single-exit waterfalls on one company. NOT read-only fund data queries —
   use carta-explore-data.
-argument-hint: "<firm name or Carta firm URL — required>"
+argument-hint: "<firm name or Carta firm URL — required for a local build>"
 version: 1.0.0
 model: inherit
 allowed-tools:
@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.99.3</carta-plugin>
+<carta-plugin>carta-investors:6.99.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -70,17 +70,18 @@ Builds a firm's baseline from Carta Fund Admin data, writes it to a local data d
 never calls the Carta MCP** — this skill fetches the data; the server only serves JSON + the built app. The
 repricing/waterfall/IRR is a **transparent estimate** (the ported `model/`), not Carta's official engine.
 
-> **Runs locally only.** Because it starts a localhost web server and opens your browser, this skill works only
-> in a Claude Code session running on your machine (a local terminal, or Claude Desktop set to run locally). It
-> can't run in a **sandboxed** session — **Cowork**, or a Claude Code **cloud** session — where that server is
-> unreachable and no local browser exists. Gate 0 stops early and tells the user to switch.
+> **Hosted or local.** Carta hosts the same app at **https://fund-modeling.carta.cloud** — the user signs in
+> with Carta and picks a firm there, with nothing to build. The local build starts a localhost web server and
+> opens your browser, so it works only in a Claude Code session running on your machine (a local terminal, or
+> Claude Desktop set to run locally). In a **sandboxed** session — **Cowork**, or a Claude Code **cloud**
+> session — Gate 0 points the user at the hosted app; in a local session Gate 1 asks which they want.
 
 ## No demo data — real firm required
 **Never** fabricate, synthesize, sample, or fall back to demo/placeholder data, and never launch against an
 empty or partial data dir. Every dashboard runs against **one real Carta firm's** Fund Admin data — either
-fetched fresh or served from a prior local fetch (cache). If the invocation includes no firm (name or URL), do
-**not** auto-pick, list, or guess — **stop and ask the user to name a firm**, then proceed only once they
-answer. A missing or unresolved firm is a graceful exit, not a reason to invent data.
+fetched fresh or served from a prior local fetch (cache). On a local build (after Gate 1), if the invocation
+includes no firm (name or URL), do **not** auto-pick, list, or guess — **stop and ask the user to name a firm**,
+then proceed only once they answer. The hosted app needs no firm here; the user picks it there. A missing or unresolved firm is a graceful exit, not a reason to invent data.
 
 ## Launch order — cache-first, MCP-lazy
 Building a dashboard needs the Carta MCP; **launching a warm cache does not.** Resolve the firm **name** and
@@ -101,15 +102,36 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" de
 ```
 - Output contains **`surface=sandboxed`** → **stop immediately.** Do **not** scan caches, resolve a firm, touch
   the MCP, or launch `serve.py`. Reply with this message (substance verbatim), then end the turn:
-  > Fund Modeling launches an interactive web app on your own machine — a local server plus your browser — so it
-  > only works in a Claude Code session running locally. It can't run in a sandboxed session: Cowork, or a Claude
-  > Code cloud session (in Claude Desktop, running in the cloud is the default — switch it to run locally).
-  > Please re-run from a local session, e.g. "fund modeling for \<firm\>".
+  > Fund Modeling is hosted by Carta at **https://fund-modeling.carta.cloud** — open it in your browser, sign in
+  > with Carta, and pick your firm. Building the app locally needs a Claude Code session running on your own
+  > machine; it can't run in a sandboxed session: Cowork, or a Claude Code cloud session (in Claude Desktop,
+  > running in the cloud is the default — switch it to run locally). To build locally instead, re-run from a
+  > local session, e.g. "fund modeling for \<firm\>".
 
   This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to launch anyway, and do **not**
   fall back to another surface or tool — a sandboxed verdict will not change on retry.
-- Otherwise (**`surface=local`**, the normal case) → continue to **Step 0** silently. Say nothing about this
+- Otherwise (**`surface=local`**, the normal case) → continue to **Gate 1** silently. Say nothing about this
   check — it stays quiet, like the rest of Step 0.
+
+## Gate 1 — Hosted or local (local sessions only)
+
+Carta hosts this app at **https://fund-modeling.carta.cloud**. The user signs in with Carta there and the app
+shows only the firms their Carta login can open, so the hosted path needs no firm name, no Carta MCP and no
+local cache. Ask before Step 0 — before any cache scan or MCP call — with `AskUserQuestion`:
+
+> **Header:** "Where to run"
+> **Question:** "Open the hosted Fund Modeling app, or build it locally on this machine?"
+> - **"Open hosted app"** — fund-modeling.carta.cloud: sign in with Carta and pick a firm; nothing to build.
+> - **"Build locally"** — pulls the firm's data through the Carta MCP into a local cache and serves the app
+>   from this machine.
+
+Skip the question when the invocation already chose: "hosted", "online" or fund-modeling.carta.cloud → hosted;
+"local", "build", "refresh", or reopening a local dashboard → local. A pasted Carta firm URL chooses neither,
+so ask as usual.
+
+- **Hosted** → reply with the link, then end the turn: "Open **https://fund-modeling.carta.cloud** in your
+  browser, sign in with Carta, and pick your firm." Do **not** scan caches, touch the MCP or launch `serve.py`.
+- **Local** → continue to **Step 0** silently.
 
 ## Step 0 — Resolve identity + check the local cache
 
@@ -660,7 +682,7 @@ picked up without a relaunch.
 
 | Situation | What to do |
 |---|---|
-| Running in a sandboxed session (`detect-surface` → `surface=sandboxed`) | Gate 0 stops before any work: tell the user to re-run in a **local** Claude Code session (a terminal, or Claude Desktop set to run locally — not Cowork or a cloud session). Do not retry or launch. |
+| Running in a sandboxed session (`detect-surface` → `surface=sandboxed`) | Gate 0 stops before any work: point the user at **https://fund-modeling.carta.cloud**, or a **local** Claude Code session to build it locally (a terminal, or Claude Desktop set to run locally — not Cowork or a cloud session). Do not retry or launch. |
 | No Carta MCP connected | Exit: "No Carta MCP is connected — please connect one and try again." Do not proceed. |
 | Firm name given but unresolvable | Prompt with `AskUserQuestion`: show any cache suggestions or "Build fresh from Carta" option. |
 | No firm given and no local cache | Exit: ask the user to name a firm before doing anything else. |
