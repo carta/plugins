@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.16</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -203,6 +203,7 @@ One `get:plan` call is the cheapest possible check: it is the same call Step 2b 
 returns in one round trip, and on a match nothing else is fetched.
 
 > **Use the plan's version, not the newest published one.** `compensation:list:benchmark_versions`
+> (no arguments — never `corporation_id`, which returns `unknown_param`)
 > may show a release *newer* than the plan's (releases land before plans are re-pinned). Always
 > follow `get:plan` — that is what the CTC product UI shows, so pinning to a newer release would
 > make this dashboard disagree with the product.
@@ -484,16 +485,17 @@ Follow `references/queries.md` for the exact arguments.
 
 **2a. Subscription gate (REQUIRED — do this before anything else).**
 
+When this conversation already holds a classified outcome of the gate for this corp (the gate file's
+*Call it once per corp per conversation*), skip the Read and the call and act on that outcome below.
+Otherwise read the gate file before the call, and send its messages verbatim:
+
 ```
-read_tool({"name": "compensation__get__subscription_status",
-           "arguments": {"corporation_id": <corporation_pk>}})
+Read ${CLAUDE_PLUGIN_ROOT}/references/gate-ctc-subscription.md
 ```
 
-It returns `{corporation_id, has_ctc_access, is_subscribed}`.
-
-- `has_ctc_access: true`, `is_subscribed: true` → continue.
-- `has_ctc_access: true`, `is_subscribed: false` → stop, surface the subscription message, fetch nothing.
-- `has_ctc_access: false` → the caller has no CTC role on this corp (`is_subscribed` is `null`). Stop; do not retry.
+It is the plugin's own `references/`, not this skill's: read it by that path, do not search for it.
+On **PASS**, continue.
+On either **FAIL**, send the message it names, fetch nothing, and stop.
 
 A corp with no subscription has no benchmark data, so every later call would be wasted.
 

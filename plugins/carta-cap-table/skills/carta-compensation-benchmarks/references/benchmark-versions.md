@@ -16,6 +16,8 @@ The active version is returned by `compensation:get:plan` as `benchmark_version`
 read_tool({"name": "compensation__list__benchmark_versions", "arguments": {}})
 ```
 
+It takes **no arguments**. Unlike every other compensation command, do not pass `corporation_id` — the list is the same for every corporation, and the extra parameter returns `unknown_param`.
+
 ## Presenting versions to the user
 
 ```

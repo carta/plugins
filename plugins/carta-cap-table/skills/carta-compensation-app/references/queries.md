@@ -16,14 +16,8 @@ Only ever act on a `corporation_pk` that appears verbatim in a `list_accounts` r
 
 ## §1 — Subscription gate (REQUIRED, before anything else)
 
-```
-read_tool({"name": "compensation__get__subscription_status",
-           "arguments": {"corporation_id": <corporation_pk>}})
-```
-
-Returns `{corporation_id, has_ctc_access, is_subscribed}`.
-`has_ctc_access: false` → the caller has no CTC role on this corp (`is_subscribed` is `null`); stop.
-`has_ctc_access: true`, `is_subscribed: false` → stop, surface the subscription message, fetch nothing.
+Run the gate in `${CLAUDE_PLUGIN_ROOT}/references/gate-ctc-subscription.md`: the call, the
+once-per-conversation rule and its outcomes live there.
 
 A corp with no subscription has no benchmark data, so every later call is wasted.
 
