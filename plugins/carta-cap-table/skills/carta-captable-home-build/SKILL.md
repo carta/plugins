@@ -25,6 +25,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-captable-home-build/scripts/build_artifact.py" *)
   - Artifact
+  - ToolSearch
   # Step 0b picks between companies; Step 2 asks who an untitled legacy page belongs to.
   - AskUserQuestion
   # Draws the pin sketch in "Keeping Carta Home handy" where inline visuals are supported.
@@ -32,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.17</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.18</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
