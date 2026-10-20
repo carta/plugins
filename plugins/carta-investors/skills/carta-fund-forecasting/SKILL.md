@@ -26,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.91.8</carta-plugin>
+<carta-plugin>carta-investors:6.91.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -79,7 +79,7 @@ Extract the **server identifier** — the middle segment between the first and l
 - `mcp__carta-prod__call_tool` → server = `carta-prod`
 - `mcp__carta__call_tool` → server = `carta`
 
-**If no Carta MCP found:** tell the user no Carta MCP server is connected. In Claude Code, they can connect it with `claude mcp add --transport http carta https://mcp.app.carta.com/mcp` (the first call opens a Carta OAuth sign-in in the browser); in Claude Desktop, add an MCP server entry running `npx mcp-remote https://mcp.app.carta.com/mcp`. After connecting, restart Claude Code and retry. Stop.
+**If no Carta MCP found:** tell the user no Carta MCP server is connected. In Claude Code, they can connect it with `claude mcp add --transport http carta https://mcp.app.carta.com/mcp` (the first call opens a Carta OAuth sign-in in the browser); in Claude Desktop, add an MCP server entry running `npx mcp-remote@0.15.1 https://mcp.app.carta.com/mcp`. After connecting, restart Claude Code and retry. Stop.
 **If exactly one found:** use it.
 **If multiple found:** ask the user which one to use via `AskUserQuestion`.
 

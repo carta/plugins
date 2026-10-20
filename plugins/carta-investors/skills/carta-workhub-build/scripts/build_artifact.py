@@ -48,12 +48,10 @@ VERSIONS_FILE = SKILL_DIR.parent.parent / ".claude-plugin" / "skill-versions.jso
 # comparison is semver, and the banner fires on major/minor only.
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
-# The part list, its order and the template markers are shared with the hosted Worker
-# (app/server/worker.js), which assembles the same page at request time — one list, so
-# the two surfaces cannot run different code. App parts are concatenated in order into
-# the one app-JS slot; the pdf.js worker bundle goes first because it defines
-# globalThis.pdfjsWorker, which the library looks for when asked to parse. pdf.js is
-# vendored because the artifact's CSP blocks every external host — see
+# The part list, its order and the template markers live in artifact_parts.json. App
+# parts are concatenated in order into the one app-JS slot; the pdf.js worker bundle goes
+# first because it defines globalThis.pdfjsWorker, which the library looks for when asked
+# to parse. pdf.js is vendored because the artifact's CSP blocks every external host — see
 # resources/vendor/README.md.
 PARTS = json.loads((SKILL_DIR / "scripts" / "artifact_parts.json").read_text())
 APP_JS_PARTS = PARTS["app_js_parts"]
@@ -139,8 +137,7 @@ def build(mcp_server, ccr_fund_uuid="", ccr_activity_id="", frt_seed_period=""):
         if token in out:
             sys.exit("ERROR: unresolved marker {} after assembly".format(token))
 
-    # Every placeholder the template and parts carry is named in artifact_parts.json; the
-    # hosted Worker fills the same list with its own values.
+    # Every placeholder the template and parts carry is named in artifact_parts.json.
     values = {
         "{{CARTA_MCP_SERVER}}": mcp_server,
         # Empty is the normal case: the panel then opens only from a task card.

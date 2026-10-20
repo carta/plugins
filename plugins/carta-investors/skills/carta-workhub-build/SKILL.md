@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.91.8</carta-plugin>
+<carta-plugin>carta-investors:6.91.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -408,13 +408,8 @@ The cards stay on screen throughout, and a read that fails in any part keeps the
 | `resources/carta-workhub.template.html` | HTML skeleton + injection markers |
 | `resources/carta-workhub.tracker.js` | inlined `@carta/mcp-ui-tracker` browser bundle |
 | `resources/vendor/` | pdf.js, vendored — pinned to the last UMD release for a reason its README gives |
-| `scripts/artifact_parts.json` | the part order and template markers, shared by `build_artifact.py` and the hosted Worker |
-| `app/` | the hosted micro-app: a Cloudflare Worker serving these same `resources/` at `workhub.<label>.carta.cloud` — see `app/DEPLOY.md` |
+| `scripts/artifact_parts.json` | the part order and template markers, read by `build_artifact.py` |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` |
-
-The hosted micro-app runs `resources/` unchanged, so every change here ships to both surfaces.
-It reaches Carta only through the commands in `app/server/commands.json`; a new command needs
-an entry there, which `tests/js/carta-workhub-hosted-drift.test.js` enforces.
 
 `carta-workhub.app.js` duplicates a handful of helpers from `carta-home.app.js` on purpose:
 the two artifacts ship independently, so neither may import from the other. Keep them
