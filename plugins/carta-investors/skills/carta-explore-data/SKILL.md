@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.94.2</carta-plugin>
+<carta-plugin>carta-investors:6.95.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -152,7 +152,7 @@ Use this table to pick the right context file before running any query:
 | Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown                                                                                                                                           | `fund-performance.md`                             | `AGGREGATE_FUND_METRICS` (latest), `TEMPORAL_FUND_COHORT_BENCHMARKS` (as of a past date/quarter-end) |
 | Cash flows in a period (contributions, distributions, fees, expenses)                                                                                                                                      | `cash-flows.md`                                   | `JOURNAL_ENTRIES` grouped by `event_type`                                 |
 | Balance sheet (assets, liabilities, partners' capital)                                                                                                                                                     | `balance-sheet.md`                                | `JOURNAL_ENTRIES` summed by `account_type`                                |
-| Cap table — share classes, ownership %, firm stake, fully-diluted ownership, shareholders / stakeholders / who-owns prompts (cap-table.md explains the firm-context limitation for shareholder-level data) | `cap-table.md`                                    | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP` (firm context required) |
+| Cap table — share classes, ownership %, firm stake, fully-diluted ownership, shareholders / stakeholders / who-owns prompts                                                                           | `cap-table.md`                                    | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP`, `STAKEHOLDER_CAP_TABLE` (firm context required) |
 | Portfolio events — certificate issuance/transfer, conversions, warrant exercises                                                                                                                           | `cap-table.md`                                    | `NEWSFEED` (firm context required)                                        |
 | 409a valuations, fair market value, FMV, common stock price                                                                                                                                                | `valuations.md`                                   | `IRC409A_VALUE`                                                           |
 | Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss                                                                                                                                | `investments.md`                                  | `AGGREGATE_INVESTMENTS`, `AGGREGATE_INVESTMENTS_HISTORY` (point-in-time)  |

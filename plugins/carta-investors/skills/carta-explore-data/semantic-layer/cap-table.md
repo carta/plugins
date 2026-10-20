@@ -1,6 +1,6 @@
 # Cap Table & Firm Ownership (Investor / Firm Context)
 
-Query investor-side cap table and firm-ownership data for portfolio companies — share classes, outstanding/authorized shares, ownership %, and firm stake.
+Query investor-side cap table and firm-ownership data for portfolio companies — share classes, outstanding/authorized shares, ownership %, firm stake, and the per-stakeholder (shareholder) cap table.
 
 ## Triggers — use this file when the user asks ...
 
@@ -18,6 +18,12 @@ Ownership questions:
 - "What's our ownership in **[Company]**?"
 - "What's our fully-diluted stake in **[Company]**?"
 
+Shareholder / stakeholder questions:
+- "Who are the shareholders of **[Company]**?"
+- "List the stakeholders / shareholders for **[Company]**"
+- "Who owns **[Company]**?" / "What does **[Stakeholder]** own in **[Company]**?"
+- "Show me **[Company]**'s cap table by stakeholder" (the table keeps only each company's most recent snapshot, so a past **[date]** cannot be served — see Query D)
+
 Portfolio event questions:
 - "Show me the portfolio event history for **[Company]**"
 - "What certificate activity has **[Company]** had?"
@@ -31,7 +37,7 @@ When the active MCP context is a **Firm**, the agent has investor-side access on
 - **ALWAYS query the DW.** Use `SUMMARY_CAP_TABLE` for share-class detail and `FUND_CORPORATION_OWNERSHIP` for firm ownership % rollups.
 - **NEVER call** `cap_table:*` or `cap_table_chart`. Those MCP commands require a direct cap-table-tenant user role and reject UUID-only corporation IDs. In firm context they will fail with permission or "invalid corporation_id" errors on nearly every portfolio company (only companies where the firm holds a direct cap-table viewer role — e.g. holdco entities — will succeed).
 - **Waterfall scenarios** (`/waterfall-scenarios`) are NOT supported here — they depend on cap-table-tenant access. If asked, explain the limitation and stop; do not attempt a DW workaround.
-- **Per-stakeholder / shareholder lists** are NOT available — there is no shareholder-detail table accessible in firm context. If the user asks "who are the shareholders of [Company]?" or "list shareholders", tell them individual shareholder data isn't accessible in investor context and stop. Do not attempt a DW workaround.
+- **Per-stakeholder / shareholder lists** come from `FUND_ADMIN.STAKEHOLDER_CAP_TABLE` (**Query D**). It is row-access controlled: a firm sees a company's stakeholder rows only when that company grants the firm **Detailed** cap table access in Carta. Zero rows for a company is the normal outcome when the firm has Summary access only — say "no detailed cap-table access for this company", not "no data", and do not fall back to `cap_table:*`.
 
 ## ⚠️ Common Mistakes in This Domain
 
@@ -39,6 +45,8 @@ When the active MCP context is a **Firm**, the agent has investor-side access on
 |---|---|---|
 | `OUTSTANDING_QUANTITY` | `OUTSTANDING_SHARES` | correct column in `SUMMARY_CAP_TABLE` and `STAKEHOLDER_CAP_TABLE` |
 | `OWNERSHIP_PERCENTAGE` | `PERCENTAGE` | column in `FUND_CORPORATION_OWNERSHIP` is `PERCENTAGE`, not `OWNERSHIP_PERCENTAGE` |
+| `FULLY_DILUTED_OWNERSHIP * 1` as a percent | `FULLY_DILUTED_OWNERSHIP * 100` | ownership columns in `STAKEHOLDER_CAP_TABLE` are fractions (1.0 = 100%) |
+| `SUM(STAKEHOLDER_FULLY_DILUTED_SHARES)` across a stakeholder's rows | `MAX(...)` or one row per stakeholder | the `STAKEHOLDER_*` totals are repeated on every row of that stakeholder |
 
 ## Picking the right query
 
@@ -47,7 +55,8 @@ When the active MCP context is a **Firm**, the agent has investor-side access on
 | Share-class breakdown, outstanding/authorized shares   | **Query A**      | `FUND_ADMIN.SUMMARY_CAP_TABLE`             |
 | Firm ownership % / fully-diluted stake                 | **Query B**      | `FUND_ADMIN.FUND_CORPORATION_OWNERSHIP`    |
 | Portfolio event history (certificate issuance/transfer, conversions, warrant exercises) | **Query C** | `FUND_ADMIN.NEWSFEED` |
-| Batch — same intent across multiple companies          | A, B, or C with `IN` | (same as above)                        |
+| Shareholder / stakeholder list, what a holder owns, per-holder breakdown | **Query D** | `FUND_ADMIN.STAKEHOLDER_CAP_TABLE` |
+| Batch — same intent across multiple companies          | A, B, C, or D with `IN` | (same as above)                     |
 | Both — "give me the full picture for [Company]"        | A then B         | Both                                       |
 
 ## Input resolution (run before either query)
@@ -295,6 +304,84 @@ LIMIT 50
 
 **Batch truncation** — same rule as Query A/B: if the row-by-row query returns exactly 500 rows, treat it as potentially truncated and split `<CORPORATION_UUIDS>` in half, capping recursion at 2 levels. The event-type breakdown variant is aggregated and rarely hits the 50-row limit; if it does, the company has an unusually diverse event history — split the batch the same way.
 
+## Query D — Cap Table by Stakeholder (STAKEHOLDER_CAP_TABLE)
+
+Parameters to substitute:
+- `<CORPORATION_UUIDS>` — one or more corporation IDs as a comma-separated list of quoted UUIDs (same resolution as Query A).
+- `<AS_OF_DATE>` — snapshot cutoff in `YYYY-MM-DD`. **Default to `CURRENT_DATE`.** `as_of_date` here is a **DATE**, so a plain date comparison is correct — no timestamp-jitter handling is needed, unlike `SUMMARY_CAP_TABLE`. **Only each company's most recent snapshot is retained** (the refresh replaces the previous one), so the table is a current-state view, not a history: a `<AS_OF_DATE>` earlier than that snapshot returns no rows. Use `SUMMARY_CAP_TABLE` for share-class history.
+
+Grain: one row per stakeholder × security class (share class, option plan, warrant block, or convertible-note block) × `as_of_date`. The `STAKEHOLDER_*` columns are the holder's totals across all their rows in that company and are **repeated on every row** — never `SUM` them.
+
+**Stakeholder summary** (default — "who are the shareholders", "who owns [Company]"):
+
+```sql
+WITH latest_dates AS (
+    SELECT CORPORATION_ID, MAX(AS_OF_DATE) AS max_as_of_date
+    FROM FUND_ADMIN.STAKEHOLDER_CAP_TABLE
+    WHERE CORPORATION_ID IN (<CORPORATION_UUIDS>)
+      AND AS_OF_DATE <= '<AS_OF_DATE>'
+    GROUP BY CORPORATION_ID
+)
+SELECT
+    s.CORPORATION_ID,
+    s.LEGAL_NAME                                                  AS company_name,
+    s.AS_OF_DATE,
+    s.STAKEHOLDER_NAME,
+    s.STAKEHOLDER_GROUP_NAME,
+    MAX(s.STAKEHOLDER_OUTSTANDING_SHARES)                         AS outstanding_shares,
+    MAX(s.STAKEHOLDER_FULLY_DILUTED_SHARES)                       AS fully_diluted_shares,
+    ROUND(MAX(s.STAKEHOLDER_FULLY_DILUTED_OWNERSHIP) * 100, 2)    AS fully_diluted_ownership_pct,
+    COUNT(*)                                                      AS holdings
+FROM FUND_ADMIN.STAKEHOLDER_CAP_TABLE s
+INNER JOIN latest_dates ld
+    ON s.CORPORATION_ID = ld.CORPORATION_ID
+   AND s.AS_OF_DATE     = ld.max_as_of_date
+GROUP BY s.CORPORATION_ID, s.LEGAL_NAME, s.AS_OF_DATE, s.STAKEHOLDER_ID, s.STAKEHOLDER_NAME, s.STAKEHOLDER_GROUP_NAME
+ORDER BY s.CORPORATION_ID, fully_diluted_shares DESC NULLS LAST, s.STAKEHOLDER_NAME
+LIMIT 500
+```
+
+**Holding detail** (one row per stakeholder × security class — "what does [Stakeholder] own", "break down [Company] by holder and class"). Add `AND s.STAKEHOLDER_NAME ILIKE '%<name>%'` to narrow to one holder.
+
+```sql
+WITH latest_dates AS (
+    SELECT CORPORATION_ID, MAX(AS_OF_DATE) AS max_as_of_date
+    FROM FUND_ADMIN.STAKEHOLDER_CAP_TABLE
+    WHERE CORPORATION_ID IN (<CORPORATION_UUIDS>)
+      AND AS_OF_DATE <= '<AS_OF_DATE>'
+    GROUP BY CORPORATION_ID
+)
+SELECT
+    s.CORPORATION_ID,
+    s.AS_OF_DATE,
+    s.STAKEHOLDER_NAME,
+    s.SECURITY_CLASS_NAME,
+    s.SECURITY_CLASS_TYPE,
+    s.OUTSTANDING_SHARES,
+    s.OUTSTANDING_WARRANTS,
+    s.OUTSTANDING_EQUITY_AWARD_DERIVATIVES,
+    s.FULLY_DILUTED_QUANTITY,
+    ROUND(s.FULLY_DILUTED_OWNERSHIP * 100, 4)                     AS fully_diluted_ownership_pct,
+    s.CASH_RAISED,
+    s.PRINCIPAL,
+    s.OUTSTANDING_DEBT,
+    s.CURRENCY_CODE
+FROM FUND_ADMIN.STAKEHOLDER_CAP_TABLE s
+INNER JOIN latest_dates ld
+    ON s.CORPORATION_ID = ld.CORPORATION_ID
+   AND s.AS_OF_DATE     = ld.max_as_of_date
+ORDER BY s.CORPORATION_ID, s.STAKEHOLDER_NAME, s.SECURITY_CLASS_TYPE, s.SECURITY_CLASS_NAME
+LIMIT 500
+```
+
+**Empty results** — 0 rows for a `CORPORATION_ID` almost always means the company has not granted this firm Detailed cap table access (the row access policy returns nothing, not an error). Say so per company: "_No detailed cap-table access for this company._" If Query A returns rows for the same company, the firm has Summary access only — offer the share-class view instead.
+
+**Empty results with an `<AS_OF_DATE>` filter** — before saying "no access", re-run the `latest_dates` CTE without the date predicate and compare its `max_as_of_date` with `<AS_OF_DATE>`. If it is on or before `<AS_OF_DATE>`, that snapshot **is** the as-of answer (an exact-date match misses it): answer from it and state its date. If it is after `<AS_OF_DATE>`, say "_Detailed holders are available as of YYYY-MM-DD only; no snapshot exists on or before <AS_OF_DATE>._" and offer that snapshot or the share-class history from `SUMMARY_CAP_TABLE`. Only an empty result **without** the date filter means no Detailed access.
+
+**Batch truncation** — same rule as Query A: exactly 500 rows means possibly truncated; split `<CORPORATION_UUIDS>` in half, cap at 2 levels. Large companies (thousands of option holders) can legitimately exceed 500 rows in the detail variant — use the stakeholder summary first, then narrow by `STAKEHOLDER_NAME`.
+
+**Reconciling with Query A** — summing `FULLY_DILUTED_QUANTITY` over all stakeholders does **not** reach the company's fully-diluted total: the unissued option pool is not a stakeholder and has no row here. Use `SUMMARY_CAP_TABLE` for company totals.
+
 ## Table reference
 
 ### SUMMARY_CAP_TABLE
@@ -315,6 +402,29 @@ Each row is a share class snapshot per corporation at a given date.
 
 Supporting tables used by Query A:
 - `FINANCING_HISTORY` — round price and date per share class (`SHARECLASS_NAME`, `ORIGINAL_ISSUE_PRICE`, `CLOSING_DATE`, `RAISED_DATE`)
+
+### STAKEHOLDER_CAP_TABLE
+One row per stakeholder × security class × `AS_OF_DATE` for a corporation. Source for Query D. Row-access controlled: rows exist for a firm only where the company grants it Detailed cap table access. Refreshed once a day per corporation from Carta's cap table.
+
+| Column | Description |
+|--------|-------------|
+| `CORPORATION_ID` | Portfolio company identifier (UUID) |
+| `LEGAL_NAME` | Company legal name; `PRO_FORMA_OF_LEGAL_NAME` / `PRO_FORMA_OF_CORPORATION_ID` are set when the snapshot is a pro forma of another entity |
+| `AS_OF_DATE` | Snapshot date. **DATE, not TIMESTAMP** — one snapshot per corporation per day; plain date comparisons are safe |
+| `STAKEHOLDER_ID`, `STAKEHOLDER_NAME` | The holder (individual or entity) |
+| `STAKEHOLDER_GROUP_ID`, `STAKEHOLDER_GROUP_NAME` | Group that consolidates related holders (typically the investing firm/organization) |
+| `SECURITY_CLASS_ID`, `SECURITY_CLASS_NAME`, `SECURITY_CLASS_TYPE` | The holding's class; type is one of `share_class`, `option_plan`, `warrant_block`, `note_block`. Ids are prefixed `SC-` / `OP-` / `WC-` / `NB-` |
+| `AS_CONVERTED_SHARECLASS_ID`, `AS_CONVERTED_SHARECLASS_NAME`, `AS_CONVERTED_SHARCLASS_STOCK_TYPE` | The share class an option plan / warrant converts into (note the historical misspelling of the stock-type column) |
+| `OUTSTANDING_SHARES` | Issued and outstanding shares; `0` on rows that are not a share class |
+| `OUTSTANDING_WARRANTS` | Outstanding warrants; `0` on rows that are not a warrant block |
+| `OUTSTANDING_EQUITY_AWARD_DERIVATIVES` | Outstanding options/RSUs; `0` on rows that are not an option plan |
+| `OUTSTANDING_COMMITTED_RSAS` | RSAs approved but not yet purchased (option plans) |
+| `FULLY_DILUTED_QUANTITY` | Fully diluted count for this holding; `NULL` for note blocks |
+| `OUTSTANDING_OWNERSHIP`, `FULLY_DILUTED_OWNERSHIP` | This holding's share of the company's outstanding / fully diluted total, as a **fraction** (1.0 = 100%) |
+| `CONVERSION_RATIO` | Share class or warrant conversion ratio; `NULL` for option plans and notes |
+| `CASH_RAISED`, `PRINCIPAL`, `INTEREST`, `OUTSTANDING_DEBT` | Money in `CURRENCY_CODE` (the company's default currency); principal/interest/debt only on note blocks |
+| `CASH_RAISED_BY_CURRENCY`, `PRINCIPAL_BY_CURRENCY`, `INTEREST_BY_CURRENCY`, `OUTSTANDING_DEBT_BY_CURRENCY` | Same amounts in every currency, as an OBJECT keyed by ISO code; `NULL` when there is no money on the holding |
+| `STAKEHOLDER_OUTSTANDING_SHARES`, `STAKEHOLDER_FULLY_DILUTED_SHARES`, `STAKEHOLDER_OUTSTANDING_OWNERSHIP`, `STAKEHOLDER_FULLY_DILUTED_OWNERSHIP` | The holder's totals across all their rows in the company, **repeated on every row** — take one value per stakeholder, never `SUM` |
 
 ### FUND_CORPORATION_OWNERSHIP
 One row per (corporation, firm, fund, as_of_date). Source for Query B.
@@ -418,6 +528,16 @@ Canonical company-name/identifier lookup. Join target for `FUND_CORPORATION_OWNE
 4. **Event-type breakdown variant** — when the user asks "what kinds" or "how many", render a simple summary table instead: Event Type | Count | Earliest | Latest.
 5. **Empty results** — if 0 rows return for a company, show "_No portfolio events recorded for this company._" rather than failing silently.
 6. **Batch** — same per-company section pattern as cap table batch responses: one `### [Company Name]` header per company, no interleaving.
+
+### Stakeholder list (Query D)
+1. **Header line** — "Stakeholders of **[Company Name]** as of [snapshot date]"
+2. **Table columns** (max 6): Stakeholder | Group | Outstanding Shares | Fully Diluted Shares | FD Ownership % | Holdings. Use the stakeholder-summary variant by default; switch to the holding-detail variant only when the user asks about a specific holder or wants the class-level breakdown.
+3. **Percentages** — `X.XX%`, from `FULLY_DILUTED_OWNERSHIP * 100` (the source is a fraction). Label it "FD Ownership %" — it is the holder's share of the company, not the firm's stake (that is Query B).
+4. **Row order** — largest fully diluted holding first, as the query returns.
+5. **Empty results** — show "_No detailed cap-table access for this company._" per company. Never say "no data" or "no shareholders": zero rows means the company has not granted the firm Detailed cap table access. If Query A has rows for the company, offer the share-class view. If the question had an as-of date, first drop the date filter and compare the snapshot date with the requested one: on or before it, answer from that snapshot and state its date; after it, say "_Detailed holders are available as of YYYY-MM-DD only_" instead of "no access".
+6. **Totals** — do not add a total row; the unissued option pool has no stakeholder row, so stakeholder rows do not sum to the company's fully diluted total. Point to Query A for company totals.
+7. **Money** — `CASH_RAISED` / `PRINCIPAL` / `OUTSTANDING_DEBT` are in `CURRENCY_CODE`; format with that code (e.g. `€1,200,000`), not `$` by default.
+8. **Batch** — same per-company section pattern as Query A: one `### [Company Name]` header per company, no interleaving.
 
 ### Ownership-only response (Query B without Query A)
 - Render one table per company, with columns: Fund Name | As Of | Ownership % | Shares Held.
