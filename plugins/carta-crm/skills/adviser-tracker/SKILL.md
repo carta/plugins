@@ -24,7 +24,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.19</carta-plugin>
+<carta-plugin>carta-crm:1.16.20</carta-plugin>
 
 # Adviser Tracker
 
@@ -214,9 +214,10 @@ CRM shows for each. Step 4 carries it in the notice.
 
 ## Step 3: Split the tiers
 
-The script splits the tiers by a fixed rule: Tier 1 is the top half of the banks by deals
-created in the last 12 months, with the three-year total as the tie-break. Tier 2 is the rest.
-Do not choose, change or override the tiers.
+The script splits the tiers by a fixed rule, once for each year of the window: Tier 1 is the top
+half of the banks by deals created in that year, with the three-year total as the tie-break. Tier 2
+is the rest. The table shows the tiers of the year it shows. The tier cards span every year, so they show
+the tiers of the current year and say so. Do not choose, change or override the tiers.
 
 ## Step 4: Build the page
 
@@ -236,9 +237,11 @@ Mandate view. The notice also carries the plain line from Step 1 when the people
 
 `<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`.
 
-The script prints one `check_domain:` line to stderr for each bank that has at least 3 deals and no
-interaction. Keep the lines for Step 6. They are never put on the page, and a bank is never dropped
-or given a strength label because of them.
+The script checks every row of both views and prints one line to stderr for each check a row fails.
+A `check_domain:` line names a bank that has deals and no interaction, with the domains the tool
+suggested for it. A `check_row:` line names a row whose counts contradict each other. Keep the lines
+for Step 6. They are never put on the page, and a bank is never dropped or given a strength label
+because of them.
 
 The script exits with a typed code when the input is wrong (`result_not_json`, `result_empty`,
 `result_invalid`, `result_corrupt`, `row_invalid`, `not_configured`, `no_result`,
@@ -273,7 +276,9 @@ redeploy.
 
 ## Step 6: Reply
 
-Give the URL and one line: it is a snapshot as of today. When the build printed `check_domain:` lines,
-add one line per bank: it has deals but no interactions on its domain, so its relationship cells show
-"No interactions found". Ask the user to check the domain of that bank. Name the check result from Step 2 when
+Give the URL and one line: it is a snapshot as of today. For each `check_domain:` line the build printed, say that the bank has deals and no interactions, so its
+relationship cells show "No interactions found". Ask the user to confirm the possible domain the line names,
+or to check the bank's domain when the line names none. For each `check_row:` line, say that the CRM result
+for that bank contradicts itself, give the line's reason, and ask the user to check that bank in the CRM. Do
+not ask about a domain. Never count a suggested domain yourself. Name the check result from Step 2 when
 it disagreed. For an empty organization, say there are no advisers yet.

@@ -122,6 +122,12 @@ def clean_months(months: object, where: str) -> list[dict]:
     return out
 
 
+def _mail_domains(value: object, where: str) -> list[dict]:
+    if not isinstance(value, list) or not all(isinstance(v, dict) and isinstance(v.get("domain"), str) for v in value):
+        raise fail("row_invalid", f"{where} must be a list of objects with a domain")
+    return [{"domain": v["domain"], "company": v["company"] if isinstance(v.get("company"), str) and v["company"] else None} for v in value]
+
+
 def clean_relationship(raw: object, where: str) -> dict:
     if not isinstance(raw, dict) or raw.get("strength") not in STRENGTHS:
         raise fail("row_invalid", f"{where}.relationship.strength must be one of {', '.join(STRENGTHS)}")
@@ -142,9 +148,11 @@ def clean_relationship(raw: object, where: str) -> dict:
             "strength": cell["strength"],
         })
     counts = {key: _count(raw[key], f"{where}.relationship.{key}") for key in ("interactions", "contacts") if key in raw}
+    domains = {key: _mail_domains(raw[key], f"{where}.relationship.{key}") for key in ("linkedDomains", "suggestedDomains") if key in raw}
     return {
         "strength": raw["strength"],
         **counts,
+        **domains,
         "topContact": None if top is None else {
             **_person(top, f"{where}.topContact"),
             "interactions": _count(top.get("interactions"), f"{where}.topContact.interactions"),
@@ -199,25 +207,22 @@ def tracker_checksum(rows: list[dict]) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def last_twelve_months(as_of: dt.date) -> set[str]:
-    """The month keys `YYYY-MM` of the 12 months that end with the month of `as_of`."""
-    index = as_of.year * 12 + as_of.month - 1
-    return {f"{(i // 12):04d}-{i % 12 + 1:02d}" for i in range(index - 11, index + 1)}
+def _deals(row: dict) -> int:
+    """The deals of a bank over the whole window."""
+    return sum(m["count"] for m in row["dealsByMonth"])
 
 
-def split_tiers(rows: list[dict], as_of: dt.date) -> dict:
-    """Tier 1 is the top half of the banks, rounded up, by deals created in the last 12 months.
+def split_tiers(rows: list[dict], year: int) -> dict:
+    """Tier 1 is the top half of the banks, rounded up, by deals created in `year`.
 
     Ties go to the bank with more deals over the whole window, then to the earlier name. The result does not
-    depend on the order of `rows`, and it does not change with the year the page shows.
+    depend on the order of `rows`.
     """
-    recent = last_twelve_months(as_of)
-
     def rank(row: dict) -> tuple:
         months = row["dealsByMonth"]
         return (
-            -sum(m["count"] for m in months if m["month"] in recent),
-            -sum(m["count"] for m in months),
+            -sum(m["count"] for m in months if m["month"].startswith(str(year))),
+            -_deals(row),
             row["adviser"]["name"].casefold(),
             row["adviser"]["domain"],
         )
@@ -228,7 +233,7 @@ def split_tiers(rows: list[dict], as_of: dt.date) -> dict:
 
 
 def build_data(payload: object, as_of: dt.date, notice: str | None) -> dict:
-    """The tool output plus `asOf`, `notice` and `tiers`, the shape the skeleton reads."""
+    """The tool output plus `asOf`, `notice` and `tiersByYear`, the shape the skeleton reads."""
     if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
         raise fail("result_invalid", "the result has no `rows` list")
     window = payload.get("window")
@@ -246,28 +251,36 @@ def build_data(payload: object, as_of: dt.date, notice: str | None) -> dict:
         "window": {"from": window["from"], "to": window["to"]},
         "asOf": as_of.isoformat(),
         "notice": notice,
-        "tiers": split_tiers(rows, as_of),
+        "tiersByYear": {str(year): split_tiers(rows, year) for year in range(window["from"], window["to"] + 1)},
         "rows": rows,
     }
 
 
-# A bank with this many deals in the window and no interaction at all most likely has its domain wrong.
-SUSPECT_DEAL_FLOOR = 3
+def _row_lines(row: dict) -> list[str]:
+    """The checks of one row: lines for the agent to report, never put on the page."""
+    name, domain = row["adviser"]["name"], row["adviser"]["domain"]
+    rel = row["relationship"]
+    interactions = rel.get("interactions")
+    if interactions is None:
+        return []
+    lines = []
+    if _deals(row) > 0 and interactions == 0:
+        suggested = ", ".join(f"{d['domain']} ({d['company']})" if d["company"] else d["domain"] for d in rel.get("suggestedDomains", []))
+        lines.append(f"check_domain: {name} ({domain}): {_deals(row)} deals, no interactions." + (f" Possible domains: {suggested}." if suggested else " No other domain found."))
+    if interactions == 0 and (rel["strength"] != "weak" or rel["topContact"] or rel["matrix"]):
+        lines.append(f"check_row: {name} ({domain}): no interactions, yet it carries a strength, a contact or a matrix.")
+    if interactions > 0 and rel.get("contacts") == 0:
+        lines.append(f"check_row: {name} ({domain}): {interactions} interactions and no contact.")
+    return lines
 
 
-def banks_without_interactions(data: dict) -> list[str]:
-    """One line per bank of any view that has deals but no interaction, for the agent to report to the user.
+def check_rows(data: dict) -> list[str]:
+    """One line per row of any view that fails a check: deals with no interaction, or counts that contradict each other.
 
-    A result from an older tool carries no interaction count, so its banks are never listed.
+    A result from an older tool carries no interaction count, so its rows are never checked.
     """
     views = data.get("views") or [data]
-    lines = []
-    for view in views:
-        for row in view["rows"]:
-            deals = sum(m["count"] for m in row["dealsByMonth"])
-            if row["relationship"].get("interactions") == 0 and deals >= SUSPECT_DEAL_FLOOR:
-                lines.append(f"{row['adviser']['name']} ({row['adviser']['domain']}): {deals} deals, no interactions")
-    return list(dict.fromkeys(lines))
+    return list(dict.fromkeys(line for view in views for row in view["rows"] for line in _row_lines(row)))
 
 
 def json_for_script(data: dict) -> str:
@@ -386,8 +399,8 @@ def main(argv: list[str] | None = None) -> int:
             data = drop_logos(data, str(exc.strerror))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(data), encoding="utf-8")
-    for line in banks_without_interactions(data):
-        print(f"check_domain: {line}", file=sys.stderr)
+    for line in check_rows(data):
+        print(line, file=sys.stderr)
     print(f"wrote {args.out}")
     return 0
 
