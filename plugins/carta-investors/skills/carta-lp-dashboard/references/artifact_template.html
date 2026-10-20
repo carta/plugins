@@ -256,9 +256,9 @@
     .pill-green { background: var(--green); color: #fff; }
     .pill-red { background: var(--red); color: #fff; }
     .pill-text { background: none; color: var(--gray-50); padding: 0 4px; }
-    .pill-purple { background: #7B61B0; color: #fff; }
     .pill-teal { background: var(--green); color: #fff; }
     .pill-lightblue { background: #5B9BD5; color: #fff; }
+    .nav-toggle { height: 24px; font-size: 12px; border: 1px solid var(--gray-20); border-radius: 4px; }
     .chart-area { position: relative; height: 220px; }
     .chart-area-sm { position: relative; height: 180px; }
 
@@ -498,23 +498,6 @@
 
     <hr class="section-sep">
 
-    <!-- Portfolio Value -->
-    <div class="section is-loading" id="section-nav">
-      <div class="section-loading"><span class="section-spinner"></span><span>Loading portfolio value…</span></div>
-      <div class="chart-header">
-        <div class="chart-title">Portfolio value</div>
-        <div class="pills">
-          <span class="pill pill-blue">NAV</span>
-          <span class="pill pill-purple">Total cash flow</span>
-          <span class="pill pill-teal">Cumulative value</span>
-        </div>
-      </div>
-      <div class="section-msg" id="nav-msg" style="display:none"></div>
-      <div class="chart-area" id="nav-chart-wrap"><canvas id="nav-chart"></canvas></div>
-    </div>
-
-    <hr class="section-sep">
-
     <!-- Contributions & Distributions -->
     <div class="section is-loading" id="section-cd">
       <div class="section-loading"><span class="section-spinner"></span><span>Loading contributions &amp; distributions…</span></div>
@@ -526,6 +509,8 @@
         <div class="pills">
           <span class="pill pill-green">Contributions</span>
           <span class="pill pill-red">Distributions</span>
+          <span class="pill pill-blue" id="nav-pill" style="display:none">NAV</span>
+          <button class="toggle-btn nav-toggle" id="nav-toggle" aria-pressed="false" onclick="toggleNav()">Show NAV</button>
         </div>
       </div>
       <div class="section-msg" id="cd-msg" style="display:none"></div>
@@ -742,7 +727,21 @@ function fmtMultiple(v, digits) {
 }
 
 let capMode='amount';
-let navChart=null, cdChart=null, perfChart=null;
+let cdChart=null, perfChart=null;
+// NAV is drawn over the cash chart only on request: it is a balance, the bars are flows.
+let showNav = false;
+
+function toggleNav() {
+  showNav = !showNav;
+  const btn = document.getElementById('nav-toggle');
+  btn.classList.toggle('active', showNav);
+  btn.setAttribute('aria-pressed', String(showNav));
+  btn.textContent = showNav ? 'Hide NAV' : 'Show NAV';
+  document.getElementById('nav-pill').style.display = showNav ? '' : 'none';
+  // Redraw only from a series that has loaded: while a refetch is in flight, or after it
+  // failed, there is none, and a load that lands later draws NAV as the toggle now says.
+  if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries });
+}
 
 function setCapMode(m) {
   capMode = m;
@@ -797,13 +796,42 @@ function qEnds(months, n) {
   }
   return r;
 }
+// A symmetric axis: the 1-2-5 value at or above the tallest bar, with ticks at the
+// halves so $0 always gets a gridline.
+function symmetricAxis(magnitudes) {
+  const m = Math.max(0, ...magnitudes);
+  const unit = m > 0 ? Math.pow(10, Math.floor(Math.log10(m))) : 1;
+  const bound = ([1, 2, 5, 10].find(k => k * unit >= m) || 1) * unit;
+  return { min: -bound, max: bound, ticks: { stepSize: bound / 2 } };
+}
 function qLbl(d) {
   const m=parseInt(d.slice(5,7)), y=d.slice(0,4);
   return (m<=3?'Q1':m<=6?'Q2':m<=9?'Q3':'Q4')+'\n'+y;
 }
 
+// Writes each quarter's TVPI above its column. TVPI is DPI + RVPI, so the stacked column
+// already has that height; a separate TVPI line would only repeat it.
+function tvpiLabels(tvpi) {
+  return {
+    id: 'tvpiLabels',
+    afterDatasetsDraw(chart) {
+      const {ctx, scales: {x, y}} = chart;
+      ctx.save();
+      ctx.font = '600 11px Inter';
+      ctx.fillStyle = '#002D9C';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      tvpi.forEach((v, i) => {
+        if (v == null) return;
+        const top = chart.data.datasets.reduce((sum, d) => sum + Math.max(0, d.data[i] || 0), 0);
+        ctx.fillText(fmtMultiple(v, 2), x.getPixelForValue(i), y.getPixelForValue(top) - 4);
+      });
+      ctx.restore();
+    },
+  };
+}
+
 const CHARTS = [
-  {canvas: 'nav-chart', wrap: 'nav-chart-wrap', msg: 'nav-msg'},
   {canvas: 'contdist-chart', wrap: 'contdist-chart-wrap', msg: 'cd-msg'},
   {canvas: 'perf-chart', wrap: 'perf-chart-wrap', msg: 'perf-msg'},
 ];
@@ -818,15 +846,21 @@ function setChartMessage(text) {
 }
 
 function destroyCharts() {
-  [navChart, cdChart, perfChart].forEach(c => { if (c) c.destroy(); });
-  navChart = cdChart = perfChart = null;
+  [cdChart, perfChart].forEach(c => { if (c) c.destroy(); });
+  cdChart = perfChart = null;
 }
 
 // The timeseries covers one currency: the active one.
+const CHART_QUARTERS = 8;
 function renderCharts(data) {
   const ax='#A6A6A6', gr='#EFEFEF';
   const months = (data.timeseries && data.timeseries.points) || [];
-  const q = qEnds(months, 8);
+  // The quarter before the window is where the first bar's change starts; when the history
+  // begins inside the window there is none, and the first bar's change starts from zero.
+  const withBase = qEnds(months, CHART_QUARTERS + 1);
+  const hasBase = withBase.length > CHART_QUARTERS;
+  const q = hasBase ? withBase.slice(1) : withBase;
+  const base = hasBase ? withBase[0] : {contributions_cumulative_cents: 0, distributions_cumulative_cents: 0};
   destroyCharts();
   if (q.length === 0) {
     setChartMessage('Not enough history to chart yet.');
@@ -838,79 +872,52 @@ function renderCharts(data) {
   const ts = {font:{size:10,family:'Inter'},color:ax};
   const gs = {color:gr};
   // Amount axes carry the currency code, so a reader never has to infer it from a symbol.
-  const amountAxis = extra => ({...extra, ticks:{...ts, callback:tickFmt(ccy)}, grid:gs,
+  const amountAxis = (extra, ticks) => ({...extra, ticks:{...ts, ...ticks, callback:tickFmt(ccy)}, grid:gs,
     title:{display:Boolean(ccy), text:ccy || '', font:{size:10,family:'Inter'}, color:ax}});
 
-  // Net cash flow: cumulative (distributions - contributions) at each quarter-end
-  const cashFlowData = q.map(m => (m.distributions_cumulative_cents - m.contributions_cumulative_cents) / 100);
-  // Cumulative value: NAV + net cash flow
-  const cumValueData = q.map((m, i) => m.nav_cents / 100 + cashFlowData[i]);
-
-  navChart = new Chart(document.getElementById('nav-chart'),{
-    type:'line',
-    data:{labels,datasets:[
-      {
-        label:'NAV',data:q.map(m=>m.nav_cents/100),
-        borderColor:'#002D9C',backgroundColor:'rgba(0,45,156,0.05)',fill:true,
-        tension:0.4,pointRadius:3,pointBackgroundColor:'#002D9C',
-        pointBorderColor:'#fff',pointBorderWidth:1.5,pointHoverRadius:5,borderWidth:2.5
-      },
-      {
-        label:'Total cash flow',data:cashFlowData,
-        borderColor:'#7B61B0',backgroundColor:'transparent',fill:false,
-        tension:0.4,pointRadius:2,pointBackgroundColor:'#7B61B0',
-        pointBorderColor:'#fff',pointBorderWidth:1,pointHoverRadius:4,borderWidth:2,
-        borderDash:[5,3]
-      },
-      {
-        label:'Cumulative value',data:cumValueData,
-        borderColor:'#2D9E90',backgroundColor:'transparent',fill:false,
-        tension:0.4,pointRadius:2,pointBackgroundColor:'#2D9E90',
-        pointBorderColor:'#fff',pointBorderWidth:1,pointHoverRadius:4,borderWidth:2,
-        borderDash:[5,3]
-      }
-    ]},
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      scales:{x:{ticks:ts,grid:{display:false}},y:amountAxis({})},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.dataset.label+': '+fmtCents(c.parsed.y*100, ccy)}}}
-    }
-  });
-
-  const cQ=q.map((e,i)=>{const p=i>0?q[i-1]:{contributions_cumulative_cents:0};return(e.contributions_cumulative_cents-p.contributions_cumulative_cents)/100;});
-  const dQ=q.map((e,i)=>{const p=i>0?q[i-1]:{distributions_cumulative_cents:0};return-((e.distributions_cumulative_cents-p.distributions_cumulative_cents)/100);});
+  const cQ=q.map((e,i)=>{const p=i>0?q[i-1]:base;return(e.contributions_cumulative_cents-p.contributions_cumulative_cents)/100;});
+  const dQ=q.map((e,i)=>{const p=i>0?q[i-1]:base;return-((e.distributions_cumulative_cents-p.distributions_cumulative_cents)/100);});
+  // Centered on $0: money in and money out read at the same scale.
+  const sumBy = (vals, keep) => vals.filter(keep).reduce((a, b) => a + b, 0);
+  const cdAxis = symmetricAxis(cQ.map((c, i) => Math.max(sumBy([c, dQ[i]], v => v > 0), -sumBy([c, dQ[i]], v => v < 0))));
+  const navAxis = symmetricAxis(q.map(m => Math.abs(m.nav_cents / 100)));
   cdChart = new Chart(document.getElementById('contdist-chart'),{
     type:'bar',
     data:{labels,datasets:[
       {label:'Contributions',data:cQ,backgroundColor:'rgba(45,158,144,0.7)',borderColor:'#2D9E90',borderWidth:1,borderRadius:2,stack:'cd'},
-      {label:'Distributions',data:dQ,backgroundColor:'rgba(229,36,49,0.6)',borderColor:'#E52431',borderWidth:1,borderRadius:2,stack:'cd'}
+      {label:'Distributions',data:dQ,backgroundColor:'rgba(229,36,49,0.6)',borderColor:'#E52431',borderWidth:1,borderRadius:2,stack:'cd'},
+      ...(showNav ? [{label:'NAV',type:'line',data:q.map(m=>m.nav_cents/100),yAxisID:'nav',
+        borderColor:'#002D9C',backgroundColor:'#002D9C',tension:0.3,pointRadius:3,
+        pointBorderColor:'#fff',pointBorderWidth:1.5,borderWidth:2.5,fill:false,order:0}] : [])
     ]},
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      scales:{x:{stacked:true,ticks:ts,grid:{display:false}},y:amountAxis({stacked:true})},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.dataset.label+': '+fmtCents(Math.abs(c.parsed.y)*100, ccy)}}}
+      // NAV gets its own right-hand axis: a balance is many quarters of flows, and on the
+      // bars' axis it would flatten them. It is symmetric too, so both axes put $0 on one line.
+      scales:{x:{stacked:true,ticks:ts,grid:{display:false}},y:amountAxis({stacked:true, min:cdAxis.min, max:cdAxis.max}, cdAxis.ticks),
+        ...(showNav ? {nav:{...amountAxis({position:'right', min:navAxis.min, max:navAxis.max}, navAxis.ticks), grid:{drawOnChartArea:false}}} : {})},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.dataset.label+': '+fmtCents((c.dataset.yAxisID==='nav' ? c.parsed.y : Math.abs(c.parsed.y))*100, ccy)}}}
     }
   });
 
+  const tvpi = q.map(m=>m.tvpi);
   perfChart = new Chart(document.getElementById('perf-chart'),{
     type:'bar',
     data:{labels,datasets:[
-      {label:'DPI',data:q.map(m=>m.dpi),backgroundColor:'rgba(45,158,144,0.5)',borderColor:'#2D9E90',borderWidth:1,stack:'p',order:2},
-      {label:'RVPI',data:q.map(m=>m.rvpi),backgroundColor:'rgba(91,155,213,0.5)',borderColor:'#5B9BD5',borderWidth:1,stack:'p',order:2,borderRadius:{topLeft:2,topRight:2}},
-      {label:'TVPI',type:'line',data:q.map(m=>m.tvpi),
-        borderColor:'#002D9C',backgroundColor:'#fff',
-        pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:'#002D9C',pointBorderWidth:2,
-        pointHoverRadius:6,borderWidth:2.5,tension:0.3,fill:false,order:1}
+      {label:'DPI',data:q.map(m=>m.dpi),backgroundColor:'rgba(45,158,144,0.5)',borderColor:'#2D9E90',borderWidth:1,stack:'p'},
+      {label:'RVPI',data:q.map(m=>m.rvpi),backgroundColor:'rgba(91,155,213,0.5)',borderColor:'#5B9BD5',borderWidth:1,stack:'p',borderRadius:{topLeft:2,topRight:2}}
     ]},
+    plugins:[tvpiLabels(tvpi)],
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
       // No floor at 0: RVPI goes negative when NAV does, and a clipped axis hides it.
-      scales:{x:{stacked:true,ticks:ts,grid:{display:false}},y:{stacked:true,ticks:{...ts,callback:v=>fmtMultiple(v, 2)},grid:gs}},
+      // The grace leaves room above the tallest column for its TVPI label.
+      scales:{x:{stacked:true,ticks:ts,grid:{display:false}},y:{stacked:true,grace:'12%',ticks:{...ts,callback:v=>fmtMultiple(v, 2)},grid:gs}},
       plugins:{legend:{display:false},tooltip:{callbacks:{
-        label:c=>' '+c.dataset.label+': '+fmtMultiple(c.parsed.y)
+        label:c=>' '+c.dataset.label+': '+fmtMultiple(c.parsed.y),
+        footer:items=>items.length ? 'TVPI: '+fmtMultiple(tvpi[items[0].dataIndex]) : ''
       }}}
     }
   });
@@ -1471,12 +1478,14 @@ function renderFooter(){
     COUNT_FMT.format(ts.month_count || 0) + ' months tracked';
 }
 
-const CHART_SECTIONS = ['section-nav', 'section-cd', 'section-perf'];
+const CHART_SECTIONS = ['section-cd', 'section-perf'];
 
 // Timeseries then quarterly for the active currency — sequential, since paralleling the
 // slow ones triggers server-side timeouts. Each section renders as its payload arrives.
 // A failure clears that section instead of leaving the previous currency's data in place.
 async function loadCurrencyData(){
+  // The cache only ever holds the active currency's series; the old one goes before the fetch.
+  currentData.timeseries = null;
   setDataBusy(true);
   setSectionsLoading([...CHART_SECTIONS, 'section-fund-movers'], true);
   try {
