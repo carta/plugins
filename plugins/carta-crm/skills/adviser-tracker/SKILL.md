@@ -24,7 +24,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.21</carta-plugin>
+<carta-plugin>carta-crm:1.17.0</carta-plugin>
 
 # Adviser Tracker
 
@@ -73,6 +73,52 @@ the user is never asked to approve a write. Use `crm_call_tool` only in a sessio
 
    When several fields match at the same level, take the one with the shortest label, then the
    first in field order.
+
+**Build on the server.** In ONE message, start the build with that field's id as `dealFieldId` (leave
+`dealFieldId` out when no field qualifies), and send the Step 2 check call beside it. The answer holds
+`buildId`:
+
+```
+crm_read_tool({ "name": "crm:get_adviser_tracker_build", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
+```
+
+Then wait for it. Each call waits up to 20 seconds on the server:
+
+```
+crm_read_tool({ "name": "crm:get_adviser_tracker_build_result", "arguments": { "buildId": "<buildId>" } })
+```
+
+While its `status` is `running`, call it again, one call per turn, at most 12 calls in all. When
+`status` is `done`, the answer holds both views and every logo: save it as the answer rules below say,
+skip the split run below, and build the page with `--build` in Step 4. A `people` that holds an `error` means the introducer and adviser
+view failed; the script drops it and adds its own notice line.
+
+Run the split run below instead, one time, when the build tool is unknown (an older environment),
+when the start call fails with any text but `adviser-tracker-not-configured:`, when `status` is
+`failed`, when the result call fails, when the build is still `running` after 12 calls, or when the
+build answer is cut, as below. Its own error rules and retry budgets apply.
+
+These rules hold for both paths:
+
+Step 4 carries one plain line in its notice that names the field used. When no field
+qualifies, leave `dealFieldId` out and say so in that line: deals are counted from every
+company field.
+
+Use an answer's saved path when it returns one: `crm_read_tool` returns a saved path when the
+surface saves an answer to a file. Otherwise write the answer to its own file in the outputs
+directory with `Write`, exactly as it came back. An answer without a saved path is cut when it is
+longer than 100 000 characters. When you cannot write an answer to its file exactly as it came back,
+for example because it is cut, never rebuild it from memory. For a cut build answer, run the split run
+below, one time. For the Mandate answer of the split run, stop. Tell the user the tracker could not be
+built because the CRM answer is too large to save. For the people answer, drop the people view as the
+people rules say.
+
+- **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, from the build or
+  the split run, or an unknown-tool error on the single call of the split run.
+  Build and publish nothing. Tell the user adviser tracking is not turned on for the organization, and stop.
+
+**The split run.**
+
 3. Plan two runs in ONE message, as two parallel calls. The Mandate run takes that field's id as
    `dealFieldId`. The people run takes `linkBy` `dealPeople` and no `dealFieldId`. Each answer
    holds `runId` and `shards`:
@@ -103,9 +149,8 @@ crm_read_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId
    unless its text is listed below. Go on to the result call below. It decides.
 
 5. Collect the results. In ONE message, call the result once for each run, with `includeLogos` false.
-   The answer then has no logos and stays small. An answer of a tool is cut when it is longer than
-   100 000 characters, so never ask for a long answer that you have to copy. `crm_read_tool` returns
-   a saved path when the surface saves an answer to a file. Each answer has the shape the build script reads:
+   The answer then has no logos and stays small. Never ask for a long answer that you have to copy:
+   the cut rule above applies. Each answer has the shape the build script reads:
 
 ```
 crm_read_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>", "includeLogos": false } })
@@ -150,22 +195,6 @@ crm_read_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "
 crm_read_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
 ```
 
-Step 4 carries one plain line in its notice that names the field used. When no field
-qualifies, leave `dealFieldId` out and say so in that line: deals are counted from every
-company field.
-
-Use the saved path when the answer returns one, for the Mandate result and for the people result
-when it succeeded. When an answer comes back without a saved path, write it to its own file in the
-outputs directory with `Write`, exactly as it came back.
-
-When you cannot write an answer to its file exactly as it came back, for example because it has no
-saved path and its rows still carry logos, so it is cut, never rebuild it from memory. For the Mandate
-answer, stop. Tell the user the tracker could not be built because the CRM answer is too large to
-save. For the people answer, drop the people view as the people rules say.
-
-- **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, or an
-  unknown-tool error on the single call. Build and publish nothing. Tell the user adviser
-  tracking is not turned on for the organization, and stop.
 - **Any other error.** In the Mandate run, except for a `crm:get_adviser_tracker_relationships`
   or `crm:get_adviser_tracker_details` call, stop. Tell the user the adviser
   tracker could not be loaded right now. Never fill a gap from `search_deals`,
@@ -188,8 +217,8 @@ crm_read_tool({ "name": "crm:get_adviser_tracker_logos", "arguments": { "banks":
 
 ## Step 2: Check the banks
 
-The check stays on the Mandate view. Send its call in the same message as the fan-out of Step 1, so
-it costs no turn. Do not retry it. When it fails, skip the check.
+The check stays on the Mandate view. Send its call in the same message as the build start, or as
+the fan-out of the split run, so it costs no turn. Do not retry it. When it fails, skip the check.
 
 It counts the deals created this year for every bank at once, with `crm:aggregate_deals`. Pass
 `group_by` as the bank field id in an array. Pass one filter: the deal created-date field `between`
@@ -200,8 +229,9 @@ out: every group already carries a `count`. Make no other check call: fees come 
 crm_read_tool({ "name": "crm:aggregate_deals", "arguments": { "group_by": ["<bank field id>"], "filters": [ { "field_id": "createdAt", "operator": "between", "value": ["<YYYY>-01-01", "<today YYYY-MM-DD>"] } ] } })
 ```
 
-Compare each group's `count` with the sum of that bank's `dealsByMonth` counts for the current year
-in the Mandate result. Compare by bank name. When a bank is not in the CRM answer, or the counts
+Compare each group's `count` with the sum of that bank's counts for the current year in the Mandate
+view: its `dealsByMonth` counts for the year in a split result, the last 12 numbers of its
+`monthCounts` in a build answer. Compare by bank name. When a bank is not in the CRM answer, or the counts
 differ, write one plain line that names up to three banks with the largest gap and says what the
 CRM shows for each. Step 4 carries it in the notice.
 
@@ -216,6 +246,12 @@ the tiers of the current year and say so. Do not choose, change or override the 
 
 ```
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --people-result <people file> --logos <logos file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
+```
+
+After a build, pass the saved build answer alone, in place of `--result`, `--people-result` and `--logos`:
+
+```
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --build <build file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
 ```
 
 The notice belongs to the Mandate view. The script gives the introducer and adviser view its own fixed line that says banks are counted from the introducers and advisers on each deal.
@@ -238,7 +274,7 @@ because of them.
 
 The script exits with a typed code when the input is wrong (`result_not_json`, `result_empty`,
 `result_invalid`, `result_corrupt`, `row_invalid`, `not_configured`, `no_result`,
-`template_invalid`). A `result_corrupt` means a file differs from the tool answer.
+`build_not_done`, `template_invalid`). A `result_corrupt` means a file differs from the tool answer.
 Write that file again from the answer, exactly as it came back, and build one more time. Any other
 code, or a second `result_corrupt`: tell the user the tracker could not be built and stop. Do not
 repair the data by hand. A logos file the script cannot use (`logos_invalid`) is left out with a line on stderr, and

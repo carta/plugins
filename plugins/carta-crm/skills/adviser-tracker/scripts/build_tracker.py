@@ -237,8 +237,7 @@ def build_data(payload: object, as_of: dt.date, notice: str | None) -> dict:
     if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
         raise fail("result_invalid", "the result has no `rows` list")
     window = payload.get("window")
-    if not (isinstance(window, dict) and all(isinstance(window.get(k), int) for k in ("from", "to")) and window["from"] <= window["to"]):
-        raise fail("result_invalid", "`window` must carry integer `from` and `to`")
+    window_months(window)
     rows = [clean_row(r, i) for i, r in enumerate(payload["rows"])]
     checksum = payload.get("checksum")
     if isinstance(checksum, str) and checksum != tracker_checksum(rows):
@@ -320,7 +319,16 @@ def drop_logos(data: dict, detail: str) -> dict:
 def apply_logos(data: dict, logos_raw: str) -> dict:
     """`data`, and each of its views, with the logos of the logos answer. An unusable answer leaves empty tiles."""
     try:
-        tenant_logo, by_domain = _logo_map(parse_result(logos_raw))
+        answer = parse_result(logos_raw)
+    except SystemExit as exc:
+        return drop_logos(data, str(exc))
+    return apply_logo_answer(data, answer)
+
+
+def apply_logo_answer(data: dict, answer: object) -> dict:
+    """`data`, and each of its views, with the logos of a parsed logos answer. An unusable answer leaves empty tiles."""
+    try:
+        tenant_logo, by_domain = _logo_map(answer)
     except SystemExit as exc:
         return drop_logos(data, str(exc))
     out = with_logos(data, tenant_logo, by_domain)
@@ -348,7 +356,16 @@ def with_people_view(data: dict, people_raw: str, as_of: dt.date) -> dict:
     main window is dropped. The Mandate page is still built.
     """
     try:
-        people = build_data(parse_result(people_raw), as_of, PEOPLE_NOTICE)
+        payload = parse_result(people_raw)
+    except SystemExit as exc:
+        return drop_people_view(data, str(exc))
+    return with_people_payload(data, payload, as_of)
+
+
+def with_people_payload(data: dict, payload: object, as_of: dt.date) -> dict:
+    """`with_people_view` for a people result that is already parsed."""
+    try:
+        people = build_data(payload, as_of, PEOPLE_NOTICE)
     except SystemExit as exc:
         return drop_people_view(data, str(exc))
     if not people["rows"]:
@@ -356,6 +373,51 @@ def with_people_view(data: dict, people_raw: str, as_of: dt.date) -> dict:
     if people["window"] != data["window"]:
         return drop_people_view(data, "its years differ")
     return {**data, "views": [{"key": key, "label": label, **view} for (key, label), view in zip((MANDATE_VIEW, PEOPLE_VIEW), (data, people))]}
+
+
+def window_months(window: object) -> list[str]:
+    """Every `YYYY-MM` of a `{from, to}` window of whole years, oldest first, as crm-api counts them."""
+    if not (isinstance(window, dict) and all(isinstance(window.get(k), int) for k in ("from", "to")) and window["from"] <= window["to"]):
+        raise fail("result_invalid", "`window` must carry integer `from` and `to`")
+    return [f"{year}-{month:02d}" for year in range(window["from"], window["to"] + 1) for month in range(1, 13)]
+
+
+def expand_build_view(view: object, tenant: object, title: object) -> dict:
+    """One view of a build answer in the result's own shape: each row's `monthCounts` become `dealsByMonth`."""
+    if not isinstance(view, dict) or not isinstance(view.get("rows"), list):
+        raise fail("result_invalid", "the build view has no `rows` list")
+    months = window_months(view.get("window"))
+    rows = []
+    for index, row in enumerate(view["rows"]):
+        counts = row.get("monthCounts") if isinstance(row, dict) else None
+        if not isinstance(counts, list) or len(counts) != len(months):
+            raise fail("row_invalid", f"rows[{index}].monthCounts must hold one count per month of the window")
+        rows.append({**{k: v for k, v in row.items() if k != "monthCounts"},
+                     "dealsByMonth": [{"month": month, "count": count} for month, count in zip(months, counts)]})
+    return {"tenant": tenant, "title": title, "window": view["window"], "rows": rows, "checksum": view.get("checksum")}
+
+
+def build_from_answer(raw: str, as_of: dt.date, notice: str | None) -> dict:
+    """The page data of a finished build answer: the Mandate view, the people view unless it failed, and the logos."""
+    answer = parse_result(raw)
+    if not isinstance(answer, dict) or answer.get("status") != "done":
+        status = answer.get("status") if isinstance(answer, dict) else None
+        raise fail("build_not_done", f"the build answer has status {status!r}, not 'done'")
+    tenant, title = answer.get("tenant"), answer.get("title")
+    data = build_data(expand_build_view(answer.get("mandate"), tenant, title), as_of, notice)
+    people = answer.get("people")
+    if isinstance(people, dict) and "error" in people:
+        data = drop_people_view(data, str(people["error"]))
+    elif people is not None:
+        try:
+            data = with_people_payload(data, expand_build_view(people, tenant, title), as_of)
+        except SystemExit as exc:
+            data = drop_people_view(data, str(exc))
+    else:
+        data = drop_people_view(data, "the build answer has no people view")
+    if answer.get("logos") is not None:
+        data = apply_logo_answer(data, answer["logos"])
+    return data
 
 
 def add_notice(data: dict, line: str) -> dict:
@@ -372,18 +434,10 @@ def render(data: dict) -> str:
     return page.replace(TITLE_SLOT, f"<title>{html.escape(title)}</title>")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--result", type=Path, help="the saved adviser tracker result")
-    parser.add_argument("--people-result", type=Path, help="the saved result of the introducer and adviser call, for a second view")
-    parser.add_argument("--logos", type=Path, help="the saved answer of the logos call, for banks whose result carries no logo")
-    parser.add_argument("--notice", help="one line shown above the table, such as a check that disagreed")
-    parser.add_argument("--as-of", type=dt.date.fromisoformat, default=dt.date.today(), help="the date the data is as of (default today)")
-    parser.add_argument("--out", type=Path, required=True)
-    args = parser.parse_args(argv)
-
+def build_from_files(args: argparse.Namespace) -> dict:
+    """The page data of a split run's saved result, people result and logos answer."""
     if not args.result:
-        raise fail("no_result", "pass --result")
+        raise fail("no_result", "pass --build or --result")
     data = build_data(parse_result(args.result.read_text(encoding="utf-8")), args.as_of, args.notice)
     if args.people_result:
         try:
@@ -397,6 +451,26 @@ def main(argv: list[str] | None = None) -> int:
             data = apply_logos(data, args.logos.read_text(encoding="utf-8"))
         except OSError as exc:
             data = drop_logos(data, str(exc.strerror))
+    return data
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--build", type=Path, help="the saved answer of a finished build, which holds both views and the logos")
+    parser.add_argument("--result", type=Path, help="the saved adviser tracker result")
+    parser.add_argument("--people-result", type=Path, help="the saved result of the introducer and adviser call, for a second view")
+    parser.add_argument("--logos", type=Path, help="the saved answer of the logos call, for banks whose result carries no logo")
+    parser.add_argument("--notice", help="one line shown above the table, such as a check that disagreed")
+    parser.add_argument("--as-of", type=dt.date.fromisoformat, default=dt.date.today(), help="the date the data is as of (default today)")
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args(argv)
+
+    if args.build:
+        if args.result or args.people_result or args.logos:
+            raise fail("no_result", "pass --build alone, or --result with its optional files")
+        data = build_from_answer(args.build.read_text(encoding="utf-8"), args.as_of, args.notice)
+    else:
+        data = build_from_files(args)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(data), encoding="utf-8")
     for line in check_rows(data):
