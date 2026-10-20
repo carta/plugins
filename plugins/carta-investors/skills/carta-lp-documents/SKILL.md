@@ -41,7 +41,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.94.0</carta-plugin>
+<carta-plugin>carta-investors:6.94.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -357,7 +357,7 @@ All 4 endpoints return the same document shape:
   "investment_type": "fund",
   "firm_name": "Harborview Partners",
   "portfolio_name": "Personal",
-  "document_date": "03/31/2025",
+  "document_date": "12/31/2024",
   "download_url": "https://…"
 }
 ```
@@ -390,8 +390,8 @@ Example:
 
 | Type | Fund | Document | Firm | Date |
 |---|---|---|---|---|
-| K-1 (Tax Year 2024) | Harborview Growth Fund II | [2024 K-1 Schedule](https://…) | Harborview Partners | Mar 20, 2025 |
-| K-1 (Tax Year 2024) | Pinecrest Growth Fund I | 🔒 Locked — Tax Form K-1 | Pinecrest Capital | Mar 18, 2025 |
+| K-1 (Tax Year 2024) | Harborview Growth Fund II | [2024 K-1 Schedule](https://…) | Harborview Partners | Dec 31, 2024 |
+| K-1 (Tax Year 2024) | Pinecrest Growth Fund I | 🔒 Locked — Tax Form K-1 | Pinecrest Capital | Dec 31, 2024 |
 
 Below the table, one line per fund with locked rows:
 
@@ -465,7 +465,7 @@ The zip includes every document from the result, not just one page of the artifa
 
 Default format — **flat, no folder**: `{quarter} {year} {fund_name} {doc_name_or_type}.pdf`, e.g. `Q1 2025 Harborview Growth Fund II Capital Call Notice.pdf`.
 
-`{fund_name}` = `investment_name`; `{year}` = the year of `document_date`; `{quarter}` from its month (Jan–Mar = Q1, …); `{tax_year}` for K-1s from `document_name` or `document_date` year − 1.
+`{fund_name}` = `investment_name`; `{year}` = the year of `document_date`; `{quarter}` from its month (Jan–Mar = Q1, …); `{tax_year}` for K-1s: a `Tax - Schedule K-1` is always dated Dec 31 of its tax year, so it is the year of `document_date`. A K-1 stored as `Tax` has no such date rule: take the year from `document_name`, else `document_date` year − 1, since it is dated when it was sent, early the next year.
 
 | Document type | Filename |
 |---|---|
@@ -606,9 +606,9 @@ Here's what comes back:
 >
 > | # | Investment | Firm | Tax Year | Date | Download |
 > |---|---|---|---|---|---|
-> | 1 | Pinecrest Growth Fund II | Pinecrest Capital | 2023 | Mar 15, 2024 | [Download](#) |
-> | 2 | Pinecrest Growth Fund I | Pinecrest Capital | 2023 | Mar 12, 2024 | [Download](#) |
-> | 3 | Oakwood Ventures Fund III | Oakwood Capital | 2023 | Apr 2, 2024 | [Download](#) |
+> | 1 | Pinecrest Growth Fund II | Pinecrest Capital | 2023 | Dec 31, 2023 | [Download](#) |
+> | 2 | Pinecrest Growth Fund I | Pinecrest Capital | 2023 | Dec 31, 2023 | [Download](#) |
+> | 3 | Oakwood Ventures Fund III | Oakwood Capital | 2023 | Dec 31, 2023 | [Download](#) |
 >
 > K-1s on file for: **2019, 2020, 2021, 2022, 2023**
 >
