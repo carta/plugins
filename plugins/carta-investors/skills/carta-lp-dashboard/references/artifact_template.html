@@ -303,13 +303,14 @@
     /* ── Fund performance by quarter ── */
     .movers-title { font-size: 15px; font-weight: 600; }
     .movers-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-    .quarter-picker {
+    .quarter-picker, .portfolio-picker {
       font-family: inherit; font-size: 12px; color: var(--black);
       background: var(--white); border: 1px solid var(--gray-20);
       border-radius: 4px; padding: 6px 10px; cursor: pointer;
       min-width: 140px;
     }
-    .quarter-picker:disabled { background: var(--gray-10); color: var(--gray-40); cursor: not-allowed; }
+    .portfolio-picker { margin-top: 8px; max-width: 320px; }
+    .quarter-picker:disabled, .portfolio-picker:disabled { background: var(--gray-10); color: var(--gray-40); cursor: not-allowed; }
     .movers-loading {
       padding: 24px 0; text-align: center; font-size: 12px; color: var(--gray-40);
     }
@@ -398,6 +399,7 @@
         <div class="header-identity">
           <div class="header-welcome">Welcome back,</div>
           <div class="header-name" id="lp-name">—</div>
+          <select class="portfolio-picker" id="portfolio-picker" aria-label="Portfolio" style="display:none" onchange="onPortfolioPickerChange()"></select>
           <div class="ccy-chip" id="ccy-chip" style="display:none"></div>
         </div>
         <div class="header-logo-box">
@@ -707,6 +709,7 @@ let dataBusy = false;
 function setDataBusy(busy) {
   dataBusy = busy;
   document.getElementById('quarter-picker').disabled = busy;
+  document.getElementById('portfolio-picker').disabled = busy;
   Array.from(document.getElementById('ccy-select').children).forEach(b => { b.disabled = busy; });
 }
 // Dates and plain numbers follow the viewer's own locale (`undefined`), never a fixed one.
@@ -1213,7 +1216,7 @@ async function onQuarterPickerChange(){
   setDataBusy(true);
   setSectionLoading('section-fund-movers', true);
   try {
-    const params = { portfolio_id: PORTFOLIO_ID, quarter_start: startISO, ...currencyParam() };
+    const params = { portfolio_id: portfolioId, quarter_start: startISO, ...currencyParam() };
     const q = await fetchCmd(QUARTERLY_CMD, params);
     currentData.quarterly = q;
     noteTruncation(q, 'funds');
@@ -1241,6 +1244,9 @@ const SUMMARY_CMD     = 'lp_portfolio:get:summary';
 const TIMESERIES_CMD  = 'lp_portfolio:get:timeseries';
 const QUARTERLY_CMD   = 'lp_portfolio:get:quarterly';
 const PORTFOLIO_ID    = __PORTFOLIO_ID__;
+const LOOKUP_CMD      = 'lp_portfolio:lookup:portfolio';
+// The portfolio on screen: the one the skill opened, until the viewer picks another.
+let portfolioId = PORTFOLIO_ID;
 
 let currentData = { summary: null, timeseries: null, quarterly: null };
 
@@ -1492,7 +1498,7 @@ async function loadCurrencyData(){
   setSectionsLoading([...CHART_SECTIONS, 'section-fund-movers'], true);
   try {
     try {
-      const ts = await fetchCmd(TIMESERIES_CMD, { portfolio_id: PORTFOLIO_ID, ...currencyParam() });
+      const ts = await fetchCmd(TIMESERIES_CMD, { portfolio_id: portfolioId, ...currencyParam() });
       currentData.timeseries = ts;
       noteTruncation(ts, 'months');
       try { renderCharts({ timeseries: ts }); } catch(e) { debugLog('renderCharts threw', e); }
@@ -1508,7 +1514,7 @@ async function loadCurrencyData(){
     try {
       const latest = latestDataQuarter();
       const latestParam = latest ? { quarter_start: latest.startISO } : {};
-      const q = await fetchCmd(QUARTERLY_CMD, { portfolio_id: PORTFOLIO_ID, ...latestParam, ...currencyParam() });
+      const q = await fetchCmd(QUARTERLY_CMD, { portfolio_id: portfolioId, ...latestParam, ...currencyParam() });
       currentData.quarterly = q;
       noteTruncation(q, 'funds');
       try { initQuarterPicker((q && q.current_quarter && q.current_quarter.label) || (latest && latest.label)); } catch(e) { debugLog('initQuarterPicker threw', e); }
@@ -1528,9 +1534,12 @@ async function loadCurrencyData(){
   }
 }
 
-async function loadByPortfolioId(portfolioId){
+async function loadPortfolio(){
   showLoading('Loading summary…');
   document.getElementById('error-screen').style.display = 'none';
+  // A truncation note describes one portfolio's response; the next one adds its own.
+  const staleNote = document.getElementById('dashboard').querySelector('.truncation-banner');
+  if (staleNote) staleNote.remove();
   try {
     const summary = await fetchCmd(SUMMARY_CMD, { portfolio_id: portfolioId });
     currentData.summary = summary;
@@ -1544,10 +1553,46 @@ async function loadByPortfolioId(portfolioId){
     try { renderFunds(summary); } catch(e) { debugLog('renderFunds threw', e); }
     setSectionsLoading(['section-cap', 'section-funds'], false);
     await loadCurrencyData();
+    return true;
   } catch (err) {
     console.error('LP Dashboard summary load error:', err);
     showError(describeFailure(err));
+    return false;
   }
+}
+
+// Lists the login's portfolios so the viewer can switch in place. One portfolio, or a
+// lookup that fails, leaves no switcher: the page keeps the portfolio it opened on.
+async function initPortfolioPicker(){
+  const picker = document.getElementById('portfolio-picker');
+  let candidates = [];
+  try {
+    const found = await fetchCmd(LOOKUP_CMD, {});
+    candidates = (found && Array.isArray(found.candidates)) ? found.candidates : [];
+  } catch (err) {
+    debugLog('portfolio lookup failed', err);
+  }
+  if (!candidates.some(c => c.portfolio_id === portfolioId) || candidates.length < 2) {
+    picker.style.display = 'none';
+    return;
+  }
+  picker.innerHTML = candidates.map(c =>
+    '<option value="' + esc(c.portfolio_id) + '">' + esc(c.partner_name || '—') + ' (' + COUNT_FMT.format(c.fund_count || 0) + ' funds)</option>'
+  ).join('');
+  picker.value = portfolioId;
+  picker.style.display = '';
+}
+
+async function onPortfolioPickerChange(){
+  const picked = document.getElementById('portfolio-picker').value;
+  if (dataBusy || !picked || picked === portfolioId) return;
+  // A portfolio that fails to load is not kept: Retry goes back to the one that worked.
+  const previous = portfolioId;
+  portfolioId = picked;
+  setDataBusy(true);
+  try {
+    if (!(await loadPortfolio())) portfolioId = previous;
+  } finally { setDataBusy(false); }
 }
 
 async function loadData(){
@@ -1556,7 +1601,7 @@ async function loadData(){
   showLoading('Connecting to Carta…');
   try {
     await callTool(WELCOME_TOOL, { _instrumentation_v2: INSTRUMENTATION_V2 });
-    await loadByPortfolioId(PORTFOLIO_ID);
+    if (await loadPortfolio()) await initPortfolioPicker();
   } catch (err) {
     console.error('LP Dashboard load error:', err);
     showError(describeFailure(err));

@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.93.0</carta-plugin>
+<carta-plugin>carta-investors:6.94.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -165,4 +165,4 @@ The title must match the page's own `<title>`, which always wins in the gallery 
 
 ### 5. Respond to the user
 
-Give the user the URL and say the dashboard loads fresh data from Carta each time it's opened. Keep it brief.
+Give the user the URL and say the dashboard loads fresh data from Carta each time it's opened. When the login holds several portfolios, say they can switch between them on the page. Keep it brief.
