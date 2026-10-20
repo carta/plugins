@@ -350,16 +350,16 @@
       "limit": 3000,
       "format": "ndjson",
       "sql": [
-        "SELECT investment_name, round, post_money_valuation, COALESCE(closing_date, raised_date) AS round_date, corporation_id",
+        "SELECT investment_name, round, shareclass_name, post_money_valuation, COALESCE(closing_date, raised_date) AS round_date, corporation_id",
         "FROM FUND_ADMIN.FINANCING_HISTORY",
-        "WHERE corporation_id IN {corp_scope}",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST)=1"
+        "WHERE corporation_id IN {corp_scope} AND post_money_valuation > 0",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST, post_money_valuation DESC)=1"
       ],
       "wide": [
         "SELECT *, COALESCE(closing_date, raised_date) AS round_date",
         "FROM FUND_ADMIN.FINANCING_HISTORY",
-        "WHERE corporation_id IN {corp_scope}",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST)=1"
+        "WHERE corporation_id IN {corp_scope} AND post_money_valuation > 0",
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST, post_money_valuation DESC)=1"
       ]
     },
     "captable": {

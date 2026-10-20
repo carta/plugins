@@ -301,8 +301,10 @@ firm — too long for one call, so it has to be hand-chunked, and each chunk cos
 same corporation set the ownership stem does.
 → `corporation_id` is joined directly to the company that resolved to that `corpUuid` via the entity_link
 bridge (`CORPORATION_BASIC_INFO_V2`, §16, no name matching) and written to
-`portfolio.companies[].lastRound = {round, postMoney, date}`. Shown in the Companies expand as context for
-repricing. Only Carta-customer portcos (those with a resolved `corpUuid`) have rounds here, so coverage is
+`portfolio.companies[].lastRound = {round, name, postMoney, date}` (`name` is the share class, e.g. "Series B
+Preferred"). The latest round is the newest share class with a post-money above 0; a same-day tie takes the
+highest post-money, so a SAFE row or a sibling class closing the same day never displaces the priced round.
+Shown in the Companies expand as context for repricing. Only Carta-customer portcos (those with a resolved `corpUuid`) have rounds here, so coverage is
 partial.
 
 ## 12. Fund metrics actuals → `AGGREGATE_FUND_METRICS`

@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.99.5</carta-plugin>
+<carta-plugin>carta-investors:6.100.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -205,8 +205,8 @@ Output it as written — do not reword, expand, or add a feature list:
 > straightforward — reach out to your Carta account team or
 > [request a demo →](https://carta.com/demo/portfolio-valuations/?&utm_medium=product&utm_source=claude&utm_campaign=valuations-plugin-inq-ww-q3-26).
 >
-> In the meantime, I can help with fund performance data, NAV, TVPI, LP
-> documents, or anything else in your current plan.
+> In the meantime, I can help with fund performance data, NAV, TVPI,
+> or anything else in your current plan.
 >
 > Request a demo:
 > https://carta.com/demo/portfolio-valuations/?&utm_medium=product&utm_source=claude&utm_campaign=valuations-plugin-inq-ww-q3-26
@@ -224,9 +224,9 @@ Then stop. Do not present the dashboard-or-company fork, and do not attempt
 any further `portfolio_valuations` call this session.
 
 The closing line is an offer, so honour it if the user takes it up: fund
-performance, NAV and TVPI go to `carta-explore-data`; LP documents to
-`carta-lp-documents`. Those domains are gated separately and generally do
-work for a caller without valuations. Route on request — don't
+performance, NAV and TVPI go to `carta-explore-data`. That domain is gated
+separately and generally does work for a caller without valuations. Route on
+request — don't
 pre-emptively start one.
 
 ## End Goal

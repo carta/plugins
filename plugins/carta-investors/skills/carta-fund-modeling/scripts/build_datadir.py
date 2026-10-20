@@ -726,8 +726,9 @@ def build(rawdir, out, meta):
         cid = col(r, "corporation_id", "corp_id")
         pm = numn(col(r, "post_money_valuation"))
         if cid and pm:
-            fin_by_corp[cid] = {"round": col(r, "round"), "postMoney": round(pm, 2),
-                                 "date": col(r, "round_date", "closing_date", "raised_date")}
+            fin_by_corp[cid] = {"round": col(r, "round"), "name": col(r, "shareclass_name") or None,
+                                "postMoney": round(pm, 2),
+                                "date": col(r, "round_date", "closing_date", "raised_date")}
 
     # ---- corp bridge: entity_link_id -> CORPORATION_UUID (§16 CORPORATION_BASIC_INFO_V2) ----
     # Optional: a firm whose portcos aren't Carta cap-table customers has no rows
@@ -1576,7 +1577,7 @@ STEM_CONTRACT = [
     ("fee_schedules", False,  ["fund_uuid", "fee_rate", "calculation_base"]),
     ("expense_ledger", False, ["fund_uuid", "account_name", "year", "amount"]),
     ("ops_benchmarks", False, ["vintage_year", "fund_aum_bucket", "net_perc_mgmt_fees_to_fundsize_50th"]),
-    ("financing",     "file", ["corporation_id", "post_money_valuation"]),
+    ("financing",     "file", ["corporation_id", "post_money_valuation", "shareclass_name"]),
     ("ownership",     "file", ["corporation_id", "percentage"]),
     ("fund_metrics",  "file", ["fund_uuid", "fund_reporting_currency"]),
     # captable / corporations: attempt-required ("file"), like gp_partners/gp_carry/

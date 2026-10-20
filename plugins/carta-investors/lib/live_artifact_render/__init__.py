@@ -1,6 +1,7 @@
 """Shared validation/escaping helpers for Live Artifact render-artifact.py scripts."""
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import sys
@@ -35,6 +36,16 @@ def js_safe_json(obj) -> str:
         .replace("&", "\\u0026")
         .replace("'", "\\u0027")
     )
+
+
+# Where the LP Documents template takes the config lp_docs_config builds.
+LP_DOCS_CONFIG_PLACEHOLDER = "__LP_DOCS_CONFIG__"
+
+
+def lp_docs_config(server: str, title: str) -> dict:
+    """The LP Documents page's config block, for its own page and for the LP Dashboard's
+    Documents tab alike."""
+    return {"server": server, "title": title, "generated": datetime.date.today().isoformat()}
 
 
 def check_path_under_cwd(p: Path, label: str):
