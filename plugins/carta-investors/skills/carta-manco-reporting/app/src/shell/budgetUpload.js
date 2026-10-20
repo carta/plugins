@@ -55,5 +55,8 @@ export function describeUpload(upload) {
   if (upload.status === "currency_mismatch") {
     return { warn: true, text: `Uploaded budget not shown: it is in ${upload.currency}, this firm reports in ${upload.snapshotCurrency}.` };
   }
+  if (upload.status === "all_hidden") {
+    return { warn: true, text: "Uploaded budget not shown: you have hidden all of its reports." };
+  }
   return { warn: false, text: `Workbook budget${upload.workbook ? ` (${upload.workbook})` : ""}, uploaded ${when}${who}. Variance chart as of ${upload.asOf}.` };
 }
