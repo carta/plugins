@@ -4298,6 +4298,46 @@ def backfill_fund_match_from_roster(rows, fund_names):
 _RENAMED_ROW_FIELDS = {"by_dept": "by_column", "formula_by_dept": "formula_by_column"}
 
 
+def snapshot_budget_entry(b, as_of_month):
+    """One resolved budget `b` (read_excel_budget()'s or read_budgets()'s output), in the
+    shape snapshot.json's budget.budgets[] carries it: the scalars the Budget vs Actuals
+    sub-nav and its charts read, plus every view it structurally supports beyond its own
+    native one (budget_view_fields)."""
+    return {
+        "id":            b.get("id") or "primary",
+        "label":         b.get("label") or "Budget",
+        # Report state for the app: editable, shared, read-only (see report_store.py).
+        "report":        b.get("report"),
+        "source":        b.get("source"),
+        "income":        {"annual": b["income_annual"],   "ytd": b["income_ytd"]},
+        "expenses":      {"annual": b["expenses_annual"], "ytd": b["expenses_ytd"]},
+        "net":           {"annual": b["income_annual"] - b["expenses_annual"],
+                          "ytd":    b["income_ytd"]    - b["expenses_ytd"]},
+        "by_tag_value": b.get("by_tag_value"),
+        "workbook_meta": b.get("workbook_meta"),
+        "period_kind":   b.get("period_kind"),
+        "period_granularity": b.get("period_granularity"),
+        "period_year":   b.get("period_year"),
+        "period":        b.get("period"),
+        "view_kinds":    b.get("view_kinds") or ["by-tag-crosstab"],
+        # rows[] carries the raw adapter output — needed for the
+        # by-quarter and by-line-item views, which read monthly[12]
+        # (and, for outline budgets, the section/subtotal
+        # structure) directly. by_tag_value (above) is the
+        # pre-aggregated shape the crosstab view uses.
+        "rows":          b.get("rows") or [],
+        # Outline budgets carry value_aliases at the budget level
+        # (crosstab budgets carry the same info per by_tag_value
+        # entry as carta_tags).
+        "value_aliases":  b.get("value_aliases") or {},
+        # Every view this budget's data structurally supports,
+        # beyond view_kinds[0] above; views[view_kinds[0]] always
+        # equals rows/by_tag_value above.
+        **dict(zip(("available_view_kinds", "views"),
+                   budget_view_fields(b, as_of_month))),
+    }
+
+
 def budget_view_fields(b, as_of_month):
     """(available_view_kinds, views) for one resolved budget entry `b`.
 
@@ -5557,39 +5597,7 @@ def build(args):
             # snapshot.budget above stays populated with the primary (first)
             # for backwards compat with Dashboard-page charts that read
             # scalar income/expenses/net without knowing about multi-budget.
-            "budgets":       [{
-                "id":            b.get("id") or "primary",
-                "label":         b.get("label") or "Budget",
-                # Report state for the app: editable, shared, read-only (see report_store.py).
-                "report":        b.get("report"),
-                "source":        b.get("source"),
-                "income":        {"annual": b["income_annual"],   "ytd": b["income_ytd"]},
-                "expenses":      {"annual": b["expenses_annual"], "ytd": b["expenses_ytd"]},
-                "net":           {"annual": b["income_annual"] - b["expenses_annual"],
-                                  "ytd":    b["income_ytd"]    - b["expenses_ytd"]},
-                "by_tag_value": b.get("by_tag_value"),
-                "workbook_meta": b.get("workbook_meta"),
-                "period_kind":   b.get("period_kind"),
-                "period_granularity": b.get("period_granularity"),
-                "period_year":   b.get("period_year"),
-                "period":        b.get("period"),
-                "view_kinds":    b.get("view_kinds") or ["by-tag-crosstab"],
-                # rows[] carries the raw adapter output — needed for the
-                # by-quarter and by-line-item views, which read monthly[12]
-                # (and, for outline budgets, the section/subtotal
-                # structure) directly. by_tag_value (above) is the
-                # pre-aggregated shape the crosstab view uses.
-                "rows":          b.get("rows") or [],
-                # Outline budgets carry value_aliases at the budget level
-                # (crosstab budgets carry the same info per by_tag_value
-                # entry as carta_tags).
-                "value_aliases":  b.get("value_aliases") or {},
-                # Every view this budget's data structurally supports,
-                # beyond view_kinds[0] above; views[view_kinds[0]] always
-                # equals rows/by_tag_value above.
-                **dict(zip(("available_view_kinds", "views"),
-                           budget_view_fields(b, as_of_month))),
-            } for b in selectable_budgets],
+            "budgets":       [snapshot_budget_entry(b, as_of_month) for b in selectable_budgets],
         },
     }
 
