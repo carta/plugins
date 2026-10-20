@@ -20,12 +20,12 @@
     "name": "Form ADV",
     "order": 10,
     "prompts": [
-      "What is our regulatory AUM"
+      "Prepare our Form ADV: Regulatory AUM and Schedule D by fund"
     ]
   },
   "carta-consolidating-financial-reports": {
     "category": "fund-accounting",
-    "name": "Consolidating financial reports",
+    "name": "Consolidated financial reports",
     "order": 10,
     "prompts": [
       "Show me my firm's balance sheet as of this month",

@@ -1249,8 +1249,8 @@ const CAP_STATIC_PAD = [
     topics: ["balance sheet"],
   },
   {
-    text: "What is our regulatory AUM",
-    topics: ["regulatory aum", "aum", "assets under management"],
+    text: "Prepare our Form ADV: Regulatory AUM and Schedule D by fund",
+    topics: ["form adv", "regulatory aum", "aum", "assets under management"],
   },
   {
     text: "Compare YTD actuals against the budget",
