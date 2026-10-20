@@ -141,8 +141,10 @@ def clean_relationship(raw: object, where: str) -> dict:
             "lastInteraction": last if isinstance(last, str) else None,
             "strength": cell["strength"],
         })
+    counts = {key: _count(raw[key], f"{where}.relationship.{key}") for key in ("interactions", "contacts") if key in raw}
     return {
         "strength": raw["strength"],
+        **counts,
         "topContact": None if top is None else {
             **_person(top, f"{where}.topContact"),
             "interactions": _count(top.get("interactions"), f"{where}.topContact.interactions"),
@@ -197,17 +199,25 @@ def tracker_checksum(rows: list[dict]) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def split_tiers(rows: list[dict], last_year: int) -> dict:
-    """Tier 1 is the top half of the banks, rounded up, by deals created over the whole window.
+def last_twelve_months(as_of: dt.date) -> set[str]:
+    """The month keys `YYYY-MM` of the 12 months that end with the month of `as_of`."""
+    index = as_of.year * 12 + as_of.month - 1
+    return {f"{(i // 12):04d}-{i % 12 + 1:02d}" for i in range(index - 11, index + 1)}
 
-    Ties go to the bank with more deals in `last_year`, then to the earlier name. The result does not depend
-    on the order of `rows`, and it does not change with the year the page shows.
+
+def split_tiers(rows: list[dict], as_of: dt.date) -> dict:
+    """Tier 1 is the top half of the banks, rounded up, by deals created in the last 12 months.
+
+    Ties go to the bank with more deals over the whole window, then to the earlier name. The result does not
+    depend on the order of `rows`, and it does not change with the year the page shows.
     """
+    recent = last_twelve_months(as_of)
+
     def rank(row: dict) -> tuple:
         months = row["dealsByMonth"]
         return (
+            -sum(m["count"] for m in months if m["month"] in recent),
             -sum(m["count"] for m in months),
-            -sum(m["count"] for m in months if m["month"].startswith(str(last_year))),
             row["adviser"]["name"].casefold(),
             row["adviser"]["domain"],
         )
@@ -236,9 +246,28 @@ def build_data(payload: object, as_of: dt.date, notice: str | None) -> dict:
         "window": {"from": window["from"], "to": window["to"]},
         "asOf": as_of.isoformat(),
         "notice": notice,
-        "tiers": split_tiers(rows, window["to"]),
+        "tiers": split_tiers(rows, as_of),
         "rows": rows,
     }
+
+
+# A bank with this many deals in the window and no interaction at all most likely has its domain wrong.
+SUSPECT_DEAL_FLOOR = 3
+
+
+def banks_without_interactions(data: dict) -> list[str]:
+    """One line per bank of any view that has deals but no interaction, for the agent to report to the user.
+
+    A result from an older tool carries no interaction count, so its banks are never listed.
+    """
+    views = data.get("views") or [data]
+    lines = []
+    for view in views:
+        for row in view["rows"]:
+            deals = sum(m["count"] for m in row["dealsByMonth"])
+            if row["relationship"].get("interactions") == 0 and deals >= SUSPECT_DEAL_FLOOR:
+                lines.append(f"{row['adviser']['name']} ({row['adviser']['domain']}): {deals} deals, no interactions")
+    return list(dict.fromkeys(lines))
 
 
 def json_for_script(data: dict) -> str:
@@ -357,6 +386,8 @@ def main(argv: list[str] | None = None) -> int:
             data = drop_logos(data, str(exc.strerror))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(data), encoding="utf-8")
+    for line in banks_without_interactions(data):
+        print(f"check_domain: {line}", file=sys.stderr)
     print(f"wrote {args.out}")
     return 0
 

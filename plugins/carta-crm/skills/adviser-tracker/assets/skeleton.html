@@ -4383,8 +4383,6 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   // Final quarter and total values of the table as drawn, keyed "domain|column".
   var shown = {};
 
-  // Deals created in the selected year grade the column: the first band whose minimum is met wins.
-  var VOLUME_BANDS = [{ min: 6, key: 'strong' }, { min: 3, key: 'moderate' }, { min: 0, key: 'weak' }];
   // Growth is only quoted for banks with at least this many deals in the earlier period.
   var MIN_BASE = 5;
   var CHOICES = 'A deal counts for a bank when the deal’s bank field (for example Mandate) names it, in the month the deal was created.';
@@ -4462,8 +4460,12 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     }
     return '<span class="' + c + ' blank"></span>';
   }
-  function volumeStrength(n) {
-    return VOLUME_BANDS.filter(function (b) { return n >= b.min; })[0].key;
+  // No label for a bank with no interaction. A result that carries no count shows the label alone.
+  function strengthCell(rel) {
+    if (rel.interactions === 0) return '<span class="grey">No interactions found</span>';
+    var basis = typeof rel.interactions === 'number'
+      ? '<div class="grey">' + rel.interactions + ' interactions' + (typeof rel.contacts === 'number' ? ', ' + rel.contacts + ' contacts' : '') + '</div>' : '';
+    return dot(rel.strength) + esc(STRENGTH[rel.strength]) + basis;
   }
   function dot(strength) { return '<span class="dot ' + esc(strength) + '"></span>'; }
   function niceMax(v) {
@@ -4641,11 +4643,11 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   function isPartialCol(col) { return state.year === cy && col === partialQ; }
   function dataRow(r, i, year) {
     var q = byQuarter(r, year), rel = r.relationship, tc = rel.topContact, d = r.adviser.domain;
-    var total = yearTotal(r, year), band = volumeStrength(total);
+    var total = yearTotal(r, year);
     return '<tr data-d="' + esc(d) + '"><td class="idx">' + i + '</td>' + bankCell(r) +
       q.map(function (n, c) { return numCell(d, c, n, ''); }).join('') +
       numCell(d, 4, total, 'total') +
-      '<td>' + dot(band) + esc(STRENGTH[band]) + '</td>' +
+      '<td>' + strengthCell(rel) + '</td>' +
       '<td>' + (tc ? '<div>' + esc(tc.name) + '</div><div class="grey">' + esc(tc.interactions) + ' interactions</div>' : '<span class="grey">No contact</span>') + '</td></tr>';
   }
   // Quarter and total cells count from the value shown before to the new one.
@@ -4666,10 +4668,10 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     }
     requestAnimationFrame(step);
   }
-  // Tier 1 is the top half of the banks by deals over the whole window, so the tiers do not follow the year.
+  // Tier 1 is the top half of the banks by deals in the last 12 months, so the tiers do not follow the year toggle.
   function tierRule() {
-    return 'Tier 1 is the top half of the banks by deals created over the ' + (data.window.to - data.window.from + 1) +
-      ' years, ties broken by deals in ' + data.window.to + ' and then by name: ' + data.tiers['1'].length + ' of ' + data.rows.length + '. Tier 2 is the rest.';
+    return 'Tier 1 is the top half of the banks by deals created in the 12 months to ' + MON[cm - 1] + ' ' + data.asOf.slice(0, 4) +
+      ', ties broken by deals over the ' + (data.window.to - data.window.from + 1) + ' years and then by name: ' + data.tiers['1'].length + ' of ' + data.rows.length + '. Tier 2 is the rest.';
   }
   function renderTable(year) {
     var toggle = '<div class="toggle" role="group" aria-label="Year">' + yearsOf(data).map(function (y) {
@@ -4678,7 +4680,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     var sub = 'Deals created per quarter of the selected year, per bank. ' + source() +
       ' Top contact is the person with the most emails and meetings with anyone on our team.';
     var how = choices() + ' The current quarter is partial and shows only the days so far. ' +
-      'Relationship strength is the deal volume of the selected year: Strong is ' + VOLUME_BANDS[0].min + ' or more deals, Moderate is ' + VOLUME_BANDS[1].min + ' to ' + (VOLUME_BANDS[0].min - 1) + ', Weak is fewer. ' +
+      'Relationship strength grades the closest pair of one person on our team and one contact at the bank, over all years. Recent emails and meetings count most. ' +
       (data.rows.length ? tierRule() + ' ' : '') +
       'Hover a row to highlight it.';
     var body;
