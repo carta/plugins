@@ -147,6 +147,17 @@ cash balance and budget calls via `mcp__<SERVER>__read_tool` as shown below — 
 also carries `_instrumentation_v2`. All go in **one assistant message** as parallel
 tool calls.
 
+**Every free-text column turns `|` into `/`.** The markdown result separates
+cells with ` | `, so a vendor, account or fund name that carries one shifts
+every cell after it on that line, and `build_manco_datadir.py` reads the wrong
+vendor type, partner and tags. On one firm, 158 journal lines had a `|` in the
+vendor name. Names, types, tags and descriptions go through
+`REPLACE(..., '|', '/')`; ids, dates, amounts and codes don't need it. A
+column added to these queries follows the same rule. The budget calls return
+JSON, but `build_manco_datadir.py` maps each budget's account name the same
+way, so it still matches the account Query A wrote. The hosted copies of these
+queries in `server/worker.js` fetch ndjson and keep the `|`.
+
 **Queries A–F below, plus cash balance and the budget calls, are the only
 `dwh__execute__query` / `fa__*` calls this skill ever issues.** Do not compose an
 ad-hoc query for a figure that looks like it should exist in the warehouse — a
@@ -164,15 +175,16 @@ query in the moment.
 
 ```sql
 SELECT JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid, EFFECTIVE_DATE AS date,
-       MONTH(EFFECTIVE_DATE) AS mo, ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
-       COALESCE(SUB_ACCOUNT_NAME, '') AS sub,
-       COALESCE(SUB_ACCOUNT_TYPE, '') AS sub_code, AMOUNT AS amt,
+       MONTH(EFFECTIVE_DATE) AS mo, REPLACE(ACCOUNT_NAME, '|', '/') AS account, ACCOUNT_TYPE AS acct_type,
+       REPLACE(COALESCE(SUB_ACCOUNT_NAME, ''), '|', '/') AS sub,
+       REPLACE(COALESCE(SUB_ACCOUNT_TYPE, ''), '|', '/') AS sub_code, AMOUNT AS amt,
        REPLACE(REPLACE(REPLACE(COALESCE(JOURNAL_ENTRY_DESCRIPTION, ''), CHR(13), ' '), CHR(10), ' '), '|', '/') AS descr,
-       COALESCE(VENDOR_NAME, '') AS vendor,
-       COALESCE(VENDOR_TYPE, '') AS vendor_type,
-       COALESCE(PARTNER_NAME, '') AS partner, COALESCE(EVENT_TYPE, '') AS event_type,
-       COALESCE(REPORTING_TAGS, '') AS tags,
-       COALESCE(TO_VARCHAR(REPORTING_TAGS_JSON), '') AS tags_json
+       REPLACE(COALESCE(VENDOR_NAME, ''), '|', '/') AS vendor,
+       REPLACE(COALESCE(VENDOR_TYPE, ''), '|', '/') AS vendor_type,
+       REPLACE(COALESCE(PARTNER_NAME, ''), '|', '/') AS partner,
+       REPLACE(COALESCE(EVENT_TYPE, ''), '|', '/') AS event_type,
+       REPLACE(COALESCE(REPORTING_TAGS, ''), '|', '/') AS tags,
+       REPLACE(COALESCE(TO_VARCHAR(REPORTING_TAGS_JSON), ''), '|', '/') AS tags_json
 FROM JOURNAL_ENTRIES
 WHERE FUND_UUID = '<MANCO_UUID>'
   AND YEAR(EFFECTIVE_DATE) = <YEAR>
@@ -229,17 +241,18 @@ lets a debit reduce the account, which is what the ledger means.
 
 ```sql
 SELECT JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
-       FUND_NAME AS fund, FUND_UUID AS fund_uuid,
+       REPLACE(FUND_NAME, '|', '/') AS fund, FUND_UUID AS fund_uuid,
        EFFECTIVE_DATE AS date, YEAR(EFFECTIVE_DATE) AS yr, MONTH(EFFECTIVE_DATE) AS mo,
-       ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
-       COALESCE(SUB_ACCOUNT_NAME, '') AS sub,
-       COALESCE(SUB_ACCOUNT_TYPE, '') AS sub_code, AMOUNT AS amt,
+       REPLACE(ACCOUNT_NAME, '|', '/') AS account, ACCOUNT_TYPE AS acct_type,
+       REPLACE(COALESCE(SUB_ACCOUNT_NAME, ''), '|', '/') AS sub,
+       REPLACE(COALESCE(SUB_ACCOUNT_TYPE, ''), '|', '/') AS sub_code, AMOUNT AS amt,
        REPLACE(REPLACE(REPLACE(COALESCE(JOURNAL_ENTRY_DESCRIPTION, ''), CHR(13), ' '), CHR(10), ' '), '|', '/') AS descr,
-       COALESCE(VENDOR_NAME, '') AS vendor,
-       COALESCE(VENDOR_TYPE, '') AS vendor_type,
-       COALESCE(PARTNER_NAME, '') AS partner, COALESCE(EVENT_TYPE, '') AS event_type,
-       COALESCE(REPORTING_TAGS, '') AS tags,
-       COALESCE(TO_VARCHAR(REPORTING_TAGS_JSON), '') AS tags_json
+       REPLACE(COALESCE(VENDOR_NAME, ''), '|', '/') AS vendor,
+       REPLACE(COALESCE(VENDOR_TYPE, ''), '|', '/') AS vendor_type,
+       REPLACE(COALESCE(PARTNER_NAME, ''), '|', '/') AS partner,
+       REPLACE(COALESCE(EVENT_TYPE, ''), '|', '/') AS event_type,
+       REPLACE(COALESCE(REPORTING_TAGS, ''), '|', '/') AS tags,
+       REPLACE(COALESCE(TO_VARCHAR(REPORTING_TAGS_JSON), ''), '|', '/') AS tags_json
 FROM JOURNAL_ENTRIES
 WHERE FIRM_ID = '<FIRM_UUID>'
   AND FUND_UUID != '<MANCO_UUID>'
@@ -297,7 +310,7 @@ like an account that doesn't exist, and its budget line becomes a question
 the operator has to answer about data Carta already holds.
 
 ```sql
-SELECT DISTINCT ACCOUNT_TYPE AS acct_type, ACCOUNT_NAME AS account
+SELECT DISTINCT ACCOUNT_TYPE AS acct_type, REPLACE(ACCOUNT_NAME, '|', '/') AS account
 FROM JOURNAL_ENTRIES
 WHERE FUND_UUID = '<MANCO_UUID>'
   AND ACCOUNT_NAME IS NOT NULL
@@ -317,8 +330,10 @@ schedule spans a fund's full life, and a period outside the reporting window
 is exactly the one a reader opens this table to check.
 
 ```sql
-SELECT fund_name AS fund, fund_id AS fund_uuid, period_name, fee_rate,
-       calculation_base, minimum_fee_amount, fixed_fee_amount, fee_currency,
+SELECT REPLACE(fund_name, '|', '/') AS fund, fund_id AS fund_uuid,
+       REPLACE(period_name, '|', '/') AS period_name, fee_rate,
+       REPLACE(calculation_base, '|', '/') AS calculation_base,
+       minimum_fee_amount, fixed_fee_amount, fee_currency,
        frequency, waived, start_date, end_date,
        period_order, uses_custom_calculation_base
 FROM FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES
@@ -352,9 +367,9 @@ trial balance this dashboard reports.
 ```sql
 SELECT JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
        EFFECTIVE_DATE AS date, YEAR(EFFECTIVE_DATE) AS yr, MONTH(EFFECTIVE_DATE) AS mo,
-       ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
+       REPLACE(ACCOUNT_NAME, '|', '/') AS account, ACCOUNT_TYPE AS acct_type,
        COALESCE(RELATED_ENTITY_ID, 0) AS related_entity_id,
-       -AMOUNT AS amt, COALESCE(EVENT_TYPE, '') AS event_type,
+       -AMOUNT AS amt, REPLACE(COALESCE(EVENT_TYPE, ''), '|', '/') AS event_type,
        REPLACE(REPLACE(REPLACE(COALESCE(JOURNAL_ENTRY_DESCRIPTION, ''), CHR(13), ' '), CHR(10), ' '), '|', '/') AS descr
 FROM JOURNAL_ENTRIES
 WHERE FIRM_ID = '<FIRM_UUID>'

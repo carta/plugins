@@ -230,7 +230,7 @@ wrong**, and both were verified against live data before this query was written:
 | Column | What the description says | What the data actually is |
 |---|---|---|
 | `FULLY_DILUTED` | "Fully diluted ownership percentage" | The **company total FD share count** (tens of millions) |
-| `PERCENTAGE` | "Ownership percentage (0-100)" | A **0–1 fraction**, and `TEXT` — must be cast |
+| `PERCENTAGE` | "Ownership percentage (0-100)" | A **0–1 fraction**; its type has been both `TEXT` and `NUMBER(38,20)`, so cast through `TO_VARCHAR` |
 
 Verified identity on every row: `PERCENTAGE = OWNERSHIP_QUANTITY / FULLY_DILUTED`. So
 `PERCENTAGE` is a **fully-diluted** ownership fraction; multiply by 100 only for display.
@@ -271,7 +271,7 @@ freshest per-fund snapshot and blanks a summed total that exceeds 100%.
 ```sql
 WITH own AS (
   SELECT CORPORATION_ID, FUND_ID, AS_OF_DATE, FULLY_DILUTED, OWNERSHIP_QUANTITY,
-         TRY_TO_NUMBER(PERCENTAGE, 38, 18) AS own_pct
+         TRY_TO_NUMBER(TO_VARCHAR(PERCENTAGE), 38, 18) AS own_pct
   FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP
   WHERE FUND_ID IN (SELECT DISTINCT fund_uuid FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
                     WHERE is_firm_rollup = FALSE AND entity_type_name NOT ILIKE '%SPV%')

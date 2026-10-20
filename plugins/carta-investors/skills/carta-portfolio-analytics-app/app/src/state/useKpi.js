@@ -29,7 +29,7 @@ export default function useKpi(firm) {
         if (!(res.headers.get("Content-Type") || "").includes("text/event-stream")) {
           const d = await res.json();
           if (!live) return;
-          if (!d || d.error) setError(d?.error || "not_ready");
+          if (!d || d.error) setError(d?.message || d?.error || "not_ready");
           else { setData(d); setTrackingFirm(d.source?.firmId); }
           return;
         }
@@ -60,7 +60,7 @@ export default function useKpi(firm) {
             } else if (msg.type === "error") {
               finished = true;
               setStep(null);
-              setError(msg.error || msg.message || "unknown");
+              setError(msg.message || msg.error || "unknown");
             }
           }
         }

@@ -7,7 +7,11 @@ Run this once, before any real work, in every skill that publishes an artifact.
 
 **PASS:** `Artifact` is in this session. Continue, and say nothing about having checked.
 
-**FAIL:** `Artifact` is absent. Stop immediately and tell the user:
+**Not loaded yet:** a session can list `Artifact` as a deferred tool, named but not callable
+until its schema is loaded. If `Artifact` isn't loaded and `ToolSearch` is available, load
+it with `ToolSearch` `select:Artifact`, once, and check again. Only then decide it is absent.
+
+**FAIL:** `Artifact` is still absent. Stop immediately and tell the user:
 
 > I can't publish this because this session has no `Artifact` tool. That usually means one
 > of two things:
@@ -24,7 +28,8 @@ Run this once, before any real work, in every skill that publishes an artifact.
 > `claude update` in the CLI), start a fresh session and ask me again.
 
 Do not offer a text or markdown fallback — the old `create_artifact` API is retired and
-there is no alternative publish path.
+there is no alternative publish path. The one exception is a skill whose own steps define
+a text answer for a missing `Artifact` tool: it follows those steps instead of stopping.
 
 ## Don't narrate this check
 

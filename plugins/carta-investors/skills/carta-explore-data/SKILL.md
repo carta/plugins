@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.101.0</carta-plugin>
+<carta-plugin>carta-investors:6.101.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -267,7 +267,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 | `HEADQUARTERS_CITY` / `HEADQUARTERS_STATE` / `HEADQUARTERS_COUNTRY` | `CITY` / `STATE` / `COUNTRY` | `CORPORATION_BASIC_INFO_V2` |
 | `LEGAL_NAME` / `NAME` / `COMPANY_NAME` | `CORPORATION_NAME` | `CORPORATION_BASIC_INFO_V2` |
 | `TRANSACTION_DATE` / `POSTING_DATE` / `ENTRY_DATE` | `effective_date` | `JOURNAL_ENTRIES` |
-| `OWNERSHIP_PERCENTAGE` / `OWNERSHIP_PCT` | `PERCENTAGE` (TEXT — cast with `TRY_TO_DECIMAL`) | `FUND_CORPORATION_OWNERSHIP` |
+| `OWNERSHIP_PERCENTAGE` / `OWNERSHIP_PCT` | `PERCENTAGE` (TEXT or NUMBER — cast with `TRY_TO_DECIMAL(TO_VARCHAR(PERCENTAGE), 38, 10)`) | `FUND_CORPORATION_OWNERSHIP` |
 | `OUTSTANDING_QUANTITY` | `OUTSTANDING_SHARES` | `SUMMARY_CAP_TABLE` |
 | `BOOL_OR(col)` | `BOOLOR_AGG(col)` | *(any table)* — Snowflake has no `BOOL_OR` |
 | `SHARE_CLASS_NAME` | `SHARECLASS_NAME` | `FINANCING_HISTORY` — one word, no underscore between SHARE and CLASS |

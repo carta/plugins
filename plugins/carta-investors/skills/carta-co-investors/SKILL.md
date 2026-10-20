@@ -9,7 +9,7 @@ description: >
   Use instead: carta-explore-data for general fund/investment/portfolio data —
   this skill is specifically for co-investor ("who else invested alongside us")
   analysis.
-version: 0.8.8
+version: 0.8.9
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -39,7 +39,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
-  # Cowork
+  # Publish
   - Artifact
   # Local execution
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-co-investors/scripts/render-artifact.py" *)
@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.101.0</carta-plugin>
+<carta-plugin>carta-investors:6.101.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -228,7 +228,7 @@ This skill assumes:
 
 - **Carta MCP connection** — `list_contexts`, `read_tool` and `call_tool` available; the user has an active session for at least one investment firm.
 - **SPA documents uploaded** — the firm has Stock Purchase Agreements in Carta's Document Intelligence. Without them the artifact renders a "no SPAs found" state rather than an empty table.
-- **Mode A needs Cowork.** Live Artifacts only render there. Claude Desktop and the Claude Code CLI get Mode B, which is a full text answer, not a degraded one.
+- **Mode A needs the `Artifact` tool**; without it, Mode B gives a full text answer, not a degraded one.
 - **`Bash` + `uv`** — Mode A runs one render script. Mode B needs neither.
 
 ## Accessibility
@@ -293,7 +293,7 @@ Route to **text analysis (Mode B)** when the user explicitly signals text, or as
 - ">5%", "over 5%", "lead", "leads" → Q2
 - "<5%", "less than 5%", "under 5%", "follow-on" → Q3
 
-Route to Mode B when Step A1's gate finds no `Artifact` tool — that means this session is not Cowork.
+Route to Mode B when Step A1's first check still finds no `Artifact` tool after loading it.
 
 ---
 
@@ -317,7 +317,7 @@ Run both checks, and stay quiet about them when they pass:
 
 Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`, alongside the other plugin-wide references. They are *not* under this skill's own `references/`. Read them by that exact path; don't search for them.
 
-If the `Artifact` tool is missing, this session is not Cowork: go to Mode B and tell the user plainly *"I'll give you the analysis as text."* Say nothing about artifacts, Cowork, or sandboxes.
+This skill has its own text answer, so a failed first check does not stop it and its stop message is not shown. If `Artifact` is still missing once that check has tried to load it, go to Mode B and open with one plain sentence: *"The interactive co-investor report needs an up-to-date Claude Code or Cowork with Artifacts turned on for your organization, so here is the analysis as text."* Say nothing about checks, modes, or sandboxes.
 
 Store the `name` the connector gate resolves as `<CARTA_MCP_SERVER>`. Step A2 passes it to the render script and Step A3 puts it in the `capabilities.mcp` grant. It is one string; there is nothing to derive and nothing to keep in sync.
 
@@ -646,5 +646,5 @@ Do not repeat the full menu after every result. If the user asks "what else can 
 | Partial SPA coverage | Note in results: "X of your Y portfolio companies have at least one SPA on file." Offer to list missing companies. |
 | MCP query error | "Could not reach Carta data. Try again in a moment." |
 | `render-artifact.py` exits non-zero | Surface the script's stderr and stop. Never hand-write the artifact HTML. |
-| No `Artifact` tool (Step A1 gate) | Go to Mode B. Tell the user "I'll give you the analysis as text" — nothing about Cowork, artifacts, or sandboxes. |
+| No `Artifact` tool, even after Step A1 tried to load it | Go to Mode B, opening with Step A1's sentence on why the answer is text. |
 | Artifact publishes but renders an error | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. |

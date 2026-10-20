@@ -1897,7 +1897,9 @@ def read_budgets(raw_dir, as_of_year, as_of_month):
             continue
         # fa:list:budgets returns {"budgets": [{account_id, account_name, account_type, amount, start_date}, ...], "count": N}
         for row in (data.get("budgets") or []):
-            name = row.get("account_name")
+            # Mapped like Query A's account column (data-fetch.md), so the
+            # spend chart finds the budget under the name the actuals carry.
+            name = (row.get("account_name") or "").replace("|", "/")
             if not name:
                 continue
             per_account[name]["monthly"][i - 1] += float(row.get("amount") or 0.0)

@@ -81,13 +81,14 @@ function buildRows(datasets) {
       id: TS_ROW_ID, keys: ts.map((d) => d.key), label: TS_LABEL, narrowable: true,
       stems: ts.flatMap((d) => d.stems || []),
       present: ts.some((d) => d.present),
+      error: ts.map((d) => d.error).filter(Boolean).join("; ") || null,
       fetchedAt: ts.map((d) => d.fetchedAt).filter(Boolean).sort()[0] || null,
     });
   }
   for (const d of datasets) {
     if (TS_KEYS.includes(d.key)) continue;
     rows.push({ id: d.key, keys: [d.key], label: d.label, narrowable: false,
-      stems: d.stems || [], present: d.present, fetchedAt: d.fetchedAt });
+      stems: d.stems || [], present: d.present, error: d.error || null, fetchedAt: d.fetchedAt });
   }
   return rows;
 }
@@ -142,6 +143,7 @@ function DatasetRow({ row, checked, onToggle, disabled, stage, progress, scope, 
   const sub = stage === "active" ? (progress || "Updating…")
     : stage === "done" ? "Updated just now"
     : stage === "pending" ? "Waiting…"
+    : row.error ? "Couldn’t load"
     : row.present ? `Updated ${fmtRelative(row.fetchedAt)}` : "Not loaded";
   const dim = canRefresh && !checked;
   return (

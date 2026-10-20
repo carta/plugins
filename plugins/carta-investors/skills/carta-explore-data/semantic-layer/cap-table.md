@@ -219,7 +219,7 @@ WITH ranked AS (
     SELECT  CORPORATION_ID,
             FIRM_ID,
             FUND_ID,
-            TRY_TO_DECIMAL(PERCENTAGE, 38, 10) * 100 AS ownership_pct_calc,
+            TRY_TO_DECIMAL(TO_VARCHAR(PERCENTAGE), 38, 10) * 100 AS ownership_pct_calc,
             FULLY_DILUTED,
             OWNERSHIP_QUANTITY,
             AS_OF_DATE,
@@ -252,7 +252,7 @@ LIMIT 500
 ```
 
 Notes:
-- `PERCENTAGE` in source is stored as TEXT, fraction-valued (e.g. `"0.0432"` = 4.32%). The query uses `TRY_TO_DECIMAL` to cast safely — non-numeric strings (e.g. `"N/A"`) become `NULL` and propagate to `firm_ownership_pct` as `NULL`. Render `—` for these rows in the presentation; do **not** treat them as `0%` ownership.
+- `PERCENTAGE` in source is fraction-valued (e.g. `0.0432` = 4.32%), and its type has been both TEXT and `NUMBER(38,20)`. `TRY_TO_DECIMAL` rejects a numeric argument, so the query casts through `TO_VARCHAR` first; that works for either type — non-numeric strings (e.g. `"N/A"`) become `NULL` and propagate to `firm_ownership_pct` as `NULL`. Render `—` for these rows in the presentation; do **not** treat them as `0%` ownership.
 - One row per (corporation, fund). If the firm holds the same corp through multiple funds, each fund gets its own row — do not sum percentages across funds.
 - `FULLY_DILUTED` is the **corporation's total fully-diluted share count** at the snapshot date (the denominator backing `PERCENTAGE`). It is NOT a boolean. Aliased as `total_fd_shares` in the SELECT to avoid confusion.
 - `FUND_NAME` is resolved via `LEFT JOIN FUND_ADMIN.FUNDS` (one row per fund — no aggregation needed).
@@ -435,7 +435,7 @@ One row per (corporation, firm, fund, as_of_date). Source for Query B.
 | `FIRM_ID` | Firm identifier (UUID) — match against `list_contexts.firm_id` |
 | `FUND_ID` | Fund identifier (UUID) |
 | `AS_OF_DATE` | Date of the ownership snapshot |
-| `PERCENTAGE` | Fund's ownership fraction in the corp, stored as TEXT (cast with `TRY_TO_DECIMAL`; multiply by 100 for %) |
+| `PERCENTAGE` | Fund's ownership fraction in the corp, TEXT or NUMBER (cast with `TRY_TO_DECIMAL(TO_VARCHAR(PERCENTAGE), 38, 10)`; multiply by 100 for %) |
 | `FULLY_DILUTED` | Corporation's total fully-diluted share count at the snapshot date (NUMBER, NOT a boolean — this is the denominator backing `PERCENTAGE`) |
 | `OWNERSHIP_QUANTITY` | Number of shares the fund holds |
 
