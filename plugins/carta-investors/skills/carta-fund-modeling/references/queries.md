@@ -397,7 +397,7 @@ every other row, so fetching them only burns DWH pages. `COMPANY_FINANCIALS` is 
 period for the whole firm, so it is the one stem that outgrows the 10,000-row clamp on a large firm; without
 this filter a firm with many custom KPIs can exceed even the 5-page (50,000-row) pagination cap. The `ORDER BY`
 is required: offset paging is only stable over an ordered result. Add a metric to `METRIC_DEFS` → add it
-here in the same change.
+here and to `server/worker.js`'s `FINANCIAL_METRICS` in the same change.
 **`COMPANY_FINANCIALS` is row-scoped to the active firm context** — it returns *only* the firm you `SET_CTX`'d
 in Step 1. Do **not** add a `firm_id`/`firm_name` filter: it is redundant with the context scope, and a value
 that doesn't match the row's own `firm_id` silently returns zero rows. Rely on the Step-1 `set_context`. (This
@@ -411,12 +411,13 @@ Collection appear, and a company must also be a tracked holding to surface on it
 ## Hosted variants → `queries.json` `hosted`
 The hosted app (`server/worker.js`) runs the local `nav_latest`, `fund_metrics`, `cohort`, `ownership`,
 `corporations`, `captable`, `waterfall`, `accrued_carry`, `distributed_carry`, `deal_irr`, `financing`,
-`fee_schedules` and `ops_benchmarks` stems, each fund-scoped one scoped to the firm's funds through the §0
-directory query (`ops_benchmarks` holds no firm data and has no scope). Only `nav_latest`, `fund_metrics` and the three hosted
+`fee_schedules`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
+the §0 directory query (`ops_benchmarks` holds no firm data and has no scope; `financials` is row-scoped by
+`set_context`, as locally). Only `nav_latest`, `fund_metrics` and the three hosted
 queries below are required; any other one the user's role cannot read leaves its data out and the firm still loads. It reads every result as **one
 10,000-row page**: it cannot page, and it rejects any result that reports `next_offset` rather than save a partial
-snapshot. The one exception is `captable`: a cap table cut at the limit is left out whole and the firm still loads,
-with no `company.capTable` (§15). Three queries are its own, each trimmed to fit that one page:
+snapshot. The exceptions are `captable` and `financials`: one cut at the limit is left out whole and the firm still
+loads, with no `company.capTable` (§15) or `company.financials` (§14). Three queries are its own, each trimmed to fit that one page:
 - `nav_history` — `MONTHLY_NAV_CALCULATIONS` at quarter-ends plus each fund's latest month only: the months its
   NAV trend keeps. Locally the trend comes from every month-end row of the §5 `cashflows` stem.
 - `cashflows` — only months with a non-zero LP contribution or distribution, and only the flow columns: the

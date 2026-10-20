@@ -800,8 +800,8 @@ def build(rawdir, out, meta):
     # mnemonic (preferred) or lowercased name; ORDER drives the UI metric dropdown.
     # (key, label, unit, matcher(mnemonic_upper, name_lower)). Forecast/deferred
     # variants are excluded — operating actuals only. Mirrored in the WHERE of the
-    # `financials` stem in queries.json so the fetch only pulls rows this matcher keeps —
-    # change both together.
+    # `financials` stem in queries.json so the fetch only pulls rows this matcher keeps, and
+    # in server/worker.js's FINANCIAL_METRICS for the hosted app — change all three together.
     METRIC_DEFS = [
         ("revenue",     "Revenue",      "Dollar", lambda mn, nm: mn == "FS_REVENUE" or nm == "revenue"),
         ("arr",         "ARR",          "Dollar", lambda mn, nm: mn in ("FS_ARR_END", "ARR") or "recurring revenue" in nm),
