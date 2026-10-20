@@ -13,12 +13,13 @@ allowed-tools:
   - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - Bash(sleep 5)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-excel/scripts/excel_exporter.py" *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.14</carta-plugin>
 
 # Excel Export
 
@@ -67,9 +68,12 @@ Use the column list confirmed during the Customization Checkpoint (resolved in `
 
 ## Running the export
 
+Hand the user the generated `.xlsx` file itself. Never give them a Carta web link to the report: it makes them sign in to Carta. If the file cannot be delivered, the presigned `download_url` works without signing in but expires, so say so.
+
+
 Check if `carta-reporting/carta_report_<user_report_pk>.json` is available (use `user_report_pk` from this session):
 - **File ready** → pass it as `"local_file"` to `report_processor.py`.
-- **Not ready** → call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})` to get a fresh presigned URL and pass it as `"download_url"` instead.
+- **Not ready** → call `read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})` first (no `corporation_id`). Only when it is `complete`, call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})` to get a fresh presigned URL and pass it as `"download_url"` instead. While it is `pending`, poll every 5 s up to 20 attempts. On `error` or `failed`, tell the user the report failed. On `not_found` or a timeout, say the report is not available and offer to regenerate it. If `download_url` itself returns `not_found`, check `report_status` once more: if `complete`, call `download_url` once more; if `pending`, resume polling within the attempts left. Never call `download_url` more than twice; if the second call fails, say the report is not available and offer to regenerate it. Never give the user the `url` that `report_status` returns: it is a Carta web page that needs a sign-in.
 
 **Always run `report_processor.py` then `excel_exporter.py`, regardless of data size or complexity.** Never write Excel files directly with openpyxl or any other library — the scripts handle Carta branding (logo, header, fonts, number formats) that will be missing from any ad-hoc implementation. This applies even when the dataset is small (e.g. 3 rows) or when sheets need to be combined.
 

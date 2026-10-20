@@ -6,6 +6,14 @@ required params (Step 3) or filter IDs — it is not part of the always-loaded S
 ```
 # Reads go through read_tool; reporting__create__report changes data, so it goes through call_tool
 
+# PARAM CONTRACT — send exactly the argument names below and nothing else; unknown keys are rejected.
+#   reporting__create__report       call_tool   corporation_id, report_type, as_of_date, report_name,
+#                                               export_format, preview, the filter keys and per-type params below
+#                                               (no formula flag: live Excel totals come from report_processor aggregations)
+#   reporting__get__report_status   read_tool   user_report_pk
+#   reporting__get__download_url    read_tool   user_report_pk, corporation_id — only once status is "complete"
+#   reporting__search__report_types read_tool   corporation_id, query, json_export_supported (optional)
+
 call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json" }})
   → { user_report_pk }
   # Always pass export_format: "json". Never pass "xlsx".
@@ -147,9 +155,14 @@ read_tool({"name": "reporting__search__report_types", "arguments": { corporation
   # hardcoded list and never retry it.
 
 read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})
-  → { status }   # status: "pending" | "complete" | "error" | "not_found"
-                 # corporation_id not required — endpoint is user-scoped
+  → { status, url }   # status: "pending" | "complete" | "error" | "not_found"
+                 # url (complete only) is a Carta web page that needs a Carta sign-in: never give it
+                 # to the user; get the file through download_url.
+                 # never pass corporation_id — endpoint is user-scoped and rejects it
 
 read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})
-  → { download_url }   # S3 presigned URL — pass to report_processor.py, not WebFetch
+  → { download_url }   # S3 presigned URL — pass to report_processor.py, not WebFetch.
+                       # not_found: re-check report_status once; if "complete", call this once more;
+                       # if "pending", resume polling within the attempts left; never call this more
+                       # than twice.
 ```

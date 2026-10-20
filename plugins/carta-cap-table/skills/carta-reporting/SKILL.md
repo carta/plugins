@@ -19,14 +19,17 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
+  - mcp__carta__request_permissions
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__list_accounts
+  - mcp__claude_ai_Carta__request_permissions
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__request_permissions
   - Artifact
   - Agent
   - AskUserQuestion
@@ -39,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.14</carta-plugin>
 
 # Custom Reports
 
@@ -96,9 +99,11 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 **Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
 
+**Report tool contract:** `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/mcp-tool-reference.md` lists the only params each `reporting__*` tool accepts — send nothing else (no `include_drafts`, no `with_formula_enabled`, no `corporation_id` on `report_status`). `reporting__create__report` always goes through `call_tool`. If `create__report` or `search__report_types` returns `scope_required`, do not call it again yet: ask the user whether to grant Carta the permission the error names, and if they agree call `<_carta_prefix>request_permissions` (a top-level connector tool, not a `call_tool` name; no arguments) once, show them the authorization link it returns verbatim, and retry the call once after they say they have authorized. When the full and preview creates both return it, ask and call `request_permissions` once, then retry both. Only the main thread runs this: a subagent that gets `scope_required` returns it without retrying. If they decline or it is still refused, tell them in plain words that their Carta connection needs that permission, then stop.
+
 **Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The only exceptions are the two reconnect retries, each after the user says "ready": the FAIL outcome in step 0b and a failed access check in step 0c. Each re-runs this discovery and replaces `_tool_results`.
 
-**Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls.)
+**Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`, `request_permissions`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls.)
 
 **Working files:** downloaded report data lives under `carta-reporting/` in the working directory (the same folder as `config.json`), never `/tmp`, so the paths work on macOS and Windows alike. Background agents run in that same working directory and create the folder (with a `.gitignore` of `*`, so nothing in it can be committed) before they write anything.
 
@@ -270,9 +275,10 @@ Run each script only in the one-line form shown below, as its own command: write
       20 attempts.
       - Status "complete" → proceed to step 2.
       - Status "error" or "failed" → write {"error":"report failed"} to output_path and stop.
+      - Status "not_found" → write {"error":"report not found"} to output_path and stop.
       - 20 attempts without complete → write {"error":"timeout"} to output_path and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
-      → presigned URL.
+      → presigned URL, only after step 1 returned "complete". On not_found, call report_status once more: if "complete", call download_url once more; if "pending", go back to step 1 within the attempts left; otherwise, or if download_url fails again, write {"error":"download_url failed"} to output_path and stop.
    3. Run, as one command: curl --create-dirs -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
       If it exits non-zero, write {"error":"download failed"} to output_path and stop.
    ```
@@ -294,9 +300,10 @@ Run each script only in the one-line form shown below, as its own command: write
       up to 10 attempts.
       - Status "complete" → proceed to step 2.
       - Status "error" or "failed" → write {"error":"preview failed"} to output_path and stop.
+      - Status "not_found" → write {"error":"preview not found"} to output_path and stop.
       - 10 attempts without complete → write {"error":"preview timeout"} to output_path and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
-      → presigned URL. If this call fails, write {"error":"download_url failed"} to output_path and stop.
+      → presigned URL only after step 1 returned "complete". On not_found, call report_status once more: if "complete", call download_url once more; if "pending", go back to step 1 within the attempts left; otherwise, or if download_url fails again, write {"error":"download_url failed"} to output_path and stop.
    3. Run, as one command: curl --create-dirs -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
       If it exits non-zero, write {"error":"download failed"} to output_path and stop.
    ```
