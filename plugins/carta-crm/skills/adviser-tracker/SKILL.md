@@ -24,7 +24,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.20</carta-plugin>
+<carta-plugin>carta-crm:1.16.21</carta-plugin>
 
 # Adviser Tracker
 
@@ -191,10 +191,10 @@ crm_read_tool({ "name": "crm:get_adviser_tracker_logos", "arguments": { "banks":
 The check stays on the Mandate view. Send its call in the same message as the fan-out of Step 1, so
 it costs no turn. Do not retry it. When it fails, skip the check.
 
-- Deals created this year for every bank at once, with `crm:aggregate_deals`. Pass `group_by` as the
-  bank field id in an array. Pass one filter: the deal created-date field `between` the first day
-  of the year and today. A filter has `field_id`, `operator` and `value`. Leave `metric` out: every
-  group already carries a `count`:
+It counts the deals created this year for every bank at once, with `crm:aggregate_deals`. Pass
+`group_by` as the bank field id in an array. Pass one filter: the deal created-date field `between`
+the first day of the year and today. A filter has `field_id`, `operator` and `value`. Leave `metric`
+out: every group already carries a `count`. Make no other check call: fees come in the result rows.
 
 ```
 crm_read_tool({ "name": "crm:aggregate_deals", "arguments": { "group_by": ["<bank field id>"], "filters": [ { "field_id": "createdAt", "operator": "between", "value": ["<YYYY>-01-01", "<today YYYY-MM-DD>"] } ] } })
@@ -204,13 +204,6 @@ Compare each group's `count` with the sum of that bank's `dealsByMonth` counts f
 in the Mandate result. Compare by bank name. When a bank is not in the CRM answer, or the counts
 differ, write one plain line that names up to three banks with the largest gap and says what the
 CRM shows for each. Step 4 carries it in the notice.
-
-- Its fees, only for the bank with the most deals this year, and only when its CRM count is 25 or
-  fewer. Call `crm:search_deals` once with the bank field `eq` the bank name and the created-date
-  filter above, with that count as `limit`. Then call `crm:get_fees_by_deal` once for the first
-  returned deal alone. When its answer says the `fees` module is disabled, or the call fails, skip
-  the whole fees check and add nothing about fees to the page. Otherwise call it for the other deals
-  in one message and add the fee totals per currency.
 
 ## Step 3: Split the tiers
 
