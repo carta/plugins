@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.97.0</carta-plugin>
+<carta-plugin>carta-investors:6.97.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -58,6 +58,7 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 | Common Questions | Semantic File |
 |---|---|
 | "What companies do we have in our portfolio?"<br>"List our investments"<br>"Show me all our portfolio companies" | *(use `fa:list:portfolio_companies`)* |
+| "List all our SPVs"<br>"Which numbered SPVs / series do we have?"<br>"What entities does the firm have?"<br>"Show me our syndicate SPVs" | *(use `fa:list:entities` — see "Listing the firm's entities" under Step 0; always pass `entity_types`)* |
 | "Show me the logo for [Company]"<br>"What are the logos for our portfolio companies?"<br>"Get a zip of all our portco logos" | *(use `fa:list:portco_logos` for per-company logo URLs, or `fa:get:portco_logo_zip` for a bulk zip download)* |
 | "What's the current NAV for [Fund]?"<br>"Show me TVPI and DPI for all funds"<br>"Show me total contributions and distributions for each LP" | `nav.md` |
 | "What's the IRR for [Fund]?"<br>"Show me fund performance metrics"<br>"What are the fund metrics as of Q4 2024?"<br>"List my funds."<br>"What's the current Net IRR and TVPI of [Fund]?"<br>"How many planned reserves are left to deploy in [Fund]?"<br>"Show called capital per quarter for [Fund] over the last 3 years." | `fund-performance.md` |
@@ -93,6 +94,19 @@ Required even for specific-company queries — establishes accessible companies 
 
 - If the result is empty, tell the user their firm context may not be set correctly and call `list_contexts` to diagnose.
 - If the user asked about a specific company, use the result to resolve the exact `corporation_id` for that company before continuing to Step 1.
+
+### Listing the firm's entities (funds, SPVs, GP entities, ManCos)
+
+`fa__list__portfolio_companies` returns the **companies the firm invests in**, not the firm's own entities, and `dwh__execute__question` only sees entities that have fund-admin data in the warehouse. When the user asks which SPVs, numbered series, funds or management companies the firm has, call `fa__list__entities` before concluding they are missing:
+
+```
+read_tool({"name": "fa__list__entities", "arguments": {"entity_types": "spv,syndicate_spv"}})
+```
+
+- `entity_types` accepts names — `fund`, `gp_entity`, `spv`, `syndicate_spv`, `management_co`, `elimination` — comma-separated. Always pass `entity_types`; never call without it. For every entity, call once per type. If a call returns "response too large", narrow it with `search` (e.g. `"search": "TVC"`) instead of reporting the entities missing.
+- Each row carries `id` (the integer entity key other `fa:*` commands take as `entity_ids`), `uuid`, `entity_type_string`, `currency`, `is_churned` and `_links.web_url`. Churned and inactive entities are included, so check `is_churned` rather than assuming absence means the entity is gone.
+- To map SPVs to their underlying investments, take the entities from this call and query `AGGREGATE_INVESTMENTS` (`investments.md`), which has `fund_name` and `fund_uuid` per investment, for those funds.
+- If the call succeeds and returns no SPVs, say so: the firm's SPVs are not administered on Carta Fund Admin (or are not visible with the user's permissions). Do not infer them from the fund entities that `dwh__execute__question` happened to return.
 
 ## Step 1 — Try execute:question (PRIMARY query path)
 
@@ -159,7 +173,8 @@ Use this table to pick the right context file before running any query:
 | Per-LP/GP data — commitments, contributions, capital accounts, partner rollforward, LP count                                                                                                               | `partner-data.md`                                 | `PARTNER_DATA`, `PARTNER_MONTHLY_NAV_CALCULATIONS`                        |
 | Portfolio company financials — revenue, ARR, headcount, KPIs                                                                                                                                               | `company-financials.md`                           | `COMPANY_FINANCIALS`                                                      |
 | Benchmark percentile rankings vs peers                                                                                                                                                                     | Use `carta-investors:carta-performance-benchmarks` | `TEMPORAL_FUND_COHORT_BENCHMARKS`                                         |
-| Fund list, entity type (Fund vs SPV)                                                                                                                                                                       | Query `ALLOCATIONS` directly                      | `ALLOCATIONS`                                                             |
+| **The firm's own entities** — list of funds, SPVs, syndicate SPVs, GP entities, management companies (names, entity type, links)                                                                         | —                                                 | `fa__list__entities` — see "Listing the firm's entities" under Step 0 (set `entity_types` to the types asked about) |
+| Fund list with metrics, or entity type as a column of a DWH result                                                                                                                                                                       | Query `ALLOCATIONS` directly                      | `ALLOCATIONS`                                                             |
 | Loans, Loan Ops (loans, lender positions)                                                                                                                                                                  | Query `LOAN_OPS.LOAN` / `LOAN_OPS.LENDER_POSITION` directly — **firm-scoping rule below is MANDATORY** | `LOAN_OPS.LOAN`, `LOAN_OPS.LENDER_POSITION`                               |
 
 > **LOAN_OPS firm-scoping rule (MANDATORY — cross-tenant exposure risk):** The active firm context does **NOT** scope `LOAN_OPS` tables. `set_context` does not filter them, and a fund-admin firm scope drops every `LOAN_OPS` table to 0 rows — the row-access policy does not resolve it (see `carta-loan-dashboard`). An unfiltered query therefore silently returns rows that belong to **other firms**, with no error or warning. Every query against `LOAN_OPS.LOAN`, `LOAN_OPS.LENDER_POSITION`, or any other `LOAN_OPS` table MUST include an explicit firm filter: `WHERE LENDING_FIRM_NAME = '<firm name>'` (or `WHERE LENDING_FIRM_ID = <id>`). Before you present the results, confirm that every returned row belongs to the expected firm — discard and re-query if any row does not. Note: `dwh__list__tables` does not enumerate `LOAN_OPS`; probe a table by name with `SELECT * FROM LOAN_OPS.<TABLE> LIMIT 1` instead.
