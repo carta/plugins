@@ -47,10 +47,18 @@ function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
 
-/** The calendar month the dashboard's own as-of date falls in, 1-12 — the
- *  true cutoff for what Carta actually has data for, independent of what
- *  any one budget claims to cover. Falls back to December when `asOf` is
- *  absent so a snapshot without one still renders a full year. */
+/** The date every budget/actuals cutoff in the app reads instead of a
+ *  snapshot's own `asOf` — the ledger's own last posted entry
+ *  (`lastPostedDate`) when the build or worker wrote one, `asOf` (the fetch
+ *  date) otherwise. A snapshot without `lastPostedDate` reads `asOf`. The
+ *  worker bundle can't import this (`server/worker.js`'s `withSharedInBudgets`
+ *  holds its own copy of the same fallback — keep the two in step). */
+export const cutoffDate = (snapshot) => snapshot?.lastPostedDate || snapshot?.asOf;
+
+/** The calendar month `cutoffDate` falls in, 1-12 — the true cutoff for
+ *  what Carta actually has data for, independent of what any one budget
+ *  claims to cover. Falls back to December when the date is absent so a
+ *  snapshot without one still renders a full year. */
 export function trueAsOfMonth(asOf) {
   return Number(String(asOf || "").slice(5, 7)) || 12;
 }

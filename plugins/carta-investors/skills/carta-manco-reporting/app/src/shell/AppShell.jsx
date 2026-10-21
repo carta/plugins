@@ -10,7 +10,7 @@ import Sidebar, { SIDEBAR_WIDTH_PX } from "./Sidebar.jsx";
 // shell, so the drawer floats over the entire page independent of route.
 //
 // Props:
-//   sidebarProps     — {initials, firmName, route, items, onNavigate, asOf}
+//   sidebarProps     — {initials, firmName, route, items, onNavigate, asOf, lastPostedDate}
 //   children         — the current route's page component.
 
 // Matches carta-fund-modeling's useNarrow, so padding collapses at the

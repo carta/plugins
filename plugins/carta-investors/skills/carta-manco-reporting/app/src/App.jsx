@@ -251,6 +251,9 @@ export default function App() {
     // this exact line, moved off the topbar entirely once "Powered by
     // Carta" was dropped from it and left it with nothing else to show.
     asOf: snapshot?.asOf,
+    // The ManCo's own books can stop earlier than the fetch date — see
+    // Sidebar.jsx, which only prints this when it differs from asOf.
+    lastPostedDate: snapshot?.lastPostedDate,
     footerAction: snapshot && <BudgetImport hosted={hostedApp} budgetUpload={snapshot.budgetUpload} onChanged={fetchData} />,
     shared: (() => {
       const onPull = reportsApi.can(REPORT_ACTIONS.PULL) ? loadShared : null;

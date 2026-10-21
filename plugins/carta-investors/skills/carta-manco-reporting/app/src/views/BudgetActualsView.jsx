@@ -14,7 +14,7 @@ import BudgetActualsOutline from "./BudgetActualsOutline.jsx";
 import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
 import { FiltersMenu, FilterRibbon, SimplePeriodPicker, S as periodControlsStyles } from "./BudgetPeriodControls.jsx";
-import { MONTH_NAME, trueAsOfMonth, formatPeriodLabel } from "./budgetPeriods.js";
+import { MONTH_NAME, trueAsOfMonth, formatPeriodLabel, cutoffDate } from "./budgetPeriods.js";
 import { rowBreakouts, defaultBreakout, worthBreakingOut, UNLABELLED } from "./accountBreakout.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
@@ -138,7 +138,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
 
   // Column budgets are one total, not a monthly split (shapes/tag_crosstab.py) —
   // widening actuals can't widen the budget figure alongside it, so it's opt-in.
-  const asOfMonth = trueAsOfMonth(snapshot?.asOf);
+  const asOfMonth = trueAsOfMonth(cutoffDate(snapshot));
   const statedLastMonth = budget?.period?.last_month ?? 12;
   const canExtendToToday = asOfMonth > statedLastMonth;
   const [throughToday, setThroughToday] = useState(false);
@@ -287,7 +287,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
           entries={accountsData?.entries || []}
           drilldown={accountsData ? drilldown : null}
           accountsData={accountsData}
-          asOf={snapshot?.asOf}
+          asOf={cutoffDate(snapshot)}
         />
       )}
 

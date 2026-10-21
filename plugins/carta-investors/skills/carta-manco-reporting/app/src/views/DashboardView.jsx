@@ -11,6 +11,7 @@ import FundSelector from "./FundSelector.jsx";
 import DateRangeControls from "./DateRangeControls.jsx";
 import { fmtCurrencyShort, displayCurrency } from "../charts/chartTheme.js";
 import { dimensionOf } from "../ui/dimension.js";
+import { cutoffDate } from "./budgetPeriods.js";
 import { Capped } from "../shell/AppShell.jsx";
 import { sans, inkNum, INK, PAPER, LINE, FAINT, MICRO, GREEN, RED, FS } from "../ui/theme.js";
 import { H1, H2, HoverCard, HelpCircleIcon } from "../ui/components.jsx";
@@ -212,8 +213,15 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
   // one of its values knows where to read that value from.
   const dimension = dimensionOf(accountsData) || dimensionOf(snapshot);
   const asOf = snapshot?.asOf || "2026-07-15";
-  const ytdWindow = ytdWindowLabel(asOf);
-  const ytdShort  = ytdShortLabel(asOf);
+  // The spend-by-GL budget column is clamped to the ledger's own last
+  // posted month (build_manco_datadir.py's as_of_month clamp, worker.js's
+  // buildBudget call); its caption names the same window, not the later
+  // fetch date. The fee-income caption follows the same cutoff for a
+  // different reason — its booked series is the ManCo's own fee entries,
+  // not a budget column, so it reads only as far as the ledger does.
+  const ytdCutoff = cutoffDate(snapshot) || asOf;
+  const ytdWindow = ytdWindowLabel(ytdCutoff);
+  const ytdShort  = ytdShortLabel(ytdCutoff);
 
   // Lifted date-range state for the breakdown pane. Default = YTD through
   // the snapshot's as-of date.

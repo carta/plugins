@@ -885,6 +885,22 @@ def _in_window(entry, window):
     return first <= (entry.get("mo") or 0) <= last
 
 
+def latest_posted_date(entries, as_of):
+    """The latest entry date in `entries`, never later than `as_of`.
+
+    `_on_or_before` already clips a build's own `entries` to `as_of`, so
+    this cap is unreachable from a real build — kept anyway, and tested in
+    isolation, because the raw dumps this reads from bound rows by month
+    alone (`MONTH(EFFECTIVE_DATE) <= <max month>`, see
+    references/data-fetch.md), and a caller one step earlier in the
+    pipeline could hand this an entry dated later in the fetch month than
+    `as_of`. `server/worker.js`'s `buildData` (its own `lastPostedDate`)
+    carries the same cap on the hosted side, where that earlier clip does
+    not exist.
+    """
+    return min(max(r["date"] for r in entries if r.get("date")), as_of)
+
+
 def gl_activity_totals(entries, window=None):
     """Spend or income posted to each GL account, within `window` if given.
 
@@ -5386,7 +5402,17 @@ def build(args):
     # Ventures with ~40) would otherwise render every account in the "top"
     # chart, contradicting the title.
     SPEND_BY_GL_TOP_N = 10
+    # The latest entry date in the ledger — a ManCo's own books can stop
+    # posting before the fetch date, and every `as_of_month` use below is the
+    # budget's own YTD/variance window, never the actuals themselves, so
+    # clamping it here is the one place that fixes every one of them.
+    last_posted_date = latest_posted_date(all_rows, args.as_of)
     as_of_month = int(args.as_of.split("-")[1])
+    if max_mo < as_of_month:
+        print(f"note: books post only through {last_posted_date}; the budget "
+              f"window stops there, not the {args.as_of} fetch date.",
+              file=sys.stderr)
+        as_of_month = max_mo
     # Excel-first, multi-budget: parse every budget-*.json file in the
     # dashboard dir. When one or more exist, the FIRST becomes the
     # "primary" that drives dashboard-side charts (spend_by_gl,
@@ -5877,6 +5903,9 @@ def build(args):
         "firmName":    args.firm_name,
         "entityLabel": args.manco_name,
         "asOf":        args.as_of,
+        # The ledger's own latest entry date, for the sidebar's "Books
+        # posted through" line — distinct from `asOf`, the fetch date.
+        "lastPostedDate": last_posted_date,
         "currency":    currency,
         "cartaEnvironment": getattr(args, "carta_environment", "production"),
         "cartaIds":    {"firm": args.firm_carta_id, "manco_fund": args.manco_carta_id},

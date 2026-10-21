@@ -7,7 +7,7 @@ import {
   TableScroll, LEDGER_BASE, useStickyHeader, StickyClone, GroupedTableHead,
 } from "../ui/table.jsx";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SUMMARY, LEDGER_SECTION } from "../ui/ledger.js";
-import { periodColumns, ytdColumn, trueAsOfMonth, cellFor, sumCells } from "./budgetPeriods.js";
+import { periodColumns, ytdColumn, trueAsOfMonth, cellFor, sumCells, cutoffDate } from "./budgetPeriods.js";
 import { accountSections, actualByGlByMonth, accountLabel, ACCOUNT_LABEL_MIN_WIDTH } from "./accountSections.js";
 
 // One section's total for one column — what its "Total <section>" row shows,
@@ -23,7 +23,7 @@ function sectionTotal(rows, col, actualsByMonth) {
 export default function MonthlyActualsView({ snapshot, accountsData, drilldown }) {
   const asOf = snapshot?.asOf;
   const year = Number(String(asOf || "").slice(0, 4)) || new Date().getFullYear();
-  const asOfMonth = trueAsOfMonth(asOf);
+  const asOfMonth = trueAsOfMonth(cutoffDate(snapshot));
   const entries = accountsData?.entries || [];
 
   const actualsByMonth = actualByGlByMonth(entries);
