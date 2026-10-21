@@ -10,6 +10,9 @@ export default function FirmChooser({ onPick }) {
   useEffect(() => {
     fetch("/api/firms").then((r) => r.json()).then((l) => setFirms(Array.isArray(l) ? l : [])).catch(() => setFirms([]));
   }, []);
+  // Two firms can share a name; those get their Carta ID underneath so the user can tell them apart.
+  const names = (firms || []).map((f) => f.name);
+  const sharedNames = new Set(names.filter((n, i) => names.indexOf(n) !== i));
 
   return (
     <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-default)", display: "grid", placeItems: "center", padding: 24 }}>
@@ -30,6 +33,11 @@ export default function FirmChooser({ onPick }) {
             border: `1px solid var(--ink-color-global-border-default)`, background: "var(--ink-color-global-surface-background-default)",
             color: "var(--ink-color-global-text-default)", fontSize: FS.bodyLg, fontWeight: 600 }}>
             {f.name}
+            {sharedNames.has(f.name) && (
+              <div style={{ color: "var(--ink-color-global-text-subtle)", fontSize: FS.body, fontWeight: 400 }}>
+                Carta ID {f.firmId}
+              </div>
+            )}
           </button>
         ))}
       </div>

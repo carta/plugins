@@ -1,6 +1,10 @@
 // URL routing for the Portfolio Analytics app.
 //
-// Shape: /firm/<slug>/<page>?t=<token>
+// Shape: /firm/<firm>/<page>?t=<token>
+//   - <firm> is the `slug` /api/firms gives the firm, used as-is. The local app
+//     (one firm per launch) uses the name slug; the Worker serves many firms and
+//     uses the firm's Carta ID, as carta-web and Fund Admin do, since two firms can
+//     share a name.
 //   - The firm slug AND the page both live in the PATH, so a reload reopens the
 //     exact firm + page you were on. The ?t= auth token (and any other query) is
 //     always preserved across navigation — main.jsx captured it once at load, but

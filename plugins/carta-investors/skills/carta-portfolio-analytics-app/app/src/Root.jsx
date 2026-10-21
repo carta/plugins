@@ -19,12 +19,15 @@ export default function Root() {
 
   useEffect(() => {
     if (firm || defaultFirm === null) return;
-    const stored = lsGet("firm");
-    if (stored) { navigate({ firm: stored, tab: "overview" }, { replace: true }); return; }
     if (defaultFirm) { choose(defaultFirm); return; }
     let live = true;
+    // The remembered firm opens only while /api/firms still lists it: a firm's URL segment can
+    // change shape, and a stale one would load as "no access" with no way back to the chooser.
     fetch("/api/firms").then((r) => r.json()).then((list) => {
-      if (live && Array.isArray(list) && list.length === 1 && list[0]?.slug) choose(list[0].slug);
+      if (!live || !Array.isArray(list)) return;
+      const stored = lsGet("firm");
+      if (stored && list.some((f) => f?.slug === stored)) navigate({ firm: stored, tab: "overview" }, { replace: true });
+      else if (list.length === 1 && list[0]?.slug) choose(list[0].slug);
     }).catch(() => {});
     return () => { live = false; };
   }, [firm, choose, defaultFirm]);
