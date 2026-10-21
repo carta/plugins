@@ -291,57 +291,123 @@ def _all_zero_check(rows: list) -> dict:
     }
 
 
-def _tie_out_check(rows: list) -> dict:
-    """Compare each row the workbook states as a total against the sum of
-    the line rows it names as constituents.
+def _rows_by_tree_id(rows: list) -> dict:
+    """Every row, indexed by whichever tree id addresses it: a line's `key`
+    or an aggregate's `total_key`. The one index every reader of a totals
+    tree resolves `children` through, so the gate (`_tie_out_check`) and
+    the readout (`_totals_readout`) always agree on what a child id is.
+    """
+    by_id = {}
+    for r in rows:
+        if r.get("key"):
+            by_id[r["key"]] = r
+        if r.get("total_key"):
+            by_id[r["total_key"]] = r
+    return by_id
 
-    Only rows the adapter itself pointed at other rows for are checked —
-    a `total`/`summary` row_kind, or a label reading like one, that also
+
+def _tree_children_map(by_id: dict, row: dict):
+    """Resolve a total's formula-derived `children` (each a line `key` or
+    another total's `total_key`) to their rows, signed by `child_signs`.
+
+    Returns `None` when the row carries no `children`, or when a child id
+    doesn't resolve to an emitted row — never a partial list.
+
+    Callers check `children_complete` themselves before calling this: a
+    row whose formula adds more than its `children` (a constant or a
+    cross-sheet value) can't be explained by children alone, tree or not.
+    """
+    children_ids = row.get("children")
+    if not children_ids:
+        return None
+    signs = row.get("child_signs") or [1] * len(children_ids)
+    resolved = [(sign, by_id.get(cid)) for sign, cid in zip(signs, children_ids)]
+    if any(cr is None for _, cr in resolved):
+        return None
+    return resolved
+
+
+def _tie_out_check(rows: list) -> dict:
+    """Compare each row the workbook states as a total against the rows it
+    names as constituents.
+
+    A row carrying a formula-derived totals tree (`children`/`child_signs`
+    from the pnl-outline adapter) ties out against its direct children —
+    a line's `key` or another total's `total_key` — signed by
+    `child_signs`, so a total of subtotals (`=N46+N50+…`) ties correctly
+    and a subtraction row (Net Income = Income − Expenses) is checked with
+    each child's sign.
+
+    A row whose `children_complete` is false adds more than its `children`
+    name (a constant or a cross-sheet value) and is left unchecked here —
+    the same as `_totals_readout` leaves it unmarked. It never falls back
+    to leaf `constituents`: the pnl-outline adapter fills `constituents`
+    with the unsigned leaf keys beneath those children, flattened through
+    each child total's own `constituents`, so summing it would drop both
+    the sign and the term the tree is missing.
+
+    Only a row with no `children` at all, or with a `children` id that
+    doesn't resolve to an emitted row (e.g. a cross-sheet pull the adapter
+    couldn't follow), takes the leaf-constituents path: a `total`/
+    `subtotal`/`summary` row_kind, or a label reading like one, that
     carries `constituents` (top-level, or nested under `calculated` for a
     dept crosstab's formula-derived rows). A total whose constituents
     don't fully resolve to emitted rows is skipped rather than compared
     against a partial sum, which would be more misleading than no check
-    at all.
-
-    When the recorded constituents don't tie, a section's last total is
-    re-summed against the line rows it actually covers (`_lines_covered_by`)
-    before it's called a mismatch — the same widening the outline view
-    renders, so a grand total whose formula named only its final sub-block
-    (e.g. a mgmt-fee total reading `<funds subtotal> + <creator>`) is not
-    refused when the lines beneath it do add up.
+    at all. When the recorded constituents don't tie, a section's last
+    total is re-summed against the line rows it actually covers
+    (`_lines_covered_by`) before it's called a mismatch — the same
+    widening the outline view renders, so a grand total whose formula
+    named only its final sub-block (e.g. a mgmt-fee total reading
+    `<funds subtotal> + <creator>`) is not refused when the lines beneath
+    it do add up.
     """
+    by_id = _rows_by_tree_id(rows)
     key_to_row = {r["key"]: r for r in rows if r.get("key")}
     comparisons = []
     for i, row in enumerate(rows):
-        is_total_like = row.get("row_kind") in ("total", "summary") or bool(
+        is_total_like = _is_total_kind(row.get("row_kind")) or bool(
             _TOTAL_LABEL_RX.search(row.get("label") or "")
         )
-        if not is_total_like or not _is_additive(row):
+        if not is_total_like:
             continue
         stated_map = _row_values(row)
         if not stated_map:
             continue
-        keys = _constituent_keys(row)
-        if not keys:
-            continue
-        constituent_rows = [key_to_row[k] for k in keys if k in key_to_row]
-        if len(constituent_rows) != len(keys):
+
+        if row.get("children") and not row.get("children_complete", True):
             continue
 
-        computed_map: dict = {}
-        for cr in constituent_rows:
-            for dim, val in _row_values(cr).items():
-                computed_map[dim] = computed_map.get(dim, 0.0) + val
-
-        # Fallback sum over the line rows this total visibly sits over —
-        # consulted only when the recorded constituents don't tie, so it
-        # can rescue a correct-but-under-recorded total without ever
-        # turning a genuine mismatch into a pass.
+        tree_children = _tree_children_map(by_id, row)
         covered_map: dict = {}
-        for cr in (key_to_row[k] for k in _lines_covered_by(rows, i)
-                   if k in key_to_row):
-            for dim, val in _row_values(cr).items():
-                covered_map[dim] = covered_map.get(dim, 0.0) + val
+        if tree_children is not None:
+            computed_map: dict = {}
+            for sign, cr in tree_children:
+                for dim, val in _row_values(cr).items():
+                    computed_map[dim] = computed_map.get(dim, 0.0) + sign * val
+        else:
+            if not _is_additive(row):
+                continue
+            keys = _constituent_keys(row)
+            if not keys:
+                continue
+            constituent_rows = [key_to_row[k] for k in keys if k in key_to_row]
+            if len(constituent_rows) != len(keys):
+                continue
+
+            computed_map = {}
+            for cr in constituent_rows:
+                for dim, val in _row_values(cr).items():
+                    computed_map[dim] = computed_map.get(dim, 0.0) + val
+
+            # Fallback sum over the line rows this total visibly sits over —
+            # consulted only when the recorded constituents don't tie, so it
+            # can rescue a correct-but-under-recorded total without ever
+            # turning a genuine mismatch into a pass.
+            for cr in (key_to_row[k] for k in _lines_covered_by(rows, i)
+                       if k in key_to_row):
+                for dim, val in _row_values(cr).items():
+                    covered_map[dim] = covered_map.get(dim, 0.0) + val
 
         for dim, stated in stated_map.items():
             computed = computed_map.get(dim, 0.0)
@@ -481,12 +547,7 @@ def _totals_readout(rows: list) -> str:
     against the signed sum of `children`. Empty when no row carries
     `children`: a sheet with no live formulas, or a non-outline shape.
     """
-    by_id = {}
-    for r in rows:
-        if r.get("key"):
-            by_id[r["key"]] = r
-        if r.get("total_key"):
-            by_id[r["total_key"]] = r
+    by_id = _rows_by_tree_id(rows)
     rows_with_children = [r for r in rows if r.get("children")]
     if not rows_with_children:
         return ""
