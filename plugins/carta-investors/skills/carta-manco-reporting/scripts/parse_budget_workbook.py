@@ -83,10 +83,12 @@ from pathlib import Path
 # `uv run scripts/parse_budget_workbook.py` from any cwd — the one place
 # this happens; `main()`'s late adapter import relies on it too.
 sys.path.insert(0, str(Path(__file__).parent))
-# `totals_tree` is stdlib-only (unlike the adapter modules themselves,
-# which need openpyxl), so importing it here costs nothing even for a
-# pure-dict caller — see `_totals_readout`.
+# `totals_tree` and `vocab` are both stdlib-only (unlike the adapter
+# modules themselves, which need openpyxl), so importing them here costs
+# nothing even for a pure-dict caller — see `_totals_readout` and
+# `_plausibility_check`.
 from shapes import totals_tree  # noqa: E402
+from shapes.vocab import SECTION_INCOME, SECTION_OPEX  # noqa: E402
 
 # Adapter registry. Keys are the values passed via --shape.
 SHAPES = {
@@ -307,6 +309,93 @@ def _all_zero_check(rows: list) -> dict:
         "passed": message is None,
         "line_row_count": len(lines),
         "zero_line_row_count": len(zero_lines),
+        "message": message,
+    }
+
+
+# A single line this large reads as a units or formula error — a
+# pay-period count multiplied into a figure, say — rather than a real
+# expense. A client's own Audit tab once called out pay-period cells of
+# 312,886 that drove one payroll line into the trillions this way. The
+# figure is in the workbook's own currency, whatever that is — the parser
+# never reads a currency code, so this can't be stated as a dollar cap,
+# and a low-unit-value currency (JPY, KRW) can legitimately carry larger
+# raw numbers for the same real spend.
+#
+# The CLI help text below reads this value directly; everywhere else
+# that states it as prose and can't import it — references/budget-workbook.md's
+# `2.75b-iii` intro and its `plausibility` bullet, references/errors.md,
+# tests/carta-investors/test_budget_validation.py's own docstring, and
+# the changeset that introduced this check — has to be updated by hand
+# if this changes.
+_PLAUSIBILITY_LINE_CAP = 1_000_000_000.0
+
+# Opex this many times income catches opex inflated on its own — the
+# pay-period case above, where income was read correctly and only opex
+# blew up. It does NOT catch a sheet uniformly inflated by one multiple
+# throughout (that leaves the ratio unchanged, so tie-out and coverage
+# are still the only things that could catch that case, and neither can
+# tell a scaled-up sheet from a correct one). It also fires on an
+# ordinary pre- or first-close ManCo plan whose fee income hasn't started
+# yet — a real budget, not a units error — so a refusal here is a
+# question to ask the operator, not an assumed defect.
+#
+# Same restated-by-hand caveat as `_PLAUSIBILITY_LINE_CAP` above.
+_PLAUSIBILITY_OPEX_INCOME_RATIO = 20.0
+
+
+def _plausibility_check(rows: list) -> dict:
+    """Refuse a budget whose own magnitudes read as a parse or units
+    error rather than a real operating plan.
+
+    Two independent triggers, either of which refuses:
+      - a line's own annual figure exceeds `_PLAUSIBILITY_LINE_CAP`
+      - opex exceeds income by more than `_PLAUSIBILITY_OPEX_INCOME_RATIO`
+
+    Reads `section` (`SECTION_INCOME` / `SECTION_OPEX`) when a row
+    carries one — only the pnl-outline adapter sets it — so the
+    opex/income ratio is silently skipped for a shape with no P&L section
+    of its own (a dept crosstab, a whole-ManCo monthly sheet); the
+    line-cap trigger applies regardless of shape.
+    """
+    lines = [r for r in rows if r.get("row_kind") == "line"]
+
+    huge = []
+    for r in lines:
+        for val in _row_values(r).values():
+            if abs(val) > _PLAUSIBILITY_LINE_CAP:
+                huge.append((r.get("label"), val))
+                break
+
+    income = sum(abs(v) for r in lines if r.get("section") == SECTION_INCOME
+                 for v in _row_values(r).values())
+    opex = sum(abs(v) for r in lines if r.get("section") == SECTION_OPEX
+               for v in _row_values(r).values())
+
+    reasons = []
+    if huge:
+        shown = "; ".join(f"{label!r}: {val:,.2f}" for label, val in huge[:5])
+        more = f" (+{len(huge) - 5} more)" if len(huge) > 5 else ""
+        reasons.append(
+            f"{len(huge)} line row(s) exceed {_PLAUSIBILITY_LINE_CAP:,.0f} "
+            f"(workbook units): {shown}{more}"
+        )
+    if income > 0 and opex > _PLAUSIBILITY_OPEX_INCOME_RATIO * income:
+        reasons.append(
+            f"opex ({opex:,.2f}) is {opex / income:,.1f}x income ({income:,.2f})"
+        )
+
+    message = None
+    if reasons:
+        message = (
+            "implausible magnitude — " + "; ".join(reasons) + ". Pass "
+            "--skip-validation if this workbook's own figures are "
+            "genuinely this large."
+        )
+    return {
+        "name": "plausibility",
+        "severity": "error",
+        "passed": message is None,
         "message": message,
     }
 
@@ -655,13 +744,17 @@ def _validate_budget(budget: dict, workbook_path, sheet_name: str) -> dict:
     Shape-agnostic by construction: every helper above reads only
     `row_kind`, `annual`, `monthly`, `by_column`, `constituents` and
     `calculated` — the vocabulary every adapter emits — never a layout
-    detail specific to one of them.
+    detail specific to one of them. `_plausibility_check`'s opex/income
+    trigger is the one exception: it also reads `section`, which only the
+    pnl-outline adapter sets, and simply has nothing to compare for a
+    shape that doesn't.
     """
     rows = budget.get("rows", [])
     checks = [
         _all_zero_check(rows),
         _tie_out_check(rows),
         _coverage_check(rows, workbook_path, sheet_name),
+        _plausibility_check(rows),
     ]
     passed = not any(c["severity"] == "error" and not c["passed"] for c in checks)
     return {"checks": checks, "passed": passed}
@@ -754,7 +847,10 @@ def main() -> int:
         help=(
             "Write budget.json even when the parse-credibility gate refuses "
             "it — an all-zero parse, a tie-out mismatch against the "
-            "workbook's own stated total, or implausibly low row coverage. "
+            "workbook's own stated total, implausibly low row coverage, or "
+            "an implausible magnitude (a line over "
+            f"{_PLAUSIBILITY_LINE_CAP:,.0f} in the workbook's own currency, "
+            f"or opex more than {_PLAUSIBILITY_OPEX_INCOME_RATIO:g}x income). "
             "The validation block is still attached and still reports what "
             "failed. Use this only once you've manually confirmed the "
             "workbook is legitimately shaped that way, e.g. a genuine "

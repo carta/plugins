@@ -101,6 +101,8 @@ from openpyxl import load_workbook
 
 from .quarter_label import match_quarter_label
 from .vocab import tag_value_for_section, match_section
+from .vocab import SECTION_INCOME as _SECTION_INCOME
+from .vocab import SECTION_OPEX as _SECTION_OPEX
 
 # Standard P&L section vocabulary. These are accounting terms, not any one
 # firm's wording; a tab using different terms still parses, its sections
@@ -109,9 +111,6 @@ _INCOME_ALIASES = {"income", "revenue", "revenues", "total revenue"}
 _EXPENSE_ALIASES = {
     "operating expenses", "operating expense", "expenses", "expense", "opex",
 }
-
-_SECTION_INCOME = "Income"
-_SECTION_OPEX = "Operating Expenses"
 
 _HEADER_SCAN_ROWS = 12          # how far down to look for the period header
 _TOTAL_PERIOD_RX = re.compile(r"^TOTAL\s+(20\d{2})$", re.IGNORECASE)

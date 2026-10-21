@@ -36,6 +36,15 @@ from __future__ import annotations
 
 import re
 
+# The outline's own two top-level P&L sections (`pnl_outline.py`'s own
+# `row["section"]` values) — defined once here, not in `pnl_outline.py`
+# itself, so a reader that can't import that module (it needs `openpyxl`;
+# this file needs only `re`) can still match against the same strings.
+# `build_manco_datadir.py` and `parse_budget_workbook.py`'s plausibility
+# check both read a row's `section` against these.
+SECTION_INCOME = "Income"
+SECTION_OPEX = "Operating Expenses"
+
 # Mapping-sheet sections that span every department rather than naming one.
 # These are accounting concepts, not organizational units: a row filed under
 # them applies firm-wide, so deriving a department alias from one would

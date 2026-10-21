@@ -49,6 +49,7 @@ import report_store
 from shapes import canonical as canonical_budget
 from shapes import formula_infer
 from shapes import totals_tree
+from shapes.vocab import SECTION_INCOME, SECTION_OPEX
 
 MONTH_LABELS_FULL_YEAR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
                           "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -2077,8 +2078,8 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
         # No row accounts for the others: they are siblings, so add them.
         return sum(float(r["annual"]) for r in cands)
 
-    income_total = _section_total("Income")
-    opex_total = _section_total("Operating Expenses")
+    income_total = _section_total(SECTION_INCOME)
+    opex_total = _section_total(SECTION_OPEX)
 
     def _section_ytd(section):
         """The section's budget through as_of_month, summed from each
@@ -2092,8 +2093,8 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
         )
 
     if period_kind == "annual":
-        income_ytd_total = _section_ytd("Income")
-        expenses_ytd_total = _section_ytd("Operating Expenses")
+        income_ytd_total = _section_ytd(SECTION_INCOME)
+        expenses_ytd_total = _section_ytd(SECTION_OPEX)
     else:
         income_ytd_total = income_total
         expenses_ytd_total = opex_total
@@ -3412,7 +3413,7 @@ def unresolved_budget_rows(rows, mapping_records=None, account_names=None,
             continue
         # An income line the roster backfill couldn't place needs a fund;
         # anything else needs a GL account.
-        needs = "fund" if row.get("section") == "Income" else "gl_account"
+        needs = "fund" if row.get("section") == SECTION_INCOME else "gl_account"
         entry = {"key": row.get("key"), "addr": row.get("addr"),
                  "label": row.get("label"), "needs": needs,
                  "hint": row.get("tag_value")}
@@ -4298,7 +4299,7 @@ def backfill_fund_match_from_roster(rows, fund_names):
 
     backfilled = 0
     for row in rows:
-        if (row.get("row_kind") != "line" or row.get("section") != "Income"
+        if (row.get("row_kind") != "line" or row.get("section") != SECTION_INCOME
                 or row.get("fund_match")):
             continue
         toks = _fund_match_tokens(row.get("label"))

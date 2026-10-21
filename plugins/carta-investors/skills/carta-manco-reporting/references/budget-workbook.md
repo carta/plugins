@@ -496,9 +496,11 @@ would be silently misread.
 
 `parse_budget_workbook.py` checks its own output before writing it: that
 the line rows aren't all zero, that the workbook's own stated totals tie
-to the rows beneath them, and that it read a plausible share of the
-sheet's numeric rows. A refusal exits 5, writes nothing, and names the
-check and the figures.
+to the rows beneath them, that it read a plausible share of the sheet's
+numeric rows, and that its own figures aren't implausible in magnitude (a
+line over 1,000,000,000 in the workbook's own currency, or opex more
+than 20x income). A refusal exits 5, writes nothing, and names the check
+and the figures.
 
 **A refusal is a question, not a verdict.** The adapter read the sheet;
 what it produced doesn't hold together. Nearly always the operator knows
@@ -554,6 +556,31 @@ Read the check name in the error and work it through:
 
 - **`coverage`** — far fewer rows emitted than the sheet has numbers in.
   The shape or the sheet is wrong; re-confirm both.
+
+- **`plausibility`** — a line over 1,000,000,000 in the workbook's own
+  currency, or opex more than 20x income, is flagged as possibly a units
+  or formula error rather than a real operating plan — a pay-period
+  count multiplied into a figure is a real case this caught. A workbook
+  can tie out perfectly and still fail this: tying out only says the
+  total agrees with its own parts, not that either is a sane number.
+  Neither trigger is conclusive on its own, though — both have genuine
+  cases:
+  - The line cap reads raw workbook units, not dollars. A low-unit-value
+    currency (JPY, KRW, VND, IDR) can carry a legitimately large raw
+    figure for an ordinary expense; ask the operator which currency the
+    workbook is in before assuming the number itself is wrong — don't
+    rely on `manco-currency.txt` existing yet, since this refusal is
+    typically the first thing to fire, often before Step 3 has fetched it.
+  - The opex/income ratio also fires on an ordinary pre-close or
+    first-close ManCo plan whose fee income hasn't started yet — ask the
+    operator whether income starts mid-year before treating the opex
+    figure as an error.
+  The message names the offending line(s) by label and value, or the
+  opex/income figures and ratio; put those cells in front of the
+  operator, along with what the workbook's currency is and when the firm
+  closes. Once they've confirmed the figures are real as parsed, re-run
+  with `--skip-validation` — same as `tie_out`, offer it only after
+  showing them the message, framed as "use the parse as shown".
 
 Put the figures in front of them rather than the check name: *"On `<tab>`
 the sheet's own Total Expenses says $741,000, but the lines under it add
