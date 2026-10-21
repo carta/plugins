@@ -892,11 +892,15 @@
     const SET_CONTEXT_TOOL = 'set_context';
     const WELCOME_TOOL = 'welcome';
 
-    // Server caps `limit` at 10,000 and signals more rows with a next_offset token
-    // in the response header. One fetch covers every real firm; the paging loop is
-    // the tail guard, not the expected path.
-    const PAGE_LIMIT = 10000;
-    const MAX_PAGES = 10;
+    // The server returns an inline page only when it is under 200 KiB (otherwise a
+    // `too_large` error) and signals more rows with a next_offset token in the
+    // response header. Pages start at PAGE_LIMIT rows and shrink on `too_large`.
+    // The first page reports total_rows, so the rest are fetched PAGE_CONCURRENCY
+    // at a time. A query planned into more than MAX_PAGES ranges fails the load
+    // rather than showing a partial row set as complete.
+    const PAGE_LIMIT = 40;
+    const PAGE_CONCURRENCY = 4;
+    const MAX_PAGES = 500;
 
     let DATA = null;
 
@@ -933,6 +937,13 @@
     // loose enough to survive minor wording tweaks from the MCP team.
     function isWelcomeRequiredMessage(text) {
       return typeof text === 'string' && /welcome/i.test(text);
+    }
+
+    // The text of an isError envelope. The gateway puts a wrapped command's own
+    // error in `result.result`, beside the generic message, so both are read.
+    function errorText(result) {
+      const text = (r) => (r && r.content && r.content[0] && r.content[0].text) || '';
+      return [text(result), text(result && result.result)].filter(Boolean).join(' ');
     }
 
     // Every Carta MCP call — call_tool, set_context, welcome alike — must carry
@@ -1003,8 +1014,7 @@
         _welcomeRecoveryPromise = (async () => {
           const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
           if (welcomeResult && welcomeResult.isError) {
-            const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
-            throw new Error('Failed to initialize MCP session: ' + msg);
+            throw new Error('Failed to initialize MCP session: ' + (errorText(welcomeResult) || '<no message>'));
           }
         })();
       }
@@ -1022,8 +1032,7 @@
       const result = await callCartaTool(toolName, args);
       if (!result || !result.isError) return result;
 
-      const errorText = (result.content && result.content[0] && result.content[0].text) || '';
-      if (!isWelcomeRequiredMessage(errorText)) {
+      if (!isWelcomeRequiredMessage(errorText(result))) {
         return result;
       }
 
@@ -1043,8 +1052,7 @@
         throw new Error('Unexpected response shape: ' + (typeof result));
       }
       if (result.isError) {
-        const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
-        throw new Error(msg);
+        throw new Error(errorText(result) || '<no message>');
       }
       if (result.content && Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
         return result.content[0].text;
@@ -1079,7 +1087,8 @@
     function parseNdjson(text) {
       const rows = [];
       let nextOffset = null;
-      if (!text) return { rows, nextOffset };
+      let totalRows = null;
+      if (!text) return { rows, nextOffset, totalRows };
 
       let body = text;
       const stripped = text.trimStart();
@@ -1087,6 +1096,8 @@
       if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
         const m = firstLine.match(/next_offset:\s*(\d+)/);
         if (m) nextOffset = parseInt(m[1], 10);
+        const t = firstLine.match(/total_rows:\s*([\d,]+)/);
+        if (t) totalRows = parseInt(t[1].replace(/,/g, ''), 10);
         body = text.slice(text.indexOf('\n\n') + 2);
       }
 
@@ -1100,35 +1111,102 @@
           console.warn('parseNdjson: skipping malformed line', e);
         }
       }
-      return { rows, nextOffset };
+      return { rows, nextOffset, totalRows };
     }
 
-    // Runs one query to exhaustion. `buildSql` takes (offset, limit). One fetch
-    // covers every real firm — the loop only engages if the server reports
-    // next_offset, and stops at MAX_PAGES so a misbehaving header can't spin.
+    // `too_large` is the server's "this page is over the inline ceiling" error;
+    // its fix text names a row count that fits ("lower the limit param to about 48").
+    // Returns the smaller limit to retry with, or null when the error is something
+    // else or the page is already a single row.
+    function shrunkLimit(message, limit) {
+      if (!/"code"\s*:\s*"too_large"/.test(message) || limit <= 1) return null;
+      const m = message.match(/limit param to about (\d+)/);
+      const suggested = m ? parseInt(m[1], 10) : limit;
+      return Math.max(1, Math.min(suggested, Math.floor(limit / 2)));
+    }
+
+    // Runs one query to exhaustion. The SQL carries no LIMIT or OFFSET: the server
+    // pages it from the `limit` / `offset` arguments. The first page is fetched
+    // alone, to learn total_rows and a page size that fits. The remaining ranges
+    // then run PAGE_CONCURRENCY at a time and are joined in offset order. A page
+    // that comes back `too_large` is retried at the same offset with fewer rows,
+    // and the smaller size is kept for the rest of the query. It returns every row
+    // of the query or rejects: a query needing more than MAX_PAGES pages, or any
+    // page that fails, fails the load, and no call for that query starts after that.
     async function fetchAllRows(buildSql, label) {
-      const all = [];
-      let offset = 0;
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
-          name: 'dwh__execute__query',
-          arguments: {
-            sql: buildSql(offset, PAGE_LIMIT),
-            format: 'ndjson',
-            // The server infers delivery shape from clientInfo.name, which cannot
-            // distinguish clients that accept a binary blob from those that reject
-            // it. `inline` forces the always-safe plain-string path.
-            response_mode: 'inline',
-            limit: PAGE_LIMIT,
-          },
-        });
-        const { rows, nextOffset } = parseNdjson(unwrapEnvelope(unwrapResponse(result)));
-        all.push(...rows);
-        if (nextOffset === null || rows.length === 0) return all;
-        offset = nextOffset;
+      const sql = buildSql();
+      let limit = PAGE_LIMIT;
+      let failed = false;
+
+      async function fetchPage(offset, count) {
+        for (;;) {
+          if (failed) throw new Error(label + ': stopped after a failed page');
+          const sent = Math.min(limit, count);
+          const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+            name: 'dwh__execute__query',
+            arguments: {
+              sql,
+              format: 'ndjson',
+              // The server infers delivery shape from clientInfo.name, which cannot
+              // distinguish clients that accept a binary blob from those that reject
+              // it. `inline` forces the always-safe plain-string path.
+              response_mode: 'inline',
+              limit: sent,
+              offset,
+            },
+          });
+          try {
+            return parseNdjson(unwrapEnvelope(unwrapResponse(result)));
+          } catch (error) {
+            const smaller = shrunkLimit(error.message || '', sent);
+            if (smaller === null) throw error;
+            // Concurrent pages sent at the old size fail together; only the first
+            // to report shrinks, the rest retry at the size it set.
+            limit = Math.min(limit, smaller);
+          }
+        }
       }
-      console.warn(label + ': hit MAX_PAGES (' + MAX_PAGES + '); results may be truncated.');
-      return all;
+
+      // Every row of [start, end), paged at the current size.
+      async function fetchRange(start, end) {
+        const rows = [];
+        let offset = start;
+        while (offset < end) {
+          const page = await fetchPage(offset, end - offset);
+          if (page.rows.length === 0) throw new Error(label + ': empty page at offset ' + offset);
+          rows.push(...page.rows);
+          offset += page.rows.length;
+        }
+        return rows;
+      }
+
+      const first = await fetchPage(0, Infinity);
+      if (first.nextOffset === null) return first.rows;
+      if (first.rows.length === 0) throw new Error(label + ': empty first page with more rows pending');
+      if (first.totalRows === null) throw new Error(label + ': next_offset without total_rows');
+
+      const ranges = [];
+      for (let start = first.nextOffset; start < first.totalRows; start += limit) {
+        ranges.push([start, Math.min(start + limit, first.totalRows)]);
+      }
+      if (ranges.length > MAX_PAGES) {
+        throw new Error(label + ': more than ' + MAX_PAGES + ' pages; results incomplete');
+      }
+      const pages = new Array(ranges.length);
+      let nextRange = 0;
+      async function worker() {
+        while (nextRange < ranges.length) {
+          const i = nextRange++;
+          try {
+            pages[i] = await fetchRange(ranges[i][0], ranges[i][1]);
+          } catch (error) {
+            failed = true;
+            throw error;
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(PAGE_CONCURRENCY, ranges.length) }, worker));
+      return first.rows.concat(...pages);
     }
 
     // Query P, Query O, and the two coverage counts each return exactly one row —
@@ -1163,24 +1241,24 @@
     // how a UUID or join key silently corrupts.
 
     // Query A — the main four-bucket audit. Identical to Mode B Step B1's query.
-    function buildAuditSql(offset, limit) {
-      return `WITH spa_issuers AS (SELECT ISSUER_NAME, EXECUTED_BY_ISSUER FROM (SELECT CASE WHEN TYPEOF(RAW_JSON:company:name) = 'OBJECT' AND RAW_JSON:company:name:value::STRING IS NOT NULL THEN RAW_JSON:company:name:value::STRING WHEN TYPEOF(RAW_JSON:company:name) = 'VARCHAR' THEN RAW_JSON:company:name::STRING ELSE ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_TOTAL_COST ELSE TOTAL_COST END) AS total_cost_basis, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_count, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1)) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, i.currency_count, i.currency_code, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC NULLS LAST, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN 4 WHEN spa_name IS NULL THEN 1 WHEN has_executed_spa = 0 THEN 2 ELSE 3 END AS sort_key, CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM labeled ORDER BY sort_key, total_cost_basis DESC NULLS LAST, company LIMIT ${limit} OFFSET ${offset}`;
+    function buildAuditSql() {
+      return `WITH spa_issuers AS (SELECT ISSUER_NAME, EXECUTED_BY_ISSUER FROM (SELECT CASE WHEN TYPEOF(RAW_JSON:company:name) = 'OBJECT' AND RAW_JSON:company:name:value::STRING IS NOT NULL THEN RAW_JSON:company:name:value::STRING WHEN TYPEOF(RAW_JSON:company:name) = 'VARCHAR' THEN RAW_JSON:company:name::STRING ELSE ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_TOTAL_COST ELSE TOTAL_COST END) AS total_cost_basis, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_count, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1)) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, i.currency_count, i.currency_code, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC NULLS LAST, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN 4 WHEN spa_name IS NULL THEN 1 WHEN has_executed_spa = 0 THEN 2 ELSE 3 END AS sort_key, CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM labeled ORDER BY sort_key, total_cost_basis DESC NULLS LAST, company`;
     }
 
     // Query D — per-company SPA drill-down (batch, all companies). SPAS_JSON
     // nests every SPA + purchaser breakdown as a compact JSON string, decoded by
     // buildCompanies() below (short keys num/sc/td/ud/cc/ex/p for SPAs, n/t/sh/pp/a
     // for purchasers).
-    function buildDrilldownSql(offset, limit) {
-      return `WITH gen_rec AS (SELECT EXTRACTION_ID, RECORD_TYPE, ATTRIBUTES, RAW_JSON, CREATED_AT FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement'), spa_docs AS (SELECT EXTRACTION_ID, ISSUER_NAME, EXECUTED_BY_ISSUER, CLOSING_DATE, CURRENCY_CODE, UPLOAD_DATE FROM (SELECT c.EXTRACTION_ID, CASE WHEN TYPEOF(c.RAW_JSON:company:name) = 'OBJECT' AND c.RAW_JSON:company:name:value::STRING IS NOT NULL THEN c.RAW_JSON:company:name:value::STRING WHEN TYPEOF(c.RAW_JSON:company:name) = 'VARCHAR' THEN c.RAW_JSON:company:name::STRING ELSE c.ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE c.ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER, TRY_TO_DATE(e.ATTRIBUTES:closing_dates[0]::STRING) AS CLOSING_DATE, IFF(REGEXP_LIKE(e.ATTRIBUTES:currency_code::STRING, '^[A-Z]{3}$'), e.ATTRIBUTES:currency_code::STRING, NULL) AS CURRENCY_CODE, c.CREATED_AT::DATE AS UPLOAD_DATE FROM gen_rec c LEFT JOIN gen_rec e ON e.EXTRACTION_ID = c.EXTRACTION_ID AND e.RECORD_TYPE = 'stock_purchase' WHERE c.RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), gen_purch AS (SELECT EXTRACTION_ID, ATTRIBUTES:name::STRING AS PURCHASER_NAME, ATTRIBUTES:entity_type::STRING AS ENTITY_TYPE, ATTRIBUTES:share_class_name::STRING AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:price_per_share::NUMBER AS PRICE_PER_SHARE, ATTRIBUTES:total_amount_paid::NUMBER AS TOTAL_AMOUNT_PAID FROM gen_rec WHERE RECORD_TYPE = 'investor'), purchaser_rows AS (SELECT sd.ISSUER_NAME, DENSE_RANK() OVER (PARTITION BY sd.ISSUER_NAME ORDER BY sd.EXTRACTION_ID) AS spa_num, sd.CLOSING_DATE, sd.CURRENCY_CODE, sd.UPLOAD_DATE AS upload_date, gp.SHARE_CLASS_NAME, gp.PURCHASER_NAME, gp.ENTITY_TYPE, gp.SHARES_PURCHASED, gp.PRICE_PER_SHARE, gp.TOTAL_AMOUNT_PAID, sd.EXECUTED_BY_ISSUER FROM spa_docs sd LEFT JOIN gen_purch gp ON gp.EXTRACTION_ID = sd.EXTRACTION_ID AND (gp.ENTITY_TYPE IS NULL OR (gp.ENTITY_TYPE NOT ILIKE '%notice%' AND gp.ENTITY_TYPE NOT ILIKE '%law firm%'))), per_spa AS (SELECT ISSUER_NAME, spa_num, ANY_VALUE(CLOSING_DATE) AS transaction_date, ANY_VALUE(upload_date) AS upload_date, ANY_VALUE(CURRENCY_CODE) AS currency_code, ANY_VALUE(SHARE_CLASS_NAME) AS share_class, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) = 1 AS executed, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'sh', SHARES_PURCHASED, 'pp', PRICE_PER_SHARE, 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY SHARES_PURCHASED DESC NULLS LAST, PURCHASER_NAME) AS purchasers FROM purchaser_rows GROUP BY ISSUER_NAME, spa_num) SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('num', spa_num, 'sc', share_class, 'td', transaction_date, 'ud', upload_date, 'cc', currency_code, 'ex', executed, 'p', purchasers)) WITHIN GROUP (ORDER BY spa_num)) AS SPAS_JSON FROM per_spa GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+    function buildDrilldownSql() {
+      return `WITH gen_rec AS (SELECT EXTRACTION_ID, RECORD_TYPE, ATTRIBUTES, RAW_JSON, CREATED_AT FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement'), spa_docs AS (SELECT EXTRACTION_ID, ISSUER_NAME, EXECUTED_BY_ISSUER, CLOSING_DATE, CURRENCY_CODE, UPLOAD_DATE FROM (SELECT c.EXTRACTION_ID, CASE WHEN TYPEOF(c.RAW_JSON:company:name) = 'OBJECT' AND c.RAW_JSON:company:name:value::STRING IS NOT NULL THEN c.RAW_JSON:company:name:value::STRING WHEN TYPEOF(c.RAW_JSON:company:name) = 'VARCHAR' THEN c.RAW_JSON:company:name::STRING ELSE c.ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE c.ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER, TRY_TO_DATE(e.ATTRIBUTES:closing_dates[0]::STRING) AS CLOSING_DATE, IFF(REGEXP_LIKE(e.ATTRIBUTES:currency_code::STRING, '^[A-Z]{3}$'), e.ATTRIBUTES:currency_code::STRING, NULL) AS CURRENCY_CODE, c.CREATED_AT::DATE AS UPLOAD_DATE FROM gen_rec c LEFT JOIN gen_rec e ON e.EXTRACTION_ID = c.EXTRACTION_ID AND e.RECORD_TYPE = 'stock_purchase' WHERE c.RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), gen_purch AS (SELECT EXTRACTION_ID, ATTRIBUTES:name::STRING AS PURCHASER_NAME, ATTRIBUTES:entity_type::STRING AS ENTITY_TYPE, ATTRIBUTES:share_class_name::STRING AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:price_per_share::NUMBER AS PRICE_PER_SHARE, ATTRIBUTES:total_amount_paid::NUMBER AS TOTAL_AMOUNT_PAID FROM gen_rec WHERE RECORD_TYPE = 'investor'), purchaser_rows AS (SELECT sd.ISSUER_NAME, DENSE_RANK() OVER (PARTITION BY sd.ISSUER_NAME ORDER BY sd.EXTRACTION_ID) AS spa_num, sd.CLOSING_DATE, sd.CURRENCY_CODE, sd.UPLOAD_DATE AS upload_date, gp.SHARE_CLASS_NAME, gp.PURCHASER_NAME, gp.ENTITY_TYPE, gp.SHARES_PURCHASED, gp.PRICE_PER_SHARE, gp.TOTAL_AMOUNT_PAID, sd.EXECUTED_BY_ISSUER FROM spa_docs sd LEFT JOIN gen_purch gp ON gp.EXTRACTION_ID = sd.EXTRACTION_ID AND (gp.ENTITY_TYPE IS NULL OR (gp.ENTITY_TYPE NOT ILIKE '%notice%' AND gp.ENTITY_TYPE NOT ILIKE '%law firm%'))), per_spa AS (SELECT ISSUER_NAME, spa_num, ANY_VALUE(CLOSING_DATE) AS transaction_date, ANY_VALUE(upload_date) AS upload_date, ANY_VALUE(CURRENCY_CODE) AS currency_code, ANY_VALUE(SHARE_CLASS_NAME) AS share_class, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) = 1 AS executed, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'sh', SHARES_PURCHASED, 'pp', PRICE_PER_SHARE, 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY SHARES_PURCHASED DESC NULLS LAST, PURCHASER_NAME) AS purchasers FROM purchaser_rows GROUP BY ISSUER_NAME, spa_num) SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('num', spa_num, 'sc', share_class, 'td', transaction_date, 'ud', upload_date, 'cc', currency_code, 'ex', executed, 'p', purchasers)) WITHIN GROUP (ORDER BY spa_num)) AS SPAS_JSON FROM per_spa GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME`;
     }
 
     // Query E — fund / geography / SOI valuation enrichment. Optional: never let
     // it fail the audit. IS_ACTIVE_INVESTMENT = TRUE scopes to positions with
     // remaining value, so a fully-exited company returns no row (correctly
     // degrading to funds=[], regionTag='—', soiValuation=null).
-    function buildEnrichmentSql(offset, limit) {
-      return `SELECT ISSUER_NAME AS COMPANY, ARRAY_AGG(DISTINCT FUND_NAME) WITHIN GROUP (ORDER BY FUND_NAME) AS FUNDS, MAX(GET(GET(TAGS_JSON, '  Region'), 0)::STRING) AS REGION_TAG, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_REMAINING_VALUE ELSE REMAINING_VALUE END) AS SOI_VALUATION, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS SOI_CURRENCY_COUNT, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS SOI_CURRENCY_CODE FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+    function buildEnrichmentSql() {
+      return `SELECT ISSUER_NAME AS COMPANY, ARRAY_AGG(DISTINCT FUND_NAME) WITHIN GROUP (ORDER BY FUND_NAME) AS FUNDS, MAX(GET(GET(TAGS_JSON, '  Region'), 0)::STRING) AS REGION_TAG, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_REMAINING_VALUE ELSE REMAINING_VALUE END) AS SOI_VALUATION, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS SOI_CURRENCY_COUNT, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS SOI_CURRENCY_CODE FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME`;
     }
 
     // Query T — live/exited status per company. Optional: disables the
@@ -1197,15 +1275,14 @@
     // needed" counted correctly under All but read 0 under Live and 0 under
     // Exited. Query T's scope must match Query A's, not a narrower one.
     //
-    // GROUP BY collapses to one row per company, so widening the asset-class
-    // scope still returns fewer rows than the old per-position query — that
-    // keeps us clear of the MAX_PAGES truncation ceiling.
+    // GROUP BY returns one row per company, so ISSUER_NAME is a unique ORDER BY
+    // key: offset paging returns each row once only when the sort key is unique.
     //
     // `IS_ACTIVE_INVESTMENT IS NOT NULL` is load-bearing: a company whose
     // positions carry no status at all stays absent from the map (unchanged
     // behaviour) rather than folding to false and being mislabelled as exited.
-    function buildStatusSql(offset, limit) {
-      return `SELECT ISSUER_NAME, MAX(CASE WHEN IS_ACTIVE_INVESTMENT = TRUE THEN 1 ELSE 0 END) AS IS_ACTIVE_INVESTMENT FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND ISSUER_NAME IS NOT NULL AND IS_ACTIVE_INVESTMENT IS NOT NULL GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+    function buildStatusSql() {
+      return `SELECT ISSUER_NAME, MAX(CASE WHEN IS_ACTIVE_INVESTMENT = TRUE THEN 1 ELSE 0 END) AS IS_ACTIVE_INVESTMENT FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND ISSUER_NAME IS NOT NULL AND IS_ACTIVE_INVESTMENT IS NOT NULL GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME`;
     }
 
     // Query P — pending-extraction count (FYI pill). Scalar, single row, no
@@ -1472,8 +1549,7 @@
       try {
         const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
         if (contextResult && contextResult.isError) {
-          const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
-          throw new Error(msg);
+          throw new Error(errorText(contextResult) || '<no message>');
         }
       } catch (error) {
         showError(
