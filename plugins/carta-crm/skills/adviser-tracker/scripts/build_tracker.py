@@ -264,7 +264,7 @@ def _row_lines(row: dict) -> list[str]:
         return []
     lines = []
     if _deals(row) > 0 and interactions == 0:
-        suggested = ", ".join(f"{d['domain']} ({d['company']})" if d["company"] else d["domain"] for d in rel.get("suggestedDomains", []))
+        suggested = ", ".join(f"{d['company']} ({d['domain']})" if d["company"] else d["domain"] for d in rel.get("suggestedDomains", []))
         lines.append(f"check_domain: {name} ({domain}): {_deals(row)} deals, no interactions." + (f" Possible domains: {suggested}." if suggested else " No other domain found."))
     if interactions == 0 and (rel["strength"] != "weak" or rel["topContact"] or rel["matrix"]):
         lines.append(f"check_row: {name} ({domain}): no interactions, yet it carries a strength, a contact or a matrix.")
