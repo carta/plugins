@@ -1,12 +1,13 @@
 # Scenario sharing (publish / pull)
 
 Firm admins can share Fund Modeling scenarios across their firm. Sharing is **built into the
-app** — there is no chat/prompt flow. If a user asks to share, publish, or pull scenarios,
-point them at the in-app controls below.
+local app** (`serve.py`) — there is no chat/prompt flow. If a user asks to share, publish, or
+pull scenarios, point them at the in-app controls below. The hosted app has no scenario
+sharing yet and shows none of these controls.
 
 ## In the app
 
-- **SHARED sidebar section** — always shown, below your local SCENARIOS. Its **Load shared
+- **SHARED sidebar section** — always shown in the local app, below your local SCENARIOS. Its **Load shared
   scenarios** (⤓) control pulls the firm's shared scenarios; they render under SHARED.
 - **Per-scenario actions** (top bar, for the active scenario):
   - **Publish** — a local scenario → shared with the firm.

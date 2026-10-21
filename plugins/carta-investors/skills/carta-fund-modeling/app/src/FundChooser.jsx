@@ -1,19 +1,17 @@
 // Landing page: pick a firm, then load its console. Lists the caller's firms (/api/firms).
 // Carta staff start with only their active firm, so they get a search box (name, firm UUID or
 // Carta ID, /api/firms?q=) and are never auto-opened into a firm. Anyone else never sees search:
-// one firm opens directly, several show as cards. Who is staff comes from /api/me; until that
+// one firm opens directly (unless the user just left it), several show as cards. Who is staff comes from /api/me; until that
 // is known (or if it fails) there is no search and no auto-open. Firm-agnostic — every card
 // is data-driven, so adding a firm needs no code change.
 import { useEffect, useState } from "react";
 import { FS, tightSans, sans, inkNum, GLOBAL_CSS } from "./ui/theme.js";
 import { Mark, H3 } from "./ui/components.jsx";
+import { FirmAccess, getJson } from "./firm-access.js";
 
 const SEARCH_DELAY_MS = 300;
 
-const getJson = (url) =>
-  fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 401 ? "Not authorized" : `HTTP ${r.status}`))));
-
-export default function FundChooser({ onPick }) {
+export default function FundChooser({ onPick, autoOpen = true }) {
   const [isStaff, setIsStaff] = useState(undefined); // undefined: loading; null: unknown
   const [firms, setFirms] = useState(null);
   const [error, setError] = useState(null);
@@ -21,7 +19,7 @@ export default function FundChooser({ onPick }) {
   const q = isStaff ? query.trim() : "";
 
   useEffect(() => {
-    getJson("/api/me").then((me) => setIsStaff(typeof me?.isStaff === "boolean" ? me.isStaff : null)).catch(() => setIsStaff(null));
+    getJson("/api/me").then((me) => setIsStaff(FirmAccess.staffFlag(me))).catch(() => setIsStaff(null));
   }, []);
 
   // Wait for who the caller is. Staff: an empty search lists their active firm, otherwise search
@@ -36,12 +34,13 @@ export default function FundChooser({ onPick }) {
           const found = Array.isArray(list) ? list : [];
           setFirms(found);
           setError(null);
-          if (isStaff === false && found.length === 1 && found[0]?.slug) onPick(found[0].slug);
+          const pinned = new FirmAccess(isStaff, found).pinnedFirm;
+          if (autoOpen && pinned) onPick(pinned);
         })
         .catch((e) => { if (live) setError(String(e)); });
     }, q ? SEARCH_DELAY_MS : 0);
     return () => { live = false; clearTimeout(timer); };
-  }, [q, isStaff, onPick]);
+  }, [q, isStaff, onPick, autoOpen]);
 
   const shown = firms || [];
   return (

@@ -461,6 +461,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         _touch_heartbeat()
         if path == "/api/heartbeat":
             return self._send(200, {"ok": True})
+        if path == "/api/app-config":
+            return self._send(200, {"mode": "local"})
+        if path == "/api/me":
+            # One firm's data dir: never staff search, so the chooser opens the firm directly.
+            return self._send(200, {"isStaff": False})
         if path == "/api/telemetry-context":
             # Read per request, not at startup: a refresh rewrites snapshot.json, and a
             # firmId it resolves late should reach the tracker without a relaunch.

@@ -9,18 +9,31 @@ import FundChooser from "./FundChooser.jsx";
 import { FirmDataContext } from "./state/FirmData.jsx";
 import { FS, sans } from "./ui/theme.js";
 import { parseRoute, navigate, subscribeNav } from "./route.js";
+import { postToOuter } from "./bridge-client.js";
+import { FirmAccess } from "./firm-access.js";
 
-export default function Root() {
+export default function Root({ features }) {
   // The URL path is the source of truth for the selected firm.
   const firm = useSyncExternalStore(subscribeNav, () => parseRoute().firm, () => null);
   const [extras, setExtras] = useState(null); // { slug, pacing, ownership, lpBase, gpBase, feeHistory, expenseHistory, opsBenchmarks } for `firm`
   const [error, setError] = useState(null);
   const [loadingStep, setLoadingStep] = useState(null); // SSE step from /api/load-firm
+  const [autoOpen, setAutoOpen] = useState(true); // false once the user leaves a firm, so the chooser doesn't reopen it
+  const [canSwitchFirm, setCanSwitchFirm] = useState(false);
+
+  // If the access check fails, offer Switch firm: the chooser still lists what the user can open.
+  useEffect(() => {
+    if (!features.switchFirm) return;
+    FirmAccess.load().then((access) => setCanSwitchFirm(!access.pinnedFirm)).catch(() => setCanSwitchFirm(true));
+  }, [features]);
 
   // Pick / clear the firm by navigating the path; also remember it for next launch.
   const choose = useCallback((slug) => {
     if (slug) localStorage.setItem("firm", slug);
-    else localStorage.removeItem("firm");
+    else {
+      localStorage.removeItem("firm");
+      setAutoOpen(false);
+    }
     navigate({ firm: slug, tab: slug ? "overview" : null }, { replace: true });
   }, []);
 
@@ -103,11 +116,16 @@ export default function Root() {
     return () => { live = false; };
   }, [firm]);
 
+  // On the chooser, clear the firm from the outer shell's browser bar and tab title too, so a
+  // reload stays on the chooser.
   useEffect(() => {
-    if (!firm) document.title = "Carta Fund Modeling";
+    if (firm) return;
+    document.title = "Carta Fund Modeling";
+    postToOuter("route", {});
+    postToOuter("title", {});
   }, [firm]);
 
-  if (!firm) return <FundChooser onPick={choose} />;
+  if (!firm) return <FundChooser onPick={choose} autoOpen={autoOpen} />;
 
   if (error) {
     return (
@@ -130,7 +148,7 @@ export default function Root() {
 
   return (
     <FirmDataContext.Provider value={extras}>
-      <App key={firm} firm={firm} onChooseFirm={() => choose(null)} />
+      <App key={firm} firm={firm} features={features} canSwitchFirm={canSwitchFirm} onChooseFirm={() => choose(null)} />
     </FirmDataContext.Provider>
   );
 }

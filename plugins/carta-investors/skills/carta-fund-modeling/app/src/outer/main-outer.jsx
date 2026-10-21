@@ -9,10 +9,10 @@ installThemeSync();
 
 // Resolve before OuterShell freezes the iframe src from location.href, so the
 // iframe inherits the scrubbed, token-free URL.
-await mountWithAuth((root) => {
+await mountWithAuth((root, features) => {
   root.render(
     <React.StrictMode>
-      <OuterShell />
+      <OuterShell features={features} />
     </React.StrictMode>
   );
 });

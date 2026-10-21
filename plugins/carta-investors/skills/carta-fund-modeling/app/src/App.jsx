@@ -204,7 +204,7 @@ function DataStatus({ asOf }) {
   );
 }
 
-export default function App({ firm, onChooseFirm }) {
+export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   const { snapshot, doc, slice, selectSlice, createSlice, renameSlice, forkSlice, deleteSlice, hideShared, showHidden, unshareSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
     usePortfolio(firm, { onLockedEdit: () => warn(BASELINE_LOCKED_MSG) });
   const share = useShare();
@@ -405,7 +405,7 @@ export default function App({ firm, onChooseFirm }) {
   // Opens/closes the chat rail in the outer shell — the app itself only owns
   // the toggle button; OuterShell holds the open/closed state and ChatPanel.
   const chatToggleLabel = chatOpen ? "Close chat panel" : "Ask Claude";
-  const chatToggle = (
+  const chatToggle = features.askClaude && (
     <button onClick={() => postToOuter("toggle-chat")} data-testid="chat-toggle"
       title={chatToggleLabel} aria-label={chatToggleLabel} aria-expanded={chatOpen}
       style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40,
@@ -418,9 +418,16 @@ export default function App({ firm, onChooseFirm }) {
     <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
       <Btn onClick={onRename} style={{ height: "auto", padding: "6px 13px", fontSize: FS.small }}>Rename</Btn>
       {!isShared(slice) && <Btn kind="danger" onClick={onDelete} style={{ height: "auto", padding: "6px 13px", fontSize: FS.small }}>Delete scenario</Btn>}
-      <ShareControls slice={slice} snapshot={snapshot} userId={userId} busy={share.running}
-        onPublish={onPublish} onFork={onFork} onRemove={onRemove} onDelete={onDeleteShared} />
+      {features.share && <ShareControls slice={slice} snapshot={snapshot} userId={userId} busy={share.running}
+        onPublish={onPublish} onFork={onFork} onRemove={onRemove} onDelete={onDeleteShared} />}
     </span>
+  );
+
+  const switchFirm = canSwitchFirm && (
+    <Btn kind="link" onClick={onChooseFirm} data-testid="switch-firm"
+      style={{ fontSize: FS.small, textDecoration: "underline" }}>
+      Switch firm
+    </Btn>
   );
 
   // ── full sidebar — firm header, tab nav (icon + label), scenarios, data status ──
@@ -440,6 +447,7 @@ export default function App({ firm, onChooseFirm }) {
         <CartaLogo size={30} style={{ flex: "none", transform: "translateY(-5px)" }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ ...sans, fontSize: 14, fontWeight: 600, lineHeight: "20px", letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)", wordBreak: "break-word" }}>{snapshot.branding?.firmName ?? snapshot.source.firm}</div>
+          {switchFirm}
         </div>
       </div>
       <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
@@ -457,22 +465,23 @@ export default function App({ firm, onChooseFirm }) {
       {doc.slices.filter((s) => !isShared(s)).map((s) => (
         <ScenarioItem key={s.id} slice={s} active={!scenariosOff && s.id === slice.id} onClick={() => pickSlice(s.id)} />
       ))}
-      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 8px 4px" }}>
-        <Eyebrow color={MICRO}>Shared</Eyebrow>
-        <PullButton onPull={share.pull} busy={share.running} />
-        {doc.slices.filter(isHidden).length > 0 && (
-          <button onClick={showHidden} title="Show hidden shared scenarios"
-            style={{ ...sans, fontSize: FS.micro, color: "var(--ink-button-background-color-primary-base-default)",
-              background: "none", border: "none", cursor: "pointer", padding: 0, marginLeft: "auto" }}>
-            {doc.slices.filter(isHidden).length} hidden · Show
-          </button>
-        )}
-      </div>
-      {doc.slices.some((s) => isShared(s) && !isHidden(s))
-        ? doc.slices.filter((s) => isShared(s) && !isHidden(s)).map((s) => (
-            <ScenarioItem key={s.id} slice={s} active={!scenariosOff && s.id === slice.id} onClick={() => pickSlice(s.id)} />
-          ))
-        : <div style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", padding: "2px 12px 4px" }}>None yet — load to check.</div>}
+      {features.share && <>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 8px 4px" }}>
+          <Eyebrow color={MICRO}>Shared</Eyebrow>
+          <PullButton onPull={share.pull} busy={share.running} />
+          {doc.slices.filter(isHidden).length > 0 && (
+            <Btn kind="link" onClick={showHidden} title="Show hidden shared scenarios"
+              style={{ fontSize: FS.micro, fontWeight: 400, textDecoration: "underline", marginLeft: "auto" }}>
+              {doc.slices.filter(isHidden).length} hidden · Show
+            </Btn>
+          )}
+        </div>
+        {doc.slices.some((s) => isShared(s) && !isHidden(s))
+          ? doc.slices.filter((s) => isShared(s) && !isHidden(s)).map((s) => (
+              <ScenarioItem key={s.id} slice={s} active={!scenariosOff && s.id === slice.id} onClick={() => pickSlice(s.id)} />
+            ))
+          : <div style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", padding: "2px 12px 4px" }}>None yet — load to check.</div>}
+      </>}
       <span style={{ flex: 1, minHeight: 10 }} />
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "6px 8px 9px" }} />
       <div style={{ padding: "0 8px 4px" }}>
@@ -500,7 +509,7 @@ export default function App({ firm, onChooseFirm }) {
           {sliceTools}
         </>}
         <span style={{ flex: 1 }} />
-        <UpdateDataButton />
+        {features.updateData && <UpdateDataButton />}
         {themeToggle}
         {chatToggle}
       </div>
@@ -513,9 +522,10 @@ export default function App({ firm, onChooseFirm }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <CartaLogo size={24} />
         <H3>{snapshot.branding?.firmName ?? snapshot.source.firm}</H3>
+        {switchFirm}
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)" }}>{statusLine}</span>
-        <UpdateDataButton />
+        {features.updateData && <UpdateDataButton />}
         {themeToggle}
         {chatToggle}
       </div>
@@ -550,13 +560,13 @@ export default function App({ firm, onChooseFirm }) {
             background: "transparent", color: "var(--ink-button-background-color-primary-base-default)", cursor: "pointer", whiteSpace: "nowrap" }}>
           + New scenario
         </button>
-        <button onClick={share.pull} disabled={share.running} data-testid="pull-shared-narrow"
+        {features.share && <button onClick={share.pull} disabled={share.running} data-testid="pull-shared-narrow"
           style={{ ...sans, fontSize: FS.bodyLg, fontWeight: 600, padding: "6px 13px", borderRadius: 4, border: `1px dashed var(--ink-color-global-border-subtle)`,
             background: "transparent", color: "var(--ink-button-background-color-primary-base-default)", cursor: share.running ? "default" : "pointer", whiteSpace: "nowrap" }}>
           ⤓ Load shared
-        </button>
+        </button>}
       </div>
-      {!locked && !scenariosOff && (
+      {features.share && !locked && !scenariosOff && (
         <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
           <ShareControls slice={slice} snapshot={snapshot} userId={userId} busy={share.running}
             onPublish={onPublish} onFork={onFork} onRemove={onRemove} onDelete={onDeleteShared} />
