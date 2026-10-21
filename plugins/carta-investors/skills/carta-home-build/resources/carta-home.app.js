@@ -1476,7 +1476,6 @@ async function fetchUserEnrichment() {
     // hidden, so filling it later causes no reflow above it.
     const whatsNewP = _listWhatsNewPrompts();
     const res = await _mcp("get_current_user", {});
-    console.log("[carta-home][debug] get_current_user full payload:\n" + JSON.stringify(res, null, 2));
     if (res && res.isError) {
       // No profile means no plugin access to check, so "What's new" stays hidden.
       return;
@@ -1487,13 +1486,11 @@ async function fetchUserEnrichment() {
     // structuredContent wrapper like {result:"<json>"}. Collect every candidate and
     // pick the one that actually carries firm_ui_categories — don't assume a shape.
     const profile = extractUserProfile(res);
-    console.log("[carta-home][debug] firm_ui_categories:", JSON.stringify(profile.firm_ui_categories));
 
     _userEntitlements = {
       manco:  readProductFlag(profile, "has_active_manco"),
       tactyc: readProductFlag(profile, "has_tactyc"),
     };
-    console.log("[carta-home][debug] resolved entitlements:", JSON.stringify(_userEntitlements));
 
     const shownAbove = renderCapabilities(profile.recommendations);
     whatsNewP
