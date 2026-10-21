@@ -28,9 +28,9 @@
   </div>
 
   <!-- Page header -->
-  <h1 class="page-title">Carta Home</h1>
-  <!-- fetchLiveData() in carta-home.app.js writes the detected firm's name here. -->
-  <p class="page-subtitle" id="firm-subtitle">Your home base for fund data, plugin updates and news.</p>
+  <!-- fetchLiveData() in carta-home.app.js writes the detected firm's name into #firm-title. -->
+  <h1 class="page-title">Carta Home<span class="page-title-firm" id="firm-title" hidden><span class="page-title-sep" aria-hidden="true">|</span><span id="firm-title-name"></span></span></h1>
+  <p class="page-subtitle">Your home base for fund data, plugin updates and news.</p>
 
   <!-- Update banner — rendered by version-check.js when a newer build is published -->
   <div id="update-banner-slot"></div>
@@ -46,30 +46,32 @@
 
   <!-- ── Capital activity ── -->
   <section id="ca-section-v2" style="display:none">
-    <p class="section-label">Capital activity</p>
-    <div class="ca-section-row" id="ca-section-cards"></div>
+    <div class="ca-collapse">
+      <p class="section-label">Capital activity</p>
+      <div class="ca-section-row" id="ca-section-cards"></div>
+    </div>
   </section>
 
   <!-- ── Portfolio analytics ── -->
   <section id="dashboards-section">
     <div class="section-label-row">
-      <p class="section-label" style="margin:0">Dashboards</p>
+      <p class="section-label" style="margin:0">Your dashboards</p>
     </div>
-    <div class="card-grid">
+    <div class="card-grid" id="dashboard-grid" data-cards="2">
 
       <!-- Schedule of Investments -->
-      <div class="skill-card">
+      <div class="skill-card dash-card">
         <div class="card-header">
           <div class="card-header-text">
-            <div class="card-title">Schedule of investments dashboard</div>
-            <div class="card-desc">A full schedule of holdings with shares, value and gain / loss.</div>
+            <div class="card-title">Schedule of investments</div>
+            <div class="card-desc">Every holding with cost, value and gain/loss.</div>
           </div>
         </div>
         <div class="card-preview">
           <div class="tbl-label" id="soi-fund-label">FUNDS</div>
           <div class="tbl-row tbl-header">
             <span class="tbl-col-name">FUND</span>
-            <span class="tbl-col-val">VALUE</span>
+            <span class="tbl-col-val">TOTAL VALUE</span>
             <span class="tbl-col-gl">GAIN/LOSS</span>
           </div>
           <div id="soi-rows">
@@ -80,11 +82,11 @@
       </div>
 
       <!-- Fund Performance -->
-      <div class="skill-card">
+      <div class="skill-card dash-card">
         <div class="card-header">
           <div class="card-header-text">
-            <div class="card-title">Fund performance dashboard</div>
-            <div class="card-desc">Dashboard of IRR, MOIC, TVPI, DPI and other metrics across funds.</div>
+            <div class="card-title">Fund performance</div>
+            <div class="card-desc">IRR, TVPI and DPI for each fund against peer benchmarks.</div>
           </div>
         </div>
         <div class="card-preview">
@@ -153,7 +155,7 @@
           <span class="plugin-news-tag">Webinar</span>
           <p class="plugin-news-title">Live webinar: AI-native fund admin workflows</p>
           <p class="plugin-news-desc">See how fund admins are cutting reporting time in half with Claude and Carta.</p>
-          <span class="plugin-news-cta">Watch recording →</span>
+          <span class="plugin-news-cta">Watch recording <span class="cta-arrow" aria-hidden="true">→</span></span>
         </div>
       </a>
 
@@ -161,12 +163,13 @@
          href="https://carta.com/blog/" target="_blank" rel="noopener">
         <div class="plugin-news-thumb plugin-news-thumb--fake">
           <div class="plugin-news-fake-play">▶</div>
+          <span class="plugin-news-fake-title">Getting started with the capital activity plugin</span>
         </div>
         <div class="plugin-news-content">
           <span class="plugin-news-tag">Video</span>
           <p class="plugin-news-title">Getting started with the capital activity plugin</p>
           <p class="plugin-news-desc">A quick walkthrough of creating cap calls and distributions end-to-end.</p>
-          <span class="plugin-news-cta">Read more →</span>
+          <span class="plugin-news-cta">Read more <span class="cta-arrow" aria-hidden="true">→</span></span>
         </div>
       </a>
 
@@ -180,7 +183,7 @@
           <span class="plugin-news-tag">Story</span>
           <p class="plugin-news-title">Internal transformation: AI at the core</p>
           <p class="plugin-news-desc">How one CFO restructured their team's workflows around Claude and Carta plugins.</p>
-          <span class="plugin-news-cta">Read more →</span>
+          <span class="plugin-news-cta">Read more <span class="cta-arrow" aria-hidden="true">→</span></span>
         </div>
       </a>
 

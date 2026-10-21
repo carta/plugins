@@ -2681,7 +2681,7 @@
                         ? `<span class="tranche-note tooltip-trigger" data-tooltip="Combines ${a.tranches} separate investment tranches into this partnership interest">(${a.tranches} tranches)</span>`
                         : '';
                     const nameCell = isExpandable
-                        ? `<span class="expand-icon underlying-toggle" id="underlying-icon-${underlyingKey}" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${inkIcon(isExpanded ? 'down' : 'forward', 9)}</span><span class="asset-name-stack"><span class="asset-name expandable" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${escHtml(a.name)}</span>${trancheTag}</span>`
+                        ? `<span class="expand-icon underlying-toggle" id="underlying-icon-${underlyingKey}" onclick="event.stopPropagation(); clickUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${inkIcon(isExpanded ? 'down' : 'forward', 9)}</span><span class="asset-name-stack"><span class="asset-name expandable" onclick="event.stopPropagation(); clickUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${escHtml(a.name)}</span>${trancheTag}</span>`
                         : `<span class="asset-name">${escHtml(a.name)}</span>`;
 
                     ar.innerHTML = rowCells({
@@ -2773,6 +2773,7 @@
         function toggle(i) {
             const rows = document.querySelectorAll(`#tableBody .asset-group-${i}`);
             const expanding = !rows[0]?.classList.contains('visible');
+            if (expanding) trackUi('click', 'SOI.Holdings.Expand');
             rows.forEach(r => setRowVisible(r, expanding));
             if (expanding) expandedCompanies.add(i); else expandedCompanies.delete(i);
             const icon = document.getElementById(`icon-${i}`);
@@ -2789,6 +2790,7 @@
         function toggleAll() {
             allExpanded = !allExpanded;
             if (allExpanded) {
+                trackUi('click', 'SOI.Holdings.ExpandAll');
                 document.querySelectorAll('#tableBody .company-row').forEach((_, i) => expandedCompanies.add(i));
             } else {
                 expandedCompanies.clear();
@@ -2960,6 +2962,12 @@
             if (expandedUnderlyingGroups.has(groupKey)) expandedUnderlyingGroups.delete(groupKey);
             else expandedUnderlyingGroups.add(groupKey);
             render();
+        }
+
+        // A viewer's own click on a fund-of-funds row; jumpToMatch opens rows too, and is tracked as itself.
+        function clickUnderlying(key, fundUuid, parentIssuerName) {
+            if (!expandedUnderlying.has(key)) trackUi('click', 'SOI.Holdings.ExpandUnderlying');
+            return toggleUnderlying(key, fundUuid, parentIssuerName);
         }
 
         // Expand/collapse one FUND_INVESTMENT asset's underlying holdings, fetching
@@ -3374,7 +3382,12 @@
 
         function cfToggle(i, name) {
             const expanding = !cfExpanded.has(name);
-            if (expanding) cfExpanded.add(name); else cfExpanded.delete(name);
+            if (expanding) {
+                trackUi('click', 'SOI.CashFlows.Expand');
+                cfExpanded.add(name);
+            } else {
+                cfExpanded.delete(name);
+            }
             document.querySelectorAll(`#cfTableBody .cf-group-${i}`).forEach(r => setRowVisible(r, expanding));
             const icon = document.getElementById(`cf-icon-${i}`);
             if (icon) icon.innerHTML = inkIcon(expanding ? 'down' : 'forward', 10);
@@ -3383,7 +3396,11 @@
         }
 
         function cfToggleAll() {
-            if (cfRenderedNames.length > 0) cfExpanded = cfAllExpanded() ? new Set() : new Set(cfRenderedNames);
+            if (cfRenderedNames.length > 0) {
+                const expanding = !cfAllExpanded();
+                if (expanding) trackUi('click', 'SOI.CashFlows.ExpandAll');
+                cfExpanded = expanding ? new Set(cfRenderedNames) : new Set();
+            }
             renderCashFlows();
         }
 
@@ -3554,6 +3571,7 @@
         // Expansions and the cross-fund search go with it — loadFund clears those
         // anyway, and leaving them behind would contradict "reset".
         function resetFilters() {
+            trackUi('click', 'SOI.Filters.Reset');
             const fundNarrowed = currentFundUuid !== ALL_ENTITIES_VALUE;
             filterText = '';
             showExited = false;
@@ -4740,6 +4758,7 @@
             if (!btn || !HOME_URL) return;
             btn.href = HOME_URL;
             btn.hidden = false;
+            btn.addEventListener("click", () => trackUi('click', 'SOI.BackToHome'));
         })();
     </script>
 </body>

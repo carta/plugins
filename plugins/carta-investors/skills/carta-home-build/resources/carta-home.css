@@ -22,6 +22,9 @@
          up, surface-lightgray-active (#656B6B), overshoots badly. Keeps the
          nested card readable as elevated against the #2C3030 card. */
       --carta-surface-card-nested:                   light-dark(#F1F1F1, #394040);
+      /* Local, non-Ink: the darker card border a hovered dashboard card takes (Carta
+         Home v2 design). No Ink border step sits between subtle and default. */
+      --carta-border-card-hover:                     light-dark(#858686, #A7AAAA);
       --ink-color-global-border-subtle:              light-dark(#DEDFDF, #2D2D2D);
       --ink-color-global-border-default:             light-dark(#A7AAAA, #656B6B);
       --ink-elevation-global-shadow-small:           0 4px 12px 0 rgb(0 0 0 / 0.08);
@@ -91,6 +94,16 @@
          Chart.js, which cannot read light-dark() out of a custom property —
          carta-home.html resolves this token through inkColor(). */
       --carta-chart-label-color:                     light-dark(#656B6B, #FFFFFF);
+      /* Fund performance chart series, in fund order. They mirror the --carta-series-* and
+         --carta-peer-median values in carta-fund-performance/references/artifact.html, so a
+         fund keeps its colour from Home to the Fund Performance dashboard. */
+      --carta-series-blue:                           light-dark(#1E3CAF, #8A9AE6);
+      --carta-series-teal:                           light-dark(#3A8F7F, #6FC2B0);
+      --carta-series-pink:                           light-dark(#C74E7E, #E58BAE);
+      --carta-series-gray:                           light-dark(#8C8C8C, #A7AAAA);
+      --carta-series-lilac:                          light-dark(#7F8CDB, #B3BCF0);
+      /* The dashed peer-median (P50) line and its legend key. */
+      --carta-peer-median:                           light-dark(#656B6B, #A7AAAA);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -135,7 +148,7 @@
       align-items: center;
       justify-content: space-between;
       position: relative;
-      margin-bottom: 12px;
+      margin-bottom: 24px;
     }
 
     /* ── Page header ── */
@@ -147,10 +160,14 @@
       color: var(--ink-color-global-text-default);
       margin-bottom: 8px;
     }
+    .page-title-sep {
+      color: var(--ink-color-global-border-default);
+      margin: 0 4px;
+    }
     .page-subtitle {
       font-size: 15px;
       color: var(--ink-color-global-text-subtle);
-      margin-bottom: 36px;
+      margin-bottom: 48px;
       max-width: none;
     }
     /* ── Section headers ── */
@@ -158,16 +175,24 @@
       font-size: 18px;
       font-weight: 600;
       color: var(--ink-color-global-text-default);
-      margin-bottom: 16px;
+      margin-bottom: 24px;
     }
 
     /* ── Card grid ── */
+    /* data-cards is the number of dashboard cards in the grid (set in the template). */
     .card-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-bottom: 40px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+      gap: 24px;
+      align-items: stretch;
+      margin-bottom: 56px;
+      --dash-min-height: 286px;
+      --dash-chart-height: 100px;
     }
+    .card-grid[data-cards="3"] { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card-grid[data-cards="4"] { --dash-min-height: 190px; --dash-chart-height: 64px; }
+    /* Three across leaves no room for a third column, so SOI drops Gain/Loss. */
+    .card-grid[data-cards="3"] .tbl-col-gl { display: none; }
 
     /* Company logo on a light chip, overlaid bottom-left of a Plugin news thumb
        when the card is a live content item (live-content.js). */
@@ -198,6 +223,33 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+    }
+    /* Dashboard cards: the whole card lifts on hover and its footer arrow nudges. */
+    .dash-card {
+      min-height: var(--dash-min-height);
+      transition: border-color .2s, box-shadow .2s, transform .2s;
+    }
+    .dash-card:hover {
+      border-color: var(--carta-border-card-hover);
+      transform: translateY(-2px);
+    }
+    .dash-card .card-header { padding: 24px 32px 16px; }
+    .dash-card .card-title { font-size: 18px; line-height: 24px; }
+    .dash-card .card-desc { height: 34px; line-height: 17px; overflow: hidden; }
+    .dash-card .card-preview { padding: 0 32px 8px; }
+    .dash-card .card-footer { margin-top: 16px; padding: 16px 32px 20px; }
+    .dash-card .card-footer .run-btn { font-size: 12px; }
+    .cta-arrow {
+      display: inline-block;
+      transition: transform .3s cubic-bezier(.34, 1.56, .64, 1);
+    }
+    .dash-card:hover .cta-arrow,
+    .plugin-news-card:hover .cta-arrow { transform: translateX(4px); }
+    @media (prefers-reduced-motion: reduce) {
+      .dash-card, .cta-arrow { transition: none; }
+      .dash-card:hover,
+      .dash-card:hover .cta-arrow,
+      .plugin-news-card:hover .cta-arrow { transform: none; }
     }
     .card-header {
       padding: 16px 20px 12px;
@@ -377,19 +429,36 @@
     .tbl-row {
       display: flex;
       align-items: center;
-      padding: 7px 0;
+      padding: 6px 0;
+      font-size: 13px;
       border-bottom: 1px solid var(--ink-color-global-border-subtle);
     }
+    .tbl-row.tbl-header {
+      padding: 7px 0;
+      border-bottom-color: var(--ink-color-global-border-default);
+    }
     .tbl-row:last-child { border-bottom: none; }
-    .tbl-col-name { flex: 1; color: var(--ink-color-global-text-default); font-weight: 500; }
-    .tbl-col-val    { width: 64px; text-align: right; color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; font-size: 12px; }
-    .tbl-col-gl     { width: 72px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
+    .tbl-col-name { flex: 1; min-width: 0; color: var(--ink-color-global-text-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tbl-col-val    { width: 96px; text-align: right; color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; font-size: 12px; }
+    .tbl-col-gl     { width: 80px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
     .gl-pos { color: var(--ink-color-global-feedback-positive-strong); }
     .gl-neg { color: var(--ink-color-global-feedback-negative-strong); }
     .loading-row { color: var(--ink-color-global-text-subtle); font-style: italic; font-size: 12px; padding: 12px 0; }
 
     /* ── Chart wrapper ── */
-    .chart-wrap { position: relative; height: 130px; }
+    .chart-wrap { position: relative; height: var(--dash-chart-height, 100px); }
+    .bench-legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, max-content));
+      gap: 6px 16px;
+      padding-top: 10px;
+      font-size: 12px;
+      color: var(--ink-color-global-text-subtle);
+    }
+    .bench-legend-item { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+    .bench-legend-label { overflow: hidden; text-overflow: ellipsis; }
+    .bench-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .bench-legend-dash { width: 14px; border-top: 2px dashed var(--carta-peer-median); flex-shrink: 0; }
     /* Shown in place of the trend chart when the firm has fund metrics but no
        peer-benchmark series (the card falls back to AGGREGATE_FUND_METRICS). */
     .bench-chart-note { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 12px; font-size: 11px; font-style: italic; color: var(--ink-color-global-text-subtle); }
@@ -555,7 +624,7 @@
       justify-content: flex-start;
       gap: 0;
       border-bottom: 1px solid var(--ink-color-global-border-subtle);
-      margin-bottom: 28px;
+      margin-bottom: 48px;
     }
     .tab-btn {
       font-family: inherit;
@@ -583,7 +652,6 @@
     }
     .tab-btn.active {
       color: var(--ink-color-global-text-default);
-      font-weight: 600;
       border-bottom-color: var(--ink-color-global-border-active);
     }
     .tab-pane { display: none; }
@@ -1040,26 +1108,37 @@
     }
 
     /* ── Capital activity v2 cards (section row + card grid) ── */
-    #ca-section-v2 { /* container hook — no extra styles needed, inherits section layout */ }
-    .ca-section-row {
+    /* Folds the section away once the last card is dismissed. The negative margin
+       and matching padding keep the cards' shadows inside the clipped box. */
+    #ca-section-v2 {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
-      margin-bottom: 40px;
+      grid-template-rows: 1fr;
+      transition: grid-template-rows .5s cubic-bezier(.22, 1, .36, 1), opacity .3s ease;
+    }
+    #ca-section-v2.ca-section--collapsed { grid-template-rows: 0fr; opacity: 0; }
+    .ca-collapse { min-height: 0; overflow: hidden; margin: -16px; padding: 16px; }
+    @media (prefers-reduced-motion: reduce) {
+      #ca-section-v2 { transition: none; }
+    }
+    .ca-section-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin-bottom: 56px;
     }
     .ca-card-v2 {
       position: relative;
       background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
       border: 1px solid var(--ink-color-global-border-subtle);
       border-radius: 0;
-      padding: 16px 16px 12px;
+      flex: 0 1 320px;
+      min-width: 260px;
+      padding: 32px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
       box-shadow: var(--ink-elevation-global-shadow-small);
-      transition: box-shadow .15s;
     }
-    .ca-card-v2:hover { box-shadow: var(--ink-elevation-global-shadow-medium); }
 
     /* dismiss × button */
     .ca-v2-dismiss {
@@ -1067,28 +1146,30 @@
       top: 10px; right: 10px;
       background: none; border: none;
       cursor: pointer;
-      font-size: 12px;
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
       color: var(--ink-color-global-text-subtle);
-      padding: 2px 4px;
+      padding: 0;
       border-radius: var(--ink-size-global-radius-subtle);
       line-height: 1;
       transition: color .1s, background .1s;
     }
     .ca-v2-dismiss:hover {
       color: var(--ink-color-global-text-default);
-      background: light-dark(rgba(0,0,0,0.06), rgba(255,255,255,0.08));
+      background: var(--ink-color-global-surface-lightgray-hover);
     }
 
     /* title / fund labels */
     .ca-v2-title {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
       color: var(--ink-color-global-text-default);
-      padding-right: 20px;        /* clear the dismiss btn */
+      padding-right: 24px;        /* clear the dismiss btn */
       line-height: 1.3;
     }
     .ca-v2-fund {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--ink-color-global-text-subtle);
       white-space: nowrap;
       overflow: hidden;
@@ -1097,9 +1178,9 @@
 
     /* progress bar */
     .ca-v2-progress-track {
-      height: 5px;
-      border-radius: var(--ink-radius-pill);
-      margin: 4px 0 2px;
+      height: 4px;
+      border-radius: 2px;
+      margin: 12px 0 6px;
       background: var(--ink-color-global-surface-lightgray-default);
       overflow: hidden;
     }
@@ -1118,7 +1199,7 @@
     }
     .ca-v2-pct {
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
       font-variant-numeric: tabular-nums;
       color: var(--ink-color-global-text-default);
     }
@@ -1129,7 +1210,7 @@
       flex-shrink: 0;
     }
     .ca-v2-status-text {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--ink-color-global-text-subtle);
       margin-left: auto;
       text-align: right;
@@ -1140,13 +1221,13 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-top: 4px;
+      margin-top: 16px;
     }
     .ca-v2-view-btn {
       background: none; border: none;
       cursor: pointer;
       padding: 0;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 500;
       font-family: inherit;
       color: var(--ink-color-global-link-default);
@@ -1156,9 +1237,10 @@
     .ca-v2-view-btn:hover { text-decoration: underline; }
 
     .ca-v2-due-badge {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 500;
-      padding: 2px 7px;
+      line-height: 1.6;
+      padding: 1px 8px;
       border-radius: var(--ink-radius-pill);
       /* default (no date) */
       background: var(--ink-color-global-surface-lightgray-default);
@@ -1255,28 +1337,20 @@
   /* auto-fit instead of a fixed 3-up: Carta Home renders in a side panel that can
      get narrow, and a 16:9 thumbnail stops reading below roughly 220px. */
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  gap: 24px;
   margin-bottom: 32px;
 }
 .plugin-news-card {
   display: flex;
   flex-direction: column;
-  background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
-  border: 1px solid var(--ink-color-global-border-subtle);
-  border-radius: var(--ink-size-global-radius-flat);
-  box-shadow: var(--ink-elevation-global-shadow-small);
-  overflow: hidden;
+  gap: 8px;
   /* each card is an <a>, so the UA underline and link color have to be cleared */
   text-decoration: none;
   color: var(--ink-color-global-text-default);
-  transition: box-shadow .15s;
 }
-.plugin-news-card:hover { box-shadow: var(--ink-elevation-global-shadow-medium); }
-/* Bordered component, so it takes Ink's border-recolor + ring rather than the bare outline. */
 .plugin-news-card:focus-visible {
-  border-color: var(--ink-color-global-border-focus-default);
-  box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
-  outline: none;
+  outline: 2px solid var(--ink-color-global-border-focus-default);
+  outline-offset: 4px;
 }
 .plugin-news-thumb {
   width: 100%;
@@ -1284,65 +1358,82 @@
   object-fit: cover;
   background: var(--ink-color-global-surface-lightgray-default);
 }
-/* The --fake and --overlay thumbs are <div>s that center a play glyph; --overlay
-   also holds a full-bleed <img> that the glyph sits on top of. */
+/* The --fake and --overlay thumbs are <div>s; --overlay holds a full-bleed <img>. */
 .plugin-news-thumb--fake,
 .plugin-news-thumb--overlay {
   position: relative;
+  overflow: hidden;
+}
+/* A news item with no image gets a black title tile with the Carta logo box. */
+.plugin-news-thumb--fake {
+  background: var(--ink-color-global-brand-black);
+  padding: 16px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
+}
+.plugin-news-thumb--fake::after {
+  content: "";
+  position: absolute;
+  top: 5%;
+  right: 4%;
+  width: 20%;
+  aspect-ratio: 56 / 32;
+  background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAAgCAYAAABHA7voAAAWfmNhQlgAABZ+anVtYgAAAB5qdW1kYzJwYQARABCAAACqADibcQNjMnBhAAAAFlhqdW1iAAAAR2p1bWRjMm1hABEAEIAAAKoAOJtxA3VybjpjMnBhOjYyYjRkNjkyLWJjOWMtNDRjZi05MWVkLTZjZGYxN2EzODk3MwAAAAOTanVtYgAAAClqdW1kYzJhcwARABCAAACqADibcQNjMnBhLmFzc2VydGlvbnMAAAAAuGp1bWIAAABEanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5pbmdyZWRpZW50LnYzAAAAABhjMnNov9SeX5B6LG3hGJihkbOR5AAAAGxjYm9yo2lkYzpmb3JtYXRpaW1hZ2UvcG5namluc3RhbmNlSUR4LHhtcDppaWQ6NWY2NmYxZTEtNjQwNC00YmE5LWFjYzktOTA0ZDZlYTBiYWY0bHJlbGF0aW9uc2hpcGhwYXJlbnRPZgAAAeJqdW1iAAAAQWp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuYWN0aW9ucy52MgAAAAAYYzJzaNqLBlMhUDBVEYJbU2GZUa4AAAGZY2JvcqJnYWN0aW9uc4KiZmFjdGlvbmtjMnBhLm9wZW5lZGpwYXJhbWV0ZXJzoWtpbmdyZWRpZW50c4GiY3VybHgtc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5pbmdyZWRpZW50LnYzZGhhc2hYINu1KqTf7erCWRf2Zj3xG5ey/R05ojzHSi35QXfbXu/NpGZhY3Rpb254HWNvbS5hbnRocm9waWMuY2xhdWRlLnByb3ZpZGVkanBhcmFtZXRlcnOheB9jb20uYW50aHJvcGljLm9yaWdpbi1jb25maWRlbmNlZ3Vua25vd25rZGVzY3JpcHRpb254ZkNsYXVkZSBwcm92aWRlZCB0aGlzIGZpbGUgYXQgdGhlIHJlcXVlc3Qgb2YgYSB1c2VyIGFuZCBtYXkgaGF2ZSBjcmVhdGVkIG9yIG1vZGlmaWVkIHRoZSBmaWxlIGNvbnRlbnRzLm1zb2Z0d2FyZUFnZW50oWRuYW1lZkNsYXVkZXJhbGxBY3Rpb25zSW5jbHVkZWT1AAAAyGp1bWIAAABAanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5oYXNoLmRhdGEAAAAAGGMyc2hA1UoxzJS6NWlm5ZSrR713AAAAgGNib3KlY2FsZ2ZzaGEyNTZjcGFkTQAAAAAAAAAAAAAAAABkaGFzaFggGbRVUJel1dh7yCcbQ+VKhww7KharS1suVhJ4r8yTPqtkbmFtZW5qdW1iZiBtYW5pZmVzdGpleGNsdXNpb25zgaJlc3RhcnQYIWZsZW5ndGgZFooAAAI+anVtYgAAACdqdW1kYzJjbAARABCAAACqADibcQNjMnBhLmNsYWltLnYyAAAAAg9jYm9ypWNhbGdmc2hhMjU2aXNpZ25hdHVyZXhNc2VsZiNqdW1iZj0vYzJwYS91cm46YzJwYTo2MmI0ZDY5Mi1iYzljLTQ0Y2YtOTFlZC02Y2RmMTdhMzg5NzMvYzJwYS5zaWduYXR1cmVqaW5zdGFuY2VJRHgseG1wOmlpZDoxNjVkNWQzMS0wNTMwLTRkZGYtOWIyMS0zYzY1ZDE0ZDRhYmZyY3JlYXRlZF9hc3NlcnRpb25zg6JjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFgg27UqpN/t6sJZF/ZmPfEbl7L9HTmiPMdKLflBd9te782iY3VybHgqc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5hY3Rpb25zLnYyZGhhc2hYILv/evUyY/CsX/wqdtdgFP4bN0yi00vTUzv8GYKbs7n9omN1cmx4KXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaGFzaC5kYXRhZGhhc2hYIJRvKBbcyPCqZRnUufK9niFkbn/G/1UdTXl0kJHs8uDPdGNsYWltX2dlbmVyYXRvcl9pbmZvo2RuYW1lb0FudGhyb3BpYyBGaWxlc2d2ZXJzaW9uZTEuMC4wa3NwZWNWZXJzaW9uZTIuNC4wAAAQOGp1bWIAAAAoanVtZGMyY3MAEQAQgAAAqgA4m3EDYzJwYS5zaWduYXR1cmUAAAAQCGNib3LShFkCEqIBJhghWQIKMIICBjCCAY2gAwIBAgIUQOWgCu7COdC+uIP6BkIFPWdVEwAwCgYIKoZIzj0EAwMwSTEXMBUGA1UEChMOQW50aHJvcGljLCBQQkMxLjAsBgNVBAMTJUFudGhyb3BpYyBDb250ZW50IENyZWRlbnRpYWxzIFJvb3QgQ0EwHhcNMjYwODA3MTg0MzU2WhcNMjgwODA2MTk0MzU2WjBEMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEpMCcGA1UEAxMgQW50aHJvcGljIENsYXVkZSBDb250ZW50IFNpZ25pbmcwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASYegpry1AYBRTVNL1CpTlbROnY3dey+UrsF9C3phYrATN3ZHf93Mo8RQN0KOUuOn19P4oWNFWe5n2/She9N7eTo1gwVjAOBgNVHQ8BAf8EBAMCB4AwFQYDVR0lBA4wDAYKKwYBBAGD6F4CATAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFM5R4gSBTmRbI/jjxM+aPpzB11zCMAoGCCqGSM49BAMDA2cAMGQCMDFzHRSeAXrSy1WOzkbhPZ6Km2wGTmZ/2gK18k8BQGXyqz88Rdrz6CTX9flAnYNVxgIwcF9c3fVhqmJKpi+UhasNUMko69cyX6STPfta3Q8EjyzDjzoyrol46FP6VFHhvUcJoWNwYWRZDZ4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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") center / contain no-repeat;
+}
+.plugin-news-fake-title {
+  max-width: 68%;
+  font-family: var(--ink-font-global-family-prominent);
+  font-size: 18px;
+  line-height: 1.15;
+  color: var(--ink-color-global-brand-white);
 }
 .plugin-news-fake-play,
 .plugin-news-play-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--ink-radius-pill);
-  background: var(--ink-color-global-surface-background-default);
-  color: var(--ink-color-global-text-default);
-  box-shadow: var(--ink-elevation-global-shadow-small);
-  font-size: 14px;
+  background: var(--ink-color-global-brand-white);
+  color: var(--ink-color-global-brand-black);
+  font-size: 11px;
   line-height: 1;
   padding-left: 2px;  /* ▶ carries left side bearing, so nudge it back to optical center */
-  opacity: .92;
 }
-.plugin-news-play-overlay { position: absolute; }
+/* On the title tile the badge sits top-left, clear of the title. */
+.plugin-news-thumb--fake .plugin-news-fake-play { top: 12px; bottom: auto; }
 .plugin-news-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px 16px 16px;
+  gap: 4px;
 }
 .plugin-news-tag {
-  align-self: flex-start;
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .04em;
+  font-weight: 500;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: var(--ink-size-global-radius-subtle);
-  background: var(--ink-color-global-surface-lightgray-default);
   color: var(--ink-color-global-text-subtle);
 }
 .plugin-news-title {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
   color: var(--ink-color-global-text-default);
 }
 .plugin-news-desc {
   margin: 0;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--ink-color-global-text-subtle);
 }
 /* The card itself is the <a>; this is a visual link cue only (see renderLiveContent). */
 .plugin-news-cta {
-  margin-top: 2px;
+  margin-top: 4px;
   align-self: flex-start;
   font-size: 12px;
   font-weight: 600;

@@ -342,6 +342,11 @@ carrying activity that no line reports, and they arrive in the same
 numbered table — an account asks *which line reports it*, which is the
 question a line asks about its values, from the other end.
 
+**The question does not arise when the firm declined a budget** ("Skip
+for now"). With no budget at all, there is no line for an account to be
+missing from — `unaccountedAccounts` is empty, not a table of every
+account asking to be mapped to lines that don't exist.
+
 Two ways an account gets there, and the entry's `section` says which — for
 your own reasoning, not the table: an account isn't scoped to any one
 budget tab, so print an em dash under `Budget tab` for these rows rather

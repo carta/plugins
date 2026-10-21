@@ -89,7 +89,19 @@ function renderCapActivitySection() {
   if (!section || !container) return;
 
   const { visible } = visibleCapActivities();
-  section.style.display = visible.length > 0 ? '' : 'none';
+  if (visible.length === 0) {
+    // A section the viewer emptied by dismissing folds away with its last card still
+    // in it; one that never had a card stays hidden. Inert keeps the folded cards out of
+    // the tab order and the accessibility tree.
+    if (section.style.display !== 'none') {
+      section.classList.add('ca-section--collapsed');
+      section.inert = true;
+    }
+    return;
+  }
+  section.style.display = '';
+  section.classList.remove('ca-section--collapsed');
+  section.inert = false;
   container.innerHTML = '';
 
   visible.forEach(r => {
@@ -132,7 +144,7 @@ function renderCapActivitySection() {
     card.className = 'ca-card-v2';
     card.dataset.caId = actId;
     card.innerHTML = `
-      <button class="ca-v2-dismiss" title="Dismiss">✕</button>
+      <button class="ca-v2-dismiss" title="Dismiss" aria-label="Dismiss">✕</button>
       <div class="ca-v2-title">${title}</div>
       <div class="ca-v2-fund">${escHtml(fullFund)}</div>
       <div class="ca-v2-progress-track">

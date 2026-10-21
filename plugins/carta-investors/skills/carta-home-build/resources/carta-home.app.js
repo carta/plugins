@@ -160,11 +160,11 @@ let _benchmarkChartInst = null;
 let _soiFundRows = [];          // hoisted so starred card can read it
 let _benchLabels = null;        // hoisted so starred perf card can draw
 let _benchDatasets = null;
-let _fundColorMap  = {};        // { fundName → hex } — populated in fetchBenchmarkData
-// Generic palette — cycles for any number of funds. Shared by the benchmark chart
-// path and the AGGREGATE_FUND_METRICS fallback so both colour funds identically.
-const _BENCH_COLORS = ["#285DA3","#2D9E90","#DDB31F","#94B524","#B29990","#58B8BC","#656B6B"];
-let _latestByFund  = {};        // { fundName → latest metrics row } — for starred perf card table
+let _fundColorMap  = {};        // { fundName → CSS colour } — populated in fetchBenchmarkFallback
+// Series colour tokens (carta-home.css, mirroring the Fund Performance dashboard), cycled
+// for any number of funds by the benchmark chart and the AGGREGATE_FUND_METRICS fallback.
+const _BENCH_COLORS = ["--carta-series-blue", "--carta-series-teal", "--carta-series-pink", "--carta-series-gray", "--carta-series-lilac"];
+const _benchToken = i => _BENCH_COLORS[i % _BENCH_COLORS.length];
 let _firmDisplayName = 'your firm'; // set by fetchLiveData once firm is resolved
 
 // ── Resolve a CSS custom property to a concrete color Chart.js can paint ──
@@ -183,6 +183,7 @@ function inkColor(token, fallback) {
   return resolved || fallback;
 }
 const chartLabelColor = () => inkColor("--carta-chart-label-color", "#656B6B");
+const PEER_MEDIAN_CSS_VAR = "--carta-peer-median";
 // Backstop for any canvas text not given an explicit color — Chart.js otherwise
 // defaults to a hardcoded #666, which is unreadable on the dark surface.
 if (window.Chart) Chart.defaults.color = chartLabelColor();
@@ -216,12 +217,12 @@ function drawBenchmarkChart(labels, datasets) {
         legend: { display: false, labels: { color: textColor } },
         tooltip: {
           enabled: true, mode: "index", intersect: false,
-          backgroundColor: "rgba(26,26,26,0.94)",
+          backgroundColor: inkColor("--carta-surface-card-elevated", "#2C3030"),
           titleColor: "#9C9F9F", titleFont: { size: 10, family: "Inter,system-ui,sans-serif" },
           bodyColor: "#FFFFFF", bodyFont: { size: 11, family: "Inter,system-ui,sans-serif" },
           borderColor: "rgba(255,255,255,0.08)", borderWidth: 1,
           padding: { top:8, bottom:8, left:12, right:12 },
-          cornerRadius: 4, caretSize: 4,
+          cornerRadius: 6, caretSize: 4,
           itemSort: (a, b) => b.parsed.y - a.parsed.y,
           callbacks: {
             label(item) {
@@ -285,32 +286,39 @@ async function fetchBenchmarkData() {
       if (r.NET_IRR_50TH != null) byFundP50[r.FUND_NAME][r.PERFORMANCE_QUARTER_START_DATE] = r.NET_IRR_50TH;
     });
 
-    const DATA_VIZ_COLORS = _BENCH_COLORS;
     // Derive shortest unique label by stripping common prefix and ", L.P." suffix
     const fundNames = Object.keys(byFund).slice(0, 3); // show max 3 funds
-    const commonPrefix = fundNames.reduce((pfx, n) => {
+    const sharedChars = fundNames.reduce((pfx, n) => {
       let i = 0; while (i < pfx.length && i < n.length && pfx[i] === n[i]) i++;
       return pfx.slice(0, i);
     }, fundNames[0] ?? "");
-    // Populate global color map so metrics table can use same colors
-    fundNames.forEach((name, i) => { _fundColorMap[name] = DATA_VIZ_COLORS[i % DATA_VIZ_COLORS.length]; });
+    // Only whole words come off, so "Great Basin …" and "GBC …" keep their "G". A lone
+    // fund has nothing to tell apart and keeps its full name.
+    const commonPrefix = fundNames.length > 1 ? sharedChars.slice(0, sharedChars.lastIndexOf(" ") + 1) : "";
+    const shortName = name => name.slice(commonPrefix.length).replace(/, L\.P\.$/, "").trim() || name;
+    // Canvas can't read a CSS variable, so each line carries its token (`_colorToken`)
+    // and the resolved colour; the prefers-color-scheme listener re-resolves them.
     const fundDatasets = fundNames.map((name, idx) => ({
-      label: name.slice(commonPrefix.length).replace(/, L\.P\.$/, "").trim() || name,
+      label: shortName(name),
       data: sortedDates.map(d => byFund[name][d] ?? null),
-      borderColor: DATA_VIZ_COLORS[idx % DATA_VIZ_COLORS.length],
+      _colorToken: _benchToken(idx),
+      borderColor: inkColor(_benchToken(idx), "#8C8C8C"),
       borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5,
       fill: false, tension: 0.4,
     }));
 
-    // Add dashed P50 benchmark lines for each fund (lighter, same color)
+    // Dashed P50 line per fund, all in the legend's "Peer median" colour so the chart
+    // and legend agree.
+    const peerMedian = inkColor(PEER_MEDIAN_CSS_VAR, "#656B6B");
     const p50Datasets = fundNames
-      .map((name, idx) => {
+      .map(name => {
         const p50data = sortedDates.map(d => byFundP50[name]?.[d] ?? null);
         if (!p50data.some(v => v != null)) return null;
         return {
-          label: (name.slice(commonPrefix.length).replace(/, L\.P\.$/, '').trim() || name) + ' P50',
+          label: shortName(name) + ' peer median',
           data: p50data,
-          borderColor: DATA_VIZ_COLORS[idx % DATA_VIZ_COLORS.length],
+          _colorToken: PEER_MEDIAN_CSS_VAR,
+          borderColor: peerMedian,
           borderWidth: 1.2, borderDash: [4, 4],
           pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.4,
         };
@@ -319,25 +327,7 @@ async function fetchBenchmarkData() {
     const allDatasets = [...fundDatasets, ...p50Datasets];
     _benchLabels = labels; _benchDatasets = allDatasets;
     drawBenchmarkChart(labels, allDatasets);
-
-    // Metrics table — latest quarter, same 3 funds as chart
-    const latestByFund = {};
-    rows.forEach(r => {
-      if (!fundNames.includes(r.FUND_NAME)) return; // respect the 3-fund cap
-      if (!latestByFund[r.FUND_NAME] || r.PERFORMANCE_QUARTER_START_DATE > latestByFund[r.FUND_NAME].PERFORMANCE_QUARTER_START_DATE) {
-        latestByFund[r.FUND_NAME] = r;
-      }
-    });
-    _latestByFund = latestByFund;
-
-    if (Object.keys(latestByFund).length) {
-      const asOf = _fmtQtr(Object.values(latestByFund)[0].PERFORMANCE_QUARTER_START_DATE);
-      _renderBenchMetricsTable(Object.values(latestByFund).map(r => ({
-        name: r.FUND_NAME,
-        color: _fundColorMap[r.FUND_NAME] || _BENCH_COLORS[0],
-        irr: r.NET_IRR, tvpi: r.TVPI, dpi: r.DPI,
-      })), asOf);
-    }
+    _renderBenchLegend(fundDatasets, p50Datasets.length > 0);
   } catch(e) {
     // Benchmark query failed (not just empty) — try the same AGGREGATE_FUND_METRICS
     // fallback the empty-rows path uses, so a benchmark-pipeline hiccup doesn't blank
@@ -346,8 +336,19 @@ async function fetchBenchmarkData() {
   }
 }
 
-// Card's per-fund returns table. items: [{ name, color, irr, tvpi, dpi }] — irr in
-// percent, tvpi/dpi as multiples (raw or null). Same markup for both card paths.
+// Legend under the trend chart: one dot per fund line, plus the dashed peer median.
+function _renderBenchLegend(fundDatasets, hasPeerMedian) {
+  const metricsEl = document.getElementById("benchmark-metrics");
+  if (!metricsEl) return;
+  const items = fundDatasets.map(d => `
+    <span class="bench-legend-item"><span class="bench-legend-dot" style="background:var(${d._colorToken})"></span><span class="bench-legend-label" title="${escHtml(d.label)}">${escHtml(d.label)}</span></span>`);
+  if (hasPeerMedian) items.push(`
+    <span class="bench-legend-item"><span class="bench-legend-dash"></span>Peer median</span>`);
+  metricsEl.innerHTML = `<div class="bench-legend">${items.join("")}</div>`;
+}
+
+// Card's per-fund returns table (AGGREGATE_FUND_METRICS fallback). items: [{ name, color,
+// irr, tvpi, dpi }] — irr in percent, tvpi/dpi as multiples (raw or null).
 function _renderBenchMetricsTable(items, asOf) {
   const metricsEl = document.getElementById("benchmark-metrics");
   if (!metricsEl || !items.length) return;
@@ -407,7 +408,7 @@ async function fetchBenchmarkFallback() {
   const rows = parseDWH(res).filter(r => r.FUND_UUID);
   if (!rows.length) return false;  // no fund data at all — leave the card blank
 
-  rows.forEach((r, i) => { _fundColorMap[r.FUND_NAME] = _BENCH_COLORS[i % _BENCH_COLORS.length]; });
+  rows.forEach((r, i) => { _fundColorMap[r.FUND_NAME] = `var(${_benchToken(i)})`; });
   // AGGREGATE_FUND_METRICS is a latest-month snapshot per fund, not a quarterly
   // series — derive the "as of" label from MONTH_END_DATE when present.
   const asOf = rows[0].MONTH_END_DATE ? _fmtQtr(String(rows[0].MONTH_END_DATE).substring(0, 10)) : "latest";
@@ -669,11 +670,14 @@ async function fetchLiveData() {
         if (firstMatch) { firmName = firstMatch[1].trim(); firmId = firstMatch[2]; }
       }
     }
-    // Update dashboard subtitle and dynamic prompts with resolved firm name
+    // Show the resolved firm in the page title and fill dynamic prompts
     if (firmName) {
       _firmDisplayName = firmName;
-      const sub = document.getElementById("firm-subtitle");
-      if (sub) sub.textContent = firmName;
+      const title = document.getElementById("firm-title");
+      if (title) {
+        document.getElementById("firm-title-name").textContent = firmName;
+        title.hidden = false;
+      }
       // Update any static run-btn prompts that have {{FIRM}} placeholder
       document.querySelectorAll('[data-prompt]').forEach(el => {
         if (el.dataset.prompt.includes('{{FIRM}}')) {
@@ -1104,7 +1108,7 @@ function renderDashboardLaunchers() {
     if (!footer) return;
     const url = DASHBOARD_URLS[d.key];
     const promptHtml = `<button class="run-btn" data-prompt="${escHtml(d.prompt)}" data-skill="${escHtml(d.key)}"
-            onclick="dashShowPrompt(this)">${escHtml(d.label)}</button>`;
+            onclick="dashShowPrompt(this)">${escHtml(d.label)} <span class="cta-arrow" aria-hidden="true">→</span></button>`;
     if (url === DASH_BUILDING) {
       // Named after the launcher it becomes. "A few minutes" on purpose, not a specific
       // number — the fan-out has run well past 3 min for some firms, and a wrong specific
@@ -1115,7 +1119,7 @@ function renderDashboardLaunchers() {
       dashExpireBuilding(footer, target, promptHtml);
     } else if (url) {
       footer.innerHTML = `<a class="run-btn" href="${escHtml(url)}"
-            onclick="trackHome('click','CartaHome.Dashboard.Open.${escHtml(d.key)}')">${escHtml(d.label)} →</a>`;
+            onclick="trackHome('click','CartaHome.Dashboard.Open.${escHtml(d.key)}')">${escHtml(d.label)} <span class="cta-arrow" aria-hidden="true">→</span></a>`;
     } else {
       footer.innerHTML = promptHtml;
     }
@@ -1536,6 +1540,7 @@ window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change"
     });
     const legendLabels = chart.options.plugins?.legend?.labels;
     if (legendLabels) legendLabels.color = color;
+    chart.data.datasets.forEach(ds => { if (ds._colorToken) ds.borderColor = inkColor(ds._colorToken, ds.borderColor); });
     chart.update("none");
   });
 });

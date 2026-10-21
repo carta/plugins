@@ -2071,6 +2071,14 @@ def read_budgets(raw_dir, as_of_year, as_of_month):
 
     # Clamp to [1, 12] as a safety net — as_of_month should already be valid.
     mo = max(1, min(12, int(as_of_month)))
+    return _carta_budget_summary(per_account, mo, "carta-fa-list-budgets")
+
+
+def _carta_budget_summary(per_account, mo, source):
+    """read_budgets()'s return shape, built from its `per_account` map
+    (`{name: {monthly: [12], type}}`) and YTD cutoff month `mo`. The one
+    place both `read_budgets()` and `empty_budgets()` build this dict, so
+    a key added to the shape is added once."""
     income_ytd    = sum(sum(a["monthly"][:mo]) for name, a in per_account.items()
                         if str(a["type"] or "")[:1] == "4")
     expenses_ytd  = sum(sum(a["monthly"][:mo]) for name, a in per_account.items()
@@ -2097,9 +2105,16 @@ def read_budgets(raw_dir, as_of_year, as_of_month):
             for n, a in sorted(per_account.items())
             if any(a["monthly"])
         ],
-        "source":        "carta-fa-list-budgets",
+        "source":        source,
         "by_tag_value": None,
     }
+
+
+def empty_budgets():
+    """`_carta_budget_summary`'s shape with every figure zeroed — the
+    actuals-only budget for a firm that declined one, Excel and Carta
+    alike."""
+    return _carta_budget_summary({}, 12, "none")
 
 
 # Net income is an aggregate in the expense section's vicinity but it is
@@ -4337,6 +4352,22 @@ def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_mo
     }
 
 
+def _read_workbook_ref(dashboard_dir):
+    """`.workbook-ref.json`'s parsed contents, or `None` when the file is
+    absent or unreadable (warning on stderr in the unreadable case).
+    The one place this file is parsed, so every reader handles an
+    unreadable ref the same way."""
+    ref_path = Path(dashboard_dir) / ".workbook-ref.json"
+    if not ref_path.exists():
+        return None
+    try:
+        return json.loads(ref_path.read_text())
+    except Exception as e:
+        print(f"warn: .workbook-ref.json unreadable ({e}); ignoring it.",
+              file=sys.stderr)
+        return None
+
+
 def find_excel_budget_files(dashboard_dir):
     """Return the firm's parsed Excel budget files, ordered so that
     budget.json (the "primary") comes first, followed by budget-<slug>.json
@@ -4362,22 +4393,15 @@ def find_excel_budget_files(dashboard_dir):
                       if p.name not in ("budget.json", "budget-mapping.json"))
     on_disk = ([primary] if primary.exists() else []) + variants
 
-    ref_path = d / ".workbook-ref.json"
-    if not ref_path.exists():
-        if on_disk:
+    ref = _read_workbook_ref(d)
+    if ref is None:
+        if on_disk and not (d / ".workbook-ref.json").exists():
             print(
                 f"warn: found {len(on_disk)} parsed budget file(s) in {d} with no "
                 f".workbook-ref.json to account for them; ignoring. They are "
                 f"left in place — re-ingest with --budget-workbook to use them.",
                 file=sys.stderr,
             )
-        return []
-
-    try:
-        ref = json.loads(ref_path.read_text())
-    except Exception as e:
-        print(f"warn: .workbook-ref.json unreadable ({e}); ignoring parsed budgets.",
-              file=sys.stderr)
         return []
 
     if ref.get("declined"):
@@ -4427,6 +4451,18 @@ def find_excel_budget_files(dashboard_dir):
         files.append(primary)
     files.extend(variants)
     return files
+
+
+def carta_budget_opted_in(dashboard_dir):
+    """Whether Carta's stored budget is used when no Excel budget is in use.
+
+    `use_carta_budget` on a declined ref decides; a declined ref without the
+    key, or no readable ref at all, counts as opted in.
+    """
+    ref = _read_workbook_ref(dashboard_dir)
+    if ref is None or not ref.get("declined"):
+        return True
+    return ref.get("use_carta_budget", True)
 
 
 _WS_RX = re.compile(r"\s+")
@@ -5444,8 +5480,12 @@ def build(args):
 
     if excel_budgets:
         budgets = excel_budgets[0]  # primary drives the top-line KPIs
-    else:
+    elif carta_budget_opted_in(dashboard):
         budgets = read_budgets(raw, args.as_of_year, as_of_month)
+    else:
+        # "Skip for now" means actuals-only — a budget explicitly declined,
+        # not a Carta fallback.
+        budgets = empty_budgets()
     total_income   = sum(m_income)
     total_expense  = sum(m_expense)
     spend_by_gl = [{"name": a["name"],
@@ -5666,10 +5706,15 @@ def build(args):
     # went through its creator's own gap analysis, not this viewer's.
     _all_budget_rows = ([r for _b in _own_budgets for r in (_b.get("rows") or [])]
                         if _own_budgets else carta_variance_payload(budgets)["rows"])
-    _unaccounted = unaccounted_accounts(_all_budget_rows, all_rows,
-                                        _carta_account_names,
-                                        read_account_decisions(dashboard),
-                                        window=_window)
+    # No budget rows at all (Excel declined and Carta's budget opted out,
+    # or Carta has none either) means there is no budget for an account to
+    # miss — asking which line reports it would be asking about lines that
+    # don't exist.
+    _unaccounted = (unaccounted_accounts(_all_budget_rows, all_rows,
+                                         _carta_account_names,
+                                         read_account_decisions(dashboard),
+                                         window=_window)
+                    if _all_budget_rows else [])
     _mapping_table.extend(account_rows(_unaccounted))
     for _i, _row in enumerate(_mapping_table, 1):
         _row["n"] = _i

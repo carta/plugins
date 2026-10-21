@@ -8,8 +8,13 @@ function initUiTracker(interfaceId, server) {
     transport: "bridge",
   });
 }
+// trackUi never throws, so a page whose events all drop would otherwise look healthy.
+let uiTrackerDropWarned = false;
 function trackUi(action, elementId, options) {
   if (window.mcpUiTracker && window.mcpUiTracker.getTransport()) {
     window.mcpUiTracker.trackUiEvent(action, elementId, options);
+  } else if (!uiTrackerDropWarned) {
+    uiTrackerDropWarned = true;
+    console.warn("[carta-investors] no MCP transport for the UI tracker — UI events are being dropped");
   }
 }

@@ -17,14 +17,14 @@ const NEWS_TAG = "pluginHomeInvestors";
 const DASHBOARDS = [
   {
     key: 'soi',
-    label: 'Open SOI dashboard',
+    label: 'Open Schedule of Investments',
     footerId: 'soi-card-footer',
     prompt: 'Show me the schedule of investments for my firm',
     buildSkill: ['carta-soi', 'carta-portfolio-analytics-routing'],
   },
   {
     key: 'perf',
-    label: 'Open fund performance dashboard',
+    label: 'Open Fund Performance',
     footerId: 'perf-card-footer',
     prompt: 'Show me the TVPI, DPI, MOIC and IRR for my funds',
     // The only builder: the router's benchmarks route answers in chat rather than

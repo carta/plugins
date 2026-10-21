@@ -132,7 +132,7 @@ const ADAPTERS = {
         _plainSnippet(_seoField(f, entries, "description")) ||
         _richText(f.body),
       url: f.slug ? `https://carta.com/customer-stories/${encodeURIComponent(f.slug)}/` : "",
-      ctaLabel: "Read more →",
+      ctaLabel: "Read more",
       sortDate: date,
       dateLabel: _dateLabel(date),
       featuredImageLink: f.featuredImage || null,
@@ -149,7 +149,7 @@ const ADAPTERS = {
       headline: (f.title || "").trim(),
       snippet: _plainSnippet(_seoField(f, entries, "description")) || _richText(f.description),
       url: f.slug ? `https://carta.com/events/${encodeURIComponent(f.slug)}/` : "",
-      ctaLabel: "Watch recording →",
+      ctaLabel: "Watch recording",
       sortDate: date,
       dateLabel: _dateLabel(date),
       featuredImageLink: f.thumbnailImage || f.featuredImage || null,
@@ -169,7 +169,7 @@ const ADAPTERS = {
       headline: (f.displayTitle || "").trim(),
       snippet: _plainSnippet(_seoField(f, entries, "description")),
       url: slug ? `https://carta.com/${slug}/` : "",
-      ctaLabel: "Read more →",
+      ctaLabel: "Read more",
       sortDate: date,
       dateLabel: _dateLabel(date),
       featuredImageLink: f.featuredImage || null,
@@ -255,14 +255,14 @@ function renderLiveContent(cards) {
            <img src="${cs.featuredUrl}" alt="${escHtml(cs.headline)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" />
            ${cs.logoUrl ? `<div class="cs-logo-chip"><img src="${cs.logoUrl}" alt="${escHtml(cs.headline)} logo" loading="lazy" onerror="this.closest('.cs-logo-chip').remove()" /></div>` : ""}
          </div>`
-      : `<div class="plugin-news-thumb plugin-news-thumb--fake"></div>`;
+      : `<div class="plugin-news-thumb plugin-news-thumb--fake"><span class="plugin-news-fake-title">${escHtml(cs.headline)}</span></div>`;
     card.innerHTML = `
       ${thumb}
       <div class="plugin-news-content">
         ${cs.eyebrow ? `<span class="plugin-news-tag">${escHtml(cs.eyebrow)}</span>` : ""}
         <p class="plugin-news-title">${escHtml(cs.headline)}</p>
         <p class="plugin-news-desc">${escHtml(cs.snippet)}</p>
-        ${cs.ctaLabel ? `<span class="plugin-news-cta">${escHtml(cs.ctaLabel)}</span>` : ""}
+        ${cs.ctaLabel ? `<span class="plugin-news-cta">${escHtml(cs.ctaLabel)} <span class="cta-arrow" aria-hidden="true">→</span></span>` : ""}
       </div>`;
     card.addEventListener("click", () => trackHome("click", "CartaHome.CustomerStories.ReadMore"));
     grid.appendChild(card);

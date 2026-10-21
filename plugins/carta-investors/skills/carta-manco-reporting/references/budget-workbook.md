@@ -53,8 +53,11 @@ order:
      - File still at `path` → reuse `path`/`sheet`/`shape` silently (still
        no need to re-ask which tabs) and go to 2.75b.
      - File is gone → go to 2.75a-0 and try to find it before giving up.
-   - Carries `{"declined": true}` → the operator has already answered.
-     Skip 2.75 silently.
+   - Carries `"declined": true` and no `deferred` key → the operator has
+     already answered. Skip 2.75 silently. `use_carta_budget` (see 2.75a-i;
+     absent counts as `true`) decides whether `build_manco_datadir.py` pulls
+     in Carta's stored budget — 2.75 itself is only about the Excel
+     workbook.
    - Carries `{"declined": true, "deferred": true}` → written by an
      earlier version that defaulted rather than asking, so this firm has
      never actually been asked. Treat it as unanswered: go to 2.75a-i.
@@ -123,15 +126,26 @@ not be told the report is about departments. The same rule the dashboard
 follows with `dimensionLabel` — answer in the firm's own word, or in none
 at all.
 
-Options:
+Use these three option captions verbatim in the `AskUserQuestion` (label —
+description):
+
+- **Your Excel workbook** — upload your own budgeting report from Excel.
+- **The budget in Carta** — use Carta's stored budget, broken out per
+  account.
+- **Skip for now** — actuals-only, sourced from Carta journals.
+
+What each selection does:
 - **Your Excel workbook** → collect the file per [Asking for a
   file](#asking-for-a-file) below, then continue to 2.75a-ii.
-- **The budget in Carta** → write `{"declined": true}` to
+- **The budget in Carta** → write
+  `{"declined": true, "use_carta_budget": true}` to
   `<dashboard_dir>/.workbook-ref.json` and skip the rest of Step 2.75.
   The dashboard renders a per-account Budget vs Actuals from Carta's own
   budget.
-- **Neither / skip for now** → same `{"declined": true}`. Carta's budget
-  is used if the firm has one; if not, the dashboard is actuals-only, the
+- **Skip for now** → write
+  `{"declined": true, "use_carta_budget": false}`. This is actuals-only,
+  full stop — Carta's stored budget is **not** pulled in as a silent
+  fallback even when one exists; that is what the option above is for. The
   Budget vs Actuals page does not appear, and Monthly Actuals (GL account
   rows, no budget columns) takes its place in the nav.
 
