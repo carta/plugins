@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.104.4</carta-plugin>
+<carta-plugin>carta-investors:6.105.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -193,6 +193,7 @@ opens with — take it from there rather than from however the user happened to 
 | Chase the companies that have not answered | `references/status-and-overdue.md`, from Step 1 |
 | Reopen a request a company already answered, or one that closed with nothing submitted, so it can submit again — "let them resubmit", "reopen the portal" | `references/reopen-request.md` |
 | Collect a number Carta does not offer | `references/custom-metrics.md` |
+| Change the description or name of a metric the firm made | `references/custom-metrics.md`, "Change a metric of the firm's own" |
 | Ask for a document Carta has no type for | `references/document-types.md` |
 | Know who is contacted about a company | `references/contacts.md`, Step 1 alone |
 | Ask why a contact seems to be missing, or who a company's request is addressed to | `references/contacts.md`, Step 1 alone |

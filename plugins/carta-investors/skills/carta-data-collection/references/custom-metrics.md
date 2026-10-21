@@ -113,3 +113,68 @@ Then say what is now possible, because creating a metric is rarely the goal:
 > asked for?
 
 The first goes to `references/send-request.md`, the second to `references/data-requirements.md`.
+
+## Change a metric of the firm's own
+
+A firm can rewrite the description of a metric it made, and rename it, without making a second
+one. Carta's own metrics cannot be changed, and neither can the options of a single or multi
+select metric. A metric's unit and aggregation cannot change after it is made: to collect it
+differently, create a new one.
+
+### Step 1 — Find the metric
+
+```
+read_tool({"name": "data_collection__list__metrics",
+           "arguments": {"organization_pk": "<org_pk>", "includeDefaults": false}})
+```
+
+`includeDefaults: false` leaves out Carta's metrics, which cannot be changed. Match what the user
+named against `name`, and keep the row's `mnemonic` for the write. The row's `description` is what
+the metric says now. If the user named one of Carta's metrics, say it is Carta's and cannot be
+changed here.
+
+### Step 2 — Settle the new text
+
+The write **replaces** the description, so it always sends one:
+
+- **A new description** is the user's text, exactly as they gave it.
+- **A rename alone** sends the description from Step 1 unchanged, beside the new `name`.
+- **Clearing the description** sends an empty string. Do this only when the user asked for it.
+
+Omit `name` unless the user asked to rename the metric.
+
+### Step 3 — Confirm
+
+Show the change as before and after, then ask:
+
+```
+| | Now | After |
+|:---|:---|:---|
+| Name | Headcount | Headcount |
+| Description | Total FTEs | Full-time employees at the end of the period |
+```
+
+Say what the change reaches, because the two fields reach different requests:
+
+- A new description shows on the requests already sent, as well as on later ones.
+- A new name shows only on requests sent from now on. A request already sent keeps the names it
+  was sent with.
+
+Nobody is emailed. Ask the confirmation question, end your reply, and wait. Never write in the same
+reply as the question.
+
+### Step 4 — Change it
+
+```
+call_tool({"name": "data_collection__mutate__metric",
+           "arguments": {"organization_pk": "<org_pk>", "mnemonic": "<mnemonic>",
+                         "description": "<new or unchanged description>",
+                         "name": "<only when renaming>"}})
+```
+
+One metric per call. The response is the metric's `mnemonic`, `name` and `description`; report the
+name and the new description.
+
+**A refusal names the reason.** A refusal for one of Carta's metrics or a select metric cannot be
+worked around here. Say what it was and stop. Never create a second metric to stand in for the one
+that could not change.
