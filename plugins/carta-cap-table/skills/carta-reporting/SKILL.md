@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.21</carta-plugin>
 
 # Custom Reports
 
@@ -201,7 +201,7 @@ Run each script only in the one-line form shown below, as its own command: write
    `canceled_and_returned_report`, `cap_table_summary_report`, `common_securities_report`,
    `eightythreeb_elections_report`, `equity_awards_outstanding`, `equity_plan_granted_report`,
    `equity_plan_report`, `exercised_and_settled_report`, `historical_terminations_report`,
-   `ocx_report`, `options_outstanding_report`, `rule_701_report`,
+   `ocx_report`, `options_outstanding_report`, `rule_701_compliance_report`,
    `secondary_transaction_seller_model`, `securities_ledger_report`,
    `share_registry_report`, `stakeholder_details_report`, `stakeholder_ledger_report`,
    `stakeholder_share_registry_report`, `stakeholder_ownership_details_report`,
@@ -211,21 +211,29 @@ Run each script only in the one-line form shown below, as its own command: write
    because it is already narrowed to what this account may run. Seven of the types above are
    unavailable to a share-class-scoped admin and will never appear in `reports` for one:
    `exercised_and_settled_report`, `historical_terminations_report`, `ocx_report`,
-   `rule_701_report`, `secondary_transaction_seller_model`, `stakeholder_ledger_report`,
+   `rule_701_compliance_report`, `secondary_transaction_seller_model`, `stakeholder_ledger_report`,
    `termination_modeling_report`.
 
-   When ranking candidates, **always prefer a supported report type over an unsupported one**, even if the unsupported type scores slightly higher. Only fall back to an unsupported type if no supported type has a plausible similarity score. Proceed with the top supported result automatically — only ask for confirmation if the top two supported results have nearly identical similarity scores AND the request is genuinely ambiguous between two different data categories. When the user's prompt clearly names a report type (e.g. "equity awards", "securities ledger", "vesting details", "exercised and settled"), proceed without asking.
+   **Only run a type that `reports` returned** and, when its entry carries `runs_through_api_report`,
+   only one with `runs_through_api_report: true`. `reporting__create__report` cannot run any other
+   type, so a request for one only fails. Proceed with the top runnable result automatically — only ask for confirmation if the top two runnable results have nearly identical similarity scores AND the request is genuinely ambiguous between two different data categories. When the user's prompt clearly names a report type (e.g. "equity awards", "securities ledger", "vesting details", "exercised and settled"), proceed without asking.
 
    **2a. In MARKDOWN mode, still make the `reporting__search__report_types` call — skip only the
    ranking dialogue.** The response is the one place a share-class-scoped admin's narrower
    catalogue appears, so every matched type must be confirmed against `reports`. Take the top
-   supported result without asking, then continue to "Collect report details".
+   runnable result without asking, then continue to "Collect report details".
 
-   **If the type the user named is absent from `reports`, do not fall back to the list above.** It
-   is not available to this account. Say: "The **{Report Type}** report isn't available on your
-   access level — I can run {two or three names from `reports`} instead. Which would you like?"
-   Never retry a type search did not return, and never describe this as lacking access to the
-   company.
+   **If the report the user needs is not runnable here, never send `reporting__create__report` a
+   type outside `reports`, and do not fall back to the list above.** Never retry a type search did
+   not return.
+   - A type from the list above that is absent from `reports` is not available to this account.
+     Say: "The **{Report Type}** report isn't available on your access level — I can run {two or
+     three names from `reports`} instead. Which would you like?" Never describe this as lacking
+     access to the company.
+   - Any other report the user needs — one not in the list above, or returned with
+     `runs_through_api_report: false` — can't be run from here. Say: "The **{Report Type}** report
+     can be run from the Reports page in Carta. The closest report I can run here is
+     **{closest runnable name from `reports`}** — would you like that instead?"
 
 3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `cat` command) and look up the matched report type in its **REQUIRED params by report_type** table. **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
 

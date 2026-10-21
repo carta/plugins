@@ -11,7 +11,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.21</carta-plugin>
 
 # issuance-import
 

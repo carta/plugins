@@ -26,7 +26,7 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   #     exercised_and_settled_report, equity_plan_report, vesting_details_report,
   #     historical_terminations_report, common_securities_report, equity_awards_outstanding,
   #     equity_plan_granted_report, options_outstanding_report, securities_ledger_report,
-  #     share_registry_report, rule_701_report, canceled_and_returned_report, eightythreeb_elections_report
+  #     share_registry_report, rule_701_compliance_report, canceled_and_returned_report, eightythreeb_elections_report
   #   termination_modeling_report: equity_plan_ids, security_ids, share_class_ids, issued_from, issued_to (stakeholder_ids not supported)
   #   stakeholder_ledger_report, stakeholder_details_report: stakeholder_ids only
   #   Passing unsupported filters for a report type has no effect.
@@ -147,12 +147,15 @@ read_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corpora
 
 read_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})
   → {
-      reports: [{report_type, name, similarity, answers_question, params_schema}],
+      reports: [{report_type, name, similarity, answers_question, params_schema, runs_through_api_report}],
       questions: [{question, similarity, answers, hide_from_ui}]
     }
   # `reports` is already filtered to what this account may run — a share-class-scoped admin sees a
   # shorter list. A report type absent from it is unavailable, not mis-ranked: never fall back to a
   # hardcoded list and never retry it.
+  # runs_through_api_report — true when reporting__create__report can run the type. Send it only
+  # types with true (or, when the field is absent, types from `reports`); any other type fails, and
+  # the user runs it from the Reports page in Carta instead.
 
 read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})
   → { status, url }   # status: "pending" | "complete" | "error" | "not_found"
