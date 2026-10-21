@@ -70,9 +70,12 @@ rather than one nobody matched — a variance the client would take at face
 value. Ask, record, re-run Step 4, then emit the URL.
 
 After Step 4's build, `accountsData.unresolvedBudgetRows` lists every
-budget line that will render budget-only, and what each needs — a fund, an
-account, which half of a fee, a tag value. Ask about them rather than
-shipping a page of zeros the reader has to notice for themselves.
+budget line with an open question, and what each needs — a fund, an
+account, which half of a fee, a tag value. Most of these will render
+budget-only until answered; a `needs: "zero_activity_account"` entry (see
+below) is the exception — it already renders an actual, just a quiet one.
+Ask about all of them rather than shipping a page of zeros, or a zero that
+reads as real, for the reader to notice unaided.
 
 ### Confirm the confident rows first, then work through the rest
 
@@ -163,8 +166,7 @@ you find yourself about to print **Needs your input** and a row in it
 still carries `source_formula`, stop and open the workbook for that row
 first — do not rely on the operator to ask you to.
 
-Two things stay out of this, both already ruled out above and repeated
-here because this is exactly where they'd creep back in:
+Three things stay out of this, ruled out here and below:
 
 - **Never guess a fund.** A line naming a fund by a short or partial name
   ("Fund I" when the roster only has "Fund II" and "Fund III") is a
@@ -175,6 +177,11 @@ here because this is exactly where they'd creep back in:
   Profit", "TBD", "(to be discussed)" aren't real spend to map at all —
   say so as the reason it's unresolved, rather than picking one of its
   `options` anyway because the row demands an answer.
+- **Never propose an answer on a `needs: "zero_activity_account"` row.**
+  Its options are the line's current mapping, so a confident match only
+  repeats it. Leave it in Needs your input, however plainly the line's
+  name matches its account (see "A mapped account with nothing behind it"
+  below).
 
 Leave a row in **Needs your input** whenever two real options are both
 plausible, or none is — and say why, in one short phrase, when you
@@ -200,14 +207,15 @@ build worked it out or you did:
 | 2 | Cashless | Operating Expenses ▸ Client Services | `<fund>` | Management fees offset |
 
 **Needs your input** — every entry with no `proposed` answer, because the
-match was too close to call on its own:
+match was too close to call on its own, or because it questions the
+current mapping itself (`zero_activity_account`):
 
 | # | Budget tab | Section | Budget line |
 |---|---|---|---|
 | 3 | Cashless | Operating Expenses ▸ Client Services | `<fund>` |
 
 **Print only these columns — drop `needs`/`wants` and `why` entirely.**
-`wants` reads from a fixed, seven-value vocabulary (`which fund`, `which
+`wants` reads from a fixed, nine-value vocabulary (`which fund`, `which
 half of the fee`, `which account(s)`, …), so a table full of budget-line
 asks routinely shows the identical string on every row — a column that
 never varies tells the reader nothing a heading like "Needs your input"
@@ -421,6 +429,39 @@ the floor while meaning more than its size.
 The count reaches the Step 5 read-out as *"N account(s) carry spend no
 budget line reports"*, so a reader knows the page is not the whole ledger
 before they start.
+
+### A mapped account with nothing behind it
+
+The question above asks about an account no line names; a `needs:
+"zero_activity_account"` row is the opposite case — a line **does** map to
+an account (it carries `gl_codes`), but nothing posted to any of them in
+the budgets' combined window (the widest window among `excel_budgets`'
+own windows — the same one `unaccountedAccounts` reads over, for the same
+reason). That renders as a correct $0 variance, with nothing distinguishing
+it from an account nobody has spent from.
+
+It joins the same numbered table as every other row, always under **Needs
+your input** — the build never pre-fills `proposed` on it, and neither do
+you (see "Never propose an answer on a `needs: "zero_activity_account"`
+row" above). The row carries the line's current account(s) as its
+`options`, with no `why` of its own — say in your own words that each one
+is currently mapped here and has shown no activity this window, so a better
+account is still one tap away. A line whose `gl_codes` already came from a
+recorded operator decision is never flagged this way: the operator already
+answered it, and asking again every build because the account stays quiet
+would mean the answer never sticks.
+
+- **It's the right account, just quiet this period** — record the line's
+  current `gl_codes` under its `addr`, like any other answer; it is not
+  flagged again.
+- **It's one of these accounts instead** — name the real one; record its
+  `gl_codes` on the row, same as any other remapping.
+- **It's not in Carta** — record `status: "void"`, same as any other line
+  with no real counterpart.
+
+The count reaches the Step 5 read-out as *"N mapped line(s) show zero
+activity this window"*, separate from the unresolved-mapping count: a line
+here already resolved, so it is not also counted as needing one.
 
 ### Values read off the client's own wording
 

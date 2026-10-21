@@ -877,6 +877,79 @@ def read_account_decisions(dashboard_dir):
 _MANAGEMENT_FEE_INCOME_RX = re.compile(r"management\s+fee", re.IGNORECASE)
 
 
+def _in_window(entry, window):
+    """Whether an entry's month falls inside (first, last), or `window` is None."""
+    if window is None:
+        return True
+    first, last = window
+    return first <= (entry.get("mo") or 0) <= last
+
+
+def gl_activity_totals(entries, window=None):
+    """Spend or income posted to each GL account, within `window` if given.
+
+    Shared by `suggest_gl_accounts` (an account the firm has actually used
+    outranks one with the same name but none) and
+    `zero_activity_mapped_rows` (a mapped account that never posted is the
+    same gap from the other side).
+    """
+    totals = {}
+    for e in entries or []:
+        gl = e.get("acct_type")
+        if gl is None or not _in_window(e, window):
+            continue
+        totals[gl] = totals.get(gl, 0.0) + abs(float(e.get("amount") or 0))
+    return totals
+
+
+def gl_names_by_subaccount(entries):
+    """GL accounts a vendor or sub-account of this name has posted to.
+
+    Keyed by normalized name, so a budget line reading "Office Pantry" can
+    be offered the account its namesake sub-account actually posts to, even
+    when that account's own category name reads nothing alike.
+    """
+    out = {}
+    for e in entries or []:
+        gl = e.get("acct_type")
+        if gl is None:
+            continue
+        for key in (dimension_value_of(e, {"source": "sub_account"}), e.get("vendor")):
+            norm = _norm_label(key)
+            if norm:
+                out.setdefault(norm, set()).add(gl)
+    return out
+
+
+def zero_activity_mapped_rows(rows, activity_by_gl, account_names=None):
+    """Budget lines mapped to account(s) with no activity in the window.
+
+    The line resolved — it carries `gl_codes` — but nothing posted there,
+    which reads as a correct $0 variance rather than the wrong account. Only
+    flagged when every one of a line's accounts is silent: a fee line
+    naming both a fee and its offset legitimately has one side quiet some
+    periods. A line whose `gl_codes` came from an operator's own answer
+    (`gl_decided`) is never flagged — the operator already said this is the
+    account, and re-asking it every build because the account stays quiet
+    would never let the answer stick.
+    """
+    out = []
+    for row in rows or []:
+        if row.get("row_kind") != "line" or row.get("void") or row.get("gl_decided"):
+            continue
+        gl_codes = row.get("gl_codes") or []
+        if not gl_codes or any(activity_by_gl.get(gl) for gl in gl_codes):
+            continue
+        out.append({
+            "key": row.get("key"), "addr": row.get("addr"),
+            "label": row.get("label"), "needs": "zero_activity_account",
+            "suggestions": [{"gl": gl, "name": (account_names or {}).get(gl),
+                            "why": "currently mapped, no activity this window"}
+                           for gl in gl_codes],
+        })
+    return out
+
+
 def unaccounted_accounts(rows, entries, account_names=None, decided=None,
                          window=None):
     """Accounts carrying activity that no budget line reports.
@@ -897,7 +970,6 @@ def unaccounted_accounts(rows, entries, account_names=None, decided=None,
     question: an account carrying mostly income would otherwise lead on a
     figure the question is not about.
     """
-    first, last = window if window else (None, None)
     naming = {}
     fund_matched = False
     for row in rows or []:
@@ -911,9 +983,7 @@ def unaccounted_accounts(rows, entries, account_names=None, decided=None,
     totals, names = {}, dict(account_names or {})
     for e in entries or []:
         gl = e.get("acct_type")
-        if gl is None:
-            continue
-        if first is not None and not (first <= (e.get("mo") or 0) <= last):
+        if gl is None or not _in_window(e, window):
             continue
         amt = float(e.get("amount") or 0)
         t = totals.setdefault(gl, {"amount": 0.0, "expense": 0.0, "income": 0.0,
@@ -2747,6 +2817,9 @@ def apply_budget_mapping(rows, mapping, budget_id=None, ambiguous_bare_addrs=Non
         # it says the line is the net of every account the fund posts to.
         if decision.get("gl_codes") is not None:
             row["gl_codes"] = [int(g) for g in decision["gl_codes"]]
+            # An operator's own answer is never re-flagged as zero-activity —
+            # see zero_activity_mapped_rows.
+            row["gl_decided"] = True
         if "scope" in decision and not decision["scope"]:
             # An explicit null is an answer: this line covers its accounts
             # whole, whatever sub-account or tag the entries happen to carry.
@@ -2859,13 +2932,20 @@ def _names_resemble(want, have, doc_freq):
 
 
 def suggest_gl_accounts(label, mapping_records, account_names, limit=3,
-                        section=None):
+                        section=None, activity_by_gl=None, subaccount_gls=None):
     """Carta accounts a budget line might mean — proposed, never applied.
 
     The client's mapping names lines more briefly than their budget does,
     so an exact match leaves real coverage on the table while a loose one
     joins the wrong account silently. These are offered for confirmation
     instead: the operator answers once and the answer is recorded.
+
+    `activity_by_gl` (gl -> YTD activity) ranks a candidate the ManCo has
+    actually spent from ahead of one with the same name but no activity —
+    the difference between "Other fees" (zero activity) and the account
+    the line really means. `subaccount_gls` (normalized name -> set of gl)
+    proposes the account a same-named vendor or sub-account posts to, which
+    a name match on the account's own category alone can miss.
     """
     by_cat = {}
     for rec in mapping_records or []:
@@ -2873,6 +2953,7 @@ def suggest_gl_accounts(label, mapping_records, account_names, limit=3,
         if cat and isinstance(gl, int):
             by_cat.setdefault(cat, set()).add(gl)
     doc_freq = _token_doc_freq(account_names)
+    subaccount_gls = subaccount_gls or {}
 
     out, seen = [], set()
 
@@ -2892,6 +2973,8 @@ def suggest_gl_accounts(label, mapping_records, account_names, limit=3,
         for c in sorted(cats, key=len, reverse=True)[:1]:
             for gl in sorted(by_cat[c]):
                 offer(gl, "the mapping's nearest line", comp)
+        for gl in sorted(subaccount_gls.get(norm, ())):
+            offer(gl, f'a sub-account or vendor named "{comp}" posts here', comp)
         want = _label_tokens(comp) - _GL_NAME_STOPWORDS
         if want:
             for gl, name in sorted(account_names.items()):
@@ -2918,10 +3001,15 @@ def suggest_gl_accounts(label, mapping_records, account_names, limit=3,
                 # fuzzy match below scores too low to find on its own.
                 if have and _names_resemble(want, have, doc_freq):
                     offer(gl, "a Carta account with a similar name (word match)", None)
-        for gl, name, ratio in _accounts_by_resemblance(label, account_names):
+        for gl, name, ratio in _accounts_by_resemblance(label, account_names, activity_by_gl):
             offer(gl, f"a Carta account with a similar name ({ratio:.0%})", None)
             if len(out) >= limit:
                 break
+    if activity_by_gl:
+        # Stable sort: an account with activity leads, but candidates tie
+        # on that in the order they were found above — a name match still
+        # outranks a resemblance guess among equally "live" accounts.
+        out.sort(key=lambda o: 0 if activity_by_gl.get(o["gl"]) else 1)
     return out[:limit * max(1, len(_label_components(label)))]
 
 
@@ -2932,8 +3020,13 @@ def suggest_gl_accounts(label, mapping_records, account_names, limit=3,
 _ACCOUNT_RESEMBLANCE_MIN = 0.6
 
 
-def _accounts_by_resemblance(label, account_names):
-    """Carta accounts whose name reads like this line's, best first."""
+def _accounts_by_resemblance(label, account_names, activity_by_gl=None):
+    """Carta accounts whose name reads like this line's, best first.
+
+    An account with YTD activity ranks ahead of one with none at the same
+    resemblance — two accounts can read equally alike, but only one of them
+    is an account the firm actually uses.
+    """
     import difflib
 
     def norm(v):
@@ -2950,7 +3043,8 @@ def _accounts_by_resemblance(label, account_names):
         ratio = difflib.SequenceMatcher(None, want, other).ratio()
         if ratio >= _ACCOUNT_RESEMBLANCE_MIN:
             scored.append((ratio, gl, name))
-    scored.sort(key=lambda x: (-x[0], x[1]))
+    scored.sort(key=lambda x: (0 if activity_by_gl and activity_by_gl.get(x[1]) else 1,
+                               -x[0], x[1]))
     return [(gl, name, ratio) for ratio, gl, name in scored]
 
 
@@ -3175,6 +3269,9 @@ def gaps_sentence(counts):
     if counts.get("unaccounted"):
         parts.append(f"{counts['unaccounted']} account(s) carry spend no budget "
                      f"line reports")
+    if counts.get("zero_activity"):
+        parts.append(f"{counts['zero_activity']} mapped line(s) show zero "
+                     f"activity this window")
     return " · ".join(parts) or None
 
 
@@ -3519,7 +3616,8 @@ def _merge_formula_and_name_suggestions(formula_accounts, name_accounts):
 
 
 def unresolved_budget_rows(rows, mapping_records=None, account_names=None,
-                           fund_names=None):
+                           fund_names=None, activity_by_gl=None,
+                           subaccount_gls=None):
     """Budget lines that will render with no actuals, and what each needs.
 
     Surfaced so the gap is a question the client answers, not a zero they
@@ -3546,7 +3644,9 @@ def unresolved_budget_rows(rows, mapping_records=None, account_names=None,
                  "hint": row.get("tag_value")}
         accounts = suggest_gl_accounts(row.get("label"), mapping_records,
                                        account_names or {},
-                                       section=row.get("section"))
+                                       section=row.get("section"),
+                                       activity_by_gl=activity_by_gl,
+                                       subaccount_gls=subaccount_gls)
         if needs == "gl_account":
             formula_accounts = _formula_gl_suggestions(row, account_names or {})
             entry["suggestions"] = _merge_formula_and_name_suggestions(formula_accounts, accounts)
@@ -3627,7 +3727,7 @@ def unconfirmed_inferences(rows, decisions=None):
 
 
 _ASK_ORDER = {"fund": 0, "fund_account": 1, "gl_account": 2, "scope": 3,
-              "fee_offset": 4}
+              "fee_offset": 4, "zero_activity_account": 5}
 
 # Below this, an account is still shown but is not its own question.
 # Measured across three real firms: a $1,000 floor halves the rows on the
@@ -3641,7 +3741,8 @@ _ASK_WANTS = {"fund": "which fund", "fund_account": "which half of the fee",
               "fee_offset": "how to report the offset",
               "account_line": "which line reports it",
               "account_line_bulk": "are any of these expected",
-              "inference": "is this what the wording means"}
+              "inference": "is this what the wording means",
+              "zero_activity_account": "is this the right account"}
 
 
 _FIELD_SAID = {"label": "the line's own name", "sub_account": "the line's sub-account",
@@ -3776,6 +3877,11 @@ def mapping_table(rows, asks, proposals=None, tab_name=None):
                           key=lambda a: _ASK_ORDER.get(a.get("needs"), 9)):
             sugs = ask.get("suggestions") or []
             picked = (proposals or {}).get(row.get("addr")) if ask.get("needs") == "fund_account" else None
+            # A quiet account is never a confident answer, however few of
+            # them there are — the account IS the mapping already on the
+            # row, so "one suggestion" here means "nothing changed", not
+            # "clearly resolved". Always asked, never pre-filled.
+            quiet = ask.get("needs") == "zero_activity_account"
             out.append({
                 "n": len(out) + 1,
                 "addr": row.get("addr"),
@@ -3787,8 +3893,8 @@ def mapping_table(rows, asks, proposals=None, tab_name=None):
                           if ask.get("needs") == "fund" and ask.get("also")
                           else _ASK_WANTS.get(ask.get("needs"), ask.get("needs"))),
                 "proposed": picked["label"] if picked else (
-                    _ask_option(sugs[0]) if len(sugs) == 1 else None),
-                "why": (picked or (sugs[0] if len(sugs) == 1 else {})).get("why"),
+                    _ask_option(sugs[0]) if len(sugs) == 1 and not quiet else None),
+                "why": (picked or (sugs[0] if len(sugs) == 1 and not quiet else {})).get("why"),
                 "answer": ({"gl_codes": picked["gl_codes"]} if picked else None),
                 "options": [_ask_option(s) for s in sugs + (ask.get("also") or [])],
             })
@@ -5307,6 +5413,14 @@ def build(args):
         t, n = e.get("acct_type"), e.get("account")
         if t is not None and n:
             _carta_account_names[t] = n
+    _activity_by_gl = gl_activity_totals(all_rows)
+    _subaccount_gls = gl_names_by_subaccount(all_rows)
+    # The widest window among the budgets' own windows: an entry any budget
+    # could report is not unreported. `None` when no budget states a whole
+    # period, which reads every entry.
+    _wins = [w for w in (_budget_window(_b, max_mo) for _b in excel_budgets) if w]
+    _window = ((min(w[0] for w in _wins), max(w[1] for w in _wins))
+               if _wins else None)
     _aliases, _coa_records = {}, []
     _coa_alias_path = Path(dashboard) / "coa-mapping.json"
     if _coa_alias_path.exists():
@@ -5484,7 +5598,8 @@ def build(args):
         _unresolved.extend(
             {**entry, "budget_id": _b.get("id"), "budget_label": _b.get("label")}
             for entry in unresolved_budget_rows(
-                _b.get("rows") or [], _coa_records, _carta_account_names, fund_names)
+                _b.get("rows") or [], _coa_records, _carta_account_names, fund_names,
+                activity_by_gl=_activity_by_gl, subaccount_gls=_subaccount_gls)
         )
     # Accounts each fund's own fee entries post to, so a fund named twice
     # can be told apart by which of them each line means.
@@ -5498,6 +5613,19 @@ def build(args):
             {**entry, "budget_id": _b.get("id"), "budget_label": _b.get("label")}
             for entry in funds_reported_twice(_b.get("rows") or [], _fund_accounts)
         )
+    # The opposite gap, from the mapping's own side: a line that resolved
+    # to an account nothing posted to in this window reads as a correct $0
+    # variance with nothing to flag it. Computed here, before the mapping
+    # table below, so it merges into that table by addr like any other ask.
+    _activity_by_gl_windowed = gl_activity_totals(all_rows, window=_window)
+    _zero_activity = []
+    for _b in _own_budgets:
+        _zero_activity.extend(
+            {**entry, "budget_id": _b.get("id"), "budget_label": _b.get("label")}
+            for entry in zero_activity_mapped_rows(
+                _b.get("rows") or [], _activity_by_gl_windowed, _carta_account_names)
+        )
+    _unresolved.extend(_zero_activity)
     # One numbered table over every budget, in workbook order, with the
     # fee halves the money already settles pre-filled.
     _mapping_table = []
@@ -5538,16 +5666,6 @@ def build(args):
     # went through its creator's own gap analysis, not this viewer's.
     _all_budget_rows = ([r for _b in _own_budgets for r in (_b.get("rows") or [])]
                         if _own_budgets else carta_variance_payload(budgets)["rows"])
-    # Over the months the budgets cover, not the months the ledger runs to.
-    # Widest window among them: an entry any budget could report is not
-    # unreported. Charging out-of-period spend against a budget that stops
-    # earlier is how an account that is properly covered reads as a gap.
-    # A budget with no whole period yet states no window; if none of them
-    # do, there is nothing to hold the ledger to and every entry is read,
-    # which is the behaviour before this scoping existed.
-    _wins = [w for w in (_budget_window(_b, max_mo) for _b in excel_budgets) if w]
-    _window = ((min(w[0] for w in _wins), max(w[1] for w in _wins))
-               if _wins else None)
     _unaccounted = unaccounted_accounts(_all_budget_rows, all_rows,
                                         _carta_account_names,
                                         read_account_decisions(dashboard),
@@ -5564,13 +5682,14 @@ def build(args):
     _unclaimed = unclaimed_dimension_values(_claim_census, _claims)
 
     _gaps = {
-        "unresolved": len(_unresolved),
+        "unresolved": len(_unresolved) - len(_zero_activity),
         "budget_only": sum(1 for _b in _own_budgets
                            for r in (_b.get("rows") or []) if r.get("void")),
         "widened": _widened,
         "unclaimed": len(_unclaimed),
         "inferred": len(_inferences),
         "unaccounted": len(_unaccounted),
+        "zero_activity": len(_zero_activity),
     }
     # The one line Step 5 reads back to the operator. Everything else here
     # is a note for whoever is watching a build; this is for the person who
