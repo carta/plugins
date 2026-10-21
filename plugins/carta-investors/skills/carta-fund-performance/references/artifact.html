@@ -1,6 +1,10 @@
   <title>Fund Performance</title>
-  <!-- Everything is inlined: the runtime CSP allows no external script, style or
-       connect host, so a CDN reference silently blocks and the charts never draw. -->
+  <!-- Inter from Google Fonts, the one external host the artifact CSP allows (Ink's starter
+       does the same). Everything else is inlined: any other CDN reference silently blocks
+       and the charts never draw. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap">
   <script>/*!
  * Chart.js v4.5.1
  * https://www.chartjs.org
@@ -27,7 +31,6 @@
 
     :root {
       color-scheme: light dark;
-      --perf-list-pad: 24px;
       --ink-color-global-text-default:               light-dark(#1A1A1A, #EDEDED);
       --ink-color-global-text-subtle:                light-dark(#656B6B, #A7AAAA);
       --ink-color-global-surface-background-default: light-dark(#FFFFFF, rgb(18 18 18));
@@ -50,8 +53,6 @@
       --ink-elevation-global-shadow-large:           0 4px 20px 0 rgb(0 0 0 / 0.2);
       --ink-font-global-family-prominent:            "SangBleu Versailles", Georgia, serif;
       --ink-font-global-size-display-1:              28px;
-      --ink-font-global-size-display-2:              22px;
-      --ink-font-global-leading-display-2:           32px;
       --ink-font-global-leading-display-1:           48px;
       --ink-size-global-radius-flat:                 0;
       --ink-size-global-radius-subtle:               4px;
@@ -92,9 +93,9 @@
       --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
       --ink-color-global-surface-lightgray-default:  light-dark(#F1F1F1, #202020);
       --ink-color-global-surface-lightgray-hover:    light-dark(#DEDFDF, #2D2D2D);
+      --ink-color-global-surface-lightgray-active:   light-dark(#CECFCF, #656B6B);
       --ink-color-global-surface-background-overlay:  light-dark(rgb(0 0 0 / 0.8), rgb(80 80 80 / 0.8));
       /* Text / links / borders */
-      --ink-color-global-link-default:               light-dark(#285DA3, #8BABD6);
       --ink-color-global-border-active:              light-dark(#1A1A1A, #CECFCF);
       /* Focus. This artifact never links tokens.css, so Ink's focus pair has to
          be declared locally for the :focus-visible model below. */
@@ -112,13 +113,24 @@
       /* Chart chrome (axis ticks + legend labels). Canvas text is painted by
          Chart.js, which cannot read light-dark() out of a custom property —
          carta-home.html resolves this token through inkColor(). */
-      --carta-chart-label-color:                     light-dark(#656B6B, #FFFFFF);
+      --carta-chart-label-color:                     light-dark(#656B6B, #A7AAAA);
+      /* Chart series, in order: the indigo / teal / pink of Carta's entity-structure
+         charts, then grey and a light indigo for a fourth and fifth fund. Each has a
+         lighter dark-mode arm so lines stay visible on the dark surface. */
+      --carta-series-blue:                           light-dark(#1E3CAF, #8A9AE6);
+      --carta-series-teal:                           light-dark(#3A8F7F, #6FC2B0);
+      --carta-series-pink:                           light-dark(#C74E7E, #E58BAE);
+      --carta-series-gray:                           light-dark(#8C8C8C, #A7AAAA);
+      --carta-series-lilac:                          light-dark(#7F8CDB, #B3BCF0);
+      /* Peer chart: the P25–P75 band is the fund indigo as a soft wash, the median a mid grey. */
+      --carta-peer-band:                             light-dark(rgb(30 60 175 / 0.16), rgb(138 154 230 / 0.2));
+      --carta-peer-median:                           light-dark(#656B6B, #A7AAAA);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: Inter, system-ui, -apple-system, sans-serif;
+      font-family: Inter, system-ui, sans-serif;
       font-size: 14px;
       line-height: 1.5;
       background: var(--ink-color-global-surface-background-default);
@@ -128,7 +140,6 @@
 
     /* Bordered controls take Ink's real treatment instead: recolor the 1px
        border, add the 4px ring outside it, drop the outline. */
-    .perf-th-info:focus-visible,
     select:focus-visible,
     #soi-page-search:focus-visible,
     #soi-page-fund-select:focus-visible,
@@ -144,14 +155,85 @@
       padding: 28px 32px 64px;
     }
 
-    /* ── Page header ── */
+    /* ── Page frame and header: the Schedule of Investments layout ── */
+    .perf-container { --perf-page-pad: 48px; width: 100%; max-width: 1600px; margin: 0 auto; padding: var(--perf-page-pad); box-sizing: border-box; }
+    .back-to-home {
+      display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;
+      font-size: 13px; font-weight: 500; line-height: 1.4;
+      color: var(--ink-color-global-text-subtle); text-decoration: none; cursor: pointer;
+    }
+    .back-to-home:hover { color: var(--ink-color-global-text-default); }
+    .back-to-home[hidden] { display: none; }
+    .perf-header { margin-bottom: 24px; }
+    .perf-header-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    .carta-logo { display: block; width: 64px; height: 32px; color: var(--ink-color-global-text-default); }
+    .perf-as-of { font-size: 13px; line-height: 20px; color: var(--ink-color-global-text-subtle); white-space: nowrap; }
+    .perf-back-link {
+      padding: 0; border: 0; background: none; cursor: pointer;
+      font: inherit; font-weight: 500; letter-spacing: inherit; color: var(--ink-color-global-text-subtle);
+    }
+    .perf-back-link:hover { color: var(--ink-color-global-text-default); }
+    .perf-back-link[hidden], #perf-firm-name-label[hidden] { display: none; }
+    .perf-header-eyebrow { font-size: 13px; color: var(--ink-color-global-text-subtle); letter-spacing: 0.02em; margin-bottom: 2px; min-height: 20px; }
     .page-title {
       font-family: var(--ink-font-global-family-prominent);
-      font-size: var(--ink-font-global-size-display-2);
+      font-size: var(--ink-font-global-size-display-1);
       font-weight: 400;
-      line-height: var(--ink-font-global-leading-display-2);
+      line-height: var(--ink-font-global-leading-display-1);
       color: var(--ink-color-global-text-default);
-      margin-bottom: 8px;
+    }
+    @media (max-width: 640px) { .perf-container { --perf-page-pad: 24px; padding: var(--perf-page-pad) 16px; } }
+
+    /* ── Fund switcher (SOI's): a bordered "Fund <name>" segment with a searchable list ── */
+    .switcher-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .fund-switcher {
+      position: relative;
+      display: inline-flex; align-items: stretch; width: fit-content; max-width: 100%;
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .switcher-segment { display: flex; align-items: center; gap: 8px; padding: 7px 12px; min-width: 0; }
+    .fund-switcher-label { font-size: 13px; color: var(--ink-color-global-text-subtle); font-weight: 500; white-space: nowrap; }
+    .combo { display: inline-flex; min-width: 0; }
+    .combo-trigger {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 320px; padding: 0;
+      border: none; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500;
+      color: var(--ink-color-global-text-default); cursor: pointer; text-align: left;
+    }
+    .combo-trigger:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 3px; }
+    .combo-trigger-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .combo-chevron { display: inline-flex; flex-shrink: 0; }
+    .combo-panel {
+      position: absolute; top: calc(100% + 6px); left: -1px; z-index: 50;
+      width: max-content; min-width: 320px; max-width: min(560px, calc(100vw - 32px));
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle); border-radius: 4px;
+      box-shadow: var(--ink-elevation-global-shadow-medium); padding: 4px 0;
+    }
+    .combo-panel[hidden] { display: none; }
+    .combo-search-wrap { padding: 8px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+    .combo-search {
+      width: 100%; height: 40px; padding: 0 12px; font-family: inherit; font-size: 14px; line-height: 1;
+      color: var(--ink-color-global-text-default); background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-default); border-radius: 4px; outline: none;
+    }
+    .combo-search:focus { border-color: var(--ink-color-global-border-focus-default); box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
+    .combo-list { max-height: 340px; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+    /* The active row's highlight shows keyboard position; the list itself needs no ring. */
+    .combo-list:focus-visible { outline: none; box-shadow: none; }
+    .combo-option {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      font-size: 14px; line-height: 24px; color: var(--ink-color-global-text-default); cursor: pointer;
+    }
+    .combo-check { width: 14px; flex-shrink: 0; display: flex; align-items: center; visibility: hidden; }
+    .combo-option[aria-selected="true"] .combo-check { visibility: visible; }
+    .combo-option[aria-selected="true"] { font-weight: 600; }
+    .combo-option:hover, .combo-option.active { background: var(--ink-color-global-surface-background-underlay); }
+    .combo-option-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .combo-empty { padding: 10px 12px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
+    @media (max-width: 640px) {
+      .fund-switcher, .switcher-segment { width: 100%; }
+      .combo-trigger { max-width: 100%; }
     }
 
     /* Company logo on a light chip, overlaid bottom-left of a Plugin news thumb
@@ -245,107 +327,212 @@
     .cust-copy-btn:hover { border-color: var(--ink-color-global-border-default); color: var(--ink-color-global-text-default); }
     .cust-copy-btn.copied { border-color: var(--ink-color-global-feedback-positive-strong); color: var(--ink-color-global-feedback-positive-strong); }
 
-    /* ── Perf page chart grid ── */
-    /* Always 2 columns; drops to 1 below 600px via media query */
-    .perf-chart-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px; }
-    .perf-chart-grid .chart-full { grid-column: 1 / -1; }
+    /* ── Fund peer chart card ── */
+    .perf-peer-card { margin-bottom: 24px; }
+    .perf-peer-summary { font-size: 14px; line-height: 20px; margin: 0 0 10px; min-height: 20px; color: var(--ink-color-global-text-default); }
+    .perf-peer-summary strong { font-weight: 600; }
+    .perf-peer-detail { color: var(--ink-color-global-text-subtle); }
+    .perf-peer-band-key { width: 14px; height: 10px; background: var(--carta-peer-band); border-radius: 2px; }
+    .perf-peer-cohort { margin-top: 10px; min-height: 18px; font-size: 12px; line-height: 18px; color: var(--ink-color-global-text-subtle); }
     .perf-chart-card {
       border: 1px solid var(--ink-color-global-border-subtle);
       border-radius: 0; padding: 16px 20px;
       background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
     }
     .perf-chart-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 8px; }
-    .perf-chart-title { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink-color-global-text-default); }
+    /* Ink heading-3: 16px semibold, no extra tracking. */
+    .perf-chart-title { font-size: 16px; font-weight: 600; line-height: 24px; color: var(--ink-color-global-text-default); }
     .perf-chart-wrap { position: relative; height: 180px; }
     .perf-chart-wrap.tall { height: 240px; }
-    /* Metrics strip: flex row matching SOI style.
-       Single row on wide screens; wraps to 2-column grid on narrow screens. */
+    /* Metrics strip: SOI's, with the IRR tile first. All five across from 1200px. Between
+       641px and 1199px the IRR tile is a full-width hero row, with room for its gross
+       figure and fee note, and the four capital tiles sit in a 2x2 grid under it, all
+       the same height. Below 641px everything stacks, IRR first. */
     .perf-metrics-strip {
-      display: flex;
-      flex-wrap: nowrap;
-      gap: 0;
-      margin-bottom: 20px;
+      display: grid; grid-template-columns: 1fr; column-gap: 16px; row-gap: 12px;
       border: 1px solid var(--ink-color-global-border-subtle);
+      background: var(--ink-color-global-surface-background-default);
+      padding: 14px 16px; margin-bottom: 24px;
     }
-    .perf-metric {
-      flex: 1 1 0;
-      min-width: 0;
-      padding: 12px 16px;
-      border-right: 1px solid var(--ink-color-global-border-subtle);
+    .perf-metric { min-width: 0; }
+    @media (max-width: 1199px) {
+      .perf-metric-irr .perf-metric-val { font-size: 28px; line-height: 36px; }
     }
-    .perf-metric:last-child { border-right: none; }
-    .perf-metric-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-color-global-text-subtle); margin-bottom: 4px; }
-    .perf-metric-val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (min-width: 641px) and (max-width: 1199px) {
+      .perf-metrics-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .perf-metric-irr { grid-column: 1 / -1; }
+      /* Hero row and the first capital row carry a rule beneath; the left capital column a rule beside. */
+      .perf-metric:nth-child(-n+3) { border-bottom: 1px solid var(--ink-color-global-border-subtle); padding-bottom: 12px; }
+      .perf-metric:nth-child(even) { border-right: 1px solid var(--ink-color-global-border-subtle); padding-right: 16px; }
+    }
+    @media (min-width: 1200px) {
+      .perf-metrics-strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .perf-metric { border-right: 1px solid var(--ink-color-global-border-subtle); padding-right: 16px; }
+      .perf-metric:last-child { border-right: none; padding-right: 0; }
+    }
+    @media (max-width: 640px) {
+      .perf-metric { border-bottom: 1px solid var(--ink-color-global-border-subtle); padding-bottom: 12px; }
+      .perf-metric:last-child { border-bottom: none; padding-bottom: 0; }
+    }
+    .perf-metric-label { font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ink-color-global-text-subtle); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .perf-irr-gross { font-size: 13px; font-weight: 400; color: var(--ink-color-global-text-subtle); }
+    .perf-irr-note { margin-top: 2px; font-size: 12px; line-height: 16px; color: var(--ink-color-global-text-subtle); }
+    .perf-metric-val { font-size: 20px; font-weight: 500; line-height: 28px; font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* ── Fund detail metrics table ── */
-    .perf-detail-table { border-collapse: collapse; width: 100%; font-size: 13px; margin-bottom: 24px; table-layout: auto; }
-    .perf-detail-table thead th { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-color-global-text-subtle); padding: 8px 14px; text-align: right; border-bottom: 1px solid var(--ink-color-global-border-subtle); white-space: nowrap; }
+    .perf-detail-table { border-collapse: collapse; width: 100%; margin-bottom: 24px; table-layout: auto; font-variant-numeric: tabular-nums; }
     .perf-detail-table thead th:first-child { text-align: left; }
-    .perf-detail-table thead th:not(:first-child) { width: 140px; }
-    .perf-detail-table tbody td { padding: 9px 14px; text-align: right; border-bottom: 1px solid var(--ink-color-global-border-subtle); font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); white-space: nowrap; }
-    .perf-detail-table tbody td:first-child { text-align: left; color: var(--ink-color-global-text-default); font-weight: 500; white-space: nowrap; }
-    .perf-detail-table tbody tr:last-child td { border-bottom: none; }
-    .perf-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
-    .perf-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-color-global-text-subtle); }
+    .perf-detail-table thead th:not(:first-child) { width: 160px; text-align: right; }
+    .perf-detail-table tbody td:not(:first-child) { text-align: right; }
     .perf-legend-dot { width: 10px; height: 3px; border-radius: 1px; flex-shrink: 0; }
+
+    /* ── All-funds overview graph (list view) ── */
+    /* Springy ease-out shared by every entrance: fast start, soft landing. */
+    :root { --perf-ease-spring: cubic-bezier(0.22, 1, 0.36, 1); }
+    .perf-overview-card { margin-bottom: 24px; animation: perf-rise .52s var(--perf-ease-spring) both; }
+    @keyframes perf-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    /* Min-heights match the filled rows, so the table below doesn't jump when the graph loads. */
+    .perf-overview-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 14px; min-height: 28px; }
+    .perf-seg {
+      display: inline-flex; gap: 2px; padding: 2px;
+      background: var(--ink-color-global-surface-lightgray-default);
+      border-radius: var(--ink-size-global-radius-subtle);
+    }
+    .perf-seg-btn, .perf-switch, .perf-overview-chip {
+      font: inherit; cursor: pointer;
+      transition: background .15s, color .15s, box-shadow .15s, transform .12s var(--perf-ease-spring);
+    }
+    .perf-seg-btn:active, .perf-switch:active, .perf-overview-chip:active { transform: scale(.96); }
+    .perf-seg-btn {
+      border: none; background: none; padding: 3px 10px; border-radius: 3px;
+      font-size: 12px; font-weight: 500; color: var(--ink-color-global-text-subtle);
+    }
+    .perf-seg-btn:hover { color: var(--ink-color-global-text-default); }
+    .perf-seg-btn[aria-checked="true"] {
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--ink-color-global-surface-lightgray-active));
+      color: var(--ink-color-global-text-default);
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+    }
+    .perf-switch-label { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
+    .perf-switch {
+      position: relative; width: 28px; height: 16px; padding: 0; border: none; border-radius: var(--ink-radius-pill);
+      background: var(--ink-color-global-border-default);
+    }
+    .perf-switch[aria-checked="true"] { background: var(--ink-color-global-border-active); }
+    .perf-switch:disabled { opacity: .4; cursor: not-allowed; }
+    .perf-switch::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+      background: var(--ink-color-global-surface-background-default);
+      /* Slight overshoot, so the knob settles like a spring. */
+      transition: transform .28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .perf-switch[aria-checked="true"]::after { transform: translateX(12px); }
+    .perf-overview-legend { margin-bottom: 10px; min-height: 52px; }
+    .perf-compare-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+    .perf-compare-rule { color: var(--ink-color-global-text-subtle); }
+    .perf-compare-reset { background: none; border: none; padding: 0; font: inherit; color: var(--ink-color-global-text-default); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+    .perf-compare-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+    /* Each fund is an eye toggle: shown funds read in full colour, hidden ones go quiet. */
+    .perf-overview-chip {
+      display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px;
+      background: none; border: 1px solid transparent; border-radius: var(--ink-size-global-radius-subtle);
+      font-size: 12px; color: var(--ink-color-global-text-default);
+    }
+    .perf-overview-chip:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+    .perf-overview-chip .perf-legend-dot { background: var(--c); }
+    .perf-overview-chip[aria-pressed="false"] { color: var(--ink-color-global-text-subtle); }
+    .perf-overview-chip[aria-pressed="false"] .perf-legend-dot { background: transparent; box-shadow: inset 0 0 0 1px var(--c); }
+    .perf-overview-chip[aria-disabled="true"] { cursor: not-allowed; }
+    .perf-overview-chip[aria-disabled="true"]:hover { background: none; }
+    .perf-compare-eye { display: inline-flex; color: var(--ink-color-global-text-subtle); }
+    .perf-overview-chip[aria-pressed="true"] .perf-compare-eye { color: var(--ink-color-global-text-default); }
+    .perf-overview-chip.is-new, .perf-overview-peer-key.is-new { animation: perf-pop .36s var(--perf-ease-spring) both; animation-delay: calc(var(--i, 0) * 40ms); }
+    .perf-overview-chip:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
+    .perf-overview-peer-key[hidden] { display: none; }
+    .perf-overview-peer-key { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
+    .perf-overview-dash { width: 14px; height: 0; border-top: 2px dashed var(--ink-color-global-text-subtle); }
+    /* The fund chart's median line is drawn in --carta-peer-median, so its key is too. */
+    .perf-peer-card .perf-overview-dash { border-top-color: var(--carta-peer-median); }
+    @keyframes perf-pop { from { opacity: 0; transform: translateY(4px) scale(.92); } to { opacity: 1; transform: none; } }
+    /* ── Loading skeleton: SOI's shimmer bones ── */
+    @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+    .shimmer-bone {
+      background: linear-gradient(90deg, var(--ink-color-global-surface-background-underlay) 25%, var(--ink-color-global-border-default) 50%, var(--ink-color-global-surface-background-underlay) 75%);
+      background-size: 800px 100%;
+      animation: shimmer 1.5s infinite ease-in-out;
+      border-radius: 4px;
+    }
+    .shimmer-table-header { display: flex; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+    .shimmer-row { display: flex; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--ink-color-global-surface-background-underlay); }
+    .shimmer-th, .shimmer-td { height: 14px; flex: 1; }
+    .shimmer-th:first-child, .shimmer-td:first-child { flex: 2; }
+    .shimmer-val { display: inline-block; height: 14px; width: 72px; vertical-align: middle; }
+    .perf-metric-val .shimmer-val { height: 22px; width: 110px; }
+    /* Chart placeholders fill their frame until the chart lands, then fade. */
+    .perf-chart-bone { position: absolute; inset: 0; transition: opacity .3s ease; pointer-events: none; }
+    .perf-chart-bone.is-done { opacity: 0; }
     /* Narrow-screen overrides */
     @media (max-width: 600px) {
-      #perf-detail-view { padding: 16px 14px !important; }
-      .perf-chart-grid { grid-template-columns: 1fr; }
       .perf-chart-wrap { height: 160px; }
       .perf-chart-wrap.tall { height: 200px; }
-      .perf-detail-table { font-size: 12px; }
-      .perf-detail-table tbody td, .perf-detail-table thead th { padding: 7px 10px; }
-      /* Both strips: 2×2 grid */
-      #soi-page-metrics { flex-wrap: wrap !important; }
-      #soi-page-metrics > * { flex: 0 0 50% !important; border-bottom: 1px solid var(--ink-color-global-border-subtle) !important; }
-      #soi-page-metrics > *:nth-child(even) { border-right: none !important; }
-      #soi-page-metrics > *:nth-last-child(-n+2) { border-bottom: none !important; }
-      .perf-metrics-strip { flex-wrap: wrap; }
-      .perf-metric { flex: 0 0 50%; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
-      .perf-metric:nth-child(even) { border-right: none; }
-      .perf-metric:nth-last-child(-n+2) { border-bottom: none; }
     }
-    /* Very narrow: both strips stack to 1 tile per row */
-    @media (max-width: 480px) {
-      #soi-page-metrics > * { flex: 0 0 100% !important; border-right: none !important; border-bottom: 1px solid var(--ink-color-global-border-subtle) !important; }
-      #soi-page-metrics > *:nth-last-child(-n+2) { border-bottom: 1px solid var(--ink-color-global-border-subtle) !important; }
-      #soi-page-metrics > *:last-child { border-bottom: none !important; }
-      .perf-metric { flex: 0 0 100%; border-right: none; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
-      .perf-metric:nth-child(even) { border-right: none; }
-      .perf-metric:last-child { border-bottom: none; }
-    }
-
-    /* ── Perf page all-funds table ── */
+    /* ── Perf page all-funds table (Ink Table, matching SOI and LP Summary) ── */
+    /* Labels are regular-weight secondary grey; values stay primary so nothing reads disabled. */
+    .perf-table-wrap { position: relative; }
     /* Scrolling sideways already makes this box the table's scroll container, so the
-       header can only stick inside it: bound its height to the window below the page
-       header (--perf-header-h, kept current by a ResizeObserver) and scroll both ways. */
+       header can only stick inside it: bound its height to the window and scroll both ways. */
     .perf-table-scroll {
       overflow: auto;
-      max-height: calc(100vh - var(--perf-header-h, 0px) - 2 * var(--perf-list-pad));
+      max-height: calc(100vh - 2 * var(--perf-page-pad));
     }
-    .perf-funds-table { min-width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
-    .perf-funds-table thead th {
-      font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
-      color: var(--ink-color-global-text-subtle); padding: 10px 12px; text-align: right;
+    /* Cells follow the Schedule of Investments table: 13px, 40px rows, a dark rule under
+       the header, the first column pinned while the rest scroll. */
+    /* Separate borders: Chromium drops collapsed borders under the pinned columns. */
+    .perf-funds-table {
+      min-width: 100%; border-collapse: separate; border-spacing: 0; table-layout: auto; font-variant-numeric: tabular-nums;
+      /* One row colour, set here so the header row inherits it too: the pinned cue column
+         and its fade match the row they end, hovered or not. */
+      --perf-row-bg: var(--ink-color-global-surface-background-default);
+    }
+    .perf-funds-table th, .perf-detail-table th {
+      background: var(--ink-color-global-surface-background-default);
+      padding: 8px 12px; height: 40px; text-align: right;
+      font-size: 13px; font-weight: 500; line-height: 20px; color: var(--ink-color-global-text-default);
       white-space: nowrap;
       /* A shadow, not a border: collapsed borders scroll away from a sticky cell. */
-      box-shadow: inset 0 -1px 0 var(--ink-color-global-border-subtle);
-      position: sticky; top: 0; z-index: 1; background: var(--ink-color-global-surface-background-default);
+      box-shadow: inset 0 -1px 0 var(--ink-color-global-text-default);
     }
-    .perf-funds-table thead th:first-child { text-align: left; width: 220px; min-width: 220px; }
-    .perf-funds-table tbody td {
-      padding: 11px 12px; text-align: right;
-      border-bottom: 1px solid var(--ink-color-global-border-subtle);
-      font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default);
-      white-space: nowrap;
+    .perf-funds-table td, .perf-detail-table td {
+      background: var(--ink-color-global-surface-background-default);
+      padding: 8px 12px; height: 40px; vertical-align: middle;
+      font-size: 13px; line-height: 22px; color: var(--ink-color-global-text-default);
+      border-bottom: 1px solid var(--ink-color-global-border-subtle); white-space: nowrap; text-align: right;
+      transition: background .15s;
     }
-    .perf-funds-table tbody td:first-child { text-align: left; white-space: normal; word-break: break-word; }
-    /* No row-level `cursor: pointer` — the <tr> no longer carries a click
-       handler; the fund name is a real <button>, so the cursor must not
-       promise a row action that doesn't exist. The hover tint stays as a
-       row-scanning aid. */
-    .perf-funds-table tbody tr:hover { background: var(--ink-color-global-surface-lightgray-hover); }
-    /* Text button styled as a link (borderless → Ink's outline + ring focus). */
+    .perf-funds-table th:first-child, .perf-funds-table td:first-child,
+    .perf-detail-table th:first-child, .perf-detail-table td:first-child { text-align: left; padding-left: 8px; }
+    .perf-funds-table th:first-child, .perf-funds-table td:first-child { position: sticky; left: 0; z-index: 2; min-width: 288px; }
+    /* Header row pinned above the body rows; the Fund header pins both ways, so it sits on top. */
+    .perf-funds-table thead th { position: sticky; top: 0; z-index: 3; }
+    .perf-funds-table thead th:first-child { z-index: 4; }
+    .perf-detail-table td:first-child { font-weight: 500; }
+    .perf-funds-table tbody tr:last-child td, .perf-detail-table tbody tr:last-child td { border-bottom: none; }
+    /* Ink sortable header: a transparent button whose 5px padding is cancelled by its
+       margin, so the label stays on the cell's text edge while the hover box bleeds. */
+    .perf-funds-table .perf-sort-btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 0 5px; margin: 0 -5px;
+      background: transparent; border: 0; border-radius: var(--ink-size-global-radius-subtle);
+      font: inherit; color: inherit; cursor: pointer; white-space: nowrap;
+      transition: background-color 80ms ease-out;
+    }
+    .perf-funds-table .perf-sort-btn:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+    .perf-funds-table .perf-sort-btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
+    .perf-sort-icon { flex-shrink: 0; }
+    .perf-sort-asc, .perf-sort-desc { fill: var(--ink-color-global-border-default); }
+    th[aria-sort="ascending"] .perf-sort-asc, th[aria-sort="descending"] .perf-sort-desc { fill: var(--ink-color-global-text-default); }
+    /* The whole row opens the fund; the fund name is the keyboard-reachable button. */
+    .perf-funds-table tbody tr { cursor: pointer; }
+    .perf-funds-table tbody tr:hover { --perf-row-bg: var(--ink-color-global-surface-background-underlay); }
+    .perf-funds-table tbody td { background: var(--perf-row-bg); }
     .perf-fund-name-link {
       background: none;
       border: none;
@@ -353,71 +540,69 @@
       font: inherit;
       font-weight: 500;
       cursor: pointer;
-      color: var(--ink-color-global-link-default);
+      color: var(--ink-color-global-text-default);
       text-align: left;
-      text-decoration: none;
     }
-    .perf-fund-name-link:hover { text-decoration: underline; }
     .perf-fund-name-link:focus-visible {
       outline: 2px solid var(--ink-color-global-border-focus-default);
       outline-offset: 0;
       box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
-      text-decoration: underline;
     }
-    .perf-th-wrap { display: inline-flex; align-items: center; gap: 5px; }
-    /* A real <button> (keyboard-reachable tooltip trigger) painted to look
-       exactly like the <i> it replaced — hence the appearance/background/padding
-       resets on top of the original glyph rules. */
-    .perf-th-info {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 13px; height: 13px; border-radius: 50%;
-      border: 1px solid var(--ink-color-global-text-subtle);
-      color: var(--ink-color-global-text-subtle);
-      font-size: 8px; font-weight: 700; font-style: normal; font-family: inherit;
-      cursor: default; position: relative; flex-shrink: 0; line-height: 1;
-      -webkit-appearance: none; appearance: none;
-      background: none; padding: 0; margin: 0;
-      /* The <i> inherited the th's uppercase + tracking (so the glyph painted
-         as "I"); the UA button style would reset both, so re-inherit them. */
-      text-transform: inherit; letter-spacing: inherit;
+    /* Every row ends in a muted chevron, so it reads as clickable at rest; on hover or
+       keyboard focus the chevron darkens and "View" fades in from its left. */
+    /* The cue has its own column, pinned to the right edge so "View" shows at every width.
+       When columns sit off-screen, they fade out into it from the left: the fade belongs to
+       the pinned column, so the cue itself is never faded. */
+    .perf-funds-table .perf-row-action-col {
+      position: sticky; right: 0; z-index: 2;
+      width: 48px; min-width: 48px; padding: 0 8px 0 0; text-align: right;
     }
+    .perf-funds-table thead th.perf-row-action-col { z-index: 4; }
+    .perf-funds-table .perf-row-action-col::before {
+      content: ""; position: absolute; top: 0; bottom: 0; right: 100%; width: 24px; pointer-events: none;
+      background: linear-gradient(to right, transparent, var(--perf-row-bg));
+      opacity: 0; transition: opacity .2s;
+    }
+    /* The header fade stops above its rule, so the line under the headers runs unbroken. */
+    .perf-funds-table thead th.perf-row-action-col::before { bottom: 1px; }
+    .perf-table-wrap.has-more-right .perf-row-action-col::before { opacity: 1; }
+    .perf-row-action {
+      display: inline-flex; align-items: center; gap: 4px; height: 32px; pointer-events: none;
+      font: 500 12px/18px Inter, system-ui, sans-serif; color: var(--ink-color-global-text-default);
+    }
+    .perf-row-action-label {
+      opacity: 0; transform: translateX(6px);
+      transition: opacity .22s var(--perf-ease-spring), transform .32s var(--perf-ease-spring);
+    }
+    .perf-row-chevron { flex-shrink: 0; color: var(--ink-color-global-border-default); transition: color .15s; }
+    .perf-funds-table tbody tr:hover .perf-row-action-label,
+    .perf-funds-table tbody tr:focus-within .perf-row-action-label { opacity: 1; transform: none; }
+    .perf-funds-table tbody tr:hover .perf-row-chevron,
+    .perf-funds-table tbody tr:focus-within .perf-row-chevron { color: var(--ink-color-global-text-default); }
+    /* Touch screens have no hover: the chevron alone says the row opens. */
+    @media (hover: none) { .perf-row-action-label { display: none; } }
+    /* Fund names wrap on phones so the numbers start on screen. */
+    @media (max-width: 600px) {
+      .perf-funds-table th:first-child, .perf-funds-table td:first-child { min-width: 184px; max-width: 184px; white-space: normal; }
+    }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    /* Labels with a definition carry SOI's dotted underline; hover or focus shows it. */
+    .tooltip-trigger {
+      background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: default;
+      text-decoration: underline dotted var(--ink-color-global-border-default); text-underline-offset: 3px;
+    }
+    .tooltip-trigger:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
     /* tooltip rendered via JS into #perf-tip (position:fixed, escapes overflow:hidden) */
     #perf-tip {
-      position: fixed; z-index: 9999; pointer-events: none;
-      background: var(--ink-color-global-brand-black);
-      color: var(--ink-color-global-brand-white); font-size: 11px; font-weight: 400;
-      letter-spacing: 0; text-transform: none; white-space: normal; width: 220px;
-      padding: 8px 10px; border-radius: var(--ink-size-global-radius-flat); line-height: 1.45;
+      position: fixed; z-index: 9999; pointer-events: none; max-width: 280px;
+      background: var(--ink-color-global-text-default); color: var(--ink-color-global-surface-background-default);
+      font-size: 12px; font-weight: 400; line-height: 18px; white-space: normal;
+      padding: 6px 10px; border-radius: 4px;
       opacity: 0; transition: opacity .15s;
     }
     #perf-tip.visible { opacity: 1; }
-    .perf-list-status { color: var(--ink-color-global-text-subtle); font-size: 13px; font-style: italic; padding: 60px 0; text-align: center; }
+    .perf-list-status { color: var(--ink-color-global-text-subtle); font-size: 13px; padding: 60px 0; text-align: center; }
 
-    /* ── Fund dropdown (detail page) ── */
-    #perf-fund-title-btn {
-      display: flex; align-items: center; gap: 5px;
-      background: none; border: none; padding: 0;
-      cursor: default; font-family: inherit;
-    }
-    #perf-fund-dropdown {
-      display: none; position: absolute; z-index: 200;
-      top: calc(100% + 8px); left: 0;
-      background: var(--ink-color-global-surface-background-default);
-      border: 1px solid var(--ink-color-global-border-subtle);
-      border-radius: var(--ink-size-global-radius-subtle);
-      box-shadow: var(--ink-elevation-global-shadow-medium);
-      min-width: 220px; max-height: 260px; overflow-y: auto;
-    }
-    .perf-fund-dropdown-item {
-      display: block; width: 100%; text-align: left;
-      padding: 9px 14px; font-size: 13px; font-family: inherit;
-      background: transparent; border: none; cursor: pointer;
-      color: var(--ink-color-global-text-default); white-space: nowrap;
-    }
-    .perf-fund-dropdown-item:hover,
-    .perf-fund-dropdown-item.active {
-      background: var(--ink-color-global-surface-background-underlay);
-    }
     .tab-btn.active {
       color: var(--ink-color-global-text-default);
       font-weight: 600;
@@ -454,72 +639,56 @@
     
 </style>
 <div id="perf-page" style="display:none; position:fixed; inset:0; z-index:200; background:var(--ink-color-global-surface-background-default); overflow-y:auto; flex-direction:column;">
-  <div id="perf-page-header" style="position:sticky; top:0; z-index:10; background:var(--ink-color-global-surface-background-default); padding:0 32px;">
+  <div class="perf-container">
     <!-- Only shown when Carta Home built this page (see the standalone bootstrap below) -->
-    <div style="max-width:1100px; margin:0 auto; padding-top:24px;">
-      <a id="perf-home-btn" style="display:none; align-items:center; gap:4px; font-size:13px; font-weight:500; color:var(--ink-color-global-text-subtle); text-decoration:none; cursor:pointer; line-height:1.4;" onmouseover="this.style.color='var(--ink-color-global-text-default)'" onmouseout="this.style.color='var(--ink-color-global-text-subtle)'">&larr; Back to Home</a>
-    </div>
-    <div style="max-width:1100px; margin:0 auto; display:flex; align-items:flex-start; gap:16px; padding:20px 0 16px;">
-      <!-- Fund title + chevron — acts as dropdown trigger in detail view -->
-      <div style="position:relative;">
-        <div style="display:flex; flex-direction:column; gap:4px;">
-          <span id="perf-firm-name-label" style="font-size:13px; font-weight:500; color:var(--ink-color-global-text-subtle);"></span>
-          <button id="perf-back-btn" style="display:none; align-items:center; gap:4px; font-size:13px; font-weight:500; color:var(--ink-color-global-text-subtle); background:none; border:none; cursor:pointer; padding:0; line-height:1.4;" onmouseover="this.style.color='var(--ink-color-global-text-default)'" onmouseout="this.style.color='var(--ink-color-global-text-subtle)'"><span id="perf-back-text"></span></button>
-          <button id="perf-fund-title-btn" onclick="perfToggleFundDropdown(event)">
-            <span class="page-title" id="perf-page-label" style="margin:0;">Fund Performance</span>
-          <svg id="perf-fund-chevron" style="display:none;color:var(--ink-color-global-text-subtle);flex-shrink:0;" width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          </button>
-        </div><!-- /column -->
-        <div id="perf-fund-dropdown"></div>
+    <a class="back-to-home" id="perf-home-btn" hidden>&larr; Back to Home</a>
+    <div class="perf-header">
+      <div class="perf-header-top">
+        <svg class="carta-logo" role="img" aria-label="Carta" width="64" height="32" viewBox="0 0 64 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
+        <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
+        </svg>
+        <span class="perf-as-of" id="perf-as-of"></span>
       </div>
-      <div style="flex:1;"></div>
+      <!-- One slot, two jobs: the firm's name on the list, "← All funds" on a fund. The Fund
+           dropdown answers "which fund?"; this answers "where am I, and how do I get back?" -->
+      <div class="perf-header-eyebrow">
+        <span id="perf-firm-name-label"></span>
+        <button type="button" class="perf-back-link" id="perf-all-funds-link" hidden>&larr; All funds</button>
+      </div>
+      <h1 class="page-title">Fund Performance</h1>
     </div>
-  </div>
+    <div class="switcher-row">
+      <div class="fund-switcher">
+        <span class="switcher-segment">
+          <span class="fund-switcher-label" id="perf-fund-switcher-label">Fund</span>
+          <div class="combo" id="perf-fund-combo"></div>
+        </span>
+      </div>
+    </div>
   <!-- ── All-funds list view ── -->
-  <div id="perf-list-view" style="max-width:1200px; margin:0 auto; padding:var(--perf-list-pad) 32px; width:100%; box-sizing:border-box;">
-    <div class="perf-list-status">Loading fund performance…</div>
-  </div>
+  <div id="perf-list-view"></div>
   <!-- ── Single-fund detail view (charts) ── -->
-  <div id="perf-detail-view" style="display:none; max-width:1100px; margin:0 auto; padding:24px 32px; width:100%; box-sizing:border-box;">
+  <div id="perf-detail-view" style="display:none;">
     <div class="perf-metrics-strip" id="perf-page-metrics"></div>
-    <div id="perf-detail-metrics-table" style="margin-top:20px;margin-bottom:8px;"></div>
-    <div id="perf-cohort-label" style="display:none;font-size:10px;color:var(--ink-color-global-text-subtle);margin-bottom:20px;letter-spacing:.01em;"></div>
+    <section class="perf-chart-card perf-peer-card" id="perf-peer-card" aria-labelledby="perf-peer-title">
+      <div class="perf-chart-header"><h2 class="perf-chart-title" id="perf-peer-title">Net IRR</h2></div>
+      <div class="perf-overview-controls">
+        <div class="perf-seg" role="radiogroup" aria-label="Metric" id="perf-peer-metric"></div>
+      </div>
+      <p class="perf-peer-summary" id="perf-peer-summary"></p>
+      <div class="perf-overview-legend">
+        <span class="perf-overview-peer-key"><span class="perf-legend-dot" style="background:var(--carta-series-blue)"></span>This fund</span>
+        <span class="perf-overview-peer-key perf-peer-only" hidden><span class="perf-overview-dash"></span>Peer median (P50)</span>
+        <span class="perf-overview-peer-key perf-peer-only" hidden><span class="perf-peer-band-key"></span>Middle 50% of peers (P25–P75)</span>
+      </div>
+      <div class="perf-chart-wrap tall"><canvas id="perf-peer-chart" role="img" aria-labelledby="perf-peer-title perf-peer-summary"></canvas><div class="shimmer-bone perf-chart-bone"></div></div>
+      <div id="perf-cohort-label" class="perf-peer-cohort"></div>
+    </section>
+    <div id="perf-detail-metrics-table" style="margin-bottom:8px;"></div>
     <div id="perf-page-status" style="color:var(--ink-color-global-text-subtle);font-size:13px;font-style:italic;padding:40px 0;text-align:center;display:none;"></div>
-    <div class="perf-chart-grid" id="perf-chart-grid">
-      <!-- TVPI half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">TVPI vs Benchmarks</div>
-        </div>
-        <div class="perf-chart-wrap"><canvas id="perf-tvpi-chart"></canvas></div>
-      </div>
-      <!-- DPI half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">DPI vs Benchmarks</div>
-        </div>
-        <div class="perf-chart-wrap"><canvas id="perf-dpi-chart"></canvas></div>
-      </div>
-      <!-- Net IRR half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">Net IRR vs Benchmarks</div>
-        </div>
-        <div class="perf-legend" id="perf-irr-legend"></div>
-        <div class="perf-chart-wrap"><canvas id="perf-irr-chart"></canvas></div>
-      </div>
-      <!-- MOIC half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">MOIC vs Benchmarks</div>
-        </div>
-        <div class="perf-chart-wrap"><canvas id="perf-moic-chart"></canvas></div>
-      </div>
-    </div>
   </div>
-
+  </div>
 </div>
 
 <!-- ── Customize popover (shared, floating) ── -->
@@ -538,12 +707,6 @@
 <div id="toast"></div>
 <script>/* __MCP_UI_TRACKER_JS__ */</script>
 <script>
-// The funds table sizes its scroll box to the window below the sticky page header,
-// whose height changes with the Back links and the title's wrapping.
-new ResizeObserver(([entry]) => {
-  document.getElementById('perf-page').style.setProperty('--perf-header-h', entry.target.offsetHeight + 'px');
-}).observe(document.getElementById('perf-page-header'));
-
 // Resolved from the runtime on first call: the connector display name granted at publish,
 // which is not always "Carta".
 let CARTA_MCP_SERVER = null;
@@ -653,7 +816,7 @@ function _fmtQtr(dateStr) {
 function fmtFull(v, curr) {
   const num = parseFloat(v ?? 0);
   if (isNaN(num)) return '—';
-  const opts = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  const opts = { minimumFractionDigits: 0, maximumFractionDigits: 0 };
   if (curr) { opts.style = 'currency'; opts.currency = curr; }
   return new Intl.NumberFormat(undefined, opts).format(num);
 }
@@ -707,9 +870,11 @@ function escHtml(str) {
   if (str == null) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+// A dotted label that shows `text` in the shared #perf-tip tooltip; callers escape `body`.
+const _perfTip = (text, body, extraClass = '') =>
+  `<button type="button" class="${extraClass ? extraClass + ' ' : ''}tooltip-trigger" aria-describedby="perf-tip" data-tip="${escHtml(text)}">${body}</button>`;
 
 // ── SOI page state ──
-let soiFunds = [];
 let customizeSource = null; // 'soi' | 'perf'
 
 const CUSTOMIZE_PROMPTS = {
@@ -808,66 +973,207 @@ document.addEventListener('click', function(e) {
 // ── Fund Performance page ──
 let perfFunds = [];
 let perfCurrentFundUuid = null;
-let perfIrrChartInst = null;
-let perfTvpiChartInst = null;
-let perfDpiChartInst = null;
-let perfMoicChartInst = null;
 
 function _perfShowListView() {
+  document.getElementById('perf-page').scrollTop = 0;
   document.getElementById('perf-list-view').style.display = 'block';
   document.getElementById('perf-detail-view').style.display = 'none';
-  const backBtn = document.getElementById('perf-back-btn');
-  if (backBtn) backBtn.style.display = 'none';
-  const firmLabel = document.getElementById('perf-firm-name-label');
-  if (firmLabel) firmLabel.style.display = '';
-  document.getElementById('perf-page-label').textContent = 'Fund Performance';
-  const chevron = document.getElementById('perf-fund-chevron');
-  if (chevron) chevron.style.display = 'none';
-  const titleBtn = document.getElementById('perf-fund-title-btn');
-  if (titleBtn) titleBtn.style.cursor = 'default';
+  perfCurrentFundUuid = null;
+  perfRenderFundSwitcher();
+  _perfSetAsOf(_perfListAsOf);
   perfLoadAllFunds();
 }
 
 function perfOpenFundDetail(uuid, name) {
   trackUi("click", "FundPerformance.FundRow.Open");
+  document.getElementById('perf-page').scrollTop = 0;
   document.getElementById('perf-list-view').style.display = 'none';
   document.getElementById('perf-detail-view').style.display = 'block';
-  const firmLabel = document.getElementById('perf-firm-name-label');
-  if (firmLabel) firmLabel.style.display = 'none';
-  const backBtn = document.getElementById('perf-back-btn');
-  if (backBtn) { backBtn.onclick = _perfShowListView; backBtn.style.display = 'inline-flex'; }
-  const backText = document.getElementById('perf-back-text');
-  if (backText) backText.textContent = '← Back to all funds';
-  document.getElementById('perf-page-label').textContent = name || 'Fund';
-  const chevron = document.getElementById('perf-fund-chevron');
-  if (chevron) chevron.style.display = '';
-  const titleBtn = document.getElementById('perf-fund-title-btn');
-  if (titleBtn) titleBtn.style.cursor = 'pointer';
   perfCurrentFundUuid = uuid;
-  if (perfFunds.length === 0 && soiFunds.length > 0) {
-    perfFunds = soiFunds;
-  }
-  perfInitFundSelect();
+  if (!perfFunds.some(f => f.uuid === uuid)) perfFunds.push({ uuid, name });
+  perfRenderFundSwitcher();
   perfLoadFund(uuid);
 }
 
+// "As of" in the header: the month-end the figures on screen run through. In the list,
+// funds can report through different month-ends, so it names the latest and says so.
+let _perfListAsOf = [];
+const _perfToday = () => new Date().toISOString().substring(0, 10);
+// A month-end as YYYY-MM-DD. The header date and the peer chart's last quarter both
+// read it through _perfDay, and both ask _perfMonthToDate whether that month is still
+// running, so the chart always ends at the date the header shows.
+const _perfDay = d => String(d).substring(0, 10);
+// Carta stamps the current month's figures with that month's last day, a date that
+// hasn't happened yet: those figures are month to date.
+const _perfMonthToDate = d => _perfDay(d) > _perfToday();
+function _perfFmtDate(d, opts = { month: 'short', day: 'numeric', year: 'numeric' }) {
+  const dt = new Date(_perfDay(d) + 'T00:00:00');
+  return isNaN(dt) ? null : dt.toLocaleDateString('en-US', opts);
+}
+function _perfSetAsOf(dates) {
+  const el = document.getElementById('perf-as-of');
+  if (!el) return;
+  const days = [...new Set(dates.filter(Boolean).map(_perfDay))].sort();
+  const lastDay = days[days.length - 1];
+  const latest = lastDay ? _perfFmtDate(lastDay) : null;
+  if (!latest) { el.innerHTML = ''; return; }
+  const label = _perfMonthToDate(lastDay)
+    ? `As of ${_perfFmtDate(lastDay, { month: 'short', year: 'numeric' })}, month to date`
+    : `As of ${latest}`;
+  el.innerHTML = days.length > 1
+    ? _perfTip('Latest month-end; some funds report earlier.', escHtml(label))
+    : escHtml(label);
+}
+
+// ── Fund switcher: SOI's "Fund <name>" combobox, listing the firm's funds. Getting
+// back to the list is the "← All funds" link's job, not an option here. ──
+const PERF_CHEVRON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+const PERF_CHECK = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// SOI adds a search box once the list is long enough to need one.
+const PERF_COMBO_SEARCH_THRESHOLD = 8;
+let _perfComboQuery = '';
+
+function _perfComboItems() {
+  const q = _perfComboQuery.trim().toLowerCase();
+  const funds = perfFunds.filter(f => !q || String(f.name).toLowerCase().includes(q));
+  return funds;
+}
+
+function perfRenderFundSwitcher() {
+  const mount = document.getElementById('perf-fund-combo');
+  if (!mount) return;
+  const current = perfFunds.find(f => f.uuid === perfCurrentFundUuid);
+  mount.innerHTML = `
+    <button type="button" class="combo-trigger" id="perf-fund-combo-trigger" aria-haspopup="listbox" aria-expanded="false"
+            aria-labelledby="perf-fund-switcher-label perf-fund-combo-trigger">
+      <span class="combo-trigger-value" title="${escHtml(current ? current.name : 'All funds')}">${escHtml(current ? current.name : 'All funds')}</span>
+      <span class="combo-chevron">${PERF_CHEVRON}</span>
+    </button>
+    <div class="combo-panel" id="perf-fund-combo-panel" hidden>
+      ${perfFunds.length >= PERF_COMBO_SEARCH_THRESHOLD ? `
+      <div class="combo-search-wrap">
+        <input type="text" class="combo-search" id="perf-fund-combo-search" placeholder="Search funds…" autocomplete="off" aria-controls="perf-fund-combo-list">
+      </div>` : ''}
+      <ul class="combo-list" role="listbox" id="perf-fund-combo-list" tabindex="-1" aria-labelledby="perf-fund-switcher-label"></ul>
+    </div>`;
+  // The firm's name shows on the list; on a fund the same slot links back to all funds.
+  const firm = document.getElementById('perf-firm-name-label');
+  const back = document.getElementById('perf-all-funds-link');
+  if (firm) firm.hidden = !!current;
+  if (back) back.hidden = !current;
+}
+
+function _perfRenderComboList() {
+  const list = document.getElementById('perf-fund-combo-list');
+  if (!list) return;
+  const items = _perfComboItems();
+  const selected = perfCurrentFundUuid || '';
+  list.innerHTML = items.length ? items.map((f, i) => `
+    <li class="combo-option" role="option" id="perf-fund-opt-${i}" data-uuid="${escHtml(f.uuid)}" aria-selected="${f.uuid === selected}">
+      <span class="combo-check">${PERF_CHECK}</span><span class="combo-option-label" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+    </li>`).join('') : '<li class="combo-empty">No funds match</li>';
+}
+
+function _perfComboOpen() {
+  const panel = document.getElementById('perf-fund-combo-panel');
+  if (!panel || !panel.hidden) return;
+  _perfComboQuery = '';
+  panel.hidden = false;
+  document.getElementById('perf-fund-combo-trigger').setAttribute('aria-expanded', 'true');
+  _perfRenderComboList();
+  const opts = [...panel.querySelectorAll('.combo-option')];
+  _perfComboSetActive(Math.max(0, opts.findIndex(o => o.getAttribute('aria-selected') === 'true')));
+  (document.getElementById('perf-fund-combo-search') || document.getElementById('perf-fund-combo-list')).focus();
+}
+
+function _perfComboClose(refocus) {
+  const panel = document.getElementById('perf-fund-combo-panel');
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  const trigger = document.getElementById('perf-fund-combo-trigger');
+  trigger.setAttribute('aria-expanded', 'false');
+  if (refocus) trigger.focus();
+}
+
+function _perfComboSetActive(i) {
+  const list = document.getElementById('perf-fund-combo-list');
+  const opts = [...list.querySelectorAll('.combo-option')];
+  opts.forEach((o, j) => o.classList.toggle('active', j === i));
+  if (opts[i]) { list.setAttribute('aria-activedescendant', opts[i].id); opts[i].scrollIntoView({ block: 'nearest' }); }
+}
+
+function _perfComboPick(uuid) {
+  _perfComboClose(false);
+  trackUi("change", "FundPerformance.FundSelect");
+  const f = perfFunds.find(x => x.uuid === uuid);
+  if (f) perfOpenFundDetail(f.uuid, f.name);
+  // Navigation re-renders the switcher, so focus the trigger that exists now.
+  document.getElementById('perf-fund-combo-trigger')?.focus();
+}
+
+(function wireFundSwitcher() {
+  const mount = document.getElementById('perf-fund-combo');
+  if (!mount) return;
+  mount.addEventListener('click', e => {
+    if (e.target.closest('.combo-trigger')) {
+      const panel = document.getElementById('perf-fund-combo-panel');
+      if (panel.hidden) _perfComboOpen(); else _perfComboClose(true);
+      return;
+    }
+    const opt = e.target.closest('.combo-option');
+    if (opt) _perfComboPick(opt.dataset.uuid);
+  });
+  mount.addEventListener('input', e => {
+    if (!e.target.classList.contains('combo-search')) return;
+    _perfComboQuery = e.target.value;
+    _perfRenderComboList();
+    _perfComboSetActive(0);
+  });
+  mount.addEventListener('keydown', e => {
+    const panel = document.getElementById('perf-fund-combo-panel');
+    if (e.target.closest('.combo-trigger') && panel.hidden) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _perfComboOpen(); }
+      return;
+    }
+    if (panel.hidden) return;
+    const opts = [...panel.querySelectorAll('.combo-option')];
+    const i = opts.findIndex(o => o.classList.contains('active'));
+    if (e.key === 'ArrowDown') { e.preventDefault(); _perfComboSetActive(Math.min(opts.length - 1, i + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); _perfComboSetActive(Math.max(0, i - 1)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (opts[i]) _perfComboPick(opts[i].dataset.uuid); }
+    else if (e.key === 'Escape') { e.preventDefault(); _perfComboClose(true); }
+    else if (e.key === 'Tab') _perfComboClose(false);
+  });
+  document.addEventListener('click', e => { if (!e.target.closest?.('#perf-fund-combo')) _perfComboClose(false); });
+  document.getElementById('perf-all-funds-link')?.addEventListener('click', () => {
+    trackUi("click", "FundPerformance.AllFunds");
+    _perfShowListView();
+    // The link hides on the list, so keep keyboard focus on the page's next control.
+    document.getElementById('perf-fund-combo-trigger')?.focus();
+  });
+})();
+
 let _perfAllFundsLoaded = false;
 let _firmContextSet = false;
+let _perfFirmName = null;    // shown above the page title, as on the Schedule of Investments
 
 async function ensureFirmContext() {
   if (_firmContextSet) return;
   try {
     const r = await _mcp("list_contexts", {});
-    let firmId;
+    let firmId, firmName;
     const sc = r?.structuredContent;
     if (sc?.firms?.length) {
-      firmId = (sc.firms.find(f => f.is_active) ?? sc.firms[0]).firm_id;
+      const active = sc.firms.find(f => f.is_active) ?? sc.firms[0];
+      firmId = active.firm_id;
+      firmName = active.firm_name;
     } else {
       try {
         const parsed = JSON.parse(r?.content?.[0]?.text ?? '');
         firmId = parsed?.active_firm_id ?? parsed?.firms?.[0]?.firm_id;
       } catch (_) {}
     }
+    if (firmName) _perfFirmName = firmName;
     if (firmId) {
       await _mcp("set_context", { firm_id: firmId });
       _firmContextSet = true;
@@ -877,29 +1183,46 @@ async function ensureFirmContext() {
   }
 }
 
+// The list view's loading state: the graph card's frame and a table of shimmer bones,
+// sized like the loaded page so nothing jumps when the data lands.
+const PERF_CONTROLS_BONE = '<div class="shimmer-bone" style="height:28px;width:420px;max-width:100%;"></div>';
+const PERF_LEGEND_BONE = '<div class="shimmer-bone" style="height:14px;width:220px;margin:0 0 8px;"></div><div class="shimmer-bone" style="height:26px;width:480px;max-width:100%;"></div>';
+function _perfListSkeleton() {
+  const row = cls => `<div class="${cls}">${'<div class="shimmer-bone shimmer-td"></div>'.repeat(6)}</div>`;
+  return `
+    <section class="perf-chart-card perf-overview-card" aria-busy="true" aria-label="Loading fund performance">
+      <div class="perf-chart-header"><div class="shimmer-bone" style="height:20px;width:180px;margin:2px 0;"></div></div>
+      <div class="perf-overview-controls">${PERF_CONTROLS_BONE}</div>
+      <div class="perf-overview-legend">${PERF_LEGEND_BONE}</div>
+      <div class="perf-chart-wrap tall"><div class="shimmer-bone perf-chart-bone"></div></div>
+    </section>
+    <div class="shimmer-table">${row('shimmer-table-header').replace(/shimmer-td/g, 'shimmer-th')}${row('shimmer-row').repeat(6)}</div>`;
+}
+
 async function perfLoadAllFunds() {
   const listEl = document.getElementById('perf-list-view');
   if (!listEl) return;
   if (_perfAllFundsLoaded && listEl.querySelector('table.perf-funds-table')) return;
-  listEl.innerHTML = '<div class="perf-list-status">Loading fund performance…</div>';
+  listEl.innerHTML = _perfListSkeleton();
   if (!(await mcpAvailable())) {
     listEl.innerHTML = '<div class="perf-list-status">Live data not available in preview mode.</div>';
     return;
   }
   await ensureFirmContext();
+  const eyebrow = document.getElementById('perf-firm-name-label');
+  if (eyebrow && _perfFirmName) eyebrow.textContent = _perfFirmName;
   try {
     const r = await _mcp("fetch", {
       command: 'dwh:execute:query',
       params: {
         sql: `SELECT
           FUND_NAME, FUND_UUID, FUND_REPORTING_CURRENCY,
-          NET_LP_IRR, TOTAL_TVPI, LP_DPI, TOTAL_RVPI, TOTAL_MOIC,
+          NET_LP_IRR, LP_TVPI, LP_DPI, LP_RVPI, TOTAL_MOIC,
           TOTAL_VALUE,
           ENDING_TOTAL_NAV,
           FUND_SIZE,
           TOTAL_DISTRIBUTION,
           TOTAL_CAP_CONTRIBUTION,
-          DRY_POWDER,
           MONTH_END_DATE
         FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
         WHERE FUND_UUID IS NOT NULL
@@ -913,9 +1236,12 @@ async function perfLoadAllFunds() {
       const rows = parseDWH(r).filter(row => row.FUND_UUID);
       if (rows.length > 0) {
         perfFunds = rows.map(row => ({ name: row.FUND_NAME, uuid: row.FUND_UUID }));
-        if (!perfCurrentFundUuid && rows[0]) perfCurrentFundUuid = rows[0].FUND_UUID;
+        _perfListAsOf = rows.map(row => row.MONTH_END_DATE);
+        _perfSetAsOf(_perfListAsOf);
         _perfAllFundsLoaded = true;
+        perfRenderFundSwitcher();
         _perfRenderFundsTable(rows, listEl);
+        perfLoadOverviewChart(rows);
         return;
       }
     }
@@ -923,65 +1249,560 @@ async function perfLoadAllFunds() {
   listEl.innerHTML = '<div class="perf-list-status">No performance data available.</div>';
 }
 
+// One format per measure for the whole page: the funds table, both charts' tooltips and
+// axes, and the fund's detail table all call these.
+// Multiples (TVPI, DPI, RVPI, MOIC): two decimals in figures, one on chart axes.
+const _perfMultiple = { fmt: v => v.toFixed(2) + 'x', tick: v => v.toFixed(1) + 'x' };
+// A table cell's multiple, from the raw query value.
+const _perfMultipleCell = v => { const n = v == null ? NaN : parseFloat(v); return isFinite(n) ? _perfMultiple.fmt(n) : '—'; };
+// Net IRR, in percent: one decimal, + on gains (Ink rule 6), exact zero unsigned.
+const _perfIrr = n => `${n > 0 ? '+' : ''}${n.toFixed(1)}%`;
+// A table cell's Net IRR, from the raw query value.
+const _perfIrrCell = v => { const n = v == null ? NaN : parseFloat(v); return isFinite(n) ? _perfIrr(n) : '—'; };
+
 const _PERF_COLS = [
-  // Net IRR is signed, so it carries the positive/negative feedback color and an
-  // explicit + on gains (Ink rule 6). Exact zero stays neutral text-default.
+  // Net IRR is signed, so it carries the positive/negative feedback color. Exact zero
+  // stays neutral text-default.
   { key: 'NET_LP_IRR',           label: 'Net IRR',              group: 'returns', fmt: v => {
-      if (v == null) return '—';
+      const txt = _perfIrrCell(v);
       const n = parseFloat(v);
-      if (!isFinite(n)) return '—';
-      const txt = (n > 0 ? '+' : '') + n.toFixed(1) + '%';
-      if (n === 0) return txt;
+      if (!isFinite(n) || n === 0) return txt;
       return `<span class="${n > 0 ? 'gl-pos' : 'gl-neg'}">${txt}</span>`;
-    }, tip: 'Net IRR is the internal rate of return based on LP contributions and distributions to the partners, and the terminal value. Terminal value being defined as the Net Asset Value (NAV) of the fund as of the selected dates, updated through the last financial reporting date, net of GP carry.' },
-  { key: 'TOTAL_TVPI',           label: 'TVPI',                 group: 'returns', fmt: v => v != null ? parseFloat(v).toFixed(2) + 'x' : '—', tip: 'TVPI is the ratio of Total Value to Paid-in Capital. Total value is equal to the sum of distributions and the residual value of the fund (also known as Net Asset Value). Paid-in capital is equal to the capital contributions to the fund.' },
-  { key: 'LP_DPI',               label: 'DPI',                  group: 'returns', fmt: v => v != null ? parseFloat(v).toFixed(2) + 'x' : '—', tip: 'DPI is the ratio of distributions paid out to Paid-in Capital. Paid-in capital is equal to the capital contributions to the fund.' },
-  { key: 'TOTAL_RVPI',           label: 'RVPI',                 group: 'returns', fmt: v => v != null ? parseFloat(v).toFixed(2) + 'x' : '—', tip: 'RVPI is the ratio of Residual Value (also known as Net Asset Value) to Paid-in Capital. Paid-in capital is equal to the capital contributions to the fund.' },
-  { key: 'TOTAL_MOIC',           label: 'MOIC',                 group: 'returns', fmt: v => v != null ? parseFloat(v).toFixed(2) + 'x' : '—', tip: 'Multiple on Invested Capital is the total value (gross) relative to invested capital, before fees and carry.' },
-  { key: 'TOTAL_VALUE',          label: 'Total Value',          group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Total value is equal to the sum of distributions to date and the net asset value of the fund.' },
-  { key: 'ENDING_TOTAL_NAV',     label: 'NAV',                  group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Net Asset Value is the sum of all the assets minus the liabilities (also known as ending partners\' capital).' },
-  { key: 'TOTAL_CAP_CONTRIBUTION',label: 'Contributions',        group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'The amount of capital called from investors. Capital contributions are on a GAAP basis and are fully recognized on the capital call due date, regardless of cash being received.' },
-  { key: 'TOTAL_DISTRIBUTION',   label: 'Distributions',        group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'The amount of capital returned to investors, inclusive of cash and non-cash considerations.' },
+    }, tip: 'Annualized return to LPs from contributions, distributions and current NAV, net of carry.' },
+  { key: 'LP_TVPI',              label: 'TVPI (LP only)',       group: 'returns', fmt: _perfMultipleCell, tip: 'LPs\' total value (distributions + NAV) ÷ LPs\' capital paid in.' },
+  { key: 'LP_DPI',               label: 'DPI (LP only)',        group: 'returns', fmt: _perfMultipleCell, tip: 'Distributions to LPs ÷ LPs\' capital paid in.' },
+  { key: 'LP_RVPI',              label: 'RVPI (LP only)',       group: 'returns', fmt: _perfMultipleCell, tip: 'LPs\' NAV ÷ LPs\' capital paid in.' },
+  { key: 'TOTAL_MOIC',           label: 'MOIC',                 group: 'returns', fmt: _perfMultipleCell, tip: 'Gross total value ÷ invested capital, before fees and carry.' },
+  { key: 'TOTAL_VALUE',          label: 'Total value',          group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Distributions to date + NAV.' },
+  { key: 'ENDING_TOTAL_NAV',     label: 'NAV',                  group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Assets minus liabilities (ending partners\' capital).' },
+  { key: 'TOTAL_CAP_CONTRIBUTION',label: 'Contributions',        group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Capital called from investors, counted on the call due date.' },
+  { key: 'TOTAL_DISTRIBUTION',   label: 'Distributions',        group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Cash and in-kind returned to investors.' },
 ];
+// A measure's name, as the funds table heads its column.
+const _perfColLabel = key => _PERF_COLS.find(c => c.key === key).label;
 
-function _perfRenderFundsTable(rows, container) {
-  // Column header row
-  // The info affordance is a real <button> (keyboard-reachable) described by the
-  // shared #perf-tip live tooltip; focusin/focusout mirror the mouse handlers.
-  const colHeaderCells = _PERF_COLS.map(c =>
-    `<th><div class="perf-th-wrap">${c.label}<button type="button" class="perf-th-info" aria-label="About ${escHtml(c.label)}" aria-describedby="perf-tip" data-tip="${escHtml(c.tip)}">i</button></div></th>`
-  ).join('');
+// ── Sortable all-funds table (Ink's sortable Table) ──
+// A header click cycles none → ascending → descending → none; "none" is the order the
+// query returns (largest NAV first). Funds with no value sort last either way.
+let _perfSort = { key: null, dir: 'none' };
+let _perfTableRows = [];
+const PERF_SORT_ICON = '<svg class="perf-sort-icon" width="10" height="14" viewBox="0 0 10 14" aria-hidden="true" focusable="false"><path class="perf-sort-asc" d="M5 1L9 6H1Z"/><path class="perf-sort-desc" d="M5 13L1 8H9Z"/></svg>';
 
-  // Body rows
-  const bodyRows = rows.map(row => {
-    const rawName = row.FUND_NAME ?? 'Fund';
-    const name = escHtml(rawName);
-    const uuid = (row.FUND_UUID ?? '').replace(/'/g, '');
-    // Double-escaped on purpose: backslash-escape the JS string literal first,
-    // then HTML-escape for the attribute. The parser decodes &#39; back to a
-    // plain quote before the JS is parsed, so a fund name like "O'Brien I, LP"
-    // would otherwise break out of the string argument.
-    const argName = escHtml(String(rawName).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
-    const cells = _PERF_COLS.map(c =>
-      `<td>${c.fmt(row[c.key], row)}</td>`
-    ).join('');
-    // No handler on the <tr>: a row isn't focusable and a <span> isn't announced
-    // as a control, so the fund name itself is the button.
-    return `<tr>
-      <td><button type="button" class="perf-fund-name-link" onclick="perfOpenFundDetail('${uuid}','${argName}')">${name}</button></td>${cells}
-    </tr>`;
-  }).join('');
-
-  container.innerHTML = `
-    <div class="perf-table-scroll">
-      <table class="perf-funds-table">
-        <thead><tr><th style="width:220px;min-width:220px;">Fund</th>${colHeaderCells}</tr></thead>
-        <tbody>${bodyRows}</tbody>
-      </table>
-    </div>`;
+function perfSortRows(rows, key, dir) {
+  if (!key || dir === 'none') return rows.slice();
+  const sign = dir === 'ascending' ? 1 : -1;
+  const val = r => (key === 'FUND_NAME' ? (r.FUND_NAME ?? null) : (r[key] == null || !isFinite(parseFloat(r[key])) ? null : parseFloat(r[key])));
+  return rows.slice().sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (x == null || y == null) return (x == null) - (y == null);
+    return sign * (typeof x === 'string' ? x.localeCompare(y) : x - y);
+  });
 }
 
-// ── Fixed-position tooltip manager for .perf-th-info (escapes overflow:hidden containers) ──
+function _perfFundRowsHtml(rows) {
+  // The whole row opens the fund (see the container's click handler); the fund name is
+  // a real <button> so the row is reachable and announced by keyboard.
+  const chevron = '<svg class="perf-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+  return rows.map(row => {
+    const name = escHtml(row.FUND_NAME ?? 'Fund');
+    const cells = _PERF_COLS.map(c => `<td>${c.fmt(row[c.key], row)}</td>`).join('');
+    return `<tr data-uuid="${escHtml(row.FUND_UUID ?? '')}">
+      <td><button type="button" class="perf-fund-name-link">${name}</button></td>${cells}
+      <td class="perf-row-action-col"><span class="perf-row-action" aria-hidden="true"><span class="perf-row-action-label">View</span>${chevron}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function _perfSortBy(key) {
+  const order = ['none', 'ascending', 'descending'];
+  const dir = _perfSort.key === key ? order[(order.indexOf(_perfSort.dir) + 1) % 3] : 'ascending';
+  _perfSort = { key: dir === 'none' ? null : key, dir };
+  trackUi("click", "FundPerformance.Table.Sort");
+  document.querySelectorAll('.perf-funds-table th[data-sort-key]').forEach(th =>
+    th.setAttribute('aria-sort', th.dataset.sortKey === _perfSort.key ? _perfSort.dir : 'none'));
+  const body = document.getElementById('perf-funds-tbody');
+  if (body) body.innerHTML = _perfFundRowsHtml(perfSortRows(_perfTableRows, _perfSort.key, _perfSort.dir));
+}
+
+function _perfRenderFundsTable(rows, container) {
+  _perfTableRows = rows;
+  const ariaSort = key => (_perfSort.key === key ? _perfSort.dir : 'none');
+  // Numeric headers put the icon before the label, as Ink's sortable Table does. Each
+  // label is also its definition's tooltip trigger, so hover explains and click sorts.
+  const colHeaderCells = _PERF_COLS.map(c =>
+    `<th data-sort-key="${c.key}" aria-sort="${ariaSort(c.key)}">${_perfTip(c.tip, PERF_SORT_ICON + c.label, 'perf-sort-btn')}</th>`
+  ).join('');
+  const nameHeader = `<th data-sort-key="FUND_NAME" aria-sort="${ariaSort('FUND_NAME')}"><button type="button" class="perf-sort-btn">Fund${PERF_SORT_ICON}</button></th>`;
+  const bodyRows = _perfFundRowsHtml(perfSortRows(rows, _perfSort.key, _perfSort.dir));
+  const nameByUuid = new Map(rows.map(row => [row.FUND_UUID, row.FUND_NAME ?? 'Fund']));
+  container.onclick = e => {
+    const th = e.target.closest('th[data-sort-key]');
+    if (th) { _perfSortBy(th.dataset.sortKey); return; }
+    const tr = e.target.closest('tbody tr[data-uuid]');
+    if (tr && nameByUuid.has(tr.dataset.uuid)) perfOpenFundDetail(tr.dataset.uuid, nameByUuid.get(tr.dataset.uuid));
+  };
+
+  if (perfOverviewChartInst) { perfOverviewChartInst.destroy(); perfOverviewChartInst = null; }
+  container.innerHTML = `
+    <section class="perf-chart-card perf-overview-card" id="perf-overview-card" aria-labelledby="perf-overview-title">
+      <div class="perf-chart-header"><h2 class="perf-chart-title" id="perf-overview-title">Net IRR</h2></div>
+      <div class="perf-overview-controls" id="perf-overview-controls">${PERF_CONTROLS_BONE}</div>
+      <div class="perf-overview-legend" id="perf-overview-legend">${PERF_LEGEND_BONE}</div>
+      <div class="perf-chart-wrap tall">
+        <canvas id="perf-overview-chart" role="img" aria-labelledby="perf-overview-title"></canvas>
+        <div class="shimmer-bone perf-chart-bone" id="perf-overview-skeleton"></div>
+      </div>
+    </section>
+    <div class="perf-table-wrap">
+    <div class="perf-table-scroll">
+      <table class="perf-funds-table">
+        <thead><tr>${nameHeader}${colHeaderCells}<th class="perf-row-action-col"><span class="sr-only">Open</span></th></tr></thead>
+        <tbody id="perf-funds-tbody">${bodyRows}</tbody>
+      </table>
+    </div>
+    </div>`;
+  const scroller = container.querySelector('.perf-table-scroll');
+  const hint = () => scroller.parentElement.classList.toggle('has-more-right', scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
+  scroller.addEventListener('scroll', hint, { passive: true });
+  window.addEventListener('resize', hint);
+  hint();
+}
+
+// ── All-funds overview graph ──
+// One solid line per fund and a dashed peer-median (P50) line in the same colour, laid
+// out like Carta Home's Fund Performance tile. It plots the funds table's measures (see
+// PERF_OVERVIEW_METRICS), so a line's last point is the fund's figure at the last
+// benchmark quarter.
+// Quarter labels on both charts sit on a fixed 45° diagonal, so they read the same
+// at every width instead of flipping between flat and slanted as the chart resizes.
+const PERF_QUARTER_TICKS = { minRotation: 45, maxRotation: 45 };
+// Chrome both charts share, so they hover, morph and read alike.
+const PERF_MORPH = { duration: 450, easing: 'easeInOutCubic' };
+// A dashed vertical rule through the hovered quarter.
+const PERF_CROSSHAIR = {
+  id: 'crosshair',
+  afterDraw(chart) {
+    if (!chart.tooltip?._active?.length) return;
+    const { ctx, scales: { x, y } } = chart;
+    const xPos = chart.tooltip._active[0].element.x;
+    ctx.save(); ctx.beginPath();
+    ctx.moveTo(xPos, y.top); ctx.lineTo(xPos, y.bottom);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(128,128,128,0.25)';
+    ctx.setLineDash([3, 3]); ctx.stroke(); ctx.restore();
+  },
+};
+const PERF_CHART_FONT = 'Inter,system-ui,sans-serif';
+// Each chart spreads this into its tooltip and adds its own itemSort and callbacks.
+function _perfTooltipChrome() {
+  return {
+    backgroundColor: 'rgba(26,26,26,0.94)',
+    titleColor: '#9C9F9F', titleFont: { size: 11, family: PERF_CHART_FONT },
+    bodyColor: '#FFFFFF', bodyFont: { size: 12, family: PERF_CHART_FONT },
+    borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
+    padding: { top: 8, bottom: 8, left: 12, right: 12 },
+    cornerRadius: 4, caretSize: 4,
+    // No white backing square, so a peer swatch reads as hollow.
+    multiKeyBackground: 'transparent',
+  };
+}
+// Both charts' axes. A fresh object per chart, since each later swaps its own y tick format.
+function _perfScales(color, tick) {
+  const font = () => ({ size: 12, family: PERF_CHART_FONT });
+  return {
+    x: { ticks: { color, font: font(), ...PERF_QUARTER_TICKS }, grid: { display: false }, border: { display: false } },
+    y: { ticks: { color, font: font(), callback: tick }, grid: { color: 'rgba(128,128,128,0.12)' }, border: { display: false } },
+  };
+}
+const _BENCH_COLORS = ["var(--carta-series-blue)","var(--carta-series-teal)","var(--carta-series-pink)","var(--carta-series-gray)","var(--carta-series-lilac)"];
+// More lines than this stop being readable on one chart.
+const PERF_OVERVIEW_MAX_FUNDS = 5;
+const PERF_OVERVIEW_DEFAULT_FUNDS = 3;
+// The benchmark query covers this many of the largest funds, each over its whole life
+// in quarters.
+const PERF_OVERVIEW_QUERY_FUNDS = 20;
+// dwh:execute:query returns 1,000 rows unless told otherwise, and rows come oldest first,
+// so a cut-off would drop the newest quarters. Ask for the DWH ceiling instead; split
+// across PERF_OVERVIEW_QUERY_FUNDS funds it is far more quarters than any fund has.
+const PERF_OVERVIEW_QUERY_LIMIT = 10000;
+// Each metric reads the same measure as the table's column of that name (LP net IRR,
+// LP DPI, LP TVPI). The table shows the latest month-end; a line ends at the last
+// benchmark quarter, so the two can differ by the months since.
+const PERF_OVERVIEW_METRICS = {
+  NET_IRR: { label: _perfColLabel('NET_LP_IRR'), value: 'NET_LP_IRR', peer: 'NET_LP_IRR_50TH',
+             fmt: _perfIrr, tick: v => v + '%' },
+  TVPI:    { label: _perfColLabel('LP_TVPI'), value: 'LP_TVPI', peer: 'LP_TVPI_50', ..._perfMultiple },
+  DPI:     { label: _perfColLabel('LP_DPI'),  value: 'LP_DPI',  peer: 'LP_DPI_50', ..._perfMultiple },
+};
+// Quarters kept per period; null keeps the whole series the query returns, which is each
+// fund's full history.
+const PERF_OVERVIEW_PERIODS = {
+  '1Y': { label: '1Y',  quarters: 4 },
+  '3Y': { label: '3Y',  quarters: 12 },
+  ALL:  { label: 'All', quarters: null },
+};
+const _PERF_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+let perfOverviewChartInst = null;
+let _perfOverviewRows = [];
+let _perfOverviewFunds = [];   // [{ uuid, name, label, color }] funds with series rows, NAV order
+// The filters the graph opens on.
+const _perfOverviewDefaults = () => ({ metric: 'NET_IRR', fundUuids: [], period: 'ALL', showPeer: true });
+let _perfOverview = _perfOverviewDefaults();
+
+// Series colours are light-dark() tokens so each has a dark-mode arm. Canvas can't read
+// var(), so chart colours resolve through inkColor at draw time.
+const _perfCanvasColor = c => (c.startsWith('var(') ? inkColor(c.slice(4, -1), '#8C8C8C') : c);
+
+const _perfReducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+
+// Fund lines draw no points, so a series with a single value would draw nothing; that
+// one value gets a dot. Builders call this on every update, since datasets are reused.
+const _perfSoloRadius = data => data.filter(v => v != null).length === 1 ? 3 : 0;
+
+// Short legend names: drop the ", L.P." suffix and the words every fund shares at the
+// front, but keep each name's last two words so "Fund I" / "Fund II" never shrink to "I".
+function _perfShortFundLabels(names) {
+  const words = names.map(n => n.replace(/,? L\.?P\.?$/, '').trim().split(/\s+/));
+  let shared = 0;
+  if (words.length > 1) {
+    while (words.every(w => w[shared] === words[0][shared] && shared < w.length)) shared++;
+    shared = Math.max(0, Math.min(shared, ...words.map(w => w.length - 2)));
+  }
+  return words.map((w, i) => w.slice(shared).join(' ') || names[i]);
+}
+
+// Builds Chart.js { labels, datasets } for the current filters. Pure: reads only its arguments.
+function perfOverviewSeries(rows, state, funds) {
+  const m = PERF_OVERVIEW_METRICS[state.metric];
+  const picked = funds.filter(f => state.fundUuids.includes(f.uuid));
+  const byFund = {};
+  rows.forEach(r => {
+    if (r[m.value] == null) return;
+    (byFund[r.FUND_UUID] = byFund[r.FUND_UUID] || {})[r.PERFORMANCE_QUARTER_START_DATE] = r;
+  });
+  let dates = Array.from(new Set(picked.flatMap(f => Object.keys(byFund[f.uuid] || {})))).sort();
+  const keep = PERF_OVERVIEW_PERIODS[state.period].quarters;
+  if (keep) dates = dates.slice(-keep);
+  const num = v => (v == null ? null : parseFloat(v));
+  const line = (f, key, peer) => {
+    const data = dates.map(d => num(byFund[f.uuid]?.[d]?.[key]));
+    return {
+      // Matched on across updates; labels can repeat (parallel vehicles), fund ids can't.
+      _perfKey: `${f.uuid}:${peer ? 'p50' : 'fund'}`,
+      label: peer ? `${f.label} P50` : f.label,
+      data,
+      borderColor: f.color,
+      borderWidth: peer ? 1.2 : 2.5,
+      borderDash: peer ? [4, 4] : [],
+      pointRadius: _perfSoloRadius(data), pointHoverRadius: peer ? 4 : 5, pointHoverBackgroundColor: f.color,
+      fill: false, tension: 0.4, spanGaps: true,
+      _perfPeer: peer,
+    };
+  };
+  const solid = picked.map(f => line(f, m.value, false));
+  const dashed = state.showPeer
+    ? picked.map(f => line(f, m.peer, true)).filter(ds => ds.data.some(v => v != null))
+    : [];
+  return { labels: dates.map(_fmtQtr), datasets: [...solid, ...dashed] };
+}
+
+async function perfLoadOverviewChart(fundRows) {
+  const ids = fundRows.map(r => r.FUND_UUID).filter(u => _PERF_UUID_RE.test(u || '')).slice(0, PERF_OVERVIEW_QUERY_FUNDS);
+  let rows = [];
+  if (ids.length) {
+    try {
+      const r = await _mcp("fetch", {
+        command: 'dwh:execute:query',
+        params: {
+          sql: `SELECT FUND_UUID, FUND_NAME, PERFORMANCE_QUARTER_START_DATE,
+                       NET_LP_IRR, NET_LP_IRR_50TH, LP_TVPI, LP_TVPI_50, LP_DPI, LP_DPI_50
+                FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
+                WHERE FUND_UUID IN (${ids.map(u => `'${u}'`).join(', ')})
+                ORDER BY PERFORMANCE_QUARTER_START_DATE, FUND_NAME`,
+          format: 'ndjson',
+          response_mode: 'inline',
+          limit: PERF_OVERVIEW_QUERY_LIMIT,
+        },
+      });
+      if (r && !r.isError) rows = parseDWH(r);
+    } catch (_) {}
+  }
+  const card = document.getElementById('perf-overview-card');
+  if (!card) return;
+  const withData = new Set(rows.map(r => r.FUND_UUID));
+  // NAV order, same as the table underneath.
+  const funds = fundRows.filter(r => withData.has(r.FUND_UUID));
+  if (!funds.length) { card.remove(); return; }
+  const labels = _perfShortFundLabels(funds.map(r => String(r.FUND_NAME ?? 'Fund')));
+  _perfOverviewRows = rows;
+  _perfLegendAnimated = false;
+  _perfOverviewFunds = funds.map((r, i) => ({
+    uuid: r.FUND_UUID, name: r.FUND_NAME, label: labels[i], color: null,
+  }));
+  _perfOverview = _perfOverviewDefaults();
+  _perfShowFunds(_perfDefaultFunds());
+  _perfWireOverviewCard(card);
+  _perfRenderOverviewControls();
+  _perfRenderOverviewLegend();
+  perfDrawOverviewChart({ entrance: true });
+  document.getElementById('perf-overview-skeleton')?.classList.add('is-done');
+}
+
+// First draw: each line draws left to right, one fund after another, and the dashed
+// peer lines follow once the solid ones land (Chart.js's progressive-line recipe).
+function _perfEntranceAnimations(solidCount, pointCount) {
+  const lineMs = 900;
+  const stepMs = lineMs / Math.max(1, pointCount);
+  const staggerMs = 120;
+  const startOf = ctx => {
+    const i = ctx.datasetIndex;
+    return i < solidCount ? i * staggerMs : solidCount * staggerMs + lineMs * 0.6 + (i - solidCount) * staggerMs;
+  };
+  const prevY = ctx => {
+    if (ctx.index === 0) return ctx.chart.scales.y.getPixelForValue(ctx.chart.scales.y.min);
+    return ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1].getProps(['y'], true).y;
+  };
+  const delay = flag => ctx => {
+    if (ctx.type !== 'data' || ctx[flag]) return 0;
+    ctx[flag] = true;
+    return startOf(ctx) + ctx.index * stepMs;
+  };
+  return {
+    x: { type: 'number', easing: 'linear', duration: stepMs, from: NaN, delay: delay('_perfX') },
+    y: { type: 'number', easing: 'easeOutQuart', duration: stepMs * 2, from: prevY, delay: delay('_perfY') },
+  };
+}
+
+// Whether any fund on the graph has a peer median for the current metric and period.
+// Without one, the title, the switch and the legend key don't promise a comparison.
+function _perfOverviewHasPeer() {
+  const all = perfOverviewSeries(_perfOverviewRows, Object.assign({}, _perfOverview, { showPeer: true }), _perfOverviewFunds);
+  return all.datasets.some(ds => ds._perfPeer);
+}
+
+// Chart.js rebuilds a line from the baseline when its dataset object is replaced, so
+// lines still on the graph keep their objects and only their values change.
+function _perfApplyOverviewData(chart, data, m) {
+  const current = new Map(chart.data.datasets.map(ds => [ds._perfKey, ds]));
+  chart.data.labels = data.labels;
+  chart.data.datasets = data.datasets.map(ds => {
+    const kept = current.get(ds._perfKey);
+    return kept ? Object.assign(kept, ds) : ds;
+  });
+  chart.options.scales.y.ticks.callback = m.tick;
+}
+
+// The series for the current filters, with colours resolved for the canvas.
+function _perfOverviewData() {
+  const data = perfOverviewSeries(_perfOverviewRows, _perfOverview, _perfOverviewFunds);
+  data.datasets.forEach(ds => { ds.borderColor = ds.pointHoverBackgroundColor = _perfCanvasColor(ds.borderColor); });
+  return data;
+}
+
+let _perfFadeTimer = null;
+// The fade-out before a cross-faded redraw; the timer swaps the data once it ends.
+const PERF_FADE_MS = 120;
+function perfDrawOverviewChart({ entrance = false, fade = false } = {}) {
+  const canvas = document.getElementById('perf-overview-chart');
+  if (!canvas || !window.Chart) return;
+  const m = PERF_OVERVIEW_METRICS[_perfOverview.metric];
+  const data = _perfOverviewData();
+  const title = document.getElementById('perf-overview-title');
+  if (title) title.textContent = _perfOverviewHasPeer() ? `${m.label} vs peer median` : m.label;
+  const still = _perfReducedMotion();
+
+  if (perfOverviewChartInst && !entrance) {
+    const chart = perfOverviewChartInst;
+    // Lines morph between values only when every point keeps its quarter; a new set of
+    // quarters re-indexes the points, and peer lines switched on would rise from the
+    // baseline, so those changes cross-fade instead.
+    const sameQuarters = chart.data.labels.join() === data.labels.join();
+    if (still || (sameQuarters && !fade)) {
+      _perfApplyOverviewData(chart, data, m);
+      chart.options.animations = { x: PERF_MORPH, y: PERF_MORPH };
+      chart.update(still ? 'none' : undefined);
+      return;
+    }
+    clearTimeout(_perfFadeTimer);
+    canvas.style.transition = `opacity ${PERF_FADE_MS}ms ease-out`;
+    canvas.style.opacity = '0';
+    _perfFadeTimer = setTimeout(() => {
+      // Re-read the filters: another change may have landed during the fade-out.
+      _perfApplyOverviewData(chart, _perfOverviewData(), PERF_OVERVIEW_METRICS[_perfOverview.metric]);
+      chart.update('none');
+      canvas.style.transition = 'opacity .24s var(--perf-ease-spring)';
+      canvas.style.opacity = '1';
+    }, PERF_FADE_MS);
+    return;
+  }
+  if (perfOverviewChartInst) { perfOverviewChartInst.destroy(); perfOverviewChartInst = null; }
+  const textColor = chartLabelColor();
+  const solidCount = data.datasets.filter(ds => !ds._perfPeer).length;
+  perfOverviewChartInst = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    plugins: [PERF_CROSSHAIR],
+    data,
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: still ? false : PERF_MORPH,
+      animations: still || !entrance ? { x: PERF_MORPH, y: PERF_MORPH } : _perfEntranceAnimations(solidCount, data.labels.length),
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ..._perfTooltipChrome(),
+          enabled: true, mode: "index", intersect: false,
+          // Each fund sits directly above its own peer median, highest fund first.
+          itemSort: (a, b) => {
+            const fundY = item => item.chart.data.datasets.find(ds => !ds._perfPeer && ds.borderColor === item.dataset.borderColor)?.data[item.dataIndex] ?? item.parsed.y;
+            return (fundY(b) - fundY(a)) || (a.dataset._perfPeer ? 1 : 0) - (b.dataset._perfPeer ? 1 : 0);
+          },
+          callbacks: {
+            label(item) {
+              if (item.parsed.y == null) return null;
+              return ` ${item.dataset.label}: ${PERF_OVERVIEW_METRICS[_perfOverview.metric].fmt(item.parsed.y)}`;
+            },
+            // Peer lines get a hollow dashed swatch, matching the dashed line on the graph.
+            labelColor(item) {
+              return item.dataset._perfPeer
+                ? { borderColor: item.dataset.borderColor, backgroundColor: 'transparent', borderWidth: 1, borderDash: [2, 2], borderRadius: 2 }
+                : { borderColor: item.dataset.borderColor, backgroundColor: item.dataset.borderColor, borderWidth: 2, borderDash: [], borderRadius: 2 };
+            },
+          },
+        },
+      },
+      scales: _perfScales(textColor, m.tick),
+    },
+  });
+}
+
+// A segmented control's buttons, one per entry of a { value: { label } } map. The
+// caller sets aria-checked.
+function _perfSegButtons(map, group) {
+  const groupAttr = group ? ` data-group="${group}"` : '';
+  return Object.entries(map).map(([value, { label }]) =>
+    `<button type="button" class="perf-seg-btn" role="radio"${groupAttr} data-value="${value}" aria-checked="false">${label}</button>`).join('');
+}
+
+// The controls render once; each change syncs their state in place, so the segmented
+// and switch transitions play instead of the row being rebuilt.
+function _perfRenderOverviewControls() {
+  const el = document.getElementById('perf-overview-controls');
+  if (!el) return;
+  const seg = (group, label, map) => `
+    <div class="perf-seg" role="radiogroup" aria-label="${label}">${_perfSegButtons(map, group)}</div>`;
+  el.innerHTML = `
+    ${seg('metric', 'Metric', PERF_OVERVIEW_METRICS)}
+    ${seg('period', 'Period', PERF_OVERVIEW_PERIODS)}
+    <span class="perf-switch-label">
+      <button type="button" class="perf-switch" role="switch" aria-checked="true" aria-label="Peer median"></button>
+      Peer median
+    </span>`;
+  _perfSyncOverviewControls();
+}
+
+function _perfSyncOverviewControls() {
+  const el = document.getElementById('perf-overview-controls');
+  if (!el) return;
+  const s = _perfOverview;
+  el.querySelectorAll('.perf-seg-btn').forEach(b => b.setAttribute('aria-checked', String(s[b.dataset.group] === b.dataset.value)));
+  const sw = el.querySelector('.perf-switch');
+  if (sw) {
+    const hasPeer = _perfOverviewHasPeer();
+    sw.setAttribute('aria-checked', String(s.showPeer && hasPeer));
+    sw.disabled = !hasPeer;
+    sw.title = hasPeer ? '' : 'No peer benchmark for these funds yet';
+  }
+}
+
+const PERF_EYE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const PERF_EYE_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.9 5.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.6M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></svg>';
+// Sets the funds on the graph, in NAV order so each line keeps its place. Colours belong
+// to shown funds: a fund keeps its colour while shown, and a newly shown fund takes the
+// first colour no shown fund is using, so no two lines ever share one.
+function _perfShowFunds(uuids) {
+  const shown = _perfOverviewFunds.filter(f => uuids.includes(f.uuid));
+  _perfOverviewFunds.forEach(f => { if (!uuids.includes(f.uuid)) f.color = null; });
+  shown.forEach(f => { if (!f.color) f.color = _BENCH_COLORS.find(c => !shown.some(o => o.color === c)); });
+  _perfOverview.fundUuids = shown.map(f => f.uuid);
+}
+
+const _perfDefaultFunds = () => _perfOverviewFunds.slice(0, PERF_OVERVIEW_DEFAULT_FUNDS).map(f => f.uuid);
+
+// "Compare funds": every queried fund with quarterly history, each with an eye to show or hide its line.
+// It starts on the stated rule (the largest funds by NAV) and says when it no longer does.
+let _perfLegendAnimated = false;
+function _perfRenderOverviewLegend() {
+  const el = document.getElementById('perf-overview-legend');
+  if (!el) return;
+  const shown = _perfOverview.fundUuids;
+  const atCap = shown.length >= PERF_OVERVIEW_MAX_FUNDS;
+  const isDefault = shown.join() === _perfDefaultFunds().join();
+  const rule = isDefault
+    ? `${Math.min(PERF_OVERVIEW_DEFAULT_FUNDS, _perfOverviewFunds.length)} largest funds by NAV`
+    : `${shown.length} of ${_perfOverviewFunds.length} funds · <button type="button" class="perf-compare-reset">Reset to ${PERF_OVERVIEW_DEFAULT_FUNDS} largest</button>`;
+  const pop = _perfLegendAnimated ? '' : ' is-new';
+  const chips = _perfOverviewFunds.map((f, i) => {
+    const on = shown.includes(f.uuid);
+    // Past the cap a hidden fund can't be shown, and the last fund shown can't be hidden.
+    const locked = on ? shown.length === 1 : atCap;
+    const why = on ? (locked ? 'At least one fund stays on the graph' : `Hide ${f.name}`)
+                   : (locked ? `Show up to ${PERF_OVERVIEW_MAX_FUNDS} funds at once` : `Show ${f.name}`);
+    return `<button type="button" class="perf-overview-chip${pop}" style="--i:${i}" data-uuid="${escHtml(f.uuid)}" aria-pressed="${on}"${locked ? ' aria-disabled="true"' : ''} title="${escHtml(why)}">
+      <span class="perf-compare-eye">${on ? PERF_EYE : PERF_EYE_OFF}</span><span class="perf-legend-dot" style="--c:${f.color || 'var(--ink-color-global-border-default)'}"></span>${escHtml(f.label)}
+    </button>`;
+  }).join('');
+  const peerKey = _perfOverview.showPeer && _perfOverviewHasPeer()
+    ? `<span class="perf-overview-peer-key${pop}" style="--i:${_perfOverviewFunds.length}"><span class="perf-overview-dash"></span>Dashed line = peer median (P50)</span>`
+    : '';
+  el.innerHTML = `
+    <div class="perf-compare-head"><span class="fund-switcher-label">Compare funds</span><span class="perf-compare-rule">${rule}</span></div>
+    <div class="perf-compare-chips" role="group" aria-label="Compare funds">${chips}${peerKey}</div>`;
+  _perfLegendAnimated = true;
+}
+
+// One set of listeners on the card.
+function _perfWireOverviewCard(card) {
+  if (card.dataset.wired) return;
+  card.dataset.wired = '1';
+  const rerender = (event) => {
+    trackUi("change", "FundPerformance.Overview." + event);
+    _perfSyncOverviewControls();
+    _perfRenderOverviewLegend();
+    perfDrawOverviewChart({ fade: event === 'Period' || event === 'Peer' });
+  };
+  card.addEventListener('click', e => {
+    const segBtn = e.target.closest('.perf-seg-btn');
+    if (segBtn) {
+      const { group, value } = segBtn.dataset;
+      if (_perfOverview[group] === value) return;
+      _perfOverview[group] = value;
+      rerender(group === 'metric' ? 'Metric' : 'Period');
+      return;
+    }
+    if (e.target.closest('.perf-switch')) {
+      _perfOverview.showPeer = !_perfOverview.showPeer;
+      rerender('Peer');
+      return;
+    }
+    if (e.target.closest('.perf-compare-reset')) {
+      _perfShowFunds(_perfDefaultFunds());
+      rerender('Funds');
+      return;
+    }
+    const chip = e.target.closest('.perf-overview-chip');
+    if (!chip) return;
+    const uuid = chip.dataset.uuid;
+    const shown = _perfOverview.fundUuids;
+    const list = shown.includes(uuid) ? shown.filter(u => u !== uuid) : [...shown, uuid];
+    if (!list.length || list.length > PERF_OVERVIEW_MAX_FUNDS) return;
+    _perfShowFunds(list);
+    rerender('Funds');
+    card.querySelector(`.perf-overview-chip[data-uuid="${uuid}"]`)?.focus();
+  });
+}
+
+// ── Fixed-position tooltip manager for .tooltip-trigger (escapes overflow:hidden containers) ──
 (function() {
   let tip = null;
   function ensureTip() {
@@ -1001,12 +1822,12 @@ function _perfRenderFundsTable(rows, container) {
     const t = ensureTip();
     t.textContent = el.getAttribute('data-tip') || '';
     const r = el.getBoundingClientRect();
-    // Position below the icon, clamped to viewport
-    let top = r.bottom + 6;
-    let left = r.right - 220; // right-align the 220px tooltip with the icon
+    // Above the label, starting at its left edge, so it never covers the value under
+    // a KPI label or the first table row; below the label only when there's no room.
+    let top = r.top - t.offsetHeight - 6;
+    if (top < 8) top = r.bottom + 6;
+    let left = Math.min(r.left, window.innerWidth - t.offsetWidth - 8);
     if (left < 8) left = 8;
-    if (left + 220 > window.innerWidth - 8) left = window.innerWidth - 228;
-    if (top + 120 > window.innerHeight) top = r.top - 120 - 6; // flip above if near bottom
     t.style.top  = top + 'px';
     t.style.left = left + 'px';
     t.classList.add('visible');
@@ -1015,12 +1836,12 @@ function _perfRenderFundsTable(rows, container) {
     if (tip) tip.classList.remove('visible');
   }
   function onEnter(e) {
-    const el = e.target.closest?.('.perf-th-info');
+    const el = e.target.closest?.('.tooltip-trigger');
     if (!el) return;
     showTip(el);
   }
   function onLeave(e) {
-    const el = e.target.closest?.('.perf-th-info');
+    const el = e.target.closest?.('.tooltip-trigger');
     if (!el) return;
     hideTip();
   }
@@ -1031,80 +1852,6 @@ function _perfRenderFundsTable(rows, container) {
   document.addEventListener('focusout', onLeave);
 })();
 
-async function perfFetchFundsAndLoad() {
-  perfSetStatus('Loading funds…');
-  try {
-    const r = await _mcp("fetch", {
-      command: 'dwh:execute:query',
-      params: {
-        sql: `SELECT FUND_NAME, FUND_UUID, ENDING_TOTAL_NAV
-              FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
-              QUALIFY ROW_NUMBER() OVER (PARTITION BY FUND_UUID ORDER BY MONTH_END_DATE DESC NULLS LAST) = 1
-              ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST
-              LIMIT 20`,
-        format: 'ndjson',
-      },
-    });
-    if (!r.isError) {
-      const rows = parseDWH(r).filter(row => row.FUND_UUID);
-      if (rows.length > 0) {
-        perfFunds = rows.map(row => ({ name: row.FUND_NAME, uuid: row.FUND_UUID }));
-        if (!perfCurrentFundUuid) perfCurrentFundUuid = rows[0].FUND_UUID;
-        perfInitFundSelect();
-      }
-    }
-  } catch (_) {}
-  perfSetStatus(null);
-  perfLoadFund(perfCurrentFundUuid);
-}
-
-function perfInitFundSelect() {
-  // Populate custom dropdown
-  const dd = document.getElementById('perf-fund-dropdown');
-  if (dd) {
-    dd.innerHTML = perfFunds.map(f => {
-      const name = f.name ?? f.entity_name ?? f.fund_name ?? 'Fund';
-      const uuid = f.fund_uuid ?? f.entity_uuid ?? f.uuid ?? '';
-      const active = uuid === perfCurrentFundUuid;
-      return `<button type="button" class="perf-fund-dropdown-item${active ? ' active' : ''}" onclick="perfSwitchFund('${escHtml(uuid)}');document.getElementById('perf-fund-dropdown').style.display='none';">${escHtml(name)}</button>`;
-    }).join('');
-  }
-}
-
-function perfToggleFundDropdown(e) {
-  if (e) e.stopPropagation();
-  const chevron = document.getElementById('perf-fund-chevron');
-  if (!chevron || chevron.style.display === 'none') return; // list view — not interactive
-  const dd = document.getElementById('perf-fund-dropdown');
-  if (!dd) return;
-  if (dd.style.display === 'none') {
-    dd.style.display = 'block';
-    setTimeout(() => document.addEventListener('click', _perfCloseFundDropdown, { once: true }), 0);
-  } else {
-    dd.style.display = 'none';
-  }
-}
-
-function _perfCloseFundDropdown() {
-  const dd = document.getElementById('perf-fund-dropdown');
-  if (dd) dd.style.display = 'none';
-}
-
-function perfSwitchFund(uuid) {
-  trackUi("change", "FundPerformance.FundSelect");
-  perfCurrentFundUuid = uuid;
-  // Update title label to the selected fund's name
-  const fund = perfFunds.find(f => (f.fund_uuid ?? f.entity_uuid ?? f.uuid ?? '') === uuid);
-  if (fund) {
-    const name = fund.name ?? fund.entity_name ?? fund.fund_name ?? 'Fund';
-    const label = document.getElementById('perf-page-label');
-    if (label) label.textContent = name;
-  }
-  // Re-render dropdown so active highlight moves to the new selection
-  perfInitFundSelect();
-  perfLoadFund(uuid);
-}
-
 function perfSetStatus(msg) {
   const el = document.getElementById('perf-page-status');
   if (!el) return;
@@ -1113,58 +1860,50 @@ function perfSetStatus(msg) {
 }
 
 async function perfLoadFund(uuid) {
-  perfSetStatus('Loading performance data…');
-  // Destroy old charts
-  if (perfIrrChartInst) { perfIrrChartInst.destroy(); perfIrrChartInst = null; }
-  if (perfTvpiChartInst) { perfTvpiChartInst.destroy(); perfTvpiChartInst = null; }
-  if (perfDpiChartInst) { perfDpiChartInst.destroy(); perfDpiChartInst = null; }
-  if (perfMoicChartInst) { perfMoicChartInst.destroy(); perfMoicChartInst = null; }
-  // Show skeleton structure (labels/headers visible, values blank) while new fund loads
-  const _metricsStrip = document.getElementById('perf-page-metrics');
-  if (_metricsStrip) _metricsStrip.innerHTML = `
-    <div class="perf-metric"><div class="perf-metric-label">Fund Size</div><div class="perf-metric-val">—</div></div>
-    <div class="perf-metric"><div class="perf-metric-label">Total Value</div><div class="perf-metric-val">—</div></div>
-    <div class="perf-metric"><div class="perf-metric-label">Total Invested</div><div class="perf-metric-val">—</div></div>
-    <div class="perf-metric"><div class="perf-metric-label">Dry Powder</div><div class="perf-metric-val">—</div></div>
-  `;
-  const _metricsTable = document.getElementById('perf-detail-metrics-table');
-  if (_metricsTable) _metricsTable.innerHTML = `
-    <table class="perf-detail-table">
-      <thead><tr><th>Metric</th><th>LP Only</th><th>Total Fund</th></tr></thead>
-      <tbody>
-        <tr><td>Total Value to Paid-in Capital (TVPI)</td><td>—</td><td>—</td></tr>
-        <tr><td>Distributions to Paid-in Capital (DPI)</td><td>—</td><td>—</td></tr>
-        <tr><td>Residual Value to Paid-in Capital (RVPI)</td><td>—</td><td>—</td></tr>
-        <tr><td>Net Internal Rate of Return (Net IRR)</td><td>—</td><td>—</td></tr>
-        <tr><td>Multiple on Invested Capital (MOIC)</td><td>—</td><td>—</td></tr>
-        <tr><td>Total Value</td><td>—</td><td>—</td></tr>
-        <tr><td>Net Asset Value (NAV)</td><td>—</td><td>—</td></tr>
-        <tr><td>Contributions</td><td>—</td><td>—</td></tr>
-        <tr><td>Distributions</td><td>—</td><td>—</td></tr>
-      </tbody>
-    </table>
-  `;
+  // Everything on the fund page describes the fund open now: clear the last fund's
+  // chart data, date and cohort here, and drop any response that lands after the
+  // viewer has opened another fund or gone back to the list.
+  const stale = () => perfCurrentFundUuid !== uuid;
+  // The id goes into SQL below, so only a well-formed UUID is queried.
+  const queryable = _PERF_UUID_RE.test(uuid || '');
+  if (perfPeerChartInst) { perfPeerChartInst.destroy(); perfPeerChartInst = null; }
+  _perfPeerData = null;
+  _perfSetAsOf([]);
+  _perfShowPeerPromise(false);
+  const cohortLabel = document.getElementById('perf-cohort-label');
+  if (cohortLabel) cohortLabel.textContent = '';
+  // Skeleton: the real labels with shimmer bones where the values will land.
+  perfRenderMetrics(null, true);
+  perfRenderMetricsTable(null, true);
+  document.querySelector('#perf-peer-card .perf-chart-bone')?.classList.remove('is-done');
+  const peerSummary = document.getElementById('perf-peer-summary');
+  if (peerSummary) peerSummary.innerHTML = '<span class="shimmer-bone shimmer-val" style="width:320px;max-width:100%;"></span>';
 
   let seriesData = null;
   let snapshotRow = null;
+  let fundNetIrr = null;
+  let fundNetIrrDate = null;
 
-  if (uuid && await mcpAvailable()) {
+  if (queryable && await mcpAvailable()) {
+    if (stale()) return;
     // ── Helper: parse series rows ──
+    // Net IRR, TVPI and DPI are the LP measures, as in the table and the snapshot point below,
+    // so the line, its last point and the table all describe the same thing.
     const _parseSeriesRows = (rows) => rows.map(row => ({
       QUARTER_END_DATE: _fmtQtr(row.PERFORMANCE_QUARTER_START_DATE),
-      NET_IRR: row.NET_IRR != null ? row.NET_IRR / 100 : null,
-      TVPI: row.TVPI != null ? parseFloat(row.TVPI) : null,
-      DPI: row.DPI != null ? parseFloat(row.DPI) : null,
+      NET_IRR: row.NET_LP_IRR != null ? row.NET_LP_IRR / 100 : null,
+      TVPI: row.LP_TVPI != null ? parseFloat(row.LP_TVPI) : null,
+      DPI: row.LP_DPI != null ? parseFloat(row.LP_DPI) : null,
       MOIC: row.MOIC != null ? parseFloat(row.MOIC) : null,
-      BENCHMARK_P25_NET_IRR: row.NET_IRR_25TH != null ? row.NET_IRR_25TH / 100 : null,
-      BENCHMARK_P50_NET_IRR: row.NET_IRR_50TH != null ? row.NET_IRR_50TH / 100 : null,
-      BENCHMARK_P75_NET_IRR: row.NET_IRR_75TH != null ? row.NET_IRR_75TH / 100 : null,
-      BENCHMARK_P25_TVPI: row.TVPI_25 != null ? parseFloat(row.TVPI_25) : null,
-      BENCHMARK_P50_TVPI: row.TVPI_50 != null ? parseFloat(row.TVPI_50) : null,
-      BENCHMARK_P75_TVPI: row.TVPI_75 != null ? parseFloat(row.TVPI_75) : null,
-      BENCHMARK_P25_DPI: row.DPI_25 != null ? parseFloat(row.DPI_25) : null,
-      BENCHMARK_P50_DPI: row.DPI_50 != null ? parseFloat(row.DPI_50) : null,
-      BENCHMARK_P75_DPI: row.DPI_75 != null ? parseFloat(row.DPI_75) : null,
+      BENCHMARK_P25_NET_IRR: row.NET_LP_IRR_25TH != null ? row.NET_LP_IRR_25TH / 100 : null,
+      BENCHMARK_P50_NET_IRR: row.NET_LP_IRR_50TH != null ? row.NET_LP_IRR_50TH / 100 : null,
+      BENCHMARK_P75_NET_IRR: row.NET_LP_IRR_75TH != null ? row.NET_LP_IRR_75TH / 100 : null,
+      BENCHMARK_P25_TVPI: row.LP_TVPI_25 != null ? parseFloat(row.LP_TVPI_25) : null,
+      BENCHMARK_P50_TVPI: row.LP_TVPI_50 != null ? parseFloat(row.LP_TVPI_50) : null,
+      BENCHMARK_P75_TVPI: row.LP_TVPI_75 != null ? parseFloat(row.LP_TVPI_75) : null,
+      BENCHMARK_P25_DPI: row.LP_DPI_25 != null ? parseFloat(row.LP_DPI_25) : null,
+      BENCHMARK_P50_DPI: row.LP_DPI_50 != null ? parseFloat(row.LP_DPI_50) : null,
+      BENCHMARK_P75_DPI: row.LP_DPI_75 != null ? parseFloat(row.LP_DPI_75) : null,
       BENCHMARK_P25_MOIC: row.MOIC_25 != null ? parseFloat(row.MOIC_25) : null,
       BENCHMARK_P50_MOIC: row.MOIC_50 != null ? parseFloat(row.MOIC_50) : null,
       BENCHMARK_P75_MOIC: row.MOIC_75 != null ? parseFloat(row.MOIC_75) : null,
@@ -1178,9 +1917,9 @@ async function perfLoadFund(uuid) {
       params: {
         sql: `SELECT
           MONTH_END_DATE, FUND_REPORTING_CURRENCY,
-          FUND_SIZE, TOTAL_MOIC, TOTAL_TVPI, TOTAL_RVPI, NET_LP_IRR, LP_DPI,
+          FUND_SIZE, TOTAL_MOIC, NET_LP_IRR, LP_DPI,
           TOTAL_VALUE, ENDING_TOTAL_NAV, TOTAL_CAP_CONTRIBUTION, TOTAL_DISTRIBUTION,
-          TOTAL_COST_OF_INVESTMENTS, DRY_POWDER, DEAL_IRR,
+          TOTAL_COST_OF_INVESTMENTS, DEAL_IRR, VINTAGE_DATE,
           LP_TVPI, LP_RVPI, LP_MOIC,
           LP_VALUE, ENDING_LP_NAV, TOTAL_LP_CAP_CONTRIBUTION, TOTAL_LP_DISTRIBUTION
         FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
@@ -1191,20 +1930,23 @@ async function perfLoadFund(uuid) {
       },
     });
 
-    const seriesPromise = _mcp("fetch", {
-      command: 'dwh:execute:query',
-      params: {
-        sql: `SELECT
+    // One statement for the first call and its retry, so the two can't drift apart.
+    // uuid passed the _PERF_UUID_RE check above (queryable) before reaching here.
+    const seriesSql = `SELECT
           PERFORMANCE_QUARTER_START_DATE,
-          NET_IRR, TVPI, DPI, MOIC,
-          NET_IRR_25TH, NET_IRR_50TH, NET_IRR_75TH,
-          TVPI_25, TVPI_50, TVPI_75,
-          DPI_25, DPI_50, DPI_75,
+          NET_LP_IRR, NET_IRR, LP_TVPI, LP_DPI, MOIC,
+          NET_LP_IRR_25TH, NET_LP_IRR_50TH, NET_LP_IRR_75TH,
+          LP_TVPI_25, LP_TVPI_50, LP_TVPI_75,
+          LP_DPI_25, LP_DPI_50, LP_DPI_75,
           MOIC_25, MOIC_50, MOIC_75,
           VINTAGE_YEAR, ENTITY_TYPE_NAME, FUND_AUM_BUCKET, FUND_COUNT
         FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
         WHERE FUND_UUID = '${uuid}'
-        ORDER BY PERFORMANCE_QUARTER_START_DATE ASC`,
+        ORDER BY PERFORMANCE_QUARTER_START_DATE ASC`;
+    const seriesPromise = _mcp("fetch", {
+      command: 'dwh:execute:query',
+      params: {
+        sql: seriesSql,
         format: 'ndjson',
       },
     });
@@ -1221,7 +1963,7 @@ async function perfLoadFund(uuid) {
           command: 'dwh:execute:query',
           params: {
             sql: `SELECT
-              FUND_SIZE, TOTAL_MOIC, TOTAL_TVPI, TOTAL_RVPI, NET_LP_IRR, LP_DPI,
+              FUND_SIZE, TOTAL_MOIC, NET_LP_IRR, LP_DPI, LP_TVPI, LP_RVPI,
               TOTAL_VALUE, ENDING_TOTAL_NAV, TOTAL_CAP_CONTRIBUTION, TOTAL_DISTRIBUTION
             FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
             WHERE FUND_UUID = '${uuid}'
@@ -1236,9 +1978,11 @@ async function perfLoadFund(uuid) {
         }
       }
     } catch (_) {}
+    if (stale()) return;
 
     // Render metrics strip + table immediately — don't wait for charts
     if (snapshotRow) {
+      _perfSetAsOf([snapshotRow.MONTH_END_DATE]);
       perfSetStatus(null);
       perfRenderMetrics(snapshotRow);
       perfRenderMetricsTable(snapshotRow);
@@ -1251,17 +1995,7 @@ async function perfLoadFund(uuid) {
         r = await _mcp("fetch", {
           command: 'dwh:execute:query',
           params: {
-            sql: `SELECT
-              PERFORMANCE_QUARTER_START_DATE,
-              NET_IRR, TVPI, DPI, MOIC,
-              NET_IRR_25TH, NET_IRR_50TH, NET_IRR_75TH,
-              TVPI_25, TVPI_50, TVPI_75,
-              DPI_25, DPI_50, DPI_75,
-              MOIC_25, MOIC_50, MOIC_75,
-              VINTAGE_YEAR, ENTITY_TYPE_NAME, FUND_AUM_BUCKET, FUND_COUNT
-            FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
-            WHERE FUND_UUID = '${uuid}'
-            ORDER BY PERFORMANCE_QUARTER_START_DATE ASC`,
+            sql: seriesSql,
             format: 'ndjson',
             response_mode: 'inline',
           },
@@ -1272,6 +2006,11 @@ async function perfLoadFund(uuid) {
         if (rows.length > 0) {
           seriesData = _parseSeriesRows(rows);
           const lastRow = rows[rows.length - 1];
+          const lastIrr = [...rows].reverse().find(row => row.NET_IRR != null);
+          if (lastIrr) {
+            fundNetIrr = lastIrr.NET_IRR;
+            fundNetIrrDate = lastIrr.PERFORMANCE_QUARTER_START_DATE;
+          }
           seriesData._cohort = {
             vintageYear: lastRow.VINTAGE_YEAR,
             entityType: lastRow.ENTITY_TYPE_NAME,
@@ -1281,16 +2020,20 @@ async function perfLoadFund(uuid) {
         }
       }
     } catch (_) {}
+    if (stale()) return;
+    // The total-fund IRR comes with the quarterly series, so the table's IRR row
+    // completes once it lands.
+    if (snapshotRow) perfRenderMetricsTable({ ...snapshotRow, FUND_NET_IRR: fundNetIrr, FUND_NET_IRR_DATE: fundNetIrrDate });
 
-    // ── Extend charts to the current quarter using the snapshot ──
-    // TEMPORAL_FUND_COHORT_BENCHMARKS is a batch-computed product and may lag
-    // several quarters behind.  Use the browser's current date to derive "today's
-    // quarter" — this avoids any dependency on MONTH_END_DATE being present in the
-    // snapshot result (e.g. when the fallback query ran without that column).
-    if (snapshotRow) {
-      const now = new Date();
-      const curQStart = new Date(Date.UTC(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1));
-      const snapQLabel = _fmtQtr(curQStart.toISOString().substring(0, 10));
+    // ── Extend the chart to the snapshot's quarter ──
+    // TEMPORAL_FUND_COHORT_BENCHMARKS is batch-computed and can lag the fund's latest
+    // figures, so the snapshot adds one trailing point, placed in the quarter of its
+    // own month-end so the line ends at the As of date. Without a month-end (the
+    // fallback query) there's no honest place for it, so it is left off.
+    // A month-end after today is the current, unfinished month: its figures are month
+    // to date, so they stay in the KPIs and table but don't extend the chart.
+    if (snapshotRow && snapshotRow.MONTH_END_DATE && !_perfMonthToDate(snapshotRow.MONTH_END_DATE)) {
+      const snapQLabel = _fmtQtr(_perfDay(snapshotRow.MONTH_END_DATE));
       // Convert "Q3'26" → sortable integer 202603.
       // Use string indexing instead of regex to avoid apostrophe character-encoding issues
       // (the curly-quote U+2019 used in _fmtQtr templates doesn't match a straight-quote regex).
@@ -1307,7 +2050,7 @@ async function perfLoadFund(uuid) {
         const snapPoint = {
           QUARTER_END_DATE: snapQLabel,
           NET_IRR:  snapshotRow.NET_LP_IRR  != null ? snapshotRow.NET_LP_IRR  / 100 : null,
-          TVPI:     snapshotRow.TOTAL_TVPI   != null ? parseFloat(snapshotRow.TOTAL_TVPI)   : null,
+          TVPI:     snapshotRow.LP_TVPI      != null ? parseFloat(snapshotRow.LP_TVPI)      : null,
           DPI:      snapshotRow.LP_DPI       != null ? parseFloat(snapshotRow.LP_DPI)       : null,
           MOIC:     snapshotRow.TOTAL_MOIC   != null ? parseFloat(snapshotRow.TOTAL_MOIC)   : null,
           BENCHMARK_P25_NET_IRR: null, BENCHMARK_P50_NET_IRR: null, BENCHMARK_P75_NET_IRR: null,
@@ -1326,10 +2069,17 @@ async function perfLoadFund(uuid) {
     }
   }
 
+  // Every path without a series settles the peer card here, with one message.
+  if (!seriesData) {
+    document.querySelector('#perf-peer-card .perf-chart-bone')?.classList.add('is-done');
+    if (peerSummary) peerSummary.textContent = 'No quarterly history or peer benchmark for this fund yet.';
+  }
+
   if (!seriesData && !snapshotRow) {
     perfSetStatus(null);
     const container = document.getElementById('perf-page-metrics');
     if (container) container.innerHTML = '<div style="color:var(--ink-color-global-text-subtle);font-size:13px;padding:20px 0;">Select a fund above to view performance data.</div>';
+    perfRenderMetricsTable(null);
     return;
   }
 
@@ -1354,173 +2104,268 @@ async function perfLoadFund(uuid) {
     if (c.fundCount)   parts.push(c.fundCount + ' funds in cohort');
     if (hasBenchmarkData) {
       cohortEl.textContent = parts.length ? 'Benchmarks: ' + parts.join(' \u00b7 ') : '';
-      cohortEl.style.display = parts.length ? 'block' : 'none';
+
     } else if (parts.length) {
       cohortEl.innerHTML = 'Cohort: ' + parts.join(' \u00b7 ') + ' &mdash; <em>peer benchmark data not yet available for this cohort</em>';
-      cohortEl.style.display = 'block';
     } else {
-      cohortEl.style.display = 'none';
+      cohortEl.textContent = '';
     }
   }
-  } // end if (seriesData)
+  }
 }
 
-function perfRenderMetrics(s) {
+// The IRR callout compares bases, not holders: the LPs' net IRR (the figure the funds
+// table, the peer chart and the quartile all use) against the fund's gross deal IRR.
+const PERF_IRR_TIPS = {
+  net: 'Net IRR: return on LP cash flows, after fees and carry.',
+  gross: "Gross IRR: return on the fund's investments, before management fees, expenses and carry.",
+  missing: 'Carta has no IRR on this basis for this fund.',
+  young: 'Within about two years of the first capital call, fees dominate and IRRs swing widely.',
+};
+// Funds younger than this get an "early-stage" note on the IRR callout.
+const PERF_YOUNG_FUND_MONTHS = 24;
+
+// The gap a reader would otherwise work out in their head, in percentage points so it
+// can't read as a relative change. Gross above net is what went to fees and carry; when
+// net comes out ahead (credit-line timing, fee offsets) the line stays neutral.
+function perfIrrSpread(net, gross) {
+  const n = net == null ? NaN : parseFloat(net), g = gross == null ? NaN : parseFloat(gross);
+  if (!isFinite(n) || !isFinite(g)) return null;
+  const pts = Math.round((g - n) * 10) / 10;
+  if (pts > 0) return `${pts.toFixed(1)} pts to fees & carry`;
+  return `${pts < 0 ? '\u2212' : ''}${Math.abs(pts).toFixed(1)} pts`;
+}
+
+function perfIsYoungFund(s) {
+  if (!s?.VINTAGE_DATE || !s?.MONTH_END_DATE) return false;
+  const start = new Date(_perfDay(s.VINTAGE_DATE) + 'T00:00:00'), end = new Date(_perfDay(s.MONTH_END_DATE) + 'T00:00:00');
+  if (isNaN(start) || isNaN(end)) return false;
+  return (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() < PERF_YOUNG_FUND_MONTHS;
+}
+
+// KPI tiles above the detail table. Total value shares its definition with the
+// all-funds table column. The IRR callout tile leads the strip.
+// In story order: what was committed, what's invested, what's left to invest, then
+// what it's all worth now. Uncalled capital is Committed capital minus Contributions,
+// so it is exact for every fund and matches the Contributions row below.
+const _PERF_KPIS = [
+  { key: 'FUND_SIZE',                 label: 'Committed capital',      tip: 'Capital partners have committed.' },
+  { key: 'TOTAL_COST_OF_INVESTMENTS', label: 'Invested (cost basis)',  tip: 'Cost of investments to date, excluding fees and expenses.' },
+  { key: 'UNCALLED',                  label: 'Uncalled capital',       tip: 'Committed capital not yet called from partners: Committed − Contributions.',
+    value: s => (s.FUND_SIZE != null && s.TOTAL_CAP_CONTRIBUTION != null) ? parseFloat(s.FUND_SIZE) - parseFloat(s.TOTAL_CAP_CONTRIBUTION) : null },
+  { key: 'TOTAL_VALUE',               label: 'Total value',            tip: null },
+];
+
+function perfRenderMetrics(s, loading = false) {
   const strip = document.getElementById('perf-page-metrics');
   if (!strip) return;
-  if (!s) { strip.innerHTML = ''; return; }
-  const fmtPct = v => v != null ? parseFloat(v).toFixed(1) + '%' : '—';
-  const fmtX   = v => v != null ? parseFloat(v).toFixed(2) + 'x' : '—';
-  const fmtDlr = v => v != null ? fmtFull(parseFloat(v), s.FUND_REPORTING_CURRENCY) : '—';
-  const fundSize    = fmtDlr(s.FUND_SIZE);
-  const totalValue  = fmtDlr(s.TOTAL_VALUE);
-  const totalInv    = fmtDlr(s.TOTAL_COST_OF_INVESTMENTS);
-  const dryPowder   = fmtDlr(s.DRY_POWDER);
-  strip.innerHTML = `
-    <div class="perf-metric"><div class="perf-metric-label">Fund Size</div><div class="perf-metric-val">${fundSize}</div></div>
-    <div class="perf-metric"><div class="perf-metric-label">Total Value</div><div class="perf-metric-val">${totalValue}</div></div>
-    <div class="perf-metric"><div class="perf-metric-label">Total Invested</div><div class="perf-metric-val">${totalInv}</div></div>
-    <div class="perf-metric"><div class="perf-metric-label">Dry Powder</div><div class="perf-metric-val">${dryPowder}</div></div>
-  `;
+  if (!s && !loading) { strip.innerHTML = ''; return; }
+  const tipOf = k => k.tip ?? _PERF_COLS.find(c => c.key === k.key).tip;
+  // The return is the headline, so the IRR tile comes first and is read first.
+  strip.innerHTML = _perfIrrCallout(s, loading) + _PERF_KPIS.map(k => {
+    const raw = loading ? null : (k.value ? k.value(s) : s[k.key]);
+    const v = loading ? '<span class="shimmer-bone shimmer-val"></span>'
+      : (raw != null ? fmtFull(parseFloat(raw), s.FUND_REPORTING_CURRENCY) : '—');
+    return `<div class="perf-metric"><div class="perf-metric-label">${_perfTip(tipOf(k), k.label)}</div><div class="perf-metric-val">${v}</div></div>`;
+  }).join('');
 }
 
-function perfRenderMetricsTable(s) {
+// Net IRR as the headline, gross beside it, and the gap spelled out under both. A
+// missing figure says "not reported" rather than a bare dash.
+function _perfIrrCallout(s, loading) {
+  const label = `<div class="perf-metric-label">${_perfTip(PERF_IRR_TIPS.net, 'Net IRR')}</div>`;
+  if (loading) return `<div class="perf-metric perf-metric-irr">${label}<div class="perf-metric-val"><span class="shimmer-bone shimmer-val"></span></div></div>`;
+  const net = _perfIrrCell(s.NET_LP_IRR), gross = _perfIrrCell(s.DEAL_IRR);
+  const grossPart = gross === '—'
+    ? _perfTip(PERF_IRR_TIPS.missing, 'Gross not reported')
+    : `vs ${gross} ${_perfTip(PERF_IRR_TIPS.gross, 'gross')}`;
+  const notes = [perfIrrSpread(s.NET_LP_IRR, s.DEAL_IRR), perfIsYoungFund(s) && _perfTip(PERF_IRR_TIPS.young, 'early-stage, IRR volatile')].filter(Boolean);
+  return `<div class="perf-metric perf-metric-irr">${label}
+    <div class="perf-metric-val">${net === '—' ? _perfTip(PERF_IRR_TIPS.missing, 'Not reported') : net} <span class="perf-irr-gross">${grossPart}</span></div>
+    ${notes.length ? `<div class="perf-irr-note">${notes.join(' · ')}</div>` : ''}
+  </div>`;
+}
+
+// Each column of the detail table reads one holder: the LPs' share, or the whole fund.
+const PERF_DETAIL_SIDES = {
+  lp:    { value: 'LP_VALUE',    nav: 'ENDING_LP_NAV',    contrib: 'TOTAL_LP_CAP_CONTRIBUTION', dist: 'TOTAL_LP_DISTRIBUTION', moic: 'LP_MOIC',    irr: 'NET_LP_IRR' },
+  total: { value: 'TOTAL_VALUE', nav: 'ENDING_TOTAL_NAV', contrib: 'TOTAL_CAP_CONTRIBUTION',    dist: 'TOTAL_DISTRIBUTION',    moic: 'TOTAL_MOIC', irr: 'FUND_NET_IRR', irrDate: 'FUND_NET_IRR_DATE' },
+};
+
+// FUND_NET_IRR is the latest fund-level net IRR from the quarterly series; it is
+// undefined until that series has answered (shown as a placeholder) and null when the
+// fund has none. FUND_NET_IRR_DATE is its quarter: the series can lag the snapshot,
+// so a figure from an earlier quarter than the As of date names its quarter.
+function perfRenderMetricsTable(s, loading = false) {
   const container = document.getElementById('perf-detail-metrics-table');
   if (!container) return;
-  if (!s) { container.innerHTML = ''; return; }
-  const fmtPct = v => v != null ? parseFloat(v).toFixed(1) + '%' : '—';
-  const fmtX   = v => v != null ? parseFloat(v).toFixed(2) + 'x' : '—';
-  const fmtDlr = v => v != null ? fmtFull(parseFloat(v), s.FUND_REPORTING_CURRENCY) : '—';
-  // [label, LP key, Total key, formatter]
+  if (!s && !loading) { container.innerHTML = ''; return; }
+  const bone = '<span class="shimmer-bone shimmer-val"></span>';
+  const num = key => { const n = s?.[key] == null ? NaN : parseFloat(s[key]); return isFinite(n) ? n : null; };
+  // The multiples are worked out from the dollar rows below them, so each column
+  // reconciles on the page: TVPI = Total value ÷ Contributions, DPI = Distributions ÷
+  // Contributions, RVPI = NAV ÷ Contributions.
+  const per = (top, c) => { const t = num(top), d = num(c.contrib); return t != null && d > 0 ? t / d : null; };
+  const x = v => loading ? bone : _perfMultipleCell(v);
+  const irrQuarter = (v, c) => {
+    const d = c.irrDate && s?.[c.irrDate], asOf = s?.MONTH_END_DATE;
+    if (_perfIrrCell(v) === '—' || !d || !asOf) return '';
+    const q = _fmtQtr(_perfDay(d));
+    return q !== _fmtQtr(_perfDay(asOf)) && _perfDay(d) < _perfDay(asOf) ? ` (${q})` : '';
+  };
+  const irr = (v, c) => loading || v === undefined ? bone : _perfIrrCell(v) + irrQuarter(v, c);
+  const dlr = v => loading ? bone : v != null ? fmtFull(parseFloat(v), s.FUND_REPORTING_CURRENCY) : '—';
+  // [label, value for one side, formatter(value, side)]
   const rows = [
-    ['Total Value to Paid-in Capital (TVPI)',   'LP_TVPI',                   'TOTAL_TVPI',             fmtX],
-    ['Distributions to Paid-in Capital (DPI)',  'LP_DPI',                    null,                     fmtX],
-    ['Residual Value to Paid-in Capital (RVPI)','LP_RVPI',                   'TOTAL_RVPI',             fmtX],
-    ['Net Internal Rate of Return (Net IRR)',   'NET_LP_IRR',                null,                     fmtPct],
-    ['Multiple on Invested Capital (MOIC)',     'LP_MOIC',                   'TOTAL_MOIC',             fmtX],
-    ['Total Value',                             'LP_VALUE',                  'TOTAL_VALUE',            fmtDlr],
-    ['Net Asset Value (NAV)',                   'ENDING_LP_NAV',             'ENDING_TOTAL_NAV',       fmtDlr],
-    ['Contributions',                           'TOTAL_LP_CAP_CONTRIBUTION', 'TOTAL_CAP_CONTRIBUTION', fmtDlr],
-    ['Distributions',                           'TOTAL_LP_DISTRIBUTION',     'TOTAL_DISTRIBUTION',     fmtDlr],
+    ['Total Value to Paid-in Capital (TVPI)',    c => per(c.value, c), x],
+    ['Distributions to Paid-in Capital (DPI)',   c => per(c.dist, c), x],
+    ['Residual Value to Paid-in Capital (RVPI)', c => per(c.nav, c), x],
+    ['Net Internal Rate of Return (IRR)',        c => s?.[c.irr], irr],
+    ['Multiple on Invested Capital (MOIC)',      c => s?.[c.moic], x],
+    [_perfColLabel('TOTAL_VALUE'),               c => s?.[c.value], dlr],
+    [_perfColLabel('ENDING_TOTAL_NAV'),          c => s?.[c.nav], dlr],
+    [_perfColLabel('TOTAL_CAP_CONTRIBUTION'),    c => s?.[c.contrib], dlr],
+    [_perfColLabel('TOTAL_DISTRIBUTION'),        c => s?.[c.dist], dlr],
   ];
-  const bodyRows = rows.map(([label, lpKey, totalKey, fmt]) =>
-    `<tr><td>${label}</td><td>${fmt(s[lpKey])}</td><td>${totalKey ? fmt(s[totalKey]) : '—'}</td></tr>`
+  const { lp, total } = PERF_DETAIL_SIDES;
+  const bodyRows = rows.map(([label, val, fmt]) =>
+    `<tr><td>${label}</td><td>${fmt(val(lp), lp)}</td><td>${fmt(val(total), total)}</td></tr>`
   ).join('');
   container.innerHTML = `
     <table class="perf-detail-table">
-      <thead><tr><th>Metric</th><th>LP Only</th><th>Total Fund</th></tr></thead>
+      <thead><tr><th>Metric</th><th>LP only</th><th>Total fund</th></tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
   `;
 }
 
+// ── Single-fund peer chart ──
+// The fund's line against its vintage cohort: P25–P75 shaded, P50 dashed, and one
+// line saying which quartile the fund sits in, so the chart says by how much.
+// Labels come from the overview graph and tooltip formats from the page's shared
+// formatters (_perfIrr, _perfMultiple), so both charts read like the tables.
+// The peer series holds Net IRR as a fraction (0.15) where the overview holds percent (15).
+// The axis gets its own unsigned tick format, as on the overview.
+const PERF_PEER_METRICS = {
+  NET_IRR: { label: PERF_OVERVIEW_METRICS.NET_IRR.label, fmt: v => _perfIrr(v * 100), tick: v => (v * 100).toFixed(0) + '%' },
+  TVPI:    { label: PERF_OVERVIEW_METRICS.TVPI.label, ..._perfMultiple },
+  DPI:     { label: PERF_OVERVIEW_METRICS.DPI.label, ..._perfMultiple },
+  MOIC:    { label: 'MOIC', ..._perfMultiple },
+};
+const PERF_QUARTILE_NAMES = ['1st quartile (top 25%)', '2nd quartile', '3rd quartile', '4th quartile (bottom 25%)'];
+let perfPeerChartInst = null;
+let _perfPeerData = null;
+let _perfPeerMetric = 'NET_IRR';
+
+// The fund's quartile at the latest quarter that has both its value and the cohort's
+// percentiles; null when no such quarter exists. Higher is better for every metric.
+function perfPeerQuartile(data, metric) {
+  for (let i = data.length - 1; i >= 0; i--) {
+    const d = data[i];
+    const v = d[metric], p25 = d['BENCHMARK_P25_' + metric], p50 = d['BENCHMARK_P50_' + metric], p75 = d['BENCHMARK_P75_' + metric];
+    if (v == null || p25 == null || p50 == null || p75 == null) continue;
+    const quartile = v >= p75 ? 1 : v >= p50 ? 2 : v >= p25 ? 3 : 4;
+    return { quartile, quarter: d.QUARTER_END_DATE };
+  }
+  return null;
+}
+
+function _perfPeerSummary() {
+  const el = document.getElementById('perf-peer-summary');
+  if (!el) return;
+  const m = PERF_PEER_METRICS[_perfPeerMetric];
+  const q = perfPeerQuartile(_perfPeerData, _perfPeerMetric);
+  const c = _perfPeerData._cohort || {};
+  if (!q) { el.textContent = `No peer benchmark yet for this fund's cohort, so ${m.label} shows the fund alone.`; return; }
+  const peers = [c.vintageYear && `${c.vintageYear} vintage`, c.entityType].filter(Boolean).join(' ');
+  const detail = [c.fundCount && `${c.fundCount} funds`, `as of ${q.quarter}`].filter(Boolean).join(', ');
+  el.innerHTML = `${escHtml(m.label)}: <strong>${PERF_QUARTILE_NAMES[q.quartile - 1]}</strong> vs ${escHtml(peers || 'peer')} funds <span class="perf-peer-detail">(${escHtml(detail)})</span>`;
+}
+
+function _perfPeerDatasets() {
+  const k = _perfPeerMetric;
+  const col = key => _perfPeerData.map(d => d[key]);
+  const band = _perfCanvasColor('var(--carta-peer-band)');
+  const median = _perfCanvasColor('var(--carta-peer-median)');
+  const fund = _perfCanvasColor('var(--carta-series-blue)');
+  return [
+    // P25 is the band's floor; P75 fills down to it.
+    { label: 'P25', data: col('BENCHMARK_P25_' + k), borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, fill: false, tension: 0.4, spanGaps: true },
+    { label: 'P75', data: col('BENCHMARK_P75_' + k), borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, backgroundColor: band, fill: '-1', tension: 0.4, spanGaps: true },
+    { label: 'Peer median (P50)', data: col('BENCHMARK_P50_' + k), borderColor: median, borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: median, fill: false, tension: 0.4, spanGaps: true },
+    { label: 'This fund', data: col(k), borderColor: fund, borderWidth: 2.5, pointRadius: _perfSoloRadius(col(k)), pointHoverRadius: 5, pointHoverBackgroundColor: fund, fill: false, tension: 0.4, spanGaps: true },
+  ];
+}
+
+// The fund chart's title and peer keys mention peers only once a draw has found peer
+// data for the current metric; loading, empty and newly opened states promise nothing.
+function _perfShowPeerPromise(hasPeer) {
+  const m = PERF_PEER_METRICS[_perfPeerMetric];
+  const title = document.getElementById('perf-peer-title');
+  if (title) title.textContent = hasPeer ? `${m.label} vs peers` : m.label;
+  document.querySelectorAll('#perf-peer-card .perf-peer-only').forEach(el => { el.hidden = !hasPeer; });
+}
+
 function perfDrawCharts(data) {
+  _perfPeerData = data;
+  document.querySelector('#perf-peer-card .perf-chart-bone')?.classList.add('is-done');
+  _perfShowPeerPromise(data.some(d => d['BENCHMARK_P50_' + _perfPeerMetric] != null));
+  const canvas = document.getElementById('perf-peer-chart');
+  if (!canvas || !window.Chart) return;
+  const m = PERF_PEER_METRICS[_perfPeerMetric];
+  _perfSyncPeerMetric();
+  _perfPeerSummary();
+  const datasets = _perfPeerDatasets();
   const labels = data.map(d => d.QUARTER_END_DATE);
-  const textClr = chartLabelColor();
-
-
-  const baseOpts = (yFmt) => ({
-    responsive: true, maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: {
-      legend: { display: false, labels: { color: textClr } },
-      tooltip: {
-        enabled: true, mode: 'index', intersect: false,
-        backgroundColor: 'rgba(26,26,26,0.94)',
-        titleColor: '#9C9F9F', titleFont: { size: 10, family: 'Inter,system-ui,sans-serif' },
-        bodyColor: '#FFFFFF', bodyFont: { size: 11, family: 'Inter,system-ui,sans-serif' },
-        borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
-        padding: { top: 8, bottom: 8, left: 12, right: 12 }, cornerRadius: 4, caretSize: 4,
-        itemSort: (a, b) => b.parsed.y - a.parsed.y,
-        callbacks: {
-          label(item) { return ` ${item.dataset.label}: ${yFmt(item.parsed.y)}`; },
-          labelColor(item) { return { borderColor: item.dataset.borderColor, backgroundColor: item.dataset.borderColor, borderWidth: 2, borderRadius: 2 }; },
+  if (perfPeerChartInst) {
+    // Same quarters, new metric: keep the dataset objects so the lines morph.
+    perfPeerChartInst.data.labels = labels;
+    perfPeerChartInst.data.datasets.forEach((ds, i) => Object.assign(ds, datasets[i]));
+    perfPeerChartInst.options.scales.y.ticks.callback = m.tick;
+    perfPeerChartInst.update(_perfReducedMotion() ? 'none' : undefined);
+    return;
+  }
+  const textColor = chartLabelColor();
+  perfPeerChartInst = new Chart(canvas.getContext('2d'), {
+    type: 'line', plugins: [PERF_CROSSHAIR],
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: _perfReducedMotion() ? false : PERF_MORPH,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ..._perfTooltipChrome(),
+          // Top to bottom as drawn: P75, fund, median, P25 sorted by value.
+          itemSort: (a, b) => b.parsed.y - a.parsed.y,
+          callbacks: {
+            label(item) { return item.parsed.y == null ? null : ` ${item.dataset.label}: ${PERF_PEER_METRICS[_perfPeerMetric].fmt(item.parsed.y)}`; },
+            labelColor(item) {
+              const c = item.dataset.borderColor || item.chart.data.datasets[1].backgroundColor;
+              return { borderColor: c, backgroundColor: item.dataset.borderWidth ? c : 'transparent', borderWidth: 1, borderDash: item.dataset.borderDash || [], borderRadius: 2 };
+            },
+          },
         },
       },
-    },
-    scales: {
-      x: { ticks: { color: textClr, font: { size: 9, family: 'Inter,system-ui,sans-serif' } }, grid: { display: false }, border: { display: false } },
-      y: { ticks: { color: textClr, font: { size: 9, family: 'Inter,system-ui,sans-serif' }, callback: yFmt }, grid: { color: 'rgba(128,128,128,0.12)' }, border: { display: false } },
+      scales: _perfScales(textColor, m.tick),
     },
   });
-
-  const crosshair = {
-    id: 'crosshair',
-    afterDraw(chart) {
-      if (!chart.tooltip._active?.length) return;
-      const { ctx, scales: { x, y } } = chart;
-      const xPos = chart.tooltip._active[0].element.x;
-      ctx.save(); ctx.beginPath();
-      ctx.moveTo(xPos, y.top); ctx.lineTo(xPos, y.bottom);
-      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(128,128,128,0.25)';
-      ctx.setLineDash([3, 3]); ctx.stroke(); ctx.restore();
-    },
-  };
-
-  const xFmt = v => v.toFixed(2) + 'x';
-
-  // ── TVPI chart ──
-  const tvpiCtx = document.getElementById('perf-tvpi-chart').getContext('2d');
-  perfTvpiChartInst = new Chart(tvpiCtx, {
-    type: 'line', plugins: [crosshair],
-    data: { labels, datasets: [
-      { label: 'P75',  data: data.map(d => d.BENCHMARK_P75_TVPI), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-      { label: 'P50',  data: data.map(d => d.BENCHMARK_P50_TVPI), borderColor: '#A7AAAA', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#A7AAAA', fill: false, tension: 0.4 },
-      { label: 'Fund', data: data.map(d => d.TVPI),               borderColor: '#285DA3', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#285DA3', fill: false, tension: 0.4 },
-      { label: 'P25',  data: data.map(d => d.BENCHMARK_P25_TVPI), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-    ].filter(ds => ds.data.some(v => v != null))},
-    options: { ...baseOpts(xFmt) },
-  });
-
-  // ── DPI chart ──
-  const dpiCtx = document.getElementById('perf-dpi-chart').getContext('2d');
-  perfDpiChartInst = new Chart(dpiCtx, {
-    type: 'line', plugins: [crosshair],
-    data: { labels, datasets: [
-      { label: 'P75',  data: data.map(d => d.BENCHMARK_P75_DPI), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-      { label: 'P50',  data: data.map(d => d.BENCHMARK_P50_DPI), borderColor: '#A7AAAA', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#A7AAAA', fill: false, tension: 0.4 },
-      { label: 'Fund', data: data.map(d => d.DPI),               borderColor: '#285DA3', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#285DA3', fill: false, tension: 0.4 },
-      { label: 'P25',  data: data.map(d => d.BENCHMARK_P25_DPI), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-    ].filter(ds => ds.data.some(v => v != null))},
-    options: { ...baseOpts(xFmt) },
-  });
-
-  // ── Net IRR chart ──
-  const irrPct = v => (v * 100).toFixed(1) + '%';
-  const irrCtx = document.getElementById('perf-irr-chart').getContext('2d');
-  const irrLegend = document.getElementById('perf-irr-legend');
-  const hasBenchmarkIrr = data.some(d => d.BENCHMARK_P50_NET_IRR != null);
-  const irrDatasets = [
-    { label: 'P75',  data: data.map(d => d.BENCHMARK_P75_NET_IRR), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-    { label: 'P50',  data: data.map(d => d.BENCHMARK_P50_NET_IRR), borderColor: '#A7AAAA', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#A7AAAA', fill: false, tension: 0.4 },
-    { label: 'Fund', data: data.map(d => d.NET_IRR),               borderColor: '#285DA3', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#285DA3', fill: false, tension: 0.4 },
-    { label: 'P25',  data: data.map(d => d.BENCHMARK_P25_NET_IRR), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-  ].filter(ds => ds.data.some(v => v != null));
-  perfIrrChartInst = new Chart(irrCtx, { type: 'line', plugins: [crosshair], data: { labels, datasets: irrDatasets }, options: { ...baseOpts(irrPct) } });
-  if (irrLegend) {
-    const legendItems = [{ color: '#285DA3', label: 'Fund' }];
-    if (hasBenchmarkIrr) {
-      legendItems.push({ color: '#A7AAAA', label: 'P50 benchmark' }, { color: '#DEDFDF', label: 'P25 / P75' });
-    }
-    irrLegend.innerHTML = legendItems.map(i => `<span class="perf-legend-item"><span class="perf-legend-dot" style="background:${i.color}"></span>${i.label}</span>`).join('');
-  }
-
-  // ── MOIC chart ──
-  const moicEl = document.getElementById('perf-moic-chart');
-  if (moicEl) {
-    const moicCtx = moicEl.getContext('2d');
-    perfMoicChartInst = new Chart(moicCtx, {
-      type: 'line', plugins: [crosshair],
-      data: { labels, datasets: [
-        { label: 'P75',  data: data.map(d => d.BENCHMARK_P75_MOIC), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-        { label: 'P50',  data: data.map(d => d.BENCHMARK_P50_MOIC), borderColor: '#A7AAAA', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#A7AAAA', fill: false, tension: 0.4 },
-        { label: 'Fund', data: data.map(d => d.MOIC),               borderColor: '#285DA3', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#285DA3', fill: false, tension: 0.4 },
-        { label: 'P25',  data: data.map(d => d.BENCHMARK_P25_MOIC), borderColor: '#DEDFDF', borderWidth: 1, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#DEDFDF', fill: false, tension: 0.4 },
-      ].filter(ds => ds.data.some(v => v != null))},
-      options: { ...baseOpts(xFmt) },
-    });
-  }
 }
+
+function _perfSyncPeerMetric() {
+  document.querySelectorAll('#perf-peer-metric .perf-seg-btn').forEach(b => b.setAttribute('aria-checked', String(b.dataset.value === _perfPeerMetric)));
+}
+const _perfPeerMetricEl = document.getElementById('perf-peer-metric');
+if (_perfPeerMetricEl) _perfPeerMetricEl.innerHTML = _perfSegButtons(PERF_PEER_METRICS);
+_perfSyncPeerMetric();
+_perfPeerMetricEl?.addEventListener('click', e => {
+  const btn = e.target.closest('.perf-seg-btn');
+  if (!btn || btn.dataset.value === _perfPeerMetric || !_perfPeerData) return;
+  _perfPeerMetric = btn.dataset.value;
+  trackUi("change", "FundPerformance.PeerChart.Metric");
+  perfDrawCharts(_perfPeerData);
+});
 
 // ── User enrichment (get_current_user) → entitlement-gated skill directory ──
 // Fetch the signed-in user's Carta profile, log the FULL payload where the LLM client
@@ -1531,16 +2376,19 @@ function perfDrawCharts(data) {
 // The perf page is the whole artifact here, so it renders in flow rather than
 // as the overlay it is inside Carta Home.
 perfLoadAllFunds();
+perfRenderFundSwitcher();
 // Links to the Carta Home page that built this one, stamped in at render.
 (function () {
   const HOME_URL = "{{HOME_URL}}";
   const homeBtn = document.getElementById('perf-home-btn');
   if (!homeBtn || !HOME_URL) return;
   homeBtn.href = HOME_URL;
-  homeBtn.style.display = 'inline-flex';
+  homeBtn.hidden = false;
 })();
 window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => {
   if (perfCurrentFundUuid) perfLoadFund(perfCurrentFundUuid);
+  // Axis labels are painted on the canvas, so the overview graph redraws in the new scheme.
+  if (perfOverviewChartInst) { perfOverviewChartInst.destroy(); perfOverviewChartInst = null; perfDrawOverviewChart(); }
 });
 </script>
-<script type="application/json" id="artifact-baseline">{"version":null,"lines":"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"}</script>
+<script type="application/json" id="artifact-baseline">{"version":null,"lines":"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"}</script>

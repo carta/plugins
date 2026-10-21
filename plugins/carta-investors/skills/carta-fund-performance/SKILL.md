@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.104.2</carta-plugin>
+<carta-plugin>carta-investors:6.104.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -45,11 +45,14 @@ firm UUID or MCP server name is substituted at build time.
 
 | Section | Notes |
 |---|---|
-| All-funds table | Fund name, Net IRR, TVPI, DPI, MOIC, NAV, Total Value — sortable, top 50 funds by NAV |
-| Per-fund detail view | Time-series charts for TVPI, DPI, Net IRR and MOIC against peer benchmark percentiles (P25/P50/P75/P90) |
-| Fund selector | Dropdown on the fund title, to switch funds without returning to the list |
+| Overview graph | Net IRR, TVPI or DPI per fund, quarter by quarter, each with a dashed peer-median (P50) line when the cohort has one — modelled on Carta Home's Fund Performance tile, reading the same measures as the table (LP net IRR, LP DPI, LP TVPI). A "Compare funds" legend shows or hides each fund with an eye toggle (up to five), starting on the 3 largest funds by NAV; filters pick the metric, the period (1Y / 3Y / All) and whether the peer median shows. Hidden when no fund has quarterly history |
+| All-funds table | Fund name, Net IRR, TVPI, DPI and RVPI (LP only, as Carta's Fund Performance tab labels them), MOIC, Total value, NAV, Contributions, Distributions — top 50 funds by NAV, sortable by any column; a click anywhere on a row opens the fund |
+| Per-fund detail view | KPI strip with a Net IRR callout (net to LPs against the fund's gross IRR, and the gap in percentage points), then one chart of the fund against its vintage cohort — P25–P75 shaded, P50 dashed, a Net IRR / TVPI / DPI / MOIC switch — with a line naming the fund's quartile; below, a table of the LP-only figures against the total fund, its TVPI, DPI and RVPI worked out from the dollar rows so each column reconciles; MOIC is Carta's |
+| Fund switcher | The Schedule of Investments' "Fund" picker, listing the firm's funds: picking one opens its detail. On a fund, "← All funds" in place of the firm name returns to the list |
 
-Navigation: list view → click a fund row → detail view → "← Back to all funds".
+The page follows the Schedule of Investments layout: an "As of" month-end top right, the firm's name above the title,
+dotted-underlined labels that show a definition on hover, and shimmer placeholders while
+data loads.
 
 Amounts render in each fund's own `FUND_REPORTING_CURRENCY`. A fund with no reporting
 currency renders bare numbers — the artifact never assumes a currency.
@@ -113,16 +116,18 @@ Carta Home asked for it, return those lines with the URL instead of printing the
 ## Step 3 — Respond
 
 Say in one sentence that the dashboard is ready, and that clicking a fund opens its
-charts. Do not restate the metrics.
+chart against its peers. Do not restate the metrics.
 
 ## Error handling
 
 The artifact handles these itself — no action needed in the skill:
 
-- **No Carta MCP connected** → the page shows a "Connect Carta" prompt.
-- **No fund data returned** → the page shows an error with a Retry button.
-- **NULL benchmark percentiles** → illustrative trajectories are drawn, labelled
-  "Illustrative benchmark data".
+- **No Carta MCP connected** → the page says live data isn't available in this view.
+- **No fund data returned** → the page says no performance data is available.
+- **NULL benchmark percentiles** → the charts show the funds alone and say there is no
+  peer benchmark yet; nothing is drawn in place of missing data.
+- **The current, unfinished month** → the As of date reads "month to date", and those
+  figures stay out of the fund's chart.
 
 ## File structure
 
@@ -144,5 +149,6 @@ tell what the user changed. After editing the page, restamp it from the repo roo
 uv run plugins/carta-investors/skills/carta-fund-performance/scripts/customizations.py stamp plugins/carta-investors/skills/carta-fund-performance/references/artifact.html
 ```
 
-The CSP in the artifact runtime allows no external script, style or connect host, so
-everything is inlined and nothing may be converted to a CDN reference.
+The CSP in the artifact runtime allows no external host except Google Fonts, which serves
+the Inter stylesheet. Everything else is inlined, and nothing may be converted to a CDN
+reference.
