@@ -1,314 +1,162 @@
 ---
 name: adviser-tracker
 description: >
-  Shows the organization's top twenty M&A advisers (investment banks) as a page: each bank with
-  its logo, deals created per quarter and per year, relationship strength with our team and the
-  top contact, split into Tier 1 and Tier 2, with a year-over-year chart per bank and a monthly
-  deal chart for the last three years. Use this skill when the user says things like "adviser
-  tracker", "advisor tracker", "M&A adviser tracker", "show our advisers", "who are our top
-  banks", or "/adviser-tracker". For one adviser's record use search-companies.
+  Publishes the organization's top twenty M&A advisers (investment banks) as a live page: each
+  bank with its logo, deals created per quarter and per year, relationship strength with our
+  team and the top contact, split into Tier 1 and Tier 2, with a year-over-year chart per bank
+  and a monthly deal chart for the last three years. The page reads the stored tracker from
+  Carta when it opens, so it is current whenever it is opened. Use this skill when the user says
+  things like "adviser tracker", "advisor tracker", "M&A adviser tracker", "show our advisers",
+  "who are our top banks", or "/adviser-tracker". For one adviser's record use search-companies.
 allowed-tools:
-  - mcp__carta__crm_call_tool
+  # The only source for a connector's name
+  - list_connectors
+  # The fallback confirmation call for the connector, and the organization the published title names.
+  - mcp__carta__welcome
+  - mcp__claude_ai_Carta__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__carta__get_current_user
+  - mcp__claude_ai_Carta__get_current_user
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
+  # The warm-up and confirmation call: it starts the server's build when none is stored, and returns the state only.
   - mcp__carta__crm_read_tool
   - mcp__claude_ai_Carta__crm_read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_read_tool
-  - mcp__claude_ai_Carta__crm_call_tool
-  - mcp__Carta__crm_call_tool
-  - mcp__Carta__crm_read_tool
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_live_page.py" *)
   - Artifact
   - ToolSearch
-  - Write
-  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" *)
 version: 1.0.1
 model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.17.2</carta-plugin>
+<carta-plugin>carta-crm:1.18.0</carta-plugin>
 
 # Adviser Tracker
 
-The question this skill answers: **"Can you help me find the top twenty advisers in this
-tenant?"** It publishes the answer as **`<Title> - <Organization>`** (both come from the tool
-result), icon **handshake**. The page is a static snapshot. All three years are in it, so its year
-toggle needs no call.
+Publishes the tracker as **`M&A Adviser Tracker - <Organization>`**, icon **🤝**.
+
+**This skill never reads tracker data and never copies any.** The page fetches the stored
+tracker from Carta when someone opens it. A tracker that is not built yet, a build that failed,
+an organization without the tracker and a missing connector are states the page shows itself.
+The skill publishes a page for every one of them and never stops for them.
 
 ## Voice
 
 Never mention the template, the script, tool names, files, paths or this skill. Progress lines
-speak in the user's words: "Pulling your advisers", "Checking the numbers", "Building the
-tracker". Never describe a search or a retry. Fees are never added across currencies.
+speak in the user's words: "Setting up your tracker", "Publishing the page".
 
-## The page
+## The grant, and why it is this narrow
 
-One artifact holds three cards, and a View toggle (By mandate, By introducer & adviser) that
-switches all three together. By mandate is the default. The toggle is absent when the people
-view is missing. The cards: the tracker table (year toggle, Q1 to Q4, year total,
-relationship strength, top contact, by tier), deals by bank year over year, and deals created
-per month for the last three years. Fees show per currency. They are never converted and never
-summed across currencies. A bank with no logo gets an empty bordered tile, never initials.
+The page declares `crm_read_tool` and nothing else. **Every viewer of the URL inherits that
+grant**, and a non-empty `capabilities` object replaces the stored one on every republish.
+`crm_read_tool` cannot write. Do **not** add `crm_call_tool`: it reaches every write, and a
+viewer of a URL must not have that.
 
 ## Step 0: Gate
 
 Read `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` (the plugin's own
-`references/`, not this skill's). Do not search for it. When that path does not resolve, the
-gate is this one rule: `Artifact` is in this session. Pass silently.
+`references/`, not this skill's). Do not search for it.
 
-## Step 1: Fetch the advisers
+## Step 1: Start the build, and find the published tracker and the organization
 
-The Carta tools may be deferred. Load `crm_call_tool` and `crm_read_tool` with one tool search in the
-same turn that opens this skill, before the first call.
+The Carta tools may be deferred. Load `crm_read_tool` and `get_current_user` with one tool search
+in the same turn that opens this skill.
 
-Every call in this skill only reads. Send each one through `crm_read_tool`, which refuses a write, so
-the user is never asked to approve a write. Use `crm_call_tool` only in a session that has no
-`crm_read_tool`.
-
-1. Call `crm:get_deal_fields`.
-2. Pick the bank field by a fixed rule. Look only at company and company-list fields. Never pick a
-   field whose label mentions introducer, buy-side, buy side or pitched: a pitched field lists banks
-   that were asked, not the bank with the mandate. Take the first level that has a match:
-   1. the label mentions Mandate or bank, for example "Mandate (bank)";
-   2. the label mentions sell-side or sell side, for example "M&A adviser (sell-side)";
-   3. the label mentions adviser, advisor or M&A.
-
-   When several fields match at the same level, take the one with the shortest label, then the
-   first in field order.
-
-**Build on the server.** In ONE message, start the build with that field's id as `dealFieldId` (leave
-`dealFieldId` out when no field qualifies), and send the Step 2 check call beside it. The answer holds
-`buildId`:
+Then in ONE turn, as parallel calls, make these four calls:
 
 ```
-crm_read_tool({ "name": "crm:get_adviser_tracker_build", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker_page", "arguments": { "stateOnly": true } })
 ```
-
-Then wait for it. Each call waits up to 20 seconds on the server:
-
-```
-crm_read_tool({ "name": "crm:get_adviser_tracker_build_result", "arguments": { "buildId": "<buildId>" } })
-```
-
-While its `status` is `running`, call it again, one call per turn, at most 12 calls in all. When
-`status` is `done`, the answer holds both views and every logo: save it as the answer rules below say,
-skip the split run below, and build the page with `--build` in Step 4. A `people` that holds an `error` means the introducer and adviser
-view failed; the script drops it and adds its own notice line.
-
-Run the split run below instead, one time, when the build tool is unknown (an older environment),
-when the start call fails with any text but `adviser-tracker-not-configured:`, when `status` is
-`failed`, when the result call fails, when the build is still `running` after 12 calls, or when the
-build answer is cut, as below. Its own error rules and retry budgets apply.
-
-These rules hold for both paths:
-
-Step 4 carries one plain line in its notice that names the field used. When no field
-qualifies, leave `dealFieldId` out and say so in that line: deals are counted from every
-company field.
-
-Use an answer's saved path when it returns one: `crm_read_tool` returns a saved path when the
-surface saves an answer to a file. Otherwise write the answer to its own file in the outputs
-directory with `Write`, exactly as it came back. An answer without a saved path is cut when it is
-longer than 100 000 characters. When you cannot write an answer to its file exactly as it came back,
-for example because it is cut, never rebuild it from memory. For a cut build answer, run the split run
-below, one time. For the Mandate answer of the split run, stop. Tell the user the tracker could not be
-built because the CRM answer is too large to save. For the people answer, drop the people view as the
-people rules say.
-
-- **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, from the build or
-  the split run, or an unknown-tool error on the single call of the split run.
-  Build and publish nothing. Tell the user adviser tracking is not turned on for the organization, and stop.
-
-**The split run.**
-
-3. Plan two runs in ONE message, as two parallel calls. The Mandate run takes that field's id as
-   `dealFieldId`. The people run takes `linkBy` `dealPeople` and no `dealFieldId`. Each answer
-   holds `runId` and `shards`:
-
-```
-crm_read_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
-crm_read_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
-```
-
-   The people run counts a deal for a bank when an introducer or adviser on the deal works at
-   the bank today. It is a second view of the page.
-
-4. Fan out. In ONE turn, as parallel tool calls in one message, call
-   `crm:get_adviser_tracker_relationships` once for every number in `shards` of each run and
-   `crm:get_adviser_tracker_details` once for each run. Each call takes the `runId` of the run
-   that listed the shard. All of them go out together, never across turns.
-   Send the shard calls in any order. A plan has at most 12 shards. A shard can hold several
-   banks, and a large bank can span several shards. Never assume one shard per bank. Calling a
-   shard again redoes that shard.
-
-```
-crm_read_tool({ "name": "crm:get_adviser_tracker_relationships", "arguments": { "runId": "<runId>", "shard": <a number from shards> } })
-crm_read_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId": "<runId>" } })
-```
-
-   An error from a `crm:get_adviser_tracker_relationships` call or a
-   `crm:get_adviser_tracker_details` call, here or in the retry below, does not stop the run
-   unless its text is listed below. Go on to the result call below. It decides.
-
-5. Collect the results. In ONE message, call the result once for each run, with `includeLogos` false.
-   The answer then has no logos and stays small. Never ask for a long answer that you have to copy:
-   the cut rule above applies. Each answer has the shape the build script reads:
-
-```
-crm_read_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>", "includeLogos": false } })
-```
-
-   Each answer carries a `checksum` of its deal counts. The build script checks it. Never retype a
-   count or edit an answer.
-
-An error comes back as the plain text of the tool answer, not as JSON. Find it by the text it
-contains. Handle these, from whichever Mandate call returns them:
-
-- **Incomplete.** The text contains `adviser_tracker_run_incomplete:` and names the missing
-  parts, for example `adviser_tracker_run_incomplete: missingShards=[3,7] missingDetails=false`.
-  Call again only the parts the text names: the shard calls for the numbers in `missingShards`,
-  and the details call when it says `missingDetails=true`. Send them in one turn, one time. Then
-  call the result again. When it is still incomplete, stop with the plain error below. Build
-  nothing from a partial result.
-- **Run not found.** The text contains `adviser_tracker_run_not_found`. The run is unknown or
-  expired. A run part lives 15 minutes. Plan a new Mandate run with `crm:get_adviser_tracker_plan`,
-  one time per skill run. Then fan out and collect again. A second
-  `adviser_tracker_run_not_found` stops with the plain error below.
-- **Unknown shard.** The text contains `adviser_tracker_unknown_shard`. Stop with the plain error
-  below. Never retry.
-- **Cache unavailable.** The text contains `adviser_tracker_cache_unavailable`. The run store did
-  not keep a write. Make the single Mandate call below instead.
-
-The retry budgets are one incomplete retry and one new-plan retry per skill run. There are no
-other retries.
-
-These rules are for the Mandate run only. Any error in the people run drops the people view:
-an error from its plan or its result, a tool that rejects `linkBy` (an older environment), or an
-incomplete or expired run. Then publish the Mandate view alone and add one plain line to the
-notice in Step 4 that the introducer and adviser view is not shown. This never stops the run, is
-never retried, and no other tool fills it in. A new Mandate plan never plans the people run again.
-
-When `crm:get_adviser_tracker_plan` is an unknown tool, this environment has no split tools. Make
-two single calls instead, in one message, and use their answers as the results. The people call
-follows the people rules above:
-
-```
-crm_read_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
-crm_read_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
-```
-
-- **Any other error.** In the Mandate run, except for a `crm:get_adviser_tracker_relationships`
-  or `crm:get_adviser_tracker_details` call, stop. Tell the user the adviser
-  tracker could not be loaded right now. Never fill a gap from `search_deals`,
-  `search_companies` or any other tool.
-
-6. Get the logos. The logos call needs the rows of the results, so it follows them in the next turn.
-   Take the `domain` and `companyId` of every row of both results, once for each domain, and call
-   the logos tool once with all of them. Its answer holds a data URI for each bank that has a logo,
-   about 300 characters each. Use the saved path when the answer returns one. Otherwise, on the next
-   turn, write the answer to its own file with `Write`, exactly as it came back. Always write it and
-   pass it as `--logos`: it is small enough to copy, so never leave the logos out because of its size.
-   When a row of a result already carries a `logo.dataUri` that is not null, the server is older and
-   has sent its logos inside the result: skip this call. When the tool is unknown, or it fails, skip
-   it and go on: the errors above do not apply to this call, and the page shows empty tiles. Never
-   fetch a logo from any other source.
-
-```
-crm_read_tool({ "name": "crm:get_adviser_tracker_logos", "arguments": { "banks": [ { "domain": "<a row's domain>", "companyId": "<its companyId>" } ] } })
-```
-
-## Step 2: Check the banks
-
-The check stays on the Mandate view. Send its call in the same message as the build start, or as
-the fan-out of the split run, so it costs no turn. Do not retry it. When it fails, skip the check.
-
-It counts the deals created this year for every bank at once, with `crm:aggregate_deals`. Pass
-`group_by` as the bank field id in an array. Pass one filter: the deal created-date field `between`
-the first day of the year and today. A filter has `field_id`, `operator` and `value`. Leave `metric`
-out: every group already carries a `count`. Make no other check call: fees come in the result rows.
-
-```
-crm_read_tool({ "name": "crm:aggregate_deals", "arguments": { "group_by": ["<bank field id>"], "filters": [ { "field_id": "createdAt", "operator": "between", "value": ["<YYYY>-01-01", "<today YYYY-MM-DD>"] } ] } })
-```
-
-Compare each group's `count` with the sum of that bank's counts for the current year in the Mandate
-view: its `dealsByMonth` counts for the year in a split result, the last 12 numbers of its
-`monthCounts` in a build answer. Compare by bank name. When a bank is not in the CRM answer, or the counts
-differ, write one plain line that names up to three banks with the largest gap and says what the
-CRM shows for each. Step 4 carries it in the notice.
-
-## Step 3: Split the tiers
-
-The script splits the tiers by a fixed rule, once for each year of the window: Tier 1 is the top
-half of the banks by deals created in that year, with the three-year total as the tie-break. Tier 2
-is the rest. The table shows the tiers of the year it shows. The tier cards span every year, so they show
-the tiers of the current year and say so. Do not choose, change or override the tiers.
-
-## Step 4: Build the page
-
-```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --people-result <people file> --logos <logos file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
-```
-
-After a build, pass the saved build answer alone, in place of `--result`, `--people-result` and `--logos`:
-
-```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --build <build file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
-```
-
-The notice belongs to the Mandate view. The script gives the introducer and adviser view its own fixed line that says banks are counted from the introducers and advisers on each deal.
-
-When `${CLAUDE_PLUGIN_ROOT}` is empty in this session, run the script by its path in the directory that
-holds this SKILL.md, for example `uv run "<the directory that holds this SKILL.md>/scripts/build_tracker.py" --result <file> ...`.
-That command is not in `allowed-tools`, so the user may be asked to approve it once.
-
-Leave out `--logos` when Step 1 skipped the logos call. Leave out `--people-result` when the people run failed. The page then has no view toggle. When
-the script drops a people file it cannot use, it adds its own line to the notice and builds the
-Mandate view. The notice also carries the plain line from Step 1 when the people run failed.
-
-`<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`.
-
-The script checks every row of both views and prints one line to stderr for each check a row fails.
-A `check_domain:` line names a bank that has deals and no interaction, with the domains the tool
-suggested for it. A `check_row:` line names a row whose counts contradict each other. Keep the lines
-for Step 6. They are never put on the page, and a bank is never dropped or given a strength label
-because of them.
-
-The script exits with a typed code when the input is wrong (`result_not_json`, `result_empty`,
-`result_invalid`, `result_corrupt`, `row_invalid`, `not_configured`, `no_result`,
-`build_not_done`, `template_invalid`). A `result_corrupt` means a file differs from the tool answer.
-Write that file again from the answer, exactly as it came back, and build one more time. Any other
-code, or a second `result_corrupt`: tell the user the tracker could not be built and stop. Do not
-repair the data by hand. A logos file the script cannot use (`logos_invalid`) is left out with a line on stderr, and
-the page shows empty tiles.
-
-## Step 5: Publish
 
 ```
 Artifact({action: "list", scope: "mine", limit: 50})
 ```
 
-Find the artifact titled exactly `<Title> - <Organization>` and keep its `url`. An artifact for
-another organization is not a match. Then publish. `url` is the only difference between a first
-publish and a redeploy.
+plus `get_current_user`, for its organization, and `list_connectors`, for Step 2.
+
+The page call is a warm-up. It answers with a state and no tracker data, and when no page is
+stored it starts the server's build at once, so the build runs while you publish. Whatever state
+it answers, including `not_configured` or an error, carry on: the page shows that state itself.
+Never call it again and never read data with it.
+
+One artifact per organization, so two never write over each other. If `get_current_user` fails or
+names no organization, leave the organization out and carry on.
+
+Look for an artifact titled exactly **`M&A Adviser Tracker - <Organization>`** (with no
+organization, **`M&A Adviser Tracker`**). An artifact for a different organization is not a
+match. Keep its `url`.
+
+**It is there, its label is `Live adviser tracker`, and the user did not ask for a rebuild:**
+the page is live, so it is already current. Go to Step 5 with that `url` and publish nothing.
+A rebuild is asked for with words like "rebuild", "republish", "redeploy" or "update the
+template".
+
+**A match with any other label, or a label the list does not show,** is a snapshot from before
+the page was live, or cannot be told from one. Go on to Step 2 and redeploy it in place at the
+kept `url`. Publishing again is always safe.
+
+**No match:** go on to Step 2 and omit `url` on the first publish.
+
+## Step 2: The connector's name
+
+Read `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md` (the plugin's own
+`references/`, not this skill's). Do not search for it. Follow it: take the name from the Step 1
+`list_connectors` answer, and ask the user when several connectors match. The Step 1 page call is
+the confirmation call the gate asks for: when it answered, with any state, the connector answers.
+Only when it failed, confirm with one `welcome` call.
+
+When there is no Carta connector, or the confirmation call does not answer, do not stop and do
+not ask: use `Carta`, publish the page anyway, and say so in Step 5. The page then tells each
+viewer to add the Carta connector, and it works once they do.
+
+## Step 3: Write the page
+
+Run this as its own command on one line, with the script path exactly as written and every
+argument quoted. Chain nothing before or after it. Do not search for the script.
+
+```
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_live_page.py" --connector "<connector display name>" --organization "<organization>" --out "<outputs-directory>/adviser-tracker-<slug>.html"
+```
+
+`<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`, or `tracker`
+with no organization. Leave `--organization` out when there is none.
+
+## Step 4: Publish
+
+`url` is the only difference between a first publish and a redeploy.
 
 ```
 Artifact({
   file_path: "<outputs-directory>/adviser-tracker-<slug>.html",
-  url: "<url from the list, omitted on a first publish>",
-  description: "Top advisers by deals created, relationship strength and top contact, by tier.",
-  icon: "handshake",
-  label: "Rebuilt from the CRM"
+  url: "<url from Step 1 — omit entirely on a first publish>",
+  description: "Your top M&A advisers: deals per quarter and year, relationship strength and top contact, by tier.",
+  favicon: "🤝",
+  label: "Live adviser tracker",
+  capabilities: {
+    mcp: {
+      servers: [
+        {
+          server: "<connector display name>",
+          tools: ["crm_read_tool"]
+        }
+      ]
+    }
+  }
 })
 ```
 
-Pass no `capabilities`: the page is static and reads nothing when opened. Omit `icon` on a
-redeploy.
+> **No `title` here.** The tool takes it from the file's `<title>` tag. **Omit `favicon` on a
+> redeploy**, so the tab keeps its icon.
 
-## Step 6: Reply
+## Step 5: Reply
 
-Give the URL and one line: it is a snapshot as of today. For each `check_domain:` line the build printed, say that the bank has deals and no interactions, so its
-relationship cells show "No interactions found". Ask the user to confirm the possible domain the line names,
-or to check the bank's domain when the line names none. For each `check_row:` line, say that the CRM result
-for that bank contradicts itself, give the line's reason, and ask the user to check that bank in the CRM. Do
-not ask about a domain. Never count a suggested domain yourself. Name the check result from Step 2 when
-it disagreed. For an empty organization, say there are no advisers yet.
+Give the user the URL and say what the page does:
+
+- It reads **live**: opening it, or its Refresh button, shows the newest stored tracker. The
+  server refreshes the stored tracker every hour, so the time on the page is at most about an
+  hour old.
+- The first time, or after a long pause, the page may say it is building. It updates by itself.
+- It **cannot write** to their CRM.
+- Anyone they share it with reads this organization's tracker through it. Say this plainly.
+- When Step 2 found no connector: the page asks each viewer to add the Carta connector.

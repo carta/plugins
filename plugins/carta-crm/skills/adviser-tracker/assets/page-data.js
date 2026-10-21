@@ -250,7 +250,56 @@
     return answer.logos != null ? applyLogos(data, answer.logos) : data;
   }
 
-  var api = { buildPageData: buildPageData };
+  var HEX = /^#[0-9a-fA-F]{6}$/;
+  var NEUTRAL = '#6b7280';
+
+  function monogramTile(initials, color) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="' + (HEX.test(color) ? color : NEUTRAL)
+      + '"/><text x="32" y="32" fill="#ffffff" font-family="system-ui,sans-serif" font-size="24" font-weight="600" text-anchor="middle" dominant-baseline="central">'
+      + String(initials).replace(/[&<>"'\uD800-\uDFFF]/g, '') + '</text></svg>';
+    return { dataUri: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) };
+  }
+
+  // The first and last word, as crm-api's initials() takes them, by whole characters.
+  function nameInitials(name) {
+    var words = String(name).trim().split(/\s+/).filter(Boolean);
+    var chars = function (word) { return Array.from(word); };
+    return (words.length > 1 ? chars(words[0])[0] + chars(words[words.length - 1])[0] : chars(words[0] || '?').slice(0, 2).join('')).toUpperCase();
+  }
+
+  function sentOr(logo, name) {
+    var sent = isObject(logo) ? logo : {};
+    return { initials: isString(sent.initials) && sent.initials ? sent.initials : nameInitials(name), color: sent.color };
+  }
+
+  // Every tile that has no logo gets the bank's monogram, and the header gets the tenant's, so no tile is blank.
+  // A monogram is drawn only here: the built page and the parity tests leave an empty tile.
+  function withMonograms(data, answer) {
+    var byDomain = {};
+    [answer.mandate, answer.people].forEach(function (view) {
+      if (isObject(view) && Array.isArray(view.rows)) {
+        view.rows.forEach(function (row) {
+          if (isObject(row) && isObject(row.adviser) && isString(row.adviser.domain)) byDomain[row.adviser.domain.toLowerCase()] = row.adviser;
+        });
+      }
+    });
+    function fill(view) {
+      var sentTenant = sentOr(isObject(answer.tenant) ? answer.tenant.logo : null, view.tenant.name);
+      var tenant = view.tenant.logo.dataUri ? view.tenant
+        : Object.assign({}, view.tenant, { logo: monogramTile(sentTenant.initials, sentTenant.color) });
+      var rows = view.rows.map(function (row) {
+        if (row.adviser.logo.dataUri) return row;
+        var sent = sentOr(byDomain[row.adviser.domain.toLowerCase()], row.adviser.name);
+        return Object.assign({}, row, { adviser: Object.assign({}, row.adviser, { logo: monogramTile(sent.initials, sent.color) }) });
+      });
+      return Object.assign({}, view, { tenant: tenant, rows: rows });
+    }
+    var out = fill(data);
+    if (data.views) out.views = data.views.map(fill);
+    return out;
+  }
+
+  var api = { buildPageData: buildPageData, withMonograms: withMonograms };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TrackerPageData = api;
 })(typeof window !== 'undefined' ? window : this);
