@@ -323,99 +323,115 @@
     .run-btn:hover { text-decoration: underline; }
     .run-btn svg { width: 14px; height: 14px; }
 
-    /* ── What to try next ── */
+    /* ── Suggested for you: editable prompt cards ── */
     .cap-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 40px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 56px;
     }
-    .cap-card {
-      border: 1px solid var(--ink-color-global-border-subtle);
-      box-shadow: var(--ink-elevation-global-shadow-small);
-      padding: 16px;
+    @media (max-width: 720px) {
+      .cap-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .cap-card { display: flex; flex-direction: column; gap: 12px; }
+    /* Category chip. Local, non-Ink pairs from the Carta Home v2 design: Ink has no
+       purple, ochre or tag-weight green step. */
+    .cap-tag {
+      align-self: flex-start;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .cap-tag--reporting  { background: light-dark(#EFEAF8, #2A2140); color: light-dark(#5B3FA8, #C9B8F0); }
+    .cap-tag--accounting { background: light-dark(#E5F3EC, #15302A); color: light-dark(#105242, #8FD3BC); }
+    .cap-tag--portfolio  { background: var(--ink-color-global-surface-lightgray-default); color: var(--ink-color-global-text-default); }
+    .cap-tag--finance    { background: light-dark(#FFF1D6, #3A2E12); color: light-dark(#7A5200, #F0CC7A); }
+    .cap-box {
+      flex: 1;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      min-height: 120px;
-      cursor: pointer;
-      transition: filter 0.12s;
-      position: relative;
-      overflow: hidden;
+      gap: 8px;
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-subtle);
+      padding: 14px 10px 10px 14px;
+      box-shadow: var(--ink-elevation-global-shadow-small);
+      transition: border-color 80ms ease-out, box-shadow 80ms ease-out;
     }
-    .cap-card:hover { filter: brightness(0.96); }
-    /* Dot pattern overlay: two radial-gradient tiers — coarser bright dots + finer dim dots —
-       at non-overlapping offsets so every 4th dot in the grid appears as an "accent" dot.
-       mask-image fades dots from invisible on the left to full opacity on the right. */
-    .cap-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-image:
-        radial-gradient(circle, light-dark(rgba(110,60,220,0.30), rgba(180,130,255,0.30)) 1.5px, transparent 1.5px),
-        radial-gradient(circle, light-dark(rgba(110,60,220,0.12), rgba(180,130,255,0.12)) 1.5px, transparent 1.5px);
-      background-size: 20px 20px, 10px 10px;
-      background-position: 3px 3px, 8px 8px;
-      -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 50%, black 100%);
-      mask-image: linear-gradient(to right, transparent 0%, transparent 50%, black 100%);
-      pointer-events: none;
-      z-index: 0;
-    }
-    .cap-card-text, .cap-card-icon { position: relative; z-index: 1; }
-    /* Gradient fills — hex values pulled from Ink token definitions above */
-    /* light-dark() accepts <color> only — use it on each stop, not the whole gradient.
-       Light stops: near-white tint → feedback-subtle base (lightest Ink semantics).
-       Dark stops: pulled from the same Ink palette family, kept subtle. */
-    .cap-card-blue {
-      background: linear-gradient(145deg,
-        light-dark(#FFFFFF, #1E1438) 0%,
-        light-dark(#FFFFFF, #1E1438) 30%,
-        light-dark(#EDE8FF, #2A1C50) 100%
-      );
-    }
-    .cap-card-teal {
-      background: linear-gradient(145deg,
-        light-dark(#FFFFFF, #1A1035) 0%,
-        light-dark(#FFFFFF, #1A1035) 30%,
-        light-dark(#EAE4FF, #261848) 100%
-      );
-    }
-    .cap-card-amber {
-      background: linear-gradient(145deg,
-        light-dark(#FFFFFF, #201542) 0%,
-        light-dark(#FFFFFF, #201542) 30%,
-        light-dark(#EEE8FF, #2E2058) 100%
-      );
-    }
-    .cap-card-violet {
-      background: linear-gradient(145deg,
-        light-dark(#FFFFFF, #1C1240) 0%,
-        light-dark(#FFFFFF, #1C1240) 30%,
-        light-dark(#E8E0FF, #281A52) 100%
-      );
+    .cap-box:hover { border-color: var(--ink-color-global-border-default); }
+    .cap-box:focus-within {
+      border-color: var(--ink-color-global-border-focus-default);
+      box-shadow: 0 0 0 2px var(--ink-color-global-border-focus-light);
     }
     .cap-card-text {
-      font-size: 13px;
-      line-height: 1.5;
-      color: var(--ink-color-global-text-default);
       flex: 1;
-    }
-    .cap-card-text::before { content: '\201C'; }
-    .cap-card-text::after  { content: '\201D'; }
-    .cap-card-icon {
-      align-self: flex-start;
-      margin-top: 10px;
-      background: none;
-      border: none;
-      padding: 0;
-      cursor: pointer;
+      min-height: 63px;
+      font-size: 14px;
+      line-height: 21px;
       color: var(--ink-color-global-text-default);
-      font-size: 11px;
-      font-style: normal;
-      font-family: inherit;
-      white-space: nowrap;
-      display: flex;
+      outline: none;
+      cursor: text;
+      overflow-wrap: anywhere;
+    }
+    /* A blinking text cursor at the end of the prompt says "you can edit this"; it
+       goes once the viewer clicks in and the real caret takes over. */
+    .cap-box:hover:not(:focus-within) .cap-card-text::after {
+      content: "";
+      display: inline-block;
+      width: 1.5px;
+      height: 1.1em;
+      margin-left: 1px;
+      vertical-align: text-bottom;
+      background: var(--ink-color-global-text-default);
+      animation: cap-caret 1.06s steps(1) infinite;
+    }
+    @keyframes cap-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    .cap-actions { position: relative; display: flex; justify-content: flex-end; }
+    .cap-copy {
+      display: inline-flex;
       align-items: center;
+      gap: 6px;
+      height: 28px;
+      padding: 0 10px 0 12px;
+      border: none;
+      border-radius: var(--ink-size-global-radius-subtle);
+      background: transparent;
+      color: var(--ink-color-global-text-default);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .cap-copy:hover,
+    .cap-box.copied .cap-copy { background: var(--ink-color-global-surface-lightgray-default); }
+    .cap-copy:active { transform: scale(.97); background: var(--ink-color-global-surface-lightgray-hover); }
+    .cap-copied-tip {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 4px);
+      padding: 6px 8px;
+      border-radius: var(--ink-size-global-radius-subtle);
+      background: var(--ink-color-global-brand-black);
+      color: var(--ink-color-global-brand-white);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(0);
+      transition: opacity .2s, transform .3s cubic-bezier(.34, 1.56, .64, 1);
+    }
+    .cap-box.copied .cap-copied-tip { opacity: 1; transform: translateY(-8px); }
+    @media (prefers-reduced-motion: reduce) {
+      .cap-copied-tip { transition: none; }
+      .cap-box.copied .cap-copied-tip { transform: none; }
+      .cap-copy:active { transform: none; }
+      .cap-box:hover:not(:focus-within) .cap-card-text::after { animation: none; }
     }
 
     /* ── Preview table ── */

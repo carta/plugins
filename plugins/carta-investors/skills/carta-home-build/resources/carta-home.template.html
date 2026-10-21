@@ -102,33 +102,11 @@
 
   </section>
 
-  <!-- ── What to try next ── -->
-  <section>
-    <p class="section-label">What to try next</p>
-
-    <!-- Personalized recommendations — populated by renderCapabilities() in app.js -->
-    <div class="cap-grid" id="cap-grid-dynamic" style="display:none"></div>
-
-    <!-- Static fallback — shown when recommendations are unavailable -->
-    <!-- These four prompts must match CAP_STATIC_PAD in carta-home.app.js (a test compares them). -->
-    <div class="cap-grid" id="cap-grid-static">
-      <div class="cap-card cap-card-blue" onclick="this.querySelector('.cap-card-icon').click()">
-        <div class="cap-card-text">Use my firm's tear sheet template and generate tear sheets for this quarter</div>
-        <button class="cap-card-icon" data-prompt="Use my firm's tear sheet template and generate tear sheets for this quarter" onclick="event.stopPropagation(); capCopy(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt</button>
-      </div>
-      <div class="cap-card cap-card-teal" onclick="this.querySelector('.cap-card-icon').click()">
-        <div class="cap-card-text">Show me my firm's balance sheet as of this month</div>
-        <button class="cap-card-icon" data-prompt="Show me my firm's balance sheet as of this month" onclick="event.stopPropagation(); capCopy(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt</button>
-      </div>
-      <div class="cap-card cap-card-amber" onclick="this.querySelector('.cap-card-icon').click()">
-        <div class="cap-card-text">Prepare our Form ADV: Regulatory AUM and Schedule D by fund</div>
-        <button class="cap-card-icon" data-prompt="Prepare our Form ADV: Regulatory AUM and Schedule D by fund" onclick="event.stopPropagation(); capCopy(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt</button>
-      </div>
-      <div class="cap-card cap-card-violet" onclick="this.querySelector('.cap-card-icon').click()">
-        <div class="cap-card-text">Compare YTD actuals against the budget</div>
-        <button class="cap-card-icon" data-prompt="Compare YTD actuals against the budget" onclick="event.stopPropagation(); capCopy(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt</button>
-      </div>
-    </div>
+  <!-- ── Suggested for you ── -->
+  <section id="prompts-section">
+    <p class="section-label">Suggested for you</p>
+    <!-- Filled by renderCapabilities() in app.js: personalized prompts, padded from CAP_STATIC_PAD. -->
+    <div class="cap-grid" id="cap-grid"></div>
   </section>
 
   <!-- ── What's new ── -->

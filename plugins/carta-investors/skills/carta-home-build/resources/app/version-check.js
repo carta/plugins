@@ -73,7 +73,7 @@ function dismissUpdateBanner(version) {
   if (slot) slot.innerHTML = "";
 }
 
-// Same affordance as the capabilities cards: icon + "Copy this prompt", swapping to
+// Icon + "Copy this prompt", swapping to
 // "✓ Copied" for a beat so the click is acknowledged in place rather than by a toast.
 const COPY_ICON =
   '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';

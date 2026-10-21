@@ -165,7 +165,8 @@ let _fundColorMap  = {};        // { fundName → CSS colour } — populated in 
 // for any number of funds by the benchmark chart and the AGGREGATE_FUND_METRICS fallback.
 const _BENCH_COLORS = ["--carta-series-blue", "--carta-series-teal", "--carta-series-pink", "--carta-series-gray", "--carta-series-lilac"];
 const _benchToken = i => _BENCH_COLORS[i % _BENCH_COLORS.length];
-let _firmDisplayName = 'your firm'; // set by fetchLiveData once firm is resolved
+const FIRM_PLACEHOLDER = 'your firm';
+let _firmDisplayName = FIRM_PLACEHOLDER; // set by fetchLiveData once firm is resolved
 
 // ── Resolve a CSS custom property to a concrete color Chart.js can paint ──
 // getPropertyValue() on a custom property returns the *unsubstituted* token
@@ -673,6 +674,7 @@ async function fetchLiveData() {
     // Show the resolved firm in the page title and fill dynamic prompts
     if (firmName) {
       _firmDisplayName = firmName;
+      refreshPromptFirm();
       const title = document.getElementById("firm-title");
       if (title) {
         document.getElementById("firm-title-name").textContent = firmName;
@@ -1237,83 +1239,232 @@ function copyPrompt(btn) {
   writeClipboard(text, feedback);
 }
 
-// Keep in sync with the static fallback cards (#cap-grid-static) in carta-home.template.html;
-// a test compares them.
-// Static prompts used to pad "What to try next" when the user has fewer than 4
-// personalized recs, and the prompts behind the markup's static fallback cards.
-// `topics` drive de-duplication: a pad is skipped when a personalized prompt
-// already covers the same subject, so we never show two cards about one thing.
+// Static prompts used to pad "Suggested for you" when the user has fewer than 4
+// personalized recs, and the whole row when they have none. `[[…]]` marks the part a
+// user most often edits; it types in when the row scrolls into view. A name in
+// PROMPT_VARS fills in at render (the last finished quarter, its end date, the firm);
+// anything else inside the brackets is kept as written. Its category chip comes from its
+// words (promptTag), like any other prompt's. `topics` drive de-duplication: a pad is
+// skipped when a personalized prompt already covers the same subject.
 const CAP_STATIC_PAD = [
   {
-    text: "Use my firm's tear sheet template and generate tear sheets for this quarter",
+    text: "Use my firm's tear sheet template and generate tear sheets for [[QUARTER]]",
     topics: ["tear sheet", "tearsheet"],
   },
   {
-    text: "Show me my firm's balance sheet as of this month",
+    text: "Show me my firm's balance sheet as of [[QUARTER_END]]",
     topics: ["balance sheet"],
   },
   {
-    text: "Prepare our Form ADV: Regulatory AUM and Schedule D by fund",
-    topics: ["form adv", "regulatory aum", "aum", "assets under management"],
+    text: "Show me the portfolio companies for each fund at [[FIRM]]",
+    topics: ["portfolio compan", "holdings"],
   },
   {
-    text: "Compare YTD actuals against the budget",
+    text: "Compare YTD actuals against the budget for [[QUARTER]] by [[vendor]]",
     topics: ["budget", "actuals"],
   },
 ];
 
-const CAP_CARD_COLORS = ["cap-card-blue", "cap-card-teal", "cap-card-amber", "cap-card-violet"];
-const CAP_COPY_SVG = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt';
+// The day before the current quarter began: the end of the last finished quarter,
+// the one a tear sheet or balance sheet is usually run for.
+function lastQuarterEnd(now) {
+  return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 0);
+}
+const PROMPT_VARS = {
+  QUARTER: now => { const d = lastQuarterEnd(now); return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`; },
+  QUARTER_END: now => fmtDate(lastQuarterEnd(now)),
+  FIRM: () => _firmDisplayName,
+};
 
-// One "Copy this prompt" card; shared by "What to try next" and "What's new".
-function capCardHtml(prompt, i, trackId = "CartaHome.Capabilities.CopyPrompt") {
-  const escaped = prompt.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  return `<div class="cap-card ${CAP_CARD_COLORS[i % CAP_CARD_COLORS.length]}" onclick="this.querySelector('.cap-card-icon').click()">
-      <div class="cap-card-text">${escaped}</div>
-      <button class="cap-card-icon" data-prompt="${escaped}" data-track="${trackId}" onclick="event.stopPropagation(); capCopy(this)">${CAP_COPY_SVG}</button>
+// A prompt as [{text}] runs and [{token, name?}] editable parts. A static pad marks its
+// parts; a personalized prompt gets its firm name, quarters, dates and relative periods
+// marked, so it fills in the same way.
+const MONTHS_RE = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*";
+function promptParts(prompt, now = new Date()) {
+  const parts = [];
+  const push = (text, token, name) => {
+    if (token != null) parts.push({ token, name });
+    else if (text) parts.push({ text });
+  };
+  if (typeof prompt !== "string") {
+    let last = 0;
+    prompt.text.replace(/\[\[([^\]]+)\]\]/g, (m, word, at) => {
+      push(prompt.text.slice(last, at));
+      if (PROMPT_VARS[word]) push(null, PROMPT_VARS[word](now), word);
+      else push(null, word);
+      last = at + m.length;
+      return m;
+    });
+    push(prompt.text.slice(last));
+    return parts;
+  }
+  const firm = _firmDisplayName && _firmDisplayName !== FIRM_PLACEHOLDER ? _firmDisplayName : null;
+  const alts = [
+    `\\bQ[1-4](?:\\s?(?:'|\u2019)?\\d{2,4})?\\b`,
+    `\\b${MONTHS_RE} \\d{1,2}, \\d{4}\\b`,
+    `\\b(?:this|last) (?:quarter|month|year)\\b`,
+    `\\bYTD\\b`,
+  ];
+  if (firm) alts.unshift(firm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(alts.join("|"), "g");
+  let last = 0, m;
+  while ((m = re.exec(prompt))) {
+    push(prompt.slice(last, m.index));
+    push(null, m[0], firm && m[0] === firm ? "FIRM" : undefined);
+    last = m.index + m[0].length;
+  }
+  push(prompt.slice(last));
+  return parts;
+}
+const promptText = prompt => promptParts(prompt).map(p => p.text ?? p.token).join("");
+
+// Category chip over each prompt. No prompt carries a category; promptTag() reads one
+// off its words, first match wins.
+const PROMPT_TAGS = {
+  reporting:  { label: "Reporting",  words: ["tear sheet", "tearsheet", "report", "lp update", "agm", "deck", "investor letter"] },
+  accounting: { label: "Accounting", words: ["balance sheet", "p&l", "trial balance", "journal", "general ledger", "nav", "reconcil"] },
+  finance:    { label: "Finance",    words: ["budget", "actuals", "expense", "manco", "aum", "form adv", "fee", "capital call", "distribution"] },
+  portfolio:  { label: "Portfolio",  words: ["portfolio", "holding", "investment", "valuation", "moic", "irr", "tvpi", "cap table", "compan"] },
+};
+const PROMPT_TAG_FALLBACK = "portfolio";
+
+function promptTag(text) {
+  const t = String(text || "").toLowerCase();
+  const hit = Object.keys(PROMPT_TAGS).find(k => PROMPT_TAGS[k].words.some(w => t.includes(w)));
+  return hit || PROMPT_TAG_FALLBACK;
+}
+
+const CAP_COPY_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+
+// One editable prompt card; shared by "Suggested for you" and "What's new".
+// `prompt` is a CAP_STATIC_PAD entry or a bare prompt string.
+function capCardHtml(prompt, trackId = "CartaHome.Capabilities.CopyPrompt") {
+  const tag = promptTag(promptText(prompt));
+  const body = promptParts(prompt).map(p => p.text != null ? escHtml(p.text)
+    : `<span class="cap-token" data-token="${escHtml(p.token)}"${p.name ? ` data-var="${p.name}"` : ""}>${escHtml(p.token)}</span>`).join("");
+  return `<div class="cap-card">
+      <span class="cap-tag cap-tag--${tag}">${PROMPT_TAGS[tag].label}</span>
+      <div class="cap-box">
+        <div class="cap-card-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Prompt">${body}</div>
+        <div class="cap-actions">
+          <button class="cap-copy" data-track="${trackId}" onclick="capCopy(this)"><span class="cap-copy-label">Copy</span>${CAP_COPY_SVG}</button>
+          <span class="cap-copied-tip" role="status">Copied. Paste into chat.</span>
+        </div>
+      </div>
     </div>`;
 }
 
-// "What to try next": the first 4 non-gap personalized cards,
-// open slots padded from CAP_STATIC_PAD. Returns the prompts now on screen so the
-// "What's new" row below never repeats one; when the markup's static fallback stays
-// up (no personalized recs), those four static prompts are what shows.
+// "Suggested for you": the first 4 non-gap personalized prompts, open slots padded
+// from CAP_STATIC_PAD (all four pads when there are no personalized ones). Returns the
+// prompts now on screen so the "What's new" row below never repeats one.
 function renderCapabilities(recs) {
-  const dynamic = document.getElementById("cap-grid-dynamic");
-  const fallback = document.getElementById("cap-grid-static");
-  const staticShown = CAP_STATIC_PAD.map(p => p.text);
-  if (!dynamic) return staticShown;
-
+  const grid = document.getElementById("cap-grid");
   const liveAll = Array.isArray(recs) ? recs.filter(r => !r.is_skill_gap && r.recommended_prompt) : [];
-  if (!liveAll.length) {
-    // No personalized recs — keep static fallback visible (default state)
-    return staticShown;
-  }
-
-  const live = liveAll.slice(0, 4);
-
-  const prompts = live.map(r => r.recommended_prompt);
+  const cards = liveAll.slice(0, 4).map(r => r.recommended_prompt);
 
   // Pad to 4, preferring prompts on subjects the personalized set doesn't cover.
   // Each duplicate filtered here is a rec already occupying a card, so the
   // preferred pass alone fills the grid in every case except one prompt matching
   // two pads. The second pass backfills from what was skipped so the grid is
   // always 4 cards.
-  const haystack = prompts.join(" ").toLowerCase();
+  const haystack = cards.join(" ").toLowerCase();
   const covered = pad => pad.topics.some(t => haystack.includes(t));
+  const has = pad => cards.includes(pad);
   for (const pad of CAP_STATIC_PAD) {
-    if (prompts.length >= 4) break;
-    if (!covered(pad) && !prompts.includes(pad.text)) prompts.push(pad.text);
+    if (cards.length >= 4) break;
+    if (!covered(pad) && !has(pad)) cards.push(pad);
   }
   for (const pad of CAP_STATIC_PAD) {
-    if (prompts.length >= 4) break;
-    if (!prompts.includes(pad.text)) prompts.push(pad.text);
+    if (cards.length >= 4) break;
+    if (!has(pad)) cards.push(pad);
   }
 
-  dynamic.innerHTML = prompts.map((p, i) => capCardHtml(p, i)).join("");
-  dynamic.style.display = "";
-  if (fallback) fallback.style.display = "none";
-  return prompts;
+  // The row paints at load and again once get_current_user answers. The grid is left
+  // alone when its prompts are unchanged, or once the viewer has pressed or focused into
+  // it (typeTokensWhenSeen marks it touched): rebuilding would drop their edits and type
+  // the blanks in again. Either way the prompts on screen are what's returned, so What's
+  // new never repeats one.
+  const shown = cards.map(promptText);
+  if (!grid) return shown;
+  if ("touched" in grid.dataset) return JSON.parse(grid.dataset.shown);
+  grid.dataset.shown = JSON.stringify(shown);
+  const key = JSON.stringify(cards.map(c => (typeof c === "string" ? c : c.text)));
+  if (grid.dataset.prompts !== key) {
+    grid.dataset.prompts = key;
+    grid.innerHTML = cards.map(c => capCardHtml(c)).join("");
+    typeTokensWhenSeen(grid);
+  }
+  return shown;
+}
+
+// The editable parts type themselves in, one after another left to right, the first
+// time the row is 40% on screen, so each card reads as a sentence with a blank that
+// fills in. Skipped under reduced motion and where there's no observer.
+const CAP_TYPE_DELAY_MS = 300, CAP_TYPE_CHAR_MS = 55, CAP_TYPE_GAP_MS = 420;
+// Once the viewer touches the row (a press anywhere in it, or focus), every blank holds
+// its full word and no timer writes to it again, so Copy never takes a half-typed
+// prompt and typing never lands on top of the viewer's edits.
+function typeTokensWhenSeen(grid) {
+  // One pair of listeners per grid records the touch and stops whichever paint's typing
+  // is current, so a row repainted before it was touched is still stopped by the touch.
+  grid._stopTyping = () => {};
+  if (!grid._touchWired) {
+    grid._touchWired = true;
+    const touch = () => {
+      if ("touched" in grid.dataset) return;
+      grid.dataset.touched = "";
+      grid._stopTyping();
+    };
+    grid.addEventListener("pointerdown", touch, { capture: true });
+    grid.addEventListener("focusin", touch, { capture: true });
+  }
+  if (typeof IntersectionObserver === "undefined") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  const tokens = Array.from(grid.querySelectorAll(".cap-token"));
+  if (!tokens.length) return;
+  tokens.forEach(t => { t.textContent = ""; t.dataset.typing = ""; });
+  let timer = null;
+  const later = (fn, ms) => { timer = setTimeout(fn, ms); };
+  const io = new IntersectionObserver(entries => {
+    if (!entries.some(e => e.isIntersecting)) return;
+    io.disconnect();
+    later(() => typeToken(tokens, 0, later), CAP_TYPE_DELAY_MS);
+  }, { threshold: 0.4 });
+  grid._stopTyping = () => {
+    clearTimeout(timer);
+    io.disconnect();
+    tokens.forEach(t => { t.textContent = t.dataset.token; delete t.dataset.typing; });
+  };
+  io.observe(grid);
+}
+
+// Reads the word when its turn comes, so a firm name that resolved meanwhile types in.
+// `later` schedules the next tick where typeTokensWhenSeen can cancel it.
+function typeToken(tokens, i, later) {
+  const t = tokens[i];
+  if (!t || !t.isConnected) return;
+  const word = t.dataset.token;
+  let n = 0;
+  const step = () => {
+    t.textContent = word.slice(0, ++n);
+    if (n < word.length) { later(step, CAP_TYPE_CHAR_MS); return; }
+    delete t.dataset.typing;
+    if (t.dataset.token !== word) t.textContent = t.dataset.token;
+    later(() => typeToken(tokens, i + 1, later), CAP_TYPE_GAP_MS);
+  };
+  step();
+}
+
+// fetchLiveData resolves the firm after the row first paints. A late firm name replaces a
+// blank only while it still shows the page's own value: a blank waiting to be typed picks
+// it up from data-token, and a blank the viewer edited is left alone.
+function refreshPromptFirm() {
+  const word = PROMPT_VARS.FIRM(new Date());
+  document.querySelectorAll('.cap-token[data-var="FIRM"]').forEach(t => {
+    const untouched = !("typing" in t.dataset) && t.textContent === t.dataset.token;
+    t.dataset.token = word;
+    if (untouched) t.textContent = word;
+  });
 }
 
 // ── "What's new": Contentful prompts for skills that recently went live ──
@@ -1347,7 +1498,7 @@ function whatsNewPluginAccess(profile) {
 // shown above -> newest first -> cap. No padding: with nothing qualifying the row hides.
 //   items:   [{text, plugin, goLiveDate}] from _listWhatsNewPrompts
 //   access:  whatsNewPluginAccess() result
-//   exclude: prompts already on screen in "What to try next"
+//   exclude: prompts already on screen in "Suggested for you"
 function selectWhatsNew(items, access, exclude, now = Date.now()) {
   const norm = t => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
   const windowStart = now - WHATS_NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;
@@ -1377,23 +1528,25 @@ function renderWhatsNew(items, access, shownAbove) {
     section.hidden = true;
     return;
   }
-  grid.innerHTML = prompts.map((p, i) => capCardHtml(p, i, "CartaHome.WhatsNew.CopyPrompt")).join("");
+  grid.innerHTML = prompts.map(p => capCardHtml(p, "CartaHome.WhatsNew.CopyPrompt")).join("");
   section.hidden = false;
 }
 
 function capCopy(btn) {
-  // Each row tags its cards (capCardHtml's trackId) so What's new copies are counted apart
-  // from What to try next; the template's static fallback cards carry no tag.
-  trackHome("click", btn.dataset.track || "CartaHome.Capabilities.CopyPrompt");
-  const text = btn.dataset.prompt || '';
-  const copySvg = CAP_COPY_SVG;
+  // Each row tags its cards (capCardHtml's trackId) so What's new copies are counted
+  // apart from Suggested for you.
+  trackHome("click", btn.dataset.track);
+  const box = btn.closest(".cap-box");
+  // innerText, so whatever the viewer typed into the prompt is what gets copied.
+  const text = box.querySelector(".cap-card-text").innerText.trim();
   const feedback = () => {
-    btn.textContent = '✓ Copied';
-    btn.classList.add('copied');
-    setTimeout(() => {
-      btn.innerHTML = copySvg;
-      btn.classList.remove('copied');
-    }, 2000);
+    btn.querySelector(".cap-copy-label").textContent = "Copied";
+    box.classList.add("copied");
+    clearTimeout(btn._copiedTimer);
+    btn._copiedTimer = setTimeout(() => {
+      btn.querySelector(".cap-copy-label").textContent = "Copy";
+      box.classList.remove("copied");
+    }, 2200);
   };
   writeClipboard(text, feedback);
 }
@@ -1475,7 +1628,7 @@ async function fetchUserEnrichment() {
   // No poll needed: claude.use("mcp") settles on its own once the view knows.
   if (!(await mcpAvailable())) { markEnrichmentDone(); return; }
   try {
-    // Start the "What's new" fetch now but don't wait on it: "What to try next" and the
+    // Start the "What's new" fetch now but don't wait on it: "Suggested for you" and the
     // Skill Directory entitlements depend only on get_current_user. The row below starts
     // hidden, so filling it later causes no reflow above it.
     const whatsNewP = _listWhatsNewPrompts();
@@ -1519,6 +1672,7 @@ function markEnrichmentDone() {
 console.log("[carta-home] build {{BUILD_ID}}");
 trackHome("render", "CartaHome.View");
 renderDashboardLaunchers();  // static — no firm context needed, so it paints before any fetch
+renderCapabilities([]);      // the static prompts paint first; get_current_user's recs replace them
 fetchLiveData();       // also triggers fetchBenchmarkData() once firmId is resolved
 fetchUserEnrichment(); // get_current_user → debug log + entitlement directory filter
 // Safety net: never leave the directory stuck on "Personalizing…" if enrichment hangs.

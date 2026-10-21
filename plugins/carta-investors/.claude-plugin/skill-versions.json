@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.15.14",
-    "headline": "New \"What's new\" row under What to try next: copyable prompts for skills launched in the last 60 days."
+    "version": "1.15.15",
+    "headline": "Suggested for you: editable prompt cards with a category tag and a Copy button."
   },
   "carta-workhub-build": {
     "version": "1.10.3",
