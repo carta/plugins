@@ -443,6 +443,16 @@ a tab — so it prints the same em dash under `Budget tab`:
 |---|---|---|---|
 | 7 | — | `<line>`, `<line>` +4 more | `<value>` |
 
+A near match is an inference too, but one that is not always applied:
+wording that shortens or misspells a value ("Atlas Prog" for "Atlas
+Program"). A clear one is applied when that
+value has spend on one of the line's own GL accounts, or when the client
+confirmed it; otherwise it is offered as a suggestion on the line's own
+scope question instead, because a resemblance in wording alone has
+matched a meals line to an office pantry. A confirmation skips the spend
+check on every later build: a confirmed programme with no spend yet this
+year reports $0, not every dollar its accounts saw.
+
 **One row per inference, not per line.** "Lines under this heading mean
 this value" is one question however many rows it touches, and a line added
 next quarter inherits the answer instead of reopening it.
