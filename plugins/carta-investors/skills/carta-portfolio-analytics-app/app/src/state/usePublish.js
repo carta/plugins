@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { trackClick } from "../analytics.js";
+import { WIRE_FIELDS } from "../model/pendingEdits.js";
+import { firmQuery } from "./firmQuery.js";
 
 const PUBLISH_POLL_MS = 2000;
-// cur rides along for additions (no cached point to read a currency from); the
-// server treats it as optional so an older tab's payload still publishes.
-const WIRE_FIELDS = ["id", "companyId", "metricKey", "period", "freq", "fromDate", "appliesTo", "value", "cur"];
+const SIGNED_OUT = "Your Carta session ended, so this tab can't see how the publish finished. Sign in again to see its results.";
+// The firm's publish status. A 401 is a final answer for this tab: it can read nothing until
+// the user signs in again. The run's status is kept per firm, not per session, so it reads as
+// "signed_out" — never as the run's outcome — and the stamped edits wait for a signed-in read.
+// Null for any other error answer; rejects when no answer came. Callers ask again only on null
+// or a rejection.
+const readPublishStatus = (firm) => fetch(`/api/publish/status${firmQuery(firm)}`)
+  .then((r) => (r.ok ? r.json() : r.status === 401 ? { status: "signed_out" } : null));
+const BUSY = "Another publish is already running. Publish again once it finishes.";
 
-const newRunId = () => (globalThis.crypto?.randomUUID ? crypto.randomUUID() : `run-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+export const newRunId = () => (globalThis.crypto?.randomUUID ? crypto.randomUUID() : `run-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 /** Just the capability bit — the app's feature-flag stand-in. Components that only decide
  *  whether to SHOW editing affordances use this instead of the full hook, so they don't
@@ -23,16 +31,17 @@ export function useCanPublish() {
 }
 
 /** Publish lifecycle for staged KPI corrections, polled from /api/publish/status.
- *  publish(edits) POSTs the wire fields of each edit under a fresh runId and returns that
- *  runId; the caller stamps it onto the edits (model/pendingEdits.markPublishing) and folds
- *  `results` back in once status is "done" (applyPublishResults). canPublish reflects
- *  /api/capabilities.publish. */
-export default function usePublish() {
+ *  publish(edits, runId) POSTs the wire fields of each edit under the caller's runId and
+ *  returns null once the run has started, or why it didn't. The caller stamps runId onto the edits
+ *  (model/pendingEdits.markPublishing) before calling — the Worker answers only once the
+ *  whole run is done — and folds `results` back in once status is "done" (applyPublishResults). canPublish reflects
+ *  /api/capabilities.publish. `firm` is the dashboard's slug; the Worker serves many firms
+ *  and needs it, the local server (one firm per launch) ignores it. */
+export default function usePublish(firm) {
   const [st, setSt] = useState({ status: "idle" });
   const [canPublish, setCanPublish] = useState(false);
   const pollRef = useRef(null);
   const genRef = useRef(0);
-  const failedRunIdRef = useRef(null);
 
   const stopPolling = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
 
@@ -45,11 +54,10 @@ export default function usePublish() {
     if (s.status === "done") {
       setSt({ status: "done", runId: s.runId, results: s.results || [], warnings: s.warnings || [] });
     } else if (s.status === "error") {
-      if (failedRunIdRef.current !== s.runId) {
-        trackClick("PortfolioAnalytics.Corrections.PublishFailed");
-        failedRunIdRef.current = s.runId;
-      }
       setSt({ status: "error", runId: s.runId, message: s.message, detail: s.detail, needsHuman: !!s.needs_human });
+    } else if (s.status === "signed_out") {
+      // No runId: the button settles no edits on it, so the stamps wait for a signed-in read.
+      setSt({ status: "error", message: SIGNED_OUT });
     } else {
       setSt({ status: "idle" });
     }
@@ -59,50 +67,74 @@ export default function usePublish() {
     stopPolling();
     const tick = async () => {
       let s;
-      try { s = await fetch("/api/publish/status").then((r) => r.json()); }
+      try { s = await readPublishStatus(firm); }
       catch (e) { return; }  // transient blip — keep polling
-      applyStatus(s);
+      if (s) applyStatus(s);
     };
     pollRef.current = setInterval(tick, PUBLISH_POLL_MS);
     tick();
-  }, [applyStatus]);
+  }, [applyStatus, firm]);
 
   useEffect(() => {
     let alive = true;
     const gen = genRef.current;
     fetch("/api/capabilities").then((r) => r.json())
       .then((c) => { if (alive) setCanPublish(!!c?.publish); }).catch(() => {});
-    fetch("/api/publish/status").then((r) => r.json()).then((s) => {
+    readPublishStatus(firm).then((s) => {
       if (!alive || !s || genRef.current !== gen) return;
       if (s.status === "running") startPolling();
       else applyStatus(s);
     }).catch(() => {});
-    return () => { alive = false; stopPolling(); };
-  }, [startPolling, applyStatus]);
+    return () => { alive = false; genRef.current += 1; stopPolling(); };
+  }, [startPolling, applyStatus, firm]);
 
-  const publish = useCallback(async (edits) => {
-    if (st.status === "running") return null;
+  const publish = useCallback(async (edits, runId) => {
+    if (st.status === "running") return BUSY;
     genRef.current += 1;
-    const runId = newRunId();
     trackClick("PortfolioAnalytics.Corrections.PublishStart");
     setSt({ status: "running", runId, progress: "Starting…" });
+    // A 4xx is a refusal before the run was claimed. A 5xx or a dropped connection can come
+    // after the Worker claimed it, so follow the run when its status names it: once stamped,
+    // an edit leaves publishing only through a status naming its run, or a refusal. Only a
+    // status the server returned settles that, and a read with no answer, or another error, is
+    // tried again. A 401 settles nothing: the tab can't read until the user signs in, so the
+    // stamp stays and the run's per-firm status settles it on a signed-in read. So do a reset
+    // and an unmount: the next mount's status read takes over.
+    const claimed = async () => {
+      const gen = genRef.current;
+      for (;;) {
+        const s = await readPublishStatus(firm).catch(() => null);
+        if (genRef.current !== gen) return true;
+        if (s?.status === "signed_out") { applyStatus(s); return true; }
+        if (s) {
+          if (s.runId !== runId) return false;
+          startPolling();
+          return true;
+        }
+        await new Promise((r) => setTimeout(r, PUBLISH_POLL_MS));
+      }
+    };
     try {
       const res = await fetch("/api/publish-edits", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ runId, edits: edits.map((e) => Object.fromEntries(WIRE_FIELDS.map((k) => [k, e[k]]))) }),
+        body: JSON.stringify({ runId, firm, edits: edits.map((e) => Object.fromEntries(WIRE_FIELDS.map((k) => [k, e[k]]))) }),
       });
       // 409 = another tab already started one; adopt and follow its progress.
-      if (res.status === 409) { startPolling(); return null; }
-      if (res.ok) { startPolling(); return runId; }
+      if (res.status === 409) { startPolling(); return BUSY; }
+      if (res.ok) { startPolling(); return null; }
+      if (res.status >= 500 && await claimed()) return null;
       let body = {};
       try { body = await res.json(); } catch (e) { /**/ }
-      setSt({ status: "error", runId, message: body.error === "bad_edit" ? "One of the corrections is malformed." : `Couldn't start the publish (${res.status}).` });
-      return null;
+      const message = body.error === "bad_edit" ? "One of the corrections is malformed." : `Couldn't start the publish (${res.status}).`;
+      setSt({ status: "error", runId, message });
+      return message;
     } catch (e) {
-      setSt({ status: "error", runId, message: e.message || "Couldn't start the publish." });
-      return null;
+      if (await claimed()) return null;
+      const message = e.message || "Couldn't start the publish.";
+      setSt({ status: "error", runId, message });
+      return message;
     }
-  }, [st.status, startPolling]);
+  }, [st.status, startPolling, firm]);
 
   const reset = useCallback(() => { genRef.current += 1; stopPolling(); setSt({ status: "idle" }); }, []);
 

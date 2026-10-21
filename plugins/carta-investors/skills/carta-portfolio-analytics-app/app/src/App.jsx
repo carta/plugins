@@ -435,7 +435,7 @@ export default function App({ firm }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 12,
             borderBottom: "1px solid var(--ink-color-global-border-subtle)" }}>
             <ConflictsButton variant="sidebar" data={data} dashboard={dashboard} />
-            <PublishEditsButton variant="sidebar" data={data} dashboard={dashboard} />
+            <PublishEditsButton variant="sidebar" firm={firm} data={data} dashboard={dashboard} />
           </div>
         )}
         <div style={{ padding: "4px 12px 0", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -460,7 +460,7 @@ export default function App({ firm }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Mark branding={data.branding} size={24} />
         <span style={{ ...serif, fontSize: FS.h3, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{resolvedFirmName}</span>
-        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton firm={firm} datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} /><PublishEditsButton data={data} dashboard={dashboard} /><ConflictsButton data={data} dashboard={dashboard} />{themeToggle}
+        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton firm={firm} datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} /><PublishEditsButton firm={firm} data={data} dashboard={dashboard} /><ConflictsButton data={data} dashboard={dashboard} />{themeToggle}
       </div>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
         {NAV_TABS.map((t) => {

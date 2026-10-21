@@ -10,6 +10,9 @@ export const EDITABLE_UNITS = new Set(["Dollar", "Number", "Percentage", "Percen
 // isn't editable: the editor's output wouldn't fit the unit Carta stores it under.
 // Mirrors publish.py's QUAL_UNIT_KIND; keep the two identical.
 export const QUAL_UNIT_KIND = { Boolean: "boolean", Date: "date", Text: "text" };
+// The fields of an edit that go over the wire to the publish endpoint (serve.py and the
+// Worker). cur is optional there: it only matters for additions.
+export const WIRE_FIELDS = ["id", "companyId", "metricKey", "period", "freq", "fromDate", "appliesTo", "value", "cur"];
 export const EDIT_STATUSES = ["draft", "publishing", "published", "failed", "conflict"];
 
 /** A reported reading store_kpis can write: a numeric Data Collection KPI or

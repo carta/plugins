@@ -6,6 +6,7 @@
 // still load. A missing/unwritten file (server returns {error:"not_ready"} with no
 // ETag) starts from EMPTY, saved on the first edit.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { firmQuery } from "./firmQuery.js";
 
 const EMPTY = { version: 1, widgets: [], customMetrics: [], notes: {}, rules: [], views: [], cellFormats: {},
   // ids of DEFAULT_FORMULAS already offered — keeps a deleted default deleted
@@ -25,7 +26,7 @@ const EMPTY = { version: 1, widgets: [], customMetrics: [], notes: {}, rules: []
   pendingEdits: [] };
 
 export default function useDashboard(firm) {
-  const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";
+  const q = firmQuery(firm);
   const [doc, setDoc] = useState(null);
   const timer = useRef(null);
   const pending = useRef(null);

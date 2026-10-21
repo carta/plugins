@@ -4,7 +4,7 @@ import { FS, sans } from "./theme.js";
 import { fmtVal, shortDate } from "./charts.jsx";
 import { metricOf, companyOf } from "../model/kpi.js";
 import { publishableEdits, markPublishing, applyPublishResults, failRun, discardEdit } from "../model/pendingEdits.js";
-import usePublish from "../state/usePublish.js";
+import usePublish, { newRunId } from "../state/usePublish.js";
 import { trackClick } from "../analytics.js";
 import { useOpenCorrections } from "./correctionEvents.js";
 
@@ -22,7 +22,7 @@ const subtle = { ...sans, fontSize: FS.small, color: "var(--ink-color-global-tex
 const TONE = { draft: "warning", publishing: "warning", published: "info", failed: "negative" };
 const LABEL = { draft: "draft", publishing: "publishing…", published: "pending refresh", failed: "failed" };
 
-function EditRow({ e, data, onDiscard }) {
+function EditRow({ e, data, onDiscard, running }) {
   const m = metricOf(data, e.metricKey) || { label: e.metricKey, unit: "Number" };
   const c = companyOf(data, e.companyId) || { name: e.companyId };
   const cur = e.cur || data.source?.currency;
@@ -33,7 +33,9 @@ function EditRow({ e, data, onDiscard }) {
           {c.name} · {m.label} · {shortDate(e.period, e.freq === "Q")}
         </div>
         <Badge tone={TONE[e.status] || "neutral"}>{LABEL[e.status] || e.status}</Badge>
-        {e.status !== "publishing" && (
+        {/* A publishing edit can be discarded once this tab follows no live run: the status that
+            would settle it may never come (a POST that never landed, a lost race between tabs). */}
+        {(e.status !== "publishing" || !running) && (
           <button type="button" onClick={() => onDiscard(e.id)} aria-label={`Discard correction to ${m.label}`}
             style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-color-global-text-subtle)", fontSize: FS.h3, lineHeight: 1, padding: "0 2px" }}>×</button>
         )}
@@ -48,13 +50,13 @@ function EditRow({ e, data, onDiscard }) {
 
 /** "Publish N changes": reviews the staged KPI corrections, sends the publishable ones
  *  through usePublish, and folds the per-edit results back into the portfolio doc. */
-export default function PublishEditsButton({ data, dashboard, variant }) {
+export default function PublishEditsButton({ firm, data, dashboard, variant }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useDismissable(open, setOpen, ref);
   // A conflict dot's click belongs to the Resolve-conflicts panel, not here.
   useOpenCorrections((edit) => { if (edit?.status !== "conflict") setOpen(true); });
-  const st = usePublish();
+  const st = usePublish(firm);
   const inSidebar = variant === "sidebar";
   // Conflicts never appear here — they have their own view and publishing can't clear them.
   const edits = (dashboard?.doc?.pendingEdits || []).filter((e) => e.status !== "conflict");
@@ -62,27 +64,37 @@ export default function PublishEditsButton({ data, dashboard, variant }) {
   const appliedRun = useRef(null);
 
   // Fold a finished run in exactly once. "error" moves its publishing edits to failed
-  // (publishable again) but does NOT reset — the error block must stay visible.
+  // (publishable again) but does NOT reset — the error block must stay visible. The status is
+  // the firm's last run, read on every load, so only a tab holding that run's stamped edits
+  // folds, tracks or shows it; anyone else's run is cleared unseen.
   useEffect(() => {
-    if (!st.runId || appliedRun.current === st.runId || !dashboard?.update) return;
+    if (!st.runId || appliedRun.current === st.runId || !dashboard?.doc || !dashboard.update) return;
+    if (st.status !== "done" && st.status !== "error") return;
+    const stamped = (dashboard.doc.pendingEdits || []).some((e) => e.runId === st.runId && e.status === "publishing");
+    if (!stamped) { st.reset(); return; }
+    appliedRun.current = st.runId;
     if (st.status === "done") {
-      appliedRun.current = st.runId;
       const now = new Date().toISOString();
       dashboard.update((d) => applyPublishResults(d, st.runId, st.results, now));
       trackClick("PortfolioAnalytics.Corrections.PublishDone");
       st.reset();
-    } else if (st.status === "error") {
-      appliedRun.current = st.runId;
+    } else {
       dashboard.update((d) => failRun(d, st.runId, st.message));
+      trackClick("PortfolioAnalytics.Corrections.PublishFailed");
     }
-  }, [st.status, st.runId]);
+  }, [st.status, st.runId, !!dashboard?.doc]);
 
   if (!edits.length) return null;
 
+  // Stamp the batch before the POST: the Worker answers only once the run is done, and a
+  // status that names this run (done, interrupted, error) must find exactly these edits.
+  // A cell re-edited meanwhile becomes an unstamped draft the results leave alone.
   const run = async () => {
     const batch = ready;
-    const runId = await st.publish(batch);
-    if (runId) dashboard.update((d) => markPublishing(d, batch.map((e) => e.id), runId));
+    const runId = newRunId();
+    dashboard.update((d) => markPublishing(d, batch.map((e) => e.id), runId));
+    const notStarted = await st.publish(batch, runId);
+    if (notStarted) dashboard.update((d) => failRun(d, runId, notStarted));
   };
   const discard = (id) => { trackClick("PortfolioAnalytics.Corrections.Discard"); dashboard.update((d) => discardEdit(d, id)); };
 
@@ -110,7 +122,7 @@ export default function PublishEditsButton({ data, dashboard, variant }) {
           )}
           <div style={subtle}>Corrections stay marked pending until the next data refresh confirms them.</div>
           <div style={{ marginTop: 8 }}>
-            {edits.map((e) => <EditRow key={e.id} e={e} data={data} onDiscard={discard} />)}
+            {edits.map((e) => <EditRow key={e.id} e={e} data={data} onDiscard={discard} running={running} />)}
           </div>
           {st.canPublish ? (
             n > 0 && (

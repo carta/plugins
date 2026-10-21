@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { setTrackingFirm } from "../analytics.js";
+import { firmQuery } from "./firmQuery.js";
 
 export default function useKpi(firm) {
-  const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";
+  const q = firmQuery(firm);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [step, setStep] = useState(null);
