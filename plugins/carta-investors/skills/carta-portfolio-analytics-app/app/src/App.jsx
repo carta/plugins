@@ -20,6 +20,7 @@ import { withCurrency, presentCurrencies, DEFAULT_CURRENCY } from "./model/curre
 import { withPendingEdits, reconcileEdits } from "./model/pendingEdits.js";
 import { seedDefaultFormulas } from "./model/formula.js";
 import { seedFavorites } from "./model/favorites.js";
+import { migrateCompanyIds } from "./model/companyIds.js";
 import Overview from "./views/Overview.jsx";
 import PivotDashboard from "./views/PivotDashboard.jsx";
 import Coverage from "./views/Coverage.jsx";
@@ -237,6 +238,16 @@ export default function App({ firm }) {
     () => withCustomMetrics(withCurrency(withPendingEdits(rawData, pendingEdits), currency), customMetrics),
     [rawData, editsKey, customKey, currencyKey],
   );
+  // Move the doc's per-company state from a company's legacyIds onto its id (see
+  // model/companyIds.js). Once per rawData, and declared first so the seeders and
+  // reconcileEdits below see company ids.
+  const migratedRef = useRef(null);
+  useEffect(() => {
+    if (!dashboard.doc || !rawData || migratedRef.current === rawData) return;
+    migratedRef.current = rawData;
+    dashboard.update((d) => migrateCompanyIds(d, rawData.companies));
+  }, [dashboard.doc, rawData]);
+
   // Seed the built-in formulas (Gross Profit Margin %) the first time a firm's doc loads, so
   // the derived KPI is already available everywhere instead of waiting for someone
   // to open the builder. seedDefaultFormulas returns null once there's nothing to

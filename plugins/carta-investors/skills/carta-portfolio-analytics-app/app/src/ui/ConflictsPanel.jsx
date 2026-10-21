@@ -98,7 +98,7 @@ export function ConflictsButton({ data, dashboard, variant }) {
   const resolveGroup = (g, keep) => {
     trackClick(keep ? "PortfolioAnalytics.Corrections.ConflictKeepMine" : "PortfolioAnalytics.Corrections.ConflictTakeCartas");
     setResolvedRows((r) => [...r, ...g.edits.map((e) => ({ edit: e, keep }))]);
-    // One update, folded over ONLY this group's open conflicts — resolving Nova's
+    // One update, folded over ONLY this group's open conflicts — resolving November's
     // group must never touch Beta LLC's, and vice versa.
     dashboard.update((d) => g.edits.reduce((acc, e) => (keep ? keepMine(acc, e, now()) : takeCartas(acc, e.id)), d));
   };
