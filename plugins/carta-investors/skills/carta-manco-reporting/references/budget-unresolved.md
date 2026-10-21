@@ -456,8 +456,19 @@ the row's `addr` gives it (`inference:<key>`, minus the prefix):
 ```
 
 `confirmed` stops it being asked again. `rejected` also stops the value
-being applied — the lines go back to reporting their accounts whole. Both
-outrank the wording on every later build.
+being applied — the lines go back to reporting their accounts whole: the
+heading copied onto each line stops narrowing it too, and the near-match
+pass never puts the value back. Both outrank the wording on every later
+build.
+
+Two things never become an inference at all. A heading never matches a
+value made only of words that identify nothing: filler such as a vendor
+called "Expenses", or a vendor or sub-account named only in Carta's own
+account words ("Other Income", "Bank Charges"). A reporting-tag value named
+like an account ("Marketing") is still a cost centre and still matches. And
+a line whose recorded answer is `"scope": null` covers its accounts whole,
+so no wording is matched against it and the heading copied onto it does
+not narrow it.
 
 **Say the open item out loud.** The gaps line names the count awaiting
 confirmation, and it belongs in the read-out even when the operator

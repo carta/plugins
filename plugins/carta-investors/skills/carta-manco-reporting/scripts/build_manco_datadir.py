@@ -561,8 +561,30 @@ def _norm_account(value):
 
 # A value read off a line's own wording, rather than stated by the workbook
 # in a column of its own. TAG_VALUE is the crosstab's own column: the firm
-# wrote the value there, so nothing was inferred.
+# wrote the value there, so nothing was inferred. An outline line's
+# tag_value is a copy of the heading above it, and is matched as that
+# heading — a "subsection" inference (see claim_dimension_values).
 INFERRED_FROM = ("sub_account", "vendor", "label", "subsection", "section")
+
+# The fields that are a heading the line sits under, not the line itself.
+# A value that names nothing never matches one: the heading "Professional
+# Expenses" is not a vendor called "Expenses". See _names_nothing.
+HEADING_FIELDS = ("subsection", "section")
+
+
+def _names_nothing(value, account_words):
+    """Whether a firm value is made only of words that identify nothing.
+
+    Filler ("Expenses", "Other") identifies nothing whatever the source. A
+    vendor or sub-account named only in Carta's account words ("Other
+    Income", "Bank Charges") is a bookkeeping catch-all. A reporting-tag
+    value named like an account ("Marketing") is a cost centre the firm set
+    up to slice its spend, so account words don't count against it.
+    """
+    dead = SCOPE_STOPWORDS
+    if value["source"] != "reporting_tag":
+        dead = dead | account_words
+    return not (_label_tokens(value["value"]) - dead)
 
 
 def inference_key(scope, field):
@@ -573,6 +595,11 @@ def inference_key(scope, field):
     next quarter inherits the answer instead of reopening it.
     """
     return "|".join([field, scope["source"], scope.get("category") or "", scope["value"]])
+
+
+def _rejected(decisions, scope, field):
+    """Whether the client rejected `scope` read off `field`."""
+    return (decisions or {}).get(inference_key(scope, field), {}).get("status") == "rejected"
 
 
 def read_inference_decisions(dashboard_dir):
@@ -604,6 +631,7 @@ def claim_dimension_values(rows, census, aliases=None, account_names=None,
     real money to the wrong line.
     """
     by_norm = claimable_index(census)
+    account_words = generic_scope_words(account_names)
     # The client's own mapping file already states what their wording means
     # in Carta's terms. Reading it beats asking them the same question.
     alias_norm = {}
@@ -612,18 +640,22 @@ def claim_dimension_values(rows, census, aliases=None, account_names=None,
         if len(vals) == 1:
             alias_norm[_norm_label(wording)] = by_norm[_norm_label(vals[0])]
 
-    def resolve(text):
+    def resolve(text, heading=False):
         norm = _norm_label(text)
         if not norm:
             return None
         if norm in by_norm:
-            return by_norm[norm]
-        if norm in alias_norm:
-            return alias_norm[norm]
-        toks = _label_tokens(text)
-        cands = [c for n, c in by_norm.items() if _label_tokens(n) <= toks]
-        # Two values both inside one label names neither.
-        return cands[0] if len(cands) == 1 else None
+            hit = by_norm[norm]
+        elif norm in alias_norm:
+            return alias_norm[norm]     # the client's own mapping file says so
+        else:
+            toks = _label_tokens(text)
+            cands = [c for n, c in by_norm.items() if _label_tokens(n) <= toks]
+            # Two values both inside one label names neither.
+            hit = cands[0] if len(cands) == 1 else None
+        if hit and heading and _names_nothing(hit, account_words):
+            return None
+        return hit
 
     # The words each Carta account name is made of. A label that adds nothing
     # to one of them names that account, however the firm abbreviates it.
@@ -631,7 +663,19 @@ def claim_dimension_values(rows, census, aliases=None, account_names=None,
     account_tokens = [t for t in account_tokens if t]
 
     claims = []
+    # The subsection header the current row sits under. A shared report's
+    # rows arrive without `subsection`, so sitting under a header row is how
+    # a line's copied-down tag_value is told apart from a stated tag column
+    # there. Only pnl_outline emits subsection headers, it always copies the
+    # subsection onto its lines' tag_value, and that copy is the mapped name,
+    # which need not read like the header's own wording ("Prof. Exp.").
+    heading = None
     for row in rows or []:
+        kind = str(row.get("row_kind") or "")
+        if kind == "subsection_header":
+            heading = row.get("label")
+        elif kind == "section_header":
+            heading = None
         # A label that names a Carta account is that account, not a slice of
         # one. Matched on the label adding nothing of its own, rather than on
         # the two strings being equal: a firm writes "Marketing" for the
@@ -654,9 +698,19 @@ def claim_dimension_values(rows, census, aliases=None, account_names=None,
                 if sc not in claims:
                     claims.append(sc)
             continue
+        # The heading above it, copied down — not a column the firm filled in.
+        copied = bool(row.get("tag_value")) and (row["tag_value"] == row.get("subsection")
+                                                 or heading is not None)
+        # So is an explicit "no scope": this line covers its accounts whole,
+        # so a copied heading must not go on narrowing it either.
+        if row.get("scope_none"):
+            if copied:
+                row.pop("tag_value", None)
+            continue
         # Most specific first: a line naming a sub-account or a vendor says
         # more about itself than the heading above it, and it is both at once.
         scopes, sources, inferred = [], set(), []
+        rejected_copy = False
         for field, text in (("sub_account", row.get("sub_account")),
                             ("vendor", row.get("vendor")),
                             ("label", row.get("label")),
@@ -665,12 +719,18 @@ def claim_dimension_values(rows, census, aliases=None, account_names=None,
                             ("section", row.get("section"))):
             if field == "label" and label_is_account:
                 continue
-            hit = resolve(text)
+            # Read a copied heading as the heading it is.
+            if field == "tag_value" and copied:
+                field = "subsection"
+            # A header row's own label is a heading too.
+            is_heading = field in HEADING_FIELDS or (field == "label" and kind.endswith("header"))
+            hit = resolve(text, heading=is_heading)
             if not hit or hit["source"] in sources:
                 continue
             if field in INFERRED_FROM:
                 key = inference_key(hit, field)
-                if (decisions or {}).get(key, {}).get("status") == "rejected":
+                if _rejected(decisions, hit, field):
+                    rejected_copy = rejected_copy or (copied and text == row["tag_value"])
                     continue        # the client has already said this is not it
                 inferred.append({**hit, "field": field, "key": key,
                                  "label": row.get("label")})
@@ -678,6 +738,10 @@ def claim_dimension_values(rows, census, aliases=None, account_names=None,
             scopes.append(hit)
             if hit not in claims:
                 claims.append(hit)
+        # Rejected: the line reports its accounts whole, so the copied
+        # heading must not narrow it through tag_value either.
+        if rejected_copy:
+            row.pop("tag_value", None)
         if not scopes:
             continue
         row["scopes"] = scopes
@@ -3176,7 +3240,7 @@ def suggest_scopes(label, census, limit=4, generic=None):
     return out[:limit]
 
 
-def resolve_near_scopes(rows, census, account_names=None):
+def resolve_near_scopes(rows, census, account_names=None, decisions=None):
     """Scope lines whose label names one of the firm's values inexactly.
 
     Exact matching walks past a workbook that shortens the value it means:
@@ -3188,6 +3252,9 @@ def resolve_near_scopes(rows, census, account_names=None):
     by name rather than stated. Anything less — a weaker resemblance, or
     two values equally close — is withheld and asked about, because a
     wrong scope moves real money between lines silently.
+
+    A value the client rejected for this wording (`decisions`, keyed as
+    inference_key) is never applied or proposed again.
 
     Returns (claims, applied, withheld). The claims join the exact ones so
     the residual arithmetic subtracts this spend from the untagged lines
@@ -3211,7 +3278,8 @@ def resolve_near_scopes(rows, census, account_names=None):
         # block of lines gets its meaning.
         cands, matched_on = [], None
         for field in ("sub_account", "vendor", "label", "tag_value", "subsection", "section"):
-            cands = suggest_scopes(row.get(field), census, generic=generic)
+            cands = [c for c in suggest_scopes(row.get(field), census, generic=generic)
+                     if not _rejected(decisions, c, field)]
             if cands:
                 matched_on = field
                 break
@@ -5318,7 +5386,7 @@ def build(args):
     _scope_applied = _scope_flagged = 0
     for _b in excel_budgets:
         _near, _a, _f = resolve_near_scopes(_b.get("rows") or [], _claim_census,
-                                            _carta_account_names)
+                                            _carta_account_names, _inference_decisions)
         _scope_applied += _a
         _scope_flagged += _f
         _own = _claims_by_budget[id(_b)]
