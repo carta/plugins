@@ -92,8 +92,12 @@ def clean_logo(raw: object) -> dict:
     return {"dataUri": fit_to_tile(uri) if usable else None}
 
 
+def _is_count(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 def _count(value: object, where: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if not _is_count(value):
         raise fail("row_invalid", f"{where} must be a non-negative integer")
     return value
 
@@ -125,7 +129,11 @@ def clean_months(months: object, where: str) -> list[dict]:
 def _mail_domains(value: object, where: str) -> list[dict]:
     if not isinstance(value, list) or not all(isinstance(v, dict) and isinstance(v.get("domain"), str) for v in value):
         raise fail("row_invalid", f"{where} must be a list of objects with a domain")
-    return [{"domain": v["domain"], "company": v["company"] if isinstance(v.get("company"), str) and v["company"] else None} for v in value]
+    return [{
+        "domain": v["domain"],
+        "company": v["company"] if isinstance(v.get("company"), str) and v["company"] else None,
+        "interactions": v["interactions"] if _is_count(v.get("interactions")) else None,
+    } for v in value]
 
 
 def clean_relationship(raw: object, where: str) -> dict:

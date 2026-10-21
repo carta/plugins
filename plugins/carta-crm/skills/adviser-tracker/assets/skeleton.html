@@ -57,6 +57,7 @@ tr.tier td{background:#faf9f6;color:var(--muted);font-size:12px;letter-spacing:.
 .bank .grey{display:block}
 .grey{color:var(--muted);font-size:13px}
 .hint{display:inline-block;width:14px;height:14px;line-height:14px;margin-left:4px;border:1px solid var(--muted);border-radius:50%;color:var(--muted);font-size:10px;font-style:italic;text-align:center;cursor:help}
+.hint:hover,.hint:focus-visible{color:var(--ink);border-color:currentColor}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:baseline}
 .strong{background:var(--green)}.moderate{background:var(--yellow)}.weak{background:var(--red)}
 .pop{display:none;z-index:10;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px 14px;min-width:260px;font-size:13px;white-space:normal}
@@ -4442,7 +4443,6 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     var p = iso.slice(0, 10).split('-');
     return p[1] + '/' + p[2] + '/' + p[0].slice(2);
   }
-  function deals(n) { return n + (n === 1 ? ' deal' : ' deals'); }
   function signed(n) { return n > 0 ? '+' + n : n < 0 ? '-' + (-n) : '0'; }
 
   // Years newest first, from window.to down to window.from.
@@ -4510,10 +4510,16 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     var names = (list || []).map(function (d) { return d.company || 'an affiliated domain'; });
     return names.filter(function (n, i) { return names.indexOf(n) === i; }).join(', ');
   }
-  function hint(text) { return ' <span class="hint" tabindex="0" title="' + esc(text) + '">i</span>'; }
-  // Each possible domain a person can confirm, in the same form as the check_domain line of the build: the company, then its domain in brackets when the company is known.
+  // The text sits in data-hint and the panel shows it on hover, focus and tap. A title attribute is not used: a sandboxed page often shows no native tooltip.
+  function hint(text) { return ' <span class="hint" tabindex="0" role="img" aria-label="' + esc(text) + '" data-hint="' + esc(text) + '">i</span>'; }
+  // A count with its noun as the page shows it, everywhere: thousands separators, and the singular for one.
+  function countOf(n, noun) { return n.toLocaleString('en-US') + ' ' + noun + (n === 1 ? '' : 's'); }
+  // Each possible domain a person can confirm: the company, then its domain and its interactions in brackets. The company is left out when unknown, and the count when the result carries none.
   function possibleDomains(list) {
-    return list.map(function (d) { return d.company ? d.company + ' (' + d.domain + ')' : d.domain; }).join(', ');
+    return list.map(function (d) {
+      var n = typeof d.interactions === 'number' ? countOf(d.interactions, 'interaction') : null;
+      return d.company ? d.company + ' (' + d.domain + (n ? ', ' + n : '') + ')' : d.domain + (n ? ' (' + n + ')' : '');
+    }).join(', ');
   }
   // Why a bank with deals shows no interaction, and where its interactions may be.
   function silentReason(rel, domain) {
@@ -4533,9 +4539,9 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       return '<span class="grey">No interactions found</span>' + (withDeals ? hint(silentReason(rel, row.adviser.domain)) : '');
     }
     var basis = typeof rel.interactions === 'number'
-      ? '<div class="grey">' + rel.interactions + ' interactions' + (typeof rel.contacts === 'number' ? ', ' + rel.contacts + ' contacts' : '') + '</div>' : '';
-    var why = rel.strength !== 'strong' && rel.contacts > 1
-      ? hint('Graded on the closest single pair of one person on our team and one contact, not the total: the ' + rel.interactions + ' interactions are spread over ' + rel.contacts + ' contacts.') : '';
+      ? '<div class="grey">' + countOf(rel.interactions, 'interaction') + (typeof rel.contacts === 'number' ? ', ' + countOf(rel.contacts, 'contact') : '') + '</div>' : '';
+    var why = rel.strength !== 'strong' && rel.contacts > 1 && typeof rel.interactions === 'number'
+      ? hint('Graded on the closest single pair of one person on our team and one contact, not the total: the ' + countOf(rel.interactions, 'interaction') + ' are spread over ' + countOf(rel.contacts, 'contact') + '.') : '';
     return dot(rel.strength) + esc(STRENGTH[rel.strength]) + why + basis;
   }
   function dot(strength) { return '<span class="dot ' + esc(strength) + '"></span>'; }
@@ -4583,7 +4589,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
         lines.push('Compared on ' + monthSpan(last) + ': ' + sumMonths(row, y, last) + ' vs ' + prev + ' in ' + (y - 1) + ', ' + change(sumMonths(row, y, last), prev));
       }
     }
-    return { title: row.adviser.name + ', ' + y + ': ' + deals(n) + ' created', lines: lines };
+    return { title: row.adviser.name + ', ' + y + ': ' + countOf(n, 'deal') + ' created', lines: lines };
   }
   function isPartial(k) { return partialM > 0 && k === data.asOf.slice(0, 7); }
   function monthTip(k) {
@@ -4597,7 +4603,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     if (isPartial(k)) lines.push('Partial month, to ' + asOfText());
     list.slice(0, 3).forEach(function (e) { lines.push(e[0] + ': ' + e[1]); });
     return {
-      title: MON[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4) + ': ' + deals(total) + ' created across the ' + data.rows.length + ' banks shown',
+      title: MON[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4) + ': ' + countOf(total, 'deal') + ' created across the ' + data.rows.length + ' banks shown',
       lines: lines
     };
   }
@@ -4721,7 +4727,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       q.map(function (n, c) { return numCell(d, c, n, ''); }).join('') +
       numCell(d, 4, total, 'total') +
       '<td>' + strengthCell(r) + '</td>' +
-      '<td>' + (tc ? '<div>' + esc(tc.name) + '</div><div class="grey">' + esc(tc.interactions) + ' interactions</div>' : '<span class="grey">No contact</span>') + '</td></tr>';
+      '<td>' + (tc ? '<div>' + esc(tc.name) + '</div><div class="grey">' + esc(countOf(tc.interactions, 'interaction')) + '</div>' : '<span class="grey">No contact</span>') + '</td></tr>';
   }
   // Quarter and total cells count from the value shown before to the new one.
   function animateCells(card, from) {
@@ -4883,43 +4889,63 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   }
 
   var tip = el('tip');
-  function showTip(bar) {
-    var t = tipOf(bar.dataset);
-    tip.innerHTML = '<p class="row"><b>' + esc(t.title) + '</b></p>' + t.lines.map(function (l) { return '<p class="row">' + esc(l) + '</p>'; }).join('');
+  // The element the open panel hangs from.
+  var tipAnchor = null;
+  // Fills the panel and puts it above `anchor`, or below it when there is no room above.
+  function placeTip(anchor, html) {
+    tipAnchor = anchor;
+    tip.innerHTML = html;
     tip.classList.add('show');
-    var r = bar.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    var r = anchor.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
     var top = r.top - h - 8;
     if (top < 8) top = Math.min(r.bottom + 8, window.innerHeight - h - 8);
     tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
     tip.style.top = top + 'px';
   }
-  function hideTip() { tip.classList.remove('show'); }
+  function showTip(bar) {
+    var t = tipOf(bar.dataset);
+    placeTip(bar, '<p class="row"><b>' + esc(t.title) + '</b></p>' + t.lines.map(function (l) { return '<p class="row">' + esc(l) + '</p>'; }).join(''));
+  }
+  function showHint(h) { placeTip(h, '<p class="row">' + esc(h.dataset.hint) + '</p>'); }
+  function hideTip() { tip.classList.remove('show'); tipAnchor = null; }
   function closest(node, sel) { return node && node.closest ? node.closest(sel) : null; }
 
   function bind() {
     var page = document.querySelector('.page');
     page.addEventListener('mouseover', function (e) {
-      var bar = closest(e.target, '.bar');
+      var bar = closest(e.target, '.bar'), h = closest(e.target, '.hint');
       if (bar) showTip(bar);
+      else if (h) showHint(h);
     });
     page.addEventListener('mouseout', function (e) {
-      var from = closest(e.target, '.bar');
-      if (from && from !== closest(e.relatedTarget, '.bar')) hideTip();
+      var from = closest(e.target, '.bar, .hint');
+      if (from && from !== closest(e.relatedTarget, '.bar, .hint')) hideTip();
     });
     // Only keyboard focus shows the panel. A mouse click also focuses a bar and must not pin the panel.
     page.addEventListener('focusin', function (e) {
-      var bar = closest(e.target, '.bar');
+      var bar = closest(e.target, '.bar'), h = closest(e.target, '.hint');
       if (bar && bar.matches(':focus-visible')) showTip(bar);
+      else if (h && h.matches(':focus-visible')) showHint(h);
     });
     page.addEventListener('focusout', function (e) {
-      if (closest(e.target, '.bar')) hideTip();
+      if (closest(e.target, '.bar, .hint')) hideTip();
     });
     page.addEventListener('click', function (e) {
+      // A tap has no hover, so it opens the hint text. A tap anywhere else closes it.
+      var tapped = closest(e.target, '.hint');
+      if (tapped) { showHint(tapped); return; }
+      if (!closest(e.target, '.bar')) hideTip();
       var view = closest(e.target, '[data-view]');
       if (view) { setView(view.dataset.view); return; }
       var leg = closest(e.target, '[data-leg]');
       if (leg) toggleYear(+leg.dataset.leg, closest(leg, '.card').id);
     });
+    // The panel is fixed to the viewport, so a scroll would leave it behind its anchor. It follows an anchor that holds keyboard
+    // focus, because focusing an element below the fold scrolls it into view after the panel opened. Hover and tap close it.
+    document.addEventListener('scroll', function () {
+      if (tipAnchor && tipAnchor === document.activeElement && tipAnchor.matches(':focus-visible')) placeTip(tipAnchor, tip.innerHTML);
+      else hideTip();
+    }, true);
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { hideTip(); return; }
       var b = closest(e.target, '.bar');

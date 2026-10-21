@@ -34,8 +34,10 @@
     return { dataUri: isString(uri) && DATA_URI.test(uri) && decodes(uri) ? fitToTile(uri) : null };
   }
 
+  function isCount(value) { return typeof value === 'number' && Number.isInteger(value) && value >= 0; }
+
   function count(value, where) {
-    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw fail('row_invalid', where + ' must be a non-negative integer');
+    if (!isCount(value)) throw fail('row_invalid', where + ' must be a non-negative integer');
     return value;
   }
 
@@ -62,7 +64,13 @@
     if (!Array.isArray(value) || !value.every(function (v) { return isObject(v) && isString(v.domain); })) {
       throw fail('row_invalid', where + ' must be a list of objects with a domain');
     }
-    return value.map(function (v) { return { domain: v.domain, company: isString(v.company) && v.company ? v.company : null }; });
+    return value.map(function (v) {
+      return {
+        domain: v.domain,
+        company: isString(v.company) && v.company ? v.company : null,
+        interactions: isCount(v.interactions) ? v.interactions : null
+      };
+    });
   }
 
   function cleanRelationship(raw, where) {
