@@ -3023,10 +3023,15 @@ def mark_widened_totals(rows):
     rather than each deciding for itself.
     """
     widened = 0
+    ids = {r[f] for r in rows or [] for f in ("key", "total_key") if r.get(f)}
     for i, row in enumerate(rows or []):
         if row.get("row_kind") not in _TOTAL_KINDS:
             continue
         if not isinstance(row.get("constituents"), list):
+            continue
+        # A total whose own formula tree states what it sums is read from
+        # that tree — the outline view never widens it, so neither does this.
+        if totals_tree.has_usable_tree(row, ids):
             continue
         # A total with no constituents but accounts of its own is a leaf
         # wearing a total's name; it reports itself, not the lines above.

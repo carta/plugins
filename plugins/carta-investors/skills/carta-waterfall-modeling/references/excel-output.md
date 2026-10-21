@@ -221,7 +221,8 @@ the new numbers into the cells that already hold them, and touch nothing else.**
 A 4-row text band in **column B**, rows 1–4 (row 5 blank):
 
 - **B1** — firm name; bold.
-- **B2** — `"{company} — Cap Table"` (Cap Table) / `"{company} —
+- **B2** — `"{company} — Cap Table"`, or `"{company} — Pro forma {label} — Cap Table"` when the root
+  cap table is a pro forma (Cap Table) / `"{company} —
   Waterfall Results"` (Waterfall) / `"{company} — Vesting"` (Vesting) / `"{company} —
   Sensitivity Analysis"` (Sensitivity).
 - **B3** — Cap Table & Vesting: `"Source: Carta — Waterfall Modeling"`. Waterfall:
@@ -232,7 +233,7 @@ A 4-row text band in **column B**, rows 1–4 (row 5 blank):
 
 ## "Cap Table" tab
 
-- Write the **root's summary only** — fetched with the root id (see the cap-table detail doc
+- Write the **root's summary only** — fetched with the root cap table (cap-table detail doc §Fetch; see it
   for the active `cap_table_command` noun). Sub-entity / consolidated cap tables are out of scope.
 - **Lay out per the `cap_table_command` noun's render doc** (rendering map, top of `SKILL.md`) —
   its column list, row order, and `colType`s. Header shape follows the doc:

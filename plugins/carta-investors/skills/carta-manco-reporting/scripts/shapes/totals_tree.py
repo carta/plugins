@@ -29,3 +29,16 @@ def tree_roots(rows: list) -> list:
     named = {cid for r in rows for cid in (r.get("children") or [])
              if cid in total_keys}
     return [r for r in rows if r.get("total_key") not in named]
+
+
+def has_usable_tree(row: dict, ids: set) -> bool:
+    """Whether `row`'s own formula tree states what it sums: `children` is
+    non-empty, every id in it is in `ids` (the budget's line `key`s and
+    total `total_key`s), and `children_complete` isn't false. The rule the
+    outline view reads a total's actuals by (`usableTree` in
+    app/src/views/BudgetActualsOutline.jsx) — such a total is summed from
+    its tree and never widened to the lines it sits over.
+    """
+    children = row.get("children") or []
+    return (bool(children) and row.get("children_complete", True) is not False
+            and all(c in ids for c in children))

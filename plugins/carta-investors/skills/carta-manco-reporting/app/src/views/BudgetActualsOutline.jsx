@@ -109,13 +109,10 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   useEffect(() => { setFlipped(new Set()); }, [breakout?.key]);
 
   // Actuals per line-row key, bucketed by quarter. Computed once; aggregate
-  // rows then sum their constituents out of this map.
-  // Totals drill by naming the lines they sum, so they need to find them.
-  const rowByKey = useMemo(() => {
-    const m = new Map();
-    for (const r of rows) if (r.key) m.set(r.key, r);
-    return m;
-  }, [rows]);
+  // rows then sum their children (or constituents) out of this map.
+  // Totals drill by naming the lines they sum, so they need to find them —
+  // through another total's `total_key` too, when a formula tree nests.
+  const rowByKey = useMemo(() => rowsByTreeId(rows), [rows]);
 
 
   const lineActuals = useMemo(
@@ -133,8 +130,8 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   // drill panel can drop the same ones the row's own figure already does.
   const excludedEntriesByKey = lineActuals.excludedEntries || {};
 
-  // Aggregate rows resolve from constituents; net income is derived from
-  // the outline's own totals.
+  // Aggregate rows resolve from their formula tree when it is usable, else
+  // from constituents; see computeAggregates.
   const aggregatesAndShort = useMemo(
     () => {
       const short = new Set();
@@ -1035,7 +1032,7 @@ export function outlineCellKey(row, quarter) {
   return `${row?.key || rowAggKey(row)}|${quarter}`;
 }
 
-function rowAggKey(row) {
+export function rowAggKey(row) {
   // Aggregate rows are identified by label + section + subsection, which
   // is unique within a workbook outline (the same subtotal label repeats
   // across depts, but never within one).
@@ -1207,29 +1204,75 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
 const isHeaderKind = (k) => String(k || "").endsWith("header");
 const isTotalKind = (k) => k === "total" || k === "subtotal" || k === "summary";
 
-/** Every line row in the section a total closes.
- *
- *  Only meaningful for the LAST total before the next header — a section's
- *  grand total, which a reader takes to cover the whole section including
- *  the subtotals within it. An earlier total covers its own run, and this
- *  says nothing about those.
+/** Every row of the outline, keyed by the id a formula tree's `children`
+ *  name it by: a line's `key`, or a total's `total_key`. */
+export function rowsByTreeId(rows) {
+  const m = new Map();
+  for (const r of rows) {
+    if (r.key) m.set(r.key, r);
+    if (r.total_key) m.set(r.total_key, r);
+  }
+  return m;
+}
+
+/** A total's direct children with the sign its own formula gives each, when
+ *  the figure can be read from them: every `children` id names a row of
+ *  this outline, and the formula adds nothing beyond them
+ *  (`children_complete`). Null otherwise — no tree at all (an older bundle,
+ *  the Worker's own Carta budget, a typed-in sheet) or one that can't
+ *  explain the row on its own — and the caller keeps the constituent path.
+ *  Whether a row is a total is read from its `children`, never its label.
  */
+export function usableTree(row, rowById) {
+  const ids = row?.children;
+  if (!Array.isArray(ids) || !ids.length || row.children_complete === false) return null;
+  const kids = ids.map(id => rowById.get(id));
+  if (kids.some(k => !k)) return null;
+  const signs = row.child_signs || [];
+  return kids.map((child, i) => ({ child, sign: signs[i] < 0 ? -1 : 1 }));
+}
+
+/** The keys of the lines a total without a usable tree sums — the one
+ *  rule both its figure (computeAggregates) and its drawer (totalMembers)
+ *  read: the lines it was widened to cover, or its formula's own, whichever
+ *  is wider. covered_lines alone would miss lines when a formula names more
+ *  lines than the run above it. Returns `row.constituents` itself when the
+ *  formula's own set wins, so a caller can tell the total wasn't widened. */
+function summedLineKeys(row, covered = row?.covered_lines || []) {
+  const constituents = row?.constituents || [];
+  return covered.length > constituents.length ? covered : constituents;
+}
+
+/** The leaf line keys a total's figure sums, read down through its tree, or
+ *  null when any of them is subtracted along the way: a drawer is a union
+ *  of entries and cannot show a difference, so a signed total (Net Income)
+ *  doesn't drill. A child total with no usable tree contributes its own
+ *  summedLineKeys. */
+function treeLeafKeys(row, rowById, seen = new Set()) {
+  const tree = usableTree(row, rowById);
+  if (!tree) return summedLineKeys(row);
+  if (seen.has(row)) return [];
+  seen.add(row);
+  const keys = [];
+  for (const { child, sign } of tree) {
+    if (sign < 0) return null;
+    const sub = child.row_kind === "line" ? [child.key] : treeLeafKeys(child, rowById, seen);
+    if (sub === null) return null;
+    keys.push(...sub);
+  }
+  return [...new Set(keys)];
+}
+
 /** The line rows a total's figure was summed from, as drill members.
  *
- *  Same keys the aggregate itself used — its formula's constituents, or
- *  the lines it was widened to cover — so the drawer holds exactly what
- *  the figure holds. A line with nothing behind it contributes nothing.
+ *  Same keys the aggregate itself used — its tree's leaf lines, or without
+ *  one summedLineKeys — so the drawer holds exactly what the figure holds. A line with nothing
+ *  behind it contributes nothing. `rowByKey` maps tree ids (see
+ *  rowsByTreeId).
  */
 export function totalMembers(row, rowByKey, valueAliases = {}, tagValuesAvailable = true,
                              dimension = null, excludedEntriesByKey = {}) {
-  // The same set the row's own figure summed (see computeAggregates): the
-  // lines it was widened to cover, or its formula's own, whichever is
-  // wider. Taking covered_lines whenever it exists opened a section total
-  // on a fraction of itself, because a formula can also name MORE lines
-  // than the run above it.
-  const constituents = row?.constituents || [];
-  const covered = row?.covered_lines || [];
-  const keys = covered.length > constituents.length ? covered : constituents;
+  const keys = treeLeafKeys(row, rowByKey) || [];
   const out = [];
   for (const k of keys) {
     const r = rowByKey.get(k);
@@ -1260,6 +1303,13 @@ export function totalMembers(row, rowByKey, valueAliases = {}, tagValuesAvailabl
   return out;
 }
 
+/** Every line row in the section a total closes.
+ *
+ *  Only meaningful for the LAST total before the next header — a section's
+ *  grand total, which a reader takes to cover the whole section including
+ *  the subtotals within it. An earlier total covers its own run, and this
+ *  says nothing about those.
+ */
 export function linesCoveredBy(rows, i) {
   if (!isTotalKind(rows[i]?.row_kind)) return [];
   // Not the section's last total: leave it to its own formula.
@@ -1275,11 +1325,26 @@ export function linesCoveredBy(rows, i) {
   return keys;
 }
 
-function computeAggregates(rows, actualsByKey, shortfalls) {
+/** Actuals per aggregate row (keyed by rowAggKey), bucketed by quarter.
+ *
+ *  A total with a usable formula tree (usableTree) reports the sum of its
+ *  children's actuals, each with the sign its formula gives it, read down
+ *  through nested totals — Net Income included, which is just another
+ *  total in the tree. Each line child's actual is computeLineActuals' own,
+ *  so its reporting-tag scope and tie-break exclusions carry through
+ *  unchanged. Without a usable tree a total sums its constituents (widened
+ *  to the lines it visibly covers), and Net Income falls back to
+ *  Total Income − Total Operating Expenses − State and Local Taxes, found
+ *  by label.
+ */
+export function computeAggregates(rows, actualsByKey, shortfalls) {
   const out = {};
-  // Constituent-summed aggregates first.
+  const rowById = rowsByTreeId(rows);
+  // Constituent-summed aggregates first, for every total the tree doesn't
+  // cover; a tree total may name one of these as a child.
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
+    if (usableTree(row, rowById)) continue;
     if (!Array.isArray(row.constituents)) continue;
     if (!row.constituents.length && (row.gl_codes || []).length) continue;
     // A formula naming fewer lines than the total visibly sits over
@@ -1290,11 +1355,8 @@ function computeAggregates(rows, actualsByKey, shortfalls) {
     // read-out that precedes it cannot disagree about which totals moved.
     const covered = Array.isArray(row.covered_lines)
       ? row.covered_lines : linesCoveredBy(rows, i);
-    let keys = row.constituents;
-    if (covered.length > row.constituents.length) {
-      keys = covered;
-      if (shortfalls) shortfalls.add(rowAggKey(row));
-    }
+    const keys = summedLineKeys(row, covered);
+    if (keys !== row.constituents && shortfalls) shortfalls.add(rowAggKey(row));
     const bucket = emptyQuarters();
     for (const k of keys) {
       const src = actualsByKey[k];
@@ -1303,9 +1365,35 @@ function computeAggregates(rows, actualsByKey, shortfalls) {
     }
     out[rowAggKey(row)] = bucket;
   }
-  // Derived rows (Net Income) = Total Income − Total Operating Expenses
-  // − any standalone summary lines between them (e.g. State and Local
-  // Taxes), matching how the workbook computes it.
+
+  // Tree totals, each child's figure signed by its own formula. A child
+  // total without a usable tree reads what it reports on its own row —
+  // its own accounts when it has them, else its constituent sum above.
+  const treeActuals = (row, seen) => {
+    const slot = rowAggKey(row);
+    if (seen.has(row)) return emptyQuarters();   // a cycle contributes nothing
+    if (out[slot]) return out[slot];
+    seen.add(row);
+    const bucket = emptyQuarters();
+    for (const { child, sign } of usableTree(row, rowById)) {
+      const src = child.row_kind === "line"
+        ? actualsByKey[child.key]
+        : usableTree(child, rowById)
+          ? treeActuals(child, seen)
+          : (actualsByKey[rowAggKey(child)] || out[rowAggKey(child)]);
+      if (!src) continue;
+      for (const q of QUARTERS) bucket[q.key] += sign * (src[q.key] || 0);
+    }
+    out[slot] = bucket;
+    return bucket;
+  };
+  for (const row of rows) {
+    if (row.row_kind !== "line" && usableTree(row, rowById)) treeActuals(row, new Set());
+  }
+
+  // Derived rows (Net Income) with no usable tree = Total Income − Total
+  // Operating Expenses − any standalone summary lines between them (e.g.
+  // State and Local Taxes), found by label.
   const byLabel = (needle) =>
     rows.find(r => String(r.label || "").trim().toLowerCase().startsWith(needle));
   const incomeRow = byLabel("total income");
@@ -1314,7 +1402,7 @@ function computeAggregates(rows, actualsByKey, shortfalls) {
     r.row_kind === "line" && /state and local tax/i.test(r.label || ""));
 
   for (const row of rows) {
-    if (row.derived !== "net_income") continue;
+    if (row.derived !== "net_income" || usableTree(row, rowById)) continue;
     const bucket = emptyQuarters();
     const inc  = incomeRow ? out[rowAggKey(incomeRow)] : null;
     const opex = opexRow   ? out[rowAggKey(opexRow)]   : null;

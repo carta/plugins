@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.105.0</carta-plugin>
+<carta-plugin>carta-investors:6.105.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -88,8 +88,8 @@ The flow is:
    `get_command`, `cap_table_command` (when available), and `available_inputs`.
 3. Collect inputs from the user.
 4. Dispatch via `run_command` → returns `{execution_id}`.
-5. **When `cap_table_command` is available** — show the cap table for the root
-   issuer as of the waterfall date, pause on a light prompt, then continue to
+5. **When `cap_table_command` is available** — show the cap table the run used for
+   the root issuer as of the waterfall date, pause on a light prompt, then continue to
    results. Otherwise skip straight to results — this company's cap table isn't
    available yet.
 6. Read the command's results doc (`references/results.<get_command noun>.md`) and
@@ -264,8 +264,8 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
 
 - `run_command` — the command to dispatch the run in Step 5.
 - `get_command` — the command to fetch results in Step 6.
-- `cap_table_command` — **optional**; the independent cap-table reader (Step 6a.5),
-  fetched by the root issuer + as-of date — **not** coupled to the run. Step 6a.5 dispatches
+- `cap_table_command` — **optional**; the cap-table reader (Step 6a.5), fetched by the root's
+  cap table (its master, or the pro forma picked for it in Step 4) + as-of date. Step 6a.5 dispatches
   on its noun to the matching renderer; an unrecognized noun or `null`/absent → skip the
   cap-table step.
 - `currency` — **optional**; ISO 4217 code (e.g. `"GBP"`) the results are in. Absent → USD.

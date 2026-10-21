@@ -30,19 +30,24 @@ same batch.
 
 ## Fetch
 
-Show the cap table for the root issuer **as of the waterfall date, before any allocations table**.
-Independent of the run — fetched by corporation + date:
+Show the cap table the run used for the root issuer **as of the waterfall date, before any allocations
+table**. Fetched by corporation + date:
 
 ```
 read_tool({"name": "<cap_table_command with all ':' replaced by '__'>", "arguments": {
-  "corporation_id": "<root.issuer_id from Step 3>",
+  "corporation_id": "<root cap table>",
   "as_of_date":     "<WATERFALL_DATE from Step 4, as YYYY-MM-DD>"
 }})
 → { share_classes[], option_plans[], warrant_blocks[], totals }
 ```
 
-`as_of_date` is a bare date (`YYYY-MM-DD`) — no time component. `corporation_id` is the root
-(`root.issuer_id` from Step 3). Response shape + column mapping:
+`as_of_date` is a bare date (`YYYY-MM-DD`) — no time component. `corporation_id` is the
+**root cap table**: the `CAP_TABLE_ID` sent in Step 4's `CAP_TABLES` for the row whose `id` is
+`root.issuer_id` (a pro forma), otherwise `root.issuer_id` from Step 3. Every fetch in this doc uses
+that same id. When it's a pro forma, its `{label}` is the `label` of the root row's `choices` entry
+(the `CAP_TABLES` row whose `id` is `root.issuer_id`) whose `value` is the sent id; §Chat rendering
+and §Excel show it. Response shape
++ column mapping:
 [`references/rendering.cap_table_by_share_class.md`](rendering.cap_table_by_share_class.md).
 
 ## Convertibles (auto-printed when the corp has notes)
@@ -52,7 +57,7 @@ round-grouped convertibles:
 
 ```
 read_tool({"name": "cap_table__get__note_blocks", "arguments": {
-  "corporation_id": "<root.issuer_id>",
+  "corporation_id": "<root cap table>",
   "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>"
 }})
 → { note_blocks[], totals }
@@ -70,7 +75,7 @@ batch), fetch the phantom units:
 
 ```
 read_tool({"name": "cap_table__get__phantom", "arguments": {
-  "corporation_id": "<root.issuer_id>",
+  "corporation_id": "<root cap table>",
   "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>"
 }})
 → { rows[], total }
@@ -89,15 +94,16 @@ per the command's results doc §Excel — fetch & write order and
 block before the Waterfall block). **When the corp has notes, the convertibles table is written under
 the Cap Table block on the Cap Table tab** (default write) — see `references/excel-output.md`
 §"Cap Table" tab. **Phantom units follow the same rule, beneath the convertibles** (or the Cap Table
-block when there are none). The by-stakeholder view, the vesting schedule, and rights & preferences
-are **not** written to the sheet.
+block when there are none). When the root cap table is a pro forma, the tab's title carries its
+`{label}` (`references/excel-output.md` §Metadata band). The by-stakeholder view, the vesting
+schedule, and rights & preferences are **not** written to the sheet.
 
 ## Chat rendering
 
 **Chat** (default) — render inline. **Phrase the lead in past tense** — the run already happened
 (Step 5). Render one short line, then the table:
 
-> Here's the cap table for **{root display name}** as of **{WATERFALL_DATE}**:
+> Here's the cap table for **{root display name}**{when the root cap table is a pro forma: ` — pro forma **{label}**`} as of **{WATERFALL_DATE}**:
 
 Render the summary per the share-class render doc, then the convertibles table (§Convertibles) and
 the phantom units table (§Phantom units), if any.
@@ -139,7 +145,7 @@ written to Excel**. Same `corporation_id` + `as_of_date`, paginated:
 
 ```
 read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
-  "corporation_id":       "<root.issuer_id>",
+  "corporation_id":       "<root cap table>",
   "as_of_date":           "<WATERFALL_DATE, YYYY-MM-DD>",
   "detail":               "full",
   "include_non_dilutive": true,
@@ -168,7 +174,7 @@ render the drill straight from the response in hand — **never re-fetch a holde
 
    ```
    read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
-     "corporation_id":       "<root.issuer_id>",
+     "corporation_id":       "<root cap table>",
      "as_of_date":           "<WATERFALL_DATE, YYYY-MM-DD>",
      "search":               "<holder name>",
      "detail":               "full",
@@ -190,7 +196,7 @@ render the drill straight from the response in hand — **never re-fetch a holde
 
    ```
    read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
-     "corporation_id":       "<root.issuer_id>",
+     "corporation_id":       "<root cap table>",
      "as_of_date":           "<WATERFALL_DATE, YYYY-MM-DD>",
      "detail":               "full",
      "include_securities":   true,
@@ -227,14 +233,14 @@ picker; **more than 4** → list them compactly and take a **free-text** name ma
 ```
 // Option / Phantom
 read_tool({"name": "cap_table__get__grant_vesting", "arguments": {
-  "corporation_id": "<root.issuer_id>",
+  "corporation_id": "<root cap table>",
   "grant_id":       "<securities[].id for an Option, phantom_securities[].id for a Phantom>"
 }})
 ```
 ```
 // Certificate / RSA / PIU
 read_tool({"name": "cap_table__get__certificate_vesting", "arguments": {
-  "corporation_id": "<root.issuer_id>",
+  "corporation_id": "<root cap table>",
   "certificate_id": "<securities[].id for a Certificate / RSA / PIU>"
 }})
 ```
@@ -256,12 +262,12 @@ Never render it unless the user asks. Read
 
 ```
 read_tool({"name": "cap_table__get__rights_and_preferences", "arguments": {
-  "corporation_id": "<root.issuer_id from Step 3>"
+  "corporation_id": "<root cap table>"
 }})
 → { count, by_type, classes[] }
 ```
 
-- `corporation_id` is the **root** issuer. This command is current-state configuration — it takes
+- `corporation_id` is the **root cap table** (§Fetch). This command is current-state configuration — it takes
   **no** `as_of_date`.
 - Render the two tables per the render doc, in chat, beside the cap table.
 

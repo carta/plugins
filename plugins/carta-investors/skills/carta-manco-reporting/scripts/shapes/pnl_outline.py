@@ -48,10 +48,18 @@ Join hints per row so the UI can resolve actuals:
                     workbook's own cell (authoritative — a firm's own
                     department total does not always equal the sum of its
                     own subtotals, and we mirror what the client sees);
-                    actuals are summed from constituents.
+                    actuals are summed from constituents unless the row
+                    has a usable tree (`totals_tree.has_usable_tree`). The
+                    Net Income row
+                    (`derived: "net_income"`) never carries them.
   - `children`    — for an aggregate row whose own formula names what it
                     sums, the row's direct children: a `key` for a line,
-                    a `total_key` for another aggregate. `total_key`
+                    a `total_key` for another aggregate. When the tree is
+                    usable (every id resolves, `children_complete` isn't
+                    false) the UI sums a total's actuals from these,
+                    signed, recursively — Net Income included, which
+                    carries `children` and `total_key` like any other
+                    total. `total_key`
                     identifies an aggregate row the way `key` identifies a
                     line, on its own counter: only line rows advance
                     `key_seq`, so a line's `key` — the address a recorded
@@ -63,7 +71,8 @@ Join hints per row so the UI can resolve actuals:
                   — false when the formula behind `children` also adds a
                     number or a cross-sheet reference, so summing
                     `children` (even signed) won't fully explain the
-                    row's own stated value.
+                    row's own stated value; such a row's actuals take the
+                    constituent path.
 
 Nothing about one firm's workbook is hardcoded here. Everything the parser
 needs is discovered from the file it is handed:
@@ -816,13 +825,32 @@ def parse(workbook_path, sheet_name, mapping_records=None,
     line_key_by_row_ix: dict = {}
     total_row_by_row_ix: dict = {}
 
+    def _apply_tree_children(row, row_ix):
+        """Sets `children`/`child_signs`/`children_complete` from the
+        formula tree, when every row `row_ix`'s own formula names has
+        already been emitted (as a line or as another total). Returns the
+        children's row indices, or None when the tree says nothing usable
+        about this row — a reference to a row not yet emitted (including
+        `row_ix` itself) can't be resolved to a key at all.
+        """
+        if row_ix not in formula_tree:
+            return None
+        children_terms = formula_tree[row_ix]
+        children_ix = [r for r, _ in children_terms]
+        if not all(r in line_key_by_row_ix or r in total_row_by_row_ix for r in children_ix):
+            return None
+        row["children"] = [
+            line_key_by_row_ix.get(r) or total_row_by_row_ix[r]["total_key"]
+            for r in children_ix
+        ]
+        row["child_signs"] = [s for _, s in children_terms]
+        row["children_complete"] = row_ix not in had_external_by_row
+        return children_ix
+
     def _apply_tree_rollup(row, row_ix):
         """Replaces `row`'s pending-list constituents with the formula
-        tree's answer, when every row `row_ix`'s own formula names has
-        already been emitted (as a line or as another total) — otherwise
-        leaves the pending-list constituents in place, since a reference
-        to a row not yet emitted (including `row_ix` itself) can't be
-        resolved to a key at all.
+        tree's answer, when `_apply_tree_children` could resolve it —
+        otherwise leaves the pending-list constituents in place.
 
         A child already emitted as a `line` contributes its own key. Any
         other already-emitted child is itself a total and contributes its
@@ -832,18 +860,9 @@ def parse(workbook_path, sheet_name, mapping_records=None,
         doesn't understand) still contributes whatever its own pending-
         list scan gave it.
         """
-        if row_ix not in formula_tree:
+        children_ix = _apply_tree_children(row, row_ix)
+        if children_ix is None:
             return
-        children_terms = formula_tree[row_ix]
-        children_ix = [r for r, _ in children_terms]
-        if not all(r in line_key_by_row_ix or r in total_row_by_row_ix for r in children_ix):
-            return
-        row["children"] = [
-            line_key_by_row_ix.get(r) or total_row_by_row_ix[r]["total_key"]
-            for r in children_ix
-        ]
-        row["child_signs"] = [s for _, s in children_terms]
-        row["children_complete"] = row_ix not in had_external_by_row
         leaf_keys = []
         seen_rows = set()
         seen_keys = set()
@@ -1090,10 +1109,14 @@ def parse(workbook_path, sheet_name, mapping_records=None,
         # item — a large budget with no account and no actual behind it.
         if (not indented and subsection is None
                 and not seen_first_dept and _NET_INCOME_RX.match(text)):
-            rows.append({"row_kind": "summary", "label": text,
-                         "section": section, "depth": 0,
-                         "annual": annual, "monthly": monthly,
-                         "comment": comment, "derived": "net_income"})
+            total_key_seq += 1
+            row = {"row_kind": "summary", "label": text,
+                   "total_key": f"t{total_key_seq}",
+                   "section": section, "depth": 0,
+                   "annual": annual, "monthly": monthly,
+                   "comment": comment, "derived": "net_income"}
+            _apply_tree_children(row, row_ix)
+            rows.append(row)
             if stop_label is None:
                 break
             continue
@@ -1114,11 +1137,17 @@ def parse(workbook_path, sheet_name, mapping_records=None,
                    "comment": comment,
                    "gl_codes": gls}
             if is_net_income:
-                # Net Income is derived, not summed from constituents —
-                # the UI computes income − opex − taxes.
+                # Net Income is derived, not summed from constituents: its
+                # formula's own signed `children` (income minus expenses,
+                # when the sheet has live formulas) say how, and it never
+                # carries `constituents`, which would read as an unsigned
+                # union of income and expense lines.
                 row["derived"] = "net_income"
                 row.pop("gl_codes", None)
                 row.pop("key", None)
+                total_key_seq += 1
+                row["total_key"] = f"t{total_key_seq}"
+                _apply_tree_children(row, row_ix)
             else:
                 pending_section.append(key)
                 if not gls:
