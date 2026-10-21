@@ -56,6 +56,10 @@ allowed-tools:
   - Read
   - Write
   - AskUserQuestion
+  - ToolSearch
+  # Optional — only present in some Claude Code surfaces; Step 2.5 feature-detects
+  # it via ToolSearch and skips the rename when it's absent.
+  - mcp__ccd_session_mgmt__set_session_title
   # Exact plugin-script commands only, quoted and unquoted, so a run with uv on
   # PATH needs no prompt. `$HOME/.local/bin/uv`, an absolute-path fallback and
   # the localhost curl check stay off the list: Claude Code asks for those.
@@ -85,7 +89,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.104.1</carta-plugin>
+<carta-plugin>carta-investors:6.104.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

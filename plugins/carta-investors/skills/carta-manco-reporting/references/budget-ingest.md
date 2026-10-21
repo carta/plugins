@@ -21,6 +21,15 @@ that decides whether any of it applies.
 
 **SILENT** apart from the one cached-data line below.
 
+By this point `<FIRM_NAME>` and `<MANCO_NAME>` are resolved on every path —
+cache hit or BUILD. Name the session after the entity now, so the session
+list reads "Carta ManCo Microapp | `<MANCO_NAME>`" instead of this skill's own
+name: if `mcp__ccd_session_mgmt__set_session_title` is available (load it
+with `ToolSearch` if deferred), call it once with that title, silently, and
+never mention it in the output. If the tool is unavailable, skip it — don't
+ask the user about it or substitute another mechanism. Harmless to call
+again on a later reopen of the same firm.
+
 Run:
 ```bash
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" resolve "<FIRM_NAME>" "<MANCO_NAME>"
