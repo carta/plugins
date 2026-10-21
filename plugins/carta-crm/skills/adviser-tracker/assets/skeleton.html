@@ -4511,13 +4511,22 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     return names.filter(function (n, i) { return names.indexOf(n) === i; }).join(', ');
   }
   function hint(text) { return ' <span class="hint" tabindex="0" title="' + esc(text) + '">i</span>'; }
+  // Each possible domain a person can confirm, in the same form as the check_domain line of the build: the domain, then its company in brackets when the company is known.
+  function possibleDomains(list) {
+    return list.map(function (d) { return d.company ? d.domain + ' (' + d.company + ')' : d.domain; }).join(', ');
+  }
+  // Why a bank with deals shows no interaction, and where its interactions may be.
+  function silentReason(rel, domain) {
+    var list = rel.suggestedDomains || [];
+    return 'Deals name this bank, but the CRM holds no email or meeting between our team and anyone at ' + domain +
+      '. Its people may write from another domain. ' +
+      (list.length
+        ? 'Possible domains, not counted until a person confirms them: ' + possibleDomains(list) + '.'
+        : 'No other domain found.');
+  }
   // No label for a bank with no interaction. A result that carries no count shows the label alone.
-  function strengthCell(rel) {
-    if (rel.interactions === 0) {
-      var maybe = (rel.suggestedDomains || []).length
-        ? hint('Interactions may sit under ' + companies(rel.suggestedDomains) + '. They are not counted until the domain is confirmed.') : '';
-      return '<span class="grey">No interactions found</span>' + maybe;
-    }
+  function strengthCell(rel, domain) {
+    if (rel.interactions === 0) return '<span class="grey">No interactions found</span>' + hint(silentReason(rel, domain));
     var basis = typeof rel.interactions === 'number'
       ? '<div class="grey">' + rel.interactions + ' interactions' + (typeof rel.contacts === 'number' ? ', ' + rel.contacts + ' contacts' : '') + '</div>' : '';
     var why = rel.strength !== 'strong' && rel.contacts > 1
@@ -4706,7 +4715,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     return '<tr data-d="' + esc(d) + '"><td class="idx">' + i + '</td>' + bankCell(r) +
       q.map(function (n, c) { return numCell(d, c, n, ''); }).join('') +
       numCell(d, 4, total, 'total') +
-      '<td>' + strengthCell(rel) + '</td>' +
+      '<td>' + strengthCell(rel, d) + '</td>' +
       '<td>' + (tc ? '<div>' + esc(tc.name) + '</div><div class="grey">' + esc(tc.interactions) + ' interactions</div>' : '<span class="grey">No contact</span>') + '</td></tr>';
   }
   // Quarter and total cells count from the value shown before to the new one.
