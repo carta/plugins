@@ -48,6 +48,7 @@ import manco_paths
 import report_store
 from shapes import canonical as canonical_budget
 from shapes import formula_infer
+from shapes import totals_tree
 
 MONTH_LABELS_FULL_YEAR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
                           "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -2015,11 +2016,23 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
         "Total Mgmt Fee Including Creator", and other variants that a
         literal match would silently resolve to zero.
 
-        A `summary` row is the firm's own bottom-line for the section and
-        wins outright. Otherwise take the largest total in the section: a
-        grand total is by construction at least as big as the sub-totals
-        beneath it, so this picks the roll-up over its parts without
-        needing to know what the firm calls it.
+        With several `total`/`summary` rows in the section, a total that
+        another candidate's formula-derived tree (`children`/`total_key`
+        from the pnl-outline adapter) names as a child is never added: the
+        tree only ever rules candidates out, since a tree the adapter
+        built is read, never guessed at. A missing `total_key` in every
+        other candidate's `children` never proves the remainder are
+        siblings — the same grand total can equally be written over the
+        leaf lines its department totals already cover (`SUBTOTAL`
+        excludes a nested `SUBTOTAL` the way Excel does), in which case no
+        candidate names another and the tree alone can't tell a sibling
+        from a roll-up either. Whatever the tree doesn't rule out — one
+        candidate, several, with or without a tree of their own — goes to
+        the arithmetic check: a candidate equal to the sum of the others
+        is taken as the roll-up, on the premise that a grand total is by
+        construction at least as big as the sub-totals beneath it; failing
+        that, the candidates are siblings covering different parts of the
+        business, and are added.
         """
         cands = [r for r in rows
                  if r.get("section") == section
@@ -2033,12 +2046,28 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
         if len(cands) == 1:
             return float(cands[0]["annual"])
 
-        # Several aggregates. Either one of them rolls the others up, or
-        # they are siblings covering different parts of the business and
-        # the section total is their sum. Magnitude alone can't tell those
-        # apart — the largest of two sibling totals looks exactly like a
-        # grand total sitting above a small subtotal. What distinguishes
-        # them is arithmetic: a roll-up equals the rest added together.
+        # A total named as another candidate's child is a part of what
+        # that candidate already states, so it's dropped before anything
+        # else runs — never added on top of the total that rolls it up.
+        # A candidate the tree says nothing about (no `children` at all)
+        # is never dropped this way: the tree can only rule candidates
+        # out, not stand in for one that carries no tree of its own.
+        cands = totals_tree.tree_roots(cands)
+        if len(cands) == 1:
+            return float(cands[0]["annual"])
+
+        # Whatever the tree didn't rule out still goes to the arithmetic
+        # check below — the tree ruling nothing out here never proves the
+        # survivors are siblings: a grand total over the same leaf lines
+        # its department totals already cover (a `SUBTOTAL` excluding a
+        # nested `SUBTOTAL`, or a `SUM` range over lines rather than over
+        # other totals) names no other candidate as its child either. One
+        # of them rolls the others up, or they are siblings covering
+        # different parts of the business and the section total is their
+        # sum. Magnitude alone can't tell those apart — the largest of two
+        # sibling totals looks exactly like a grand total sitting above a
+        # small subtotal. What distinguishes them is arithmetic: a roll-up
+        # equals the rest added together.
         vals = [abs(float(r["annual"])) for r in cands]
         total = sum(vals)
         for r, v in zip(cands, vals):

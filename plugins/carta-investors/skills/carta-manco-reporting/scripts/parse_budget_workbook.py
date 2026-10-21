@@ -78,6 +78,16 @@ import re
 import sys
 from pathlib import Path
 
+# Adapters live under scripts/shapes/, a sibling package of this file.
+# Adjust sys.path so `import shapes.foo` works whether the user runs
+# `uv run scripts/parse_budget_workbook.py` from any cwd — the one place
+# this happens; `main()`'s late adapter import relies on it too.
+sys.path.insert(0, str(Path(__file__).parent))
+# `totals_tree` is stdlib-only (unlike the adapter modules themselves,
+# which need openpyxl), so importing it here costs nothing even for a
+# pure-dict caller — see `_totals_readout`.
+from shapes import totals_tree  # noqa: E402
+
 # Adapter registry. Keys are the values passed via --shape.
 SHAPES = {
     # Columns are one reporting-tag's values. Named for the layout, not for
@@ -146,6 +156,16 @@ _TIE_OUT_ABS_TOL = 50.0
 def _tie_tolerance(stated: float, computed: float) -> float:
     """How far `computed` may drift from `stated` and still count as a tie."""
     return max(_TIE_OUT_ABS_TOL, _TIE_OUT_REL_TOL * max(abs(stated), abs(computed)))
+
+
+def _signed_child(sign, label, value: float) -> str:
+    """One child's line in a totals breakdown: a leading `-` when its
+    parent's formula subtracts it, then its label and value. Shared by
+    the tie-out mismatch message (`_tie_out_check`) and the totals
+    readout's leaf lines (`_totals_readout`), so the two descriptions of
+    what a total's children are always render alike.
+    """
+    return f"{'-' if sign < 0 else ''}{label}: {value:,.2f}"
 
 
 # Off by a multiple, or against a sum of the opposite sign: the
@@ -361,6 +381,13 @@ def _tie_out_check(rows: list) -> dict:
     named only its final sub-block (e.g. a mgmt-fee total reading
     `<funds subtotal> + <creator>`) is not refused when the lines beneath
     it do add up.
+
+    A mismatch's `message` names what the gate actually compared the
+    total against. For a row tied out via its tree, that's each signed
+    child by label and value — the question is about those specific rows,
+    not a verdict on the parse. A row tied out via leaf `constituents`
+    uses the "line rows sum to" wording, since there's no single child to
+    point at.
     """
     by_id = _rows_by_tree_id(rows)
     key_to_row = {r["key"]: r for r in rows if r.get("key")}
@@ -380,11 +407,19 @@ def _tie_out_check(rows: list) -> dict:
 
         tree_children = _tree_children_map(by_id, row)
         covered_map: dict = {}
+        children_by_dim: dict = {}
         if tree_children is not None:
-            computed_map: dict = {}
             for sign, cr in tree_children:
                 for dim, val in _row_values(cr).items():
-                    computed_map[dim] = computed_map.get(dim, 0.0) + sign * val
+                    children_by_dim.setdefault(dim, []).append(
+                        {"label": cr.get("label"), "sign": sign, "value": val})
+            # Derived from `children_by_dim`, not summed separately, so a
+            # mismatch's listed children always add up to the figure the
+            # message reports they sum to.
+            computed_map = {
+                dim: sum(c["sign"] * c["value"] for c in children)
+                for dim, children in children_by_dim.items()
+            }
         else:
             if not _is_additive(row):
                 continue
@@ -417,6 +452,7 @@ def _tie_out_check(rows: list) -> dict:
                 cov_tol = _tie_tolerance(stated, covered)
                 if abs(stated - covered) <= cov_tol:
                     computed, tolerance = covered, cov_tol
+            children_detail = children_by_dim.get(dim) if tree_children is not None else None
             comparisons.append({
                 "label": row.get("label"),
                 "row_kind": row.get("row_kind"),
@@ -426,19 +462,39 @@ def _tie_out_check(rows: list) -> dict:
                 "tolerance": round(tolerance, 2),
                 "within_tolerance": abs(stated - computed) <= tolerance,
                 "gross": _is_gross_mismatch(stated, computed, tolerance),
+                "children": children_detail,
             })
 
     mismatches = [c for c in comparisons if not c["within_tolerance"]]
     gross = [c for c in mismatches if c["gross"]]
     message = None
     if mismatches:
-        parts = [
-            f"{m['label']!r}"
-            + (f" [{m['dimension']}]" if m["dimension"] else "")
-            + f": workbook states {m['stated']:,.2f}, line rows sum to "
-              f"{m['computed']:,.2f} (tolerance {m['tolerance']:,.2f})"
-            for m in (gross or mismatches)
-        ]
+        def _describe(m):
+            head = (
+                f"{m['label']!r}"
+                + (f" [{m['dimension']}]" if m["dimension"] else "")
+                + f": workbook states {m['stated']:,.2f}, "
+            )
+            if m["children"]:
+                # Names exactly what the total's own formula sums, so the
+                # operator can see which child is missing, zero, or on the
+                # wrong side without opening the workbook — the refusal is
+                # a question about those rows, not a verdict on the parse.
+                breakdown = "; ".join(
+                    _signed_child(c["sign"], repr(c["label"]), c["value"])
+                    for c in m["children"]
+                )
+                return (
+                    head + "its own formula's children sum to "
+                    f"{m['computed']:,.2f} (tolerance {m['tolerance']:,.2f}) — "
+                    f"{breakdown}"
+                )
+            return (
+                head + f"line rows sum to {m['computed']:,.2f} "
+                f"(tolerance {m['tolerance']:,.2f})"
+            )
+
+        parts = [_describe(m) for m in (gross or mismatches)]
         lead = (
             "tie-out mismatch against the workbook's own stated total — "
             if gross else
@@ -551,8 +607,7 @@ def _totals_readout(rows: list) -> str:
     rows_with_children = [r for r in rows if r.get("children")]
     if not rows_with_children:
         return ""
-    child_ids = {c for r in rows_with_children for c in r["children"]}
-    roots = [r for r in rows_with_children if r["total_key"] not in child_ids]
+    roots = totals_tree.tree_roots(rows_with_children)
 
     lines = []
 
@@ -578,12 +633,12 @@ def _totals_readout(rows: list) -> str:
         mark = tie_mark(stated, computed) if row.get("children_complete", True) else ""
         lines.append(f"{'  ' * depth}{prefix}{row.get('label')}: {amount}{mark}")
         for sign, c in zip(signs, children):
-            child_prefix = "" if sign > 0 else "-"
             if c.get("children"):
-                render(c, depth + 1, child_prefix)
+                render(c, depth + 1, "" if sign > 0 else "-")
             else:
                 lines.append(
-                    f"{'  ' * (depth + 1)}{child_prefix}{c.get('label')}: {float(c.get('annual') or 0.0):,.2f}"
+                    f"{'  ' * (depth + 1)}"
+                    f"{_signed_child(sign, c.get('label'), float(c.get('annual') or 0.0))}"
                 )
 
     for r in roots:
@@ -714,11 +769,9 @@ def main() -> int:
         return 2
 
     # Late import so a bad --shape argparse-fails before we touch openpyxl.
+    # scripts/shapes/ is already on sys.path (see the module-level insert
+    # near the top of this file).
     module_path = SHAPES[args.shape]
-    # Adapters live under scripts/shapes/, which is a sibling package of
-    # this file. Adjust sys.path so `import shapes.foo` works whether the
-    # user runs `uv run scripts/parse_budget_workbook.py` from any cwd.
-    sys.path.insert(0, str(Path(__file__).parent))
     module = __import__(module_path, fromlist=["parse"])
     if not hasattr(module, "parse"):
         print(
@@ -773,6 +826,15 @@ def main() -> int:
 
     validation = _validate_budget(budget, workbook, args.sheet)
     budget["validation"] = validation
+
+    # Printed ahead of the refusal check: a refused parse exits there, and
+    # its reader needs the readout to see what each mismatched total was
+    # compared against, same as a successful parse does.
+    if args.shape == "pnl-outline":
+        readout = _totals_readout(budget.get("rows", []))
+        if readout:
+            print(f"totals readout:\n{readout}", file=sys.stderr)
+
     failed = [c for c in validation["checks"] if c["severity"] == "error" and not c["passed"]]
     if failed:
         detail = "\n".join(f"  - {c['name']}: {c['message']}" for c in failed)
@@ -814,10 +876,6 @@ def main() -> int:
         detail = f"{len(rows_out)} accounts (no department axis)"
     else:
         detail = f"{len(rows_out)} outline rows ({lines} line items)"
-    if args.shape == "pnl-outline":
-        readout = _totals_readout(rows_out)
-        if readout:
-            print(f"totals readout:\n{readout}", file=sys.stderr)
     print(
         f"parsed {detail}; period_year={budget.get('period_year')}; wrote {out}",
         file=sys.stderr,

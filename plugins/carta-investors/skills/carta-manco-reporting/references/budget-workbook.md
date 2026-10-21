@@ -399,14 +399,15 @@ could read, it also prints an indented readout to stderr — every root
 total down through what it sums, with a ✓/✗ against the *signed* sum of
 its own children. A child the total's own formula subtracts prints with a
 leading `-`, whether that child is a leaf line or another total with its
-own children underneath. Skim it before moving on: a dept total sitting
-under the wrong grand total, or a ✗, is visible here in the first minute
-rather than surfacing later as a dashboard number nobody can explain. A
-total with **no mark at all** (its amount printed as `—`, or printed as a
-number but still unmarked) means either its own stated amount isn't a
-number the parser could read, or its formula also adds a constant or a
-cross-sheet value alongside the rows shown — nothing here failed to tie,
-it simply can't be checked this way.
+own children underneath. It prints whether the gate passes or refuses —
+see 2.75b-iii for reading it alongside a `tie_out` refusal. Skim it before
+moving on: a dept total sitting under the wrong grand total, or a ✗, is
+visible here in the first minute rather than surfacing later as a
+dashboard number nobody can explain. A total with **no mark at all** (its
+amount printed as `—`, or printed as a number but still unmarked) means
+either its own stated amount isn't a number the parser could read, or its
+formula also adds a constant or a cross-sheet value alongside the rows
+shown — nothing here failed to tie, it simply can't be checked this way.
 
 #### 2.75b-i — The window actuals are summed over
 
@@ -518,20 +519,38 @@ Read the check name in the error and work it through:
   parse to fail the same way twice. Take the operator's own description
   instead. Only a genuinely empty template justifies `--skip-validation`.
 
-- **`tie_out`, refused** — a stated total is off from the rows we summed
-  by a multiple, or against the opposite sign. When the sum is *larger*
-  than the total, the outline usually ran past the end of the budget into
-  a supporting schedule and counted it twice; ask the operator for the
-  last row of the real budget and re-run with `--stop-label "<that row>"`.
-  When the sum is *smaller*, lines the total covers weren't read as lines
-  — that's a parser limit, not a missing answer, so say so plainly rather
-  than sending them looking for a setting that doesn't exist. Note a
-  *section's grand total that rolls up subtotals* is not this case: the
-  gate re-sums the last total in a section against every line row beneath
-  it (the same widening the outline view renders), so a total whose own
-  formula names only its final sub-block — e.g. a mgmt-fee grand total
-  reading `<funds subtotal> + <creator>` — ties on its own and is not
-  refused when the lines under it add up.
+- **`tie_out`, refused** — a stated total is off from what it was compared
+  against by a multiple, or against the opposite sign. When the sum is
+  *larger* than the total, the outline usually ran past the end of the
+  budget into a supporting schedule and counted it twice; ask the operator
+  for the last row of the real budget and re-run with
+  `--stop-label "<that row>"`.
+  When the sum is *smaller*, the refusal message names what the gate
+  actually compared the total against — its own formula's children, when
+  it has one (a line or another total, each by label) — so read that list
+  before asking anything. Pair it with the totals readout above: the same
+  total appears there with a ✗, and its children are printed right beneath
+  it, so a row reading as the wrong side (filed under Income when its own
+  formula sits inside Operating Expenses, say) or carrying an unexpected
+  figure is usually visible without opening the workbook. Put what the
+  readout shows in front of the operator and ask about that, rather than
+  guessing a setting or declaring it unreadable before you've looked:
+  *"`<Total>` reads as 142.8M, but its own formula's pieces — `<child A>`:
+  `<value>`, `<child B>`: `<value>` — only add to 51.9M. Does one of these
+  belong on the other side, or under a different total?"*
+  A *total of subtotals* ties on its own: the gate ties a total
+  against the children its own formula names — `=N46+N50+…` sums two
+  subtotal cells, not a `SUM(`/`SUBTOTAL(` range over leaf lines — so a
+  grand total whose formula names several subtotals, or only its final
+  sub-block (e.g. a mgmt-fee grand total reading `<funds subtotal> +
+  <creator>`, widened against every line row the section's last total
+  visibly sits over when it has no such tree) ties on its own.
+
+  Only once you've shown the operator the readout and the mismatch, and
+  they've told you the parse is correct as it stands, re-run with
+  `--skip-validation` — ask for that confirmation in those terms ("use the
+  parse as shown"), not as though they had already reviewed the workbook
+  before you showed them anything.
 
 - **`coverage`** — far fewer rows emitted than the sheet has numbers in.
   The shape or the sheet is wrong; re-confirm both.
