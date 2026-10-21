@@ -416,10 +416,13 @@ The hosted app (`server/worker.js`) runs the local `nav_latest`, `fund_metrics`,
 `fee_schedules`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
 the §0 directory query (`ops_benchmarks` holds no firm data and has no scope; `financials` is row-scoped by
 `set_context`, as locally). Only `nav_latest`, `fund_metrics` and the three hosted
-queries below are required; any other one the user's role cannot read leaves its data out and the firm still loads. It reads every result as **one
+queries below are required; any other one that errors leaves its data out and the firm still loads: the user's role cannot read
+the table, or the result is over the MCP's inline size cap. It reads every result as **one
 10,000-row page**: it cannot page, and it rejects any result that reports `next_offset` rather than save a partial
 snapshot. The exceptions are `captable` and `financials`: one cut at the limit is left out whole and the firm still
-loads, with no `company.capTable` (§15) or `company.financials` (§14). Three queries are its own, each trimmed to fit that one page:
+loads, with no `company.capTable` (§15) or `company.financials` (§14). The snapshot's `source.queries` records, per query,
+which happened: `loaded` (with its row count), `denied`, `too_large` (each with the error text) or `cut` (with the row
+counts the DWH reports). Three queries are its own, each trimmed to fit that one page:
 - `nav_history` — `MONTHLY_NAV_CALCULATIONS` at quarter-ends plus each fund's latest month only: the months its
   NAV trend keeps. Locally the trend comes from every month-end row of the §5 `cashflows` stem.
 - `cashflows` — only months with a non-zero LP contribution or distribution, and only the flow columns: the

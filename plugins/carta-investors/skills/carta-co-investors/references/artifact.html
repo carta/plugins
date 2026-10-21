@@ -467,11 +467,15 @@
     const SET_CONTEXT_TOOL = 'set_context';
     const WELCOME_TOOL = 'welcome';
 
-    // Server caps `limit` at 10,000 and signals more rows with a next_offset token
-    // in the response header. One fetch covers every real firm; the paging loop is
-    // the tail guard, not the expected path.
-    const PAGE_LIMIT = 10000;
-    const MAX_PAGES = 10;
+    // The server returns an inline page only when it is under 200 KiB (otherwise a
+    // `too_large` error) and signals more rows with a next_offset token in the
+    // response header. Pages start at PAGE_LIMIT rows and shrink on `too_large`.
+    // The first page reports total_rows, so the rest are fetched PAGE_CONCURRENCY
+    // at a time. A query planned into more than MAX_PAGES ranges fails the load
+    // rather than showing a partial row set as complete.
+    const PAGE_LIMIT = 40;
+    const PAGE_CONCURRENCY = 4;
+    const MAX_PAGES = 500;
 
     let DATA = null;
     let welcomeCalledThisSession = false;
@@ -512,6 +516,13 @@
     // loose enough to survive minor wording tweaks from the MCP team.
     function isWelcomeRequiredMessage(text) {
       return typeof text === 'string' && /welcome/i.test(text);
+    }
+
+    // The text of an isError envelope. The gateway puts a wrapped command's own
+    // error in `result.result`, beside the generic message, so both are read.
+    function errorText(result) {
+      const text = (r) => (r && r.content && r.content[0] && r.content[0].text) || '';
+      return [text(result), text(result && result.result)].filter(Boolean).join(' ');
     }
 
     // Every Carta MCP call — call_tool, set_context, welcome alike — must carry
@@ -570,8 +581,7 @@
       const result = await callCartaTool(toolName, args);
       if (!result || !result.isError) return result;
 
-      const errorText = (result.content && result.content[0] && result.content[0].text) || '';
-      if (!isWelcomeRequiredMessage(errorText) || welcomeCalledThisSession) {
+      if (!isWelcomeRequiredMessage(errorText(result)) || welcomeCalledThisSession) {
         return result;
       }
 
@@ -579,8 +589,7 @@
       welcomeCalledThisSession = true;
       const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
       if (welcomeResult && welcomeResult.isError) {
-        const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
-        throw new Error('Failed to initialize MCP session: ' + msg);
+        throw new Error('Failed to initialize MCP session: ' + (errorText(welcomeResult) || '<no message>'));
       }
 
       return await callCartaTool(toolName, args);
@@ -598,8 +607,7 @@
         throw new Error('Unexpected response shape: ' + (typeof result));
       }
       if (result.isError) {
-        const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
-        throw new Error(msg);
+        throw new Error(errorText(result) || '<no message>');
       }
       if (result.content && Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
         return result.content[0].text;
@@ -634,7 +642,8 @@
     function parseNdjson(text) {
       const rows = [];
       let nextOffset = null;
-      if (!text) return { rows, nextOffset };
+      let totalRows = null;
+      if (!text) return { rows, nextOffset, totalRows };
 
       let body = text;
       const stripped = text.trimStart();
@@ -642,6 +651,8 @@
       if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
         const m = firstLine.match(/next_offset:\s*(\d+)/);
         if (m) nextOffset = parseInt(m[1], 10);
+        const t = firstLine.match(/total_rows:\s*([\d,]+)/);
+        if (t) totalRows = parseInt(t[1].replace(/,/g, ''), 10);
         body = text.slice(text.indexOf('\n\n') + 2);
       }
 
@@ -655,35 +666,102 @@
           console.warn('parseNdjson: skipping malformed line', e);
         }
       }
-      return { rows, nextOffset };
+      return { rows, nextOffset, totalRows };
     }
 
-    // Runs one query to exhaustion. `buildSql` takes (offset, limit). One fetch
-    // covers every real firm — the loop only engages if the server reports
-    // next_offset, and stops at MAX_PAGES so a misbehaving header can't spin.
+    // `too_large` is the server's "this page is over the inline ceiling" error;
+    // its fix text names a row count that fits ("lower the limit param to about 48").
+    // Returns the smaller limit to retry with, or null when the error is something
+    // else or the page is already a single row.
+    function shrunkLimit(message, limit) {
+      if (!/"code"\s*:\s*"too_large"/.test(message) || limit <= 1) return null;
+      const m = message.match(/limit param to about (\d+)/);
+      const suggested = m ? parseInt(m[1], 10) : limit;
+      return Math.max(1, Math.min(suggested, Math.floor(limit / 2)));
+    }
+
+    // Runs one query to exhaustion. The SQL carries no LIMIT or OFFSET: the server
+    // pages it from the `limit` / `offset` arguments. The first page is fetched
+    // alone, to learn total_rows and a page size that fits. The remaining ranges
+    // then run PAGE_CONCURRENCY at a time and are joined in offset order. A page
+    // that comes back `too_large` is retried at the same offset with fewer rows,
+    // and the smaller size is kept for the rest of the query. It returns every row
+    // of the query or rejects: a query needing more than MAX_PAGES pages, or any
+    // page that fails, fails the load, and no call for that query starts after that.
     async function fetchAllRows(buildSql, label) {
-      const all = [];
-      let offset = 0;
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
-          name: 'dwh__execute__query',
-          arguments: {
-            sql: buildSql(offset, PAGE_LIMIT),
-            format: 'ndjson',
-            // The server infers delivery shape from clientInfo.name, which cannot
-            // distinguish clients that accept a binary blob from those that reject
-            // it. `inline` forces the always-safe plain-string path.
-            response_mode: 'inline',
-            limit: PAGE_LIMIT,
-          },
-        });
-        const { rows, nextOffset } = parseNdjson(unwrapEnvelope(unwrapResponse(result)));
-        all.push(...rows);
-        if (nextOffset === null || rows.length === 0) return all;
-        offset = nextOffset;
+      const sql = buildSql();
+      let limit = PAGE_LIMIT;
+      let failed = false;
+
+      async function fetchPage(offset, count) {
+        for (;;) {
+          if (failed) throw new Error(label + ': stopped after a failed page');
+          const sent = Math.min(limit, count);
+          const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+            name: 'dwh__execute__query',
+            arguments: {
+              sql,
+              format: 'ndjson',
+              // The server infers delivery shape from clientInfo.name, which cannot
+              // distinguish clients that accept a binary blob from those that reject
+              // it. `inline` forces the always-safe plain-string path.
+              response_mode: 'inline',
+              limit: sent,
+              offset,
+            },
+          });
+          try {
+            return parseNdjson(unwrapEnvelope(unwrapResponse(result)));
+          } catch (error) {
+            const smaller = shrunkLimit(error.message || '', sent);
+            if (smaller === null) throw error;
+            // Concurrent pages sent at the old size fail together; only the first
+            // to report shrinks, the rest retry at the size it set.
+            limit = Math.min(limit, smaller);
+          }
+        }
       }
-      console.warn(label + ': hit MAX_PAGES (' + MAX_PAGES + '); results may be truncated.');
-      return all;
+
+      // Every row of [start, end), paged at the current size.
+      async function fetchRange(start, end) {
+        const rows = [];
+        let offset = start;
+        while (offset < end) {
+          const page = await fetchPage(offset, end - offset);
+          if (page.rows.length === 0) throw new Error(label + ': empty page at offset ' + offset);
+          rows.push(...page.rows);
+          offset += page.rows.length;
+        }
+        return rows;
+      }
+
+      const first = await fetchPage(0, Infinity);
+      if (first.nextOffset === null) return first.rows;
+      if (first.rows.length === 0) throw new Error(label + ': empty first page with more rows pending');
+      if (first.totalRows === null) throw new Error(label + ': next_offset without total_rows');
+
+      const ranges = [];
+      for (let start = first.nextOffset; start < first.totalRows; start += limit) {
+        ranges.push([start, Math.min(start + limit, first.totalRows)]);
+      }
+      if (ranges.length > MAX_PAGES) {
+        throw new Error(label + ': more than ' + MAX_PAGES + ' pages; results incomplete');
+      }
+      const pages = new Array(ranges.length);
+      let nextRange = 0;
+      async function worker() {
+        while (nextRange < ranges.length) {
+          const i = nextRange++;
+          try {
+            pages[i] = await fetchRange(ranges[i][0], ranges[i][1]);
+          } catch (error) {
+            failed = true;
+            throw error;
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(PAGE_CONCURRENCY, ranges.length) }, worker));
+      return first.rows.concat(...pages);
     }
 
     // ── SQL ───────────────────────────────────────────────────────────────────
@@ -755,7 +833,7 @@
 
     // Query S — one row per purchaser, with the companies they appear alongside
     // and the firm-wide SPA coverage counts embedded on every row.
-    function buildSummarySql(offset, limit) {
+    function buildSummarySql() {
       return `${SPA_CTE},
         doc_metadata AS (SELECT i.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM spa_issuer i JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN spa_deal s ON i.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN spa_purchaser p ON i.EXTRACTION_ID = p.EXTRACTION_ID WHERE i.FIRM_ID = '${FIRM_UUID}' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> '' GROUP BY i.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE),
         dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')),
@@ -767,8 +845,7 @@
         JOIN spa_purchaser p ON dd.EXTRACTION_ID = p.EXTRACTION_ID
         WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'
         GROUP BY p.PURCHASER_NAME, p.ENTITY_TYPE
-        ORDER BY COUNT(DISTINCT cc.CANONICAL_NAME) DESC, p.PURCHASER_NAME, p.ENTITY_TYPE
-        LIMIT ${limit} OFFSET ${offset}`;
+        ORDER BY COUNT(DISTINCT cc.CANONICAL_NAME) DESC, p.PURCHASER_NAME, p.ENTITY_TYPE`;
     }
 
     // Query R — one row per portfolio company, rounds nested as a compact JSON
@@ -780,39 +857,39 @@
     // purchasers survive, and per_round groups on the per-purchaser share class,
     // so a tie changes how many rounds a company appears to have — not just their
     // order.
-    function buildRoundsSql(offset, limit) {
+    function buildRoundsSql() {
       return `${SPA_CTE},
         doc_metadata AS (SELECT i.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM spa_issuer i JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN spa_deal s ON i.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN spa_purchaser p ON i.EXTRACTION_ID = p.EXTRACTION_ID WHERE i.FIRM_ID = '${FIRM_UUID}' GROUP BY i.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE),
         dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')),
         investor_rows AS (SELECT cc.CANONICAL_NAME AS ISSUER_NAME, p.SHARE_CLASS_NAME, s.CLOSING_DATE, dd.EXTRACTION_ID, p.PURCHASER_NAME, p.ENTITY_TYPE, p.SHARES_PURCHASED, p.TOTAL_AMOUNT_PAID, p.SHARES_PURCHASED / NULLIF(SUM(p.SHARES_PURCHASED) OVER (PARTITION BY dd.EXTRACTION_ID), 0) AS PCT_OF_ROUND, ROW_NUMBER() OVER (PARTITION BY dd.EXTRACTION_ID ORDER BY p.SHARES_PURCHASED DESC NULLS LAST, p.PURCHASER_NAME) AS RN FROM dedup_docs dd JOIN spa_issuer i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY JOIN spa_purchaser p ON dd.EXTRACTION_ID = p.EXTRACTION_ID LEFT JOIN spa_deal s ON dd.EXTRACTION_ID = s.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'),
         per_round AS (SELECT ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'p', ROUND(PCT_OF_ROUND, 4), 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY PCT_OF_ROUND DESC NULLS LAST, PURCHASER_NAME) AS INVESTORS FROM investor_rows WHERE RN <= 15 GROUP BY ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID)
         SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('sc', SHARE_CLASS_NAME, 'cd', CLOSING_DATE, 'inv', INVESTORS)) WITHIN GROUP (ORDER BY CLOSING_DATE DESC NULLS LAST, SHARE_CLASS_NAME, EXTRACTION_ID)) AS ROUNDS_JSON
-        FROM per_round GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME
-        LIMIT ${limit} OFFSET ${offset}`;
+        FROM per_round GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME`;
     }
 
     // Query V — the firm's own entities (funds, SPVs, GPs, management companies),
     // excluded from the co-investor list and flagged as `isFirm` inside each round.
     // Read here rather than handed in by the agent: a firm with hundreds of SPVs
     // overflows the fa:list:entities response limit, and the page has no such cap.
-    function buildVehiclesSql(offset, limit) {
+    function buildVehiclesSql() {
       return `SELECT DISTINCT FUND_NAME
         FROM FUND_ADMIN.FUNDS
         WHERE FIRM_ID = '${FIRM_UUID}'
           AND FUND_NAME IS NOT NULL
-        ORDER BY FUND_NAME
-        LIMIT ${limit} OFFSET ${offset}`;
+        ORDER BY FUND_NAME`;
     }
 
-    // Query T — live/exited status per equity investment, behind the filter tabs.
-    function buildStatusSql(offset, limit) {
-      return `SELECT ISSUER_NAME, IS_ACTIVE_INVESTMENT
+    // Query T — live/exited status per company, behind the filter tabs.
+    // GROUP BY returns one row per company, so ISSUER_NAME is a unique ORDER BY
+    // key: offset paging returns each row once only when the sort key is unique.
+    function buildStatusSql() {
+      return `SELECT ISSUER_NAME, MAX(CASE WHEN IS_ACTIVE_INVESTMENT = TRUE THEN 1 ELSE 0 END) AS IS_ACTIVE_INVESTMENT
         FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
         WHERE FIRM_ID = '${FIRM_UUID}'
           AND ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY')
           AND ISSUER_NAME IS NOT NULL
-        ORDER BY ISSUER_NAME
-        LIMIT ${limit} OFFSET ${offset}`;
+        GROUP BY ISSUER_NAME
+        ORDER BY ISSUER_NAME`;
     }
 
     // ── Transform ─────────────────────────────────────────────────────────────
@@ -1087,8 +1164,7 @@
       try {
         const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
         if (contextResult && contextResult.isError) {
-          const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
-          throw new Error(msg);
+          throw new Error(errorText(contextResult) || '<no message>');
         }
       } catch (error) {
         showError(
