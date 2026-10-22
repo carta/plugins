@@ -415,8 +415,13 @@ size, which is the number the operator will check against their statement
 of operations and find wrong.
 
 Offer the budget's own lines, plus "leave it where it is". Record the
-answer as `{"scope": {"source": "...", "category": "...", "value": "..."}}`
-against that row's `addr` in `budget-mapping.json`, then re-run Step 4.
+answer against that row's `addr` — `--tag "<category>=<value>"` for a
+reporting tag, `--vendor "<vendor>"` or `--sub "<sub_account>"` for those
+— then re-run Step 4:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" scope "<dashboard_dir>" "<addr>" --tag "<category>=<value>" --source operator
+```
 
 **Use `addr`, not the row's position or label alone.** The rows a client
 picks here are usually the subtotals a workbook builds its own sections
@@ -485,7 +490,8 @@ After the orientation line, ask a single `AskUserQuestion`:
   already confirmed doesn't resurface here on its own — it isn't
   unresolved — but the operator can still name one directly ("row 3 should
   be the fee account instead") through the free-text option below; record
-  the new answer in `budget-mapping.json` the same way Step 4.7 would and
+  the new answer with `record_mapping.py` the same way Step 4.7 does (see
+  [budget-unresolved.md](budget-unresolved.md)'s "Recording answers") and
   rebuild
 - **Undo the last dashboard update** *(only when an archive exists)* → restore the
   most recent entry from `rollback --list` (newest-first; take `archives[0].id`):

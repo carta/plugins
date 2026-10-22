@@ -89,7 +89,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.106.3</carta-plugin>
+<carta-plugin>carta-investors:6.106.6</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -261,7 +261,10 @@ datadir build runs silently. Speak only at:
   actual, which reads as an account nobody spent from rather than one
   nobody matched. Every other question in this skill waits until the
   report is up, because the report is right without it; these two are not.
-  Answer them, rebuild (Step 4), then emit the URL
+  Answer them, rebuild (Step 4), then emit the URL. Every answer is
+  recorded with `record_mapping.py`, its `--source` saying whether the
+  operator gave it or you made it on their behalf — never by writing
+  `budget-mapping.json` yourself
 - Step 5 — the dashboard URL, its orientation line, and — only when the
   build reported gaps — one line counting where the report and the
   client's own workbook differ (5c)

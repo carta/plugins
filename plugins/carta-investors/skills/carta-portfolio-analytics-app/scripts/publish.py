@@ -11,7 +11,6 @@ set_context / list_accounts / call_tool, no Bash, no Write. One store call per
 company-and-currency group, one attempt each; a rejected call fails its edits and the
 user decides whether to retry. Stdlib-only, 3.9-safe.
 """
-import datetime as _dt
 import importlib.util as _ilu
 import json
 import math
@@ -221,9 +220,6 @@ def _store_args(owner_pk, group):
         "owner_id": str(owner_pk),
         "owner_type": "ENTITY_TYPE_ORGANIZATION",
         "currency_code": group["currency"],
-        # Without this the store stamps as_of_date = period_end and the correction
-        # loses the warehouse dedup to the original filing (Global Constraints).
-        "reported_as_of_date": _dt.date.today().isoformat(),
         "kpis": group["kpis"],
     }
 

@@ -36,12 +36,20 @@ Stdlib-only, Python 3.9-safe.
 import argparse
 import glob
 import json
+import os
 import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from datetime import date as _date
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl; msvcrt locks the same byte range.
+    fcntl = None
+    import msvcrt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import manco_paths
@@ -583,10 +591,17 @@ def _names_nothing(value, account_words):
     value named like an account ("Marketing") is a cost centre the firm set
     up to slice its spend, so account words don't count against it.
     """
+    return not _meaningful_words(value, account_words)
+
+
+def _meaningful_words(value, account_words):
+    """The words of a firm value that identify something — its own wording
+    less filler, and less Carta's account words unless it is a reporting
+    tag (a cost centre named like an account is still a cost centre)."""
     dead = SCOPE_STOPWORDS
     if value["source"] != "reporting_tag":
-        dead = dead | account_words
-    return not (_label_tokens(value["value"]) - dead)
+        dead = dead | (account_words or set())
+    return _label_tokens(value["value"]) - dead
 
 
 def inference_key(scope, field):
@@ -606,11 +621,11 @@ def _decided(decisions, scope, field):
 
 
 def _rejected(decisions, scope, field):
-    return _decided(decisions, scope, field) == "rejected"
+    return _decided(decisions, scope, field) == REJECTED
 
 
 def _confirmed(decisions, scope, field):
-    return _decided(decisions, scope, field) == "confirmed"
+    return _decided(decisions, scope, field) == CONFIRMED
 
 
 def _inference(scope, field, row):
@@ -654,13 +669,7 @@ def read_inference_decisions(dashboard_dir):
     Confirmed is not asked again; rejected is not applied again. Absent
     means nobody has been asked yet.
     """
-    path = Path(dashboard_dir) / "budget-mapping.json"
-    if not path.exists():
-        return {}
-    try:
-        return (json.loads(path.read_text()).get("inferences") or {})
-    except Exception:
-        return {}
+    return mapping_section(_read_mapping_or_empty(dashboard_dir), ("inferences",))
 
 
 def claim_dimension_values(rows, census, aliases=None, account_names=None,
@@ -863,13 +872,7 @@ def read_account_decisions(dashboard_dir):
     budget, is not asked about again. Assigning it to a line is recorded on
     that line's own `gl_codes` instead — the line is what reports it.
     """
-    path = Path(dashboard_dir) / "budget-mapping.json"
-    if not path.exists():
-        return {}
-    try:
-        return (json.loads(path.read_text()).get("accounts") or {})
-    except Exception:
-        return {}
+    return mapping_section(_read_mapping_or_empty(dashboard_dir), ("accounts",))
 
 
 # A fund_match line reports the ManCo's own aggregate management-fee-income
@@ -2533,6 +2536,10 @@ def group_reimbursements(rows, name_individuals=False, entry_ids=None):
 
 VOID = "void"
 REMOVED = "removed"
+# An inference's answer, and an account's.
+CONFIRMED = "confirmed"
+REJECTED = "rejected"
+NOT_EXPECTED = "not_expected"
 
 
 def read_budget_mapping(dashboard_dir):
@@ -2554,13 +2561,7 @@ def read_budget_mapping(dashboard_dir):
     fund's fees on another — so an unresolved row is asked about and the
     answer recorded here rather than inferred again on every build.
     """
-    path = Path(dashboard_dir) / "budget-mapping.json"
-    if not path.exists():
-        return {}
-    try:
-        return (json.loads(path.read_text()).get("rows") or {})
-    except Exception:
-        return {}
+    return mapping_section(_read_mapping_or_empty(dashboard_dir), ("rows",))
 
 
 def copy_budget_mapping(dashboard_dir, rows, src_id, dst_id):
@@ -2576,23 +2577,31 @@ def copy_budget_mapping(dashboard_dir, rows, src_id, dst_id):
     and turn a bare answer the build ignored into a prefixed one.
     Returns the number of answers recorded.
     """
-    mapping = read_budget_mapping(dashboard_dir)
-    if not mapping:
-        return 0
     ambiguous = ambiguous_bare_addrs(_last_build_own_budgets(dashboard_dir))
     src_rows = [dict(r) for r in rows]
     dst_rows = [dict(r) for r in rows]
     assign_row_addresses(src_rows, budget_id=src_id)
     assign_row_addresses(dst_rows, budget_id=dst_id)
-    answers = {}
-    for src, dst in zip(src_rows, dst_rows):
-        decision = _recorded_decision(mapping, src, ambiguous)
-        # An empty decision still counts: it is what kept a bare answer off
-        # the source row, and the copy must not pick that answer up later.
-        if decision is not None:
-            answers[src["addr"]] = decision
-            answers[dst["addr"]] = decision
-    return record_budget_mapping(dashboard_dir, answers) if answers else 0
+
+    # Read inside the write's lock, so an answer recorded meanwhile is the
+    # one copied.
+    def copies(payload):
+        decisions = mapping_section(payload, ("rows",))
+        answers = {}
+        for src, dst in zip(src_rows, dst_rows):
+            decision = _recorded_decision(decisions, src, ambiguous)
+            # An empty decision still counts: it is what kept a bare answer
+            # off the source row, and the copy must not pick that answer up
+            # later.
+            if decision is not None:
+                answers[src["addr"]] = decision
+                answers[dst["addr"]] = decision
+        return answers
+
+    try:
+        return update_mapping(dashboard_dir, ("rows",), copies)
+    except RuntimeError:
+        return 0
 
 
 def _last_build_own_budgets(dashboard_dir):
@@ -2606,8 +2615,10 @@ def read_fund_attribution(dashboard_dir):
     Shares `budget-mapping.json` with `read_budget_mapping`, under its own
     top-level key so the two never collide:
 
-        {"fund_attribution": {"by_id":   {"<gluuid or id>": "<fund_uuid>"},
-                               "by_memo": {"<memo text, exact>": "<fund_uuid>"}}}
+        {"fund_attribution": {"by_id":   {"<gluuid or id>": {"fund": "<fund_uuid>", ...}},
+                               "by_memo": {"<memo text, exact>": {"fund": "<fund_uuid>", ...}}}}
+
+    Each answer is returned as its fund uuid alone.
 
     `infer_fund_from_memo` reads a memo; it does not read an operator's
     mind. A tie it can't break, or a memo it can't parse at all, is
@@ -2617,14 +2628,19 @@ def read_fund_attribution(dashboard_dir):
     description, which is how one wording shared by many lines (a
     migrated year, a lump transfer) is fixed in a single answer.
     """
-    path = Path(dashboard_dir) / "budget-mapping.json"
-    if not path.exists():
-        return {"by_id": {}, "by_memo": {}}
-    try:
-        fa = json.loads(path.read_text()).get("fund_attribution") or {}
-    except Exception:
-        return {"by_id": {}, "by_memo": {}}
-    return {"by_id": fa.get("by_id") or {}, "by_memo": fa.get("by_memo") or {}}
+    mapping = _read_mapping_or_empty(dashboard_dir)
+
+    def funds(by):
+        return {k: fund_answer(v).get("fund")
+                for k, v in mapping_section(mapping, ("fund_attribution", by)).items()}
+
+    return {"by_id": funds("by_id"), "by_memo": funds("by_memo")}
+
+
+def fund_answer(value):
+    """A fund_attribution answer as a dict: record_mapping.py writes
+    `{"fund": uuid, "source": …}`; a hand-written one is the bare uuid."""
+    return value if isinstance(value, dict) else {"fund": value}
 
 
 def resolve_fund_attribution(row, candidates, overrides):
@@ -2711,7 +2727,96 @@ def _recorded_decision(mapping, row, ambiguous_bare_addrs):
     return decision
 
 
-def record_budget_mapping(dashboard_dir, answers):
+def _mapping_path(dashboard_dir):
+    return Path(dashboard_dir) / "budget-mapping.json"
+
+
+def read_mapping_file(dashboard_dir):
+    """The whole of `budget-mapping.json`, `{}` when there is none yet.
+
+    An unreadable file is not an empty one: it raises rather than letting a
+    caller start a fresh one over the top of it.
+    """
+    path = _mapping_path(dashboard_dir)
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text()) or {}
+        if not isinstance(payload, dict):
+            raise ValueError("not a JSON object")
+    except Exception:
+        raise RuntimeError(f"{path} exists but could not be read; "
+                           f"not overwriting it")
+    return payload
+
+
+def _read_mapping_or_empty(dashboard_dir):
+    """`read_mapping_file` for the build's readers: an unreadable file applies
+    no answers, the same as no file at all."""
+    try:
+        return read_mapping_file(dashboard_dir)
+    except RuntimeError:
+        return {}
+
+
+def mapping_section(mapping, section):
+    """The answers under `section`, a key path into budget-mapping.json
+    (`("rows",)`, `("fund_attribution", "by_memo")`); `{}` when absent."""
+    answers = mapping
+    for key in section:
+        answers = (answers or {}).get(key) or {}
+    return answers
+
+
+@contextmanager
+def _mapping_lock(dashboard_dir):
+    """Held from the read to the write of budget-mapping.json, so two writers
+    running at once can't each merge into the same old copy and drop the
+    other's answer."""
+    lock_path = _mapping_path(dashboard_dir).with_suffix(".json.lock")
+    with open(lock_path, "a+") as fh:
+        if fcntl is not None:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        else:
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+            else:
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+def update_mapping(dashboard_dir, section, compute):
+    """Merge `compute(mapping)`'s answers into `section`, under the lock.
+
+    `compute` reads the file as it stands inside the lock and returns
+    `{key: answer}` to merge — or nothing, which writes nothing. The file is
+    replaced whole only after the new copy is fully written, so a failed
+    write never leaves a partial one. Returns the number of answers added
+    or changed.
+    """
+    path = _mapping_path(dashboard_dir)
+    with _mapping_lock(dashboard_dir):
+        payload = read_mapping_file(dashboard_dir)
+        answers = compute(payload) or {}
+        if not answers:
+            return 0
+        target = payload
+        for key in section:
+            target = target.setdefault(key, {})
+        changed = sum(1 for k, v in answers.items() if target.get(k) != v)
+        target.update(answers)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, indent=2))
+        os.replace(str(tmp), str(path))
+        return changed
+
+
+def record_budget_mapping(dashboard_dir, answers, section=("rows",)):
     """Merge answers into the dir's mapping file, never replacing it.
 
     This file is the only record of decisions a client made — which fund a
@@ -2719,23 +2824,43 @@ def record_budget_mapping(dashboard_dir, answers):
     Nothing else holds them, and they cost a conversation each. Write the
     whole file and one careless run erases work nobody can reconstruct.
 
-    Returns the number of rows added or changed.
+    `section` is the key path the answers merge under — one of
+    `_PROVENANCE_SECTIONS`. Every other section is left as found.
+
+    Returns the number of answers added or changed.
     """
-    path = Path(dashboard_dir) / "budget-mapping.json"
-    payload = {"rows": {}}
-    if path.exists():
-        try:
-            payload = json.loads(path.read_text()) or {"rows": {}}
-        except Exception:
-            # An unreadable file is not an empty one. Refuse rather than
-            # start a fresh one over the top of it.
-            raise RuntimeError(f"{path} exists but could not be read; "
-                               f"not overwriting it")
-    rows = payload.setdefault("rows", {})
-    changed = sum(1 for k, v in (answers or {}).items() if rows.get(k) != v)
-    rows.update(answers or {})
-    path.write_text(json.dumps(payload, indent=2))
-    return changed
+    return update_mapping(dashboard_dir, section, lambda _mapping: answers)
+
+
+# Who gave a recorded answer: the operator themselves, or the model on their
+# behalf. `record_mapping.py` stamps one of these on every answer it writes.
+SOURCE_OPERATOR = "operator"
+SOURCE_DELEGATED = "operator-delegated"
+MAPPING_SOURCES = (SOURCE_OPERATOR, SOURCE_DELEGATED)
+
+# The sections of budget-mapping.json that hold answers, as key paths.
+_PROVENANCE_SECTIONS = (("rows",), ("inferences",), ("accounts",),
+                        ("fund_attribution", "by_id"), ("fund_attribution", "by_memo"))
+
+
+def mapping_provenance(mapping):
+    """Who gave each recorded answer, from its `source` stamp.
+
+    `delegated` lists the answers the model made on the operator's behalf
+    ("do your best"); `unattributed` lists the answers with no stamp at all —
+    written before record_mapping.py stamped one, or written around it. A
+    `fund_attribution` answer recorded as a bare fund uuid has no stamp.
+    """
+    out = {"delegated": [], "unattributed": []}
+    for section in _PROVENANCE_SECTIONS:
+        for key, value in mapping_section(mapping, section).items():
+            source = value.get("source") if isinstance(value, dict) else None
+            ref = {"section": ".".join(section), "key": key}
+            if source == SOURCE_DELEGATED:
+                out["delegated"].append(ref)
+            elif source not in MAPPING_SOURCES:
+                out["unattributed"].append(ref)
+    return out
 
 
 def rehome_fee_rows_to_manco(rows, manco_fee_accounts, foreign_fee_accounts,
@@ -3303,6 +3428,12 @@ def gaps_sentence(counts):
     if counts.get("zero_activity"):
         parts.append(f"{counts['zero_activity']} mapped line(s) show zero "
                      f"activity this window")
+    if counts.get("delegated"):
+        parts.append(f"{counts['delegated']} answer(s) made on your behalf "
+                     f"(operator-delegated)")
+    if counts.get("unattributed"):
+        parts.append(f"{counts['unattributed']} answer(s) with no recorded source "
+                     f"(written before or outside record_mapping.py)")
     return " · ".join(parts) or None
 
 
@@ -3745,16 +3876,19 @@ def unconfirmed_inferences(rows, decisions=None):
     out = {}
     for row in rows or []:
         for inf in row.get("scope_inferred") or []:
-            if decided.get(inf["key"], {}).get("status") in ("confirmed", "rejected"):
+            if decided.get(inf["key"], {}).get("status") in (CONFIRMED, REJECTED):
                 continue
             e = out.setdefault(inf["key"], {
                 "key": inf["key"], "source": inf["source"],
                 "category": inf.get("category"), "value": inf["value"],
-                "field": inf["field"], "lines": [],
+                "field": inf["field"], "lines": [], "row_count": 0,
             })
+            # Every row the answer reaches, two lines of one label included;
+            # `lines` is only the labels to show.
+            e["row_count"] += 1
             if row.get("label") and row["label"] not in e["lines"]:
                 e["lines"].append(row["label"])
-    return sorted(out.values(), key=lambda x: -len(x["lines"]))
+    return sorted(out.values(), key=lambda x: -x["row_count"])
 
 
 _ASK_ORDER = {"fund": 0, "fund_account": 1, "gl_account": 2, "scope": 3,
@@ -3838,29 +3972,73 @@ def account_rows(unaccounted, start=1, floor=_ACCOUNT_ASK_FLOOR):
     return out
 
 
-def inference_rows(inferences, start=1):
+# An inference reaching more rows than this is confirmed only with its count
+# stated back — see `needs_line_ack` in inference_rows.
+_INFERENCE_ACK_MAX_LINES = 10
+
+
+# An inference's mapping-table address is this prefix and its key.
+INFERENCE_ADDR_PREFIX = "inference:"
+
+
+def inference_rows(inferences, start=1, account_words=None):
     """Each inference as one row of the same numbered table.
 
     Pre-filled with the value the build applied, so an operator who agrees
     changes nothing — the answer only has to be typed where it is wrong.
+
+    `line_count` is the number of budget rows the answer reaches — across
+    every one of the firm's own budgets, two rows of one label counted
+    twice. `needs_line_ack` marks an inference whose confirmation moves
+    enough money to be stated line count first: more than
+    `_INFERENCE_ACK_MAX_LINES` rows, or a value of one meaningful word
+    (`_meaningful_words`, read with Carta's `account_words`).
+    record_mapping.py's `confirm-inference` refuses one without
+    `--lines <line_count>`.
     """
     out = []
     for inf in inferences or []:
         lines = inf["lines"]
+        count = inf["row_count"]
         shown = ", ".join(lines[:3]) + (f" +{len(lines) - 3} more" if len(lines) > 3 else "")
         out.append({
             "n": start + len(out),
-            "addr": f"inference:{inf['key']}",
+            "addr": INFERENCE_ADDR_PREFIX + inf["key"],
             "line": shown,
             "section": f"matched on {_FIELD_SAID.get(inf['field'], inf['field'])}",
             "needs": "inference",
             "wants": _ASK_WANTS["inference"],
             "proposed": inf["value"],
-            "why": f"applied to {len(lines)} line(s) on this wording alone",
-            "answer": {"status": "confirmed"},
+            "why": f"applied to {count} line(s) on this wording alone",
+            "answer": {"status": CONFIRMED},
             "options": [inf["value"], "not that value"],
+            "line_count": count,
+            "needs_line_ack": (count > _INFERENCE_ACK_MAX_LINES
+                               or len(_meaningful_words(inf, account_words)) <= 1),
         })
     return out
+
+
+def _row_answer(row, answer):
+    """`answer` as one whole decision for `row`: GL codes on a line that
+    reports one fund carry that fund too, since an answer states the line's
+    fund and accounts together."""
+    if answer and "gl_codes" in answer and row.get("fund_match"):
+        return {"fund": row["fund_match"], **answer}
+    return answer
+
+
+def _ask_answer(sug):
+    """The decision one candidate stands for, in the shape a row answer
+    records it — `fund`, `gl_codes`, or the full `scope`."""
+    if sug.get("fund"):
+        return {"fund": sug["fund"]}
+    if sug.get("gl") is not None:
+        return {"gl_codes": [sug["gl"]]}
+    if sug.get("source"):
+        return {"scope": {k: sug[k] for k in ("source", "category", "value")
+                          if sug.get(k) is not None}}
+    return None
 
 
 def _ask_option(sug):
@@ -3913,6 +4091,7 @@ def mapping_table(rows, asks, proposals=None, tab_name=None):
             # row, so "one suggestion" here means "nothing changed", not
             # "clearly resolved". Always asked, never pre-filled.
             quiet = ask.get("needs") == "zero_activity_account"
+            sole = sugs[0] if len(sugs) == 1 and not quiet else None
             out.append({
                 "n": len(out) + 1,
                 "addr": row.get("addr"),
@@ -3923,10 +4102,11 @@ def mapping_table(rows, asks, proposals=None, tab_name=None):
                 "wants": ("which fund, or which account"
                           if ask.get("needs") == "fund" and ask.get("also")
                           else _ASK_WANTS.get(ask.get("needs"), ask.get("needs"))),
-                "proposed": picked["label"] if picked else (
-                    _ask_option(sugs[0]) if len(sugs) == 1 and not quiet else None),
-                "why": (picked or (sugs[0] if len(sugs) == 1 and not quiet else {})).get("why"),
-                "answer": ({"gl_codes": picked["gl_codes"]} if picked else None),
+                "proposed": picked["label"] if picked else (_ask_option(sole) if sole else None),
+                "why": (picked or sole or {}).get("why"),
+                # What "Yes, confirm all" records for this row.
+                "answer": _row_answer(row, {"gl_codes": picked["gl_codes"]} if picked
+                                      else _ask_answer(sole) if sole else None),
                 "options": [_ask_option(s) for s in sugs + (ask.get("also") or [])],
             })
     return out
@@ -5709,11 +5889,12 @@ def build(args):
     # Values read off the client's own wording. Applied, so the report is
     # whole, and asked, so nobody finds out months later that a heading was
     # taken to mean something the client never said.
-    _inferences = []
-    for _b in _own_budgets:
-        _inferences.extend(unconfirmed_inferences(_b.get("rows") or [],
-                                                  _inference_decisions))
-    _mapping_table.extend(inference_rows(_inferences))
+    # One pass over every budget of the firm's own: an answer is recorded by
+    # inference key alone, so it reaches the same wording in all of them.
+    _inferences = unconfirmed_inferences(
+        [r for _b in _own_budgets for r in (_b.get("rows") or [])], _inference_decisions)
+    _mapping_table.extend(inference_rows(
+        _inferences, account_words=generic_scope_words(_carta_account_names)))
     # _own_budgets only: a shared-in budget's rows arrive already resolved by
     # its creator, so counting them here would read as native-mapping coverage
     # this firm's own workbook doesn't actually have.
@@ -5752,6 +5933,9 @@ def build(args):
     _claims = [c for i, c in enumerate(_all_claims) if c not in _all_claims[:i]]
     _unclaimed = unclaimed_dimension_values(_claim_census, _claims)
 
+    # An unreadable file applies no answers, so it has none to attribute either.
+    _provenance = mapping_provenance(_read_mapping_or_empty(dashboard))
+
     _gaps = {
         "unresolved": len(_unresolved) - len(_zero_activity),
         "budget_only": sum(1 for _b in _own_budgets
@@ -5761,6 +5945,8 @@ def build(args):
         "inferred": len(_inferences),
         "unaccounted": len(_unaccounted),
         "zero_activity": len(_zero_activity),
+        "delegated": len(_provenance["delegated"]),
+        "unattributed": len(_provenance["unattributed"]),
     }
     # The one line Step 5 reads back to the operator. Everything else here
     # is a note for whoever is watching a build; this is for the person who
@@ -6005,6 +6191,9 @@ def build(args):
         # Dimension values with spend that no budget line accounts for — a
         # question for the client, not something to guess at.
         "unclaimedValues": _unclaimed,
+        # Which recorded answers the model made on the operator's behalf, and
+        # which carry no source at all — Step 4.7 lists both back.
+        "mappingProvenance": _provenance,
         "gaps": _gaps,
     }
 

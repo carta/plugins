@@ -115,7 +115,9 @@ operator can confirm against.
 Split on whether the entry carries a `proposed` value — that line is the
 one between "confirm this" and "decide this", and blurring the two into
 one table buries the rows that actually need a decision among the ones
-that don't.
+that don't. The one exception is an inference row (`needs: "inference"`):
+it carries `proposed` but is never part of Current mapping; it is asked
+with its line count — see "Values read off the client's own wording" below.
 
 ### Read the unresolved rows yourself before splitting the table
 
@@ -131,11 +133,13 @@ have done first.
 **Before splitting the table, read every entry left with no `proposed`
 value the way an accountant would — not the nearest string, but what the
 line plainly means against its own `options`.** Where you're confident,
-set `proposed` to that option yourself so the row lands in **Current
-mapping** instead of **Needs your input**. It is still only a candidate:
-the same single `AskUserQuestion` below is where the operator confirms or
-overrules it, exactly like a mechanically-proposed row — you are adding
-candidates to that gate, never recording an answer ahead of it.
+list that option first on the row's own question in **Needs your input**,
+marked `← recommended`. **Never set `proposed` yourself, and never fold
+your own picks into the Current mapping "confirm all" batch:** that batch
+is what the build matched on its own, and a confirm-all over rows the
+operator never saw asked individually is how a model's guesses get
+recorded as the operator's answers. Your read makes the row one tap; it
+never makes it zero.
 
 **An entry carrying `source_formula` has already had its formula checked
 mechanically — read it yourself before falling back to the label.** The
@@ -148,8 +152,8 @@ off your workbook's own formula" — nothing further to do. An entry that
 still carries `source_formula` here is one the mechanical pass couldn't
 resolve on its own (a lookup table, a chain of references, criteria this
 pass doesn't evaluate); read that formula the same way you'd read any
-other close call, and set `proposed` yourself when tracing it settles the
-question.
+other close call, and recommend the account it names on that row's own
+question when tracing it settles the question.
 
 **This is not optional and not a fallback you reach for only if the
 operator asks for it — do it before you print a single table.**
@@ -198,8 +202,8 @@ the way a budget line's own wording points at a GL account, so there's
 nothing here to anchor a guess on. Every row there stays for the
 operator, as before.
 
-**Current mapping** — every entry with a `proposed` answer, whether the
-build worked it out or you did:
+**Current mapping** — every entry the build itself gave a `proposed`
+answer, other than an inference row:
 
 | # | Budget tab | Section | Budget line | Proposed GL account(s) |
 |---|---|---|---|---|
@@ -262,15 +266,15 @@ single `AskUserQuestion`:
 
 > **Confirm the `<N>` mappings above?**
 > Matched against your Carta chart of accounts — some read straight off an
-> exact name, some off your workbook's own formulas, some are my own best
-> read of what a line means; either way, tell me if anything should
-> change. **Nothing here is locked in — you can always come back and
-> change a mapping later, this run or a future one.**
+> exact name, some off your workbook's own formulas; either way, tell me
+> if anything should change. **Nothing here is locked in — you can always
+> come back and change a mapping later, this run or a future one.**
 
 Options, each restating that these aren't final so the reassurance
 survives even if the question's own prose gets trimmed in the render:
 **"Yes, confirm all — I can always update these later"** — records every
-entry in Current mapping as-is, one `record_budget_mapping()` call.
+entry in Current mapping as-is: each row's `answer`, with `--source
+operator` (see "Recording answers" below).
 **"No — a few need changing"** — free text next, since which rows and how
 differs every time (e.g. "3 is the fee account", "2 is budget-only") and
 can't be buttoned. **"Decide later"** — records nothing; the table
@@ -314,12 +318,12 @@ are easy to miss:
   filters, or references, and answer from that rather than from the
   label. Judgment applied to one row, not a second automated pass —
   record the result the same way any other answer to this row is
-  recorded, and note in `notes` that it came from the formula so a later
+  recorded, with `--note "read off the workbook's formula"` so a later
   table view still shows an honest reason.
 - **It is not in Carta** — the firm budgets for something their ledger has
-  no account for. Record `status: "void"`: the line renders budget-only,
-  it stops being asked about, and the Step 5 read-out counts it among the
-  lines that are budget-only by choice rather than by accident.
+  no account for. Record it with `answer … --budget-only`: the line renders
+  budget-only, it stops being asked about, and the Step 5 read-out counts
+  it among the lines that are budget-only by choice rather than by accident.
 - **Leave it for now** — record nothing. It comes back next run, which is
   the right cost for an answer nobody is ready to give.
 
@@ -328,11 +332,18 @@ options exist because the match was close enough to show and not close
 enough to trust — "LP portal expenses" against a firm's "LP meeting
 expenses" is one word apart and a different account.
 
-An entry carrying `answer` is recordable as it stands, so "Yes, confirm
-all" writes the lot in one `record_budget_mapping()` call. An entry with no
-`proposed` has no answer to record and must be answered before it can be.
-On "No — a few need changing", only re-ask about the numbers the operator
-names — the rest of Current mapping still confirms as shown.
+An entry the build gave a `proposed` answer carries the decision it stands
+for in `answer`, so "Yes, confirm all" records each of them by the keys
+that `answer` holds, all in one command. `fund` and `gl_codes` together:
+`answer <addr> --fund "<fund_name>"` and one `--gl <code>` per code, or
+`--net` when `gl_codes` is empty — leave out `--fund` when `answer` has no
+`fund`, and the `--gl`/`--net` when it has no `gl_codes`. `scope`:
+`scope <addr>` and the flag its `source` names — `--tag
+"<category>=<value>"` for a `reporting_tag`, `--vendor "<value>"`, or
+`--sub "<value>"` for a `sub_account`. An entry with no `proposed` has no answer to record and must
+be answered before it can be. On "No — a few need
+changing", only re-ask about the numbers the operator names — the rest of
+Current mapping still confirms as shown.
 
 ### Spend no budget line reports
 
@@ -346,6 +357,11 @@ question a line asks about its values, from the other end.
 for now"). With no budget at all, there is no line for an account to be
 missing from — `unaccountedAccounts` is empty, not a table of every
 account asking to be mapped to lines that don't exist.
+
+**When there is a budget, this question is never skipped** — not for
+speed, not because the operator confirmed everything else at a glance, and
+not because the accounts look small. It is the only place this money
+surfaces at all.
 
 Two ways an account gets there, and the entry's `section` says which — for
 your own reasoning, not the table: an account isn't scoped to any one
@@ -370,9 +386,12 @@ answer to give once, not the headline of the question.
 
 Three ways to answer:
 
-- **An existing line reports it** — add the account to that line's
-  `gl_codes` in the `rows` block. The line is what reports it, so that is
-  where the answer belongs.
+- **An existing line reports it** — record it on that line:
+  `answer <line's addr> --gl <each code it already has> --gl <this account>`
+  — and `--fund "<fund_name>"` too when the line reports one fund. An
+  answer states the line's fund and accounts whole, so restate everything
+  it already carries. The line is what reports it, so that is where the
+  answer belongs.
 - **It needs a line of its own** — the workbook has nothing for this spend
   and the client wants it shown. That is a change to their budget rather
   than to the mapping: tell them, and leave the account unanswered. When
@@ -380,11 +399,11 @@ Three ways to answer:
   account Carta already budgets is its own line, so this answer means
   budgeting the account in Carta — nothing here reaches that stage unless
   Carta carries no budget for it at all.
-- **Not expected in the budget** — recorded under `accounts`, and never
+- **Not expected in the budget** — recorded with `not-expected`, and never
   asked about again:
 
-```json
-{"accounts": {"6300": {"status": "not_expected"}}}
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" not-expected "<dashboard_dir>" <gl_code> --source operator
 ```
 
 **Each `needs: "account_line"` entry gets its own three-way question —
@@ -422,9 +441,9 @@ One answer covers the row:
 > expected in the budget?
 > `7105 Meal 585 · 7180 Telephone & internet 585 · 7099 Other fees 963 · …`
 
-Confirming records `status: "not_expected"` for every account in the row,
-in the same `accounts` block. A client who wants one of them out of the
-group names it, and it becomes an ordinary question.
+Confirming records one `not-expected` per account in the row. A client who
+wants one of them out of the group names it, and it becomes an ordinary
+question.
 
 **Two things the floor is blind to, so say them if they appear.** A
 suspense account is a classification signal rather than a small expense,
@@ -457,12 +476,14 @@ answered it, and asking again every build because the account stays quiet
 would mean the answer never sticks.
 
 - **It's the right account, just quiet this period** — record the line's
-  current `gl_codes` under its `addr`, like any other answer; it is not
-  flagged again.
-- **It's one of these accounts instead** — name the real one; record its
-  `gl_codes` on the row, same as any other remapping.
-- **It's not in Carta** — record `status: "void"`, same as any other line
-  with no real counterpart.
+  current codes with `answer <addr> --gl <each current code>` (plus
+  `--fund "<fund_name>"` on a line that reports one fund), like any other
+  answer; it is not flagged again.
+- **It's one of these accounts instead** — name the real one and record it
+  with `answer <addr> --gl <code>` (restating `--fund` the same way), same
+  as any other remapping.
+- **It's not in Carta** — `answer <addr> --budget-only`, same as any other
+  line with no real counterpart.
 
 The count reaches the Step 5 read-out as *"N mapped line(s) show zero
 activity this window"*, separate from the unresolved-mapping count: a line
@@ -503,26 +524,43 @@ year reports $0, not every dollar its accounts saw.
 this value" is one question however many rows it touches, and a line added
 next quarter inherits the answer instead of reopening it.
 
-Record the answer under `inferences` in `budget-mapping.json`, keyed as
-the row's `addr` gives it (`inference:<key>`, minus the prefix):
+**Confirming an inference is always a question, never part of the Current
+mapping confirm-all** — even though the row arrives with `proposed` set.
+One inference can narrow dozens of lines at once, so the operator sees
+what each confirmation moves before giving it:
 
-```json
-{"inferences": {"subsection|reporting_tag|Department|<value>":
-                {"status": "confirmed"}}}
+- Print each inference with its `line_count` ("Events — 23 lines"). A
+  table of inferences with no counts is not a question the operator can
+  answer.
+- An inference with `needs_line_ack` (more than ten lines, or a one-word
+  value such as "Events") gets **its own** `AskUserQuestion`, its count in
+  the question itself. Only inferences without it may share one question,
+  and that question still lists every one with its count.
+
+Record each answer by its key — the row's `addr` minus `inference:`. For
+an inference with `needs_line_ack`, `--lines` must restate its count, or
+the command refuses:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" confirm-inference "<dashboard_dir>" "<inference_key>" --lines <line_count> --source operator
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" reject-inference "<dashboard_dir>" "<inference_key>" --source operator
 ```
 
 `confirmed` stops it being asked again. `rejected` also stops the value
 being applied — the lines go back to reporting their accounts whole: the
 heading copied onto each line stops narrowing it too, and the near-match
 pass never puts the value back. Both outrank the wording on every later
-build.
+build. A rejection is final here: a rejected value scopes no line, so no
+later build shows its line count again, and `confirm-inference` refuses
+it. An operator who changes their mind scopes the lines they mean with
+`scope`.
 
 Two things never become an inference at all. A heading never matches a
 value made only of words that identify nothing: filler such as a vendor
 called "Expenses", or a vendor or sub-account named only in Carta's own
 account words ("Other Income", "Bank Charges"). A reporting-tag value named
 like an account ("Marketing") is still a cost centre and still matches. And
-a line whose recorded answer is `"scope": null` covers its accounts whole,
+a line whose recorded answer is `scope --none` covers its accounts whole,
 so no wording is matched against it and the heading copied onto it does
 not narrow it.
 
@@ -544,10 +582,11 @@ assumption when you show the table:
 
 **`budget-mapping.json` is the only record of these answers.** Each one
 cost a conversation with the client, nothing else holds them, and they are
-not in git. Merge into it — `record_budget_mapping()` — and never write it
-whole or delete it to clear a single entry. A file that is there but
-unreadable is not an empty one: stop rather than start a fresh one over
-the top.
+not in git. Every answer reaches it through `record_mapping.py` (see
+"Recording answers" below) — never a hand-written `json.dump`, never an
+edit, never a delete to clear a single entry. A file that is there but
+unreadable is not an empty one: the script refuses rather than start a
+fresh one over the top, and so do you.
 
 **Fund lines arrive with candidates too.** A workbook abbreviates ("Opp
 Fund II"), and a shorter name can fit two funds at once — both are cases
@@ -623,16 +662,25 @@ a placeholder for hires not yet made has nothing to compare against:
   reads as a decision rather than a gap.
 - **Remove** — drop the line from the report entirely.
 
-Record every answer in `<dashboard_dir>/budget-mapping.json`, keyed by the
-row's `addr` (not its bare `key`), and re-run Step 4:
+Record every answer by the row's `addr` (not its bare `key`), and re-run
+Step 4:
 
-```json
-{"rows": {"r7":  {"fund": "<a fund the firm has>"},
-          "r19": {"gl_codes": [7110, 7105]},
-          "r21": {"gl_codes": []},
-          "r24": {"status": "void"},
-          "r25": {"status": "removed"}}}
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" answer "<dashboard_dir>" "<addr>" --fund "<fund_name>" --source operator
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" answer "<dashboard_dir>" "<addr>" --gl <gl_code> --gl <gl_code> --source operator
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" answer "<dashboard_dir>" "<addr>" --fund "<fund_name>" --gl <gl_code> --source operator
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" answer "<dashboard_dir>" "<addr>" --fund "<fund_name>" --net --source operator
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" answer "<dashboard_dir>" "<addr>" --budget-only --source operator
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" answer "<dashboard_dir>" "<addr>" --remove --source operator
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" answer "<dashboard_dir>" "<addr>" --fee-source omit --source operator
 ```
+
+An `answer` states the line's fund and accounts whole: `--gl` alone clears
+a fund recorded earlier, and `--fund` alone clears its accounts. On a line
+that reports one fund, restate the fund with its accounts (`--fund … --gl`
+or `--fund … --net`). `--fee-source` answers a `needs: "fee_offset"` row —
+`omit` or `fund_ledger`, its two `options` — and is the one answer that
+leaves the line's fund and accounts as they are.
 
 **Two entries can share a `key` and even a `label`.** Every shape adapter
 numbers its own rows from 1, so a firm with more than one ingested budget
@@ -645,7 +693,37 @@ and per row, and a decision recorded under the bare key of a firm with
 more than one budget is silently never applied, on purpose, rather than
 risk landing on the wrong budget's line.
 
-An empty `gl_codes` is an answer: on a per-fund line it means the net of
-every account that fund posts to. Recorded answers survive re-runs and are
-not asked about again — except a fee split that leaves two lines of one
-fund on the same account, which comes back because it double-counts.
+`--fund "<fund_name>" --net` is an answer: on a per-fund line it means the
+net of every account that fund posts to. Recorded answers survive re-runs and are not asked
+about again — except a fee split that leaves two lines of one fund on the
+same account, which comes back because it double-counts.
+
+### Recording answers: record_mapping.py, and who gave each one
+
+Every answer in this file reaches `budget-mapping.json` through one
+`record_mapping.py` command — `answer`, `scope`, `confirm-inference`,
+`reject-inference`, `not-expected`, or `fund` — and nothing else writes it.
+Each command merges one answer and stamps it with `--source` and the time.
+`--source` is required, and it says who gave the answer:
+
+- **`--source operator`** — the operator gave this answer: they picked it
+  in an `AskUserQuestion`, or confirmed it in a "Yes, confirm all" over a
+  table that listed it.
+- **`--source operator-delegated`** — you chose it on their behalf. When
+  the operator says "do your best", "you decide", or anything like it,
+  make the call and record each such answer this way — never as
+  `operator`. Then list every one back in your next message, by line and
+  answer, so the operator can see exactly what was decided for them.
+
+A changed answer carries the `--source` it is recorded with. Restating an
+answer exactly as it is on file is not giving it: the command writes
+nothing, and the answer keeps the stamp it had — `operator-delegated`, or
+none.
+
+After the rebuild, `accountsData.mappingProvenance` lists both kinds, and
+the gaps line counts them: *"N answer(s) made on your behalf
+(operator-delegated)"* and *"M answer(s) with no recorded source (written
+before or outside record_mapping.py)"*. Read both back at this step. A
+mapping file from before the stamp existed loads unchanged; its answers
+are the second kind, counted on every build until changed, and never
+asked about again on that account alone.

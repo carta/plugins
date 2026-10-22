@@ -90,8 +90,9 @@ id, never by name.
 
 `instance_id` is one submission (a "collection instance"); it is a monotonic surrogate, so
 the in-app refresh reads the cached max back as `--after-instance` and pulls only
-submissions logged since the last pull. `as_of_date` cannot play that role: companies stamp
-it with the statement date (on a large firm a third of the rows have `as_of_date =
+submissions logged since the last pull. `as_of_date` cannot play that role: only recently saved
+rows carry the time Carta received the version, and older rows may hold the
+statement date or the period end (on a large firm a third of them have `as_of_date =
 period_end`), so a September filing "as of 2026-06-30" would slip under any date floor.
 
 **Why this exact shape — four traps, all verified on live data:**
