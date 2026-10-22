@@ -52,7 +52,10 @@ Step 3's check would mean re-deriving it from scratch for a guard this query
 doesn't need. Use `<FIRM_UUID>` straight from Step 0.2's cache probe (or
 Step 1, on a BUILD path); identify `<SERVER>` the same bare way Step 1's
 opening paragraph does — scan connected tools for the Carta MCP prefix —
-without running any of Step 1's firm-*lookup* logic.
+without running any of Step 1's firm-*lookup* logic. When that scan finds no
+prefix, or Query E is refused, and Step 2.5's `raw_as_of` is not null, take
+Step 3's cached-actuals fallback below instead of Step 1's stop: Step 2.75
+reads the `accounts-all.txt` already on disk.
 
 `<raw_dir>` and `needs_fetch` both come from Step 2.5's `manco_paths.py
 resolve` output.
@@ -68,15 +71,50 @@ already on disk.
 
 ## Step 3 — Fetch from the warehouse
 
-**SILENT** — no user-facing output in this step, beyond the one cache line below.
+**SILENT** — no user-facing output in this step, beyond the one cache line and the
+one fallback line below.
 
 When `needs_fetch` is empty, say one line — *"Cache is current; nothing to refetch."* —
 and go to Step 4.
 
 Otherwise, run the fetch below using `<SERVER>` and `<FIRM_UUID>` (Step 1),
-`<MANCO_UUID>` / `<MANCO_ENTITY_ID>` (Step 2), and `raw_dir`, `needs_fetch`,
+`<MANCO_UUID>` / `<MANCO_ENTITY_ID>` (Step 2) — on a warm or soft cache hit,
+which skipped those steps, the identifiers come from Step 0.2's cache probe
+and `<SERVER>` from the connected tools' Carta MCP prefix, as in Step 2.6 —
+and `raw_dir`, `needs_fetch`,
 `<YEAR>`, `<MAX_MO>` and `<AS_OF>` — all from Step 2.5's `manco_paths.py resolve`
 output.
+
+### When the actuals pull can't run — serve the cache, dated as itself
+
+Applies only when Step 2.5's `raw_as_of` is not null, so a completed pull is
+on disk — on a warm and a soft cache hit alike. It covers Step 2.6 and Step 3.
+If any of these happens in Step 2.6, or in Step 3 before any of Step 3's
+results are saved:
+
+- no Carta MCP prefix is connected;
+- `list_contexts` / `set_context` cannot make `<FIRM_UUID>` the active firm
+  (the persistent mismatch below);
+- any query comes back 403, "not authorized", or with a break-the-glass
+  requirement;
+
+Step 3's queries go out in one parallel block, so judge the block as a whole:
+when any of them is refused, save none of its results, even the ones that came
+back — a `raw/` with today's cash balance beside last week's journal entries
+matches no single date.
+
+Then keep every file already under `raw/` (the cached `accounts-all.txt`
+included, and an `accounts-all.txt` Step 2.6 saved this run — it carries no
+as-of date), skip the rest of Step 2.6 and all of Step 3, do **not** write
+`.fetched-at`, and say one line: *"I couldn't reach Carta for today's
+actuals, so this shows your data as of `<raw_as_of>`."* Carry on with the next step that still runs — Step 2.75
+when the fallback was taken in Step 2.6, Step 4 otherwise — and Step 4 passes
+`raw_as_of` as `--as-of`
+([serve-and-update.md](serve-and-update.md)). This is how a packaged pilot
+without warehouse access, or an operator whose connector has dropped, still
+gets a dashboard — dated by the data it holds, never by today. When
+`raw_as_of` is null there is nothing to fall back to, and the stop rules below
+and in [errors.md](errors.md) apply as written.
 
 **`<YEAR>`, `<MAX_MO>` and `<AS_OF>` are read from `resolve`, never computed
 by hand.** They come back as `year`, `max_mo` and `as_of` on that same JSON.
@@ -84,8 +122,7 @@ Deriving them yourself is how two runs on the same day end up scoping to
 different months and building two different dashboards for one firm, with
 no error in between.
 
-**Parallel with Step 2.75b.** When the cache is cold (this step runs) and a workbook
-is being parsed (Step 2.75b will run), issue this step's `read_tool` block and Step
+**Parallel with Step 2.75b.** When a workbook is being parsed (Step 2.75b will run), issue this step's `read_tool` block and Step
 2.75b's `parse_budget_workbook.py` Bash calls in the **same tool-use message** — the
 two are independent once Step 2.75a has confirmed the workbook and sheets.
 
@@ -119,7 +156,8 @@ Find the entry marked active (however this MCP surfaces that — an `is_active: 
 field, an `(active)` suffix on the firm's line, etc.) and compare its firm UUID
 against `<FIRM_UUID>`. If they don't match, retry
 `mcp__<SERVER>__set_context(firm_id="<FIRM_UUID>", _instrumentation_v2={...})` once; if the second attempt
-still doesn't match, stop and tell the user:
+still doesn't match, take the fallback above when `raw_as_of` is not null;
+otherwise stop and tell the user:
 
 > "The Carta session's active firm changed mid-run — please re-invoke the skill."
 

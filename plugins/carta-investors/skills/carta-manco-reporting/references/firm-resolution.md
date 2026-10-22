@@ -245,9 +245,11 @@ signals above (tests / unusual installs).
 
 Mirrors `carta-investors:carta-fund-modeling`'s "cache-first, MCP-lazy" launch
 order: resolve identity and check the local cache **before** touching the
-Carta MCP at all. A fresh, unambiguous cache hit reopens with **zero MCP
-calls** — Step 1, Step 1.5, and Step 2 below are the BUILD path, reached only
-on a cache miss, an ambiguous local match, a stale cache, or an explicit refresh.
+Carta MCP at all. A fresh, unambiguous cache hit reopens with no MCP call
+before Step 3's actuals pull, and with none at all when Carta can't be reached
+(Step 3's cached-actuals fallback) — Step 1, Step 1.5, and Step 2 below are the
+BUILD path, reached only on a cache miss, an ambiguous local match, or an
+explicit refresh.
 
 **Do NOT call `mcp__<SERVER>__welcome`, ever.** Calling `welcome` renders the
 Carta connector widget in the transcript (a large card showing plugin-check
@@ -285,8 +287,7 @@ entries Carta tags as "CS", say).
 
 Also check whether the invocation's text contains "refresh" or "fetch
 fresh" (case-insensitive) — capture this as `<FORCE_REFRESH>`. It forces
-the BUILD path below regardless of what the cache probe finds, the same
-override Step 2.5 already applies to Step 3.
+the BUILD path below regardless of what the cache probe finds.
 
 ### 0.2 — Local cache probe (before any MCP call)
 
@@ -300,8 +301,8 @@ continuation of the greeting (0.3) and Step 1. Otherwise, run:
 
 Each entry carries `firm_name`, `manco_name`, `firm_uuid`, `firm_carta_id`,
 `manco_uuid`, `manco_carta_id`, `manco_entity_id`, `dashboard_dir`, `raw_dir`,
-and `raw_age_days` — the same freshness signal Step 2.5 gates Step 3 on,
-persisted into `accounts.json` by the prior invocation's Step 4 build. A
+and `raw_age_days` — the age of the last completed pull, which here only
+separates a warm hit from a soft one (Step 3 runs either way), persisted into `accounts.json` by the prior invocation's Step 4 build. A
 cache dir built before these fields existed reads them back as `null` —
 treat that exactly like a miss (a normal BUILD re-populates it, no error).
 
@@ -320,10 +321,11 @@ Classify the result:
   `<MANCO_CARTA_ID>`, `<MANCO_ENTITY_ID>`, `<MANCO_NAME>` straight from that
   entry, and `<CARTA_ENVIRONMENT>` from its `carta_environment` field
   (`"production"` if that field is `null` — a pre-upgrade cache). **Skip
-  Step 1, Step 1.5, and Step 2 entirely — no MCP call.** Go to the
+  Step 1, Step 1.5, and Step 2 entirely — no identity lookup over the
+  MCP.** Go to the
   cache-hit continuation of the greeting (0.3), then **Step 2.5**
-  ([budget-ingest.md](budget-ingest.md)), which independently re-checks the
-  same `raw_age_days` signal before deciding Step 3 is skippable. Do **not**
+  ([budget-ingest.md](budget-ingest.md)), and Step 3 re-pulls the actuals
+  as on every run. Do **not**
   ask the "Build the dashboard for `<MANCO_NAME>`?" confirmation on this
   path — a fresh, unambiguous reopen is meant to be as instant and silent as
   a fund-modeling cache hit, which skips its own confirmation the same way.
@@ -334,8 +336,8 @@ Classify the result:
   Step 1.5, and Step 2** — resolving a firm and its entity over the MCP, and
   re-confirming eligibility, to learn what the last build already wrote to
   disk costs round trips and answers nothing. Go to the greeting's
-  continuation (0.3) using the "seen before" variant, then Step 2.5, which
-  will send this run to Step 3 for the refresh.
+  continuation (0.3) using the "seen before" variant, then Step 2.5 and
+  Step 3, as on every run.
 - **Exactly one clean match but an identity field is `null`** (a cache dir
   older than these fields) → treat as a **MISS**: the entry cannot say who
   the entity is, so Step 1/1.5/2 must.
@@ -381,9 +383,9 @@ style as 0.0 — no Markdown blockquote prefix, matching the
 
 **The next paragraph runs on a first invocation only** — a MISS or soft
 hit at 0.2. It describes work that is about to happen, and on a warm reload
-none of it does: firm resolution, entity resolution, the fetch and every
-budget question are all skipped, and the reader wants the link rather than
-an account of steps nobody is taking.
+almost none of it does: firm resolution, entity resolution and every budget
+question are skipped, the fetch is only the day's actuals, and the reader
+wants the link rather than an account of steps nobody is taking.
 
 Here's how it comes together: I'll identify your firm and management
 company in Carta, pull the year-to-date journal entries and fee schedules,
@@ -399,10 +401,11 @@ only place the cache-hit/miss distinction shows up to the user:
   raw typed text) and the freshness signal already in hand, no new lookup:
 
   Since a cache for **`<FIRM_NAME>`** — **`<MANCO_NAME>`** already exists
-  locally, this should be quick — let me reload your dashboard.
+  locally, this should be quick — let me reload your dashboard with today's
+  actuals.
 
-  Do NOT append "Let me connect to the Carta MCP..." on this path — there is
-  no MCP call coming next.
+  Do NOT append "Let me connect to the Carta MCP..." on this path — the
+  actuals pull is the only MCP work left, and it needs no announcement.
 - **SOFT HIT** — the firm and its entity came off disk too; only the data
   is stale:
 

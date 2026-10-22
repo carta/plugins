@@ -7,8 +7,8 @@ person. `pk` is the integer Carta user id in the `get_current_user` result. `ser
 - **Build path** (any run that has already made a Carta MCP call, a build or a refresh): if `pk` is not
   in the session, call `mcp__<SERVER>__get_current_user` once, right after the run's first MCP call, and
   keep `pk`.
-- **Warm-cache launch** (no MCP call is allowed): pass `--user-id` only when `pk` is already in the
-  session. Never call the MCP just to get it.
+- **Launch with no MCP call this run** (a cache-only reopen, e.g. one that could not reach Carta):
+  pass `--user-id` only when `pk` is already in the session. Never call the MCP just to get it.
 - **Reusing a running server** (no launch): write `pk`, when in the session, to `<dashboard_dir>/.user-id`.
   The server reads that file per request, so it takes effect without a relaunch.
 - Without a Carta MCP, omit the flag. Never substitute the email or a placeholder.

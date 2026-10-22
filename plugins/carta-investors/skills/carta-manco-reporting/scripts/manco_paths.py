@@ -19,8 +19,8 @@ Subcommands:
 
 snapshot_age_days is the age of the last datadir rebuild (Step 4), which runs
 on every invocation. raw_age_days is the age of the last actual DWH fetch
-(Step 3), from the raw_dir/.fetched-at marker — the freshness signal that
-actually gates whether Step 3 should re-run.
+(Step 3), from the raw_dir/.fetched-at marker. Neither gates Step 3: it runs
+on every invocation, scoped to the files needs_fetch names.
 
 Cache root: $XDG_CACHE_HOME/manco-reporting/ (defaults to ~/.cache/manco-reporting/).
 Deliberately outside the plugin's own dir so multiple engineers on the same
@@ -104,11 +104,11 @@ def snapshot_age_days(dashboard_dir):
 
 
 def raw_age_days(raw_dir):
-    """Age of the last actual DWH fetch, in days — NOT snapshot.json's age.
-    Step 4 rewrites snapshot.json on every invocation, including warm-cache
-    ones that skip Step 3, so snapshot_age_days is always ~0 and can never
-    gate a refetch. raw_dir/.fetched-at is written once, at the end of Step
-    3's actual fetch, and is the only reliable freshness signal."""
+    """Age of the last completed DWH fetch, in days — NOT snapshot.json's age,
+    which Step 4 rewrites on every invocation. raw_dir/.fetched-at is written
+    at the end of a Step 3 fetch that ran, so it is not rewritten when Step 3
+    falls back to the cached actuals. Step 0.2 reads it to tell a warm hit
+    from a soft one; it does not decide whether Step 3 runs."""
     p = raw_dir / ".fetched-at"
     if not p.exists():
         return None
@@ -127,6 +127,10 @@ def raw_as_of(raw_dir):
 _JE_FILES = ["je-expense-page1.txt", "je-income.txt", "fund-fees.txt",
              "manco-fee-income.txt", "cash-balance.json"]
 
+# The actuals are stale the moment they are written, so every invocation
+# re-pulls them and the dashboard's "Data as of" is always the day it opened.
+_ACTUALS_MAX_AGE = 0.0
+
 
 def _budget_max_age(month, max_mo):
     """A closed month's budget is history and is fetched once. The open
@@ -137,12 +141,12 @@ def _budget_max_age(month, max_mo):
 def max_age_days(window=None):
     """How long each of Step 3's files stays usable, in days.
 
-    These follow from what the data is: journal entries move daily, a
-    reporting currency is set at onboarding, a budget month settles once it
-    closes. `refresh` overrides all of it.
+    These follow from what the data is: the actuals (journal entries, fee
+    income, cash balance) are re-pulled on every invocation, a reporting
+    currency is set at onboarding, a budget month settles once it closes.
     """
     w = window or reporting_window()
-    ages = {name: 1.0 for name in _JE_FILES}
+    ages = {name: _ACTUALS_MAX_AGE for name in _JE_FILES}
     for month in range(1, 13):
         ages[budget_file(w["year"], month)] = _budget_max_age(month, w["max_mo"])
     ages["manco-currency.txt"] = 3650.0
@@ -182,7 +186,7 @@ def raw_inventory(raw_dir, window=None):
         if f.name in out:
             continue
         age = round((now - f.stat().st_mtime) / 86400.0, 1)
-        out[f.name] = {"age_days": age, "stale": age >= 1.0}
+        out[f.name] = {"age_days": age, "stale": age >= _ACTUALS_MAX_AGE}
     return out
 
 

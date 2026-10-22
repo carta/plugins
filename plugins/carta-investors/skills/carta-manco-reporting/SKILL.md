@@ -93,7 +93,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.108.9</carta-plugin>
+<carta-plugin>carta-investors:6.108.10</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -158,8 +158,9 @@ cache. If the user doesn't name a firm, ask via `AskUserQuestion` — do
 
 Eight steps, cache-first: Step 0's local cache probe decides whether Steps 1,
 1.5, and 2 need the Carta MCP at all, the same way `carta-fund-modeling`
-resolves identity from a local cache before ever touching the MCP. Steps 4, 5
-and 6 run on every invocation regardless.
+resolves identity from a local cache before ever touching the MCP. Step 3
+(limited to what Step 2.5's `needs_fetch` names) and Steps 4, 5 and 6 run on
+every invocation regardless.
 
 | Step | Run it? | What it does | Detail |
 |---|---|---|---|
@@ -167,10 +168,10 @@ and 6 run on every invocation regardless.
 | 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-lookup.md](references/firm-lookup.md) |
 | 1.5 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit (same condition as Step 1) | ManCo eligibility hard gate — confirms an active Fund Admin subscription and an active management company before proceeding | [firm-lookup.md](references/firm-lookup.md) |
 | 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-lookup.md](references/firm-lookup.md) |
-| 2.5 | always | Cache check — decides **only** whether Step 3 runs, and hands it the year/month window to query | [budget-ingest.md](references/budget-ingest.md) |
+| 2.5 | always | Cache check — decides which files Step 3 fetches, and hands it the year/month window to query | [budget-ingest.md](references/budget-ingest.md) |
 | 2.6 | when `accounts-all.txt` is missing or stale | Fetch the chart of accounts, so 2.75 can be asked against it | [data-fetch.md](references/data-fetch.md) |
 | 2.75 | always | Resolve the budget workbook (silent when a ref answers it) | [budget-ingest.md](references/budget-ingest.md) — routes to [budget-workbook.md](references/budget-workbook.md) only when a workbook needs resolving |
-| 3 | **only** when the cache is cold, or the user said "refresh" | Fetch journal entries from the warehouse | [data-fetch.md](references/data-fetch.md) |
+| 3 | always — the actuals on every invocation, anything else only once it expires | Fetch journal entries from the warehouse | [data-fetch.md](references/data-fetch.md) |
 | 4 | always | Rebuild the datadir | [serve-and-update.md](references/serve-and-update.md) |
 | 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
@@ -183,23 +184,20 @@ sequence, not the instructions.
 
 ### Parallel dispatch — Step 2.75b and Step 3
 
-When the cache is cold (Step 3 will run) and a workbook is being parsed
-(Step 2.75b will run), issue Step 3's `read_tool` block and Step 2.75b's
-`parse_budget_workbook.py` Bash calls in the **same tool-use message**. The
-two are independent once Step 2.75a has confirmed the workbook and sheets.
+Issued together in one tool-use message — see
+[data-fetch.md](references/data-fetch.md)'s "Parallel with Step 2.75b".
 
 ### The four that get skipped
 
 Every one of these has been dropped in real runs, and each produces a
 dashboard that comes up looking correct while being wrong:
 
-1. **A warm Step-2.5 cache hit skips Step 3 and nothing past it.** Not Step
-   4 — that is where the budget state resolved in 2.75 is applied, and it
-   takes seconds. Not Step 5's reuse check. Not Step 6. Going from the cache
-   check straight to launching serves whatever the answers used to be.
-   (Step 0.2's *own* cache probe is a separate, earlier gate — it can also
-   skip Steps 1-2, but never anything from 2.5 onward; a stale or ambiguous
-   Step 0.2 result still reaches Step 2.5's independent check on Step 3.)
+1. **A warm cache skips Steps 1-2 and nothing past them.** Not Step 3 —
+   it re-pulls the actuals on every invocation, so the dashboard's "Data as
+   of" is the day it was opened. Not Step 4 — that is where the budget state
+   resolved in 2.75 is applied, and it takes seconds. Not Step 5's reuse
+   check. Not Step 6. Going from the cache check straight to launching
+   serves whatever the numbers and the answers used to be.
 2. **Step 5 reuses before it launches.** Read `.port`, probe it, and reuse
    a live server. When launching, pass no `PORT` if `.port` exists —
    `serve.py` restores its own recorded port and token. Computing a port

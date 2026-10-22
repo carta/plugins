@@ -6144,7 +6144,7 @@ def build(args):
     accounts_data = {
         "asOf":            args.as_of,
         "manco_uuid":      args.manco_uuid,
-        # Lets a later run reopen this (firm, manco) from cache with no MCP call.
+        # Lets a later run reopen this (firm, manco) from cache with no identity lookup over the MCP.
         "firm_uuid":       args.firm_uuid,
         "firm_carta_id":   args.firm_carta_id,
         "manco_carta_id":  args.manco_carta_id,

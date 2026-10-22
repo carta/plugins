@@ -73,20 +73,18 @@ reporting their absence as a gap.
 
 **SILENT** — no user-facing output in this step. Next allowed output: Step 5's URL.
 
-Runs on every invocation, including a warm-cache one that skipped Step 3.
+Runs on every invocation, right after Step 3 — including one where Step 3 fell back
+to the cached actuals.
 It reads `raw/` and takes seconds, and it is where the budget state
 resolved in Step 2.75 is actually applied — skipping it would serve a
 snapshot built under whatever the answer used to be.
 
-**`<AS_OF>` on the cache-hit path (Step 3 skipped) is `raw_as_of` from Step
-2.5's `manco_paths.py resolve` output — not today's date.** The raw journal
-entries under `raw/` are however old `raw_age_days` says they are — Step
-2.5 now skips Step 3 on any warm cache regardless of age, so that can be
-days, not just hours. Stamping the snapshot with today's date would make
-the dashboard claim data through today while `raw/` is actually that much
-older. When Step 3 *did* run this invocation, `<AS_OF>` is the value it
-just computed and wrote to `.fetched-at` — the two paths agree by
-construction.
+**`<AS_OF>` is `as_of` from Step 2.5's `manco_paths.py resolve` output** —
+the date Step 3 just pulled the actuals through and wrote to `.fetched-at`.
+The one exception is Step 3's cached-actuals fallback
+([data-fetch.md](data-fetch.md)): no pull ran, so `<AS_OF>` is `raw_as_of`,
+the date of the data actually under `raw/` — stamping today on it would claim
+numbers nobody fetched. Never compute either by hand.
 
 Run the build script:
 

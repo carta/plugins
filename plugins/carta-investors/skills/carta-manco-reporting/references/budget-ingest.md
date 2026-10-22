@@ -19,7 +19,7 @@ that decides whether any of it applies.
 
 ## Step 2.5 — Cache check
 
-**SILENT** apart from the one cached-data line below.
+**SILENT** — no user-facing output in this step.
 
 By this point `<FIRM_NAME>` and `<MANCO_NAME>` are resolved on every path —
 cache hit or BUILD. Name the session after the entity now, so the session
@@ -42,41 +42,23 @@ the filenames Step 3 should actually request, or `all` on a first run — and
 all three forward as `<YEAR>`, `<MAX_MO>` and `<AS_OF>`; Step 3 must not
 work them out for itself.
 
-**Gate on `raw_age_days`, not `snapshot_age_days`.** `snapshot_age_days`
-tracks Step 4's rebuild, which runs on *every* invocation — including one
-that's about to skip Step 3 — so it is always ~0 and can never signal that
-a refetch is due. `raw_age_days` comes from the `raw_dir/.fetched-at`
-marker Step 3 writes only when it actually runs (see
-[data-fetch.md](data-fetch.md)'s "Mark the fetch complete"), so it's the
-one field that answers "how old is the underlying journal-entry data?"
+**Step 3 runs on every invocation, warm cache or cold, and requests only
+what `needs_fetch` names.** The actuals — the journal entries, fee income
+and cash balance — are always in it, so the dashboard's "Data as of" line
+is the day the operator opened it, never the day of some earlier pull. A
+reopen after `serve.py`'s idle shutdown, a day later, must not show
+yesterday's numbers as current. Everything else keeps its own life
+(`manco_paths.py`'s `max_age_days`): a closed budget month, the chart of
+accounts, the fee schedules and the currency come back only once they
+expire, so a warm reopen costs the handful of actuals queries, not the
+full fetch. A null `raw_age_days` (never fetched, or an interrupted run)
+is no different — `needs_fetch` already names whatever is missing. When the
+pull can't run, Step 3 falls back to the cached actuals,
+dated `raw_as_of` ([data-fetch.md](data-fetch.md)).
 
-- **`raw_age_days` is not null** → skip **Step 3 only** (the DWH fetch),
-  no matter how old. Tell the user in one line: *"Using cached data from
-  `<age>`."* That line is not a stopping point — it is not a question,
-  and no reply is coming. **In that same assistant message, immediately
-  make Step 2.75's or Step 4's first tool call next; do not end your turn
-  waiting for the user.** Do not jump to launching either — Step 2.75 and
-  Step 4 both still run. A warm cache is a statement about journal
-  entries, nothing else. The operator already has a local app for this
-  firm — re-running tens of DWH queries on every re-invocation just to
-  restate data that may not have moved is the wrong default. Step 6
-  already offers "Refresh the Carta data" once the dashboard is up, so a
-  real re-fetch is one answer away whenever it's actually wanted; Step
-  2.5 itself never re-fetches on age alone.
-- **`raw_age_days` is null (never fetched)** → proceed to Step 3 and hand
-  it `needs_fetch`. A null marker does not mean the directory is empty —
-  it is also what an interrupted run leaves behind. Step 3 requests what
-  `needs_fetch` names, not all 17. There is no cache to launch from yet,
-  so this is the one case Step 3 cannot be deferred.
-
-If the user's original invocation included the word "refresh" or "fetch fresh", always proceed to Step 3 regardless of cache age.
-
-**A warm cache skips the fetch, never the budget resolution or the
-rebuild.** Step 3 is the expensive part — tens of DWH queries — and once
-a firm has been fetched at least once, re-paying that cost is the
-operator's call, not something every re-invocation does for them. Step
-2.75 is a local check costing nothing, and Step 4 rebuilds the snapshot
-from `raw/` in seconds.
+**Step 3 refreshes the actuals, never skips the budget resolution or the
+rebuild.** Step 2.75 is a local check costing nothing, and Step 4 rebuilds
+the snapshot from `raw/` in seconds.
 
 Skipping those two is what made a previously ingested workbook
 un-droppable: the budget prompt never ran, the build never ran, and the
