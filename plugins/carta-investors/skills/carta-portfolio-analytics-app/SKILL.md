@@ -23,24 +23,28 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__carta__get_current_user
   - mcp__carta__discover
   - mcp__carta_production__welcome
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
+  - mcp__carta_production__get_current_user
   - mcp__carta_production__discover
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__discover
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__discover
   - Read
   - Write
@@ -54,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.107.3</carta-plugin>
+<carta-plugin>carta-investors:6.107.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -153,7 +157,7 @@ Resolve the firm: `list_contexts {firm_name:"<typed name>"}` (always pass the na
 Parse **firm name** = leading text, **firm_uuid** = the hex UUID token. One →
 use it; multiple → match/`AskUserQuestion`; zero → ask to re-enter.
 `set_context {firm_id:<firm_uuid>}`. Capture the integer `#<digits>` as `firmId`
-if present, else null.
+if present, else null. Then fetch `pk` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Build path).
 
 Key the cache on the canonical name:
 ```bash
@@ -424,7 +428,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/serve
   --web-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/webapp" \
   --src-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/app/src" --detach
 ```
-Append `--user-id <pk>` to the `serve.py` command so telemetry names a real user. Take `pk` from the `get_current_user` result already in the session (a connected Carta MCP has it from bootstrap); if it isn't there and a Carta MCP is connected, call `get_current_user` once to get it. Without a Carta MCP, omit the flag. Never substitute the email or a placeholder.
+Append `--user-id <pk>` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (the plugin's `references/`, not this skill's).
 
 Run with **Bash run_in_background**; read the printed `http://127.0.0.1:<port>/?t=<token>`
 (also in `<dashboard_dir>/.port` + `.token`) and give the user that URL.

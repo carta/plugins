@@ -113,6 +113,8 @@ something catches it first:
 mcp__<SERVER>__list_contexts(_instrumentation_v2={...})
 ```
 
+After this `list_contexts`, fetch `pk` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Build path).
+
 Find the entry marked active (however this MCP surfaces that — an `is_active: true`
 field, an `(active)` suffix on the firm's line, etc.) and compare its firm UUID
 against `<FIRM_UUID>`. If they don't match, retry

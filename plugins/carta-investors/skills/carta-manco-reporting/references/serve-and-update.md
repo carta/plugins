@@ -247,7 +247,7 @@ curl -sf -o /dev/null -w '%{http_code}' \
 ```
 
 A `200` means our server, for this data dir, still serving. **Reuse it** —
-skip the launch, emit that same URL, and go to Step 6.
+skip the launch, write `pk` to `<dashboard_dir>/.user-id` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Reusing a running server), emit that same URL, and go to Step 6.
 
 This matters more than it looks. Treating an occupied port as "find
 another one" hands out a new URL on every invocation — 8787, then 8788,
@@ -286,11 +286,7 @@ process/session — the same flag `carta-fund-modeling`'s `serve.py` uses.
 Cleanup is now the idle timeout (`--idle-timeout`, 24h default), not the
 launcher going away.
 
-**Only when the session already carries `pk`** from `get_current_user` (a connected Carta
-MCP has it from bootstrap), append `--user-id <pk>` so telemetry names a real user. Never
-call the MCP just to get it — firm-resolution.md's Step 0 says not to call
-`mcp__<SERVER>__welcome` at all, and this launch stays on that same MCP-free footing when
-`pk` isn't already in hand. Never substitute the email or a placeholder.
+Append `--user-id <pk>` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (the plugin's `references/`, not this skill's).
 
 Pass `PORT=8787` **only** when the firm has no `.port` yet — a first-ever
 launch. If 8787 is taken, try up to 8797; if all ten are busy, say which

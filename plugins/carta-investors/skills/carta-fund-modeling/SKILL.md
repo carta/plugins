@@ -21,24 +21,28 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__carta__get_current_user
   - mcp__carta__search_tools
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__search_tools
   - mcp__carta_production__welcome
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
+  - mcp__carta_production__get_current_user
   - mcp__carta_production__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - Read
   - Write
@@ -51,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.107.3</carta-plugin>
+<carta-plugin>carta-investors:6.107.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -277,6 +281,7 @@ warm-cache launch skips this step entirely — no MCP.
 **If exactly one found:** call `mcp__<SERVER>__welcome` to verify. This is `<SERVER>`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — the server instructions require `welcome` as the first call.
+After `welcome`, fetch `pk` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Build path).
 **Fund Admin only — never `fund_forecasting:*`.**
 
 **Classify the environment from `<SERVER>`'s name.** A name containing `test`/`sandbox`/`demo`/`preprod`/
@@ -640,9 +645,7 @@ user-facing dashboard.)
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/serve.py" --data-dir "<dashboard_dir>" \
   --web-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/webapp" --detach
 ```
-**Only when the session already carries `pk`** from `get_current_user` (a connected Carta MCP has it from
-bootstrap), append `--user-id <pk>` so telemetry names a real user. Never call the MCP to get it — that
-needs `welcome` first, and this path stays MCP-free. Never substitute the email or a placeholder.
+Append `--user-id <pk>` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (the plugin's `references/`, not this skill's).
 Run with **Bash run_in_background**; read `<dashboard_dir>/.port` + the printed `http://127.0.0.1:<port>/?t=<token>`
 and give the user that URL. Tell them it **opens in their default browser automatically** — if it doesn't,
 they can paste the URL into the address bar. `webapp/` is the committed prebuilt React app, served

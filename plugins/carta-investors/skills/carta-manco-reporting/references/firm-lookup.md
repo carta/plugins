@@ -127,6 +127,8 @@ Then classify the narrowed clean-match set:
 
 Then `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})` to activate the firm.
 
+After `list_contexts` succeeds, fetch `pk` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Build path). Still never call `welcome`.
+
 ## Step 1.5 — ManCo eligibility (HARD GATE)
 
 > **STOP. This is a hard gate.** This dashboard requires an active Carta
