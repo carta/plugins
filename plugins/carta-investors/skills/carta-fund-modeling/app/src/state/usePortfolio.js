@@ -5,12 +5,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { activeSlice, getSlice, makeSlice, sliceId, BASELINE_ID, hydrateDoc, dehydrateDoc } from "../model/slices.js";
 import { setTrackingFirm } from "../analytics.js";
 import useEtagAutosave from "./useEtagAutosave.js";
+import { runFirmLoad } from "./firmLoad.js";
 
 export default function usePortfolio(firm, { onLockedEdit } = {}) {
   const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";
   const [snapshot, setSnapshot] = useState(null);
   const [doc, setDoc] = useState(null);
   const paused = useRef(false); // chat-turn soft lock: holds every autosave PUT
+  const rerunning = useRef(false); // a firm load is rerunning inside load()
   // Latest doc + locked-edit callback, held in refs so `update` can read them
   // without landing in its useCallback deps (and so the callback fires OUTSIDE
   // the setDoc updater — updaters must stay pure; StrictMode double-invokes them).
@@ -23,15 +25,33 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
   /** Re-fetch from disk as the new truth, DROPPING any pending stale PUT —
    *  callers that care about unsaved edits flush() first. */
   const load = useCallback(async () => {
-    const [s, pr] = await Promise.all([
+    const read = () => Promise.all([
       fetch(`/api/snapshot${q}`).then((r) => r.json()),
-      fetch(`/api/portfolio${q}`).then(async (r) => { reset(r.headers.get("etag")); return r.json(); }),
+      // A not_ready answer carries no ETag; keep the one held, which still matches the stored document.
+      fetch(`/api/portfolio${q}`).then(async (r) => { reset(r.headers.get("etag") ?? undefined); return r.json(); }),
     ]);
-    if (s?.error === "not_ready" || pr?.error === "not_ready" || !s?.funds || !Array.isArray(pr?.slices)) return;
+    const notReady = (s, pr) => s?.error === "not_ready" || pr?.error === "not_ready";
+    // A 409 while the firm load reruns calls load() again; the rerun's own read already reloads.
+    if (rerunning.current) return;
+    let [s, pr] = await read();
+    // The session's Carta data expires; the portfolio's baseline is built from it, so load it again.
+    if (notReady(s, pr)) {
+      rerunning.current = true;
+      try {
+        await runFirmLoad(firm);
+        await flush(); // an edit made during the rerun, before the read that replaces the doc
+        [s, pr] = await read();
+      } catch {
+        return;
+      } finally {
+        rerunning.current = false;
+      }
+    }
+    if (notReady(s, pr) || !s?.funds || !Array.isArray(pr?.slices)) return;
     setSnapshot(s);
     setTrackingFirm(s?.source?.firmId);
     setDoc(hydrateDoc(pr));
-  }, [q, reset]);
+  }, [firm, q, reset, flush]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { docRef.current = doc; }, [doc]);
 

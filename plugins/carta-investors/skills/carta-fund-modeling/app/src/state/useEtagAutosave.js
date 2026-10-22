@@ -4,7 +4,8 @@ export const SAVE_DELAY_MS = 400;
 // Browsers cap a keepalive request's body at 64 KB; a bigger one is sent plainly and may not finish.
 const KEEPALIVE_MAX_BYTES = 64 * 1024;
 
-/** `onConflict` runs on a 409 and should reload; nothing is sent while `paused.current` is true. */
+/** `onConflict` runs on a 409 and should reload. It runs once the save slot is free and is not awaited,
+ *  so a reload may flush; if `onConflict` rejects, the "error" state is set. Nothing is sent while `paused.current` is true. */
 export default function useEtagAutosave(url, { encode = (d) => d, onConflict, paused, onState } = {}) {
   const timer = useRef(null);
   const pending = useRef(null);
@@ -25,6 +26,7 @@ export default function useEtagAutosave(url, { encode = (d) => d, onConflict, pa
     pending.current = null;
     const { encode, onConflict, onState } = latest.current;
     onState?.("saving");
+    let conflict = false;
     const run = (async () => {
       try {
         const text = JSON.stringify(encode(body));
@@ -35,7 +37,7 @@ export default function useEtagAutosave(url, { encode = (d) => d, onConflict, pa
           keepalive: unloading && text.length < KEEPALIVE_MAX_BYTES,
         });
         if (r.status === 409) {
-          await onConflict?.();
+          conflict = true;
           onState?.("idle");
           return;
         }
@@ -49,6 +51,7 @@ export default function useEtagAutosave(url, { encode = (d) => d, onConflict, pa
     })();
     inflight.current = run;
     try { await run; } finally { inflight.current = null; }
+    if (conflict) Promise.resolve(onConflict?.()).catch(() => onState?.("error"));
   }, [url]);
 
   // Closing the tab inside the debounce would otherwise drop the last edit.

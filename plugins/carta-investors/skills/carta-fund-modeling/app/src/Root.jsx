@@ -11,6 +11,7 @@ import { FS, sans } from "./ui/theme.js";
 import { parseRoute, navigate, subscribeNav } from "./route.js";
 import { postToOuter } from "./bridge-client.js";
 import { FirmAccess } from "./firm-access.js";
+import { runFirmLoad } from "./state/firmLoad.js";
 
 export default function Root({ features }) {
   // The URL path is the source of truth for the selected firm.
@@ -62,39 +63,14 @@ export default function Root({ features }) {
       if (snap?.error === "not_ready") {
         // No data yet — fetch from MCP via SSE stream
         setLoadingStep("Connecting to Carta…");
-        const res = await fetch("/api/load-firm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slug: firm }),
-        });
-        // 401/403/400 come back as JSON, not SSE. The frame parser finds no
-        // "data: " line in those bytes, so the failure would pass silently.
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
+        try {
+          await runFirmLoad(firm, (step) => { if (live) setLoadingStep(step); });
+        } catch (e) {
           if (live) {
             setLoadingStep(null);
-            setError(body?.message || body?.error || `Load failed (${res.status})`);
+            setError(e.message);
           }
           return;
-        }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop();
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const evt = JSON.parse(line.slice(6));
-              if (!live) return;
-              if (evt.error) { setError(evt.error); return; }
-              if (evt.step && !evt.done) setLoadingStep(evt.step);
-            } catch {}
-          }
         }
         if (!live) return;
         setLoadingStep(null);
