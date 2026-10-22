@@ -8,7 +8,7 @@ description: >
   MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
   data queries (Cowork persistent artifacts); over carta-portfolio-valuations for
   read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
-  carta-lp-dashboard unless asked by name; over carta-consolidating-financial-reports for
+  carta-consolidating-financial-reports for
   single-fund balance sheets.
   Use instead: carta-lp-summary for the LP Summary page ("build the LP summary for [firm]");
   carta-co-investors for co-investor / "who else invested" analysis;
@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.108.1</carta-plugin>
+<carta-plugin>carta-investors:6.108.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -42,6 +42,8 @@ allowed-tools:
 # Explore Data
 
 Query the Carta data warehouse for investors data — NAV, performance metrics, cash flow statements, balance sheets, portfolio financials, and more.
+
+> **If `AskUserQuestion` is unavailable:** wherever this skill says to use it, ask the same question in chat instead — a short numbered list of the options — then stop and wait for the user's answer. Do not guess an answer or keep querying.
 
 > **Schema-first rule for raw SQL:** Whenever you fall through to `dwh__execute__query` directly — bypassing `execute:question` and the semantic-layer steps — you MUST call `dwh__list__tables` (omit `schema` to enumerate all schemas) and then `dwh__get__table_schema` to confirm the exact table path and every column name before composing the query. Never infer or guess column names from context or semantics; the live schema is the only source of truth. One preflight eliminates the two leading error classes: `invalid identifier` (wrong column name) and `Object does not exist` (wrong table name) on the first attempt.
 
