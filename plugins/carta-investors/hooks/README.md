@@ -56,6 +56,13 @@ read through `read_tool`, on the same server the view came from. It shows
   the companies changed since that first read, from any source. Reopening the same review
   keeps the session's changes and reads it once, even when it was approved or closed;
   opening a different one starts over.
+- On the desktop app, draws a band above the prompt, under any other plugin's band
+  (each keeps the rest of the chain, so both show in either order):
+  the review, a status pill, fair value and change (or "Multi-currency"), the companies
+  changed this session, and when it last updated (with a warning after a failed poll).
+- `/soi-review` shares the review's companion page link and, on the desktop app only,
+  asks Claude to open it in its built-in browser; or says there is no review, or no
+  companion page for it.
 - Every poll carries `_instrumentation_v2: { from_hook: true }`, so carta-mcp does not
   count it as Claude's usage.
 - Tests: `claude plugin test plugins/carta-investors` runs `register.test.tsx`. In CI,

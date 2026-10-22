@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { Color, EngineInterface, Register } from 'claude-code'
 
 import type { SoiReview, SoiReviewState } from '../types'
 import { changedCompanies, companyValue } from './changes'
@@ -16,6 +16,7 @@ export const SLOW_MS = 15000
 export const IDLE_MS = 30 * 60 * 1000
 export const STALE_MS = 60 * 1000
 const DONE = new Set(['approved', 'closed'])
+const PILL: Record<string, Color> = { 'waiting-on-you': 'suggestion', 'with-fund-admin': 'merged', approved: 'success' }
 // More companies than this in one read collapse into a single toast.
 export const TOAST_LIMIT = 3
 
@@ -76,6 +77,21 @@ function toastChanges($: EngineInterface, before: SoiReviewState, after: SoiRevi
   else for (const company of companies) $.ui.toast(companyToast(company, before, after))
 }
 
+// `$1.4M · +$410K (+41.4%)` against the prior period end kept from the session's first read.
+function fairValue({ current, prior, currency }: SoiReviewState['fair_value']): string {
+  if (currency === null) return 'Multi-currency'
+  const money = (n: number, signDisplay: 'auto' | 'exceptZero' = 'auto') =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1, signDisplay }).format(n)
+  if (prior == null) return money(Number(current))
+  const change = Number(current) - Number(prior)
+  const percent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1, signDisplay: 'exceptZero' })
+  return `${money(Number(current))} · ${money(change, 'exceptZero')}${Number(prior) ? ` (${percent.format(change / Number(prior))})` : ''}`
+}
+
+function clockTime(ms: number | null): string {
+  return ms === null ? '—' : new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
 // Reset by a reload, which only means the next tick reads at once. The cadence counts
 // ticks rather than comparing clock times, so timer jitter never pushes a read a tick late.
 let ticksSinceRead = Infinity
@@ -110,7 +126,9 @@ async function poll($: EngineInterface) {
       if (prev === null || !isSameReview(prev, review)) return prev
       if (state === null) return { ...prev, failedAt: now }
       const first = prev.first ?? state.positions
-      return { ...prev, state, first, changedCompanies: changedCompanies(first, state.positions), readAt: now, failedAt: null }
+      // Reads after the first carry no prior period end (include_baseline=false); keep the first's.
+      const fair_value = { ...state.fair_value, prior: state.fair_value.prior ?? prev.state?.fair_value.prior }
+      return { ...prev, state: { ...state, fair_value }, first, changedCompanies: changedCompanies(first, state.positions), readAt: now, failedAt: null }
     })
     if (state === null || gen !== pollGen || !isSameReview(await read($, soiReview), review)) return
     $.ui.status(statusLine(state))
@@ -122,6 +140,7 @@ async function poll($: EngineInterface) {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    await $.command.register({ name: 'soi-review', description: "Reopen this session's SOI review companion page" })
     lastPrompt = await $.clock.now()
     $.clock.every(TICK_MS, () => poll($).catch(() => undefined))
     return next(e)
@@ -147,4 +166,42 @@ export const register: Register = on => {
     }
     return ran
   }).catch(($, e, next) => next(e))
+
+  on('command.run', { command: 'soi-review' }, async $ => {
+    const state = (await read($, soiReview))?.state
+    if (!state) return { text: 'No SOI review in this session yet.' }
+    if (!state.companion_url) return { text: "The companion page isn't available for this review." }
+    // Only the desktop app has a browser beside the chat; anywhere else the link is the answer.
+    if (!(await $.session.surfaces()).includes('desktop')) return { text: `SOI review companion page: ${state.companion_url}` }
+    // A prompt rather than a browser call: the browser tools are Claude's and load through ToolSearch.
+    // Queued from a timer, as a command.run hook may not submit while it holds the turn.
+    const text = `Open ${state.companion_url} in your built-in browser beside the chat.`
+    $.clock.after(0, () => void $.prompt.submit({ text }).catch(() => undefined))
+    return { text: `Opening the SOI review companion page: ${state.companion_url}` }
+  })
+
+  // Desktop only: the terminal has the status line. Drawn under whatever else is in the
+  // band (carta-cli's environment row, which keeps its own next(e) too), so both show.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const review = await read($, soiReview)
+    const state = review?.state
+    if (e.surface !== 'desktop' || e.props.hasSurvey || !review || !state) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    const theirs = await next(e)
+    const changed = review.changedCompanies.length
+    return (
+      <Box flexDirection="column">
+        {theirs}
+        <Box flexDirection="row" flexWrap="wrap" gap={2}>
+          <Text bold>{state.report_label}</Text>
+          <Text color="inverseText" backgroundColor={PILL[state.status] ?? 'inactive'}> {state.status_label} </Text>
+          <Text dimColor>{fairValue(state.fair_value)}</Text>
+          {changed > 0 && <Text color="success">● {changed} {changed === 1 ? 'company' : 'companies'} changed this session</Text>}
+          {review.failedAt === null
+            ? <Text dimColor>updated {clockTime(review.readAt)}</Text>
+            : <Text color="warning">⚠ last updated {clockTime(review.readAt)}</Text>}
+        </Box>
+      </Box>
+    )
+  })
 }
