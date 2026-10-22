@@ -58,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.107.5</carta-plugin>
+<carta-plugin>carta-investors:6.107.6</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -82,8 +82,8 @@ local cache. Before anything else — before the firm prompt, any cache scan or 
 > **Header:** "Where to run"
 > **Question:** "Open the hosted Portfolio Analytics app, or build it locally on this machine?"
 > - **"Open hosted app"** — Use it in your browser at analytics.carta.cloud: sign in with Carta, nothing
->   to install. The formulas, notes, views and favorites you save are shared with your firm, so colleagues
->   who open the same firm see them too; they are cleared after 30 days without a save.
+>   to install. The formulas, notes, views and favorites you make are automatically saved and viewable by
+>   other members of your firm; they are cleared after 30 days without a save.
 > - **"Build locally"** — Run it on this computer from your firm's data, pulled through your Carta
 >   connection. The formulas, notes, views and favorites you save stay on this machine, visible only to
 >   you.

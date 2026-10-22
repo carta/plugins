@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.107.5</carta-plugin>
+<carta-plugin>carta-investors:6.107.6</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -129,9 +129,12 @@ shows only the firms their Carta login can open, so the hosted path needs no loc
 
 > **Header:** "Where to run"
 > **Question:** "Open the hosted Fund Modeling app, or build it locally on this machine?"
-> - **"Open hosted app"** — fund-modeling.carta.cloud: sign in with Carta and open your firm; nothing to build.
-> - **"Build locally"** — pulls the firm's data through the Carta MCP into a local cache and serves the app
->   from this machine.
+> - **"Open hosted app"** — Use it in your browser at fund-modeling.carta.cloud: sign in with Carta, nothing
+>   to install. The scenarios and fund plans you make are automatically saved and viewable by other members
+>   of your firm.
+> - **"Build locally"** — Run it on this computer from your firm's data, pulled through your Carta
+>   connection. Your scenarios stay on this machine, visible only to you, until a firm admin publishes one
+>   to share it with the firm.
 
 Skip the question when the invocation already chose: "hosted", "online" or fund-modeling.carta.cloud → hosted;
 "local", "build", "refresh", or reopening a local dashboard → local. A pasted Carta firm URL chooses neither,
@@ -655,9 +658,10 @@ After giving the URL, add one short post-launch line (not a menu):
 "A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · publish a scenario to share it with your firm · plan your next fund on the Fund Construction tab · say 'refresh' to pull fresh Carta data."
 
 ## Scenario sharing
-Firm admins can publish/pull scenarios across the firm — **built into the app** (a SHARED sidebar section plus
-per-scenario Publish / Update / Duplicate / Hide / Delete). It is button-driven with no prompt flow; if a
-user asks to share, point them at those controls. See
+In the local build, firm admins publish/pull scenarios across the firm — **built into the app** (a SHARED
+sidebar section plus per-scenario Publish / Update / Duplicate / Hide / Delete). It is button-driven with no
+prompt flow; if a user asks to share, point them at those controls. On the hosted app, scenarios are already
+stored for the firm, so colleagues who open the same firm see them with no publish step. See
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/references/scenario-sharing.md`.
 
 ## Refresh / edits
