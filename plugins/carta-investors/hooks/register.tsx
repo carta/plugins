@@ -11,6 +11,9 @@ const VIEW_TOOL = /^mcp__(.+)__view_remote$/
 export const VIEW_APP = 'updateInvestmentsMcpApps'
 export const READ_COMMAND = 'fa__get__soi-review-state'
 export const TICK_MS = 5000
+export const SLOW_MS = 15000
+export const IDLE_MS = 30 * 60 * 1000
+export const STALE_MS = 60 * 1000
 const DONE = new Set(['approved', 'closed'])
 
 // An MCP result's JSON: structured content, else its first text block, unwrapped from the
@@ -25,7 +28,7 @@ function reviewFrom(server: string, text: string): SoiReview | null {
   const view = payload(text)
   const review = view?.args?.review
   if (view?.resource?.moduleFederation?.remoteName !== VIEW_APP || !review?.soi_report_id || !review.firm_uuid) return null
-  return { server, firmUuid: review.firm_uuid, soiReportId: review.soi_report_id, state: null }
+  return { server, firmUuid: review.firm_uuid, soiReportId: review.soi_report_id, state: null, readAt: null, failedAt: null }
 }
 
 // `SOI Q3 2026 · Waiting on you`; the quarter is the period end's.
@@ -38,7 +41,7 @@ async function readState($: EngineInterface, review: SoiReview): Promise<SoiRevi
   try {
     const result = await $.mcp.call(review.server, 'read_tool', {
       name: READ_COMMAND,
-      arguments: { firm_uuid: review.firmUuid, soi_report_id: review.soiReportId, include_baseline: true },
+      arguments: { firm_uuid: review.firmUuid, soi_report_id: review.soiReportId, include_baseline: review.state === null },
       // Marks the poll as the plugin's own, so carta-mcp does not count it as Claude's usage.
       _instrumentation_v2: { from_hook: true },
     })
@@ -50,19 +53,54 @@ async function readState($: EngineInterface, review: SoiReview): Promise<SoiRevi
   }
 }
 
+// Reset by a reload, which only means the next tick reads at once. The cadence counts
+// ticks rather than comparing clock times, so timer jitter never pushes a read a tick late.
+let ticksSinceRead = Infinity
+let lastPrompt = 0
+// One poll at a time: a read slower than a tick would otherwise overlap the next one, and
+// the two could land out of order. A poll holding the lock for STALE_MS, whatever step it is
+// stuck on, gives it to a fresh poll: at most one takeover per STALE_MS, counted from when the
+// holder took it. Only the newest poll (pollGen) writes or releases the lock.
+let isPolling = false
+let ticksHeld = 0
+let pollGen = 0
+
 async function poll($: EngineInterface) {
-  const review = await read($, soiReview)
-  if (review === null || DONE.has(review.state?.status ?? '')) return
-  const state = await readState($, review)
-  if (state === null) return
-  const isCurrent = (prev: SoiReview | null) => prev?.soiReportId === review.soiReportId && prev.server === review.server
-  await update($, soiReview, prev => (prev !== null && isCurrent(prev) ? { ...prev, state } : prev))
-  if (isCurrent(await read($, soiReview))) $.ui.status(statusLine(state))
+  ticksSinceRead += 1
+  if (isPolling && ++ticksHeld * TICK_MS < STALE_MS) return
+  ticksHeld = 0
+  const gen = ++pollGen
+  isPolling = true
+  try {
+    const review = await read($, soiReview)
+    if (review === null || DONE.has(review.state?.status ?? '')) return
+    const now = await $.clock.now()
+    const every = review.state?.status === 'waiting-on-you' ? TICK_MS : SLOW_MS
+    if (now - lastPrompt > IDLE_MS || ticksSinceRead * TICK_MS < every) return
+    ticksSinceRead = 0
+
+    const state = await readState($, review)
+    if (gen !== pollGen) return
+    const isCurrent = (prev: SoiReview | null) => prev?.soiReportId === review.soiReportId && prev.server === review.server
+    await update($, soiReview, prev => {
+      if (prev === null || !isCurrent(prev)) return prev
+      return state === null ? { ...prev, failedAt: now } : { ...prev, state, readAt: now, failedAt: null }
+    })
+    if (state !== null && gen === pollGen && isCurrent(await read($, soiReview))) $.ui.status(statusLine(state))
+  } finally {
+    if (gen === pollGen) isPolling = false
+  }
 }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    lastPrompt = await $.clock.now()
     $.clock.every(TICK_MS, () => poll($).catch(() => undefined))
+    return next(e)
+  })
+
+  on('prompt.submit', async ($, e, next) => {
+    lastPrompt = await $.clock.now()
     return next(e)
   })
 
@@ -73,6 +111,7 @@ export const register: Register = on => {
     if (review !== null) {
       await update($, soiReview, () => review)
       $.ui.status(undefined)
+      ticksSinceRead = Infinity // read it on the next tick
     }
     return ran
   }).catch(($, e, next) => next(e))

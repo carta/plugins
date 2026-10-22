@@ -45,7 +45,11 @@ read through `read_tool`, on the same server the view came from. It shows
 
 - Unlike the allowlist above, it accepts `view_remote` on any server, and recognises
   the review by the view's `remoteName` (`updateInvestmentsMcpApps`).
-- Polls every `TICK_MS` and stops once the review is approved or closed.
+- Polls every `TICK_MS` while the review waits on the GP, every `SLOW_MS` otherwise;
+  stops once it is approved or closed, and pauses after `IDLE_MS` without a prompt. A
+  failed poll keeps the last state and records when it failed. One poll runs at a time; a
+  poll still running `STALE_MS` after it started is replaced by a fresh one, at most once
+  per `STALE_MS`.
 - Every poll carries `_instrumentation_v2: { from_hook: true }`, so carta-mcp does not
   count it as Claude's usage.
 - Tests: `claude plugin test plugins/carta-investors` runs `register.test.tsx`. In CI,

@@ -15,6 +15,8 @@ export type SoiReview = {
   firmUuid: string
   soiReportId: string
   state: SoiReviewState | null
+  readAt: number | null
+  failedAt: number | null
 }
 
 declare module 'claude-code' {
