@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { sans, FAINT, GLOBAL_CSS, FS } from "./ui/theme.js";
 import AppShell from "./shell/AppShell.jsx";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
@@ -43,6 +43,9 @@ function usePathRoute(firmSlug) {
 // Slug -> the name its events carry. A Budget-vs-Actuals child slug is a
 // workbook-derived budget id, so it never reaches an id.
 const VIEW_NAMES = { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals", "monthly-actuals": "MonthlyActuals" };
+
+// Floor between resurface refetches: a flurry of tab switches skips the refetch instead of repeating it.
+export const RESURFACE_REFRESH_MIN_MS = 60_000;
 
 function slugify(name) {
   return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -95,35 +98,47 @@ export default function App() {
   // Parallel fetch snapshot + accounts (accounts is optional; drill-downs
   // just don't render if it's absent). Returns its promise so a report change
   // (which the server has already rebuilt both into) can await the refetch.
-  const fetchData = useCallback(() => Promise.all([
-    fetch("/api/snapshot")
-      .then(r => r.json())
-      .then(data => {
-        if (data?.error) {
-          failSnapshot(data.error);
-          return;
-        }
-        if (data?.ops) {
-          data.ops.total_income = data.ops.total_income ?? data.ops.ytdIncome ?? 0;
-          data.ops.total_expenses = data.ops.total_expenses ?? data.ops.ytdExpenses ?? 0;
-          data.ops.net = data.ops.net ?? (data.ops.total_income - data.ops.total_expenses);
-        }
-        setDisplayCurrency(data?.currency);
-        if (data?.feeSchedule?.funds) assignCategoricalColors(data.feeSchedule.funds);
-        setSnapshot(data);
-        setSnapshotError(null);
-      })
-      .catch(e => failSnapshot(e?.message || String(e))),
+  // A background refetch that fails at the network level while a snapshot is
+  // shown keeps that snapshot up and only records the failure.
+  const lastFetchRef = useRef(0);
+  const snapshotRef = useRef(null);
+  const fetchData = useCallback(({ background = false } = {}) => {
+    lastFetchRef.current = Date.now();
+    return Promise.all([
+      fetch("/api/snapshot")
+        .then(r => r.json())
+        .then(data => {
+          if (data?.error) {
+            failSnapshot(data.error);
+            return;
+          }
+          if (data?.ops) {
+            data.ops.total_income = data.ops.total_income ?? data.ops.ytdIncome ?? 0;
+            data.ops.total_expenses = data.ops.total_expenses ?? data.ops.ytdExpenses ?? 0;
+            data.ops.net = data.ops.net ?? (data.ops.total_income - data.ops.total_expenses);
+          }
+          setDisplayCurrency(data?.currency);
+          if (data?.feeSchedule?.funds) assignCategoricalColors(data.feeSchedule.funds);
+          snapshotRef.current = data;
+          setSnapshot(data);
+          setSnapshotError(null);
+        })
+        .catch(e => {
+          const reason = e?.message || String(e);
+          if (background && snapshotRef.current) { reportSnapshotError(reason); return; }
+          failSnapshot(reason);
+        }),
 
-    fetch("/api/accounts")
-      .then(r => r.json())
-      .then(data => {
-        if (data?.error) { trackRender("MancoReporting.App.AccountsUnavailable"); return; }
-        if (data?.monthly_categories?.categories) assignExpenseCategoryColors(data.monthly_categories.categories);
-        setAccountsData(data);
-      })
-      .catch(() => trackRender("MancoReporting.App.AccountsUnavailable")),
-  ]), [failSnapshot]);
+      fetch("/api/accounts")
+        .then(r => r.json())
+        .then(data => {
+          if (data?.error) { trackRender("MancoReporting.App.AccountsUnavailable"); return; }
+          if (data?.monthly_categories?.categories) assignExpenseCategoryColors(data.monthly_categories.categories);
+          setAccountsData(data);
+        })
+        .catch(() => trackRender("MancoReporting.App.AccountsUnavailable")),
+    ]);
+  }, [failSnapshot]);
   const reportsApi = useReports({ onChanged: fetchData });
   const hostedApp = useHostedApp();
   const hiddenReports = reportsApi.reports.filter(r => r.hidden);
@@ -156,6 +171,19 @@ export default function App() {
   };
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Refetch when the tab becomes visible again, so a long-open tab picks up actuals
+  // the server has refreshed since; RESURFACE_REFRESH_MIN_MS throttles it. A network
+  // failure leaves the page as it was.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchRef.current < RESURFACE_REFRESH_MIN_MS) return;
+      fetchData({ background: true });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchData]);
 
   // Auto-load: when the snapshot comes back not_ready, drive /api/load-firm's SSE
   // progress stream. /api/reports can depend on the firm just loaded, and the read on
