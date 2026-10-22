@@ -63,8 +63,6 @@ is sent (`scripts/report_payload.py`) and again by Carta.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.
-- `MANCO_REPORT_SHARING=0` turns budget reports and sharing off: the server answers no
-  `/api/reports*` route and the app shows no report controls.
 
 When Carta hasn't turned the budget-report commands on for someone, the app says sharing
 isn't available yet.

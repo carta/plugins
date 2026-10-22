@@ -89,7 +89,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.107.2</carta-plugin>
+<carta-plugin>carta-investors:6.107.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -364,13 +364,9 @@ no event.
 
 ## Budget reports and sharing
 
-Budget reports and sharing are on unless the dashboard server runs with
-`MANCO_REPORT_SHARING=0` (when on, its startup banner names the Carta connectors sharing
-uses). Off, the page shows no report controls, so don't offer to share, duplicate or hide a
-budget, or to load reports shared with someone.
-
-When it is on, people duplicate, hide and share budgets from the Budget vs Actuals page
-itself. Each workbook budget is a report that keeps following its workbook, and a shared
+Every workbook budget on the Budget vs Actuals page is a report, and people duplicate, hide
+and share them from the page itself (the dashboard server's startup banner names the Carta
+connector(s) sharing uses). Each report keeps following its workbook, and a shared
 one is marked changed when a re-import or a mapping answer moves its figures. When someone
 asks to share a budget, point them at the controls beside **Export**; don't edit
 `reports.json` by hand.

@@ -68,10 +68,6 @@ WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
 SHARE_MCP_SERVER = None  # --share-mcp-server / MANCO_SHARE_MCP_SERVER: the one Carta connector sharing may use
-# Budget reports and sharing (/api/reports*) answer unless MANCO_REPORT_SHARING=0.
-# Off, those routes 404 and the app shows no report controls.
-REPORT_SHARING_ENV = "MANCO_REPORT_SHARING"
-REPORT_SHARING = True
 MAX_BODY_BYTES = 1024 * 1024
 REBUILD_TIMEOUT = 600
 
@@ -336,10 +332,6 @@ def _start_share_op(op, params):
 _REPORT_ACTION_RE = re.compile(r"^/api/reports/([A-Za-z0-9_.-]{1,160})/(rename|duplicate|hide|unlink|remove)$")
 
 
-def report_sharing_enabled(environ):
-    return environ.get(REPORT_SHARING_ENV, "1") != "0"
-
-
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -431,10 +423,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "environment": _read_carta_environment(DATA_DIR),
                 "userId": _read_user_id(DATA_DIR),
             })
-        if path == "/api/reports" and REPORT_SHARING:
+        if path == "/api/reports":
             listing, etag = _reports_listing()
             return self._send(200, listing, extra={"ETag": etag})
-        if path == "/api/reports/share-status" and REPORT_SHARING:
+        if path == "/api/reports/share-status":
             job = (qs.get("job") or [None])[0]
             if job is None:
                 with _share_state_lock:
@@ -473,8 +465,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._token_ok(parse_qs(u.query)):
             return self._send(401, {"error": "unauthorized"})
         _touch_heartbeat()
-        if not REPORT_SHARING:
-            return self._send(404, {"error": "not_found"})
         body, bad = self._read_json_body()
         if bad:
             return self._send(bad, {"error": "payload_too_large" if bad == 413 else "bad_json"})
@@ -617,7 +607,7 @@ def _bind(preferred_port):
 
 
 def main():
-    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN, SHARE_MCP_SERVER, REPORT_SHARING
+    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN, SHARE_MCP_SERVER
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", required=True)
     ap.add_argument("--web-dir", default=str(Path(__file__).resolve().parent.parent / "webapp"))
@@ -654,7 +644,6 @@ def main():
     )
     args = ap.parse_args()
     SHARE_MCP_SERVER = args.share_mcp_server or os.environ.get(share_bridge.SERVER_ENV)
-    REPORT_SHARING = report_sharing_enabled(os.environ)
 
     DATA_DIR = Path(args.data_dir).resolve()
     WEB_DIR = Path(args.web_dir).resolve()
@@ -702,10 +691,9 @@ def main():
     if args.detach:
         _detach_or_warn()
 
-    if REPORT_SHARING:
-        targets = share_bridge.candidate_servers(_read_carta_environment(DATA_DIR), SHARE_MCP_SERVER)
-        print("[serve] report sharing uses Carta connector(s): %s%s" % (
-            ", ".join(targets), " (pinned)" if SHARE_MCP_SERVER else ""), flush=True)
+    targets = share_bridge.candidate_servers(_read_carta_environment(DATA_DIR), SHARE_MCP_SERVER)
+    print("[serve] report sharing uses Carta connector(s): %s%s" % (
+        ", ".join(targets), " (pinned)" if SHARE_MCP_SERVER else ""), flush=True)
     threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()
     try:
         httpd.serve_forever()
