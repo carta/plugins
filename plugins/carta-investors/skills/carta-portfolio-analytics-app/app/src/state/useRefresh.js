@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { trackClick } from "../analytics.js";
+import useCapabilities from "./useCapabilities.js";
 
 // Fetch phases turn over every tens of seconds, so a 5s poll stays current cheaply.
 const REFRESH_POLL_MS = 5000;
@@ -13,7 +14,7 @@ const REFRESH_POLL_MS = 5000;
 export default function useRefresh(firm) {
   const [st, setSt] = useState({ status: "idle", warnings: [] });
   const [elapsed, setElapsed] = useState(0);
-  const [canRefresh, setCanRefresh] = useState(false);
+  const canRefresh = !!useCapabilities()?.refresh;
   const pollRef = useRef(null);
   // True only for the tab that clicked Update — it alone surfaces a fetch error it started.
   const initiatedRef = useRef(false);
@@ -67,8 +68,6 @@ export default function useRefresh(firm) {
   // On mount: learn whether refresh is supported, and resume an in-flight/staged fetch.
   useEffect(() => {
     let alive = true;
-    fetch("/api/capabilities").then((r) => r.json())
-      .then((c) => { if (alive) setCanRefresh(!!c?.refresh); }).catch(() => {});
     fetch("/api/refresh/status").then((r) => r.json()).then((s) => {
       if (!alive || !s) return;
       if (s.status === "running") startPolling();

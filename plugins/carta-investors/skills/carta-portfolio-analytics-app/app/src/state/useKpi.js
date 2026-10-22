@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { setTrackingFirm } from "../analytics.js";
 import { firmQuery } from "./firmQuery.js";
 
@@ -7,6 +7,10 @@ export default function useKpi(firm) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [step, setStep] = useState(null);
+  // Bumped by reload() to fetch again. A failed Worker build is never cached, so a plain
+  // re-fetch rebuilds it; serve.py re-reads kpi.json on every request.
+  const [attempt, setAttempt] = useState(0);
+  const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
   useEffect(() => {
     let live = true;
@@ -75,7 +79,7 @@ export default function useKpi(firm) {
     })();
 
     return () => { live = false; controller.abort(); };
-  }, [q]);
+  }, [q, attempt]);
 
-  return { data, error, step };
+  return { data, error, step, reload };
 }

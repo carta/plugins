@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useSyncExternalStore, memo } from "react";
 import { FS, serif, sans, GLOBAL_CSS, MICRO } from "./ui/theme.js";
-import { Mark, SunIcon, MoonIcon, useDismissable, Eyebrow, TooltipLayer, Dropdown, TextInput, TAB_LEAVE_EVENT } from "./ui/components.jsx";
+import { Mark, SunIcon, MoonIcon, useDismissable, Eyebrow, TooltipLayer, Dropdown, TextInput, Btn, TAB_LEAVE_EVENT } from "./ui/components.jsx";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import PublishEditsButton from "./ui/PublishEditsButton.jsx";
 import { ConflictsButton } from "./ui/ConflictsPanel.jsx";
@@ -11,6 +11,9 @@ import { parseRoute, navigate, subscribeNav } from "./route.js";
 import useKpi from "./state/useKpi.js";
 import useDashboard from "./state/useDashboard.js";
 import useNow from "./state/useNow.js";
+import useIsWorker from "./state/useIsWorker.js";
+import { leaveFirm } from "./state/leftFirm.js";
+import { isCartaId } from "./model/cartaId.js";
 import { trackClick, trackRender } from "./analytics.js";
 import { lsGet, lsSet } from "./state/storage.js";
 import { ChartPrefsProvider } from "./state/chartPrefs.js";
@@ -221,7 +224,7 @@ export default function App({ firm }) {
   useEffect(() => {
     fetch("/auth/check").then((r) => r.json()).then((d) => { if (d.userName) setUserName(d.userName); }).catch(() => {});
   }, []);
-  const { data: rawData, error, step: loadStep } = useKpi(firm);
+  const { data: rawData, error, step: loadStep, reload } = useKpi(firm);
   const dashboard = useDashboard(firm);
   // Custom metrics splice in as derived KPIs (Formulas itself gets rawData). Key the
   // memo on slice CONTENT — update() clones the doc, so identity changes on any edit.
@@ -291,8 +294,9 @@ export default function App({ firm }) {
   );
 
   // Shared by the chart export stamp, the tab title, and the header below —
-  // branding name > raw source label > the `firm` prop/slug.
-  const resolvedFirmName = data?.branding?.firmName || data?.source?.firm || firm;
+  // branding name > raw source label > the `firm` prop/slug. The Worker's slug is a bare
+  // Carta ID, so it reads "Firm <id>" until a name loads.
+  const resolvedFirmName = data?.branding?.firmName || data?.source?.firm || (isCartaId(firm) ? `Firm ${firm}` : firm);
 
   // Stamp the firm + as-of date onto every chart EXPORT. A downloaded PNG lands in
   // a deck with no page around it, so it has to carry whose numbers it is itself.
@@ -373,7 +377,7 @@ export default function App({ firm }) {
   if (data) setDisplayCurrency(data.source?.currency);
 
   if (error) {
-    return <Center><div style={{ fontSize: FS.bodyLg }}>Couldn’t load KPI data ({error}). Try “Refresh KPI data”.</div></Center>;
+    return <LoadError firm={firm} error={error} onRetry={reload} />;
   }
   if (!data) {
     return <Center><Mark size={56} style={{ margin: "0 auto", opacity: 0.9 }} />
@@ -528,6 +532,21 @@ function TabPane({ active, View, data, dashboard }) {
 // Skips the view's render while hidden, and on reappearing if its inputs didn't change.
 const TabView = memo(({ View, data, dashboard }) => <View data={data} dashboard={dashboard} />,
   (prev, next) => !next.active || (prev.data === next.data && prev.dashboard === next.dashboard));
+
+function LoadError({ firm, error, onRetry }) {
+  const worker = useIsWorker();
+  return (
+    <Center>
+      <div style={{ fontSize: FS.bodyLg }}>Couldn’t load KPI data ({error}).</div>
+      {/* The local app is launched by Claude, which can rebuild its data; the Worker has no Claude. */}
+      {worker === false && <div style={{ marginTop: 8, color: "var(--ink-color-global-text-subtle)" }}>To rebuild it, ask Claude to “Refresh KPI data”.</div>}
+      <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "center" }}>
+        <Btn kind="primary" onClick={onRetry}>Try again</Btn>
+        <Btn onClick={() => leaveFirm(firm)}>Choose another firm</Btn>
+      </div>
+    </Center>
+  );
+}
 
 function Center({ children }) {
   return (

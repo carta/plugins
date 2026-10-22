@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { trackClick } from "../analytics.js";
 import { WIRE_FIELDS } from "../model/pendingEdits.js";
 import { firmQuery } from "./firmQuery.js";
+import useCapabilities from "./useCapabilities.js";
 
 const PUBLISH_POLL_MS = 2000;
 const SIGNED_OUT = "Your Carta session ended, so this tab can't see how the publish finished. Sign in again to see its results.";
@@ -20,14 +21,7 @@ export const newRunId = () => (globalThis.crypto?.randomUUID ? crypto.randomUUID
  *  whether to SHOW editing affordances use this instead of the full hook, so they don't
  *  join the status polling. */
 export function useCanPublish() {
-  const [can, setCan] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/capabilities").then((r) => r.json())
-      .then((c) => { if (alive) setCan(!!c?.publish); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
-  return can;
+  return !!useCapabilities()?.publish;
 }
 
 /** Publish lifecycle for staged KPI corrections, polled from /api/publish/status.
@@ -39,7 +33,7 @@ export function useCanPublish() {
  *  and needs it, the local server (one firm per launch) ignores it. */
 export default function usePublish(firm) {
   const [st, setSt] = useState({ status: "idle" });
-  const [canPublish, setCanPublish] = useState(false);
+  const canPublish = useCanPublish();
   const pollRef = useRef(null);
   const genRef = useRef(0);
 
@@ -78,8 +72,6 @@ export default function usePublish(firm) {
   useEffect(() => {
     let alive = true;
     const gen = genRef.current;
-    fetch("/api/capabilities").then((r) => r.json())
-      .then((c) => { if (alive) setCanPublish(!!c?.publish); }).catch(() => {});
     readPublishStatus(firm).then((s) => {
       if (!alive || !s || genRef.current !== gen) return;
       if (s.status === "running") startPolling();

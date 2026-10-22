@@ -11,3 +11,13 @@ export function lsSet(key, value) {
 export function lsRemove(key) {
   try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
 }
+// The same guard for sessionStorage, which holds state that should end with the tab.
+export function ssGet(key) {
+  try { return sessionStorage.getItem(key); } catch { return null; }
+}
+export function ssSet(key, value) {
+  try { sessionStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
+export function ssRemove(key) {
+  try { sessionStorage.removeItem(key); } catch { /* storage unavailable */ }
+}

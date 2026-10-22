@@ -3,10 +3,13 @@
 // skipped). Lists firms from /api/firms.
 import { useEffect, useState } from "react";
 import { FS, sans, serif } from "./ui/theme.js";
-import { Mark } from "./ui/components.jsx";
+import { Mark, Btn, TextInput } from "./ui/components.jsx";
+import useIsWorker from "./state/useIsWorker.js";
+import { isCartaId } from "./model/cartaId.js";
 
 export default function FirmChooser({ onPick }) {
   const [firms, setFirms] = useState(null);
+  const worker = useIsWorker();
   useEffect(() => {
     fetch("/api/firms").then((r) => r.json()).then((l) => setFirms(Array.isArray(l) ? l : [])).catch(() => setFirms([]));
   }, []);
@@ -22,9 +25,14 @@ export default function FirmChooser({ onPick }) {
           <div style={{ ...serif, fontSize: FS.h2, fontWeight: 700 }}>Portfolio Analytics</div>
         </div>
         {firms == null && <div style={{ color: "var(--ink-color-global-text-subtle)" }}>Loading firms…</div>}
-        {firms && firms.length === 0 && (
+        {firms && firms.length === 0 && worker === false && (
           <div style={{ color: "var(--ink-color-global-text-subtle)", fontSize: FS.bodyLg }}>
             No firm data found. Ask Claude to build portfolio analytics for a firm first.
+          </div>
+        )}
+        {firms && firms.length === 0 && worker && (
+          <div style={{ color: "var(--ink-color-global-text-subtle)", fontSize: FS.bodyLg, marginBottom: 16 }}>
+            Carta lists no firms for your account.
           </div>
         )}
         {firms && firms.map((f) => (
@@ -40,7 +48,29 @@ export default function FirmChooser({ onPick }) {
             )}
           </button>
         ))}
+        {/* Carta lists only a staff user's active firm, so the Worker offers every firm by
+            its Carta ID, whatever the list holds. The Worker still checks access on open. */}
+        {firms && worker && <OpenByCartaId onPick={onPick} />}
       </div>
     </div>
+  );
+}
+
+function OpenByCartaId({ onPick }) {
+  const [id, setId] = useState("");
+  const cartaId = id.trim();
+  const valid = isCartaId(cartaId);
+  const submit = (e) => { e.preventDefault(); if (valid) onPick(cartaId); };
+  return (
+    <form onSubmit={submit} style={{ marginTop: 16 }}>
+      <label htmlFor="carta-id" style={{ display: "block", marginBottom: 6, color: "var(--ink-color-global-text-subtle)", fontSize: FS.body }}>
+        Open a firm by Carta ID
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <TextInput id="carta-id" inputMode="numeric" autoComplete="off" placeholder="e.g. 1001"
+          value={id} onChange={(e) => setId(e.target.value)} style={{ flex: 1 }} />
+        <Btn kind="primary" type="submit" disabled={!valid}>Open</Btn>
+      </div>
+    </form>
   );
 }
