@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.108.6</carta-plugin>
+<carta-plugin>carta-investors:6.108.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -154,13 +154,11 @@ so ask as usual.
   uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" resolve "<canonical name>"
   ```
   Reply with `https://fund-modeling.carta.cloud/firm/<slug>` (the printed `slug`) and end the turn: "Open
-  **\<link\>** and sign in with Carta. If it then shows a different firm, open **\<link\>** again or use
-  **Switch firm** to pick **\<canonical name\>**." (Sign-in returns to the app's home page, so a first visit
-  can still show the last firm; the second open keeps the firm in the link.) Do **not** launch `serve.py` or
-  scan caches. Fall back to the bare link plus the **Switch firm** line from Gate 0, naming the firm as typed,
-  when there is no Carta MCP, `list_contexts` leaves no single firm, or the **canonical name** has any
-  non-ASCII character (the hosted slug does not transliterate it). Never build a slug from the typed name, by
-  hand or with `resolve`.
+  **\<link\>** and sign in with Carta. If it shows a different firm, use **Switch firm** to pick
+  **\<canonical name\>**." Do **not** launch `serve.py` or scan caches. Fall back to the bare link plus the
+  **Switch firm** line from Gate 0, naming the firm as typed, when there is no Carta MCP, `list_contexts`
+  leaves no single firm, or the **canonical name** has any non-ASCII character (the hosted slug does not
+  transliterate it). Never build a slug from the typed name, by hand or with `resolve`.
 - **Local** → continue to **Step 0** silently.
 
 ## Step 0 — Resolve identity + check the local cache
