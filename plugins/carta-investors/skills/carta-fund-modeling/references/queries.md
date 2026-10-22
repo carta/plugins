@@ -415,17 +415,31 @@ The hosted app (`server/worker.js`) runs the local `nav_latest`, `fund_metrics`,
 `corporations`, `captable`, `waterfall`, `accrued_carry`, `distributed_carry`, `deal_irr`, `financing`,
 `fee_schedules`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
 the §0 directory query (`ops_benchmarks` holds no firm data and has no scope; `financials` is row-scoped by
-`set_context`, as locally). Only `nav_latest`, `fund_metrics` and the three hosted
-queries below are required; any other one that errors leaves its data out and the firm still loads: the user's role cannot read
-the table, or the result is over the MCP's inline size cap. It reads every result as **one
-10,000-row page**: it cannot page, and it rejects any result that reports `next_offset` rather than save a partial
-snapshot. The exceptions are `captable` and `financials`: one cut at the limit is left out whole and the firm still
-loads, with no `company.capTable` (§15) or `company.financials` (§14). The snapshot's `source.queries` records, per query,
-which happened: `loaded` (with its row count), `denied`, `too_large` (each with the error text) or `cut` (with the row
-counts the DWH reports). Three queries are its own, each trimmed to fit that one page:
+`set_context`, as locally). It pages every query (`server/dwh-pages.js`) under both of the DWH's limits, 10,000
+rows and 200 KiB inline: each starts at a page size set by its row width, a `too_large` page is retried at the
+same offset, smaller, up to 3 times, and a query's rows are trusted only when they add up to the page header's
+`total_rows`. **Every query it runs must end with a top-level `ORDER BY` on its own output columns that gives a
+total order** (a unique key, or `ORDER BY ALL`): the DWH reruns the query for each page and moves only that
+`ORDER BY` outside, so without it pages can repeat or skip rows and still add up. Most keys are unique by
+the query's own `QUALIFY` or `GROUP BY` partition; these are unique only in the data, checked against the
+warehouse, so recheck them if their table changes: `(fund_uuid, month_end_date)` for `nav_history` and
+`cashflows`, `(fund_uuid, performance_quarter_start_date)` for `cohort`, `(fund_id, config_name)` for
+`waterfall`, `(fund_id, period_order)` for `fee_schedules` and `(fund_uuid, general_ledger_asset_id)` for
+`investments`. A query stops after 500 pages, which keeps 17 queries under the Worker's 10,000 subrequests a
+load. Only `nav_latest`,
+`fund_metrics` and the three hosted queries below are required: one that fails rejects the load, so a partial
+snapshot is never saved. Any other one that fails is left out whole and the firm still loads, without that data
+(no `company.capTable` (§15), no `company.financials` (§14), and so on). The snapshot's `source.queries` records,
+per query, which happened: `loaded` (`rows`, the total across pages), `denied` (`message`, any other tool
+error), `too_large` (`offset`, the page that stayed over the inline cap after the retries, and `message`),
+`too_many_pages` (`rows` and `pages` when it stopped) or `cut` (`rows` fetched and the warehouse's `totalRows`,
+which differ when it refreshed mid-load). `loaded` and `cut` also carry `pages`, the pages received, and
+`retries`, the `too_large` retries. Three queries are
+its own:
 - `nav_history` — `MONTHLY_NAV_CALCULATIONS` at quarter-ends plus each fund's latest month only: the months its
   NAV trend keeps. Locally the trend comes from every month-end row of the §5 `cashflows` stem.
 - `cashflows` — only months with a non-zero LP contribution or distribution, and only the flow columns: the
   dated flows behind net LP IRR (the NAV trend comes from `nav_history`). The local §5 stem keeps every month.
 - `investments` — one row per lot, ungrouped, with `remaining_value_per_share`, which the hosted snapshot
-  reads per lot. The local §3 stem groups by asset.
+  reads per lot, and `general_ledger_asset_id`, which with `fund_uuid` keys a lot for paging. The local §3 stem
+  groups by asset.

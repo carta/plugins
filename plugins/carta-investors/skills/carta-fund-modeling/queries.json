@@ -43,7 +43,7 @@
         "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
         "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
         "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1",
-        "ORDER BY fund_name"
+        "ORDER BY fund_name, fund_uuid"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
@@ -107,7 +107,8 @@
         "       fund_reporting_currency, vintage_year, vintage_date, total_moic",
         "FROM FUND_ADMIN.AGGREGATE_FUND_METRICS",
         "WHERE fund_uuid IN ({fund_uuids})",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1"
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1",
+        "ORDER BY fund_uuid"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.AGGREGATE_FUND_METRICS",
@@ -126,7 +127,8 @@
         "WHERE ALLOCATION_BUCKET_NAME = 'Carried interest accrued'",
         "  AND IS_GENERAL_PARTNER = TRUE",
         "  AND fund_uuid IN ({fund_uuids})",
-        "GROUP BY fund_uuid"
+        "GROUP BY fund_uuid",
+        "ORDER BY fund_uuid"
       ]
     },
     "distributed_carry": {
@@ -140,7 +142,8 @@
         "WHERE ALLOCATION_BUCKET_NAME = 'Carried interest earned'",
         "  AND IS_GENERAL_PARTNER = TRUE",
         "  AND fund_uuid IN ({fund_uuids})",
-        "GROUP BY fund_uuid"
+        "GROUP BY fund_uuid",
+        "ORDER BY fund_uuid"
       ]
     },
     "cohort": {
@@ -158,7 +161,8 @@
         "       moic_5, moic_10, moic_25, moic_50, moic_75, moic_90, moic_95",
         "FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS",
         "WHERE fund_uuid IN ({fund_uuids})",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY performance_quarter_start_date DESC) <= 8"
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY performance_quarter_start_date DESC) <= 8",
+        "ORDER BY fund_uuid, performance_quarter_start_date DESC"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS",
@@ -177,7 +181,7 @@
         "       minimum_fee_amount, fixed_fee_amount, fee_currency",
         "FROM FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES",
         "WHERE fund_id IN ({fund_uuids})",
-        "ORDER BY fund_id, period_order"
+        "ORDER BY fund_uuid, period_order"
       ]
     },
     "expense_ledger": {
@@ -215,7 +219,8 @@
         "       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_25TH, NET_PERC_PAYROLL_TO_CONTRIBUTIONS_50TH,",
         "       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_75TH",
         "FROM FUND_ADMIN.FUND_OPS_BENCHMARKS_V2",
-        "WHERE entity_type_name = 'Fund' AND NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH IS NOT NULL"
+        "WHERE entity_type_name = 'Fund' AND NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH IS NOT NULL",
+        "ORDER BY ALL"
       ]
     },
     "partners": {
@@ -303,7 +308,8 @@
         "SELECT fund_id, fund_name, config_name, carry_rate, preferred_return,",
         "       gp_catchup_rate, gp_catchup_limit, recommended_config_rank, is_automated",
         "FROM FUND_ADMIN.PROFIT_ALLOCATION_WATERFALL_CONFIG",
-        "WHERE fund_id IN ({fund_uuids})"
+        "WHERE fund_id IN ({fund_uuids})",
+        "ORDER BY fund_id, config_name"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.PROFIT_ALLOCATION_WATERFALL_CONFIG",
@@ -319,7 +325,8 @@
         "SELECT fund_uuid, issuer_name, deal_irr, performance_quarter_end_date",
         "FROM FUND_ADMIN.TEMPORAL_DEAL_IRR",
         "WHERE fund_uuid IN ({fund_uuids})",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid, issuer_id ORDER BY performance_quarter_end_date DESC)=1"
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid, issuer_id ORDER BY performance_quarter_end_date DESC)=1",
+        "ORDER BY ALL"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.TEMPORAL_DEAL_IRR",
@@ -336,7 +343,8 @@
         "SELECT FUND_ID, CORPORATION_ID, PERCENTAGE, AS_OF_DATE",
         "FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP",
         "WHERE FUND_ID IN ({fund_uuids})",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, FUND_ID ORDER BY AS_OF_DATE DESC)=1"
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, FUND_ID ORDER BY AS_OF_DATE DESC)=1",
+        "ORDER BY FUND_ID, CORPORATION_ID"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP",
@@ -353,7 +361,8 @@
         "SELECT investment_name, round, shareclass_name, post_money_valuation, COALESCE(closing_date, raised_date) AS round_date, corporation_id",
         "FROM FUND_ADMIN.FINANCING_HISTORY",
         "WHERE corporation_id IN {corp_scope} AND post_money_valuation > 0",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST, post_money_valuation DESC)=1"
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_id ORDER BY COALESCE(closing_date, raised_date) DESC NULLS LAST, post_money_valuation DESC)=1",
+        "ORDER BY corporation_id"
       ],
       "wide": [
         "SELECT *, COALESCE(closing_date, raised_date) AS round_date",
@@ -376,7 +385,8 @@
         "       DIVIDEND_TYPE, DIVIDEND_COUPON, IS_COMPOUNDING, AS_OF_DATE",
         "FROM FUND_ADMIN.SUMMARY_CAP_TABLE",
         "WHERE CORPORATION_ID IN {corp_scope}",
-        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, SECURITY_CLASS_ID ORDER BY AS_OF_DATE DESC)=1"
+        "QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, SECURITY_CLASS_ID ORDER BY AS_OF_DATE DESC)=1",
+        "ORDER BY CORPORATION_ID, SECURITY_CLASS_ID"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.SUMMARY_CAP_TABLE",
@@ -392,7 +402,8 @@
       "sql": [
         "SELECT entity_link_id, corporation_uuid, corporation_name",
         "FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2",
-        "WHERE corporation_uuid IN {corp_scope}"
+        "WHERE corporation_uuid IN {corp_scope}",
+        "ORDER BY ALL"
       ],
       "wide": [
         "SELECT * FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2",
@@ -419,7 +430,7 @@
         "                 period_end, mnemonic, frequency, report_type, instance_type",
         "    ORDER BY DATE(as_of_date) DESC, instance_id DESC",
         ") = 1 AND float_value IS NOT NULL",
-        "ORDER BY legal_name, mnemonic, name, period_end, report_type"
+        "ORDER BY legal_name, mnemonic, name, period_end, report_type, float_value, unit_type, currency"
       ]
     }
   },
@@ -432,7 +443,7 @@
         "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
         "QUALIFY MONTH(month_end_date) IN (3, 6, 9, 12)",
         "     OR month_end_date = MAX(month_end_date) OVER (PARTITION BY fund_uuid)",
-        "ORDER BY month_end_date DESC"
+        "ORDER BY month_end_date DESC, fund_uuid"
       ]
     },
     "cashflows": {
@@ -441,18 +452,18 @@
         "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS",
         "WHERE fund_uuid IN ({fund_uuids}) AND is_firm_rollup = FALSE",
         "  AND (COALESCE(lp_contributions, 0) <> 0 OR COALESCE(lp_distributions, 0) <> 0)",
-        "ORDER BY month_end_date DESC"
+        "ORDER BY month_end_date DESC, fund_uuid"
       ]
     },
     "investments": {
       "sql": [
-        "SELECT issuer_name, entity_link_id, fund_uuid, fund_name, fund_entity_type_name, asset_name, asset_class_type,",
+        "SELECT issuer_name, entity_link_id, fund_uuid, general_ledger_asset_id, fund_name, fund_entity_type_name, asset_name, asset_class_type,",
         "       count_remaining_shares, remaining_value, remaining_value_per_share,",
         "       total_cost, total_proceeds, total_unrealized_gain_loss, investment_date,",
         "       is_active_investment, is_public_asset",
         "FROM FUND_ADMIN.AGGREGATE_INVESTMENTS",
         "WHERE fund_uuid IN ({fund_uuids})",
-        "ORDER BY issuer_name, fund_uuid"
+        "ORDER BY issuer_name, fund_uuid, general_ledger_asset_id"
       ]
     }
   }
