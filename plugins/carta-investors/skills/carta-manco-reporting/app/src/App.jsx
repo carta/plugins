@@ -9,6 +9,7 @@ import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
+import useLoadFirm from "./state/useLoadFirm.js";
 import { useHostedApp } from "./shell/hostedApp.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
 import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
@@ -47,10 +48,11 @@ function slugify(name) {
   return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-// "not_ready" means the skill has not written snapshot.json yet — a handoff race, not a
-// break. Counting the two together would hide whichever is rarer.
+// Means the skill has not written snapshot.json yet — a handoff race, not a break.
+// Counting the two together in telemetry would hide whichever is rarer.
+const NOT_READY = "not_ready";
 function reportSnapshotError(reason) {
-  trackRender(reason === "not_ready" ? "MancoReporting.App.DataNotReady" : "MancoReporting.App.SnapshotError");
+  trackRender(reason === NOT_READY ? "MancoReporting.App.DataNotReady" : "MancoReporting.App.SnapshotError");
 }
 
 export default function App() {
@@ -59,7 +61,22 @@ export default function App() {
   // Rebuilt inline, this handed the drawer a new array every render, which
   // recomputed its whole filter chain and reset the entry list as it grew.
   const topCategoryNames = useMemo(() => topCategoryNamesFor(accountsData), [accountsData]);
+  // notReady is a handoff race (the skill hasn't written snapshot.json yet; the
+  // auto-load below is already running) and renders the load-status line. error is a
+  // real failure and renders the error banner. At most one of them is set.
+  const [notReady, setNotReady] = useState(false);
   const [error, setError] = useState(null);
+  // The one place that sets either: every snapshot/load-firm outcome narrows to this
+  // single call so the "at most one" invariant above can't drift out of sync at a site
+  // that forgets the other half of the pair.
+  const setSnapshotError = useCallback((e) => {
+    const isNotReady = e === NOT_READY;
+    setNotReady(isNotReady);
+    setError(isNotReady ? null : e);
+  }, []);
+  // Pairs a snapshot-fetch failure with its telemetry so neither call site has to
+  // remember both halves on its own.
+  const failSnapshot = useCallback((e) => { reportSnapshotError(e); setSnapshotError(e); }, [setSnapshotError]);
   const drilldown = useDrilldown();
   const firmSlug = slugify(displayFirmName(snapshot?.firmName));
   const [route, navigate] = usePathRoute(firmSlug);
@@ -75,8 +92,6 @@ export default function App() {
   }, [dark]);
   const toggleTheme = () => { trackClick("MancoReporting.App.ToggleTheme"); setDark((d) => !d); };
 
-  const [loadStatus, setLoadStatus] = useState(null);
-
   // Parallel fetch snapshot + accounts (accounts is optional; drill-downs
   // just don't render if it's absent). Returns its promise so a report change
   // (which the server has already rebuilt both into) can await the refetch.
@@ -84,7 +99,10 @@ export default function App() {
     fetch("/api/snapshot")
       .then(r => r.json())
       .then(data => {
-        if (data?.error) { reportSnapshotError(data.error); setError(data.error); return; }
+        if (data?.error) {
+          failSnapshot(data.error);
+          return;
+        }
         if (data?.ops) {
           data.ops.total_income = data.ops.total_income ?? data.ops.ytdIncome ?? 0;
           data.ops.total_expenses = data.ops.total_expenses ?? data.ops.ytdExpenses ?? 0;
@@ -93,9 +111,9 @@ export default function App() {
         setDisplayCurrency(data?.currency);
         if (data?.feeSchedule?.funds) assignCategoricalColors(data.feeSchedule.funds);
         setSnapshot(data);
-        setError(null);
+        setSnapshotError(null);
       })
-      .catch(e => { reportSnapshotError(String(e)); setError(String(e)); }),
+      .catch(e => failSnapshot(e?.message || String(e))),
 
     fetch("/api/accounts")
       .then(r => r.json())
@@ -105,7 +123,7 @@ export default function App() {
         setAccountsData(data);
       })
       .catch(() => trackRender("MancoReporting.App.AccountsUnavailable")),
-  ]), []);
+  ]), [failSnapshot]);
   const reportsApi = useReports({ onChanged: fetchData });
   const hostedApp = useHostedApp();
   const hiddenReports = reportsApi.reports.filter(r => r.hidden);
@@ -139,54 +157,16 @@ export default function App() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Auto-load: when snapshot returns not_ready, trigger /api/load-firm via SSE.
+  // Auto-load: when the snapshot comes back not_ready, drive /api/load-firm's SSE
+  // progress stream. /api/reports can depend on the firm just loaded, and the read on
+  // mount ran before it had, so reload it too once the firm is in.
+  const { loadStatus, loadError } = useLoadFirm(notReady, () => { fetchData(); reportsApi.reload(); });
+
+  // A failure from the load itself (not a transient "still building") is a real error,
+  // not "still loading" — leaving notReady set would read as a load that never finishes.
   useEffect(() => {
-    if (error !== "not_ready") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        let slug;
-        const cfg = await fetch("/api/app-config").then(r => r.json());
-        slug = cfg?.defaultFirm;
-        if (!slug) {
-          const firms = await fetch("/api/firms").then(r => r.json()).catch(() => []);
-          if (Array.isArray(firms) && firms.length > 0) slug = firms[0].slug;
-        }
-        if (!slug || cancelled) return;
-        setLoadStatus("Loading firm data…");
-        const resp = await fetch("/api/load-firm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slug }),
-        });
-        const reader = resp.body?.getReader();
-        if (!reader) return;
-        const decoder = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done || cancelled) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() || "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const msg = JSON.parse(line.slice(6));
-              setLoadStatus(msg.step || "Loading…");
-              // /api/reports can depend on the firm just loaded, and the read on mount
-              // ran before it had. Reload it now that the firm is in.
-              if (msg.done) { fetchData(); reportsApi.reload(); setLoadStatus(null); return; }
-              if (msg.error) { setError(msg.error); setLoadStatus(null); return; }
-            } catch { /* skip */ }
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setError(String(e));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [error, fetchData, reportsApi.reload]);
+    if (loadError) setSnapshotError(loadError);
+  }, [loadError, setSnapshotError]);
 
   // Tab title names the firm, mirroring carta-fund-modeling. No iframe here,
   // so document.title is set directly instead of posted to an outer shell.
@@ -279,15 +259,15 @@ export default function App() {
     <>
       <style>{GLOBAL_CSS}</style>
       <AppShell sidebarProps={sidebarProps}>
-        {error === "not_ready" && (
+        {notReady && (
           <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>
             {loadStatus || "· Loading fund data…"}
           </p>
         )}
-        {error && error !== "not_ready" && (
+        {error && (
           <p style={{ ...sans, fontSize: FS.bodyLg, color: "var(--red)" }}>Error: {error}</p>
         )}
-        {!error && !snapshot && (
+        {!error && !notReady && !snapshot && (
           <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>{loadStatus || "Loading…"}</p>
         )}
         {snapshot && activeParent === "dashboard" && (
