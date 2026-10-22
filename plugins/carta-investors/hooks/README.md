@@ -30,3 +30,26 @@ Hooks that target the Carta MCP server use an explicit allowlist rather than `mc
 
 - `carta*` / `Carta*` — prefix match; covers any server name starting with "carta" or "Carta" (e.g. `carta-local`)
 - UUID — registered automatically by Claude Desktop; one UUID per Carta environment
+
+## SOI review module (`register.tsx`)
+
+A Claude Code hooks module that needs Claude Code 2.1.308 or later. Builds older than
+2.1.286, and Cowork, skip it. Builds 2.1.286 to 2.1.307 load it, but it never learns a
+review, because the tool name they pass to `tool.call` does not include the server. Every
+build runs the command hooks above.
+
+When Claude opens an SOI review in the Update Investments view, the module learns the
+review from that `view_remote` result and polls Carta MCP's `fa__get__soi-review-state`
+read through `read_tool`, on the same server the view came from. It shows
+`SOI Q<n> <yyyy> · <status_label>` in the status line.
+
+- Unlike the allowlist above, it accepts `view_remote` on any server, and recognises
+  the review by the view's `remoteName` (`updateInvestmentsMcpApps`).
+- Polls every `TICK_MS` and stops once the review is approved or closed.
+- Every poll carries `_instrumentation_v2: { from_hook: true }`, so carta-mcp does not
+  count it as Claude's usage.
+- Tests: `claude plugin test plugins/carta-investors` runs `register.test.tsx`. In CI,
+  validate.yml's plugin-tests job installs the claude CLI and runs
+  `tests/plugin-mods/test_plugin_mod_suites.py`, which validates and tests every plugin
+  with a hooks module. The test file is held back from the public plugin by
+  `hooks/*.test.tsx` in `public-plugins.json`.

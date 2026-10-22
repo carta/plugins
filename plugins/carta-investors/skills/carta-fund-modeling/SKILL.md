@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.107.9</carta-plugin>
+<carta-plugin>carta-investors:6.107.11</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -144,11 +144,12 @@ so ask as usual.
   in your browser, sign in with Carta, and pick your firm." Do **not** scan caches, touch the MCP or launch
   `serve.py`.
 - **Hosted, firm named** (name, Carta firm URL or UUID) → the app reopens the last firm used in the browser, so a
-  bare link can open the wrong firm. Link straight to the requested one instead. The only MCP calls allowed are
-  `welcome` and `list_contexts {firm_name: "<typed firm name>"}` on the Carta MCP (identify and verify it as in
+  bare link can open the wrong firm. Link straight to the firm the user named instead. The only MCP calls allowed are
+  `welcome` and `list_contexts {firm_name: "<typed firm name>"}` on the Carta MCP (identify it by Step 1's
+  tool-list scan, since no command can test for the MCP, and fall back at once if it finds none; verify it as in
   Step 1; a URL/UUID goes in as the `firm_id` it takes) — read-only, **never `set_context`**, which would change
   the user's active firm. Pick the firm by Step 1's *Resolve the firm* rules, without `AskUserQuestion`; if they
-  leave no single firm, fall back. Then:
+  leave no single firm, fall back. Then, with the canonical name `list_contexts` returned:
   ```bash
   uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" resolve "<canonical name>"
   ```
@@ -158,7 +159,8 @@ so ask as usual.
   can still show the last firm; the second open keeps the firm in the link.) Do **not** launch `serve.py` or
   scan caches. Fall back to the bare link plus the **Switch firm** line from Gate 0, naming the firm as typed,
   when there is no Carta MCP, `list_contexts` leaves no single firm, or the **canonical name** has any
-  non-ASCII character (the hosted slug does not transliterate it). Never guess a slug from the typed name.
+  non-ASCII character (the hosted slug does not transliterate it). Never build a slug from the typed name, by
+  hand or with `resolve`.
 - **Local** → continue to **Step 0** silently.
 
 ## Step 0 — Resolve identity + check the local cache
