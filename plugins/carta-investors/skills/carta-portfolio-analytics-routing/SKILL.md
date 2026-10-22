@@ -71,7 +71,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.106.9</carta-plugin>
+<carta-plugin>carta-investors:6.107.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -127,7 +127,7 @@ Respond immediately without extended reasoning.
 | Message signals | Action |
 |---|---|
 | "run my valuations", "do my marks", "quarterly marks", "fair value", "batch valuations", "close my quarter", "update the EV", "autopilot valuation", "goal seek", "waterfall", "exit scenario" | **Stop.** Portfolio valuations are handled separately. Tell the user: "Portfolio marks and valuations are handled by a different skill set — try `/carta-valuations-routing` or say 'run my valuations'." |
-| "K-1", "capital call notice", "distribution notice", "LP documents", "LP quarterly report", "AGM deck", "tear sheet" | **Stop.** LP reporting is handled separately. Tell the user: "Tear sheets and AGM decks have their own skills — try `carta-investors:carta-download-tearsheet` or `carta-investors:carta-agm-deck-builder`. Documents your fund sent to its LPs are managed in Carta directly." |
+| "K-1", "capital call notice", "distribution notice", "LP documents", "LP quarterly report", "AGM deck", "tear sheet" | **Stop.** LP reporting is handled separately. Tell the user: "Tear sheets and AGM decks have their own skills — try `carta-investors:carta-download-tearsheet` or `carta-investors:carta-agm-deck-builder`. For an investor's own K-1s and notices, say 'show me my LP documents'. Documents your fund sent to its LPs are managed in Carta directly." |
 | "comparable companies", "comp set", "GPC comps", "select comps", "find comps", "add comparables", "update the comp set", "trading comps", "browse comps", "add ticker", "industry comparables" | **Stop.** Comparable company selection is handled by the Portfolio Valuations skill set. Tell the user: "Comparable company selection lives in the Portfolio Valuations skill — try `/carta-valuations-routing` or say 'update my comp set'." |
 | "SPA audit", "SPA coverage", "missing SPAs", "Form ADV", "regulatory AUM" | **Stop.** SPA audit and Form ADV are handled separately. Tell the user: "SPA audit and Form ADV live in a separate skill set — try `/carta-compliance-routing`." |
 
@@ -192,6 +192,7 @@ Fire only if Step 1 returned no clear match.
 | SPA audit, Form ADV, regulatory AUM | `/carta-compliance-routing` |
 | Tear sheets | `carta-investors:carta-download-tearsheet` |
 | AGM decks, LP meeting decks | `carta-investors:carta-agm-deck-builder` |
+| An investor's own K-1s and LP documents | Say "show me my LP documents" |
 | Cap table ownership, equity management, 409A | Carta cap table tools |
 | Wants Carta's Fund Admin team to *do* something | `carta-fund-admin-requests` |
 
@@ -518,4 +519,4 @@ to active" below, not a re-mirroring job.
 - **CTA until GA:** "The loan portfolio dashboard is coming to external users soon. Reach out to your Carta account manager or contact Carta Support to request early access."
 - **Skill when live:** `carta-investors:carta-loan-dashboard`
 - **Dispatch mechanism to use:** Mirror already built — promote via `Read references/loan-dashboard.md` once the tool grants above are added.
-- **Disambiguation to carry forward:** "loan portfolio" / "loans I've made" / "draw balance" → Loan Dashboard (once live); "my LP portfolio" / "LP investments" → out of scope (do not confuse loan portfolio with LP portfolio — these are different products, "loan" vs "LP").
+- **Disambiguation to carry forward:** "loan portfolio" / "loans I've made" / "draw balance" → Loan Dashboard (once live); "my LP portfolio" / "LP investments" → out of scope, suggest saying "show my LP dashboard" (do not confuse loan portfolio with LP portfolio — these are different products, "loan" vs "LP").
