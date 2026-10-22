@@ -50,6 +50,12 @@ read through `read_tool`, on the same server the view came from. It shows
   failed poll keeps the last state and records when it failed. One poll runs at a time; a
   poll still running `STALE_MS` after it started is replaced by a fresh one, at most once
   per `STALE_MS`.
+- Compares each read with the one before: one toast per company whose booked value
+  changed (more than `TOAST_LIMIT` collapse into one), and one when the status moves,
+  in the read command's own words. No toast on the session's first read. It also keeps
+  the companies changed since that first read, from any source. Reopening the same review
+  keeps the session's changes and reads it once, even when it was approved or closed;
+  opening a different one starts over.
 - Every poll carries `_instrumentation_v2: { from_hook: true }`, so carta-mcp does not
   count it as Claude's usage.
 - Tests: `claude plugin test plugins/carta-investors` runs `register.test.tsx`. In CI,

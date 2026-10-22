@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { SoiReview, SoiReviewState } from '../types'
+import { changedCompanies, companyValue } from './changes'
 
 const soiReview = atom({ plugin: 'carta-investors', key: 'soiReview' } as const, null)
 
@@ -15,6 +16,8 @@ export const SLOW_MS = 15000
 export const IDLE_MS = 30 * 60 * 1000
 export const STALE_MS = 60 * 1000
 const DONE = new Set(['approved', 'closed'])
+// More companies than this in one read collapse into a single toast.
+export const TOAST_LIMIT = 3
 
 // An MCP result's JSON: structured content, else its first text block, unwrapped from the
 // `{ result }` envelope FastMCP puts around a tool's return value.
@@ -28,8 +31,11 @@ function reviewFrom(server: string, text: string): SoiReview | null {
   const view = payload(text)
   const review = view?.args?.review
   if (view?.resource?.moduleFederation?.remoteName !== VIEW_APP || !review?.soi_report_id || !review.firm_uuid) return null
-  return { server, firmUuid: review.firm_uuid, soiReportId: review.soi_report_id, state: null, readAt: null, failedAt: null }
+  return { server, firmUuid: review.firm_uuid, soiReportId: review.soi_report_id, state: null, first: null, changedCompanies: [], readAt: null, failedAt: null }
 }
+
+// Two records are the same SOI review when they name the same report on the same server.
+const isSameReview = (a: SoiReview | null, b: SoiReview) => a?.soiReportId === b.soiReportId && a.server === b.server
 
 // `SOI Q3 2026 · Waiting on you`; the quarter is the period end's.
 function statusLine(state: SoiReviewState): string {
@@ -53,6 +59,23 @@ async function readState($: EngineInterface, review: SoiReview): Promise<SoiRevi
   }
 }
 
+function companyToast(company: string, before: SoiReviewState, after: SoiReviewState): string {
+  const { currency } = after.fair_value
+  if (currency === null) return `${company} updated`
+  const money = new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 })
+  const was = money.format(companyValue(before.positions, company))
+  return `${company} updated: ${was} → ${money.format(companyValue(after.positions, company))}`
+}
+
+// One toast per company changed since the last read, and one for a status move in the
+// read command's own words. The session's first read has nothing before it to compare.
+function toastChanges($: EngineInterface, before: SoiReviewState, after: SoiReviewState) {
+  if (after.status !== before.status) $.ui.toast(after.status_message ?? after.status_label)
+  const companies = changedCompanies(before.positions, after.positions)
+  if (companies.length > TOAST_LIMIT) $.ui.toast(`${companies.length} companies updated`)
+  else for (const company of companies) $.ui.toast(companyToast(company, before, after))
+}
+
 // Reset by a reload, which only means the next tick reads at once. The cadence counts
 // ticks rather than comparing clock times, so timer jitter never pushes a read a tick late.
 let ticksSinceRead = Infinity
@@ -73,7 +96,9 @@ async function poll($: EngineInterface) {
   isPolling = true
   try {
     const review = await read($, soiReview)
-    if (review === null || DONE.has(review.state?.status ?? '')) return
+    // Opening the view forces one read (ticksSinceRead is Infinity), even of a review held as done.
+    const isForced = ticksSinceRead === Infinity
+    if (review === null || (DONE.has(review.state?.status ?? '') && !isForced)) return
     const now = await $.clock.now()
     const every = review.state?.status === 'waiting-on-you' ? TICK_MS : SLOW_MS
     if (now - lastPrompt > IDLE_MS || ticksSinceRead * TICK_MS < every) return
@@ -81,12 +106,15 @@ async function poll($: EngineInterface) {
 
     const state = await readState($, review)
     if (gen !== pollGen) return
-    const isCurrent = (prev: SoiReview | null) => prev?.soiReportId === review.soiReportId && prev.server === review.server
     await update($, soiReview, prev => {
-      if (prev === null || !isCurrent(prev)) return prev
-      return state === null ? { ...prev, failedAt: now } : { ...prev, state, readAt: now, failedAt: null }
+      if (prev === null || !isSameReview(prev, review)) return prev
+      if (state === null) return { ...prev, failedAt: now }
+      const first = prev.first ?? state.positions
+      return { ...prev, state, first, changedCompanies: changedCompanies(first, state.positions), readAt: now, failedAt: null }
     })
-    if (state !== null && gen === pollGen && isCurrent(await read($, soiReview))) $.ui.status(statusLine(state))
+    if (state === null || gen !== pollGen || !isSameReview(await read($, soiReview), review)) return
+    $.ui.status(statusLine(state))
+    if (review.state !== null) toastChanges($, review.state, state)
   } finally {
     if (gen === pollGen) isPolling = false
   }
@@ -109,8 +137,12 @@ export const register: Register = on => {
     const server = VIEW_TOOL.exec(e.tool)?.[1]
     const review = server !== undefined && ran.text !== undefined ? reviewFrom(server, ran.text) : null
     if (review !== null) {
-      await update($, soiReview, () => review)
-      $.ui.status(undefined)
+      // Claude reopens the view on the same review after booking from the chat: keep its
+      // state and the session's changes, so that booking is still compared and counted.
+      if (!isSameReview(await read($, soiReview), review)) {
+        await update($, soiReview, () => review)
+        $.ui.status(undefined)
+      }
       ticksSinceRead = Infinity // read it on the next tick
     }
     return ran
