@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.107.1</carta-plugin>
+<carta-plugin>carta-investors:6.107.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -71,7 +71,7 @@ never calls the Carta MCP** — this skill fetches the data; the server only ser
 repricing/waterfall/IRR is a **transparent estimate** (the ported `model/`), not Carta's official engine.
 
 > **Hosted or local.** Carta hosts the same app at **https://fund-modeling.carta.cloud** — the user signs in
-> with Carta and picks a firm there, with nothing to build. The local build starts a localhost web server and
+> with Carta and opens their firm there (Gate 1 links to the requested one when it can), with nothing to build. The local build starts a localhost web server and
 > opens your browser, so it works only in a Claude Code session running on your machine (a local terminal, or
 > Claude Desktop set to run locally). In a **sandboxed** session — **Cowork**, or a Claude Code **cloud**
 > session — Gate 0 points the user at the hosted app; in a local session Gate 1 asks which they want.
@@ -81,12 +81,13 @@ repricing/waterfall/IRR is a **transparent estimate** (the ported `model/`), not
 empty or partial data dir. Every dashboard runs against **one real Carta firm's** Fund Admin data — either
 fetched fresh or served from a prior local fetch (cache). On a local build (after Gate 1), if the invocation
 includes no firm (name or URL), do **not** auto-pick, list, or guess — **stop and ask the user to name a firm**,
-then proceed only once they answer. The hosted app needs no firm here; the user picks it there. A missing or unresolved firm is a graceful exit, not a reason to invent data.
+then proceed only once they answer. The hosted app needs no firm here; when one is named, Gate 1 resolves it for a deep link, otherwise the user picks it there. A missing or unresolved firm is a graceful exit, not a reason to invent data.
 
 ## Launch order — cache-first, MCP-lazy
 Building a dashboard needs the Carta MCP; **launching a warm cache does not.** Resolve the firm **name** and
 check the local cache *before* touching any MCP — a fresh cache launches with **no MCP call**. Only a
-build/refresh (Step 1 onward) identifies the MCP and resolves the firm over it.
+build/refresh (Step 1 onward) identifies the MCP and resolves the firm over it. The one exception is Gate 1's
+hosted hand-off for a named firm, which makes read-only MCP calls to build a deep link (see Gate 1).
 
 ## Gate 0 — Surface check (run first, before anything else)
 
@@ -108,6 +109,10 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" de
   > running in the cloud is the default — switch it to run locally). To build locally instead, re-run from a
   > local session, e.g. "fund modeling for \<firm\>".
 
+  If the invocation named a firm, add one line to that reply: "You asked about **\<firm\>** — the app
+  reopens the last firm used in your browser, so use **Switch firm** if it opens a different one." (No
+  deep link here: a sandboxed session does not reliably have the MCP.)
+
   This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to launch anyway, and do **not**
   fall back to another surface or tool — a sandboxed verdict will not change on retry.
 - Otherwise (**`surface=local`**, the normal case) → continue to **Gate 1** silently. Say nothing about this
@@ -116,12 +121,11 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" de
 ## Gate 1 — Hosted or local (local sessions only)
 
 Carta hosts this app at **https://fund-modeling.carta.cloud**. The user signs in with Carta there and the app
-shows only the firms their Carta login can open, so the hosted path needs no firm name, no Carta MCP and no
-local cache. Ask before Step 0 — before any cache scan or MCP call — with `AskUserQuestion`:
+shows only the firms their Carta login can open, so the hosted path needs no local cache; when a firm is named, Gate 1 may build a deep link to it (below). Ask before Step 0 — before any cache scan or MCP call — with `AskUserQuestion`:
 
 > **Header:** "Where to run"
 > **Question:** "Open the hosted Fund Modeling app, or build it locally on this machine?"
-> - **"Open hosted app"** — fund-modeling.carta.cloud: sign in with Carta and pick a firm; nothing to build.
+> - **"Open hosted app"** — fund-modeling.carta.cloud: sign in with Carta and open your firm; nothing to build.
 > - **"Build locally"** — pulls the firm's data through the Carta MCP into a local cache and serves the app
 >   from this machine.
 
@@ -129,8 +133,25 @@ Skip the question when the invocation already chose: "hosted", "online" or fund-
 "local", "build", "refresh", or reopening a local dashboard → local. A pasted Carta firm URL chooses neither,
 so ask as usual.
 
-- **Hosted** → reply with the link, then end the turn: "Open **https://fund-modeling.carta.cloud** in your
-  browser, sign in with Carta, and pick your firm." Do **not** scan caches, touch the MCP or launch `serve.py`.
+- **Hosted, no firm named** → reply with the link, then end the turn: "Open **https://fund-modeling.carta.cloud**
+  in your browser, sign in with Carta, and pick your firm." Do **not** scan caches, touch the MCP or launch
+  `serve.py`.
+- **Hosted, firm named** (name, Carta firm URL or UUID) → the app reopens the last firm used in the browser, so a
+  bare link can open the wrong firm. Link straight to the requested one instead. The only MCP calls allowed are
+  `welcome` and `list_contexts {firm_name: "<typed firm name>"}` on the Carta MCP (identify and verify it as in
+  Step 1; a URL/UUID goes in as the `firm_id` it takes) — read-only, **never `set_context`**, which would change
+  the user's active firm. Pick the firm by Step 1's *Resolve the firm* rules, without `AskUserQuestion`; if they
+  leave no single firm, fall back. Then:
+  ```bash
+  uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" resolve "<canonical name>"
+  ```
+  Reply with `https://fund-modeling.carta.cloud/firm/<slug>` (the printed `slug`) and end the turn: "Open
+  **\<link\>** and sign in with Carta. If it then shows a different firm, open **\<link\>** again or use
+  **Switch firm** to pick **\<canonical name\>**." (Sign-in returns to the app's home page, so a first visit
+  can still show the last firm; the second open keeps the firm in the link.) Do **not** launch `serve.py` or
+  scan caches. Fall back to the bare link plus the **Switch firm** line from Gate 0, naming the firm as typed,
+  when there is no Carta MCP, `list_contexts` leaves no single firm, or the **canonical name** has any
+  non-ASCII character (the hosted slug does not transliterate it). Never guess a slug from the typed name.
 - **Local** → continue to **Step 0** silently.
 
 ## Step 0 — Resolve identity + check the local cache

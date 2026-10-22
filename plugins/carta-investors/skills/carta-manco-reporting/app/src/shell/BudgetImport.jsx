@@ -34,7 +34,12 @@ export default function BudgetImport({ hosted, budgetUpload, onChanged }) {
   return (
     <div style={{ ...sans, fontSize: FS.small, color: FAINT, lineHeight: 1.4, display: "grid", gap: 6, marginBottom: 10 }}>
       {note && (
-        <div style={{ color: note.warn ? RED : FAINT }}>
+        // The uploaded workbook's filename is one long, underscore-heavy token with no
+        // natural break point, so it overflows this column — invisibly on a wide screen
+        // where there's a gap before the dashboard's own content, but painting straight
+        // into it on a narrow one. Same wordBreak the sidebar's own firm name uses
+        // (Sidebar.jsx's firmName style), in the same column, for the same reason.
+        <div style={{ color: note.warn ? RED : FAINT, wordBreak: "break-word" }}>
           {note.text}{" "}
           <a
             href={BUDGET_DOWNLOAD_URL} download
