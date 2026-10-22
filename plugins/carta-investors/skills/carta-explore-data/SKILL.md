@@ -8,7 +8,7 @@ description: >
   MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
   data queries (Cowork persistent artifacts); over carta-portfolio-valuations for
   read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
-  carta-consolidating-financial-reports for
+  carta-lp-dashboard unless asked by name; over carta-consolidating-financial-reports for
   single-fund balance sheets.
   Use instead: carta-lp-summary for the LP Summary page ("build the LP summary for [firm]");
   carta-co-investors for co-investor / "who else invested" analysis;
@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.108.4</carta-plugin>
+<carta-plugin>carta-investors:6.108.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
