@@ -8,7 +8,7 @@ import App from "./App.jsx";
 import FundChooser from "./FundChooser.jsx";
 import { FirmDataContext } from "./state/FirmData.jsx";
 import { FS, sans } from "./ui/theme.js";
-import { parseRoute, navigate, subscribeNav } from "./route.js";
+import { parseRoute, navigate, subscribeNav, isFirmId } from "./route.js";
 import { postToOuter } from "./bridge-client.js";
 import { FirmAccess } from "./firm-access.js";
 import { runFirmLoad } from "./state/firmLoad.js";
@@ -44,8 +44,10 @@ export default function Root({ features }) {
   useEffect(() => {
     if (firm) return;
     const stored = localStorage.getItem("firm");
-    if (stored) navigate({ firm: stored, tab: "overview" }, { replace: true });
-  }, [firm]);
+    // A remembered name slug names no hosted firm, so opening it would only answer 403.
+    if (stored && features.firmsById && !isFirmId(stored)) localStorage.removeItem("firm");
+    else if (stored) navigate({ firm: stored, tab: "overview" }, { replace: true });
+  }, [firm, features]);
 
   // Load the firm's extras whenever the firm changes. If snapshot data isn't
   // ready yet (fresh OAuth session), trigger /api/load-firm to fetch from MCP.

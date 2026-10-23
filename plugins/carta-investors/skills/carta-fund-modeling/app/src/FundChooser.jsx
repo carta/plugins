@@ -11,6 +11,15 @@ import { FirmAccess, getJson } from "./firm-access.js";
 
 const SEARCH_DELAY_MS = 300;
 
+// A search answer carries no fund count, so a count shows only when the firm has one.
+function cardFacts(f) {
+  return [
+    f.firmId && `Carta ID ${f.firmId}`,
+    f.funds != null && `${f.funds} fund${f.funds === 1 ? "" : "s"}`,
+    f.navAsOf && `NAV ${f.navAsOf}`,
+  ].filter(Boolean).join(" · ");
+}
+
 export default function FundChooser({ onPick, autoOpen = true }) {
   const [isStaff, setIsStaff] = useState(undefined); // undefined: loading; null: unknown
   const [firms, setFirms] = useState(null);
@@ -75,8 +84,8 @@ export default function FundChooser({ onPick, autoOpen = true }) {
               <Mark branding={{ mark: f.mark }} size={42} />
               <div>
                 <H3 as="div" style={{ lineHeight: 1.2 }}>{f.name}</H3>
-                <div style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 6 }}>
-                  {f.funds} fund{f.funds === 1 ? "" : "s"}{f.navAsOf ? ` · NAV ${f.navAsOf}` : ""}
+                <div data-testid={`firm-facts-${f.slug}`} style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 6 }}>
+                  {cardFacts(f)}
                 </div>
               </div>
               <span style={{ ...sans, fontSize: FS.body, fontWeight: 600, color: "var(--ink-button-background-color-primary-base-default)", marginTop: 2 }}>Open workspace →</span>

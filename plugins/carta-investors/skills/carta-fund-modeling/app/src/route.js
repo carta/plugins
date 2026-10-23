@@ -1,7 +1,8 @@
 // URL routing for the fund-modeling app.
 //
-// Shape: /firm/<slug>/<page>
-//   - The firm slug and the page both live in the PATH. A reload therefore
+// Shape: /firm/<firm>/<page>
+//   - <firm> is an ID on the hosted app (see isFirmId) and the firm's name slug locally.
+//   - The firm and the page both live in the PATH. A reload therefore
 //     reopens the exact firm and page you were on.
 //   - The /api auth token is not in the URL — it lives in localStorage (see dash-token.js).
 //   - Path-based (History API), not a hash: serve.py and Vite dev both serve
@@ -13,6 +14,11 @@
 // fires no event of its own, so navigate() dispatches NAV_EVENT to notify them.
 
 export const NAV_EVENT = "fm:navigate";
+
+export const CARTA_ID_RE = /^[1-9][0-9]*$/;
+export const FIRM_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Hosted URLs name a firm by Carta ID, or by firm UUID while Carta sends no Carta ID.
+export const isFirmId = (firm) => CARTA_ID_RE.test(firm || "") || FIRM_UUID_RE.test(firm || "");
 
 /** Parse the current path into { firm, tab }. Either may be null. */
 export function parseRoute() {
