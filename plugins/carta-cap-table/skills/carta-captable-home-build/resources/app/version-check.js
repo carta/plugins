@@ -50,7 +50,7 @@ const UPDATE_COPY_ICON =
 const UPDATE_COPY_LABEL = UPDATE_COPY_ICON + "Copy this prompt";
 
 function copyUpdatePrompt(btn) {
-  trackHome("click", "CaptableHome.UpdateBanner.Copy");
+  trackPrompt("CaptableHome.UpdateBanner.Copy", UPDATE_PROMPT, "other");
   copyText(UPDATE_PROMPT, () => {
     btn.textContent = "✓ Copied";
     setTimeout(() => { btn.innerHTML = UPDATE_COPY_LABEL; }, 2000);

@@ -47,6 +47,20 @@ function trackHome(action, elementId, options) {
   }
 }
 
+// Tag a prompt click with its text.
+// The tracker attaches mcp_prompt and caps length.
+function trackPrompt(elementId, prompt, source, meta) {
+  const text = String(prompt || "");
+  if (!text) return trackHome("click", elementId);
+  const m = meta || {};
+  const data = { prompt: text, source };
+  if (m.skill) data.recommendedSkill = String(m.skill).slice(0, 255);
+  if (Number.isInteger(m.rank) && m.rank >= 0) data.rank = m.rank;
+  if (window.mcpUiTracker && window.mcpUiTracker.getTransport()) {
+    window.mcpUiTracker.trackPromptSelection(data, elementId);
+  }
+}
+
 // The artifact sandbox can deny clipboard-write, and navigator.clipboard is absent in
 // some hosts — so confirm a copy only once one of the two paths actually succeeded.
 function copyTextFallback(str) {
@@ -91,8 +105,9 @@ function fullPagePrompt(pageId) {
 }
 
 function fpCopyPrompt(btn) {
-  trackHome("click", "CaptableHome.Dashboards.CopyPrompt");
-  copyText(resolvePrompt(btn.dataset.prompt), () => {
+  const text = resolvePrompt(btn.dataset.prompt);
+  trackPrompt("CaptableHome.Dashboards.CopyPrompt", text, "dashboard");
+  copyText(text, () => {
     btn.textContent = "✓ Copied";
     btn.classList.add("copied");
     setTimeout(() => { btn.innerHTML = COPY_ICON_SVG + "Copy"; btn.classList.remove("copied"); }, 2000);
@@ -385,8 +400,8 @@ function renderDirectory() {
 }
 
 function dirCopyPrompt(btn) {
-  trackHome("click", "CaptableHome.Directory.Copy");
   const text = resolvePrompt(btn.dataset.prompt);
+  trackPrompt("CaptableHome.Directory.Copy", text, "static");
   const feedback = () => {
     btn.textContent = 'Copied!';
     btn.classList.add('copied');

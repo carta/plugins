@@ -23,8 +23,10 @@ function renderWhatsNew() {
 }
 
 function whatsNewCopy(btn) {
-  trackHome("click", "CaptableHome.WhatsNew.CopyPrompt");
-  copyText(resolvePrompt(btn.dataset.prompt), () => {
+  // Config-defined, so static.
+  const text = resolvePrompt(btn.dataset.prompt);
+  trackPrompt("CaptableHome.WhatsNew.CopyPrompt", text, "static");
+  copyText(text, () => {
     btn.textContent = "✓ Copied";
     setTimeout(() => { btn.textContent = "Copy this prompt"; }, 2000);
   });

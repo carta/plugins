@@ -9,17 +9,25 @@ const CAP_COPY_LABEL = CAP_COPY_ICON + "Copy this prompt";
 
 let _capRecommendations = [];
 
-function capCard(prompt, index) {
+// meta: { source, skill }; rank is position.
+function capCard(prompt, index, meta) {
+  const m = meta || { source: "static" };
   const resolved = resolvePrompt(prompt);
+  const attrs = ` data-source="${escHtml(m.source)}"`
+    + (m.skill ? ` data-skill="${escHtml(m.skill)}"` : "")
+    + ` data-rank="${index}"`;
   return `<div class="cap-card ${CAP_COLORS[index % CAP_COLORS.length]}">
     <div class="cap-card-text">${escHtml(resolved)}</div>
-    <button class="cap-card-icon" data-prompt="${escHtml(prompt)}">${CAP_COPY_LABEL}</button>
+    <button class="cap-card-icon" data-prompt="${escHtml(prompt)}"${attrs}>${CAP_COPY_LABEL}</button>
   </div>`;
 }
 
 function capCopy(btn) {
-  trackHome("click", "CaptableHome.Capabilities.CopyPrompt");
-  copyText(resolvePrompt(btn.dataset.prompt), () => {
+  const d = btn.dataset;
+  const text = resolvePrompt(d.prompt);
+  trackPrompt("CaptableHome.Capabilities.CopyPrompt", text, d.source || "static",
+    { skill: d.skill, rank: d.rank === undefined ? undefined : Number(d.rank) });
+  copyText(text, () => {
     btn.textContent = "✓ Copied";
     setTimeout(() => { btn.innerHTML = CAP_COPY_LABEL; }, 2000);
   });
@@ -42,12 +50,13 @@ function padWithStaticPrompts(prompts) {
 function renderCapabilities() {
   const grid = document.getElementById("cap-grid");
   if (!grid) return;
-  const live = _capRecommendations
+  const recs = _capRecommendations
     .filter(r => r && !r.is_skill_gap && typeof r.recommended_prompt === "string" && r.recommended_prompt.trim())
-    .map(r => r.recommended_prompt)
     .slice(0, CAP_GRID_SIZE);
-  const prompts = padWithStaticPrompts(live);
-  grid.innerHTML = prompts.map(capCard).join("");
+  const prompts = padWithStaticPrompts(recs.map(r => r.recommended_prompt));
+  // Pads sit after the recs, so they get no meta.
+  const metas = recs.map(r => ({ source: "recommendation", skill: r.recommended_skill }));
+  grid.innerHTML = prompts.map((p, i) => capCard(p, i, metas[i])).join("");
   // The whole card copies, not just the button — the card's hover state advertises it.
   grid.querySelectorAll(".cap-card").forEach(card => {
     const btn = card.querySelector(".cap-card-icon");

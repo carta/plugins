@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.24</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.25</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
