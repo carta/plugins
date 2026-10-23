@@ -415,8 +415,8 @@ The hosted app (`server/worker.js`) runs the local `nav_latest`, `fund_metrics`,
 `corporations`, `captable`, `waterfall`, `accrued_carry`, `distributed_carry`, `deal_irr`, `financing`,
 `fee_schedules`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
 the §0 directory query (`ops_benchmarks` holds no firm data and has no scope; `financials` is row-scoped by
-`set_context`, as locally). It pages every query (`server/dwh-pages.js`) under both of the DWH's limits, 10,000
-rows and 200 KiB inline: each starts at a page size set by its row width, a `too_large` page is retried at the
+`set_context`, as locally). It pages every query (`server/dwh-pages.js`) in blob pages of 10,000 rows, the DWH's
+row cap; a blob has no inline size cap. A page over the DWH's 16 MiB page cap is `too_large`: it is retried at the
 same offset, smaller, up to 3 times, and a query's rows are trusted only when they add up to the page header's
 `total_rows`. **Every query it runs must end with a top-level `ORDER BY` on its own output columns that gives a
 total order** (a unique key, or `ORDER BY ALL`): the DWH reruns the query for each page and moves only that
@@ -431,7 +431,7 @@ load. Only `nav_latest`,
 snapshot is never saved. Any other one that fails is left out whole and the firm still loads, without that data
 (no `company.capTable` (§15), no `company.financials` (§14), and so on). The snapshot's `source.queries` records,
 per query, which happened: `loaded` (`rows`, the total across pages), `denied` (`message`, any other tool
-error), `too_large` (`offset`, the page that stayed over the inline cap after the retries, and `message`),
+error), `too_large` (`offset`, the page that stayed over the page cap after the retries, and `message`),
 `too_many_pages` (`rows` and `pages` when it stopped) or `cut` (`rows` fetched and the warehouse's `totalRows`,
 which differ when it refreshed mid-load). `loaded` and `cut` also carry `pages`, the pages received, and
 `retries`, the `too_large` retries. Three queries are
