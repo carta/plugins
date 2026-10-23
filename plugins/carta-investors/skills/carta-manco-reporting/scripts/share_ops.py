@@ -38,12 +38,13 @@ def _plugin_version() -> Optional[str]:
         return None
 
 
-def _source() -> Dict[str, str]:
+def source() -> Dict[str, str]:
+    """Which client made a write, for fa:create:budget_report's optional `source`."""
     version = _plugin_version()
     return {"client": SOURCE_CLIENT, **({"client_version": version} if version else {})}
 
 
-def _context(data_dir: Path) -> Dict[str, Any]:
+def context(data_dir: Path) -> Dict[str, Any]:
     """Which ManCo entity the dashboard is for, and the data date it was built on."""
     try:
         accounts = json.loads((data_dir / "accounts.json").read_text())
@@ -57,6 +58,44 @@ def _context(data_dir: Path) -> Dict[str, Any]:
         "fund_uuid": fund_uuid,
         "as_of": snapshot.get("asOf"),
     }
+
+
+def report_args(
+    ctx: Dict[str, Any],
+    name: str,
+    payload: Dict[str, Any],
+    *,
+    check_basis: bool,
+    source: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Validate a report against the share contract and return the create/mutate
+    call's argument bundle: ``{name[, schema_version, payload_compact,
+    snapshot_basis][, source]}``. Raises ShareError("invalid") on anything
+    report_payload's contract rejects.
+
+    `name` and `payload` are always checked. `check_basis` sends (and so
+    validates) `snapshot_basis` — and the payload itself — only when this call
+    is actually resending the budget; an update that isn't resending it sends
+    neither. `source` is checked and included only when given: a create always
+    gives one, an update never does.
+    """
+    try:
+        report_payload.validate(payload)
+        report_payload.check_name(name)
+        basis = {"as_of": ctx["as_of"]} if ctx["as_of"] else {}
+        if check_basis:
+            report_payload.check_snapshot_basis(basis)
+        if source is not None:
+            report_payload.check_source(source)
+    except report_payload.PayloadError as e:
+        raise ShareError(str(e), "invalid")
+    args: Dict[str, Any] = {"name": name}
+    if check_basis:
+        args.update(schema_version=report_payload.SCHEMA_VERSION,
+                    payload_compact=report_payload.compact(payload), snapshot_basis=basis)
+    if source is not None:
+        args["source"] = source
+    return args
 
 
 def _shared_meta(report: Dict[str, Any]) -> Dict[str, Any]:
@@ -81,7 +120,7 @@ def _shared_meta(report: Dict[str, Any]) -> Dict[str, Any]:
     return meta
 
 
-def _envelope(response: Any) -> Dict[str, Any]:
+def envelope(response: Any) -> Dict[str, Any]:
     if isinstance(response, dict) and response.get("document_returned"):
         # fa:get:budget_report offloads an oversized report to a document URL
         # instead of inlining it (ADR-0019/0022) — nothing this skill downloads yet.
@@ -99,7 +138,7 @@ def cached_shareable_users(data_dir: Path, now: Callable[[], float] = time.time)
     a lookup from this alone, with no bridge and no `claude` CLI; shareable_users uses
     it before asking Carta."""
     try:
-        ctx = _context(data_dir)
+        ctx = context(data_dir)
     except ShareError:
         return None
     path = Path(data_dir) / USERS_CACHE_FILE
@@ -118,7 +157,7 @@ def shareable_users(bridge: Any, data_dir: Path, emit: Emit, refresh: bool = Fal
                     now: Callable[[], float] = time.time) -> Dict[str, Any]:
     """Who the report can be shared with, as {users, fetched_at}: the saved list while it is
     under a day old for this entity, otherwise (or with `refresh`) Carta's answer, saved."""
-    ctx = _context(data_dir)
+    ctx = context(data_dir)
     path = Path(data_dir) / USERS_CACHE_FILE
     if not refresh:
         cached = cached_shareable_users(data_dir, now)
@@ -203,7 +242,7 @@ def _share(
     one last sent re-sends the payload; the payload fingerprint leaves it out, since the
     build that compares against it never sees a view.
     """
-    ctx = _context(data_dir)
+    ctx = context(data_dir)
     doc = store.load()
     report = report_store.ReportStore.find(doc, report_id)
     meta = report_store.ReportStore.metadata(report)
@@ -211,8 +250,6 @@ def _share(
         raise ShareError("This report was shared with you; duplicate it to share your own version.", "not_owner")
     payload = store.read_share_payload(report_id)
     name = report["name"]
-    basis = {"as_of": ctx["as_of"]} if ctx["as_of"] else {}
-    source = _source()
     link = report.get("shared") or {}
     # The budget (and so the basis it was snapshotted at) travels only when it
     # changed: re-sending an unchanged one makes a change of recipients slow
@@ -225,32 +262,17 @@ def _share(
     sent, view_fingerprint = _with_view(payload, view)
     view_changed = view_fingerprint is not None and view_fingerprint != link.get("view_fingerprint")
     sends_payload = (not is_update) or link.get("dirty") or view_changed or shared_with is None
-    try:
-        report_payload.validate(payload)
-        report_payload.check_name(name)
-        if sends_payload:
-            report_payload.check_snapshot_basis(basis)
-        if not is_update:
-            report_payload.check_source(source)
-    except report_payload.PayloadError as e:
-        raise ShareError(str(e), "invalid")
 
     if is_update:
-        args: Dict[str, Any] = {
-            "fund_uuid": ctx["fund_uuid"],
-            "report_uuid": link["uuid"],
-            "name": name,
-        }
+        args: Dict[str, Any] = {"fund_uuid": ctx["fund_uuid"], "report_uuid": link["uuid"]}
+        args.update(report_args(ctx, name, sent, check_basis=sends_payload))
         if shared_with is not None:
             args["shared_with"] = shared_with
-        if sends_payload:
-            args.update(schema_version=report_payload.SCHEMA_VERSION,
-                        payload_compact=report_payload.compact(sent), snapshot_basis=basis)
         if not force and link.get("updated_at"):
             args["expected_updated_at"] = link["updated_at"]
         emit("Updating the shared report…")
         try:
-            response = _envelope(bridge.call("fa__mutate__budget_report", args, emit))
+            response = envelope(bridge.call("fa__mutate__budget_report", args, emit))
         except ShareError as e:
             if e.code == "conflict":
                 return {"status": "stale"}
@@ -258,18 +280,12 @@ def _share(
                 return {"status": "deleted"}
             raise
     else:
-        args = {
-            "fund_uuid": ctx["fund_uuid"],
-            "name": name,
-            "schema_version": report_payload.SCHEMA_VERSION,
-            "payload_compact": report_payload.compact(sent),
-            "snapshot_basis": basis,
-            "source": source,
-        }
+        args = {"fund_uuid": ctx["fund_uuid"]}
+        args.update(report_args(ctx, name, sent, check_basis=True, source=source()))
         if shared_with:
             args["shared_with"] = shared_with
         emit("Sharing your report…")
-        response = _envelope(bridge.call("fa__create__budget_report", args, emit))
+        response = envelope(bridge.call("fa__create__budget_report", args, emit))
     shared = _shared_meta(response["report"])
     shared["people"] = _recipient_people(shared.get("shared_with"), shared.get("people"), people, link.get("people"))
     shared["view_fingerprint"] = view_fingerprint if sends_payload else link.get("view_fingerprint")
@@ -315,10 +331,20 @@ def publish_as_new(bridge: Any, store: report_store.ReportStore, data_dir: Path,
     return share(bridge, store, data_dir, report_id, shared_with or [], emit, people=people, view=view)
 
 
+def delete_upstream(bridge: Any, ctx: Dict[str, Any], uuid: str, emit: Emit) -> None:
+    """Delete a budget_report in Carta by uuid, treating it already being gone as done —
+    the end state either way is that no one can see it anymore."""
+    try:
+        bridge.call("fa__delete__budget_report", {"fund_uuid": ctx["fund_uuid"], "report_uuid": uuid}, emit)
+    except ShareError as e:
+        if e.code != "not_found":
+            raise
+
+
 def delete(bridge: Any, store: report_store.ReportStore, data_dir: Path, report_id: str,
            emit: Emit) -> Dict[str, Any]:
     """Stop sharing a report you shared: it goes for everyone; your local copy stays private."""
-    ctx = _context(data_dir)
+    ctx = context(data_dir)
     report = report_store.ReportStore.find(store.load(), report_id)
     link = report.get("shared") or {}
     if not link.get("uuid"):
@@ -326,11 +352,7 @@ def delete(bridge: Any, store: report_store.ReportStore, data_dir: Path, report_
     if not link.get("is_owner"):
         raise ShareError("Only the person who shared this report can delete it.", "not_owner")
     emit("Deleting the shared report…")
-    try:
-        bridge.call("fa__delete__budget_report", {"fund_uuid": ctx["fund_uuid"], "report_uuid": link["uuid"]}, emit)
-    except ShareError as e:
-        if e.code != "not_found":  # already gone upstream: the end state is the same
-            raise
+    delete_upstream(bridge, ctx, link["uuid"], emit)
     store.clear_shared(report_id)
     return {"status": "ok"}
 
@@ -341,7 +363,7 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
     Each payload is checked against the contract before it's stored; one that
     fails is skipped and counted, never rendered with wrong numbers.
     """
-    ctx = _context(data_dir)
+    ctx = context(data_dir)
     emit("Loading shared reports…")
     listing = bridge.call("fa__get__budget_reports", {"fund_uuid": ctx["fund_uuid"]}, emit)
     # A flaky call can come back as {} — trusting that as "nothing is shared" would
@@ -367,8 +389,8 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
         emit("Fetching shared report %d of %d…" % (i, len(wanted)))
         try:
             full = bridge.call("fa__get__budget_report", {"fund_uuid": ctx["fund_uuid"], "report_uuid": meta["uuid"]}, emit)
-            envelope = _envelope(full)
-            report_payload.validate(envelope.get("payload"))
+            fetched = envelope(full)
+            report_payload.validate(fetched.get("payload"))
         except ShareError as e:
             if e.code == "unexpected_call":
                 raise  # a call nobody asked for may have changed something: never a quiet skip
@@ -377,11 +399,11 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
         except report_payload.PayloadError:
             skipped += 1
             continue
-        info = envelope["report"]
+        info = fetched["report"]
         pulled.append({
             "uuid": info["uuid"],
             "name": info.get("name") or "Shared report",
-            "budget": canonical.budget_from_canonical(envelope["payload"], report_id="pending", name=info.get("name") or "Shared report"),
+            "budget": canonical.budget_from_canonical(fetched["payload"], report_id="pending", name=info.get("name") or "Shared report"),
             "shared": _shared_meta(info),
         })
     upstream = {m.get("uuid") for m in reports if m.get("uuid")} if trustworthy else None

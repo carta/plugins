@@ -64,7 +64,7 @@ def main() -> int:
     data_dir = Path(args.data_dir).expanduser()
     try:
         if args.cmd == "context":
-            print(json.dumps({"fund_uuid": share_ops._context(data_dir)["fund_uuid"]}))
+            print(json.dumps({"fund_uuid": share_ops.context(data_dir)["fund_uuid"]}))
             return 0
         responses = json.loads(Path(args.responses).expanduser().read_text())
         result = share_ops.pull(_Answers(responses), report_store.ReportStore(data_dir), data_dir,

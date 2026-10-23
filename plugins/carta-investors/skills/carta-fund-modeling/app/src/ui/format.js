@@ -103,9 +103,9 @@ export const fmtAsOf = (iso) => {
 };
 
 /** The fund display name embeds an ALL-CAPS slug prefix for dense tables
- *  ("KRAKATOA-VENTURES-FUND-IV-L-P (Krakatoa Ventures Fund IV, 2021)"). The
+ *  ("ACME-VENTURES-FUND-IV-L-P (Acme Ventures Fund IV, 2021)"). The
  *  picker only needs the readable, already-title-cased part — strip the slug
- *  and surface "Krakatoa Ventures Fund IV (2021)". Falls back to the raw label
+ *  and surface "Acme Ventures Fund IV (2021)". Falls back to the raw label
  *  (e.g. "All Funds") when there's no parenthetical. */
 export function fundLabel(s) {
   if (!s) return s;

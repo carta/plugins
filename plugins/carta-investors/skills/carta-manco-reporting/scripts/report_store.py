@@ -66,6 +66,14 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-") or "report"
 
 
+def _dismiss(doc: Dict[str, Any], *uuids: Optional[str]) -> None:
+    """Add each non-empty, not-already-present uuid to the list pulls skip."""
+    dismissed = doc.setdefault("dismissed_uuids", [])
+    for uuid in uuids:
+        if uuid and uuid not in dismissed:
+            dismissed.append(uuid)
+
+
 _COPY_SUFFIX = " (copy)"
 
 
@@ -164,13 +172,21 @@ class ReportStore:
 
     @staticmethod
     def dismissed_uuids(doc: Dict[str, Any]) -> Set[str]:
-        """Uuids of reports shared with you that you removed here: pulls leave them out."""
-        return set(doc.get("dismissed_uuids") or [])
+        """Uuids pulls leave out: reports shared with you that you removed here, and
+        every report's own-sync mirror (own_sync.push_if_changed must never come back
+        as if someone else had shared it with you)."""
+        mirrored = {ReportStore.own_sync_uuid(r) for r in doc["reports"]}
+        return (set(doc.get("dismissed_uuids") or []) | mirrored) - {None}
 
     @staticmethod
     def shared_uuid(report: Dict[str, Any]) -> Optional[str]:
         """The Carta uuid a report is shared under, or None if it isn't shared."""
         return (report.get("shared") or {}).get("uuid")
+
+    @staticmethod
+    def own_sync_uuid(report: Dict[str, Any]) -> Optional[str]:
+        """The Carta uuid a report's private own-sync mirror is pushed under, or None."""
+        return (report.get("own_sync") or {}).get("uuid")
 
     @staticmethod
     def _unique_id(doc: Dict[str, Any], base: str) -> str:
@@ -285,6 +301,7 @@ class ReportStore:
             "read_only": read_only,
             "editable": not read_only,
             "shared": shared,
+            "own_sync": report.get("own_sync") or None,
             "updated_at": report.get("updated_at"),
         }
 
@@ -345,20 +362,51 @@ class ReportStore:
             report["hidden"] = bool(hidden)
             return self.metadata(report)
 
-    def remove(self, report_id: str, *, expected_etag: Optional[str] = None) -> None:
+    @staticmethod
+    def _removable(doc: Dict[str, Any], report_id: str) -> dict:
+        """The shape remove() enforces, given an already-loaded doc: the report exists
+        and isn't a workbook report. Shared by remove() (inside its own transaction,
+        reusing the doc it already holds) and check_removable() (a read-only pre-check
+        for a caller — own_sync.forget — that must refuse before making any outside
+        call, not just before writing)."""
+        report = ReportStore.find(doc, report_id)
+        if _is_workbook(report):
+            raise ReportEditError("a workbook report can be hidden, not deleted", "invalid")
+        return report
+
+    def check_removable(self, report_id: str, *, expected_etag: Optional[str] = None) -> dict:
+        """Raise the same ReportEditError remove() would, with nothing changed yet: a
+        stale expected_etag, a missing report_id, or a workbook report. Returns the
+        report dict. remove() enforces the same rule again, authoritatively, inside its
+        own transaction — this lets a caller that must not touch anything else (Carta
+        included) until the removal would actually succeed check first."""
+        if expected_etag is not None and expected_etag != self.etag():
+            raise ReportEditError("the reports changed since you loaded them", "conflict")
+        return self._removable(self.load(), report_id)
+
+    def remove(self, report_id: str, *, expected_etag: Optional[str] = None) -> Optional[str]:
         """Drop a local copy or a report shared with you. A report shared with you stays
         removed: later pulls skip it. A workbook report would only re-seed on the next
-        build, so it is hidden instead."""
+        build, so it is hidden instead.
+
+        Returns the own-sync uuid this removal dismissed, or None. own_sync.forget
+        compares this against the uuid it already deleted upstream before calling
+        remove(): a push racing forget's own check_removable() call can stamp a
+        *different* own-sync uuid on the report in between, and that uuid must be
+        deleted too, or its mirror outlives every local trace of it."""
         with self.transaction(expected_etag) as doc:
-            report = self.find(doc, report_id)
-            if _is_workbook(report):
-                raise ReportEditError("a workbook report can be hidden, not deleted", "invalid")
-            uuid = self.shared_uuid(report)
-            if report.get("state") == SHARED_IN and uuid:
-                dismissed = doc.setdefault("dismissed_uuids", [])
-                if uuid not in dismissed:
-                    dismissed.append(uuid)
+            report = self._removable(doc, report_id)
+            to_dismiss = []
+            if report.get("state") == SHARED_IN:
+                to_dismiss.append(self.shared_uuid(report))
+            own_uuid = self.own_sync_uuid(report)
+            # dismissed_uuids() only sees a *present* report's own_sync mirror; once
+            # this report is gone, its mirror must stay excluded on its own. The mirror
+            # itself still exists in Carta — own_sync.forget retires it there first.
+            to_dismiss.append(own_uuid)
+            _dismiss(doc, *to_dismiss)
             doc["reports"] = [r for r in doc["reports"] if r["id"] != report_id]
+            return own_uuid
 
     def record_shared(self, report_id: str, shared: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
         """Stamp the share link after a publish or an update, with a fingerprint of the
@@ -384,6 +432,30 @@ class ReportStore:
             sent = shared.get("payload_fingerprint")
             if sent and sent != payload_fingerprint(payload):
                 shared["dirty"] = True
+            return self.metadata(report)
+
+    def record_own_sync(self, report_id: str, uuid: Optional[str], payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Stamp a report's private sync link to Carta after a push to own_sync.push_if_changed,
+        with a fingerprint of the payload sent, so the next push can tell whether it moved
+        again. Kept apart from `shared` — this link is never visible to anyone but the
+        report's own owner, and the Share dialog must never read it.
+
+        Returns the report's metadata, or None when `report_id` was removed while the
+        push was in flight. Either way `uuid` must not end up live in Carta with
+        nothing local claiming it: here it only goes into `dismissed_uuids`, so a pull
+        never re-imports it even if the delete below fails; own_sync.push_if_changed is
+        what actually deletes it upstream when this returns None."""
+        with self.transaction() as doc:
+            try:
+                report = self.find(doc, report_id)
+            except ReportEditError:
+                _dismiss(doc, uuid)
+                return None
+            report["own_sync"] = {
+                "uuid": uuid,
+                "payload_fingerprint": payload_fingerprint(payload),
+                "synced_at": _now(),
+            }
             return self.metadata(report)
 
     def clear_shared(self, report_id: str, *, expected_etag: Optional[str] = None) -> Dict[str, Any]:
