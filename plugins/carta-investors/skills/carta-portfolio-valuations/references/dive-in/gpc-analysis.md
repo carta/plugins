@@ -86,11 +86,7 @@ Call `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {
 EBITDA, and other financial inputs **entered directly in the valuation
 scenario** — not pulled from a data warehouse or external source):
 - Check that at least one period has a non-zero revenue or EBITDA value.
-- If `periods` is empty or all periods have zero revenue and EBITDA, try
-  `call_tool({"name": "portfolio_valuations__get__financials_refresh", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` once to pull the
-  latest inputs from source records. Then re-call `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.
-  **Do this silently** — do not tell the user about the retry.
-- If still empty after the refresh attempt, surface and stop:
+- If `periods` is empty or all periods have zero revenue and EBITDA, surface and stop:
   > "**{candidate name}** doesn't have any financials entered yet.
   > Please fill in revenue and/or EBITDA in Carta before running GPC
   > analysis, then come back."
