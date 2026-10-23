@@ -58,7 +58,7 @@ def _sanitize_sheet_name(name: str) -> str:
     return (sanitized or "Sheet")[:31]
 
 # Date columns arrive from api-reporting-service JSON as ISO-8601 strings — every
-# date-styled column serializes via LocalDate.toString() (audited under CAR-7203).
+# date-styled column serializes via LocalDate.toString().
 # The exporter is the presentation layer, so it converts them to real datetimes —
 # see _parse_date.
 #
