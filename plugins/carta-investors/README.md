@@ -47,6 +47,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-manco-reporting` | Interactive management-company reporting dashboard — a local React app over live ManCo financials with P&L drill-down, Budget vs Actuals, management fee income by fund, expense breakdowns, and journal-entry detail. Invoke with a firm name, e.g. "ManCo reporting for Demo Capital". |
 | `deal-group-wf-health` | Read-only dashboard of waterfall health across a firm's deal groups (pass any firm/org id) — model assignment (stranded/none), ownership-link defects, orphaned models, and whether recent runs reached every entity. Internal-only. |
 | `carta-entity-map` | Redact a deal group's entity map in Carta's view by chatting — group, rename or hide entities, hide ownership %, add a title and footer — then export the PDF from the view. Internal-only. |
+| `firm-bulk-entity-update` | Not implemented yet. Will carry a firm's monthly change file for a deal group's firm-controlled entities through one cycle — ingest, resolve, review, write, true-up — instead of one entity at a time. Internal-only. |
 
 ### Budgeting (Excel)
 

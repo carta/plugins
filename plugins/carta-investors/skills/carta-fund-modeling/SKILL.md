@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.111.1</carta-plugin>
+<carta-plugin>carta-investors:6.111.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -149,16 +149,12 @@ so ask as usual.
   tool-list scan, since no command can test for the MCP, and fall back at once if it finds none; verify it as in
   Step 1; a URL/UUID goes in as the `firm_id` it takes) — read-only, **never `set_context`**, which would change
   the user's active firm. Pick the firm by Step 1's *Resolve the firm* rules, without `AskUserQuestion`; if they
-  leave no single firm, fall back. Then, with the canonical name `list_contexts` returned:
-  ```bash
-  uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" resolve "<canonical name>"
-  ```
-  Reply with `https://fund-modeling.carta.cloud/firm/<slug>` (the printed `slug`) and end the turn: "Open
-  **\<link\>** and sign in with Carta. If it shows a different firm, use **Switch firm** to pick
-  **\<canonical name\>**." Do **not** launch `serve.py` or scan caches. Fall back to the bare link plus the
-  **Switch firm** line from Gate 0, naming the firm as typed, when there is no Carta MCP, `list_contexts`
-  leaves no single firm, or the **canonical name** has any non-ASCII character (the hosted slug does not
-  transliterate it). Never build a slug from the typed name, by hand or with `resolve`.
+  leave no single firm, fall back. The hosted app names a firm by its **Carta ID**, the integer `carta_id`
+  that `list_contexts` returns for it, or by its firm UUID (`firm_id`) when `carta_id` is null. Reply with
+  `https://fund-modeling.carta.cloud/firm/<carta_id>` (else `/firm/<firm_id>`) and end the turn: "Open
+  **\<link\>** and sign in with Carta to open **\<canonical name\>**." Do **not** launch `serve.py` or scan
+  caches. Fall back to the bare link plus the **Switch firm** line from Gate 0, naming the firm as typed, when
+  there is no Carta MCP or `list_contexts` leaves no single firm. Never put a firm name in the link.
 - **Local** → continue to **Step 0** silently.
 
 ## Step 0 — Resolve identity + check the local cache
