@@ -73,6 +73,17 @@
     });
   }
 
+  // One grade per calendar year: the year, its interactions and contacts, and the grade crm-api gave it.
+  function yearGrades(value, where) {
+    if (!Array.isArray(value)) throw fail('row_invalid', where + ' must be a list');
+    return value.map(function (entry) {
+      if (!isObject(entry) || !Number.isInteger(entry.year) || STRENGTHS.indexOf(entry.strength) < 0) {
+        throw fail('row_invalid', where + ' entries need an integer year and a strength');
+      }
+      return { year: entry.year, interactions: count(entry.interactions, where + '.interactions'), contacts: count(entry.contacts, where + '.contacts'), strength: entry.strength };
+    });
+  }
+
   function cleanRelationship(raw, where) {
     if (!isObject(raw) || STRENGTHS.indexOf(raw.strength) < 0) {
       throw fail('row_invalid', where + '.relationship.strength must be one of ' + STRENGTHS.join(', '));
@@ -87,6 +98,7 @@
     ['linkedDomains', 'suggestedDomains'].forEach(function (key) {
       if (key in raw) out[key] = mailDomains(raw[key], where + '.relationship.' + key);
     });
+    if ('byYear' in raw) out.byYear = yearGrades(raw.byYear, where + '.relationship.byYear');
     var cells = matrix.map(function (cell) {
       if (!isObject(cell) || STRENGTHS.indexOf(cell.strength) < 0) throw fail('row_invalid', where + '.relationship.matrix entries need a strength');
       return {

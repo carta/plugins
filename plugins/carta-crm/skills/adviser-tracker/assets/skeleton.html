@@ -4530,13 +4530,30 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
         ? 'Possible domains, not counted until a person confirms them: ' + possibleDomains(list) + '.'
         : 'No other domain found.');
   }
+  // The grade of `year` when the result grades each year, else null.
+  function yearGrade(rel, year) {
+    return (rel.byYear || []).filter(function (g) { return g.year === year; })[0] || null;
+  }
+  // One plain sentence on why a year has its grade: its count, its people and the year, which runs to asOf for the current year.
+  function yearReason(g) {
+    var when = 'in ' + g.year + (g.year === cy ? ' so far' : '');
+    if (!g.interactions) return 'No email or meeting between our team and anyone at this bank ' + when + '.';
+    return STRENGTH[g.strength] + ': ' + g.interactions.toLocaleString('en-US') + (g.interactions === 1 ? ' email or meeting' : ' emails and meetings') +
+      ' between our team and ' + g.contacts.toLocaleString('en-US') + (g.contacts === 1 ? ' person' : ' people') + ' at this bank ' + when + '.';
+  }
   // No label for a bank with no interaction. A result that carries no count shows the label alone.
   // A bank with deals carries the reason, the same rule as the build's check_domain line. A bank with no deals has nothing to explain.
-  function strengthCell(row) {
-    var rel = row.relationship;
+  // A result that grades each year shows the grade of `year`, its own counts and the reason, so the year toggle changes the cell.
+  function strengthCell(row, year) {
+    var rel = row.relationship, g = yearGrade(rel, year);
     if (rel.interactions === 0) {
       var withDeals = row.dealsByMonth.some(function (m) { return m.count > 0; });
       return '<span class="grey">No interactions found</span>' + (withDeals ? hint(silentReason(rel, row.adviser.domain)) : '');
+    }
+    if (g && !g.interactions) return '<span class="grey">No interactions in ' + g.year + '</span>' + hint(yearReason(g));
+    if (g) {
+      return dot(g.strength) + esc(STRENGTH[g.strength]) + hint(yearReason(g)) +
+        '<div class="grey">' + countOf(g.interactions, 'interaction') + ', ' + countOf(g.contacts, 'contact') + '</div>';
     }
     var basis = typeof rel.interactions === 'number'
       ? '<div class="grey">' + countOf(rel.interactions, 'interaction') + (typeof rel.contacts === 'number' ? ', ' + countOf(rel.contacts, 'contact') : '') + '</div>' : '';
@@ -4726,7 +4743,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     return '<tr data-d="' + esc(d) + '"><td class="idx">' + i + '</td>' + bankCell(r) +
       q.map(function (n, c) { return numCell(d, c, n, ''); }).join('') +
       numCell(d, 4, total, 'total') +
-      '<td>' + strengthCell(r) + '</td>' +
+      '<td>' + strengthCell(r, year) + '</td>' +
       '<td>' + (tc ? '<div>' + esc(tc.name) + '</div><div class="grey">' + esc(countOf(tc.interactions, 'interaction')) + '</div>' : '<span class="grey">No contact</span>') + '</td></tr>';
   }
   // Quarter and total cells count from the value shown before to the new one.
@@ -4752,15 +4769,22 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     return 'Tier 1 is the top half of the banks by deals created in ' + year +
       ', ties broken by deals over the ' + (data.window.to - data.window.from + 1) + ' years and then by name: ' + tiersFor(year)['1'].length + ' of ' + data.rows.length + '. Tier 2 is the rest.';
   }
+  // How the strength column is graded: per selected year when the result carries each year's grade, else over all years.
+  function strengthRule() {
+    var perYear = data.rows.some(function (r) { return (r.relationship.byYear || []).length; });
+    return perYear
+      // The bands mirror YEAR_STRENGTH_THRESHOLDS in carta/crm (apis/api/src/components/adviser-tracker/adviser-tracker.constants.ts).
+      ? 'Relationship strength and contacts count the selected year only: every email and meeting between our team and the bank that year. 500 or more is Strong, 50 to 499 is Moderate and under 50 is Weak. The current year counts the months so far. A bank with no interaction has no grade. '
+      // The bands mirror getContactStrength in carta/crm (apis/api/src/components/common/helpers/getContactStrength.ts).
+      : 'Relationship strength grades the closest pair of one person on our team and one contact at the bank, over all years. Each email or meeting is worth 1 point, falling about 2.5% a month. A pair with 10 or more points is Strong, 3 to under 10 is Moderate and under 3 is Weak. A bank with no interaction has no grade. ';
+  }
   function renderTable(year) {
     var toggle = '<div class="toggle" role="group" aria-label="Year">' + yearsOf(data).map(function (y) {
       return '<button type="button" data-year="' + y + '" aria-pressed="' + (y === year) + '">' + y + '</button>';
     }).join('') + '</div>';
     var sub = 'Deals created per quarter of the selected year, per bank. ' + source() +
       ' Top contact is the person with the most emails and meetings with anyone on our team.';
-    var how = choices() + ' The current quarter is partial and shows only the days so far. ' +
-      // The bands mirror getContactStrength in carta/crm (apis/api/src/components/common/helpers/getContactStrength.ts).
-      'Relationship strength grades the closest pair of one person on our team and one contact at the bank, over all years. Each email or meeting is worth 1 point, falling about 2.5% a month. A pair with 10 or more points is Strong, 3 to under 10 is Moderate and under 3 is Weak. A bank with no interaction has no grade. ' +
+    var how = choices() + ' The current quarter is partial and shows only the days so far. ' + strengthRule() +
       (data.rows.length ? tierRule(year) + ' ' : '') +
       'Hover a row to highlight it.';
     var body;

@@ -136,6 +136,24 @@ def _mail_domains(value: object, where: str) -> list[dict]:
     } for v in value]
 
 
+def _year_grades(value: object, where: str) -> list[dict]:
+    """One grade per calendar year: the year, its interactions and contacts, and the grade crm-api gave it."""
+    if not isinstance(value, list):
+        raise fail("row_invalid", f"{where} must be a list")
+    grades = []
+    for entry in value:
+        year = entry.get("year") if isinstance(entry, dict) else None
+        if not isinstance(year, int) or isinstance(year, bool) or entry.get("strength") not in STRENGTHS:
+            raise fail("row_invalid", f"{where} entries need an integer year and a strength")
+        grades.append({
+            "year": year,
+            "interactions": _count(entry.get("interactions"), f"{where}.interactions"),
+            "contacts": _count(entry.get("contacts"), f"{where}.contacts"),
+            "strength": entry["strength"],
+        })
+    return grades
+
+
 def clean_relationship(raw: object, where: str) -> dict:
     if not isinstance(raw, dict) or raw.get("strength") not in STRENGTHS:
         raise fail("row_invalid", f"{where}.relationship.strength must be one of {', '.join(STRENGTHS)}")
@@ -157,10 +175,12 @@ def clean_relationship(raw: object, where: str) -> dict:
         })
     counts = {key: _count(raw[key], f"{where}.relationship.{key}") for key in ("interactions", "contacts") if key in raw}
     domains = {key: _mail_domains(raw[key], f"{where}.relationship.{key}") for key in ("linkedDomains", "suggestedDomains") if key in raw}
+    years = {"byYear": _year_grades(raw["byYear"], f"{where}.relationship.byYear")} if "byYear" in raw else {}
     return {
         "strength": raw["strength"],
         **counts,
         **domains,
+        **years,
         "topContact": None if top is None else {
             **_person(top, f"{where}.topContact"),
             "interactions": _count(top.get("interactions"), f"{where}.topContact.interactions"),
