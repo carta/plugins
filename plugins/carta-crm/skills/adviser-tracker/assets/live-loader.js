@@ -14,7 +14,8 @@
   // The one stamp for every call this page makes: it marks a call as issued by the page, not the model.
   var INSTRUMENTATION = { skills: [], from_ui: true };
   var STATES = ['ready', 'building', 'failed', 'not_configured'];
-  var NOT_SET_UP = /unknown tool|tool not found|not available|not registered|no such tool/i;
+  // carta-mcp answers `Unknown CRM tool '<name>'` for a tool crm-api does not offer this caller.
+  var NOT_SET_UP = /unknown (crm )?tool|tool not found|not available|not registered|no such tool/i;
   var CODE_MESSAGES = {
     needs_reauth: 'Reconnect Carta in Settings, then reload this page.',
     server_not_connected: 'Add the Carta connector in Settings, then reload this page.',
