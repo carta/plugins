@@ -44,6 +44,12 @@ def _known_locations():
     if _WIN:
         appdata = os.environ.get("APPDATA", "")
         return [
+            # Where the native installer (install.ps1) puts claude.exe. It also adds
+            # this directory to the user's PATH in the registry, but a process already
+            # running (this one, and anything it launches) keeps its old PATH — so
+            # cmd_check right after cmd_install would otherwise report claude_bin=none
+            # for an install that actually succeeded.
+            home / ".local" / "bin" / _BIN,
             home / "AppData" / "Roaming" / "npm" / _BIN,
             *([Path(appdata) / "npm" / _BIN] if appdata else []),
         ]
