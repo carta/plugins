@@ -1,7 +1,7 @@
 import { sans, INK, PAPER, LINE, FAINT, FS } from "../ui/theme.js";
 import { Btn, POPOVER_SHADOW } from "../ui/components.jsx";
 import { REPORT_ACTIONS } from "../state/useReports.js";
-import { ClaudePrompt, claudeFixPrompt } from "./claudeFix.jsx";
+import { ClaudePrompt, ClaudeSignIn, claudeFixPrompt } from "./claudeFix.jsx";
 
 const RUNNING = {
   [REPORT_ACTIONS.PULL]: "Loading shared reports…",
@@ -43,6 +43,7 @@ export default function ShareStatus({ notice, progress, firmName, hosted, onDism
         {fixPrompt ? (
           <>
             <div style={S.sub}>{notice.message}</div>
+            <ClaudeSignIn code={notice.code} hosted={hosted} event="MancoReporting.ShareStatus.SignIn" />
             <ClaudePrompt text={fixPrompt} event="MancoReporting.ShareStatus.CopyFixPrompt" />
           </>
         ) : notice.status === "error" && notice.op === REPORT_ACTIONS.PULL && !hosted ? (

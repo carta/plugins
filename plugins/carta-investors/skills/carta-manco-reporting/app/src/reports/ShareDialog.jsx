@@ -10,7 +10,7 @@ import { UPDATED, shareOutcome } from "./shareOutcome.js";
 import { ownShare } from "./reportState.js";
 import { actSaved, REPORT_ACTIONS } from "../state/useReports.js";
 import { sharerView } from "../views/budgetPrefs.js";
-import { ClaudePrompt, claudeFixPrompt } from "./claudeFix.jsx";
+import { ClaudePrompt, ClaudeSignIn, claudeFixPrompt } from "./claudeFix.jsx";
 
 // The report's Share | Export panel, anchored under the header button. Wording is agreed
 // with product; the Carta staff sentence holds because Carta staff keep access to the firm's entities.
@@ -461,12 +461,14 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
             {!outcome && peopleError && (
               <>
                 <p style={S.error} role="alert">{peopleError.message}</p>
+                <ClaudeSignIn code={peopleError.code} hosted={hosted} event="MancoReporting.ShareDialog.SignIn" />
                 {peopleFixPrompt && <ClaudePrompt text={peopleFixPrompt} event="MancoReporting.ShareDialog.CopyFixPrompt" />}
               </>
             )}
             {error && (
               <>
                 <p style={S.error} role="alert">{error.message}</p>
+                <ClaudeSignIn code={error.code} hosted={hosted} event="MancoReporting.ShareDialog.SignIn" />
                 {errorFixPrompt && <ClaudePrompt text={errorFixPrompt} event="MancoReporting.ShareDialog.CopyFixPrompt" />}
               </>
             )}

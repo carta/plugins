@@ -47,9 +47,11 @@ import argparse
 import http.server
 import json
 import os
+import queue
 import re
 import secrets
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -320,6 +322,94 @@ def _startup_claude_probe():
     print("[serve] claude CLI: %s (%s)" % (bin_path, state), flush=True)
 
 
+# ── Sign-in to Claude (POST /api/claude-signin) ──
+# `claude auth login` prints its sign-in URL within a second or two, then blocks
+# reading a paste-back code from stdin — it only completes on its own once the
+# browser's OAuth redirect reaches it locally. That read is what keeps the process
+# alive long enough for the redirect to arrive, so stdin is a pipe this never
+# writes to or closes, not DEVNULL (which would answer the read with EOF at once
+# and exit the CLI before any redirect can land). The dashboard opens the
+# returned URL itself (`ClaudeSignIn`'s `window.open`) and polls
+# GET /api/claude-status, whose re-probe (while marked unavailable) is what
+# later notices sign-in actually worked.
+_SIGNIN_URL_TIMEOUT = 15  # seconds to wait for the CLI to print its sign-in URL
+_SIGNIN_WINDOW = 600  # seconds one `claude auth login` is left alive waiting for
+                      # the browser's redirect, before this kills it itself
+_SIGNIN_URL_RE = re.compile(r"https://\S+")
+_signin_lock = threading.Lock()
+_signin_proc = None  # the one `claude auth login` process alive right now, if any
+
+
+def _read_signin_url(proc, timeout):
+    """The first https:// URL `claude auth login` prints, or None past `timeout`.
+    Runs the read on its own thread so a CLI that never prints anything (or never
+    exits) can't block the caller past `timeout` -- `select` would, but doesn't
+    work on a Windows pipe, which this dashboard also has to run on."""
+    q = queue.Queue(maxsize=1)
+
+    def reader():
+        try:
+            for line in proc.stdout:
+                found = _SIGNIN_URL_RE.search(line)
+                if found:
+                    q.put(found.group(0))
+                    return
+        except (OSError, ValueError):
+            pass
+        q.put(None)
+
+    threading.Thread(target=reader, daemon=True).start()
+    try:
+        return q.get(timeout=timeout)
+    except queue.Empty:
+        return None
+
+
+def _reap_signin(proc):
+    """Wait out the sign-in window, killing the process if the operator (or the
+    browser's redirect) never finishes it, then free the slot for a new attempt --
+    whether that happens here or `_start_signin` kills it first for lack of a URL."""
+    global _signin_proc
+    try:
+        proc.wait(timeout=_SIGNIN_WINDOW)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+    with _signin_lock:
+        if _signin_proc is proc:
+            _signin_proc = None
+
+
+def _start_signin():
+    """Start `claude auth login` and return {"url": ...} or {"error": ...}. Refuses
+    a second attempt for as long as the first's process is alive — not just while
+    this call is reading its URL — since only one sign-in may run at a time. The
+    check and the start happen under one hold of _signin_lock: two requests that
+    both arrive while the slot is empty (two tabs, or ShareDialog showing two
+    ClaudeSignIn buttons at once) must not both find it empty and both start a
+    login -- find_claude() and Popen return quickly, so holding the lock this long
+    blocks nothing real."""
+    global _signin_proc
+    with _signin_lock:
+        if _signin_proc is not None and _signin_proc.poll() is None:
+            return {"error": "signin_in_progress"}
+        claude_bin = CLAUDE_BIN or preflight_claude.find_claude()
+        if not claude_bin:
+            return {"error": preflight_claude.REASON_NOT_INSTALLED}
+        try:
+            proc = subprocess.Popen([claude_bin, "auth", "login"], stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        except OSError as e:
+            return {"error": "failed", "message": str(e)}
+        _signin_proc = proc
+    threading.Thread(target=_reap_signin, args=(proc,), daemon=True).start()
+    url = _read_signin_url(proc, _SIGNIN_URL_TIMEOUT)
+    if url is None:
+        proc.kill()  # never printed a URL — nothing for the operator to open
+        return {"error": "no_url"}
+    return {"url": url}
+
+
 def _set_share_state(**fields):
     with _share_state_lock:
         _share_state.update(fields)
@@ -586,6 +676,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(bad, {"error": "payload_too_large" if bad == 413 else "bad_json"})
         if u.path == "/api/reports/share-op":
             return self._share_op(body)
+        if u.path == "/api/claude-signin":
+            result = _start_signin()
+            status = 202 if "url" in result else (409 if result.get("error") == "signin_in_progress" else 400)
+            return self._send(status, result)
         m = _REPORT_ACTION_RE.match(u.path)
         if not m:
             return self._send(404, {"error": "not_found"})

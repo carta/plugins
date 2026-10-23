@@ -75,6 +75,21 @@ is sent (`scripts/report_payload.py`) and again by Carta.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.
+- A `not_logged_in` error's dialog offers a **Sign in to Claude** button alongside the
+  copy-to-clipboard prompt. It posts `/api/claude-signin`, which runs `claude auth login`
+  with its stdin left open on a pipe — never written to or closed — and hands back the
+  URL the CLI prints. Leaving stdin open matters: the CLI blocks reading a paste-back
+  code from it, and that read is what keeps the process alive long enough for the
+  browser's OAuth redirect to complete the sign-in locally; closing stdin (or DEVNULL)
+  would answer that read with EOF and exit the CLI before the redirect could ever
+  arrive. The dashboard itself opens the returned URL in a new tab, then polls
+  `GET /api/claude-status` every couple of seconds until it reports signed in, for up
+  to ten minutes — matching (but tracked independently of) the server's own
+  `_SIGNIN_WINDOW`, past which `serve.py` kills the process itself and frees the slot
+  for another attempt. Past its own ten minutes the dialog gives up too, returning to
+  its button with "Still not signed in — try again." `not_installed` never gets this
+  button — installing needs Step 0.5's confirmation, which this endpoint doesn't ask
+  for.
 
 When Carta hasn't turned the budget-report commands on for someone, the app says sharing
 isn't available yet.
