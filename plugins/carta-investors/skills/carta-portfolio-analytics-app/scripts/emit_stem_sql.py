@@ -103,8 +103,10 @@ _FUNDS_SQL = (
 # Dedup tie-break mirrors the financials service's latest-filing order: as_of_date,
 # then instance_id (monotonic instance surrogate) — as_of_date alone ties nondeterministically.
 # instance_id is SELECTed so a refresh can read the cached max back as its incremental floor.
-# general_ledger_issuer_id / corporation_id (a UUID here) / llc_entity_id are the row's
-# identity keys for the builder's company_key(); per-issuer constants, so the QUALIFY is unaffected.
+# Two companies can share a legal name, so the dedup is keyed by the identity columns the
+# builder's company_key() reads (general_ledger_issuer_id, corporation_id — a UUID here —
+# and llc_entity_id); legal_name stays in the key for rows that carry none of them, which
+# company_key() keys by name. server/queries.js holds the same QUALIFY and ORDER BY.
 _FINANCIALS_TEMPLATE = (
     "SELECT legal_name, name, mnemonic, report_type, unit_type, currency,\n"
     "       float_value, string_value, period_end, period_start, frequency, as_of_date,\n"
@@ -118,10 +120,11 @@ _FINANCIALS_TEMPLATE = (
     "{company_clause}"
     "{after_clause}"
     "QUALIFY ROW_NUMBER() OVER (\n"
-    "    PARTITION BY legal_name, COALESCE(mnemonic, name),\n"
-    "                 COALESCE(frequency, ''), period_end\n"
+    "    PARTITION BY legal_name, general_ledger_issuer_id, corporation_id, llc_entity_id,\n"
+    "                 COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end\n"
     "    ORDER BY as_of_date DESC NULLS LAST, instance_id DESC) = 1\n"
-    "ORDER BY legal_name, COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end"
+    "ORDER BY legal_name, general_ledger_issuer_id, corporation_id, llc_entity_id,\n"
+    "         COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end"
 )
 _FINANCIALS_SINCE_PLACEHOLDER = (
     "  -- OPTIONAL history window; add only when the user chose one (see SKILL Step 1b):\n"

@@ -77,16 +77,19 @@ WHERE instance_type = 'Actual'
   -- OPTIONAL incremental floor; the in-app refresh sets it to the cached max instance_id:
   -- AND instance_id > <after_instance>
 QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY legal_name, COALESCE(mnemonic, name),
-                 COALESCE(frequency, ''), period_end
+    PARTITION BY legal_name, general_ledger_issuer_id, corporation_id, llc_entity_id,
+                 COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end
     ORDER BY as_of_date DESC NULLS LAST, instance_id DESC) = 1
-ORDER BY legal_name, COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end
+ORDER BY legal_name, general_ledger_issuer_id, corporation_id, llc_entity_id,
+         COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end
 ```
 
 `general_ledger_issuer_id`, `corporation_id` (a UUID in this table) and `llc_entity_id` are the row's
 identity keys: the builder's `company_key()` resolves the GL id through the holdings stems' `entity_link_id`
 pairing (§3 and §5) and the corporation UUID through §6, so a KPI row joins its holdings and cap table by
-id, never by name.
+id, never by name. Two companies can share a legal name (two Carta corporations under one name), so the
+`QUALIFY` keys each period by these three columns too; `legal_name` stays in the key for rows that carry
+none of them, which `company_key()` keys by name.
 
 `instance_id` is one submission (a "collection instance"); it is a monotonic surrogate, so
 the in-app refresh reads the cached max back as `--after-instance` and pulls only
@@ -107,7 +110,7 @@ period_end`), so a September filing "as of 2026-06-30" would slip under any date
 3. **Drop forward-dated submissions.** A row can be stamped "as of" a date that has
    not happened yet (a restatement artifact); `as_of_date <= CURRENT_DATE` removes
    it so it cannot win the period.
-4. **Page over a TOTAL order, and dedup in SQL.** `LIMIT/OFFSET` re-runs the query as an independent execution per page; the warehouse gives no stable physical order to rows that tie on the `ORDER BY`, so tied rows can silently overlap and gap across pages, dropping whole companies at the page seam. Order over a *total* key: because `QUALIFY` keeps exactly one row per `(legal_name, COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end)`, ordering by all four of those columns fully determines row order, so OFFSET paging is repeatable. Ordering by only three of them is not enough.
+4. **Page over a TOTAL order, and dedup in SQL.** `LIMIT/OFFSET` re-runs the query as an independent execution per page; the warehouse gives no stable physical order to rows that tie on the `ORDER BY`, so tied rows can silently overlap and gap across pages, dropping whole companies at the page seam. Order over a *total* key: because `QUALIFY` keeps exactly one row per `(legal_name, general_ledger_issuer_id, corporation_id, llc_entity_id, COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end)`, ordering by all seven of those columns fully determines row order, so OFFSET paging is repeatable. Ordering by fewer is not enough.
 **Row-scoped via `set_context` AND explicitly pinned with `firm_id = '<firm_uuid>'`**
 (emit with `--firm-uuid`; see §0 for why the context scope alone cannot be trusted).
 On a drifted grant the predicate fails to 0 rows instead of pulling foreign data, and

@@ -93,6 +93,9 @@ _PREFIXES_NONPROD = ("Carta_Sandbox", "claude_ai_Carta_Sandbox", "carta_sandbox"
                      "carta-sandbox", "carta-test", "carta-demo", "carta-preprod")
 _TOOLNAME_RE = re.compile(r"^mcp__(.+)__[a-z_]+$")
 
+# financials' dedup key, in save_query_result's column spec: emit_stem_sql's QUALIFY partition.
+_FIN_KEY = "legal_name,general_ledger_issuer_id,corporation_id,llc_entity_id,mnemonic|name,frequency,period_end"
+
 # save_query_result flags that verify a stem tiled completely on the single-fetch,
 # retry, and paging paths (SKILL.md Step 2 / Fallback). The light stems carry their
 # own unique key too, so a mis-tiled or short page — or a lossy markdown fallback —
@@ -103,8 +106,7 @@ _VERIFY_FLAGS = {
     "fdshares": ["--verify-complete", "--unique-key", "corporation_id,fund_id"],
     "deal_irr": ["--verify-complete", "--unique-key", "issuer_name,fund_uuid"],
     "capstack": ["--verify-complete", "--unique-key", "corporation_id,security_class_id"],
-    "financials": ["--verify-complete", "--unique-key",
-                   "legal_name,mnemonic|name,frequency,period_end"],
+    "financials": ["--verify-complete", "--unique-key", _FIN_KEY],
     "forecasts": ["--verify-complete"],
     "holdings_history": ["--verify-complete", "--unique-key", "_pk"],
     "entity_identity": ["--verify-complete", "--unique-key", "entity_link_id"],
@@ -120,7 +122,7 @@ _PAGED_STEMS = ["entity_identity", "corporation_links", "holdings_history", "fin
 # every vintage, so its delta is appended. A row edited in place or deleted upstream
 # is not seen until a chat "Refresh KPI data" rebuilds the cache in full.
 _INCREMENTAL = {
-    "financials": {"key": "legal_name,mnemonic|name,frequency,period_end",
+    "financials": {"key": _FIN_KEY,
                    "order": "as_of_date,instance_id"},
     "forecasts": None,
 }
