@@ -90,6 +90,7 @@ Every row spells the full id, prefix included.
 | `MancoReporting.Nav.SharedReport` | click | Sidebar → a report someone shared with you, under "Shared with you". The report id stays out of the event. |
 | `MancoReporting.Nav.LoadSharedReports` | click | Sidebar → "Load shared reports" (or "Check for new shared reports"). |
 | `MancoReporting.Nav.ShowHiddenReports` | click | Sidebar → "Show N hidden" under "Shared with you". |
+| `MancoReporting.Nav.AutoLoadSharedReportsFailed` | render | The hosted app's own check for new shared reports (on open, or when the tab came back) failed. Nothing shown to the user; "Load shared reports" still retries. |
 
 ### Dashboard
 

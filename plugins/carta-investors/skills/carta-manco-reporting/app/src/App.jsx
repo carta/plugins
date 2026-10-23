@@ -9,6 +9,8 @@ import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
+import useAutoPull from "./state/useAutoPull.js";
+import { resurfaceDue } from "./state/resurface.js";
 import useLoadFirm, { LOAD_FIRM_LABEL } from "./state/useLoadFirm.js";
 import { loadFirmStepProgress } from "./state/loadFirmSteps.js";
 import LoadingScreen from "./ui/LoadingScreen.jsx";
@@ -46,8 +48,6 @@ function usePathRoute(firmSlug) {
 // workbook-derived budget id, so it never reaches an id.
 const VIEW_NAMES = { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals", "monthly-actuals": "MonthlyActuals" };
 
-// Floor between resurface refetches: a flurry of tab switches skips the refetch instead of repeating it.
-export const RESURFACE_REFRESH_MIN_MS = 60_000;
 
 function slugify(name) {
   return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -148,16 +148,24 @@ export default function App() {
   // One run at a time: each unhide moves the listing's version, so a second run would send a stale one.
   const [unhiding, setUnhiding] = useState(false);
 
+  const showPulled = (result) => setShareNotice({ status: "done", op: REPORT_ACTIONS.PULL, message: pulledMessage(result) });
   const loadShared = async () => {
     trackClick("MancoReporting.Nav.LoadSharedReports");
     setShareNotice({ status: "running", op: REPORT_ACTIONS.PULL });
     try {
       const result = await reportsApi.runShareOp(REPORT_ACTIONS.PULL);
-      setShareNotice({ status: "done", op: REPORT_ACTIONS.PULL, message: pulledMessage(result) });
+      showPulled(result);
     } catch (e) {
       setShareNotice({ status: "error", op: REPORT_ACTIONS.PULL, message: e.message, code: e.code });
     }
   };
+  // New shared reports show up on their own on the hosted app; a run that changed nothing
+  // shows nothing.
+  useAutoPull({
+    enabled: hostedApp && !!snapshot && reportsApi.available && reportsApi.can(REPORT_ACTIONS.PULL),
+    reportsApi,
+    onPulled: showPulled,
+  });
   const unhideAll = async () => {
     trackClick("MancoReporting.Nav.ShowHiddenReports");
     setUnhiding(true);
@@ -175,14 +183,10 @@ export default function App() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // Refetch when the tab becomes visible again, so a long-open tab picks up actuals
-  // the server has refreshed since; RESURFACE_REFRESH_MIN_MS throttles it. A network
-  // failure leaves the page as it was.
+  // the server has refreshed since; resurfaceDue throttles it. A network failure leaves
+  // the page as it was.
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      if (Date.now() - lastFetchRef.current < RESURFACE_REFRESH_MIN_MS) return;
-      fetchData({ background: true });
-    };
+    const onVisible = () => { if (resurfaceDue(lastFetchRef.current)) fetchData({ background: true }); };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [fetchData]);

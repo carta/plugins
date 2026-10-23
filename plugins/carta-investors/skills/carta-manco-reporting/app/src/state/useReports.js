@@ -52,6 +52,13 @@ export async function actSaved(reportsApi, ...args) {
   }
 }
 
+// Whether a pull added, updated or removed a report shared with you — when it did not,
+// nothing on the page changed.
+export function pullChanged(result) {
+  const counts = result?.counts || {};
+  return !!(counts.added || counts.updated || counts.removed);
+}
+
 // Duplicates a report and opens the copy. A copy made but not yet on the page
 // isn't a failed duplicate, so that error keeps its own words.
 export async function duplicateReport(reportsApi, report, onOpenReport) {
@@ -117,7 +124,9 @@ export default function useReports({ onChanged } = {}) {
     return data?.report;
   }, [load, onChanged]);
 
-  const runShareOp = useCallback(async (op, params = {}) => {
+  // `background`: a run the user didn't start (useAutoPull's) — it doesn't drive `shareJob`,
+  // so the share panel and status show only what the user asked for.
+  const runShareOp = useCallback(async (op, params = {}, { background = false } = {}) => {
     const start = () => fetch("/api/reports/share-op", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -144,7 +153,7 @@ export default function useReports({ onChanged } = {}) {
     }
     const job = (await readJson(res))?.job;
     if (!job) throw new ReportError("Couldn't start that.", "invalid");
-    setShareJob({ status: "running", op, progress: "Checking your Carta connection…" });
+    if (!background) setShareJob({ status: "running", op, progress: "Checking your Carta connection…" });
     const started = Date.now();
     for (;;) {
       await new Promise(r => setTimeout(r, POLL_MS));
@@ -161,14 +170,18 @@ export default function useReports({ onChanged } = {}) {
       }
       // A failed status read isn't the job's end; keep polling until the timeout.
       if (res && !res.ok) state = null;
-      if (state) setShareJob(state);
+      if (state && !background) setShareJob(state);
       if (state && state.status !== "running") {
         if (state.status === "error") {
           throw new ReportError(state.error?.message || "Couldn't finish — try again.", state.error?.code);
         }
         if (op !== REPORT_ACTIONS.USERS) {
+          // The listing is cheap and always re-read: another tab of the same user can have
+          // pulled a report in already, which this run then finds on record and counts as
+          // nothing new. The snapshot is refetched only when the reports actually moved.
+          const before = etagRef.current;
           await load();
-          await onChanged?.();
+          if (op !== REPORT_ACTIONS.PULL || pullChanged(state.result) || etagRef.current !== before) await onChanged?.();
         }
         return state.result;
       }
