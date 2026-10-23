@@ -54,6 +54,22 @@ export const EASE_OUT       = "cubic-bezier(.2,.7,.2,1)";
 // primary-button surface — flat brand-black (inverts to white on dark)
 export const GRAD_DARK = "var(--ink-button-background-color-primary-base-default)";
 
+// Categorical fund palette using Ink data-viz token hex values. SVG fill attributes
+// need literal hex (CSS vars don't resolve as SVG presentation attributes), so we
+// inline the resolved values from --ink-color-global-data-viz-* tokens.
+export const PALETTE = [
+  "#1A1A1A", // brand-black (lead fund — no data-viz token; Carta primary)
+  "#285DA3", // data-viz-blue-3
+  "#2D9E90", // data-viz-positive-3 (teal)
+  "#DDB31F", // data-viz-yellow-3
+  "#58B8BC", // data-viz-turquoise-3
+  "#94B524", // data-viz-lime-3
+  "#B29990", // data-viz-brown-3
+  "#656B6B", // data-viz-neutral-3
+  "#E52431", // data-viz-negative-3
+  "#CECFCF", // brand-gray-30 (10th slot fallback)
+];
+
 // .tape range-input thumb size (px) — single source of truth for the CSS below and
 // any consumer computing a track-relative position accounting for thumb width.
 export const TAPE_THUMB = 14;
@@ -338,6 +354,11 @@ export const GLOBAL_CSS = `
   .navitem-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; }
   .navitem.active .navitem-icon { background: ${STRIPE}; }
   .addslice:hover { background: ${SHADE} !important; }
+  /* Jump-link chips (JumpLinks) — flat grey pills; the section in view turns solid. */
+  .jumpchip { display: inline-flex; align-items: center; gap: 6px; border: none; border-radius: 999px; padding: 6px 13px 6px 10px; cursor: pointer;
+    background: ${SHADE}; color: var(--ink-color-global-text-default); transition: background-color 120ms ease-out, color 120ms ease-out; }
+  .jumpchip:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+  .jumpchip.active { background: var(--ink-color-global-text-default); color: var(--ink-color-global-surface-background-default); }
 
   .statcell { transition: background .1s ${EASE}; border-radius: 0; }
   .statcell:hover { background: ${SHADE}; }

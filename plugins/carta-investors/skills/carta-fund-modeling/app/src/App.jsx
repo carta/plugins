@@ -11,12 +11,11 @@ import { ShareControls, PullButton, SharePopover } from "./ui/ScenarioSharing.js
 import { isShared, isHidden } from "./model/slices.js";
 import Overview from "./views/Overview.jsx";
 import Companies from "./views/Companies.jsx";
-import PowerLaw from "./views/returns/PowerLaw.jsx";
 import LpReturns from "./views/returns/LpReturns.jsx";
 import GpEconomics from "./views/returns/GpEconomics.jsx";
 import Reserves from "./views/Reserves.jsx";
-import CohortStanding from "./views/CohortStanding.jsx";
 import Report from "./views/Report.jsx";
+import Reports from "./views/reports/Reports.jsx";
 import FundConstruction from "./views/construction/FundConstruction.jsx";
 import ScenarioDialog from "./ui/ScenarioDialog.jsx";
 import ConfirmDialog from "./ui/ConfirmDialog.jsx";
@@ -44,10 +43,8 @@ const TABS = [
   ["gp-economics", "GP Economics", ["M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z", "M21.21 15.89A10 10 0 1 1 8 2.83"]],
   // bank → landmark
   ["reserves", "Reserves", ["M10 18v-7", "M11.119 2.205a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949z", "M14 18v-7", "M18 18v-7", "M3 22h18", "M6 18v-7"]],
-  // spaceship → rocket
-  ["power-law", "Power Law", ["M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5", "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09", "M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z", "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"]],
-  // trophy → trophy
-  ["cohort", "Benchmarks", ["M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2", "M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2", "M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3", "M4 22h16", "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z", "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"]],
+  // Lucide layout-grid
+  ["reports", "Reports", ["M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z", "M15 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z", "M15 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z", "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z"]],
   // download → download
   ["export", "Export", ["M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5"]],
   // plant → sprout
@@ -63,11 +60,10 @@ const DEFAULT_TAB = "overview";
 const TAB_VIEW_NAMES = {
   overview: "Overview",
   companies: "Companies",
-  "power-law": "PowerLaw",
   "lp-returns": "LpReturns",
   "gp-economics": "GpEconomics",
   reserves: "Reserves",
-  cohort: "CohortStanding",
+  reports: "Reports",
   construction: "FundConstruction",
   export: "Export",
 };
@@ -319,10 +315,10 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
     return { ...slice, assumptions: { ...slice.assumptions, exitHorizon } };
   }, [snapshot, slice]);
 
-  // The Returns family (Power Law / LP Returns / GP Economics) is per-entity: when
+  // LP Returns and GP Economics are per-entity tabs: when
   // landing on one with the firm-wide "All Funds" scope, auto-select the first fund
   // so the page (and its picker) name a real entity instead of silently falling back.
-  const PER_FUND_TABS = ["power-law", "lp-returns", "gp-economics"];
+  const PER_FUND_TABS = ["lp-returns", "gp-economics"];
   useEffect(() => {
     if (PER_FUND_TABS.includes(tab) && fundScope === ALL_FUNDS && snapshot?.funds?.length) {
       setFundScope(snapshot.funds[0].id);
@@ -362,6 +358,14 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   // column — so it's excluded here. This makes the header/sidebar "GP carry"
   // tie out to the Overview GP Carry column exactly.
   const firmGpCarry = firmAgg.accruedCarry + firmAgg.carryBanked;
+
+  // what the Returns-family views take: LP Returns, GP Economics, and the Power Law and LP reports on Reports
+  const returnsProps = {
+    snapshot, portfolio: effSlice, fundStates,
+    baseAssumptions: baseSlice.assumptions,
+    exitHorizonOverrides: slice.assumptions.exitHorizon || {},
+    fundScope, setFundScope, setAssumption, readOnly: locked,
+  };
 
   const onNewSlice = () => setScenarioDialog({ mode: "new" });
   const onRename = () => setScenarioDialog({ mode: "rename" });
@@ -609,18 +613,12 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
                   fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
                   sliceName={slice.name} onOpenFundSection={openFundSection} />
               )}
-              {(tab === "power-law" || tab === "lp-returns" || tab === "gp-economics") && (() => {
-                const returnsProps = {
-                  snapshot, portfolio: effSlice, fundStates,
-                  baseAssumptions: baseSlice.assumptions,
-                  exitHorizonOverrides: slice.assumptions.exitHorizon || {},
-                  fundScope, setFundScope, setAssumption, readOnly: locked,
-                };
-                if (tab === "power-law") return <PowerLaw {...returnsProps} />;
-                if (tab === "lp-returns") return <LpReturns {...returnsProps} />;
-                return <GpEconomics {...returnsProps} />;
-              })()}
-              {tab === "cohort" && <CohortStanding snapshot={snapshot} fundStates={fundStates} portfolio={slice} />}
+              {tab === "lp-returns" && <LpReturns {...returnsProps} />}
+              {tab === "gp-economics" && <GpEconomics {...returnsProps} />}
+              {tab === "reports" && (
+                <Reports returnsProps={returnsProps} snapshot={snapshot} portfolio={slice}
+                  fundStates={fundStates} mixedCurrency={firmAgg.mixedCurrency} />
+              )}
               {tab === "construction" && <FundConstruction snapshot={snapshot} firm={firm} companies={baseSlice?.companies} />}
               {tab === "export" && <Report doc={doc} snapshot={snapshot} baseSlice={baseSlice} />}
             </div>

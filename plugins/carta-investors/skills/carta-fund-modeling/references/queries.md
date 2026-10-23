@@ -38,9 +38,9 @@ below documents the fields the generator derives from each.
 Scenario-only console — the dashboard reads `firms.json`, `snapshot.json`, `portfolio.json`, `pacing.json`,
 `company-ownership.json`, and `lp-base.json`. Reporting datasets (company financials, tearsheets, SOI, deal
 IRR, cash-flow statement) are no longer fetched or written. Cohort benchmarks (§8) and the LP base (§9) ARE
-fetched — they feed the Cohort Standing tab (`snapshot.benchmarks`) and the Overview LP Base section.
+fetched — they feed the Benchmarks report on the Reports tab (`snapshot.benchmarks`) and the LP Returns partners table.
 
-The **LP Glidepath** section (in the LP Returns tab; `src/model/glidepath.js`) adds **no new query**. Its
+The **LP glidepath** report (in the LP returns section of the Reports tab; `src/model/glidepath.js`) adds **no new query**. Its
 "today" anchor is the **live repriced fund state** (`computeFundStates`), so it moves with the active
 scenario; the booked history comes from dated LP flows and NAV marks (§5 `snapshot.cashflows`,
 `snapshot.navSeries[].byFund`), with the horizon from `snapshot.windDownYear`.
@@ -53,7 +53,7 @@ scenario; the booked history comes from dated LP flows and NAV marks (§5 `snaps
 | `snapshot.funds[].netLpIrr` | `xirr` of §5 flows + ending LP NAV (suppress for funds < ~1yr old) |
 | `snapshot.funds[].gpCapitalNav` | §2 `MONTHLY_NAV_CALCULATIONS.ending_gp_nav` — derived |
 | `snapshot.baseAccruedCarry`, `gpEconomics[].accruedCarryToday`, `accruedCarryAsOf` | §7 `ALLOCATIONS` (`Carried interest accrued`, GP side) — **real booked figure** |
-| `snapshot.benchmarks[fundId].{tvpi,dpi,moic}{p50..p95}, irr{p50..p90}, fundMoic, cohortSize` | §8 `TEMPORAL_FUND_COHORT_BENCHMARKS` (Cohort Standing) |
+| `snapshot.benchmarks[fundId].{tvpi,dpi,moic}{p50..p95}, irr{p50..p90}, fundMoic, cohortSize` | §8 `TEMPORAL_FUND_COHORT_BENCHMARKS` (Benchmarks report) |
 | `snapshot.baseLpNav` | §2 `MONTHLY_NAV_CALCULATIONS.ending_lp_nav` |
 | `snapshot.cashflows[fundId].{flows,paidInTotal,terminalDate}` | §5 `MONTHLY_NAV_CALCULATIONS` monthly LP contributions/distributions; terminal ← wind-down (vintage + fund life) |
 | `snapshot.windDownYear` | vintage + 10 (fund life) |
@@ -287,7 +287,7 @@ SQL: the `deal_irr` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --r
 → per company, take the primary fund's latest `deal_irr`; write `portfolio.companies[].dealIrr`. **Sanitize:**
 `0.0` → null (held-at-cost / no IRR), `≤ -0.999` → -1.0 (total write-off, shows -100%), `> 5` → null
 (tiny/recent basis → unrealistic). Shown as a Deal IRR column on Companies and beside each holding in the
-Overview concentration list.
+Concentration report on the Reports tab.
 
 ## 11. Last priced round → `FINANCING_HISTORY`
 **Scope this by the firm's portfolio `corporation_id`s.** Do **not** run it unscoped: `FINANCING_HISTORY` is not

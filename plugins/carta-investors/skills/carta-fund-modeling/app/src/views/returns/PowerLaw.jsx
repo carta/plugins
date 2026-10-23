@@ -1,14 +1,13 @@
 import { useMemo } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
-import { fmtM, fmtX } from "../../ui/format.js";
-import { H1, H3, MethodNote, SourceNote, FundPicker, Slider, Segmented, MultiFundPicker, fundLabel, SectionChips } from "../../ui/components.jsx";
+import { fmtM, fmtX, shortCompany } from "../../ui/format.js";
+import { H3, MethodNote, SourceNote, Slider, Segmented, MultiFundPicker, fundLabel } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { exitValueImpact, fundCompanyReturns } from "../../model/sensitivity.js";
 import { returnTheFundSolutions } from "../../model/returnthefund.js";
 import { useScenarioModel } from "./useScenarioModel.js";
 import PowerLawChart from "./PowerLawChart.jsx";
 
-const shortCo = (n) => n.replace(/\s*\(.*\)/, "").replace(/,? (Inc|Corp|Co|LLC|Ltd)\.?,?( dba .*)?$/i, "");
 const TOP_N = 15;
 
 /** Diverging bar from a baseline center: red = downside half, green = upside.
@@ -70,7 +69,7 @@ function ExitImpactCard({ snapshot, portfolio, fs }) {
           borderTop: `1px solid var(--ink-color-global-border-subtle)` }}>
           <span style={{ ...sans, fontSize: FS.body, fontWeight: 500, color: "var(--ink-color-global-text-default)", width: 150, flex: "none",
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`${c.name} · ${fmtM(c.fv)}`}>
-            <span style={{ ...inkNum, color: MICRO, marginRight: 7 }}>{i + 1}</span>{shortCo(c.name)}
+            <span style={{ ...inkNum, color: MICRO, marginRight: 7 }}>{i + 1}</span>{shortCompany(c.name)}
           </span>
           <span style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 54, textAlign: "right", flex: "none" }}>{fmtX(Math.min(c.lowMultiple, c.highMultiple))}</span>
           <SwingBar lowVal={c.lowMultiple} highVal={c.highMultiple} baseVal={t.baseMultiple} pct={pct} />
@@ -198,10 +197,10 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
                     slack, so the #/multiple/value columns size to their (constant)
                     content instead of a shifting slack share — otherwise every
                     column reflowed as the target slider changed the values. */}
-                <td style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-default)", width: "100%" }}>{s.companies.map((c) => shortCo(c.name)).join(" + ")}</td>
+                <td style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-default)", width: "100%" }}>{s.companies.map((c) => shortCompany(c.name)).join(" + ")}</td>
                 <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{fmtX(s.m)}</td>
                 <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}
-                  title={s.companies.map((c) => `${shortCo(c.name)} → ${fmtM(c.neededValue)}`).join(" · ")}>
+                  title={s.companies.map((c) => `${shortCompany(c.name)} → ${fmtM(c.neededValue)}`).join(" · ")}>
                   {fmtM(s.companies.reduce((t, c) => t + c.neededValue, 0))}
                 </td>
               </tr>
@@ -218,9 +217,12 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
   );
 }
 
-/** Power Law tab — portfolio sensitivity: which holdings drive the fund's Net TVPI. */
-export default function PowerLaw(props) {
-  const { snapshot, portfolio, setFundScope, readOnly, setAssumption } = props;
+/** Power Law — one of the fund's power-law charts; the Reports page's Portfolio
+ *  analysis theme heading carries the fund picker. `section` picks the chart: "curve" (returns
+ *  by rank), "return-the-fund" (the backsolve) or "sensitivity" (Net TVPI exposure
+ *  by holding). */
+export default function PowerLaw({ section, ...props }) {
+  const { snapshot, portfolio, readOnly, setAssumption } = props;
   const m = useScenarioModel(props);
   const returns = useMemo(() => fundCompanyReturns(portfolio, m.fundId), [portfolio, m.fundId]);
   // The Return-the-fund target lives in the scenario's assumptions (per fund), so each
@@ -237,23 +239,14 @@ export default function PowerLaw(props) {
   });
   return (
     <div>
-      <H1 actions={<FundPicker funds={snapshot.funds} value={m.fundId} onChange={setFundScope} includeAll={false} />}>Power Law</H1>
-      <p style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", margin: "0 0 16px" }}>
-        At Carta marks: {fmtX(m.cartaNet)} Net TVPI on total incl. future calls
-      </p>
-      <SectionChips sections={[["pl-chart", "Power law"], ["pl-return", "Return the fund"], ["pl-sensitivity", "Sensitivity"]]} />
-      <section id="pl-chart" style={{ scrollMarginTop: 64 }}>
-        <PowerLawChart companies={returns} fundName={fundLabel(m.fs.name)} />
-      </section>
-      <section id="pl-return" style={{ scrollMarginTop: 64 }}>
-        {/* target is stored per fund in the scenario's assumptions, so each scenario
-            keeps its own and it persists like the other scenario settings. */}
+      {section === "curve" && <PowerLawChart companies={returns} fundName={fundLabel(m.fs.name)} />}
+      {/* target is stored per fund in the scenario's assumptions, so each scenario
+          keeps its own and it persists like the other scenario settings. */}
+      {section === "return-the-fund" && (
         <ReturnTheFund portfolio={portfolio} fundId={m.fundId} readOnly={readOnly}
           target={rtfTarget} setTarget={setRtfTarget} config={rtfConfig} setConfig={setRtfConfig} />
-      </section>
-      <section id="pl-sensitivity" style={{ scrollMarginTop: 64 }}>
-        <ExitImpactCard snapshot={snapshot} portfolio={portfolio} fs={m.fs} />
-      </section>
+      )}
+      {section === "sensitivity" && <ExitImpactCard snapshot={snapshot} portfolio={portfolio} fs={m.fs} />}
     </div>
   );
 }

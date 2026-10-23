@@ -64,7 +64,7 @@ For Claude for Excel, enable the Carta connector in **Settings → Connectors** 
 
 | Skill | Description |
 |-------|-------------|
-| `carta-fund-modeling` | Launch an interactive local console to reprice portfolio companies, model exits, and plan reserves for an entire firm — fund modeling React app with Overview, Companies, Exit & IRR, Reserves, and Cohort Standing tabs. Invoke with a firm name, e.g. "fund modeling for Demo Capital". |
+| `carta-fund-modeling` | Launch an interactive local console to reprice portfolio companies, model exits, and plan reserves for an entire firm — fund modeling React app with Overview, Companies, LP Returns, GP Economics, Reserves, Reports, and Fund Construction (beta) tabs. Invoke with a firm name, e.g. "fund modeling for Demo Capital". |
 | `carta-portfolio-analytics-app` | Launch an interactive local console for a firm's portfolio-company analytics — every operating KPI the portcos report into Data Collection, plus valuation, cap tables, risk and benchmarking from Fund Admin. Eleven tabs: Overview, Dashboard, Review, Portfolio, Compare, Forecast, Risk, a Company page (with PDF tearsheet), Val. Multiples, Formulas & covenants, Explore. Invoke with a firm name, e.g. "portfolio analytics for Acme Ventures". |
 
 ## MCP Tools

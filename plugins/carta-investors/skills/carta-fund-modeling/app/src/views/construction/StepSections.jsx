@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FS, sans } from "../../ui/theme.js";
-import { Badge, CheckCircleIcon, ChevronDownIcon } from "../../ui/components.jsx";
+import { Badge, CheckCircleIcon, ChevronDownIcon, usePinnedHeight } from "../../ui/components.jsx";
 import { fmtMIn, fmtPct } from "../../ui/format.js";
 import { validateGeneral, effectiveGeneral, validateFees, validateRecycling, validateWaterfall, validateLps, deriveGeneral, waterfallTerms } from "../../model/construction/plan.js";
 import { validateLightFees, validatePortfolio, validateOutcomes } from "../../model/construction/light.js";
@@ -17,20 +17,8 @@ import { EmbeddedContext, fmtYm } from "./fields.jsx";
 const isEmpty = (e) => Object.keys(e).length === 0;
 const secId = (id) => `fc-sec-${id}`;
 
-/** Heights of the app's top bar and the pinned summary bar, so the jump bar pins just below both. */
-function usePinnedHeight() {
-  const [h, setH] = useState(0);
-  useEffect(() => {
-    const els = ['[data-testid="app-topbar"]', '[data-testid="construction-summary"]'].map((q) => document.querySelector(q)).filter(Boolean);
-    const measure = () => setH(els.reduce((sum, el) => sum + el.getBoundingClientRect().height, 0));
-    measure();
-    if (typeof ResizeObserver === "undefined") return undefined;
-    const ro = new ResizeObserver(measure);
-    els.forEach((el) => ro.observe(el));
-    return () => ro.disconnect();
-  }, []);
-  return h;
-}
+// the app's top bar and the pinned summary bar, so the jump bar pins just below both
+const PINNED_ABOVE = ['[data-testid="app-topbar"]', '[data-testid="construction-summary"]'];
 
 function JumpBar({ sections, top, onJump, trailing }) {
   const [active, setActive] = useState(sections[0].id);
@@ -114,7 +102,7 @@ function SectionCard({ s, index, scrollMargin, open, onToggle }) {
 }
 
 export function Sections({ sections, testId, focus, focusKey, stepId, jumpBar = true, ...props }) {
-  const pinned = usePinnedHeight();
+  const pinned = usePinnedHeight(PINNED_ABOVE);
   // Sections show their green check only once the step they belong to is confirmed.
   const confirmed = !stepId || !!props.plan?.confirmed?.[stepId];
   // Every section starts folded to its summary line; jumping to one, or arriving to change it, opens it.

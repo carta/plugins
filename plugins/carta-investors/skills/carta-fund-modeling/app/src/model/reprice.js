@@ -427,7 +427,7 @@ export const SENTIMENT_MULTIPLES = [0, 1, 3, 5, 10, 20];
 
 /** Red→green sentiment color for a quick-pick multiple. Literal HSL (semantic —
  *  red = down, green = up — so it reads correctly in both light and dark mode;
- *  same "literal colors are intentional" precedent as Overview's chart PALETTE). */
+ *  same "literal colors are intentional" precedent as the chart PALETTE in ui/theme.js). */
 export function sentimentColor(mult) {
   if (mult <= 0) return "hsl(2, 62%, 50%)";   // write-off — red
   if (mult < 1.5) return "hsl(40, 6%, 46%)";  // held at Carta — neutral grey

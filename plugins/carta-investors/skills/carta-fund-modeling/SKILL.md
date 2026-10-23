@@ -3,10 +3,10 @@ name: carta-fund-modeling
 description: >
   Spin up an interactive local web console for FIRM-LEVEL scenario modeling over Carta Fund Admin data — a
   React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES. Tabs: Overview
-  (fund-family rollup, pacing, concentration), Companies (per-company repricing, LP make-whole
-  waterfall, carry banking, partial sales), Exit & IRR (exit scenarios, XIRR, GP &
-  LP returns, per-fund DPI/RVPI/TVPI glidepath), Reserves (dry-powder planning), Cohort Standing
-  (peer-cohort + S&P-equivalent benchmarking), and Fund Construction (beta: model a NEW fund step by step —
+  (fund-family rollup), Companies (per-company repricing, LP make-whole waterfall, carry banking,
+  partial sales), LP Returns and GP Economics (exit scenarios, XIRR, carry), Reserves
+  (dry-powder planning), Reports (power law, LP sensitivity, DPI/RVPI/TVPI glidepath, peer-cohort
+  benchmarks, pacing, concentration), and Fund Construction (beta: model a NEW fund step by step —
   sectors, allocations, fees, recycling, waterfall, LPs — into projected TVPI/DPI/IRR). Also hosted at
   fund-modeling.carta.cloud. Invoke with a firm name, e.g. "fund modeling for Demo Capital" or "model
   portfolio scenarios for a firm". Fund Admin only. NOT for reading existing Tactyc/Fund Forecasting funds —
@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.112.2</carta-plugin>
+<carta-plugin>carta-investors:6.112.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -619,8 +619,8 @@ It writes `firms.json`, `snapshot.json`, `portfolio.json`, `pacing.json`, and �
 `logoDataUri` on any company matched against `<raw_dir>/logos/` (Step 2b) — omitted entirely when that
 company has no logo, in which case the app falls back to its initials avatar. In particular it emits
 **`snapshot.source` as an object** (`{firm,firmId,firmUuid,navAsOf,marksAsOf,marksPulledAt,currency,mixedCurrency,cartaEnvironment}`); the app
-runs `source.navAsOf.slice(0,4)`, so a `source` written as a bare string blanks the **Companies** and
-**Exit & IRR** tabs. The generator resolves the firm's real reporting currency (never hardcoded USD), keeps
+runs `source.navAsOf.slice(0,4)`, so a `source` written as a bare string blanks the **Companies**,
+**LP Returns**, **GP Economics** and **Reports** tabs. The generator resolves the firm's real reporting currency (never hardcoded USD), keeps
 realized companies inert (`realized:true, includeInNav:false, cartaFv:0`), reads ownership from the
 `FUND_CORPORATION_OWNERSHIP.PERCENTAGE` **fraction** (not the `FULLY_DILUTED` share count), and degrades
 missing optional inputs to empty states. **Never hand-author these files or fabricate values** — the blank

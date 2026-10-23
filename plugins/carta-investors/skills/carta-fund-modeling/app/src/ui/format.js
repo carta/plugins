@@ -126,6 +126,14 @@ export function fundNameOnly(s) {
   return fundLabel(s)?.replace(/\s*\(\d{4}\)$/, "");
 }
 
+/** A company name without its parenthetical or legal suffix ("Acme, Inc." → "Acme") —
+ *  a compact label for ranked lists and chart points. */
+export const shortCompany = (n) => n.replace(/\s*\(.*\)/, "").replace(/,? (Inc|Corp|Co|LLC|Ltd)\.?,?( dba .*)?$/i, "");
+
+/** The parenthetical fund name without its ", 2021" vintage — a compact label for
+ *  chart legends and tooltips. */
+export const shortFund = (name) => { const m = (name || "").match(/\(([^)]+)\)\s*$/); return (m ? m[1] : name).replace(/,\s*\d{4}\s*$/, "").trim(); };
+
 /** A "YYYY-MM" month as "Jan 2027"; `empty` when there's no month. */
 export const fmtYm = (ym, empty = "—") => {
   if (!ym) return empty;

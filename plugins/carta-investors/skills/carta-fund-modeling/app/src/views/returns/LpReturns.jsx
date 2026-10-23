@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
-import { fmtM, fmtX, fmtPct, fmtAsOf, fmt$ } from "../../ui/format.js";
-import { H1, H2, H3, Eyebrow, Segmented, MethodNote, SourceNote, FundPicker, StatBar, Badge, fundLabel, SectionChips, EmptyState } from "../../ui/components.jsx";
+import { fmtM, fmtX, fmtPct, fmtAsOf } from "../../ui/format.js";
+import { H1, H3, Eyebrow, Segmented, SourceNote, StatBar, fundLabel, SectionChips } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { useFirmData } from "../../state/FirmData.jsx";
 import { useScenarioModel } from "./useScenarioModel.js";
-import Glidepath from "./Glidepath.jsx";
+import FundHeader, { NoNavState } from "./FundHeader.jsx";
 
 const RT = { ...inkNum, textAlign: "right", fontSize: FS.value };
 
@@ -139,12 +139,12 @@ function LpPartnersTable({ funds }) {
   );
 }
 
-/** LP Returns tab — LP-facing scorecard, S&P comparator, the per-multiple LP
- *  scenario grid, and the all-partners returns table. */
+/** LP Returns tab — LP-facing scorecard, the public-market benchmark it compares
+ *  against, and the all-partners returns table. */
 export default function LpReturns(props) {
   const { snapshot, fundScope, setFundScope, setAssumption, readOnly } = props;
   const m = useScenarioModel(props);
-  const { fund, fs, fundId, sliceRows, spRate, hotRate, exitDate } = m;
+  const { fund, fs, fundId, spRate, hotRate, exitDate } = m;
   const exitYr = exitDate ? exitDate.slice(0, 4) : "—";
   // Public-market benchmark options — the hurdle LP cash flows are indexed into
   // (PME-style). S&P long-run + recent, plus Nasdaq and the 10-yr Treasury as a
@@ -155,34 +155,14 @@ export default function LpReturns(props) {
     { r: 0.17, label: "Nasdaq 17%" },
     { r: 0.044, label: "10-yr Treasury 4.4%" },
   ];
-  // per-multiple LP grid — the benchmark column label carries the live rate. Net
-  // TVPI sorts on the exit multiple (the value the row is keyed by).
-  const EXIT_COLS = useMemo(() => [
-    { label: "Net TVPI", align: "left", get: (r) => r.multiple },
-    { label: "LP dist.", get: (r) => r.lpDistributions },
-    { label: "LP profit", get: (r) => r.lpNetProfit },
-    { label: "Net LP IRR", get: (r) => r.netLpIrr },
-    { label: `Bench @${(spRate * 100).toFixed(1)}%`, get: (r) => r.spIrr },
-    { label: "Edge", get: (r) => r.edge },
-  ], [spRate]);
-  const { sorted: exitRows, sort: exitSort, onSort: onExitSort } = useTableSort(sliceRows, EXIT_COLS);
-  // Exit horizon is set on the Companies tab now (shared assumption); the grid
-  // and scorecard below still read the resulting terminal date via `exitDate`.
+  // Exit horizon is set on the Companies tab (shared assumption); the scorecard
+  // below reads the resulting terminal date via `exitDate`.
   const { lpBase } = useFirmData();
   const sections = [
     ["lp-scorecard", "Scorecard"],
     ["lp-sp", "Benchmark"],
-    ["lp-grid", "LP returns"],
-    ["lp-glidepath", "Glidepath"],
     lpBase && (lpBase.lps || []).length ? ["lp-partners", "Partners"] : null,
   ].filter(Boolean);
-  // full-row tint for the "current marks" row — Ink blue (distinct from --accent-soft,
-  // which is reserved for nav/side-rail active state), not the "repriced" stripe pattern:
-  // this row means "selected scenario," not "edited."
-  const SLICE_BG = "var(--row-selected)";
-  // fmt$(0), not "$0" — the zero must carry the fund's currency, not a hardcoded $
-  const c$ = (n) => (n === 0 ? fmt$(0) : fmtM(n));
-  const markLabel = readOnly ? "current marks" : "scenario mark";
 
   const subStyle = { ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", marginTop: 5, whiteSpace: "nowrap" };
   const cmpSub = (cur, base, fmt, eps) => {
@@ -212,14 +192,12 @@ export default function LpReturns(props) {
     },
   ];
 
-  const picker = <FundPicker funds={snapshot.funds} value={fundId} onChange={setFundScope} includeAll={false} />;
-  // No NAV close means no LP cash flows: say why rather than render a $0 / n/m grid.
+  const header = { Heading: H1, title: "LP Returns", funds: snapshot.funds, fundId, setFundScope };
   if (fs.hasNav === false) {
     return (
       <div>
-        <H1 actions={picker}>LP Returns</H1>
-        <EmptyState type="page" icon="pending"
-          text={`${fundLabel(fs.name)} has no month-end NAV close booked in Carta yet, so its LP cash flows and returns aren't available. Its holdings are on the Companies tab.`} />
+        <FundHeader {...header} />
+        <NoNavState fs={fs} />
         <section id="lp-partners" style={{ scrollMarginTop: 64 }}>
           <LpPartnersTable funds={snapshot.funds} />
         </section>
@@ -229,10 +207,7 @@ export default function LpReturns(props) {
 
   return (
     <div>
-      <H1 actions={picker}>LP Returns</H1>
-      <p style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", margin: "0 0 16px" }}>
-        At Carta marks: {fmtX(m.cartaNet)} Net TVPI on total incl. future calls
-      </p>
+      <FundHeader {...header} cartaNet={m.cartaNet} />
 
       <SectionChips sections={sections} />
       {/* ── scorecard ── */}
@@ -261,52 +236,6 @@ export default function LpReturns(props) {
             The hurdle from indexing the same LP cash flows into a public-market benchmark (a PME-style comparison) — the annual return you'd have to beat by staying in the fund. Exit horizon (currently {fmtAsOf(exitDate)}) is set on the <strong>Companies</strong> tab.
           </p>
         </div>
-      </section>
-
-      <section id="lp-grid" style={{ scrollMarginTop: 64 }}>
-      <H2 id="lp-returns">LP returns</H2>
-      <MethodNote>
-        Net to LPs across exit multiples — distributions, profit and net LP IRR vs the benchmark; current marks highlighted.
-      </MethodNote>
-      {/* scrolls in place via .table-scroll (theme.js) — no sticky here, this
-          grid is only ~10-15 rows, too short to ever need a pinned header. */}
-      <TableScroll style={{ marginBottom: 10 }}>
-        <table className="ledger sheet">
-          <TableHead cols={EXIT_COLS} sort={exitSort} onSort={onExitSort} />
-          <tbody>
-            {exitRows.map((r) => (
-              <tr key={r.isSlice ? "slice" : r.multiple} style={r.isSlice ? { background: SLICE_BG } : undefined}>
-                <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
-                  {r.isSlice ? (
-                    <span style={{ color: "var(--ink-color-global-link-default)" }}>
-                      {r.multiple.toFixed(2)}×
-                      <Badge tone="info" style={{ marginLeft: 7 }}>{markLabel}</Badge>
-                    </span>
-                  ) : (
-                    `${r.multiple}×`
-                  )}
-                </td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{c$(r.lpDistributions)}</td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{c$(r.lpNetProfit)}</td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{fmtPct(r.netLpIrr)}</td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{fmtPct(r.spIrr)}</td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: r.edge == null ? "var(--ink-color-global-text-subtle)" : r.edge >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>
-                  {r.edge == null ? "n/m" : (r.edge >= 0 ? "+" : "−") + fmtPct(Math.abs(r.edge))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </TableScroll>
-      <SourceNote style={{ marginBottom: 28 }}>
-        Source: Carta Fund Admin LP cash flows. The <span style={{ color: "var(--ink-color-global-link-default)", fontWeight: 600 }}>highlighted row</span> is current marks. IRR: XIRR on
-        Carta LP flows with one terminal distribution on {fmtAsOf(exitDate)} (assumed exit horizon). <span style={{ color: "var(--ink-color-global-feedback-positive-strong)" }}>Green</span> edge beats indexing into the benchmark at {(spRate * 100).toFixed(1)}%/yr.
-      </SourceNote>
-      </section>
-
-      <section id="lp-glidepath" style={{ scrollMarginTop: 64 }}>
-      <Glidepath snapshot={snapshot} fundState={fs} portfolio={props.portfolio}
-        setAssumption={setAssumption} readOnly={readOnly} />
       </section>
 
       <section id="lp-partners" style={{ scrollMarginTop: 64 }}>

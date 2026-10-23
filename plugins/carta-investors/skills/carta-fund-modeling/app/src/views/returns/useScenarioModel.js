@@ -4,12 +4,11 @@ import { scenarioTable, scenarioRow, exitDateIrr } from "../../model/scenarios.j
 import { scenarioFund, fundIdsOf } from "../../model/funds.js";
 import { waterfallCfgFor, exitHorizonFor } from "../../model/reprice.js";
 
-// Shared per-fund scenario model for the Returns family of tabs (Power Law, LP
-// Returns, GP Economics). This is the computation that used to live at the top of
-// the single Scenarios view (before it was split into three tabs); it is lifted
-// here verbatim so all three tabs read from ONE source of truth for the waterfall
-// config, the S&P rate, the per-multiple scenario grid and the "today's marks"
-// slice. Returns plain values only (no JSX) — each view renders its own sections.
+// Shared per-fund scenario model for the Returns-family views (LP Returns, GP
+// Economics, and the Portfolio analysis and LP returns themes on the Reports tab): ONE
+// source of truth for the waterfall config, the S&P rate, the per-multiple
+// scenario grid and the "today's marks" slice. Returns plain values only (no
+// JSX) — each view renders its own sections.
 export function useScenarioModel({
   snapshot, portfolio, fundStates, baseAssumptions, fundScope, setAssumption,
   exitHorizonOverrides,

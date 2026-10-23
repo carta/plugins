@@ -3,21 +3,7 @@ import { FS, sans, inkNum } from "../../ui/theme.js";
 import { fmtMIn, fmtX, fmtPct } from "../../ui/format.js";
 import { stepLabel } from "../../model/construction/plan.js";
 import { fmtCount } from "./fields.jsx";
-
-function useTopbarHeight() {
-  const [h, setH] = useState(0);
-  useEffect(() => {
-    const bar = document.querySelector('[data-testid="app-topbar"]');
-    if (!bar) return undefined;
-    const measure = () => setH(bar.getBoundingClientRect().height);
-    measure();
-    if (typeof ResizeObserver === "undefined") return undefined;
-    const ro = new ResizeObserver(measure);
-    ro.observe(bar);
-    return () => ro.disconnect();
-  }, []);
-  return h;
-}
+import { usePinnedHeight } from "../../ui/components.jsx";
 
 /** The app scrolls inside its content pane, not the window; null means the window. */
 function scrollerOf(el) {
@@ -53,7 +39,7 @@ function Figure({ label, value, sub, testId, compact }) {
 }
 
 export default function SummaryBar({ plan, result }) {
-  const top = useTopbarHeight();
+  const top = usePinnedHeight();
   const ref = useRef(null);
   const compact = useCompact(ref);
   const ccy = plan.general.currency;

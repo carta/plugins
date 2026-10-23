@@ -21,6 +21,16 @@ export default function Root({ features }) {
   const [loadingStep, setLoadingStep] = useState(null); // SSE step from /api/load-firm
   const [autoOpen, setAutoOpen] = useState(true); // false once the user leaves a firm, so the chooser doesn't reopen it
   const [canSwitchFirm, setCanSwitchFirm] = useState(false);
+  const [shownFirm, setShownFirm] = useState(firm);
+
+  // Reset during render, not in the load effect: one render with the new firm and the old extras
+  // mounts App, whose portfolio load would start a second firm load beside Root's.
+  if (firm !== shownFirm) {
+    setShownFirm(firm);
+    setExtras(null);
+    setError(null);
+    setLoadingStep(null);
+  }
 
   // If the access check fails, offer Switch firm: the chooser still lists what the user can open.
   useEffect(() => {
@@ -54,9 +64,6 @@ export default function Root({ features }) {
   useEffect(() => {
     if (!firm) return;
     let live = true;
-    setExtras(null);
-    setError(null);
-    setLoadingStep(null);
     const q = `?firm=${encodeURIComponent(firm)}`;
 
     async function loadExtras() {

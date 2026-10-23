@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
-import { fmtM, fmtX, fmtPct, fmt$ } from "../../ui/format.js";
-import { H1, H2, Btn, Eyebrow, MethodNote, SourceNote, FundPicker, Slider, StatTile, StatBar, Badge, fundLabel, SectionChips } from "../../ui/components.jsx";
+import { fmtM, fmtPct, fmt$ } from "../../ui/format.js";
+import { H1, H2, Btn, Eyebrow, MethodNote, SourceNote, Slider, StatTile, StatBar, Badge, fundLabel, SectionChips } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { useFirmData } from "../../state/FirmData.jsx";
 import { useScenarioModel } from "./useScenarioModel.js";
+import FundHeader from "./FundHeader.jsx";
 import { trackClick } from "../../analytics.js";
 
 // GP returns per exit multiple. Net TVPI sorts on the exit multiple (the row key).
@@ -119,10 +120,7 @@ export default function GpEconomics(props) {
 
   return (
     <div>
-      <H1 actions={<FundPicker funds={snapshot.funds} value={fundId} onChange={setFundScope} includeAll={false} />}>GP Economics</H1>
-      <p style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", margin: "0 0 16px" }}>
-        At Carta marks: {fmtX(m.cartaNet)} Net TVPI on total incl. future calls
-      </p>
+      <FundHeader Heading={H1} title="GP Economics" funds={snapshot.funds} fundId={fundId} setFundScope={setFundScope} cartaNet={m.cartaNet} />
 
       <SectionChips sections={sections} />
       {/* ── waterfall config ── */}

@@ -28,7 +28,7 @@ export function useDismissable(open, setOpen, refs) {
 }
 
 /** Hairline SF-style icons — consistent stroke, no emoji anywhere. */
-const icon = (paths) => ({ size = 14, strokeWidth = 1.8, style }) => (
+export const icon = (paths) => ({ size = 14, strokeWidth = 1.8, style }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", display: "block", ...style }}>
     {paths.map((d, i) => <path key={i} d={d} />)}
@@ -261,11 +261,22 @@ export const SourceNote = ({ children, style }) => (
   </p>
 );
 
-/** Sticky in-page section nav — chips that scroll to each section and highlight
- *  the one in view. `sections` is an array of `[id, label]`; each target block
- *  should be `<section id="…" style={{ scrollMarginTop: 64 }}>`. Shared across
- *  every multi-section tab. */
-export function SectionChips({ sections }) {
+// Firm-wide aggregations can't be summed across currencies — a mixed-currency
+// firm gets this notice instead of a meaningless combined total.
+export const MixedCurrencyNote = ({ title }) => (
+  <div className="card" style={{ padding: "18px 22px", marginTop: 18 }}>
+    <H3 as="div" style={{ marginBottom: 6 }}>{title}</H3>
+    <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>
+      Not shown — this firm's funds report in multiple currencies, which can't be summed into a firm-wide total.
+    </div>
+  </div>
+);
+
+/** Which of `sections` (`[id, label]` pairs) is in view, plus `go(id)` to scroll to
+ *  one. Each id names a target block (`<section id="…">`); a jump lands that block's
+ *  scroll-margin below the pane's top. JumpLinks sets that margin on click; a page
+ *  using SectionChips sets it on each section. Drives both in-page navs below. */
+function useSectionNav(sections) {
   const [active, setActive] = useState(sections[0]?.[0]);
   const ids = sections.map((s) => s[0]).join(",");
   useEffect(() => {
@@ -279,6 +290,14 @@ export function SectionChips({ sections }) {
     return () => obs.disconnect();
   }, [ids]); // eslint-disable-line react-hooks/exhaustive-deps
   const go = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  return { active, go };
+}
+
+/** Sticky in-page section nav — chips that scroll to each section and highlight
+ *  the one in view. `sections` is an array of `[id, label]`. Shared across every
+ *  multi-section tab. */
+export function SectionChips({ sections }) {
+  const { active, go } = useSectionNav(sections);
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 5, background: "var(--ink-color-global-surface-background-default)", padding: "2px 0 0", marginBottom: 18,
       display: "flex", gap: 22, flexWrap: "wrap", borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
@@ -294,6 +313,59 @@ export function SectionChips({ sections }) {
         );
       })}
     </div>
+  );
+}
+
+const ArrowDownIcon = icon(["M12 5v14", "m19 12-7 7-7-7"]);
+
+/** Summed live height of the pinned bars named by `selectors` (the app's sticky top
+ *  bar by default), so a bar that pins inside the content pane can pin just below
+ *  them rather than under them. */
+export function usePinnedHeight(selectors = ['[data-testid="app-topbar"]']) {
+  const [h, setH] = useState(0);
+  const key = selectors.join("|");
+  useEffect(() => {
+    const els = selectors.map((q) => document.querySelector(q)).filter(Boolean);
+    const measure = () => setH(els.reduce((sum, el) => sum + el.getBoundingClientRect().height, 0));
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(measure);
+    els.forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- `key` stands in for `selectors`
+  return h;
+}
+
+// gap left between the pinned jump links and a section's heading after a jump
+const JUMP_GAP = 16;
+
+/** Sticky "Jump to:" links for a long page of themed sections — grey pills with a
+ *  down arrow (so they read as scrolling the page, not as tabs that swap it), the
+ *  section in view shown solid. Same `sections` and scroll tracking as SectionChips;
+ *  `onJump(id)` is called on a click. It pins below the app's top bar, and on a click
+ *  sets the target section's scroll-margin to the two bars' current heights plus a
+ *  gap, so the section's heading lands just below them even when either bar wraps. */
+export function JumpLinks({ sections, onJump }) {
+  const { active, go } = useSectionNav(sections);
+  const top = usePinnedHeight();
+  const navRef = useRef(null);
+  const jump = (id) => {
+    onJump?.(id);
+    const el = document.getElementById(id);
+    if (el && navRef.current) el.style.scrollMarginTop = `${top + navRef.current.getBoundingClientRect().height + JUMP_GAP}px`;
+    go(id);
+  };
+  return (
+    <nav ref={navRef} aria-label="Jump to section" style={{ position: "sticky", top, zIndex: 5, background: "var(--ink-color-global-surface-background-default)",
+      display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 0", marginBottom: 22, borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
+      <span style={{ ...sans, fontSize: FS.body, fontWeight: 600, color: "var(--ink-color-global-text-subtle)", marginRight: 2 }}>Jump to:</span>
+      {sections.map(([id, label]) => (
+        <button key={id} className={`jumpchip${active === id ? " active" : ""}`} aria-current={active === id ? "location" : undefined}
+          onClick={() => jump(id)} style={{ ...sans, fontSize: FS.body, fontWeight: 500, lineHeight: "20px" }}>
+          <ArrowDownIcon size={14} strokeWidth={1.8} />{label}
+        </button>
+      ))}
+    </nav>
   );
 }
 

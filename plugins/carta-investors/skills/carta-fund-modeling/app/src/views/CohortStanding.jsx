@@ -8,7 +8,7 @@
 // empty row.
 import { FS, sans, inkNum, MICRO } from "../ui/theme.js";
 import { fmtM, fmtX, fmtPct } from "../ui/format.js";
-import { H1, H3, MethodNote, SourceNote, fundNameOnly, Eyebrow, StatTile } from "../ui/components.jsx";
+import { H3, SourceNote, fundNameOnly, Eyebrow, StatTile } from "../ui/components.jsx";
 import { cohortPercentile } from "../model/benchmarks.js";
 
 const TICKS = [50, 75, 90, 95];
@@ -225,7 +225,6 @@ export default function CohortStanding({ snapshot, fundStates }) {
         : `Carta has not published peer cohort benchmarks for ${firm}'s funds (no vintage / AUM / entity-type cohort in TEMPORAL_FUND_COHORT_BENCHMARKS across their recent quarters). When cohort data becomes available it will appear here automatically.`;
     return (
       <div>
-        <H1>Benchmarks</H1>
         <div className="card" style={{ padding: "52px 24px", textAlign: "center" }}>
           <H3 as="div" style={{ marginBottom: 8 }}>
             Benchmarking is not available currently.
@@ -250,23 +249,13 @@ export default function CohortStanding({ snapshot, fundStates }) {
 
   return (
     <div>
-      <H1>Benchmarks</H1>
-      <MethodNote>
-        Every fund shows TVPI, DPI, and Gross MOIC on its own compact percentile bar against Carta's same-vintage
-        venture cohorts — the only scale that compares across vintages. Net TVPI and Net IRR are shown under each fund name.
-      </MethodNote>
       <div>
-        <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", marginBottom: 10 }}>
-          {(() => {
-            const bench = rows.filter((r) => r.kind === "benchmarked" && r.metrics.tvpi.kind === "benchmarked");
-            if (!bench.length)
-              return "Carta has not published peer cohorts for these vintages and fund sizes on TVPI — showing each fund's multiples and IRR without a percentile bar.";
-            const aboveMedian = bench.filter((r) => r.metrics.tvpi.pctl >= 50).length;
-            return aboveMedian === bench.length
-              ? "Every benchmarked fund sits above its cohort median on TVPI."
-              : `${aboveMedian} of ${bench.length} benchmarked funds sit above their cohort median on TVPI.`;
-          })()}
-        </div>
+        {/* No fund has a TVPI cohort: say why the TVPI bars are empty. */}
+        {!rows.some((r) => r.kind === "benchmarked" && r.metrics.tvpi.kind === "benchmarked") && (
+          <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", marginBottom: 10 }}>
+            Carta has not published peer cohorts for these vintages and fund sizes on TVPI — showing each fund's multiples and IRR without a percentile bar.
+          </div>
+        )}
 
         {visibleRows.map(({ f, kind, metrics }, i) => {
           return (

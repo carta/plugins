@@ -1,5 +1,5 @@
-// LP Glidepath — one fund's DPI / RVPI / TVPI traced over its life, rendered as a
-// section inside the LP Returns tab. Historical years (from the fund's cashflows +
+// LP Glidepath — one fund's DPI / RVPI / TVPI traced over its life, rendered as the
+// LP glidepath report on the Reports tab. Historical years (from the fund's cashflows +
 // NAV marks) sit left of the "today" line; projected years roll forward under the
 // scenario's pacing knobs. RVPI (the unrealized band) runs off into DPI (the
 // realized band) as capital comes back; the two stack to TVPI. It is TIED TO THE
@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, fmtPct } from "../../ui/format.js";
-import { H2, H3, Eyebrow, MethodNote, SourceNote, Segmented, Slider, StatBar, Badge, fundLabel } from "../../ui/components.jsx";
+import { H3, Eyebrow, MethodNote, SourceNote, Segmented, Slider, StatBar, Badge, fundLabel } from "../../ui/components.jsx";
 import { fundGlidepath } from "../../model/glidepath.js";
 
 // realized (DPI) vs unrealized (RVPI) band colors; TVPI is the ink line on top.
@@ -142,8 +142,8 @@ function GlidepathChart({ g }) {
   );
 }
 
-/** Rendered as a section inside LP Returns. `fundState` is the live (repriced)
- *  per-fund state; the parent owns fund selection. */
+/** The LP glidepath report: chart, projection knobs and per-year table. `fundState`
+ *  is the live (repriced) per-fund state; the parent owns fund selection. */
 export default function Glidepath({ snapshot, fundState, portfolio, setAssumption, readOnly }) {
   const fundId = fundState?.id;
   const asOfYear = +String(snapshot.source?.navAsOf).slice(0, 4);
@@ -169,7 +169,7 @@ export default function Glidepath({ snapshot, fundState, portfolio, setAssumptio
 
   return (
     <div>
-      <H2 id="lp-glidepath">LP glidepath</H2>
+      <H3 as="div" style={{ marginBottom: 4 }}>LP glidepath</H3>
       <MethodNote>
         {fundState ? fundLabel(fundState.name) : "The fund"}'s LP multiples over its life, at this scenario's marks. Left of “Today” is actual (from Carta cashflows + NAV marks); right is a projection: remaining uncalled commitment is called over the investment period and deployed at the fund's current multiple, and the resulting value is realized over the horizon. At 0% NAV growth today's TVPI is held flat — RVPI simply converts into DPI over time; raise NAV growth to model further appreciation. Repricing companies or toggling exits moves the Today anchor and the whole path.
       </MethodNote>

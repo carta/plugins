@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
-import { fmtM, fmtX } from "../../ui/format.js";
+import { fmtM, fmtX, shortCompany } from "../../ui/format.js";
 import { H3, MethodNote, SourceNote } from "../../ui/components.jsx";
-
-const shortCo = (n) => n.replace(/\s*\(.*\)/, "").replace(/,? (Inc|Corp|Co|LLC|Ltd)\.?,?( dba .*)?$/i, "");
 
 // The "standard" venture power-law exponent: returns decay ~ rank^-1 (Zipf).
 // Anchored to this fund's own top holding, so the reference asks "given your best
@@ -176,7 +174,7 @@ export default function PowerLawChart({ companies, fundName }) {
                   filter: "drop-shadow(0 2px 6px rgba(0,0,0,.12))",
                 }}
                 strokeWidth="1" />
-              <text x={tx + 11} y={ty + 18} style={{ ...sans, fontSize: FS.small, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>{shortCo(hovered.name)}</text>
+              <text x={tx + 11} y={ty + 18} style={{ ...sans, fontSize: FS.small, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>{shortCompany(hovered.name)}</text>
               <text x={tx + 11} y={ty + 34} style={{ ...inkNum, fontSize: FS.small, fill: "var(--ink-color-global-text-subtle)" }}>
                 #{hovered.rank} · {fmtX(hovered.moic)} · {fmtM(hovered.value)}{hovered.realized ? " · exited" : ""}
               </text>

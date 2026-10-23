@@ -197,7 +197,7 @@
   /* === Avatar (Ink's Avatar component tokens).
      Ink's own initials-primary/secondary/tertiary enum is intentionally not included here —
      this app colors initials avatars from its own categorical data-viz palette instead
-     (see PALETTE in Overview.jsx), passed directly as Avatar's `initialsColor` prop. === */
+     (see PALETTE in ui/theme.js), passed directly as Avatar's `initialsColor` prop. === */
   --ink-avatar-background-color-base:               light-dark(#FFFFFF, #5A473F);
   --ink-avatar-background-color-initials-default:   light-dark(#EFEAE8, #7B6056);
   --ink-avatar-icon-background-color-base:          light-dark(#EFEAE8, #332824);
