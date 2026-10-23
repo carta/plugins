@@ -71,10 +71,10 @@ def to_canonical(resolved_budget, period_year=None, *, mapped_gl_first=False):
     period_year = period_year or resolved_budget.get("period_year")
 
     dims = list(resolved_budget.get("dimensions") or [])
-    if not dims and any(r.get("tag_value") for r in rows):
-        # An outline line's tag_value scoping has no top-level `dimensions`
-        # entry today — infer the same axis so a scoped outline can also
-        # project a tag-crosstab view.
+    if not dims and any(r.get("tag_value") or r.get("by_column") for r in rows):
+        # Neither an outline line's tag_value scoping nor a snapshot entry's
+        # crosstab (snapshot_budget_entry keeps no `dimensions`) names the
+        # axis its scoped facts sit on — infer it, so those facts validate.
         dims = ["tag_value"]
 
     nodes = []

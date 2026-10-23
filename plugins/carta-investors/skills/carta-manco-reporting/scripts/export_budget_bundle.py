@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Package a built workbook budget as one JSON file for the hosted app's "Import budget".
 
-Reads snapshot.json, accounts.json and each budget's .reports/<id>.share.json from
---dashboard-dir. Exits 2 when nothing is safe to export.
+Reads snapshot.json and accounts.json from --dashboard-dir. The hosted app builds each
+budget's share payload itself from what this exports. Exits 2 when nothing is safe to export.
 Keep SCHEMA_VERSION equal to BUDGET_BUNDLE_SCHEMA in server/worker.js.
 """
 
@@ -12,9 +12,6 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
-import report_payload
-import report_store
 
 SCHEMA_VERSION = 1
 
@@ -47,37 +44,6 @@ def _unmapped_lines(budgets):
     )
 
 
-def _share_for_budget(dashboard_dir, budget_id):
-    """The budget's share payload, ready to upload — or None, with the reason on stderr.
-
-    A budget the last build never got as far as sharing (a brand-new workbook row, or one
-    whose share_payload build raised) has no share.json yet; the bundle still exports,
-    just without that one budget's `share` field.
-    """
-    if dashboard_dir is None or not budget_id:
-        return None
-    store = report_store.ReportStore(dashboard_dir)
-    try:
-        payload = store.read_share_payload(budget_id)
-        report_payload.validate(payload)
-    except report_store.ReportEditError:
-        print(
-            "export_budget_bundle: %s has no readable share payload (%s missing or "
-            "unreadable); rebuild the dashboard to produce it. Exporting it without sharing."
-            % (budget_id, store.share_payload_path(budget_id)),
-            file=sys.stderr,
-        )
-        return None
-    except report_payload.PayloadError as e:
-        print("export_budget_bundle: %s's share payload is invalid (%s); exporting it without sharing." % (budget_id, e), file=sys.stderr)
-        return None
-    return {
-        "schema_version": report_payload.SCHEMA_VERSION,
-        "payload": payload,
-        "fingerprint": report_store.payload_fingerprint(payload),
-    }
-
-
 def _own_variance(variance, own_ids):
     """varianceByCategory, limited to the budgets this bundle actually carries.
 
@@ -96,7 +62,7 @@ def _own_variance(variance, own_ids):
     return dict(variance, budgets=kept, default_id=default_id)
 
 
-def build_bundle(snapshot, accounts, dashboard_dir=None, exported_at=None):
+def build_bundle(snapshot, accounts, exported_at=None):
     budget = snapshot.get("budget") or {}
     raw_budgets = [b for b in (budget.get("budgets") or []) if b.get("rows")]
     if budget.get("source") != "excel-workbook" or not raw_budgets:
@@ -117,10 +83,6 @@ def build_bundle(snapshot, accounts, dashboard_dir=None, exported_at=None):
             "Every budget on this dashboard was shared with you, not your own — "
             "nothing of yours to export."
         )
-    for b in budgets:
-        share = _share_for_budget(dashboard_dir, b.get("id"))
-        if share is not None:
-            b["share"] = share
     budget = dict(budget, budgets=budgets)
     # The bundle is stored and shown next to the firm's live numbers; a guessed
     # currency would put one firm's budget under another's symbol.
@@ -166,15 +128,15 @@ def main(argv=None):
     try:
         snapshot = _load(args.dashboard_dir, "snapshot.json")
         accounts = _load(args.dashboard_dir, "accounts.json")
-        bundle = build_bundle(snapshot, accounts, dashboard_dir=args.dashboard_dir)
+        bundle = build_bundle(snapshot, accounts)
     except NothingToExport as e:
         print("export_budget_bundle: %s" % e, file=sys.stderr)
         return 2
 
     out = Path(args.out) if args.out else Path(args.dashboard_dir) / ("manco-budget-%s.json" % _slug(snapshot.get("firmName")))
-    # Compact, not indented: report_payload's 256 KB-per-payload cap is measured on this
-    # form, and indentation alone can nearly triple a payload's size (nesting depth). The
-    # Worker, the only reader, rejects anything over 4 MB; nobody edits this file by hand.
+    # Compact, not indented: indentation alone can nearly triple the file's size (nesting
+    # depth), and the Worker, the only reader, rejects anything over 4 MB; nobody edits this
+    # file by hand.
     out.write_text(json.dumps(bundle, separators=(",", ":")))
 
     unmapped = _unmapped_lines(bundle["budget"]["budgets"])
