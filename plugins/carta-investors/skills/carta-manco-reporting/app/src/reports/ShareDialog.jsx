@@ -9,6 +9,7 @@ import { fmtDate, sharerName } from "./ReportNotice.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
 import { ownShare } from "./reportState.js";
 import { actSaved, REPORT_ACTIONS } from "../state/useReports.js";
+import { ClaudePrompt, claudeFixPrompt } from "./claudeFix.jsx";
 
 // The report's Share | Export panel, anchored under the header button. Wording is agreed
 // with product; the Carta staff sentence holds because Carta staff keep access to the firm's entities.
@@ -63,7 +64,7 @@ function sameSet(a, b) {
   return true;
 }
 
-export default function ShareDialog({ report, reportsApi, firmName, entityName, exportProps, anchorRef, onClose, onDone, onBusyChange }) {
+export default function ShareDialog({ report, reportsApi, firmName, entityName, exportProps, hosted, anchorRef, onClose, onDone, onBusyChange }) {
   const link = ownShare(report);
   // The picker shows who a share reaches: offered for a new share only when the server can
   // create one, and always for an existing share so its audience stays visible. Stop
@@ -76,14 +77,14 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
   const [mode, setMode] = useState(initialMode);
   const [picked, setPicked] = useState(initialPicked);
   const [users, setUsers] = useState(null);
-  const [peopleError, setPeopleError] = useState(null);
+  const [peopleError, setPeopleError] = useState(null); // { message, code } | null
   // Names load up front only for a report already shared with people; a new share waits
   // until someone goes to add a person.
   const [wantPeople, setWantPeople] = useState(!!link && initialMode === "people");
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null); // { message, code } | null
   const [outcome, setOutcome] = useState(null); // "stale" | "deleted"
   const [confirmStop, setConfirmStop] = useState(false);
   const panelRef = useRef(null);
@@ -122,12 +123,12 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
   const askPeople = (opts, kept = null) => {
     if (!reportsApi.can(REPORT_ACTIONS.USERS)) {
       setUsers(kept);
-      setPeopleError("Carta's people list isn't available here.");
+      setPeopleError({ message: "Carta's people list isn't available here.", code: null });
       return Promise.resolve();
     }
     return reportsApi.loadPeople(opts)
       .then(({ users: list, fetchedAt }) => { setUsers(list); setPeopleAsOf(fetchedAt); })
-      .catch(e => { setUsers(kept); setPeopleError(e.message); });
+      .catch(e => { setUsers(kept); setPeopleError({ message: e.message, code: e.code }); });
   };
   const asked = useRef(false);
   useEffect(() => {
@@ -202,13 +203,13 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
         return;
       }
       if (outcome.kind === "partial") {
-        setError(outcome.message);
+        setError({ message: outcome.message, code: null });
         return;
       }
       onClose();
       onDone?.(op === REPORT_ACTIONS.SHARE && link ? UPDATED : DONE[op]);
     } catch (e) {
-      setError(e.message);
+      setError({ message: e.message, code: e.code });
     } finally {
       setBusy(false);
     }
@@ -226,7 +227,7 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
       onClose();
       if (notice) onDone?.(notice);
     } catch (e) {
-      setError(e.message);
+      setError({ message: e.message, code: e.code });
     } finally {
       setBusy(false);
     }
@@ -248,6 +249,9 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
     : recipients.length
       ? `Only the ${recipients.length === 1 ? "person" : `${recipients.length} people`} you added can open this report.`
       : "Add at least one person to share this report.";
+
+  const peopleFixPrompt = claudeFixPrompt(peopleError?.code, hosted);
+  const errorFixPrompt = claudeFixPrompt(error?.code, hosted);
 
   const footer = outcome === "stale" ? (
     <>
@@ -448,8 +452,18 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
                 </p>
               </>
             )}
-            {!outcome && peopleError && <p style={S.error} role="alert">{peopleError}</p>}
-            {error && <p style={S.error} role="alert">{error}</p>}
+            {!outcome && peopleError && (
+              <>
+                <p style={S.error} role="alert">{peopleError.message}</p>
+                {peopleFixPrompt && <ClaudePrompt text={peopleFixPrompt} event="MancoReporting.ShareDialog.CopyFixPrompt" />}
+              </>
+            )}
+            {error && (
+              <>
+                <p style={S.error} role="alert">{error.message}</p>
+                {errorFixPrompt && <ClaudePrompt text={errorFixPrompt} event="MancoReporting.ShareDialog.CopyFixPrompt" />}
+              </>
+            )}
           </div>
           <footer style={S.footer}>{footer}</footer>
         </>

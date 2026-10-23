@@ -94,6 +94,18 @@ STATE_CHECKING = "checking"    # no probe has landed yet
 STATE_AVAILABLE = "available"
 STATE_UNAVAILABLE = "unavailable"
 _CLAUDE_STATUS = {"state": STATE_CHECKING, "reason": None}
+# A share op's own message for each reason preflight_claude can name, shown instead of
+# letting an op that actually needs Carta run and fail with share_bridge's generic
+# "unreachable" -- these two are known in advance, from the same probe /api/claude-status
+# reads, so there is nothing to gain by trying the real connection first. Any other reason
+# (just "ok", or the probe never having run) falls through to a real attempt. This never
+# gates a "users" lookup a fresh saved list can already answer -- see _run_share_op.
+_CLAUDE_FIX_MESSAGES = {
+    preflight_claude.REASON_NOT_INSTALLED:
+        "Report sharing needs the Claude Code CLI installed on this computer.",
+    preflight_claude.REASON_NOT_LOGGED_IN:
+        "Report sharing needs you signed in to Claude Code.",
+}
 IDLE_TIMEOUT_DEFAULT = 86400  # 24h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
@@ -339,11 +351,24 @@ def _run_share_op(op, params):
     def emit(message):
         _set_share_state(progress=message)
     try:
+        if op == "users" and not params.get("refresh"):
+            # A fresh saved list answers this without any Carta call -- so without
+            # needing the `claude` CLI at all. Checked first: the Claude check below
+            # is only for ops that are actually about to call Carta.
+            cached = share_ops.cached_shareable_users(DATA_DIR)
+            if cached is not None:
+                _finish_share_state(status="done", result={"status": "ok", **cached}, error=None)
+                return
         if _claude_unavailable():
             # Checking afresh here (not just trusting the cached state) means an
             # operator who just installed or signed in doesn't have to restart the
             # server to get as far as actually trying the share.
             _refresh_claude_status()
+        with _claude_lock:
+            reason = _CLAUDE_STATUS["reason"]
+        fix_message = _CLAUDE_FIX_MESSAGES.get(reason)
+        if fix_message:
+            raise share_bridge.ShareError(fix_message, reason)
         bridge = _get_bridge()
         store = report_store.ReportStore(DATA_DIR)
         if op == "users":

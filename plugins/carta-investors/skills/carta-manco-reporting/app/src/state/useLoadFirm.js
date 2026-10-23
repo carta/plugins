@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
+// Status shown while waiting for the first real step; App.jsx uses it as the fallback
+// for the same wait.
+export const LOAD_FIRM_LABEL = "Loading firm data…";
+
 // Drives /api/load-firm's SSE progress stream when the hosted app has no cached snapshot
 // for this firm yet. Mirrors carta-portfolio-analytics-app's useKpi.js: an AbortController
 // tied to the trigger/unmount (so switching away mid-load doesn't leave the Worker running
@@ -32,7 +36,7 @@ export default function useLoadFirm(trigger, onDone) {
         }
         if (!slug || !live) return;
 
-        setLoadStatus("Loading firm data…");
+        setLoadStatus(LOAD_FIRM_LABEL);
         const resp = await fetch("/api/load-firm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

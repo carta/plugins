@@ -1,6 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { sans, serif, INK, FAINT, LINE, PAPER, GRAD_DARK, CARD, FS, EYEBROW_TRACKING, SHADOW_HOVER, BLUE } from "./theme.js";
 
+// Same mark, same path data, as carta-fund-modeling's CartaLogo and
+// carta-portfolio-analytics-app's Mark (plugins are deployed standalone, so each carries
+// its own copy) — flat color so it reads near-black in light and inverts cleanly in dark.
+// The viewBox is cropped to the artwork's own bounds (the source SVG pads it inside a
+// larger canvas), so the drawn box's edges sit flush with the element. `size` is the
+// height; width follows the cropped artwork's 301.09×131.28 aspect ratio.
+const CARTA_LOGO_VB = "44.32 46.99 301.09 131.28";
+const CARTA_LOGO_AR = 301.09 / 131.28;
+const CARTA_LOGO_PATH = "M44.32,46.99v131.28h301.09V46.99H44.32z M337.41,170.27H52.32V54.99h285.09V170.27z M87.87,115.91c0-14.85,12.47-23.57,23.66-23.57c8.01,0,15.48,3.02,19.48,9.98l-7.48,4.36c-1.29-1.96-3.05-3.56-5.12-4.66c-2.07-1.1-4.38-1.67-6.73-1.65c-6.58,0-14.41,5.16-14.41,15.39c0,9.98,7.48,15.48,15.03,15.48c5.25,0,9.61-2.94,12.19-7.48l7.65,3.55c-4.33,7.83-12.07,12-21.05,12C99.79,139.3,87.87,130.57,87.87,115.91z M158.86,139.3c6.22,0,12.09-2.76,15.12-6.76v5.51h9.24V93.49h-9.24v5.52c-2.88-4.04-8.89-6.67-15.12-6.67c-13.61,0-23.13,9.96-23.13,23.48C135.73,129.07,145.34,139.3,158.86,139.3z M159.75,100.79c8.54,0,14.4,6.4,14.4,15.03c0,8.63-5.87,15.03-14.4,15.03c-8.72,0-14.59-6.49-14.59-15.21C145.16,107.11,151.21,100.79,159.75,100.79z M229.91,102.1h-7.11v-8.9h7.2V80.04h9.52v13.16h9.87v8.9h-9.87v35.93h-9.61V102.1z M275.73,139.3c6.23,0,12.1-2.76,15.13-6.76v5.51h9.25V93.49h-9.25v5.52c-2.88-4.04-8.89-6.67-15.13-6.67c-13.6,0-23.12,9.96-23.12,23.48C252.61,129.07,262.21,139.3,275.73,139.3z M276.63,100.79c8.53,0,14.41,6.4,14.41,15.03c0,8.63-5.88,15.03-14.41,15.03c-8.72,0-14.59-6.49-14.59-15.21C262.04,107.11,268.09,100.79,276.63,100.79z M202.36,137.99h-9.61V93.43h8.8v7.74c1.82-5.03,5.67-8.45,10.77-8.45c1.1-0.02,2.21,0.1,3.29,0.35v8.62c-7.18-0.84-13.25,4.18-13.25,15.66V137.99z";
+export function CartaLogo({ size = 30, style }) {
+  return (
+    <svg height={size} width={size * CARTA_LOGO_AR} viewBox={CARTA_LOGO_VB}
+      role="img" aria-label="Carta" style={{ display: "block", ...style }}>
+      <path d={CARTA_LOGO_PATH} style={{ fill: "var(--ink-color-global-text-default)" }} />
+    </svg>
+  );
+}
+
 /** Ink's real dark tooltip chip, matching `carta-fund-modeling`'s own
  *  `InfoTip`. Uses flat `brand-black`/`brand-white`, not
  *  `surface-darkgray-default` — that token is wrapped in

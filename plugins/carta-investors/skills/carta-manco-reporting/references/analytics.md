@@ -179,7 +179,9 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.ShareDialog.ExportTab` | click | The Export tab of the Share panel (the HTML download itself is `BudgetVsActuals.ExportHtml`). |
 | `MancoReporting.ShareDialog.GeneralAccessPeople` | click | General access set to "Only people you add". |
 | `MancoReporting.ShareDialog.GeneralAccessEveryone` | click | General access set to everyone at the firm who can view the entity's accounting. |
-| `MancoReporting.ShareStatus.CopyPrompt` | click | Copy on the Claude prompt a failed shared-reports load suggests. |
+| `MancoReporting.ShareDialog.CopyFixPrompt` | click | Copy on the Claude install/sign-in prompt shown in the Share panel: a failed share, publish-as-new, delete, or people lookup whose error names the `claude` CLI itself as the problem. |
+| `MancoReporting.ShareStatus.CopyPrompt` | click | Copy on the ask-Claude prompt for a failed shared-reports load. |
+| `MancoReporting.ShareStatus.CopyFixPrompt` | click | Copy on the Claude install/sign-in prompt for a failed shared-reports load whose error names the `claude` CLI itself as the problem. |
 
 ### Drill-down drawer
 

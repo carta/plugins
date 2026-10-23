@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { sans, FAINT, GLOBAL_CSS, FS } from "./ui/theme.js";
+import { sans, GLOBAL_CSS, FS } from "./ui/theme.js";
 import AppShell from "./shell/AppShell.jsx";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
 import DashboardView from "./views/DashboardView.jsx";
@@ -9,7 +9,9 @@ import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
-import useLoadFirm from "./state/useLoadFirm.js";
+import useLoadFirm, { LOAD_FIRM_LABEL } from "./state/useLoadFirm.js";
+import { loadFirmStepProgress } from "./state/loadFirmSteps.js";
+import LoadingScreen from "./ui/LoadingScreen.jsx";
 import { useHostedApp } from "./shell/hostedApp.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
 import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
@@ -153,7 +155,7 @@ export default function App() {
       const result = await reportsApi.runShareOp(REPORT_ACTIONS.PULL);
       setShareNotice({ status: "done", op: REPORT_ACTIONS.PULL, message: pulledMessage(result) });
     } catch (e) {
-      setShareNotice({ status: "error", op: REPORT_ACTIONS.PULL, message: e.message });
+      setShareNotice({ status: "error", op: REPORT_ACTIONS.PULL, message: e.message, code: e.code });
     }
   };
   const unhideAll = async () => {
@@ -288,15 +290,13 @@ export default function App() {
       <style>{GLOBAL_CSS}</style>
       <AppShell sidebarProps={sidebarProps}>
         {notReady && (
-          <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>
-            {loadStatus || "· Loading fund data…"}
-          </p>
+          <LoadingScreen label={loadStatus || LOAD_FIRM_LABEL} step={loadFirmStepProgress(loadStatus)} />
         )}
         {error && (
           <p style={{ ...sans, fontSize: FS.bodyLg, color: "var(--red)" }}>Error: {error}</p>
         )}
         {!error && !notReady && !snapshot && (
-          <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>{loadStatus || "Loading…"}</p>
+          <LoadingScreen label={loadStatus || "Loading…"} />
         )}
         {snapshot && activeParent === "dashboard" && (
           <DashboardView
@@ -316,6 +316,7 @@ export default function App() {
             dark={dark}
             onToggleTheme={toggleTheme}
             reportsApi={reportsApi}
+            hosted={hostedApp}
             onOpenReport={(id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals")}
             onShareDone={(message) => setShareNotice({ status: "done", op: REPORT_ACTIONS.SHARE, message })}
           />

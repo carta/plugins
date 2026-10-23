@@ -91,6 +91,29 @@ def _envelope(response: Any) -> Dict[str, Any]:
     return response
 
 
+def cached_shareable_users(data_dir: Path, now: Callable[[], float] = time.time) -> Optional[Dict[str, Any]]:
+    """The saved shareable-users list, as {users, fetched_at}, while it is under a day
+    old for this entity — None when there is nothing usable to return without asking
+    Carta (this dashboard's own data missing or unbuilt included — that failure is
+    for the real Carta call to raise, not this cache-only check). A caller can answer
+    a lookup from this alone, with no bridge and no `claude` CLI; shareable_users uses
+    it before asking Carta."""
+    try:
+        ctx = _context(data_dir)
+    except ShareError:
+        return None
+    path = Path(data_dir) / USERS_CACHE_FILE
+    try:
+        saved = json.loads(path.read_text())
+    except (OSError, ValueError):
+        saved = None
+    if (isinstance(saved, dict) and saved.get("fund_uuid") == ctx["fund_uuid"]
+            and isinstance(saved.get("users"), list) and isinstance(saved.get("fetched_at"), (int, float))
+            and 0 <= now() - saved["fetched_at"] < USERS_CACHE_MAX_AGE):
+        return {"users": saved["users"], "fetched_at": saved["fetched_at"]}
+    return None
+
+
 def shareable_users(bridge: Any, data_dir: Path, emit: Emit, refresh: bool = False,
                     now: Callable[[], float] = time.time) -> Dict[str, Any]:
     """Who the report can be shared with, as {users, fetched_at}: the saved list while it is
@@ -98,14 +121,9 @@ def shareable_users(bridge: Any, data_dir: Path, emit: Emit, refresh: bool = Fal
     ctx = _context(data_dir)
     path = Path(data_dir) / USERS_CACHE_FILE
     if not refresh:
-        try:
-            saved = json.loads(path.read_text())
-        except (OSError, ValueError):
-            saved = None
-        if (isinstance(saved, dict) and saved.get("fund_uuid") == ctx["fund_uuid"]
-                and isinstance(saved.get("users"), list) and isinstance(saved.get("fetched_at"), (int, float))
-                and 0 <= now() - saved["fetched_at"] < USERS_CACHE_MAX_AGE):
-            return {"users": saved["users"], "fetched_at": saved["fetched_at"]}
+        cached = cached_shareable_users(data_dir, now)
+        if cached is not None:
+            return cached
     emit("Loading who can see this entity…")
     result = bridge.call("fa__get__budget_report_shareable_users", {"fund_uuid": ctx["fund_uuid"]}, emit)
     users = (result or {}).get("users") if isinstance(result, dict) else None
