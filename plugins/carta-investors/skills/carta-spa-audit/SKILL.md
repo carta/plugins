@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.111.2</carta-plugin>
+<carta-plugin>carta-investors:6.111.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -71,7 +71,7 @@ Follow these rules every time except for machine-readable output (JSON, XML):
 - **Punctuation:** No period at the end of headings or titles.
 - **Bullets:** Always use `•` — never `-` or `*` for user-facing bullets. Numbered lists use `1.` `2.` `3.`
 - **Dates:** `Mmm D, yyyy` format (e.g. `Jan 5, 2024`). Exception: first invested dates are shown as `Mmm yyyy` (month-level — day precision is not meaningful for portfolio-entry dates).
-- **Currency (standard):** `$123,456`. Negative: `($445,443)`.
+- **Currency (standard):** `$123,456`. Negative: `($445,443)`. Cost basis follows its own rule in Step B2 — it carries each company's currency code, never a `$`.
 - **Null values:** Use `—` (em-dash), never `N/A`, blank, or prose like "not recorded".
 
 ### Tables [PATTERN tables v0.0.12]
@@ -391,16 +391,18 @@ Reads the unified SPA source (see below), groups by issuer name to deduplicate m
 
 > **`NULLS LAST` on that same rank is load-bearing — do not drop it.** `fuzzy_matched` ranks candidates through a `LEFT JOIN`, and Snowflake sorts NULLs **first** on a `DESC` ordering. Without `NULLS LAST`, a company whose primary name finds no SPA but whose alias scores 100 has its NULL row win `rn = 1`, carries a NULL `spa_name` into `labeled`, and gets bucketed "1. Missing SPA" — silently discarding exactly the matches the alias candidates exist to recover. At one firm that was the difference between 66 and 133 companies in Executed SPA. Like the total ordering above, it only became load-bearing once `norm_investments` emitted more than one row per investment. The co-investors skill carries the same clause; keep the two in step. `carta-portfolio-rights/references/portfolio-rights.sql` copies this query's name normalisation and alias expressions; change them there too.
 
-> **CRITICAL — fetch ONCE; never re-issue this query with a different `offset`.** A single fetch with `limit: 500` covers any real portfolio (even Sequoia-scale firms top out around 300 portfolio companies). Do **not** re-run this query for "later pages." Reason: when the model re-types this ~1,500-char SQL for a second call it reliably corrupts a token — the embedded firm UUID drifts (e.g. `…8af6…` → `…8ad6…`), or a JOIN key changes (`d.DOCUMENT_ID` → `s.DOCUMENT_ID`), silently dropping rows or failing the call. One fetch means the SQL is authored exactly once and this whole class of error cannot happen.
+> **A bare parenthetical is an alias only when it could be a name.** `alias_raw` takes the text after `fka`/`dba`/`formerly` when the investment name has one, and otherwise any parenthetical — but investment names carry many that are not names: `(1 CASE)`, `(Series A)`, `(Cayman)`, `(US)`, `(Holding)`, `(Israeli company)`. The `IFF(REGEXP_LIKE(...), NULL, ...)` around the bare fallback drops those — two characters or fewer, a leading digit, a series, a "held …" or "investment …" phrase, "… company", or a structural word (holding, group, feeder, onshore/offshore, and the jurisdictions Cayman, BVI, Delaware, Pty) — before they reach the fuzzy match, where a generic word scores ≥ 90 against another company's SPA (`(Holding)` against `SP Holding LTD`). Query O, `carta-portfolio-rights/references/portfolio-rights.sql` and the `carta-co-investors` page carry the same expression; `test_former_name_expression_matches_the_mode_b_audit` fails when one drifts.
+
+> **CRITICAL — fetch ONCE; never re-issue this query with a different `offset`.** A single fetch with `limit: 1000` covers any real portfolio — the query returns one row per company the firm holds, SAFEs and fund positions included, and active multi-fund firms reach 500. Do **not** re-run this query for "later pages." Reason: when the model re-types this ~1,500-char SQL for a second call it reliably corrupts a token — the embedded firm UUID drifts (e.g. `…8af6…` → `…8ad6…`), or a JOIN key changes (`d.DOCUMENT_ID` → `s.DOCUMENT_ID`), silently dropping rows or failing the call. One fetch means the SQL is authored exactly once and this whole class of error cannot happen.
 >
-> **If the row count ever exceeds 500** (it won't for any real firm — flag it as a data anomaly rather than paginating): raise `limit` in the same single call. Never add `offset` pages.
+> **If the row count ever exceeds 1000** (flag it as a data anomaly rather than paginating): raise `limit` in the same single call. Never add `offset` pages.
 
 Replace `<firm_id>` with the firm id from Step 1.
 
 ```
 read_tool({"name": "dwh__execute__query", "arguments": {
-  "sql": "WITH spa_issuers AS (SELECT ISSUER_NAME, EXECUTED_BY_ISSUER FROM (SELECT CASE WHEN TYPEOF(RAW_JSON:company:name) = 'OBJECT' AND RAW_JSON:company:name:value::STRING IS NOT NULL THEN RAW_JSON:company:name:value::STRING WHEN TYPEOF(RAW_JSON:company:name) = 'VARCHAR' THEN RAW_JSON:company:name::STRING ELSE ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_TOTAL_COST ELSE TOTAL_COST END) AS total_cost_basis, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_count, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1)) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, i.currency_count, i.currency_code, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC NULLS LAST, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN 4 WHEN spa_name IS NULL THEN 1 WHEN has_executed_spa = 0 THEN 2 ELSE 3 END AS sort_key, CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM labeled ORDER BY sort_key, total_cost_basis DESC NULLS LAST, company",
-  "limit": 500
+  "sql": "WITH spa_issuers AS (SELECT ISSUER_NAME, EXECUTED_BY_ISSUER FROM (SELECT CASE WHEN TYPEOF(RAW_JSON:company:name) = 'OBJECT' AND RAW_JSON:company:name:value::STRING IS NOT NULL THEN RAW_JSON:company:name:value::STRING WHEN TYPEOF(RAW_JSON:company:name) = 'VARCHAR' THEN RAW_JSON:company:name::STRING ELSE ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_TOTAL_COST ELSE TOTAL_COST END) AS total_cost_basis, COUNT(DISTINCT CURRENCY_CODE) AS currency_count, MAX(CURRENCY_CODE) AS currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), IFF(REGEXP_LIKE(UPPER(TRIM(REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1))), '(.{0,2}|[0-9].*|SERIES.*|.*COMPANY|HELD .*|INVESTMENT .*|HOLDINGS?|GROUP|CAYMAN|BVI|PTY|DELAWARE|OFFSHORE|ONSHORE|FEEDER)'), NULL, REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1))) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, i.currency_count, i.currency_code, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC NULLS LAST, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM labeled ORDER BY spa_bucket, total_cost_basis DESC NULLS LAST, company",
+  "limit": 1000
 }})
 ```
 
@@ -445,7 +447,7 @@ Cache schema:
     "spaCompanies": <X>
   },
   "buckets": {
-    "missing":     [{"company": "...", "firstInvested": "YYYY-MM-DD", "costBasis": <number>}, ...],
+    "missing":     [{"company": "...", "firstInvested": "YYYY-MM-DD", "costBasis": <number>, "currency": "<currency_code, or null when currency_count is not 1>"}, ...],
     "unexecuted":  [...],
     "executed":    [...],
     "notNeeded":   [...]
@@ -453,7 +455,7 @@ Cache schema:
 }
 ```
 
-Use `Write` to write the JSON. Group the main audit query's rows by `spa_bucket` into the four bucket arrays. Drill-down data is NOT cached (always fetched live in Step B2 follow-ups).
+Use `Write` to write the JSON. Group the main audit query's rows by `spa_bucket` into the four bucket arrays. Store `currency` as the row's `currency_code` when `currency_count` is 1, otherwise null. Drill-down data is NOT cached (always fetched live in Step B2 follow-ups).
 
 ---
 
@@ -468,12 +470,12 @@ Use `Write` to write the JSON. Group the main audit query's rows by `spa_bucket`
 Then present **four separate sub-tables** — one per bucket, in priority order, each with its own heading. Do not combine into one flat table.
 
 **Formatting rules (all tables):**
-- Currency: `$X,XXX,XXX` with commas, no cents
+- Cost basis: `X,XXX,XXX <currency_code>` with commas, no cents (e.g. `30,534,806 USD`, `28,080,000,000 IDR`). Write `Multiple currencies` when `currency_count` > 1, and append `*` with the footnote `* currency not recorded` when the code is null. Never prefix `$`, and never add or compare amounts in different currencies
 - Dates: `Mmm yyyy` (e.g. "Dec 2017") — month-level is intentional for first invested
 - `#` column for row references — does not count toward the 6-column limit
 - Never show raw UUIDs
-- Sort each sub-table by `total_cost_basis DESC` when rendering — filter rows by their `spa_bucket` value and sort within that bucket, regardless of the order rows arrived from the query
-- Within actionable buckets, insert a `— Exited / written-off positions —` divider row between the last `$>0` entry and the first `$0` cost-basis row
+- Sort each sub-table by `total_cost_basis DESC` when rendering — filter rows by their `spa_bucket` value and sort within that bucket, regardless of the order rows arrived from the query. Sort the companies in the currency most companies share first, then the rest grouped by currency code, each group by cost basis — never rank an amount against one in another currency
+- Within actionable buckets, insert a `— Exited / written-off positions —` divider row between the last entry with cost basis above 0 and the first with 0
 - **Fuzzy-match footnote:** if any company was matched to its SPA via Jaro-Winkler similarity (not an exact name match), append `*` to that company name and add a footnote below the table: `* matched via name similarity`
 
 ---
@@ -484,7 +486,7 @@ Show all rows individually — each represents a gap to remediate.
 
 | # | Company | First invested | Cost basis |
 |---|---------|---------------|----------:|
-| 1 | Acme Holdings, Inc. | Nov 2017 | $30,534,806 |
+| 1 | Acme Holdings, Inc. | Nov 2017 | 30,534,806 USD |
 
 ---
 
@@ -494,7 +496,7 @@ SPA is on file but needs the issuer's signature.
 
 | # | Company | First invested | Cost basis |
 |---|---------|---------------|----------:|
-| 1 | PortCo Beta, Inc. | Dec 2017 | $52,405,204 |
+| 1 | PortCo Beta, Inc. | Dec 2017 | 52,405,204 USD |
 
 ---
 
@@ -502,7 +504,7 @@ SPA is on file but needs the issuer's signature.
 
 | # | Company | First invested | Cost basis |
 |---|---------|---------------|----------:|
-| 1 | Greenfield Tech, Inc. | Aug 2021 | $24,515,309 |
+| 1 | Greenfield Tech, Inc. | Aug 2021 | 24,515,309 USD |
 
 ---
 
@@ -510,7 +512,7 @@ SPA is on file but needs the issuer's signature.
 
 | # | Company | First invested | Cost basis |
 |---|---------|---------------|----------:|
-| 1 | Example Co., Inc. | Jul 2023 | $1,500,000 |
+| 1 | Example Co., Inc. | Jul 2023 | 1,500,000 USD |
 
 ---
 
@@ -520,6 +522,8 @@ SPA is on file but needs the issuer's signature.
 
 • Largest cost-basis position in bucket 1 (missing SPA) — biggest blind spot, no document on file
 • Largest cost-basis position in bucket 2 (unexecuted SPA) — most urgent to chase for signature
+
+Pick each largest position only among companies in the currency most companies share.
 
 ---
 
@@ -561,8 +565,8 @@ Run this query, replacing `<company_name>` with their input:
 
 ```
 read_tool({"name": "dwh__execute__query", "arguments": {
-  "sql": "WITH gen_rec AS (SELECT EXTRACTION_ID, RECORD_TYPE, ATTRIBUTES, RAW_JSON, CREATED_AT FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement'), spa_docs AS (SELECT EXTRACTION_ID, ISSUER_NAME, EXECUTED_BY_ISSUER, CLOSING_DATE, CURRENCY_CODE, UPLOAD_DATE FROM (SELECT c.EXTRACTION_ID, CASE WHEN TYPEOF(c.RAW_JSON:company:name) = 'OBJECT' AND c.RAW_JSON:company:name:value::STRING IS NOT NULL THEN c.RAW_JSON:company:name:value::STRING WHEN TYPEOF(c.RAW_JSON:company:name) = 'VARCHAR' THEN c.RAW_JSON:company:name::STRING ELSE c.ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE c.ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER, TRY_TO_DATE(e.ATTRIBUTES:closing_dates[0]::STRING) AS CLOSING_DATE, IFF(REGEXP_LIKE(e.ATTRIBUTES:currency_code::STRING, '^[A-Z]{3}$'), e.ATTRIBUTES:currency_code::STRING, NULL) AS CURRENCY_CODE, c.CREATED_AT::DATE AS UPLOAD_DATE FROM gen_rec c LEFT JOIN gen_rec e ON e.EXTRACTION_ID = c.EXTRACTION_ID AND e.RECORD_TYPE = 'stock_purchase' WHERE c.RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), gen_purch AS (SELECT EXTRACTION_ID, ATTRIBUTES:name::STRING AS PURCHASER_NAME, ATTRIBUTES:entity_type::STRING AS ENTITY_TYPE, ATTRIBUTES:share_class_name::STRING AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:price_per_share::NUMBER AS PRICE_PER_SHARE, ATTRIBUTES:total_amount_paid::NUMBER AS TOTAL_AMOUNT_PAID FROM gen_rec WHERE RECORD_TYPE = 'investor') SELECT DENSE_RANK() OVER (ORDER BY sd.EXTRACTION_ID) AS spa_num, sd.UPLOAD_DATE AS upload_date, sd.ISSUER_NAME, gp.PURCHASER_NAME, gp.SHARE_CLASS_NAME, gp.SHARES_PURCHASED, gp.PRICE_PER_SHARE, gp.TOTAL_AMOUNT_PAID, sd.CURRENCY_CODE, sd.CLOSING_DATE AS transaction_date, CASE WHEN sd.EXECUTED_BY_ISSUER = TRUE THEN 'Yes' ELSE 'No' END AS executed FROM spa_docs sd LEFT JOIN gen_purch gp ON gp.EXTRACTION_ID = sd.EXTRACTION_ID AND (gp.ENTITY_TYPE IS NULL OR (gp.ENTITY_TYPE NOT ILIKE '%notice%' AND gp.ENTITY_TYPE NOT ILIKE '%law firm%')) WHERE UPPER(sd.ISSUER_NAME) LIKE UPPER('%<company_name>%') ORDER BY sd.EXTRACTION_ID, gp.PURCHASER_NAME",
-  "limit": 100
+  "sql": "WITH gen_rec AS (SELECT EXTRACTION_ID, RECORD_TYPE, ATTRIBUTES, RAW_JSON, CREATED_AT FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement'), spa_docs AS (SELECT EXTRACTION_ID, ISSUER_NAME, EXECUTED_BY_ISSUER, CLOSING_DATE, CURRENCY_CODE, UPLOAD_DATE FROM (SELECT c.EXTRACTION_ID, CASE WHEN TYPEOF(c.RAW_JSON:company:name) = 'OBJECT' AND c.RAW_JSON:company:name:value::STRING IS NOT NULL THEN c.RAW_JSON:company:name:value::STRING WHEN TYPEOF(c.RAW_JSON:company:name) = 'VARCHAR' THEN c.RAW_JSON:company:name::STRING ELSE c.ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE c.ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER, TRY_TO_DATE(e.ATTRIBUTES:closing_dates[0]::STRING) AS CLOSING_DATE, IFF(REGEXP_LIKE(e.ATTRIBUTES:currency_code::STRING, '^[A-Z]{3}$'), e.ATTRIBUTES:currency_code::STRING, NULL) AS CURRENCY_CODE, c.CREATED_AT::DATE AS UPLOAD_DATE FROM gen_rec c LEFT JOIN gen_rec e ON e.EXTRACTION_ID = c.EXTRACTION_ID AND e.RECORD_TYPE = 'stock_purchase' WHERE c.RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), gen_purch AS (SELECT EXTRACTION_ID, ATTRIBUTES:name::STRING AS PURCHASER_NAME, ATTRIBUTES:entity_type::STRING AS ENTITY_TYPE, ATTRIBUTES:share_class_name::STRING AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:price_per_share::NUMBER(38, 6) AS PRICE_PER_SHARE, ATTRIBUTES:total_amount_paid::NUMBER(38, 2) AS TOTAL_AMOUNT_PAID FROM gen_rec WHERE RECORD_TYPE = 'investor') SELECT DENSE_RANK() OVER (ORDER BY sd.EXTRACTION_ID) AS spa_num, sd.UPLOAD_DATE AS upload_date, sd.ISSUER_NAME, gp.PURCHASER_NAME, gp.SHARE_CLASS_NAME, gp.SHARES_PURCHASED, gp.PRICE_PER_SHARE, gp.TOTAL_AMOUNT_PAID, sd.CURRENCY_CODE, sd.CLOSING_DATE AS transaction_date, CASE WHEN sd.EXECUTED_BY_ISSUER = TRUE THEN 'Yes' ELSE 'No' END AS executed FROM spa_docs sd LEFT JOIN gen_purch gp ON gp.EXTRACTION_ID = sd.EXTRACTION_ID AND (gp.ENTITY_TYPE IS NULL OR (gp.ENTITY_TYPE NOT ILIKE '%notice%' AND gp.ENTITY_TYPE NOT ILIKE '%law firm%')) WHERE UPPER(sd.ISSUER_NAME) LIKE UPPER('%<company_name>%') ORDER BY sd.EXTRACTION_ID, gp.PURCHASER_NAME",
+  "limit": 500
 }})
 ```
 
@@ -582,7 +586,7 @@ Present results in two sub-tables. Both use `SPA #` as the join key so the user 
 |------:|-----------------|------------|-------:|------------:|-------------:|
 | 1 | Sample Fund IV, L.P. | Series C Preferred | 125,000 | 40.00 USD | 5,000,000 USD |
 
-Every amount carries the `CURRENCY_CODE` of its SPA — never assume USD, and never total across SPAs with different codes. When `CURRENCY_CODE` is null the document did not state a currency: render the bare number with a `*` and add the footnote `* currency not stated in the source document`.
+Show each price per share with the decimals the document states (`0.05071`, not `0.05`) — seed-stage prices are often fractions of a cent. Every amount carries the `CURRENCY_CODE` of its SPA — never assume USD, and never total across SPAs with different codes. When `CURRENCY_CODE` is null the document did not state a currency: render the bare number with a `*` and add the footnote `* currency not stated in the source document`.
 
 **Field notes:**
 - **Upload date** — when Carta extracted the document. For SPAs that predate the current extraction pipeline this falls back to a data-refresh date and reads as approximate.
@@ -644,8 +648,8 @@ AskUserQuestion(
 - SPA execution status comes from Carta's document AI extraction. Documents uploaded but not yet processed by Carta won't appear.
 - Deduplication is by issuer name: if the same company has multiple SPA uploads, the query takes `MAX(EXECUTED_BY_ISSUER)` — executed wins over unexecuted for the same issuer.
 - Only SPAs extracted by the current Document AI pipeline are visible. A document that was extracted before the cutover and never re-extracted makes its company read as "Missing SPA" even though the SPA is uploaded in Carta.
-- Amounts are shown in the currency the SPA document states, and are marked when it stated none. Amounts in different currencies are never summed.
-- Cost basis is the sum across all funds and asset classes for that issuer — total capital deployed, not current fair market value. It sums `BASE_CURRENCY_TOTAL_COST` for foreign-currency investments and `TOTAL_COST` for the rest, keyed off `IS_FOREIGN_CURRENCY_INVESTMENT`: on a foreign-currency row `TOTAL_COST` is **0** and the amount lives in the base-currency column, so summing `TOTAL_COST` alone silently values those holdings at zero. Do **not** "simplify" this to `COALESCE(BASE_CURRENCY_TOTAL_COST, TOTAL_COST)` — the two base-currency columns differ in null semantics (`BASE_CURRENCY_REMAINING_VALUE` is `0`, not NULL, on domestic rows), so COALESCE collapses SOI valuation. The currency each amount is denominated in follows the same flag, and is carried through so the artifact can render the amount in it rather than labelling the column ambiguously.
+- SPA amounts are shown in the currency the SPA document states, and are marked when it stated none. Cost basis is shown in each holding's own currency. Amounts in different currencies are never summed or ranked against each other.
+- Cost basis is the sum across all funds and asset classes for that issuer — total capital deployed, not current fair market value. It sums `BASE_CURRENCY_TOTAL_COST` for foreign-currency investments and `TOTAL_COST` for the rest, keyed off `IS_FOREIGN_CURRENCY_INVESTMENT`: on a foreign-currency row `TOTAL_COST` is often **0** and the amount lives in the base-currency column, so summing `TOTAL_COST` alone silently values those holdings at zero. Do **not** "simplify" this to `COALESCE(BASE_CURRENCY_TOTAL_COST, TOTAL_COST)` — the two base-currency columns differ in null semantics (`BASE_CURRENCY_REMAINING_VALUE` is `0`, not NULL, on domestic rows), so COALESCE collapses SOI valuation. Both `TOTAL_COST` on a domestic row and `BASE_CURRENCY_TOTAL_COST` on a foreign one are in the holding's own `CURRENCY_CODE`, so that column labels the amount on every row. Do **not** label foreign rows with `BASE_CURRENCY_CODE`: it reads `USD` or NULL on some foreign rows whose amount is in IDR, BRL, CAD or EUR, which would show an IDR 28B holding as $28B. A company whose rows span currencies gets `currency_count` > 1 and no single code. Nothing adds or ranks amounts across currencies: Mode B shows each cost basis with its own code; the artifact's value totals count only the companies in the currency most of them share, and both surfaces sort those companies first, then the rest grouped by currency.
 - **Renamed companies** may show as "Missing SPA" even when a SPA exists under the old name. If an investment is recorded as "OldName Insurance" but the SPA was uploaded under "NewName Services, Inc." (the former name), the fuzzy match won't link them. Flag these cases with a footnote when they appear in results.
 - A company whose SPA documents were uploaded under variant name spellings (e.g. `ACMECORP INC.`, `AcmeCorp Inc.`, `AcmeCorp, Inc.`) will match correctly — the query treats the company as executed if **any** name variant has `EXECUTED_BY_ISSUER = true`.
 - If the same company appears as two separate investment records (e.g. "PortCo A, Inc. d/b/a PortCo B" and "PortCo B"), each record is evaluated independently. One may show as executed, the other as missing. This reflects the investment data, not an error.
