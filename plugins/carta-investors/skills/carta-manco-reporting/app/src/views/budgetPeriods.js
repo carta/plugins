@@ -131,6 +131,21 @@ export function ytdColumn(range, year, asOfMonth, columns) {
   return { key: "ytd", label: "YTD", months, ytd: true, future: false };
 }
 
+/** The columns a row's label cell stands for, and the months they cover.
+ *
+ *  Year to date when that column is on, else every period on screen — never
+ *  both: YTD already holds the periods' months, so adding it to them counts
+ *  each month twice. Monthly Actuals' label cells stand for this; Budget vs
+ *  Actuals' stand for the window instead, so a page passes ChildRow the
+ *  `label` its own rows use. A label drill passes exactly these months, so
+ *  the entries it lists add up to the figure it reports.
+ */
+export function labelWindow(columns) {
+  const ytd = columns.find((c) => c.ytd);
+  const cols = ytd ? [ytd] : columns;
+  return { cols, months: cols.flatMap((c) => c.months) };
+}
+
 function sameMonths(a, b) {
   return a.length === b.length && a.every((m, i) => m === b[i]);
 }

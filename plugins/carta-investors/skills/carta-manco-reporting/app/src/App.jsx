@@ -325,6 +325,8 @@ export default function App() {
             snapshot={snapshot}
             accountsData={accountsData}
             drilldown={accountsData ? drilldown : null}
+            dark={dark}
+            onToggleTheme={toggleTheme}
           />
         )}
       </AppShell>

@@ -22,7 +22,7 @@ export function FilterRibbon({ children }) {
  *  up, which columns to show, and over what window. */
 export default function BudgetPeriodControls({
   filters, onFilters, range, onRange, year, asOfMonth, frequencyEnabled = true,
-  breakouts, breakoutKey, onBreakoutKey,
+  columnsPane = true, breakouts, breakoutKey, onBreakoutKey,
 }) {
   // No memo: the whole toolbar is a handful of literals, and staying a plain
   // function keeps it callable from the unit tests.
@@ -53,6 +53,7 @@ export default function BudgetPeriodControls({
       )}
 
       <FiltersMenu filters={filters} onFilters={onFilters} ytdPane={frequencyEnabled}
+                   columnsPane={columnsPane}
                    breakouts={breakouts} breakoutKey={breakoutKey}
                    onBreakoutKey={onBreakoutKey} />
 
@@ -114,14 +115,15 @@ const PANE_EVENTS = {
 // createPortal/boundary-flip
 // logic here: fund-modeling needs that because its toolbar sits inside a
 // clipped scrollable column; this page's toolbar has no such container.
-export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, breakoutKey, onBreakoutKey,
-                              departments, hiddenRows }) {
+// `columnsPane` is off where the grid has no budget or variance column to hide.
+export function FiltersMenu({ filters, onFilters, ytdPane = true, columnsPane = true,
+                              breakouts, breakoutKey, onBreakoutKey, departments, hiddenRows }) {
   const hasColumns = !!(filters && onFilters);
   const hasBreakouts = !!(breakouts?.length && onBreakoutKey);
   // Which panes exist right now, independent of draft state — the source of
   // truth for whether a stale activePane still points at something real.
   const paneKeys = [
-    ...(hasColumns ? ["columns", ...(ytdPane ? ["ytd"] : [])] : []),
+    ...(hasColumns ? [...(columnsPane ? ["columns"] : []), ...(ytdPane ? ["ytd"] : [])] : []),
     ...(hasBreakouts ? ["breakouts"] : []),
     ...(departments ? ["departments"] : []),
     ...(hiddenRows ? ["hiddenRows"] : []),
@@ -194,7 +196,7 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
 
   const navItems = [
     ...(hasColumns ? [
-      { key: "columns", label: "Columns", count: draftHidden.length },
+      ...(columnsPane ? [{ key: "columns", label: "Columns", count: draftHidden.length }] : []),
       ...(ytdPane ? [{ key: "ytd", label: "Year-to-Date", count: draft.showYtd ? 1 : 0 }] : []),
     ] : []),
     ...(hasBreakouts ? [

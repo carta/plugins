@@ -95,9 +95,6 @@ Every row spells the full id, prefix included.
 
 | Id | Action | Fires when |
 |---|---|---|
-| `MancoReporting.Dashboard.ExportHtml` | click | Export pressed. |
-| `MancoReporting.Dashboard.ExportHtmlSucceeded` | click | The export file was produced. |
-| `MancoReporting.Dashboard.ExportHtmlFailed` | click | The export threw, or its target was missing. |
 | `MancoReporting.Dashboard.CashDetailHover` | click | The cash-balance-by-account card opened (hover or focus). |
 | `MancoReporting.Dashboard.CashUnavailable` | render | The Cash Balance tile has no balance to show. |
 | `MancoReporting.Dashboard.VendorSpendHidden` | render | Top Vendors left out: no vendor spend. |
@@ -125,9 +122,6 @@ Every row spells the full id, prefix included.
 | `MancoReporting.BudgetVsActuals.LayoutOutline` | render | The budget rendered as the workbook's own outline. |
 | `MancoReporting.BudgetVsActuals.LayoutCrosstab` | render | The budget rendered as the department (tag) crosstab. |
 | `MancoReporting.BudgetVsActuals.UnsupportedView` | render | The budget declares a view the app cannot render. |
-| `MancoReporting.BudgetVsActuals.ExportHtml` | click | Export pressed. |
-| `MancoReporting.BudgetVsActuals.ExportHtmlSucceeded` | click | The export file was produced. |
-| `MancoReporting.BudgetVsActuals.ExportHtmlFailed` | click | The export threw, or its target was missing. |
 | `MancoReporting.BudgetVsActuals.PeriodChange` | click | The Period (frequency) dropdown changed. |
 | `MancoReporting.BudgetPeriodPanel.View` | render | A period popover opened: the month-range picker or the crosstab's period picker. |
 | `MancoReporting.BudgetVsActuals.PeriodPreset` | click | A date-range preset picked in the month-range picker. |
@@ -152,6 +146,15 @@ Every row spells the full id, prefix included.
 | `MancoReporting.BudgetVsActuals.OutlineToggleGroup` | click | Outline layout: a section collapsed or expanded. |
 | `MancoReporting.BudgetVsActuals.OutlineToggleLine` | click | Outline layout: a line's breakout expanded or collapsed. |
 | `MancoReporting.BudgetVsActuals.CrosstabExpandRow` | click | Crosstab layout: a row's breakout expanded or collapsed. |
+
+The Period, Filters and date-range ids above also fire from Monthly Actuals, which shares
+that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
+
+### Monthly Actuals
+
+| Id | Action | Fires when |
+|---|---|---|
+| `MancoReporting.MonthlyActuals.ExpandRow` | click | An account row's breakout expanded or collapsed. |
 
 ### Budget reports and sharing
 
@@ -203,7 +206,10 @@ Every row spells the full id, prefix included.
 
 Built from a map, so no single literal holds them. `App.jsx`'s `VIEW_NAMES` and
 `DrilldownDrawer.jsx`'s `DRILL_NAMES` / `DRILL_SOURCES` are the source of truth. Update
-this table with the map.
+this table with the map. The `ExportHtml` ids are composed by `ui/exportHtml.js`'s
+`exportPropsFor` from each page's `eventPage`; `analyticsCatalogue.test.js` reads every
+`eventPage:` literal in the source and fails when a page's three rows are missing here,
+or when a row here names a page nothing emits.
 
 | Id | Action | Fires when |
 |---|---|---|
@@ -223,6 +229,15 @@ this table with the map.
 | `MancoReporting.Drilldown.Open.OutlineCell` | render | Outline-layout cell drill. |
 | `MancoReporting.Drilldown.Open.OutlineTotal` | render | Outline-layout total drill. |
 | `MancoReporting.Drilldown.Open.Other` | render | A drill kind missing from `DRILL_NAMES`, which is a bug to fix. |
+| `MancoReporting.Dashboard.ExportHtml` | click | Dashboard: Export pressed. |
+| `MancoReporting.Dashboard.ExportHtmlSucceeded` | click | Dashboard: the export file was produced. |
+| `MancoReporting.Dashboard.ExportHtmlFailed` | click | Dashboard: the export threw, or its target was missing. |
+| `MancoReporting.BudgetVsActuals.ExportHtml` | click | Budget vs Actuals: Export pressed. |
+| `MancoReporting.BudgetVsActuals.ExportHtmlSucceeded` | click | Budget vs Actuals: the export file was produced. |
+| `MancoReporting.BudgetVsActuals.ExportHtmlFailed` | click | Budget vs Actuals: the export threw, or its target was missing. |
+| `MancoReporting.MonthlyActuals.ExportHtml` | click | Monthly Actuals: Export pressed. |
+| `MancoReporting.MonthlyActuals.ExportHtmlSucceeded` | click | Monthly Actuals: the export file was produced. |
+| `MancoReporting.MonthlyActuals.ExportHtmlFailed` | click | Monthly Actuals: the export threw, or its target was missing. |
 
 `Drilldown.Open.Account`, `.DepartmentAccount` and `.DateRangeCategory` without a suffix
 still fire for an entry point `DRILL_SOURCES` does not map. There is no separate click

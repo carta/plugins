@@ -17,9 +17,9 @@ export function prefsKey(mancoUuid, budgetId) {
 
 /** That key, or null until the data naming this ManCo has loaded. The view
  *  renders before it, and a key standing in for it belongs to no one. */
-export function prefsKeyFor(accountsData, budget) {
+export function prefsKeyFor(accountsData, reportId) {
   const uuid = accountsData?.manco_uuid;
-  return uuid ? prefsKey(uuid, budget?.id) : null;
+  return uuid ? prefsKey(uuid, reportId) : null;
 }
 
 /** Whether the toolbar may be saved yet. Writing before the saved state has

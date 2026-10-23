@@ -20,7 +20,7 @@ import CashDetailCard from "./CashDetailCard.jsx";
 import { hasCashDetail } from "../ui/cashDetail.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
-import { slugify } from "../ui/exportHtml.js";
+import { exportPropsFor } from "../ui/exportHtml.js";
 import { trackClick, trackRender } from "../analytics.js";
 
 const DASHBOARD_EXPORT_ID = "manco-export-dashboard";
@@ -357,16 +357,10 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
         actions={
           <div data-export-exclude style={{ display: "flex", gap: 8 }}>
             {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
-            <ExportButton
-              targetId={DASHBOARD_EXPORT_ID}
-              entityName={snapshot?.firmName || "ManCo"}
-              pageLabel="Dashboard"
-              asOf={snapshot?.asOf}
-              filenameBase={`${slugify(snapshot?.firmName) || "manco"}-dashboard`}
-              events={{ click: "MancoReporting.Dashboard.ExportHtml",
-                       succeeded: "MancoReporting.Dashboard.ExportHtmlSucceeded",
-                       failed: "MancoReporting.Dashboard.ExportHtmlFailed" }}
-            />
+            <ExportButton {...exportPropsFor(snapshot, {
+              targetId: DASHBOARD_EXPORT_ID, pageLabel: "Dashboard",
+              slug: "dashboard", eventPage: "Dashboard",
+            })} />
           </div>
         }
       >Dashboard</H1>

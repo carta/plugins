@@ -54,10 +54,11 @@ order:
        no need to re-ask which tabs) and go to 2.75b.
      - File is gone → go to 2.75a-0 and try to find it before giving up.
    - Carries `"declined": true` and no `deferred` key → the operator has
-     already answered. Skip 2.75 silently. `use_carta_budget` (see 2.75a-i;
-     absent counts as `true`) decides whether `build_manco_datadir.py` pulls
-     in Carta's stored budget — 2.75 itself is only about the Excel
-     workbook.
+     already answered. Skip 2.75 silently. `use_carta_budget` (see 2.75a-i)
+     decides whether `build_manco_datadir.py` pulls in Carta's stored
+     budget — 2.75 itself is only about the Excel workbook. A ref without
+     the key is read as **Skip for now** (actuals only); do not re-ask.
+     The operator moves to Carta's budget by deleting the ref, as below.
    - Carries `{"declined": true, "deferred": true}` → written by an
      earlier version that defaulted rather than asking, so this firm has
      never actually been asked. Treat it as unanswered: go to 2.75a-i.

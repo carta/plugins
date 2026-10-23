@@ -38,6 +38,25 @@ export function slugify(s) {
   return String(s || "export").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "export";
 }
 
+/** One page's ExportButton props. `slug` names the page in the file name
+ *  ("<firm>-<slug>"); `eventPage` is the page segment of its three events —
+ *  MancoReporting.<eventPage>.ExportHtml{,Succeeded,Failed}, catalogued in
+ *  references/analytics.md under "Composed ids". */
+export function exportPropsFor(snapshot, { targetId, pageLabel, slug, eventPage }) {
+  const event = `MancoReporting.${eventPage}.ExportHtml`;
+  // Named before slugify sees it: slugify's own fallback is "export", and the
+  // file must read "manco-<page>" when the snapshot names no firm.
+  const entityName = snapshot?.firmName || "ManCo";
+  return {
+    targetId,
+    entityName,
+    pageLabel,
+    asOf: snapshot?.asOf,
+    filenameBase: `${slugify(entityName)}-${slug}`,
+    events: { click: event, succeeded: `${event}Succeeded`, failed: `${event}Failed` },
+  };
+}
+
 function cloneWithoutExcluded(el) {
   const clone = el.cloneNode(true);
   clone.querySelectorAll("[data-export-exclude]").forEach((n) => n.remove());

@@ -21,7 +21,7 @@ import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
 import { reportFor } from "../shell/reportNav.js";
 import ReportNotice from "../reports/ReportNotice.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
-import { slugify } from "../ui/exportHtml.js";
+import { exportPropsFor } from "../ui/exportHtml.js";
 import { displayFirmName } from "../ui/firmName.js";
 import { trackClick, trackRender } from "../analytics.js";
 
@@ -227,16 +227,10 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
                    : isOutline ? "Budget by line item"
                    : isTagCrosstab ? `Budget by ${columnLabel.toLowerCase()}`
                    : "Budget — unsupported view";
-  const exportProps = {
-    targetId: BVA_EXPORT_ID,
-    entityName: snapshot?.firmName || "ManCo",
-    pageLabel: `Budget vs Actuals — ${headingText}`,
-    asOf: snapshot?.asOf,
-    filenameBase: `${slugify(snapshot?.firmName) || "manco"}-budget-vs-actuals`,
-    events: { click: "MancoReporting.BudgetVsActuals.ExportHtml",
-              succeeded: "MancoReporting.BudgetVsActuals.ExportHtmlSucceeded",
-              failed: "MancoReporting.BudgetVsActuals.ExportHtmlFailed" },
-  };
+  const exportProps = exportPropsFor(snapshot, {
+    targetId: BVA_EXPORT_ID, pageLabel: `Budget vs Actuals — ${headingText}`,
+    slug: "budget-vs-actuals", eventPage: "BudgetVsActuals",
+  });
 
   return (
     <div id={BVA_EXPORT_ID}>

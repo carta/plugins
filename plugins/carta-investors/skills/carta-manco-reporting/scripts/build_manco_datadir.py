@@ -4652,13 +4652,14 @@ def find_excel_budget_files(dashboard_dir):
 def carta_budget_opted_in(dashboard_dir):
     """Whether Carta's stored budget is used when no Excel budget is in use.
 
-    `use_carta_budget` on a declined ref decides; a declined ref without the
-    key, or no readable ref at all, counts as opted in.
+    `use_carta_budget` on a declined ref decides. A declined ref without the
+    key cannot tell "Skip for now" from "The budget in Carta", and is read as
+    Skip: actuals only. No readable ref at all counts as opted in.
     """
     ref = _read_workbook_ref(dashboard_dir)
     if ref is None or not ref.get("declined"):
         return True
-    return ref.get("use_carta_budget", True)
+    return ref.get("use_carta_budget", False)
 
 
 _WS_RX = re.compile(r"\s+")
