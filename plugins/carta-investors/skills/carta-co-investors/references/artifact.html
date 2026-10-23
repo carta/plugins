@@ -833,6 +833,11 @@
 
     // Query S — one row per purchaser, with the companies they appear alongside
     // and the firm-wide SPA coverage counts embedded on every row.
+    //
+    // The ORDER BY names output columns only. The server pages by restating it
+    // outside a `SELECT * FROM (...)` wrapper, where an aggregate or a table alias
+    // (`COUNT(DISTINCT cc.X)`, `p.NAME`) does not resolve; it then serves pages
+    // unordered, and pages overlap and skip rows with no error.
     function buildSummarySql() {
       return `${SPA_CTE},
         doc_metadata AS (SELECT i.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM spa_issuer i JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN spa_deal s ON i.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN spa_purchaser p ON i.EXTRACTION_ID = p.EXTRACTION_ID WHERE i.FIRM_ID = '${FIRM_UUID}' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> '' GROUP BY i.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE),
@@ -845,11 +850,17 @@
         JOIN spa_purchaser p ON dd.EXTRACTION_ID = p.EXTRACTION_ID
         WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'
         GROUP BY p.PURCHASER_NAME, p.ENTITY_TYPE
-        ORDER BY COUNT(DISTINCT cc.CANONICAL_NAME) DESC, p.PURCHASER_NAME, p.ENTITY_TYPE`;
+        ORDER BY ARRAY_SIZE(COMPANIES) DESC, PURCHASER_NAME, ENTITY_TYPE`;
     }
 
     // Query R — one row per portfolio company, rounds nested as a compact JSON
-    // string. Short keys (sc/cd/inv, n/t/p/a) keep the payload small. The RN <= 15
+    // string. Short keys (sc/cd/cur/inv, n/t/p/a) keep the payload small.
+    //
+    // `cur` is the SPA's ISO currency, read from RAW_JSON only:
+    // ATTRIBUTES:currency_code defaults to USD when the extractor found none. The
+    // extractor sometimes writes the currency out ("United States dollars",
+    // "US$"); those common spellings map to their code, and anything else is
+    // null so the amount shows with no symbol rather than a guessed one. The RN <= 15
     // cap bounds each round's investor list; the tail past the 15th has near-zero
     // percentage of round and is not rendered prominently in the drill-down.
     //
@@ -861,9 +872,10 @@
       return `${SPA_CTE},
         doc_metadata AS (SELECT i.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM spa_issuer i JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN spa_deal s ON i.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN spa_purchaser p ON i.EXTRACTION_ID = p.EXTRACTION_ID WHERE i.FIRM_ID = '${FIRM_UUID}' GROUP BY i.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE),
         dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')),
-        investor_rows AS (SELECT cc.CANONICAL_NAME AS ISSUER_NAME, p.SHARE_CLASS_NAME, s.CLOSING_DATE, dd.EXTRACTION_ID, p.PURCHASER_NAME, p.ENTITY_TYPE, p.SHARES_PURCHASED, p.TOTAL_AMOUNT_PAID, p.SHARES_PURCHASED / NULLIF(SUM(p.SHARES_PURCHASED) OVER (PARTITION BY dd.EXTRACTION_ID), 0) AS PCT_OF_ROUND, ROW_NUMBER() OVER (PARTITION BY dd.EXTRACTION_ID ORDER BY p.SHARES_PURCHASED DESC NULLS LAST, p.PURCHASER_NAME) AS RN FROM dedup_docs dd JOIN spa_issuer i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY JOIN spa_purchaser p ON dd.EXTRACTION_ID = p.EXTRACTION_ID LEFT JOIN spa_deal s ON dd.EXTRACTION_ID = s.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'),
-        per_round AS (SELECT ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'p', ROUND(PCT_OF_ROUND, 4), 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY PCT_OF_ROUND DESC NULLS LAST, PURCHASER_NAME) AS INVESTORS FROM investor_rows WHERE RN <= 15 GROUP BY ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID)
-        SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('sc', SHARE_CLASS_NAME, 'cd', CLOSING_DATE, 'inv', INVESTORS)) WITHIN GROUP (ORDER BY CLOSING_DATE DESC NULLS LAST, SHARE_CLASS_NAME, EXTRACTION_ID)) AS ROUNDS_JSON
+        spa_currency AS (SELECT EXTRACTION_ID, CASE WHEN REGEXP_LIKE(CUR_RAW, '[A-Z]{3}') THEN CUR_RAW WHEN REGEXP_LIKE(CUR_RAW, 'US[$]|U[.]?S[.]? DOLLARS?|UNITED STATES (DOLLARS?|CURRENCY)') THEN 'USD' WHEN REGEXP_LIKE(CUR_RAW, 'CANADIAN (DOLLARS?|CURRENCY)') THEN 'CAD' WHEN REGEXP_LIKE(CUR_RAW, 'AUSTRALIAN DOLLARS?') THEN 'AUD' END AS CURRENCY FROM (SELECT EXTRACTION_ID, UPPER(TRIM(CASE WHEN TYPEOF(RAW_JSON:currency) = 'OBJECT' THEN RAW_JSON:currency:value::VARCHAR ELSE RAW_JSON:currency::VARCHAR END)) AS CUR_RAW FROM spa_rec WHERE RECORD_TYPE = 'company')),
+        investor_rows AS (SELECT cc.CANONICAL_NAME AS ISSUER_NAME, p.SHARE_CLASS_NAME, s.CLOSING_DATE, cur.CURRENCY, dd.EXTRACTION_ID, p.PURCHASER_NAME, p.ENTITY_TYPE, p.SHARES_PURCHASED, p.TOTAL_AMOUNT_PAID, p.SHARES_PURCHASED / NULLIF(SUM(p.SHARES_PURCHASED) OVER (PARTITION BY dd.EXTRACTION_ID), 0) AS PCT_OF_ROUND, ROW_NUMBER() OVER (PARTITION BY dd.EXTRACTION_ID ORDER BY p.SHARES_PURCHASED DESC NULLS LAST, p.PURCHASER_NAME) AS RN FROM dedup_docs dd JOIN spa_issuer i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY JOIN spa_purchaser p ON dd.EXTRACTION_ID = p.EXTRACTION_ID LEFT JOIN spa_deal s ON dd.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN spa_currency cur ON dd.EXTRACTION_ID = cur.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'),
+        per_round AS (SELECT ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, CURRENCY, EXTRACTION_ID, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'p', ROUND(PCT_OF_ROUND, 4), 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY PCT_OF_ROUND DESC NULLS LAST, PURCHASER_NAME) AS INVESTORS FROM investor_rows WHERE RN <= 15 GROUP BY ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, CURRENCY, EXTRACTION_ID)
+        SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('sc', SHARE_CLASS_NAME, 'cd', CLOSING_DATE, 'cur', CURRENCY, 'inv', INVESTORS)) WITHIN GROUP (ORDER BY CLOSING_DATE DESC NULLS LAST, SHARE_CLASS_NAME, EXTRACTION_ID)) AS ROUNDS_JSON
         FROM per_round GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME`;
     }
 
@@ -956,9 +968,11 @@
     const TRAILING_ROMAN_RE = / (I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII)$/;
 
     // Upper-case, drop the punctuation that varies between spellings of the same
-    // vehicle ("Acme Fund VI, L.P." vs "Acme Fund VI, LP"), collapse whitespace.
+    // vehicle ("Acme Fund VI, L.P." vs "Acme Fund VI, LP"), close up hyphens and
+    // dashes ("Fund VIII - Entrepreneurs" vs "Fund VIII–Entrepreneurs"), collapse
+    // whitespace. Mode B's firm_vehicle SQL applies the same rule.
     function normalizeName(name) {
-      return (name || '').toUpperCase().replace(/[.,]/g, '').replace(/ +/g, ' ').trim();
+      return (name || '').toUpperCase().replace(/[.,]/g, '').replace(/ *[-‐‑‒–—] */g, '-').replace(/ +/g, ' ').trim();
     }
 
     // Drop the legal suffix and any series numeral, so "Acme Growth Fund I, LP"
@@ -1026,10 +1040,11 @@
         if (!purchaser) continue;
         if (matchesFirmVehicle(purchaser)) continue;
         const canonical = applyCanonical(purchaser);
-        // Key case-insensitively: SPAs for the same investor arrive shouted and
-        // title-cased ("ACME FUND VII, LP" alongside "Acme Fund VII, LP"), and a
-        // case-sensitive key renders that investor as two rows.
-        const key = canonical.toUpperCase();
+        // Key on normalizeName, as Mode B's co-investor grouping does: SPAs for the
+        // same investor arrive shouted, title-cased and differently punctuated
+        // ("ACME CO., LP" alongside "Acme Co, LP"), and a literal key renders that
+        // investor as two rows.
+        const key = normalizeName(canonical);
         let entry = byCanonical.get(key);
         if (!entry) {
           entry = { name: canonical, rawNames: [], entityType: row.ENTITY_TYPE || '—', companies: new Set() };
@@ -1103,6 +1118,7 @@
         const roundsList = roundsData.map(r => ({
           shareClass: r.sc || '—',
           closingDate: normalizeClosingDate(r.cd),
+          currency: r.cur || null,
           investors: (r.inv || []).map(inv => ({
             name: inv.n || '',
             entityType: inv.t || '—',
@@ -1253,9 +1269,19 @@
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    function fmt(n) {
+    // Amounts carry their round's currency. With none on the SPA the number
+    // shows bare: a guessed symbol would misstate a non-USD round.
+    function fmt(n, currency) {
       if (!n || n === 0) return '—';
-      return '$' + Math.round(n).toLocaleString('en-US');
+      const rounded = Math.round(n);
+      if (!currency) return rounded.toLocaleString('en-US');
+      try {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
+        }).format(rounded);
+      } catch (_) {
+        return rounded.toLocaleString('en-US') + ' ' + currency;
+      }
     }
 
     function pct(n) {
@@ -1528,14 +1554,14 @@
         sorted.forEach(inv => {
           const bold = inv.isFirm ? 'font-weight:600' : '';
           const badge = inv.isFirm ? ' <span class="you-badge">You</span>' : '';
-          html += '<tr><td style="' + bold + '">' + esc(inv.name) + badge + '</td><td>' + entityTag(inv.entityType) + '</td><td class="number">' + pct(inv.pctOfRound) + '</td><td class="number">' + fmt(inv.amountPaid) + '</td></tr>';
+          html += '<tr><td style="' + bold + '">' + esc(inv.name) + badge + '</td><td>' + entityTag(inv.entityType) + '</td><td class="number">' + pct(inv.pctOfRound) + '</td><td class="number">' + fmt(inv.amountPaid, round.currency) + '</td></tr>';
         });
         const seen = new Set();
         let total = 0;
         round.investors.forEach(inv => {
           if (!seen.has(inv.name) && inv.amountPaid) { total += inv.amountPaid; seen.add(inv.name); }
         });
-        html += '</tbody><tfoot><tr><td colspan="3">Total raised</td><td class="number">' + fmt(total) + '</td></tr></tfoot></table></div>';
+        html += '</tbody><tfoot><tr><td colspan="3">Total raised</td><td class="number">' + fmt(total, round.currency) + '</td></tr></tfoot></table></div>';
       });
 
       document.getElementById('drawer-content').innerHTML = html;

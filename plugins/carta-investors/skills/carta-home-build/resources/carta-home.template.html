@@ -109,14 +109,24 @@
     <div class="cap-grid" id="cap-grid"></div>
   </section>
 
-  <!-- ── What's new ── -->
-  <!-- Contentful pluginPrompt entries for skills that went live recently; filled and
-       un-hidden by renderWhatsNew() in app.js, stays hidden when none qualify. -->
-  <section id="whats-new-section" style="margin-bottom: 32px;" hidden>
-    <p class="section-label">What's new</p>
-    <div class="cap-grid" id="cap-grid-whats-new"></div>
+  <!-- ── What's new + Plugin news share one band under a rule ── -->
+  <div class="wn-band">
+  <!-- Featured microapps (WHATS_NEW_MICROAPPS) and recently launched skills; filled and
+       un-hidden by renderWhatsNew() in app/whats-new.js once get_current_user answers. -->
+  <section id="whats-new-section" hidden>
+    <h2 class="wn-heading">What's new</h2>
+    <div class="wn-carousel" id="wn-carousel"
+         onmouseenter="wnPause('hovered', true)" onmouseleave="wnPause('hovered', false)"
+         onfocusin="wnPause('focused', true)"
+         onfocusout="if (!this.contains(event.relatedTarget)) wnPause('focused', false)">
+      <div class="wn-index">
+        <div id="wn-index-items" role="tablist" aria-label="What's new"></div>
+        <button class="wn-see-all" onclick="switchTab('directory')">See all skills and microapps →</button>
+      </div>
+      <div class="wn-center" id="wn-center"></div>
+      <div class="wn-preview" id="wn-preview"></div>
+    </div>
   </section>
-
 
   <!-- ── Plugin news ── -->
   <section id="plugin-news-section" style="margin-top:8px;">
@@ -168,6 +178,8 @@
     </div>
   </section>
 
+
+  </div><!-- /wn-band -->
 
   <div style="text-align:right;padding:12px 0 4px;">
     <span class="build-stamp" style="font-size:11px;color:var(--ink-color-global-text-subtle);font-variant-numeric:tabular-nums;">v{{ARTIFACT_VERSION}} · build {{BUILD_ID}}</span>

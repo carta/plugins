@@ -714,6 +714,7 @@ async function fetchLiveData() {
     _benchmarkFirmId = firmId;  // expose for benchmark fetch
     fetchBenchmarkData();       // kick off in parallel — no await, independent card
     fetchCapitalActivity();     // kick off in parallel — no await, pinned card
+    if (firmName) wnCheckDataCollection(firmName); // no await: unlocks What's new's Portfolio Analytics
 
     // Step 2: single DWH query — fund names + portfolio values (no set_context or fa:list:entities needed)
     let dwhFundRows = [];
@@ -1113,6 +1114,11 @@ function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// The viewer asked their system for less motion: no typing effect, no carousel rotation or fade.
+function prefersReducedMotion() {
+  return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
 // ── Dashboard launchers ──
 // A dashboard published during the build gets a link; one that was skipped falls back to
 // its prompt, which is the same copy affordance the skill directory uses.
@@ -1352,10 +1358,9 @@ function promptTag(text) {
 
 const CAP_COPY_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
 
-// One editable prompt card; shared by "Suggested for you" and "What's new".
-// `prompt` is a CAP_STATIC_PAD entry or a bare prompt string.
+// One editable prompt card. `prompt` is a CAP_STATIC_PAD entry or a bare prompt string.
 // meta: { source, skill, rank }, carried to capCopy's tag.
-function capCardHtml(prompt, trackId = "CartaHome.Capabilities.CopyPrompt", meta = {}) {
+function capCardHtml(prompt, meta = {}) {
   const suggested = promptText(prompt);
   const tag = promptTag(suggested);
   const attrs = ` data-prompt="${escHtml(suggested)}"`
@@ -1369,8 +1374,8 @@ function capCardHtml(prompt, trackId = "CartaHome.Capabilities.CopyPrompt", meta
       <div class="cap-box">
         <div class="cap-card-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Prompt">${body}</div>
         <div class="cap-actions">
-          <button class="cap-copy" data-track="${trackId}"${attrs} onclick="capCopy(this)"><span class="cap-copy-label">Copy</span>${CAP_COPY_SVG}</button>
-          <span class="cap-copied-tip" role="status">Copied. Paste into chat.</span>
+          <button class="cap-copy" data-track="CartaHome.Capabilities.CopyPrompt"${attrs} onclick="capCopy(this)"><span class="cap-copy-label">Copy</span>${CAP_COPY_SVG}</button>
+          <span class="cap-copied-tip" role="status">${PROMPT_COPIED_TIP}</span>
         </div>
       </div>
     </div>`;
@@ -1415,7 +1420,7 @@ function renderCapabilities(recs) {
   if (grid.dataset.prompts !== key) {
     grid.dataset.prompts = key;
     // Cards past the personalized ones are pads, so they read as static.
-    grid.innerHTML = cards.map((c, i) => capCardHtml(c, undefined, i < live.length
+    grid.innerHTML = cards.map((c, i) => capCardHtml(c, i < live.length
       ? { source: "recommendation", skill: live[i].recommended_skill, rank: i }
       : { source: "static", rank: i })).join("");
     typeTokensWhenSeen(grid);
@@ -1445,7 +1450,7 @@ function typeTokensWhenSeen(grid) {
     grid.addEventListener("focusin", touch, { capture: true });
   }
   if (typeof IntersectionObserver === "undefined") return;
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  if (prefersReducedMotion()) return;
   const tokens = Array.from(grid.querySelectorAll(".cap-token"));
   if (!tokens.length) return;
   tokens.forEach(t => { t.textContent = ""; t.dataset.typing = ""; });
@@ -1493,74 +1498,11 @@ function refreshPromptFirm() {
   });
 }
 
-// ── "What's new": Contentful prompts for skills that recently went live ──
-// A prompt qualifies when its goLiveDate is within the last WHATS_NEW_WINDOW_DAYS
-// (and not in the future). 60 days is about two release cycles: long enough that a
-// skill launched just before a user's vacation is still new when they return, short
-// enough that the row turns over instead of becoming a second skill directory.
-// Raise it if the row is often empty, lower it if launches are frequent.
-const WHATS_NEW_WINDOW_DAYS = 60;
-const WHATS_NEW_MAX = 4;
-
-// Which plugin labels (pluginPrompt.plugin) the user may see. Mirrors carta-mcp's
-// product_visibility RULES — the same gate that decides which tools a user is shown:
-//   "Investors Plugin" -> any fund-admin-family flag is true
-//                         (has_fund_admin, has_investment_firm, has_tactyc, has_active_manco)
-//   "Cap Table Plugin" -> has_cap_table is true
-// Strict by design: a flag that is false, null (unknown) or missing denies, unlike
-// the Skill Directory's "unknown shows" rule, because a "new skill" card for a
-// product the user cannot use is a dead end, while a missing card costs nothing.
-// An unrecognised plugin label is denied for the same reason.
-function whatsNewPluginAccess(profile) {
-  const p = profile || {};
-  const anyTrue = keys => keys.some(k => readProductFlag(p, k) === true);
-  return {
-    "investors plugin": anyTrue(["has_fund_admin", "has_investment_firm", "has_tactyc", "has_active_manco"]),
-    "cap table plugin": anyTrue(["has_cap_table"]),
-  };
-}
-
-// Pure selection: window -> access -> not already
-// shown above -> newest first -> cap. No padding: with nothing qualifying the row hides.
-//   items:   [{text, plugin, goLiveDate}] from _listWhatsNewPrompts
-//   access:  whatsNewPluginAccess() result
-//   exclude: prompts already on screen in "Suggested for you"
-function selectWhatsNew(items, access, exclude, now = Date.now()) {
-  const norm = t => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
-  const windowStart = now - WHATS_NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  const seen = new Set((Array.isArray(exclude) ? exclude : []).map(norm));
-  const out = [];
-  const dated = (Array.isArray(items) ? items : [])
-    .map(it => ({ it, ts: Date.parse(it && it.goLiveDate) }))
-    .filter(x => x.it && x.it.text && Number.isFinite(x.ts) && x.ts >= windowStart && x.ts <= now)
-    .filter(x => !!(access || {})[norm(x.it.plugin)])
-    .sort((a, b) => b.ts - a.ts);
-  for (const { it } of dated) {
-    if (out.length >= WHATS_NEW_MAX) break;
-    const key = norm(it.text);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(it.text);
-  }
-  return out;
-}
-
-function renderWhatsNew(items, access, shownAbove) {
-  const section = document.getElementById("whats-new-section");
-  const grid = document.getElementById("cap-grid-whats-new");
-  if (!section || !grid) return;
-  const prompts = selectWhatsNew(items, access, shownAbove);
-  if (!prompts.length) {
-    section.hidden = true;
-    return;
-  }
-  grid.innerHTML = prompts.map((p, i) => capCardHtml(p, "CartaHome.WhatsNew.CopyPrompt", { source: "contentful", rank: i })).join("");
-  section.hidden = false;
-}
+const COPIED_TIP_MS = 2200;
+// What a copied prompt's confirmation says, on the prompt cards and in What's new.
+const PROMPT_COPIED_TIP = "Copied. Paste into chat.";
 
 function capCopy(btn) {
-  // Each row tags its cards (capCardHtml's trackId) so What's new copies are counted
-  // apart from Suggested for you.
   // The tag carries the suggested text, never the viewer's edits.
   const d = btn.dataset;
   trackPrompt(d.track, d.prompt, d.source || "static",
@@ -1575,7 +1517,7 @@ function capCopy(btn) {
     btn._copiedTimer = setTimeout(() => {
       btn.querySelector(".cap-copy-label").textContent = "Copy";
       box.classList.remove("copied");
-    }, 2200);
+    }, COPIED_TIP_MS);
   };
   writeClipboard(text, feedback);
 }
@@ -1595,7 +1537,7 @@ document.addEventListener('click', function(e) {
 // that decide which Skill Directory categories are shown.
 // The Skill Directory as it stood at build time, from .claude-plugin/skill-directory.json
 // with opt-outs and skills absent from the install already dropped: a list of
-// {skill, category, name, order, prompts, tag?, requires?}. It is the first paint and the
+// {skill, category, name, order, prompts, tag?, requires?, whatsNew?}. It is the first paint and the
 // fallback — app/skill-directory.js replaces _directorySkills with the published list.
 const BAKED_SKILL_DIRECTORY = {{SKILL_DIRECTORY_JSON}};
 let _directorySkills = BAKED_SKILL_DIRECTORY;
@@ -1657,9 +1599,10 @@ async function fetchUserEnrichment() {
   // No poll needed: claude.use("mcp") settles on its own once the view knows.
   if (!(await mcpAvailable())) { markEnrichmentDone(); return; }
   try {
-    // Start the "What's new" fetch now but don't wait on it: "Suggested for you" and the
-    // Skill Directory entitlements depend only on get_current_user. The row below starts
-    // hidden, so filling it later causes no reflow above it.
+    // Start the What's new skills fetch now but don't wait on it: "Suggested for you", the
+    // Skill Directory entitlements and What's new's microapps depend only on
+    // get_current_user. The skills join the carousel when they arrive; it sits below the
+    // prompt row, so that causes no reflow above it.
     const whatsNewP = _listWhatsNewPrompts();
     const res = await _mcp("get_current_user", {});
     if (res && res.isError) {
@@ -1679,9 +1622,12 @@ async function fetchUserEnrichment() {
     };
 
     const shownAbove = renderCapabilities(profile.recommendations);
+    // The microapps paint as soon as the profile says which ones the firm has; the
+    // Contentful skills join them when they arrive.
+    renderWhatsNew(profile, [], shownAbove);
     whatsNewP
-      .then(items => renderWhatsNew(items, whatsNewPluginAccess(profile), shownAbove))
-      .catch(err => console.error("[carta-home] what's new render failed — row stays hidden", err));
+      .then(items => renderWhatsNew(profile, items, shownAbove))
+      .catch(err => console.error("[carta-home] what's new skills failed — showing the microapps only", err));
   } catch (e) {
     console.error("[carta-home][debug] get_current_user error:", e);
   } finally {

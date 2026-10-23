@@ -1,13 +1,15 @@
 // Replaces the baked Skill Directory with the published list from plugin:list:skills, so a
 // skill that ships after the build still appears without a rebuild.
 // Depends on core.js (carta-home.app.js): _mcp(), mcpAvailable(), tryParse(),
-// _mcpResultCandidates(), renderDirectory(), DIR_CATEGORIES, BAKED_SKILL_DIRECTORY, and
-// PLUGIN from version-check.js.
+// _mcpResultCandidates(), renderDirectory(), DIR_CATEGORIES, BAKED_SKILL_DIRECTORY;
+// PLUGIN from version-check.js; and wnRefresh() from whats-new.js, so What's new re-picks
+// its skill against the published list.
 
 // The list arrives over the network, so hold every entry to the shape the baked list has;
-// the renderer escapes what it prints either way. `tag` and `requires` are optional, and
-// an entry that omits one keeps the baked value for that skill, so a server that does not
-// pass them through yet cannot drop a skill's App tag or entitlement gate.
+// the renderer escapes what it prints either way. `tag`, `requires` and `whatsNew` are
+// optional, and an entry that omits one keeps the baked value for that skill, so a server
+// that does not pass them through yet cannot drop a skill's App tag, entitlement gate or
+// What's new opt-out.
 function normalizeDirectoryEntries(raw, baked) {
   if (!Array.isArray(raw)) return null;
   const known = new Set(DIR_CATEGORIES.map(cat => cat.id));
@@ -33,6 +35,8 @@ function normalizeDirectoryEntries(raw, baked) {
       const value = typeof e[key] === "string" && e[key].trim() ? e[key].trim() : fallback[key];
       if (value) entry[key] = value;
     }
+    const whatsNew = typeof e.whatsNew === "boolean" ? e.whatsNew : fallback.whatsNew;
+    if (typeof whatsNew === "boolean") entry.whatsNew = whatsNew;
     entries.push(entry);
   }
   // An empty list reads as "every skill is gone", which is never the right thing to show
@@ -59,6 +63,7 @@ async function loadPublishedDirectory() {
     const entries = normalizeDirectoryEntries(extractDirectoryPayload(res)?.skills, BAKED_SKILL_DIRECTORY);
     if (!entries || JSON.stringify(entries) === JSON.stringify(_directorySkills)) return;
     _directorySkills = entries;
+    wnRefresh();
     // The directory tab paints from _directorySkills when it opens, so there is nothing
     // to redraw until then.
     if (_dirTabOpened) renderDirectory();

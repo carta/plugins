@@ -96,3 +96,82 @@ const DIR_CATEGORIES = [
     tagline: 'Send work to your Carta fund admin team and track it.',
   },
 ];
+
+// ── What's new: the microapps Carta Home features ──
+// The What's new carousel shows the open microapps, then one skill from
+// Contentful, then the locked microapps, up to WHATS_NEW_SLOTS items (app/whats-new.js),
+// so a locked one can be pushed out. `unlockedBy` is the product flag that makes a
+// microapp usable for the firm (from get_current_user, or derived: see
+// WHATS_NEW_DERIVED_FLAGS in app/whats-new.js); without it the item is locked, with
+// `lockedLabel` in place of its set-up button. The label links to `unlockPath`, a page in
+// the viewer's own Carta (the web app host for get_current_user's `environment`, never its
+// API `base_url`, + the path, `{organization_pk}` filled with the firm's organization
+// account), once both are known; else to
+// `unlockUrl`, the product's carta.com demo request page, which app/whats-new.js tags
+// `utm_campaign=carta-home-whatsnew-<key>` so Marketing can attribute the visit to Carta
+// Home and to the microapp. With neither, the label is plain text. `key` names the
+// microapp in Home (tracking, the campaign tag); `skill` is the skill that builds it:
+// "Set up in Claude Code" copies `/<skill>`, and that skill never also takes What's new's
+// skill slot. `preview` keys WHATS_NEW_PREVIEWS (app/whats-new.js).
+// The Fund Administration demo page, where locked Fund Modeling and ManCo both lead.
+const FUND_ADMIN_DEMO_URL = 'https://carta.com/demo/fund-admin/?utm_medium=product&utm_source=claude';
+const WHATS_NEW_MICROAPPS = [
+  {
+    key: 'fund-modeling',
+    title: 'Fund Modeling',
+    headline: 'See how every assumption moves your returns',
+    description: 'Model fund return scenarios based on Carta data and see how different assumptions move LP returns and GP carry.',
+    skill: 'carta-fund-modeling',
+    unlockedBy: 'has_fund_admin',
+    lockedLabel: 'Available with Carta Fund Administration',
+    unlockUrl: FUND_ADMIN_DEMO_URL,
+    preview: 'fundModeling',
+  },
+  {
+    key: 'manco-budgeting',
+    title: 'ManCo Budgeting',
+    headline: "Budget vs. actuals that doesn't need rebuilding",
+    description: 'Track management company budget vs. actuals in a live dashboard traced back to Carta journal entries.',
+    skill: 'carta-manco-reporting',
+    unlockedBy: 'has_active_manco',
+    lockedLabel: 'Available with Carta ManCo',
+    // Carta's in-app ManCo upgrade page. Until it can be built, the demo page the carta-manco
+    // skill uses: ManCo is sold with Fund Administration.
+    unlockPath: '/marketing/firm/{organization_pk}/management-companies',
+    unlockUrl: FUND_ADMIN_DEMO_URL,
+    preview: 'mancoBudgeting',
+  },
+  {
+    key: 'analytics',
+    title: 'Portfolio Analytics',
+    headline: 'Your whole portfolio in one dashboard',
+    description: 'Explore your whole portfolio in one interactive dashboard, from all your reporting metrics to valuations and tearsheets.',
+    skill: 'carta-portfolio-analytics-app',
+    // Not a get_current_user flag: app/whats-new.js looks up the firm's Data Collection
+    // setting (resolveDataCollection) and leaves this item out until it knows.
+    unlockedBy: 'has_data_collection',
+    // No link: carta.com has no Data Collection page to send the viewer to.
+    lockedLabel: 'Available with Data Collection',
+    preview: 'portfolioAnalytics',
+  },
+];
+
+// ── What's new: what each skill hands back, for its preview ──
+// A new skill's preview shows the kind of thing it produces: a deck, a one-page
+// document, a spreadsheet, or an answer in chat about funds, companies or a checklist.
+// A skill takes its Skill Directory category's kind (`byCategory`), else 'funds';
+// `bySkill` lists only the skills whose output differs from their category's.
+// A deck, document or spreadsheet skill is picked over a newer chat answer
+// (rankWhatsNew in app/whats-new.js).
+const WHATS_NEW_SKILL_OUTPUTS = {
+  bySkill: {
+    'carta-brand-extraction': 'deck',
+    'carta-spa-audit': 'checklist',
+  },
+  byCategory: {
+    'lp-reporting': 'document',
+    'fund-accounting': 'spreadsheet',
+    'manco': 'spreadsheet',
+    'portfolio': 'companies',
+  },
+};

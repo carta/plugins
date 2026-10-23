@@ -3,6 +3,7 @@
     "category": "lp-reporting",
     "name": "AGM deck builder",
     "order": 20,
+    "whatsNew": false,
     "prompts": [
       "Produce an annual general meeting deck to show our investors"
     ]
@@ -53,6 +54,7 @@
     "category": "lp-reporting",
     "name": "Tear sheet download",
     "order": 10,
+    "whatsNew": false,
     "prompts": [
       "Use my firm's tear sheet template and generate tear sheets for this quarter"
     ]

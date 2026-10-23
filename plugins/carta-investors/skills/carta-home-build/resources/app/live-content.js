@@ -276,12 +276,12 @@ fetchLiveContent();
 // name) for skills that recently went live. The DAG carta_skill_prompts_contentful
 // fills `goLiveDate` from SKILL_STATUS_HISTORY.GO_LIVE_DATE.
 //
-// Returns [{text, plugin, goLiveDate}] where goLiveDate is the raw field value; the
-// recency window, plugin access and de-dupe against the Recommended row are applied
-// by selectWhatsNew() in carta-home.app.js, which has the user's profile. Always
-// returns an array: an empty one hides the row, which is a normal outcome (no bridge,
-// command absent on this env, key unprovisioned, nothing new) and must never throw
-// into the render path.
+// Returns [{text, plugin, goLiveDate, skill}] where goLiveDate is the raw field value;
+// the recency window, plugin access and de-dupe against the Recommended row are applied
+// by selectWhatsNew() in app/whats-new.js, which has the user's profile. Always
+// returns an array: an empty one leaves What's new showing the microapps only, which is
+// a normal outcome (no bridge, command absent on this env, key unprovisioned, nothing
+// new) and must never throw into the render path.
 //
 // No server-side plugin filter: the `fields` param takes one equality filter, and the
 // row needs both "Investors Plugin" and "Cap Table Plugin" entries for users who have
@@ -295,7 +295,7 @@ async function _listWhatsNewPrompts() {
   const ORDER = "-fields.goLiveDate";
   try {
     // No bridge probe here: _mcp() resolves the connector itself and throws when it
-    // is unavailable, which the catch below turns into the hidden-row fallback.
+    // is unavailable, which the catch below turns into the microapps-only fallback.
     const obj = _unwrap(await _mcp("call_tool", {
       name: "marketing__list__content",
       arguments: {
@@ -317,11 +317,13 @@ async function _listWhatsNewPrompts() {
         const plugin = typeof f.plugin === "string" ? f.plugin.trim() : "";
         // The CDA omits empty optional fields, so goLiveDate may be absent entirely.
         const goLiveDate = typeof f.goLiveDate === "string" ? f.goLiveDate.trim() : "";
-        return text ? { text, plugin, goLiveDate } : null;
+        // The skill the prompt runs, which What's new names the item by.
+        const skill = typeof f.skill === "string" ? f.skill.trim() : "";
+        return text ? { text, plugin, goLiveDate, skill } : null;
       })
       .filter(Boolean);
   } catch (err) {
-    console.error("[live-content] what's new prompts fetch failed — hiding the row", err);
+    console.error("[live-content] what's new prompts fetch failed — showing the microapps only", err);
     return [];
   }
 }

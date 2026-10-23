@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.110.1</carta-plugin>
+<carta-plugin>carta-investors:6.111.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -112,6 +112,36 @@ own sidebar tile.
   out hides as well. A gated item hides only when its flag is an explicit `false`. Anything
   else — enrichment unavailable, the call failed, the key absent or `null`, a staff account
   whose enrichment is stripped — shows it. Seeing too much beats seeing nothing.
+- **What's new** (`resources/app/whats-new.js`) — a rotating carousel of up to four items.
+  The featured microapps (`WHATS_NEW_MICROAPPS`: Fund Modeling, ManCo Budgeting, Portfolio
+  Analytics) each have a preview mockup and a "Set up in Claude Code" button that copies their
+  command. A microapp whose product flag is not `true` is locked and comes after the open
+  ones. Its label links to `unlockPath` in the viewer's own Carta (the web app host for
+  `get_current_user`'s `environment`, from `CARTA_APP_HOSTS` in `whats-new.js`, never its API
+  `base_url`; + the path, with the firm's organization pk) once both are known, else to its
+  carta.com demo page (`unlockUrl`), else is plain text: locked ManCo opens Carta's in-app
+  ManCo page, falling back to the Fund Administration demo page; locked Fund Modeling links to
+  the Fund Administration demo page; locked Portfolio Analytics has no link. Fund Modeling and ManCo
+  Budgeting read `has_fund_admin` and `has_active_manco` from `get_current_user`. Portfolio
+  Analytics reads `has_data_collection`, which Home works out itself once `fetchLiveData` has
+  resolved the firm and called `set_context`: `list_accounts` with the firm name finds its
+  `organization_pk:<n>` account (the exact name match, else the only candidate; corporations
+  ignored; the same organization builds ManCo's link), then `call_tool` →
+  `data_collection__get__firm_settings` reads that one organization's `data_collection_enabled`
+  (off when `data_collection_enabled` is not true, on a 404, or when the firm has no organization
+  account). Until that answers, or if it can't be asked, the matches are ambiguous, the settings
+  call fails any other way, or the reply is unreadable, Portfolio Analytics stays out of the carousel rather than flash open or upsell a firm that may have it; it takes
+  its slot when the answer lands, without moving the viewer off the item they're on. One skill that went live
+  in the last 60 days (Contentful `pluginPrompt`) takes one slot: never one the Skill Directory
+  marks `"whatsNew": false` and never a featured microapp's own skill (the product is already
+  in the carousel), a deck, document or spreadsheet skill before a chat answer, newest
+  first within each (`rankWhatsNew`). It sits after the open microapps and
+  before the locked ones, so the last item in that order drops out of the four, with a copyable prompt and a preview of what it hands back
+  (`WHATS_NEW_SKILL_OUTPUTS`). Shown once `get_current_user` answers; an answer with none of
+  the microapps' `get_current_user` flags known keeps it hidden rather than upsell a paying
+  customer. Rotates every 5s, pauses
+  while hovered or focused, stops for good once the viewer picks an item, and stands still
+  under reduced motion.
 - **Firm auto-detection** — calls `list_contexts` without a firm name filter; extracts the
   active firm UUID and name from the response. All DWH queries use `FIRM_ID = '${firmId}'`
   dynamically — the artifact works for any Carta firm with no code changes.
@@ -177,12 +207,17 @@ rejects with `not_in_manifest`:
 - `set_context` — activates the firm's DWH session
 - `fetch` — all DWH queries (SOI, P&L, BS, benchmarks, tear sheets)
 - `get_current_user` — signed-in user's profile; `has_tactyc` and `has_active_manco` gate
-  their Skill Directory categories (see `fetchUserEnrichment`)
+  their Skill Directory categories (see `fetchUserEnrichment`), and the product flags lock
+  What's new's microapps
+- `list_accounts` — finds the firm's organization account, whose Data Collection setting
+  unlocks What's new's Portfolio Analytics (`resolveDataCollection` in
+  `resources/app/whats-new.js`) and whose pk builds locked ManCo's in-app link
 - `mutate` — the legacy write dispatcher, granted as a fallback; nothing in `resources/`
   calls it
 - `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
-- `call_tool` — the gateway dispatcher, carrying both the Capital Activity reminder sends
-  (`fa__mutate__send-capital-call-reminder`) and the Plugin news live-content cards
+- `call_tool` — the gateway dispatcher, carrying the Capital Activity reminder sends
+  (`fa__mutate__send-capital-call-reminder`), the Plugin news live-content cards, and the
+  Data Collection settings read (`data_collection__get__firm_settings`)
 
 ## Source layout — the artifact is BUILT, not hand-edited
 
@@ -192,13 +227,14 @@ need the full file in context. Edit the small source file for what you're changi
 
 | File | What it holds | Edit it to… |
 |------|---------------|-------------|
-| `resources/carta-home.config.js` | `DIR_CATEGORIES` (id, name, tagline, optional `requires`), `NEWS_TAG`; `DASHBOARDS` launcher registry | change which categories show, a category's entitlement gate, which Contentful tag feeds Plugin news, or which cards launch a standalone dashboard |
-| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"`) and `requires`; `null` opts a skill out | add or change a skill's row or example prompts — no rebuild needed once published |
+| `resources/carta-home.config.js` | `DIR_CATEGORIES` (id, name, tagline, optional `requires`), `NEWS_TAG`; `DASHBOARDS` launcher registry; `WHATS_NEW_MICROAPPS` featured microapps; `WHATS_NEW_SKILL_OUTPUTS` output kind per skill and per category | change which categories show, a category's entitlement gate, which Contentful tag feeds Plugin news, which cards launch a standalone dashboard, which microapps What's new features, or which output kind a new skill's preview shows |
+| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"`), `requires` and `whatsNew` (`false` keeps the skill out of What's new); `null` opts a skill out | add or change a skill's row or example prompts — no rebuild needed once published |
 | `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`) when idle, validates it, and re-renders over the baked list | change how the published list is merged or when it loads |
 | `resources/carta-home.app.js` | shared/core runtime logic (`_mcp`, format helpers, `fetchLiveData` bootstrap, SOI, Fund Performance, Skill Directory, tour) | change behavior / data fetching for anything not yet split into its own file below |
 | `resources/app/capital-activity.js` | Capital activity cards + detail overlay (fetch/render/dismiss) | change the capital call / distribution cards or their detail modal |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |
+| `resources/app/whats-new.js` | What's new carousel: featured microapps (locked by product flag, linked in-app or to a carta.com demo page or not at all; the Data Collection lookup behind Portfolio Analytics), one new skill from Contentful (skipping `whatsNew: false` and featured microapps' own skills, visual outputs first) with a preview of its output (`WHATS_NEW_SKILL_OUTPUTS` in the config file), rotation, and the microapp preview mockups (microapp list lives in `WHATS_NEW_MICROAPPS` in the config file above) | change which microapps are featured or how they lock, how many new skills join, or the carousel's behaviour |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/carta-home.css` | styles (Ink tokens) | change appearance |
 | `resources/carta-home.template.html` | HTML skeleton + injection markers | change page structure |
@@ -547,7 +583,7 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool", "track_ui_event"]
+          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool", "list_accounts", "track_ui_event"]
         }
       ]
     }
@@ -569,7 +605,8 @@ Artifact({
 > `marketing__list__content` / `marketing__get__asset_data`
 > (`resources/app/live-content.js`); without it those cards fall back to the static
 > defaults. The marketing commands only exist on some environments, so a missing command
-> degrades gracefully to the static cards.
+> degrades gracefully to the static cards. `list_accounts` (with `call_tool`) is how What's
+> new learns whether the firm has Data Collection; without it Portfolio Analytics never shows.
 >
 > Keep `favicon` stable across redeploys — users find the tab by its icon — and keep the
 > title stable **for a given firm**: it is the per-firm lookup key Step 2 matches on.
