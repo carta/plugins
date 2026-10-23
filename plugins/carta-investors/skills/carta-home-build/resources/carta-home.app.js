@@ -75,6 +75,20 @@ function trackHome(action, elementId, options) {
   }
 }
 
+// Tag a prompt click with its text.
+// The tracker attaches mcp_prompt and caps length.
+function trackPrompt(elementId, prompt, source, meta) {
+  const text = String(prompt || "");
+  if (!text) return trackHome("click", elementId);
+  const m = meta || {};
+  const data = { prompt: text, source };
+  if (m.skill) data.recommendedSkill = String(m.skill).slice(0, 255);
+  if (Number.isInteger(m.rank) && m.rank >= 0) data.rank = m.rank;
+  if (window.mcpUiTracker && window.mcpUiTracker.getTransport()) {
+    window.mcpUiTracker.trackPromptSelection(data, elementId);
+  }
+}
+
 // ── Skill metadata ──
 const SKILLS = {
   soi:        { name: "Schedule of investments",      desc: "Full holdings with cost, marks and MOIC." },
@@ -149,7 +163,8 @@ document.querySelectorAll(".run-btn[data-prompt]").forEach(btn => {
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     const skill = btn.dataset.skill;
-    trackHome("click", "CartaHome.RunPrompt" + (skill ? "." + skill.charAt(0).toUpperCase() + skill.slice(1) : ""));
+    trackPrompt("CartaHome.RunPrompt" + (skill ? "." + skill.charAt(0).toUpperCase() + skill.slice(1) : ""),
+      btn.dataset.prompt, "static");
     showPromptPopover(btn, btn.dataset.prompt, btn.dataset.skill);
   });
 });
@@ -1143,7 +1158,8 @@ function dashExpireBuilding(footer, target, promptHtml) {
 // Launchers are built after the .run-btn[data-prompt] binding pass has run, so they
 // carry their own handler into the same popover every other run button uses.
 function dashShowPrompt(btn) {
-  trackHome("click", "CartaHome.Dashboard.CopyPrompt." + (btn.dataset.skill || ''));
+  trackPrompt("CartaHome.Dashboard.CopyPrompt." + (btn.dataset.skill || ''),
+    btn.dataset.prompt, "dashboard");
   showPromptPopover(btn, btn.dataset.prompt, btn.dataset.skill);
 }
 
@@ -1226,8 +1242,8 @@ function writeClipboard(text, feedback) {
 }
 
 function copyPrompt(btn) {
-  trackHome("click", "CartaHome.Customize.CopyPrompt." + (customizeSource === "perf" ? "Perf" : "SOI"));
   const text = btn.dataset.prompt || '';
+  trackPrompt("CartaHome.Customize.CopyPrompt." + (customizeSource === "perf" ? "Perf" : "SOI"), text, "static");
   const feedback = () => {
     btn.textContent = '✓ Copied';
     btn.classList.add('copied');
@@ -1338,8 +1354,14 @@ const CAP_COPY_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none
 
 // One editable prompt card; shared by "Suggested for you" and "What's new".
 // `prompt` is a CAP_STATIC_PAD entry or a bare prompt string.
-function capCardHtml(prompt, trackId = "CartaHome.Capabilities.CopyPrompt") {
-  const tag = promptTag(promptText(prompt));
+// meta: { source, skill, rank }, carried to capCopy's tag.
+function capCardHtml(prompt, trackId = "CartaHome.Capabilities.CopyPrompt", meta = {}) {
+  const suggested = promptText(prompt);
+  const tag = promptTag(suggested);
+  const attrs = ` data-prompt="${escHtml(suggested)}"`
+    + (meta.source ? ` data-source="${escHtml(meta.source)}"` : "")
+    + (meta.skill ? ` data-skill="${escHtml(meta.skill)}"` : "")
+    + (Number.isInteger(meta.rank) ? ` data-rank="${meta.rank}"` : "");
   const body = promptParts(prompt).map(p => p.text != null ? escHtml(p.text)
     : `<span class="cap-token" data-token="${escHtml(p.token)}"${p.name ? ` data-var="${p.name}"` : ""}>${escHtml(p.token)}</span>`).join("");
   return `<div class="cap-card">
@@ -1347,7 +1369,7 @@ function capCardHtml(prompt, trackId = "CartaHome.Capabilities.CopyPrompt") {
       <div class="cap-box">
         <div class="cap-card-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Prompt">${body}</div>
         <div class="cap-actions">
-          <button class="cap-copy" data-track="${trackId}" onclick="capCopy(this)"><span class="cap-copy-label">Copy</span>${CAP_COPY_SVG}</button>
+          <button class="cap-copy" data-track="${trackId}"${attrs} onclick="capCopy(this)"><span class="cap-copy-label">Copy</span>${CAP_COPY_SVG}</button>
           <span class="cap-copied-tip" role="status">Copied. Paste into chat.</span>
         </div>
       </div>
@@ -1360,7 +1382,8 @@ function capCardHtml(prompt, trackId = "CartaHome.Capabilities.CopyPrompt") {
 function renderCapabilities(recs) {
   const grid = document.getElementById("cap-grid");
   const liveAll = Array.isArray(recs) ? recs.filter(r => !r.is_skill_gap && r.recommended_prompt) : [];
-  const cards = liveAll.slice(0, 4).map(r => r.recommended_prompt);
+  const live = liveAll.slice(0, 4);
+  const cards = live.map(r => r.recommended_prompt);
 
   // Pad to 4, preferring prompts on subjects the personalized set doesn't cover.
   // Each duplicate filtered here is a rec already occupying a card, so the
@@ -1391,7 +1414,10 @@ function renderCapabilities(recs) {
   const key = JSON.stringify(cards.map(c => (typeof c === "string" ? c : c.text)));
   if (grid.dataset.prompts !== key) {
     grid.dataset.prompts = key;
-    grid.innerHTML = cards.map(c => capCardHtml(c)).join("");
+    // Cards past the personalized ones are pads, so they read as static.
+    grid.innerHTML = cards.map((c, i) => capCardHtml(c, undefined, i < live.length
+      ? { source: "recommendation", skill: live[i].recommended_skill, rank: i }
+      : { source: "static", rank: i })).join("");
     typeTokensWhenSeen(grid);
   }
   return shown;
@@ -1528,14 +1554,17 @@ function renderWhatsNew(items, access, shownAbove) {
     section.hidden = true;
     return;
   }
-  grid.innerHTML = prompts.map(p => capCardHtml(p, "CartaHome.WhatsNew.CopyPrompt")).join("");
+  grid.innerHTML = prompts.map((p, i) => capCardHtml(p, "CartaHome.WhatsNew.CopyPrompt", { source: "contentful", rank: i })).join("");
   section.hidden = false;
 }
 
 function capCopy(btn) {
   // Each row tags its cards (capCardHtml's trackId) so What's new copies are counted
   // apart from Suggested for you.
-  trackHome("click", btn.dataset.track);
+  // The tag carries the suggested text, never the viewer's edits.
+  const d = btn.dataset;
+  trackPrompt(d.track, d.prompt, d.source || "static",
+    { skill: d.skill, rank: d.rank === undefined ? undefined : Number(d.rank) });
   const box = btn.closest(".cap-box");
   // innerText, so whatever the viewer typed into the prompt is what gets copied.
   const text = box.querySelector(".cap-card-text").innerText.trim();
@@ -1723,8 +1752,8 @@ const APP_TAG_TIP = 'Microapps are interactive apps built for a specific job and
 const APP_LAUNCH_NOTE = 'Launches in Claude Code — paste this prompt there.';
 
 function dirCopyPrompt(btn) {
-  trackHome("click", "CartaHome.Directory.Copy");
   const text = btn.dataset.prompt || '';
+  trackPrompt("CartaHome.Directory.Copy", text, "static");
   const copiedLabel = btn.dataset.copiedLabel || 'Copied!';
   const feedback = () => {
     btn.textContent = copiedLabel;
