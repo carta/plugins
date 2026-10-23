@@ -1,5 +1,5 @@
 // ── Update banner: is this artifact behind the published build? ──
-// Depends on core.js (carta-home.app.js): _mcp(), escHtml(), showToast(), trackHome(), trackPrompt().
+// Depends on core.js (carta-home.app.js): _mcp(), escHtml(), showToast(), trackHome(), trackPrompt(), PROMPT_SOURCE.
 //
 // A live artifact is a frozen copy of its source — once built into a user's workspace
 // nothing can update it in place, and the sandbox sets connect-src 'none' so it cannot
@@ -80,7 +80,7 @@ const COPY_ICON =
 const COPY_LABEL = COPY_ICON + "Copy this prompt";
 
 function copyUpdatePrompt(btn) {
-  trackPrompt("CartaHome.UpdateBanner.Copy", UPDATE_PROMPT, "other");
+  trackPrompt("CartaHome.UpdateBanner.Copy", UPDATE_PROMPT, PROMPT_SOURCE.OTHER);
   const done = () => {
     btn.textContent = "✓ Copied";
     setTimeout(() => { btn.innerHTML = COPY_LABEL; }, 2000);

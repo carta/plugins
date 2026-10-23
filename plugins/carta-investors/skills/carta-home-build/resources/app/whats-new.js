@@ -1,6 +1,6 @@
 // ── What's new: a carousel of featured microapps and recently launched skills ──
 // Depends on core.js (carta-home.app.js): _mcp(), _mcpResultCandidates(), readProductFlag(),
-// escHtml(), writeClipboard(), trackHome(), trackPrompt(), promptTag(), prefersReducedMotion(),
+// escHtml(), writeClipboard(), trackHome(), trackPrompt(), PROMPT_SOURCE, promptTag(), prefersReducedMotion(),
 // PROMPT_TAGS, _directorySkills, APP_TAG_TIP, COPIED_TIP_MS, PROMPT_COPIED_TIP; on carta-home.config.js:
 // WHATS_NEW_MICROAPPS, WHATS_NEW_SKILL_OUTPUTS.
 
@@ -419,8 +419,8 @@ function wnCopy(btn) {
   // Each copy carries mcp_prompt: a skill's prompt comes from Contentful, a microapp's
   // set-up command is fixed config. `rank` is the item's zero-based place in the carousel.
   const id = "CartaHome.WhatsNew.Copy." + it.key;
-  if (it.kind === "skill") trackPrompt(id, it.copyText, "contentful", { rank: _wn.active });
-  else trackPrompt(id, it.copyText, "static");
+  if (it.kind === "skill") trackPrompt(id, it.copyText, PROMPT_SOURCE.CONTENTFUL, { rank: _wn.active });
+  else trackPrompt(id, it.copyText, PROMPT_SOURCE.STATIC);
   const tip = btn.parentElement.querySelector(".wn-copied-tip");
   writeClipboard(it.copyText, () => {
     if (!tip) return;

@@ -884,9 +884,10 @@
        the 10px `th` but must clear 12px `td` content, so em/ch would size off the
        wrong font — and a proportion keeps Partner from absorbing every pixel lost
        on a narrow panel. */
-    .ca-th-amount  { width: 22%; }
-    .ca-th-status  { width: 14%; }
-    .ca-th-date    { width: 15%; }
+    .ca-th-amount  { width: 20%; }
+    /* Fits "Partially paid", the longest capital-call label. */
+    .ca-th-status  { width: 18%; }
+    .ca-th-date    { width: 14%; }
     .ca-th-remind  { width: 18%; }
     .ca-th-actions { width: 7%; }
     /* A distribution has no remind or menu column, so Status takes the room a
@@ -931,6 +932,8 @@
     .ca-status-settled  { background: var(--ink-color-global-text-default); color: var(--ink-color-global-surface-background-default); }
     .ca-status-failed   { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ink-color-global-feedback-negative-strong); }
     .ca-late { color: var(--ca-unpaid); font-weight: 500; }
+    .ca-late-quiet { color: var(--ink-color-global-text-subtle); font-weight: 400; }
+    .ca-amount-sub { font-size: 11px; line-height: 14px; margin-top: 2px; color: var(--ink-color-global-text-subtle); }
     .ca-td-remind { white-space: nowrap; }
     .ca-remind-btn {
       background: none; border: none;
@@ -1039,6 +1042,8 @@
       border-radius: var(--ink-size-global-radius-subtle);
     }
     .ca-row-menu-item:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+    /* `display: block` above outranks the browser's own [hidden] rule. */
+    .ca-row-menu-item[hidden] { display: none; }
 
     /* ── Email preview modal ── */
     .ca-preview-overlay {

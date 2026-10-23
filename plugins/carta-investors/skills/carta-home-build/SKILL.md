@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.113.1</carta-plugin>
+<carta-plugin>carta-investors:6.114.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -155,10 +155,15 @@ own sidebar tile.
   listing each LP partner's amount, status, and date — paid date once paid, days late while
   outstanding. On a capital call, unpaid partners get **Send Reminder** (**Resend**, over the
   last-reminded date, once one has gone out), which previews and then sends the email via
-  `fa:mutate:send-capital-call-reminder`. Rows with `email_notice_enabled: false` show a muted
+  `fa:mutate:send-capital-call-reminder`. Partly paid partners show a **Partially paid** pill,
+  a `$X unpaid` line under the amount called (in the picker too) and days late in gray rather
+  than red — a fund can carry a few dollars' balance for years, so the row never reads as a
+  task. Their reminder lives in the row's ⋯ menu (**Send reminder** / **Resend reminder**),
+  and the row notes when it was last reminded. Rows with `email_notice_enabled: false` show a muted
   **Email disabled** and no menu — the backend drops those sends silently. **Remind investors**
-  in the summary row batches the same send: a selection table of the remindable investors (all
-  checked to start), then a preview with a picker over each one's own email. One entry per
+  in the summary row, offered only while some remindable partner has paid nothing, batches the
+  same send: a selection table of the remindable investors (unpaid ones ticked to start, partly
+  paid ones listed unticked; a group with any interest that has paid nothing counts as unpaid), then a preview with a picker over each one's own email. One entry per
   interest group, since the backend collapses a group's rows into a single email. The preview
   is the confirmation: snoozing it means the next click sends, and a sent batch reads
   **Sent just now** for 24h (`caBulkRemindedAt`).
@@ -332,7 +337,15 @@ Two things that follow from the published tree being the source of truth:
 
 Keep calling `trackHome(action, elementId)` on new interactive elements (top of the
 handler), IDs as `CartaHome.<Area>.<Specific>` (e.g. `CartaHome.Tour.Start`) — skip sort
-clicks, keystrokes, dropdown changes.
+clicks, keystrokes, dropdown changes. IDs are literals: never put customer data (firm,
+fund or company names) in one. A detail that varies goes in `{ value }` — a tour step, a
+batch size — which only a click carries; a `render` keeps just its ID.
+
+A button that copies a prompt calls `trackPrompt(elementId, prompt, source, { skill, rank })`
+instead. The tracker attaches the suggested text (never the viewer's edits) as the
+`com.carta/mcp_prompt` entity, so analytics can match the copy to the prompt the user runs
+next. `source` is one of `PROMPT_SOURCE` (the schema's enum, defined beside `trackPrompt`),
+and `rank` is the prompt's zero-based place in its list.
 
 The runtime CSP is `connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com`,
 so the artifact cannot reach the collector host. The vendored tracker instead relays each

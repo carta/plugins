@@ -1,6 +1,6 @@
 // ── Capital activity: pinned card + detail overlay ──
 // Depends on core.js (carta-home.app.js): _mcp(), fmtShort(), fmtFull(),
-// fmtDDMmmYYYY(), escHtml(), showToast(), and the shared _benchmarkFirmId.
+// fmtDDMmmYYYY(), escHtml(), showToast(), trackHome(), and the shared _benchmarkFirmId.
 let _capActivityData = null; // null = not yet fetched; [] = none active; [...rows] = active
 
 // ── Capital activity: fetch active capital calls + distributions ──
@@ -298,9 +298,9 @@ const CA_PAYOUT_STATUSES = {
 
 // A capital call's pill, coloured on the same scale as a payout's.
 const CA_CALL_STATUSES = {
-  paid:           { label: 'Paid',    tone: 'settled' },
-  partially_paid: { label: 'Partial', tone: 'pending' },
-  unpaid:         { label: 'Unpaid',  tone: 'neutral' },
+  paid:           { label: 'Paid',           tone: 'settled' },
+  partially_paid: { label: 'Partially paid', tone: 'pending' },
+  unpaid:         { label: 'Unpaid',         tone: 'neutral' },
 };
 
 // The overlay's amount and payment fields, read from whichever side of the
@@ -377,17 +377,25 @@ function canRemind(r) {
 }
 
 // One entry per interest group, because the send collapses a group's rows into a
-// single email — listing rows would double-count a two-interest investor.
-function groupUnpaidRows(rows, include) {
+// single email — listing rows would double-count a two-interest investor. Every
+// row not yet fully paid can be reminded. A group reads "Partially paid", so the
+// picker leaves it to the GP to opt in, only when every row in it is partly paid:
+// one interest that has paid nothing makes the whole group a to-do.
+function groupOutstandingRows(rows, include) {
   const byKey = new Map();
   (rows ?? []).forEach(r => {
-    if (r.paymentStatus !== 'unpaid' || !include(r)) return;
+    if (r.paymentStatus === 'paid' || !include(r)) return;
     // Mirrors the backend's own fallback key for a row with no group.
     const key = r.partnerInterestGroupUuid ?? `row_${r.rowId}`;
     const seen = byKey.get(key);
     if (seen) {
       seen.rowIds.push(r.rowId);
       seen.amount += r.amount;
+      seen.amountPending += r.amountPending;
+      if (r.paymentStatus !== 'partially_paid') {
+        seen.paymentStatus = r.paymentStatus;
+        seen.status = r.status;
+      }
       // The group's chase date is its latest row's.
       if (r.lastReminded && (!seen.lastReminded || r.lastReminded > seen.lastReminded)) {
         seen.lastReminded = r.lastReminded;
@@ -401,6 +409,11 @@ function groupUnpaidRows(rows, include) {
       fundUuid: r.fundUuid,
       rowIds: [r.rowId],
       amount: r.amount,
+      amountPending: r.amountPending,
+      // A group reads like a row, so the row helpers (caStatusBadge,
+      // amountCellInner, dateCellInner) draw its cells too.
+      paymentStatus: r.paymentStatus,
+      status: r.status,
       lastReminded: r.lastReminded,
       daysLate: r.daysLate,
     });
@@ -409,22 +422,29 @@ function groupUnpaidRows(rows, include) {
 }
 
 function remindableGroups(rows) {
-  return groupUnpaidRows(rows, canRemind);
+  return groupOutstandingRows(rows, canRemind);
 }
 
 // Listed but unselectable: an email-disabled investor reads as remindable from the
 // detail table, so dropping them from the selection silently confuses.
 function blockedRemindGroups(rows) {
-  return groupUnpaidRows(rows, r => !canRemind(r));
+  return groupOutstandingRows(rows, r => !canRemind(r));
 }
 
-// An already-reminded row offers "Resend" over its last-reminded date, so the
-// GP can see which LPs have been chased.
+// An email-disabled row reads "Email disabled" whatever it owes. Otherwise an
+// already-reminded row offers "Resend" over its last-reminded date, so the GP
+// can see which LPs have been chased. A partly paid row is never presented as a
+// task — a fund can carry a few dollars' balance for years — so it only notes
+// when it was last reminded; its reminder lives in the row menu.
 function remindCellInner(r, activityId) {
   if (!canRemind(r)) {
     return `<span class="ca-remind-off"
       title="Email notices are disabled for this investor, so a reminder would not reach them."
       >Email disabled</span>`;
+  }
+  if (r.paymentStatus === 'partially_paid') {
+    const remindedOn = r.lastReminded ? fmtRemindedOn(r.lastReminded) : null;
+    return remindedOn ? `<div class="ca-remind-sub">Reminded ${remindedOn}</div>` : '';
   }
   const remindedOn = r.lastReminded ? fmtRemindedOn(r.lastReminded) : null;
   return `<button class="ca-remind-btn"
@@ -438,19 +458,41 @@ function remindCellInner(r, activityId) {
     remindedOn ? `<div class="ca-remind-sub">Reminded ${remindedOn}</div>` : ''}`;
 }
 
-// The preview needs the interest id, and previews an email a disabled row will
-// never get, so both cases lose the menu.
+// The preview needs the interest id, and a disabled row gets no email to preview
+// or send, so it loses the menu. A partly paid row's menu also carries its
+// reminder (see remindCellInner), so it keeps the menu without an interest id.
 function rowMenuCellInner(r, activityId) {
-  if (r.partnerId == null || !canRemind(r)) return '';
+  const remind = r.paymentStatus === 'partially_paid';
+  if (!canRemind(r) || (r.partnerId == null && !remind)) return '';
   return `<button class="ca-row-menu-btn"
       aria-label="More actions"
       aria-haspopup="true"
       aria-expanded="false"
-      data-partner-id="${escHtml(r.partnerId)}"
+      data-row-id="${escHtml(r.rowId)}"
+      data-partner-id="${escHtml(r.partnerId ?? '')}"
       data-activity-id="${escHtml(activityId)}"
       data-fund-uuid="${escHtml(r.fundUuid)}"
       data-partner-name="${escHtml(r.partnerName)}"
+      data-remind="${remind ? '1' : ''}"
+      data-resend="${remind && r.lastReminded ? '1' : ''}"
       onclick="toggleCaRowMenu(this)">&#8943;</button>`;
+}
+
+// A partly paid row's amount notes what is still unpaid under the total called.
+function amountCellInner(r) {
+  const unpaid = r.paymentStatus === 'partially_paid'
+    ? `<div class="ca-amount-sub">${fmtFull(r.amountPending)} unpaid</div>` : '';
+  return `${fmtFull(r.amount)}${unpaid}`;
+}
+
+// Paid rows report when; outstanding ones report how late — in red only for an
+// LP who has paid nothing, so a small leftover balance does not read as urgent.
+function dateCellInner(r) {
+  if (r.daysLate > 0 && r.paymentStatus !== 'paid') {
+    const quiet = r.paymentStatus === 'partially_paid' ? ' ca-late-quiet' : '';
+    return `<span class="ca-late${quiet}">${r.daysLate}d late</span>`;
+  }
+  return r.paidDate ? r.paidDate.slice(0, 10) : '—';
 }
 
 // A label the column cannot fit is ellipsized (see `.ca-status`), so the pill
@@ -527,23 +569,19 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
         </thead>
         <tbody>
           ${rows.map(r => {
-            // Paid rows report when; outstanding ones report how late.
-            const dateCell = r.daysLate > 0 && r.paymentStatus !== 'paid'
-              ? `<span class="ca-late">${r.daysLate}d late</span>`
-              : (r.paidDate ? r.paidDate.slice(0, 10) : '—');
             // Remind is only meaningful for capital calls (fa:mutate:send-capital-call-reminder)
-            // and only for partners who haven't paid yet.
-            const remindCell = !isCall ? '' : (r.paymentStatus !== 'unpaid'
+            // and only for partners who still owe part of the call.
+            const remindCell = !isCall ? '' : (r.paymentStatus === 'paid'
               ? '<td class="ca-td-remind"></td>'
               : `<td class="ca-td-remind">${remindCellInner(r, activityId)}</td>`);
-            const menuCell = !isCall ? '' : (r.paymentStatus !== 'unpaid'
+            const menuCell = !isCall ? '' : (r.paymentStatus === 'paid'
               ? '<td class="ca-td-actions"></td>'
               : `<td class="ca-td-actions">${rowMenuCellInner(r, activityId)}</td>`);
-            return `<tr class="ca-detail-row ca-row-${r.paymentStatus}">
+            return `<tr class="ca-detail-row ca-row-${r.paymentStatus}" data-row-id="${escHtml(r.rowId)}">
               <td class="ca-td-name">${escHtml(r.partnerName)}</td>
-              <td class="ca-td-amount">${fmtFull(r.amount)}</td>
+              <td class="ca-td-amount">${amountCellInner(r)}</td>
               <td class="ca-td-status">${caStatusBadge(r)}</td>
-              <td class="ca-td-date">${dateCell}</td>
+              <td class="ca-td-date">${dateCellInner(r)}</td>
               ${remindCell}
               ${menuCell}
             </tr>`;
@@ -597,6 +635,7 @@ function ensureRemindOverlay() {
 
 function openRemindConfirm(btn) {
   const isResend = btn.dataset.resend === '1';
+  trackHome("click", "CartaHome.CapActivity.Remind", { value: isResend ? "resend" : "send" });
   _pendingRemind = {
     rowId: btn.dataset.rowId,
     activityId: btn.dataset.activityId,
@@ -677,16 +716,28 @@ function closeRemindConfirm() {
   _pendingBulk = null;
 }
 
+// The cached row a reminder was sent for. The id came back through a data
+// attribute, so it is a string whatever type the API sent.
+function cachedRow(activityId, rowId) {
+  return (_capDetailCache[activityId] ?? []).find(r => String(r.rowId) === String(rowId));
+}
+
 async function submitRemindConfirm() {
   if (!_pendingRemind) return;
+  trackHome("click", "CartaHome.CapActivity.Remind.Send");
   const { rowId, activityId, fundUuid, partnerName, sourceBtn } = _pendingRemind;
-  // A snoozed send skips the confirm step, so the row's own button looks busy.
-  const btn = document.getElementById('ca-confirm-submit-btn') ?? sourceBtn;
+  // A snoozed send skips the confirm step, so the row's own button looks busy —
+  // unless the send came from the row menu, whose ⋯ button has no label to swap.
+  const btn = document.getElementById('ca-confirm-submit-btn')
+    ?? (sourceBtn.classList.contains('ca-remind-btn') ? sourceBtn : null);
   const label = btn ? btn.textContent : '';
   // Applied on send, not on cancel: cancelling means "never mind", and silently
   // changing a preference from it would surprise.
   if (document.getElementById('ca-snooze-preview')?.checked) snoozePreviewForOneDay();
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  // The row's own trigger stays disabled until the send settles, so a second
+  // click (on the ⋯ menu too) cannot send the same reminder twice.
+  sourceBtn.disabled = true;
   clearSendError();
 
   try {
@@ -701,15 +752,16 @@ async function submitRemindConfirm() {
     });
     if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
     // Stamp the cache, not just the DOM: the overlay reopens off the cache.
-    const row = _capDetailCache[activityId].find(r => r.rowId === rowId);
+    const row = cachedRow(activityId, rowId);
     row.lastReminded = new Date().toISOString();
-    sourceBtn.closest('.ca-td-remind').innerHTML = remindCellInner(row, activityId);
+    refreshRemindedRow(row, activityId);
     renderSentConfirm([partnerName]);
     _pendingRemind = null;
   } catch (e) {
     console.error('[remind error]', e);
     showSendError('Failed to send reminder — please try again.');
     if (btn) { btn.disabled = false; btn.textContent = label; }
+    sourceBtn.disabled = false;
   }
 }
 
@@ -745,13 +797,21 @@ function stampBulkSent(activityId) {
   }
 }
 
+// Offered only while someone has paid nothing: partly paid partners are listed in
+// the picker, but on their own they are not a job to be done.
 function bulkRemindCta(activityId, rows) {
-  if (!remindableGroups(rows).length) return '';
+  if (!remindableGroups(rows).some(g => g.paymentStatus === 'unpaid')) return '';
   if (bulkRemindedRecently(activityId)) {
     return '<span class="ca-notify-sent">Sent just now</span>';
   }
   return `<button class="ca-notify-btn" data-activity-id="${escHtml(activityId)}"
       onclick="openBulkNotify(this)">Remind investors</button>`;
+}
+
+// A partly paid partner is listed but left unticked: they have already sent
+// money, so chasing them is the GP's call.
+function preselectedBulkKeys(groups) {
+  return groups.filter(g => g.paymentStatus !== 'partially_paid').map(g => g.key);
 }
 
 function openBulkNotify(btn) {
@@ -764,7 +824,7 @@ function openBulkNotify(btn) {
     activityId,
     groups,
     blocked: blockedRemindGroups(rows),
-    selected: new Set(groups.map(g => g.key)),
+    selected: new Set(preselectedBulkKeys(groups)),
     previewKey: null,
   };
   renderBulkSelect();
@@ -781,9 +841,9 @@ function bulkSelectRow(g, cells) {
       <td class="ca-td-check">${cells}</td>
       <td class="ca-td-name" title="${escHtml(g.name)}">${escHtml(g.name)}${
         g.blocked ? '<div class="ca-remind-sub">Email disabled</div>' : ''}</td>
-      <td class="ca-td-amount">${fmtFull(g.amount)}</td>
-      <td class="ca-td-status">${caStatusBadge({ status: CA_CALL_STATUSES.unpaid })}</td>
-      <td class="ca-td-date">${g.daysLate > 0 ? `<span class="ca-late">${g.daysLate}d late</span>` : '—'}</td>
+      <td class="ca-td-amount">${amountCellInner(g)}</td>
+      <td class="ca-td-status">${caStatusBadge(g)}</td>
+      <td class="ca-td-date">${dateCellInner(g)}</td>
       <td class="ca-td-reminded">${g.lastReminded ? (fmtRemindedOn(g.lastReminded) ?? '—') : '—'}</td>
     </tr>`;
 }
@@ -870,6 +930,7 @@ function syncBulkFooter() {
 
 function bulkNotifyContinue() {
   if (!_pendingBulk?.selected.size) return;
+  trackHome("click", "CartaHome.CapActivity.BulkNotify.Continue", { value: selectedBulkGroups().length });
   // The preview is the confirmation, so opting out of it sends on this click.
   if (isPreviewSnoozed()) { submitBulkRemind(); return; }
   // No interest id means no preview to confirm against, so it takes the short path.
@@ -976,6 +1037,7 @@ async function submitBulkRemind() {
   if (!_pendingBulk?.selected.size) return;
   const { activityId } = _pendingBulk;
   const sel = selectedBulkGroups();
+  trackHome("click", "CartaHome.CapActivity.BulkNotify.Send", { value: sel.length });
   const rowIds = sel.flatMap(g => g.rowIds);
   // A snoozed send skips the confirm step, so the selection footer looks busy.
   const btn = document.getElementById('ca-bulk-submit-btn')
@@ -1057,6 +1119,15 @@ function clearSendError() {
   document.querySelector('#ca-confirm-overlay .ca-send-error')?.remove();
 }
 
+// Redraws a just-reminded row's remind and menu cells as a fresh render from the
+// cache would, so a partly paid row's menu offers a resend from here on.
+function refreshRemindedRow(r, activityId) {
+  const tr = document.querySelector(`#ca-detail-overlay tr[data-row-id="${CSS.escape(String(r.rowId))}"]`);
+  if (!tr) return;
+  tr.querySelector('.ca-td-remind').innerHTML = remindCellInner(r, activityId);
+  tr.querySelector('.ca-td-actions').innerHTML = rowMenuCellInner(r, activityId);
+}
+
 // Stamps the cache, not just the DOM: the overlay reopens off the cache.
 function stampRemindedRows(activityId, rowIds) {
   const now = new Date().toISOString();
@@ -1064,10 +1135,7 @@ function stampRemindedRows(activityId, rowIds) {
   (_capDetailCache[activityId] ?? []).forEach(r => {
     if (!ids.has(r.rowId)) return;
     r.lastReminded = now;
-    const cell = document
-      .querySelector(`.ca-remind-btn[data-row-id="${CSS.escape(r.rowId)}"]`)
-      ?.closest('.ca-td-remind');
-    if (cell) cell.innerHTML = remindCellInner(r, activityId);
+    refreshRemindedRow(r, activityId);
   });
 }
 
@@ -1083,7 +1151,8 @@ function ensureCaRowMenu() {
     _caRowMenu.className = 'ca-row-menu';
     _caRowMenu.setAttribute('role', 'menu');
     _caRowMenu.innerHTML =
-      `<button class="ca-row-menu-item" role="menuitem" onclick="previewEmailFromMenu()">Preview email</button>`;
+      `<button class="ca-row-menu-item" id="ca-row-menu-remind" role="menuitem" onclick="remindFromMenu()"></button>
+       <button class="ca-row-menu-item" id="ca-row-menu-preview" role="menuitem" onclick="previewEmailFromMenu()">Preview email</button>`;
     document.body.appendChild(_caRowMenu);
   }
   return _caRowMenu;
@@ -1096,6 +1165,10 @@ function toggleCaRowMenu(btn) {
   if (isOpenForThisRow) return;
 
   menu._sourceBtn = btn;
+  const remindItem = menu.querySelector('#ca-row-menu-remind');
+  remindItem.hidden = btn.dataset.remind !== '1';
+  remindItem.textContent = btn.dataset.resend === '1' ? 'Resend reminder' : 'Send reminder';
+  menu.querySelector('#ca-row-menu-preview').hidden = !btn.dataset.partnerId;
   menu.classList.add('ca-row-menu-open');
   btn.setAttribute('aria-expanded', 'true');
 
@@ -1129,6 +1202,13 @@ document.addEventListener('keydown', (e) => {
     closeEmailPreview();
   }
 });
+
+function remindFromMenu() {
+  const btn = _caRowMenu?._sourceBtn;
+  if (!btn) return;
+  closeCaRowMenu();
+  openRemindConfirm(btn);
+}
 
 function previewEmailFromMenu() {
   const btn = _caRowMenu?._sourceBtn;

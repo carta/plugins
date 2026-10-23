@@ -69,24 +69,38 @@ if (window.mcpUiTracker) {
     mcpServerId: CARTA_MCP_SERVER,
   });
 }
+// Never throws, so a missing transport would otherwise drop every event unnoticed.
+let _trackDropWarned = false;
+const _hasTransport = () => !!(window.mcpUiTracker && window.mcpUiTracker.getTransport());
 function trackHome(action, elementId, options) {
-  if (window.mcpUiTracker && window.mcpUiTracker.getTransport()) {
+  if (_hasTransport()) {
     window.mcpUiTracker.trackUiEvent(action, elementId, options);
+  } else if (!_trackDropWarned) {
+    _trackDropWarned = true;
+    console.warn("[carta-home] no UI-event transport — analytics events are being dropped");
   }
 }
 
-// Tag a prompt click with its text.
-// The tracker attaches mcp_prompt and caps length.
+// The mcp_prompt schema's `source` enum: a value outside it fails validation and the event is lost.
+const PROMPT_SOURCE = Object.freeze({
+  RECOMMENDATION: "recommendation",
+  STATIC: "static",
+  DASHBOARD: "dashboard",
+  CONTENTFUL: "contentful",
+  OTHER: "other",
+});
+// Tag a prompt click with its text and where it came from (a PROMPT_SOURCE), so analytics
+// can match the copy to the prompt the user runs next. Send the suggested text only, never
+// typed text. The tracker attaches mcp_prompt and caps length.
 function trackPrompt(elementId, prompt, source, meta) {
   const text = String(prompt || "");
-  if (!text) return trackHome("click", elementId);
+  // No text, or no transport: a plain click, which warns once if events are being dropped.
+  if (!text || !_hasTransport()) return trackHome("click", elementId);
   const m = meta || {};
   const data = { prompt: text, source };
   if (m.skill) data.recommendedSkill = String(m.skill).slice(0, 255);
   if (Number.isInteger(m.rank) && m.rank >= 0) data.rank = m.rank;
-  if (window.mcpUiTracker && window.mcpUiTracker.getTransport()) {
-    window.mcpUiTracker.trackPromptSelection(data, elementId);
-  }
+  window.mcpUiTracker.trackPromptSelection(data, elementId);
 }
 
 // ── Skill metadata ──
@@ -128,6 +142,8 @@ function showPromptPopover(btn, prompt, skillId) {
   // Copy action
   const copyBtn = pop.querySelector("#pop-copy");
   copyBtn.addEventListener("click", () => {
+    // The prompt was tagged by the click that opened this popover; this counts the copy.
+    trackHome("click", "CartaHome.PromptPopover.Copy");
     navigator.clipboard.writeText(prompt).then(() => {
       copyBtn.textContent = "✓ Copied";
       copyBtn.classList.add("copied");
@@ -164,7 +180,7 @@ document.querySelectorAll(".run-btn[data-prompt]").forEach(btn => {
     e.stopPropagation();
     const skill = btn.dataset.skill;
     trackPrompt("CartaHome.RunPrompt" + (skill ? "." + skill.charAt(0).toUpperCase() + skill.slice(1) : ""),
-      btn.dataset.prompt, "static");
+      btn.dataset.prompt, PROMPT_SOURCE.STATIC);
     showPromptPopover(btn, btn.dataset.prompt, btn.dataset.skill);
   });
 });
@@ -705,7 +721,11 @@ async function fetchLiveData() {
       });
     }
 
-    if (!firmId) { populateFallback("Can't load your portfolio — no active firm in your Carta context."); return; }
+    if (!firmId) {
+      trackHome("render", "CartaHome.Unavailable.NoFirm");
+      populateFallback("Can't load your portfolio — no active firm in your Carta context.");
+      return;
+    }
 
     // Await set_context before firing DWH queries — the MCP server requires an active
     // firm context even when FIRM_ID is embedded directly in the SQL.
@@ -757,6 +777,7 @@ async function fetchLiveData() {
       const _pl = document.getElementById("pnl-label"); if (_pl) _pl.textContent = "CONSOLIDATING P&L · " + (dwhFundRows[0]?.FUND_NAME ?? "");
       const _bl = document.getElementById("bs-label");  if (_bl) _bl.textContent = "BALANCE SHEET · " + (dwhFundRows[0]?.FUND_NAME ?? "");
     } else {
+      trackHome("render", "CartaHome.SOI.Empty");
       renderSOIError("No fund data");
     }
 
@@ -1036,6 +1057,8 @@ ORDER BY MONTH_END_DATE DESC LIMIT 1`,
 
   } catch (err) {
     console.error("Carta MCP fetch error:", err);
+    // A connector-level failure can't relay this either; it lands when the bridge still works.
+    trackHome("render", "CartaHome.Unavailable.LoadError");
     // Connector-level codes rethrow from _mcp and land here. Each has a different fix,
     // so name it — one generic banner hides the action that would repair the page.
     renderSOIError(SOI_ERROR_BY_CODE[err?.code]
@@ -1168,7 +1191,7 @@ function dashExpireBuilding(footer, target, promptHtml) {
 // carry their own handler into the same popover every other run button uses.
 function dashShowPrompt(btn) {
   trackPrompt("CartaHome.Dashboard.CopyPrompt." + (btn.dataset.skill || ''),
-    btn.dataset.prompt, "dashboard");
+    btn.dataset.prompt, PROMPT_SOURCE.DASHBOARD);
   showPromptPopover(btn, btn.dataset.prompt, btn.dataset.skill);
 }
 
@@ -1252,7 +1275,7 @@ function writeClipboard(text, feedback) {
 
 function copyPrompt(btn) {
   const text = btn.dataset.prompt || '';
-  trackPrompt("CartaHome.Customize.CopyPrompt." + (customizeSource === "perf" ? "Perf" : "SOI"), text, "static");
+  trackPrompt("CartaHome.Customize.CopyPrompt." + (customizeSource === "perf" ? "Perf" : "SOI"), text, PROMPT_SOURCE.STATIC);
   const feedback = () => {
     btn.textContent = '✓ Copied';
     btn.classList.add('copied');
@@ -1342,6 +1365,9 @@ function promptParts(prompt, now = new Date()) {
   return parts;
 }
 const promptText = prompt => promptParts(prompt).map(p => p.text ?? p.token).join("");
+// A prompt as written, its [[…]] blanks unresolved: what a copy button holds, so the copy's
+// prompt context can resolve it when pressed and never carries the viewer's edits.
+const rawPrompt = prompt => (typeof prompt === "string" ? prompt : prompt.text);
 
 // Category chip over each prompt. No prompt carries a category; promptTag() reads one
 // off its words, first match wins.
@@ -1362,11 +1388,11 @@ function promptTag(text) {
 const CAP_COPY_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
 
 // One editable prompt card. `prompt` is a CAP_STATIC_PAD entry or a bare prompt string.
-// meta: { source, skill, rank }, carried to capCopy's tag.
+// meta: { source, skill, rank }, carried to capCopy's tag. data-prompt holds the prompt as
+// written, blanks unresolved, so capCopy fills them as they stand when pressed.
 function capCardHtml(prompt, meta = {}) {
-  const suggested = promptText(prompt);
-  const tag = promptTag(suggested);
-  const attrs = ` data-prompt="${escHtml(suggested)}"`
+  const tag = promptTag(promptText(prompt));
+  const attrs = ` data-prompt="${escHtml(rawPrompt(prompt))}"`
     + (meta.source ? ` data-source="${escHtml(meta.source)}"` : "")
     + (meta.skill ? ` data-skill="${escHtml(meta.skill)}"` : "")
     + (Number.isInteger(meta.rank) ? ` data-rank="${meta.rank}"` : "");
@@ -1390,24 +1416,25 @@ function capCardHtml(prompt, meta = {}) {
 function renderCapabilities(recs) {
   const grid = document.getElementById("cap-grid");
   const liveAll = Array.isArray(recs) ? recs.filter(r => !r.is_skill_gap && r.recommended_prompt) : [];
-  const live = liveAll.slice(0, 4);
-  const cards = live.map(r => r.recommended_prompt);
+  const cards = liveAll.slice(0, 4).map(r => ({
+    prompt: r.recommended_prompt, source: PROMPT_SOURCE.RECOMMENDATION, skill: r.recommended_skill,
+  }));
 
   // Pad to 4, preferring prompts on subjects the personalized set doesn't cover.
   // Each duplicate filtered here is a rec already occupying a card, so the
   // preferred pass alone fills the grid in every case except one prompt matching
   // two pads. The second pass backfills from what was skipped so the grid is
   // always 4 cards.
-  const haystack = cards.join(" ").toLowerCase();
+  const haystack = cards.map(c => c.prompt).join(" ").toLowerCase();
   const covered = pad => pad.topics.some(t => haystack.includes(t));
-  const has = pad => cards.includes(pad);
+  const has = pad => cards.some(c => c.prompt === pad);
   for (const pad of CAP_STATIC_PAD) {
     if (cards.length >= 4) break;
-    if (!covered(pad) && !has(pad)) cards.push(pad);
+    if (!covered(pad) && !has(pad)) cards.push({ prompt: pad, source: PROMPT_SOURCE.STATIC });
   }
   for (const pad of CAP_STATIC_PAD) {
     if (cards.length >= 4) break;
-    if (!has(pad)) cards.push(pad);
+    if (!has(pad)) cards.push({ prompt: pad, source: PROMPT_SOURCE.STATIC });
   }
 
   // The row paints at load and again once get_current_user answers. The grid is left
@@ -1415,17 +1442,15 @@ function renderCapabilities(recs) {
   // it (typeTokensWhenSeen marks it touched): rebuilding would drop their edits and type
   // the blanks in again. Either way the prompts on screen are what's returned, so What's
   // new never repeats one.
-  const shown = cards.map(promptText);
+  const shown = cards.map(c => promptText(c.prompt));
   if (!grid) return shown;
   if ("touched" in grid.dataset) return JSON.parse(grid.dataset.shown);
   grid.dataset.shown = JSON.stringify(shown);
-  const key = JSON.stringify(cards.map(c => (typeof c === "string" ? c : c.text)));
+  const key = JSON.stringify(cards.map(c => rawPrompt(c.prompt)));
   if (grid.dataset.prompts !== key) {
     grid.dataset.prompts = key;
-    // Cards past the personalized ones are pads, so they read as static.
-    grid.innerHTML = cards.map((c, i) => capCardHtml(c, i < live.length
-      ? { source: "recommendation", skill: live[i].recommended_skill, rank: i }
-      : { source: "static", rank: i })).join("");
+    grid.innerHTML = cards.map((c, i) => capCardHtml(c.prompt,
+      { source: c.source, skill: c.skill, rank: i })).join("");
     typeTokensWhenSeen(grid);
   }
   return shown;
@@ -1506,9 +1531,10 @@ const COPIED_TIP_MS = 2200;
 const PROMPT_COPIED_TIP = "Copied. Paste into chat.";
 
 function capCopy(btn) {
-  // The tag carries the suggested text, never the viewer's edits.
+  // The tag carries the suggested prompt, its blanks filled as they stand now, never the
+  // viewer's edits.
   const d = btn.dataset;
-  trackPrompt(d.track, d.prompt, d.source || "static",
+  trackPrompt(d.track, d.prompt ? promptText({ text: d.prompt }) : "", d.source || PROMPT_SOURCE.STATIC,
     { skill: d.skill, rank: d.rank === undefined ? undefined : Number(d.rank) });
   const box = btn.closest(".cap-box");
   // innerText, so whatever the viewer typed into the prompt is what gets copied.
@@ -1703,7 +1729,8 @@ const APP_LAUNCH_NOTE = 'Launches in Claude Code — paste this prompt there.';
 
 function dirCopyPrompt(btn) {
   const text = btn.dataset.prompt || '';
-  trackPrompt("CartaHome.Directory.Copy", text, "static");
+  trackPrompt("CartaHome.Directory.Copy", text, PROMPT_SOURCE.STATIC,
+    { skill: btn.dataset.skill, rank: Number(btn.dataset.rank) });
   const copiedLabel = btn.dataset.copiedLabel || 'Copied!';
   const feedback = () => {
     btn.textContent = copiedLabel;
@@ -1726,12 +1753,12 @@ function directoryCategories(entries) {
 
 function renderDirectorySkill(s, firm) {
   const isApp = s.tag === APP_TAG;
-  const prompts = s.prompts.map(p => {
+  const prompts = s.prompts.map((p, rank) => {
     const text = escHtml(p.replace(/\{\{FIRM\}\}/g, firm));
     const copiedLabel = isApp ? 'Copied — open Claude Code' : 'Copied!';
     return `<div class="dir-skill-prompt">
               <span class="dir-skill-prompt-text">"${text}"</span>
-              <button class="dir-copy-btn" data-prompt="${text}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+              <button class="dir-copy-btn" data-prompt="${text}" data-skill="${escHtml(s.skill)}" data-rank="${rank}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
             </div>`;
   }).join('');
   const tipId = `dir-tip-${escHtml(s.skill)}`;
@@ -1933,13 +1960,13 @@ function _tourPaint() {
 }
 
 function tourNext() {
-  trackHome("click", "CartaHome.Tour.Next");
+  trackHome("click", "CartaHome.Tour.Next", { value: _tourIdx + 1 });
   _tourIdx++;
   if (_tourIdx >= TOUR_STEPS.length) tourEnd();
   else _tourPaint();
 }
 
-function tourSkip() { trackHome("click", "CartaHome.Tour.Skip"); tourEnd(); }
+function tourSkip() { trackHome("click", "CartaHome.Tour.Skip", { value: _tourIdx + 1 }); tourEnd(); }
 
 function tourEnd() {
   _tourRestore();
