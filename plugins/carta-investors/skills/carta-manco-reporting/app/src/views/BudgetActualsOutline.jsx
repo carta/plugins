@@ -16,6 +16,8 @@ import {
 import { fundMatchRegex } from "./drilldown/util.js";
 import { trackClick } from "../analytics.js";
 import { trueAsOfMonth } from "./budgetPeriods.js";
+import { prefsKeyFor } from "./budgetPrefs.js";
+import useViewToolbar from "./useViewToolbar.js";
 
 // Budget vs Actuals — outline renderer.
 //
@@ -70,7 +72,8 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   // breaks out — a line naming several Carta accounts opens by account.
   const breakouts = useMemo(() => rowBreakouts(accountsData, budget),
                             [accountsData, budget]);
-  const [breakoutKey, setBreakoutKey] = useState(null);
+  // Kept across reloads and in the URL, as the other two layouts keep their toolbars.
+  const { breakoutKey, setBreakoutKey } = useViewToolbar({ prefsKey: prefsKeyFor(accountsData, budget?.id), breakouts });
   const breakout = useMemo(() => {
     if (breakoutKey === "none") return null;
     if (breakoutKey) return breakouts.find(b => b.key === breakoutKey) || null;

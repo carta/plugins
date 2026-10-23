@@ -41,11 +41,13 @@ export function localStore() {
   }
 }
 
+// Saved prefs are a plain object; anything else (an array, a string) reads as none.
+const asPrefs = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : null);
+
 export function readPrefs(store, key) {
   try {
     const raw = store?.getItem(key);
-    const saved = raw ? JSON.parse(raw) : null;
-    return saved && typeof saved === "object" ? saved : null;
+    return asPrefs(raw ? JSON.parse(raw) : null);
   } catch {
     // Anything unreadable is a preference, not data — open on the defaults.
     return null;
@@ -57,6 +59,29 @@ export function writePrefs(store, key, prefs) {
     store?.setItem(key, JSON.stringify(prefs));
   } catch {
     // A full or blocked store costs the reader their preference, nothing more.
+  }
+}
+
+/** Toolbar prefs as a URL `view` parameter (shell/route.js), so a copied link opens the
+ *  same view: base64url of the JSON, or null when they are the page's defaults — a view
+ *  nobody changed keeps a clean URL. */
+export function encodeViewParam(prefs, defaults) {
+  const json = JSON.stringify(prefs);
+  if (json === JSON.stringify(defaults)) return null;
+  const bytes = new TextEncoder().encode(json);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** The prefs a `view` parameter carries, or null for none or anything unreadable (a link
+ *  cut short, or hand-edited) — the page then opens on the reader's own saved prefs. */
+export function decodeViewParam(value) {
+  if (!value) return null;
+  try {
+    const bin = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
+    const saved = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+    return asPrefs(saved);
+  } catch {
+    return null;
   }
 }
 
@@ -109,5 +134,21 @@ export function toPrefs(filters, range, preset, breakoutKey) {
       ? { preset }
       : { preset: "custom", first: range.first, last: range.last },
     breakoutKey: breakoutKey ?? null,
+  };
+}
+
+/** The crosstab and line-item layouts' own toolbar, as saved: the breakout, and (crosstab
+ *  only) every department column, the rows the author hid, and actuals through today. */
+export function toViewPrefs({ breakoutKey = null, showAll = false, showHidden = false, throughToday = false } = {}) {
+  return { breakoutKey: breakoutKey ?? null, showAll: !!showAll, showHidden: !!showHidden, throughToday: !!throughToday };
+}
+
+/** toViewPrefs' saved shape folded into the defaults, dropping what no longer applies. */
+export function restoreViewPrefs(saved, breakouts) {
+  return {
+    breakoutKey: restoreBreakoutKey(saved, breakouts),
+    showAll: saved?.showAll === true,
+    showHidden: saved?.showHidden === true,
+    throughToday: saved?.throughToday === true,
   };
 }

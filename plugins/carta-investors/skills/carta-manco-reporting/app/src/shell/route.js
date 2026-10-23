@@ -14,10 +14,30 @@ export function parseRoute() {
   return { firm: null, tab: null };
 }
 
+// The query parameter a page's toolbar state rides in (views/budgetPrefs.js encodes it), so
+// a copied link opens the same view. It belongs to one page: moving to another tab drops it.
+const VIEW_PARAM = "view";
+
 function urlFor({ firm, tab }) {
   const url = new URL(window.location.href);
+  if ((tab || null) !== parseRoute().tab) url.searchParams.delete(VIEW_PARAM);
   url.pathname = firm ? `/firm/${encodeURIComponent(firm)}${tab ? `/${tab}` : ""}` : "/";
   return url;
+}
+
+/** This page's `view` parameter, or null. */
+export function readViewParam() {
+  if (typeof window === "undefined") return null;
+  return new URL(window.location.href).searchParams.get(VIEW_PARAM);
+}
+
+/** Set this page's `view` parameter, or drop it for null, in place: no history entry, no
+ *  navigation event — the page is the same, only how it's set up changed. */
+export function writeViewParam(value) {
+  const url = new URL(window.location.href);
+  if (value === null) url.searchParams.delete(VIEW_PARAM);
+  else url.searchParams.set(VIEW_PARAM, value);
+  if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
 }
 
 /** Navigate to { firm, tab }. Defaults to a history push (Back returns to the

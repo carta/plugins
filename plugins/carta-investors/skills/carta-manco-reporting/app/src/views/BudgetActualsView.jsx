@@ -16,6 +16,8 @@ import HoverTip from "../ui/HoverTip.jsx";
 import { FiltersMenu, FilterRibbon, SimplePeriodPicker, S as periodControlsStyles } from "./BudgetPeriodControls.jsx";
 import { MONTH_NAME, trueAsOfMonth, formatPeriodLabel, cutoffDate } from "./budgetPeriods.js";
 import { rowBreakouts, defaultBreakout, worthBreakingOut, UNLABELLED } from "./accountBreakout.js";
+import { prefsKeyFor } from "./budgetPrefs.js";
+import useViewToolbar from "./useViewToolbar.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
 import { reportFor } from "../shell/reportNav.js";
@@ -94,8 +96,25 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   const report = reportFor(budget, reportsApi);
   const byTagValue = budget?.by_tag_value || [];
   const viewKinds = budget?.view_kinds || ["by-tag-crosstab"];
-  const [showAll, setShowAll] = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
+  // What a row can be opened up by. Same control, same rules and the same
+  // ordering as the other two layouts — a reader who learns it on one
+  // report should not have to learn it again here.
+  const breakouts = useMemo(() => rowBreakouts(accountsData, budget),
+                            [accountsData, budget]);
+  // The crosstab's toolbar, kept across reloads and in the URL — only while the crosstab is
+  // the layout showing: the other two keep their own toolbar under the same budget's key.
+  // Outline budgets mirror the client's own budget tab (sections, their
+  // line items, their subtotals, their order) rather than a dept
+  // crosstab — see BudgetActualsOutline. The dept crosstab machinery
+  // below is inert for these.
+  const viewKind = classifyBudgetView(viewKinds);
+  const isOutline = viewKind === "by-line-item";
+  const isAccounts = viewKind === "by-account";
+  const isTagCrosstab = viewKind === "by-tag-crosstab";
+  const isRecognizedView = viewKind != null;
+  const {
+    showAll, setShowAll, showHidden, setShowHidden, throughToday, setThroughToday, breakoutKey, setBreakoutKey,
+  } = useViewToolbar({ prefsKey: isTagCrosstab ? prefsKeyFor(accountsData, budget?.id) : null, breakouts });
   // A callback-ref, not useRef: a stable ref's identity never re-attaches
   // if the view first mounts on a non-crosstab budget. See useStickyHeader.
   const [theadEl, setTheadEl] = useState(null);
@@ -141,7 +160,6 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   const asOfMonth = trueAsOfMonth(cutoffDate(snapshot));
   const statedLastMonth = budget?.period?.last_month ?? 12;
   const canExtendToToday = asOfMonth > statedLastMonth;
-  const [throughToday, setThroughToday] = useState(false);
   const effectivePeriod = useMemo(() => {
     if (!throughToday || !canExtendToToday) return budget?.period;
     return { ...budget?.period, last_month: asOfMonth };
@@ -170,12 +188,6 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
     return m;
   }, [allRows]);
 
-  // What a row can be opened up by. Same control, same rules and the same
-  // ordering as the other two layouts — a reader who learns it on one
-  // report should not have to learn it again here.
-  const breakouts = useMemo(() => rowBreakouts(accountsData, budget),
-                            [accountsData, budget]);
-  const [breakoutKey, setBreakoutKey] = useState(null);
   const breakout = useMemo(() => {
     if (breakoutKey === "none") return null;
     if (breakoutKey) return breakouts.find(b => b.key === breakoutKey) || null;
@@ -198,15 +210,6 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
 
   const meta = budget?.workbook_meta;
 
-  // Outline budgets mirror the client's own budget tab (sections, their
-  // line items, their subtotals, their order) rather than a dept
-  // crosstab — see BudgetActualsOutline. The dept crosstab machinery
-  // above is inert for these.
-  const viewKind = classifyBudgetView(viewKinds);
-  const isOutline = viewKind === "by-line-item";
-  const isAccounts = viewKind === "by-account";
-  const isTagCrosstab = viewKind === "by-tag-crosstab";
-  const isRecognizedView = viewKind != null;
   // The page's .View fires once from App.jsx; this says which renderer it got,
   // and fires again when a sidebar budget switch changes it.
   useEffect(() => {
