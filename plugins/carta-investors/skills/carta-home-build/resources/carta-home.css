@@ -2093,6 +2093,14 @@
   font-size: 8px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Segment dashboards: LP summary card ── */
+.dash-card[hidden] { display: none; }
+.tbl-col-lp { width: 128px; white-space: nowrap; flex-shrink: 0; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); }
+.tbl-row.tbl-header .tbl-col-lp { font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--ink-color-global-text-subtle); }
+.lp-dot { margin: 0 4px; color: var(--ink-color-global-border-default); }
+.tbl-col-name:has(.lp-name) { display: flex; align-items: center; }
+.lp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .wn-prev-sheet > span { padding: 4px 5px; border-right: 1px solid #DEDFDF; border-bottom: 1px solid #DEDFDF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wn-prev-sheet > span:not(:nth-child(4n+1)) { text-align: right; }
 .wn-prev-sheet-h { background: #F1F1F1; font-weight: 600; color: #656B6B; }

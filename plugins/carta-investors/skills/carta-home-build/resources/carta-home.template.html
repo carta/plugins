@@ -98,6 +98,26 @@
         <div class="card-footer" id="perf-card-footer"></div>
       </div>
 
+      <!-- LP summary — shown for Fund Admin firms (app/segment-dashboards.js) -->
+      <div class="skill-card dash-card" id="lp-card" hidden>
+        <div class="card-header">
+          <div class="card-header-text">
+            <div class="card-title">LP summary</div>
+            <div class="card-desc">Every LP's commitments, returns and exposure across all funds.</div>
+          </div>
+        </div>
+        <div class="card-preview">
+          <div class="tbl-row tbl-header">
+            <span class="tbl-col-name">LARGEST LPS</span>
+            <span class="tbl-col-lp">COMMITTED · TVPI</span>
+          </div>
+          <div id="lp-rows">
+            <div class="loading-row">Loading…</div>
+          </div>
+        </div>
+        <div class="card-footer" id="lp-card-footer"></div>
+      </div>
+
     </div>
 
   </section>

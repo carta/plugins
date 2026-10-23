@@ -541,7 +541,7 @@ def build(raw, out, meta, as_of_max=None):
     # display is set only for a qualitative KPI; value is None for free text.
     series = {}
     # Raw financial rows staged for cadence-aware collapse (see collapse loop below):
-    # fin_acc[company id][key][period_end][freq] = [(as_of_str, value, currency, display, period_start), ...]
+    # fin_acc[company id][key][period_end][freq] = [(as_of_str, value, currency, display, period_start, instance_id), ...]
     fin_acc = {}
     display_name = {}          # company id -> a real display name (first seen)
     fin_currency = None
@@ -606,7 +606,7 @@ def build(raw, out, meta, as_of_max=None):
         ps = str(col(r, "period_start") or "")[:10] or None
         (fin_acc.setdefault(nm_norm, {}).setdefault(key, {})
                 .setdefault(str(period), {}).setdefault(freq, [])
-                .append((asof, v4, cur, disp, ps)))
+                .append((asof, v4, cur, disp, ps, _int_or_none(col(r, "instance_id")))))
         if qdate is not None:
             add_months_to(nm_norm, key, period, qdate)
 
@@ -618,10 +618,12 @@ def build(raw, out, meta, as_of_max=None):
                 best = {}
                 for fr, rows in by_freq.items():
                     live = [x for x in rows if x[0][:10] <= as_of_max] or rows
-                    best[fr] = max(live, key=lambda x: x[0])
+                    # The QUALIFY's order: latest as_of, then highest instance_id; a full tie goes
+                    # to the later row, as in the Worker's builder.
+                    best[fr] = max(reversed(live), key=lambda x: (x[0], -1 if x[5] is None else x[5]))
                 qval = best["Q"][1] if "Q" in best else None
                 fr = "M" if "M" in best else ("Q" if "Q" in best else next(iter(best)))
-                _asof, v4, cur, disp, ps = best[fr]
+                _asof, v4, cur, disp, ps, _iid = best[fr]
                 series.setdefault(nm, {}).setdefault(key, {})[pe] = (v4, cur, disp, qval, fr, ps)
 
     # ---- forecasts (instance_type='Estimate'): keep EVERY vintage ----
@@ -1021,7 +1023,9 @@ def build(raw, out, meta, as_of_max=None):
 
     companies = []
     all_periods = set()
-    for nm_norm in sorted(set(series) | set(fc_raw) | val_norms | ret_norms, key=lambda n: canonical_name(n).lower()):
+    # Same-named companies tie on the name; the id breaks the tie, as the Worker's builder does.
+    for nm_norm in sorted(set(series) | set(fc_raw) | val_norms | ret_norms,
+                          key=lambda n: (canonical_name(n).lower(), n)):
         rec = ident["by_entity_link"].get(nm_norm) if key_type.get(nm_norm) == "entity_link" else None
         name = canonical_name(nm_norm)
         rec_series = {}

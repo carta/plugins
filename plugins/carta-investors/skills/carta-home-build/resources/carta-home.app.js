@@ -213,7 +213,9 @@ function drawBenchmarkChart(labels, datasets) {
   const crosshairPlugin = {
     id: "crosshair",
     afterDraw(chart) {
-      if (!chart.tooltip._active?.length) return;
+      // No tooltip yet on the draw a resize triggers mid-construction (a card appearing
+      // beside this one reflows the grid).
+      if (!chart.tooltip?._active?.length) return;
       const { ctx, scales: { x, y } } = chart;
       const xPos = chart.tooltip._active[0].element.x;
       ctx.save(); ctx.beginPath();
@@ -714,6 +716,7 @@ async function fetchLiveData() {
     _benchmarkFirmId = firmId;  // expose for benchmark fetch
     fetchBenchmarkData();       // kick off in parallel — no await, independent card
     fetchCapitalActivity();     // kick off in parallel — no await, pinned card
+    segmentSetFirm(firmId);     // LP summary card, for Fund Admin firms
     if (firmName) wnCheckDataCollection(firmName); // no await: unlocks What's new's Portfolio Analytics
 
     // Step 2: single DWH query — fund names + portfolio values (no set_context or fa:list:entities needed)
@@ -1621,6 +1624,7 @@ async function fetchUserEnrichment() {
       tactyc: readProductFlag(profile, "has_tactyc"),
     };
 
+    segmentSetFundAdmin(readProductFlag(profile, "has_fund_admin"));
     const shownAbove = renderCapabilities(profile.recommendations);
     // The microapps paint as soon as the profile says which ones the firm has; the
     // Contentful skills join them when they arrive.

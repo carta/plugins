@@ -110,6 +110,7 @@ APP_JS_PARTS = [
     "app/live-content.js",
     "app/skill-directory.js",
     "app/whats-new.js",
+    "app/segment-dashboards.js",
 ]
 
 MARKERS = {

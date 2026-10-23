@@ -37,6 +37,7 @@ allowed-tools:
   - Skill(carta-investors:carta-soi)
   - Skill(carta-investors:carta-portfolio-analytics-routing)
   - Skill(carta-investors:carta-fund-performance)
+  - Skill(carta-investors:carta-lp-summary)
   - AskUserQuestion
   # Draws the pin sketch in "Keeping Carta Home handy" where inline visuals are supported.
   - mcp__*__show_widget
@@ -52,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.112.6</carta-plugin>
+<carta-plugin>carta-investors:6.113.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -112,6 +113,10 @@ own sidebar tile.
   out hides as well. A gated item hides only when its flag is an explicit `false`. Anything
   else — enrichment unavailable, the call failed, the key absent or `null`, a staff account
   whose enrichment is stripped — shows it. Seeing too much beats seeing nothing.
+- **LP summary** (`resources/app/segment-dashboards.js`, Fund Admin firms) — the three largest
+  LP families by commitment with net TVPI, from `FUND_ADMIN.PARTNER_DATA` and each partner's
+  latest `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` month, per fund currency. The footer
+  launches the LP Summary dashboard.
 - **What's new** (`resources/app/whats-new.js`) — a rotating carousel of up to four items.
   The featured microapps (`WHATS_NEW_MICROAPPS`: Fund Modeling, ManCo Budgeting, Portfolio
   Analytics) each have a preview mockup and a "Set up in Claude Code" button that copies their
@@ -160,9 +165,11 @@ own sidebar tile.
 
 ## Dashboard launchers
 
-Two of the home cards are **summaries that link out**, not full surfaces. The full
-Schedule of Investments and Fund Performance experiences each live in their own standalone
+The dashboard cards are **summaries that link out**, not full surfaces. The full Schedule of
+Investments, Fund Performance and LP Summary experiences each live in their own standalone
 artifact, published by their own skill, so there is exactly one implementation of each.
+Every firm gets the first two; a Fund Admin firm adds LP summary
+(`resources/app/segment-dashboards.js`), so the grid holds 2 or 3 cards.
 
 `DASHBOARDS` in `resources/carta-home.config.js` is the registry. Each entry has:
 
@@ -173,6 +180,7 @@ artifact, published by their own skill, so there is exactly one implementation o
 | `prompt` | **the contract** — copied into chat when no URL was baked in |
 | `label` | the launcher's visible text |
 | `buildSkill` | build-time only: candidates Step 5 fans out to, in preference order. Optional. |
+| `requires` | build-time only: the `get_current_user` flag that must be `true` for Step 5 to build it. Optional. |
 
 **`prompt` is the contract, and `buildSkill` follows it.** The same sentence routes to
 whichever skill owns that dashboard in the current install — `carta-soi` here, and
@@ -234,6 +242,7 @@ need the full file in context. Edit the small source file for what you're changi
 | `resources/app/capital-activity.js` | Capital activity cards + detail overlay (fetch/render/dismiss) | change the capital call / distribution cards or their detail modal |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |
+| `resources/app/segment-dashboards.js` | LP summary card: which firms get it, its warehouse query, and the 2/3-card grid | change who sees that card or what it shows |
 | `resources/app/whats-new.js` | What's new carousel: featured microapps (locked by product flag, linked in-app or to a carta.com demo page or not at all; the Data Collection lookup behind Portfolio Analytics), one new skill from Contentful (skipping `whatsNew: false` and featured microapps' own skills, visual outputs first) with a preview of its output (`WHATS_NEW_SKILL_OUTPUTS` in the config file), rotation, and the microapp preview mockups (microapp list lives in `WHATS_NEW_MICROAPPS` in the config file above) | change which microapps are featured or how they lock, how many new skills join, or the carousel's behaviour |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/carta-home.css` | styles (Ink tokens) | change appearance |
@@ -410,8 +419,9 @@ instead of claiming a second URL. Omit a `url` you did not find.
 | Home | `Carta Home - <Firm>` (hyphen) | this firm only |
 | Schedule of investments | `<Firm> — Schedule of Investments` (em dash) | this firm only |
 | Fund performance | `Fund Performance` | shared by every firm |
+| LP summary | `<Firm> — LP Summary` (em dash) | this firm only |
 
-**A title is not an identity on its own.** The two firm-scoped pages carry the firm in
+**A title is not an identity on its own.** The firm-scoped pages carry the firm in
 theirs, so one belonging to a *different* firm is not a match — reusing its `url` would
 republish over that firm's page. Match the whole title, never a fragment: every firm's SOI
 ends in the same three words.
@@ -624,7 +634,8 @@ live by now with its cards marked as building, and this is what fills them in. S
 starter pack unbuilt and every dashboard on whatever version it was last published from.
 
 For each `DASHBOARDS` entry in `resources/carta-home.config.js` that has a `buildSkill`
-and that was not kept as it is, work down its candidates in order and invoke the **first one that resolves**, keeping the
+and that was not kept as it is, skip it when it names a `requires` flag that the user's
+`get_current_user` profile does not carry as `true` — that firm never sees the card. Otherwise work down its candidates in order and invoke the **first one that resolves**, keeping the
 artifact URL it returns, keyed by the entry's `key`. A candidate that is not installed is
 not a failure — move to the next one. Once a candidate returns a URL, stop; do not invoke
 the rest, or the same dashboard is published twice.

@@ -31,6 +31,16 @@ const DASHBOARDS = [
     // publishing an artifact.
     buildSkill: ['carta-fund-performance'],
   },
+  {
+    key: 'lp',
+    label: 'Open LP Summary',
+    footerId: 'lp-card-footer',
+    prompt: 'Show me a summary of our LPs',
+    buildSkill: ['carta-lp-summary'],
+    // Step 5 builds it only for a firm whose get_current_user flag is true; the card
+    // shows on the same condition (app/segment-dashboards.js).
+    requires: 'has_fund_admin',
+  },
 ];
 
 // Baked in at build time by build_artifact.py from --dashboard-url key=url, or this
