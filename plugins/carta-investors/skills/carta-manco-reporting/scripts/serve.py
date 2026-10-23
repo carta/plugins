@@ -58,6 +58,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import manco_paths
+import preflight_claude
 import report_store
 import share_bridge
 import share_ops
@@ -68,6 +69,7 @@ WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
 SHARE_MCP_SERVER = None  # --share-mcp-server / MANCO_SHARE_MCP_SERVER: the one Carta connector sharing may use
+CLAUDE_BIN = None  # --claude-bin, or found by preflight_claude at startup; see _refresh_claude_status
 MAX_BODY_BYTES = 1024 * 1024
 REBUILD_TIMEOUT = 600
 
@@ -84,6 +86,14 @@ _finished_share_jobs = {}  # job id -> its final state, oldest first
 FINISHED_SHARE_JOBS_KEPT = 20
 _bridge = None
 _bridge_lock = threading.Lock()
+# Whether the `claude` CLI that report sharing needs can run. Checked (and
+# refreshed) before a share op rather than gating the dashboard itself — browsing
+# reports needs none of this, only sharing does.
+_claude_lock = threading.Lock()
+STATE_CHECKING = "checking"    # no probe has landed yet
+STATE_AVAILABLE = "available"
+STATE_UNAVAILABLE = "unavailable"
+_CLAUDE_STATUS = {"state": STATE_CHECKING, "reason": None}
 IDLE_TIMEOUT_DEFAULT = 86400  # 24h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
@@ -235,8 +245,67 @@ def _get_bridge():
     global _bridge
     with _bridge_lock:
         if _bridge is None:
-            _bridge = share_bridge.Bridge(str(DATA_DIR), _read_carta_environment(DATA_DIR), override=SHARE_MCP_SERVER)
+            _bridge = share_bridge.Bridge(str(DATA_DIR), _read_carta_environment(DATA_DIR),
+                                          override=SHARE_MCP_SERVER, claude_bin=CLAUDE_BIN)
         return _bridge
+
+
+def _claude_unavailable():
+    with _claude_lock:
+        return _CLAUDE_STATUS["state"] == STATE_UNAVAILABLE
+
+
+def _refresh_claude_status():
+    """Re-find the claude binary and check its login. True when sharing can run.
+
+    Runs once at startup, and again before a share op whenever the last check left
+    sharing marked unavailable (the operator may have installed or signed in since)
+    or a share just failed to reach Carta (they may have signed out mid-session).
+    A binary path that changed — a Claude Code auto-update can move or delete it
+    while the dashboard stays up — drops the cached Bridge/Session so the next
+    share op picks up the new path instead of spawning a dead one.
+    """
+    global CLAUDE_BIN, _bridge
+    result = preflight_claude.probe(CLAUDE_BIN)
+    ok = result["reason"] == preflight_claude.REASON_OK
+    bin_changed = False
+    with _claude_lock:
+        if result["bin"] and result["bin"] != CLAUDE_BIN:
+            CLAUDE_BIN = result["bin"]
+            bin_changed = True
+        _CLAUDE_STATUS.update(state=STATE_AVAILABLE if ok else STATE_UNAVAILABLE, reason=result["reason"])
+    if bin_changed:
+        old_bridge = None
+        with _bridge_lock:
+            old_bridge, _bridge = _bridge, None
+        if old_bridge is not None:
+            # Its session is a long-lived `claude -p` subprocess: dropping the
+            # reference alone would leave it running (nothing closes stdin, so it
+            # never sees EOF) until serve.py's own idle timeout, hours later. Closed
+            # on its own thread so this probe never waits out a call already using it.
+            threading.Thread(target=old_bridge.close, daemon=True).start()
+    if not ok:
+        print("[serve] claude CLI unavailable for sharing: %s" % result["reason"],
+              file=sys.stderr, flush=True)
+    return ok
+
+
+def _refresh_claude_status_later():
+    threading.Thread(target=_refresh_claude_status, daemon=True).start()
+
+
+def _startup_claude_probe():
+    """Resolve and print the claude CLI's status once at launch, in the background so
+    a slow `claude auth status` never delays the printed dashboard URL."""
+    ok = _refresh_claude_status()
+    with _claude_lock:
+        bin_path, reason = CLAUDE_BIN, _CLAUDE_STATUS["reason"]
+    if bin_path is None:
+        print("[serve] claude CLI: not found — report sharing needs it", flush=True)
+        return
+    state = ("logged in" if ok else
+            "logged out" if reason == preflight_claude.REASON_NOT_LOGGED_IN else "sign-in unknown")
+    print("[serve] claude CLI: %s (%s)" % (bin_path, state), flush=True)
 
 
 def _set_share_state(**fields):
@@ -270,6 +339,11 @@ def _run_share_op(op, params):
     def emit(message):
         _set_share_state(progress=message)
     try:
+        if _claude_unavailable():
+            # Checking afresh here (not just trusting the cached state) means an
+            # operator who just installed or signed in doesn't have to restart the
+            # server to get as far as actually trying the share.
+            _refresh_claude_status()
         bridge = _get_bridge()
         store = report_store.ReportStore(DATA_DIR)
         if op == "users":
@@ -294,6 +368,11 @@ def _run_share_op(op, params):
                 result["rebuild_error"] = message
         _finish_share_state(status="done", result=result, error=None)
     except share_bridge.ShareError as e:
+        if e.code == "unreachable":
+            # Covers both "claude isn't installed" and "signed out" — refresh now so
+            # /api/claude-status (and the next share attempt) reflect it without
+            # waiting for the next time something happens to trigger a recheck.
+            _refresh_claude_status_later()
         if e.raw:
             print("[serve] share %s failed: %s" % (op, e.raw[:500]), file=sys.stderr, flush=True)
         _finish_share_state(status="error", error={"code": e.code, "message": str(e)})
@@ -426,6 +505,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/reports":
             listing, etag = _reports_listing()
             return self._send(200, listing, extra={"ETag": etag})
+        if path == "/api/claude-status":
+            # Re-probes when the last check left sharing unavailable, so a caller
+            # that polls this before offering to share sees an install/sign-in
+            # that happened since without needing a relaunch.
+            if _claude_unavailable():
+                _refresh_claude_status()
+            with _claude_lock:
+                state, reason = _CLAUDE_STATUS["state"], _CLAUDE_STATUS["reason"]
+            return self._send(200, {"available": state != STATE_UNAVAILABLE,
+                                    "state": state, "reason": reason})
         if path == "/api/reports/share-status":
             job = (qs.get("job") or [None])[0]
             if job is None:
@@ -607,7 +696,7 @@ def _bind(preferred_port):
 
 
 def main():
-    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN, SHARE_MCP_SERVER
+    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN, SHARE_MCP_SERVER, CLAUDE_BIN
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", required=True)
     ap.add_argument("--web-dir", default=str(Path(__file__).resolve().parent.parent / "webapp"))
@@ -642,8 +731,16 @@ def main():
         default=int(os.environ.get("IDLE_TIMEOUT", str(IDLE_TIMEOUT_DEFAULT))),
         help="seconds of API inactivity before the server self-terminates (0 = never)",
     )
+    ap.add_argument(
+        "--claude-bin", default=None,
+        help="absolute path to the claude CLI binary report sharing uses (default: found "
+        "the same way as preflight_claude.py, including the launching Claude Code "
+        "session's own binary); used only while it still exists, so a path removed "
+        "by a later auto-update falls back to a fresh search",
+    )
     args = ap.parse_args()
     SHARE_MCP_SERVER = args.share_mcp_server or os.environ.get(share_bridge.SERVER_ENV)
+    CLAUDE_BIN = args.claude_bin
 
     DATA_DIR = Path(args.data_dir).resolve()
     WEB_DIR = Path(args.web_dir).resolve()
@@ -695,6 +792,8 @@ def main():
     print("[serve] report sharing uses Carta connector(s): %s%s" % (
         ", ".join(targets), " (pinned)" if SHARE_MCP_SERVER else ""), flush=True)
     threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()
+    # Also after the fork, for the same reason as the watchdog above.
+    threading.Thread(target=_startup_claude_probe, daemon=True).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

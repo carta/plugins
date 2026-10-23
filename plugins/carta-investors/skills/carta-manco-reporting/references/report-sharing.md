@@ -59,7 +59,19 @@ is sent (`scripts/report_payload.py`) and again by Carta.
   uses a production connector.
 - `--share-mcp-server <name>` (or `MANCO_SHARE_MCP_SERVER`) pins one connector, for example
   a test connector. The startup banner prints which connectors sharing will use.
-- `MANCO_CLAUDE_BIN` overrides the `claude` binary the bridge starts.
+- The `claude` binary the bridge starts is found by `scripts/preflight_claude.py`
+  (Step 0.5): `--claude-bin` (or `MANCO_CLAUDE_BIN`) pins one explicitly; otherwise PATH,
+  the usual install locations, and the launching Claude Code session's own binary
+  (`CLAUDE_CODE_EXECPATH`) are searched in order. `serve.py` re-probes whenever
+  `GET /api/claude-status` is asked for while marked unavailable, or right after a
+  share fails to reach Carta, so installing or signing in takes effect without a
+  relaunch. Only a changed binary path replaces the cached Bridge; a sign-out keeps
+  the same Bridge, whose session ends on the failed call, and each later call starts
+  a fresh session that fails the same way until the operator signs back in.
+  `/api/claude-status` answers `{"available", "state", "reason"}`: `state` is
+  `checking` (no probe has landed yet, `reason` is `null`), `available`, or
+  `unavailable`; once a probe has run, `reason` is `ok`, `not_installed`, or
+  `not_logged_in`.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.

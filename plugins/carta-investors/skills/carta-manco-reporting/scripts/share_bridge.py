@@ -24,8 +24,10 @@ import sys
 import threading
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
+import preflight_claude
+
 SERVER_ENV = "MANCO_SHARE_MCP_SERVER"
-CLAUDE_BIN_ENV = "MANCO_CLAUDE_BIN"
+CLAUDE_BIN_ENV = preflight_claude.CLAUDE_BIN_ENV
 
 PROD_SERVERS = ("claude_ai_carta", "claude_ai_Carta", "carta", "carta_production", "carta_prod",
                 # The same claude.ai Carta connector, addressed by its UUID instead of its name.
@@ -343,7 +345,11 @@ def _same_json(sent: Any, expected: Dict[str, Any]) -> bool:
 
 class Bridge(object):
     """A warm session, reused across share operations. The first call pays spawn +
-    welcome; later ones reuse it. A dead session respawns on the next call."""
+    welcome; later ones reuse it. A dead session respawns on the next call. Call
+    `close()` when retiring a Bridge (not just dropping the reference) so its
+    session's subprocess is actually ended rather than left running until serve.py
+    exits. Calls made after `close()` still finish normally, but a retired Bridge
+    keeps no session once each returns."""
 
     def __init__(self, cwd: str, carta_environment: Optional[str], override: Optional[str] = None,
                  claude_bin: Optional[str] = None,
@@ -355,6 +361,7 @@ class Bridge(object):
         self._lock = threading.Lock()
         self._session: Optional[Session] = None
         self._call_tool: Optional[str] = None
+        self._retired = False
 
     @property
     def servers(self) -> Tuple[str, ...]:
@@ -405,13 +412,17 @@ class Bridge(object):
 
     def call(self, command: str, arguments: Dict[str, Any], emit: Callable[[str], None]) -> Any:
         """Run one Carta command (e.g. "fa__get__budget_reports") and return its result.
-        While it runs, the session's hook lets call_tool run this command and no other."""
+        While it runs, the session's hook lets call_tool run this command and no other.
+        A call made after `close()` has retired this Bridge still runs normally, but
+        ends the session it opened before returning."""
         with self._lock:
             session, call_tool = self._connect(emit)
             try:
                 return self._relay(session, call_tool, command, arguments)
             finally:
                 expect_command(self._cwd, "")
+                if self._retired:
+                    self.reset()
 
     def _relay(self, session: Session, call_tool: str, command: str, arguments: Dict[str, Any]) -> Any:
         # The small fields go first and the payload last: a model copying a long
@@ -487,3 +498,12 @@ class Bridge(object):
         session, self._session, self._call_tool = self._session, None, None
         if session is not None:
             session.close()
+
+    def close(self) -> None:
+        """Retire this bridge. Takes the same lock `call` holds for its whole duration,
+        so this waits out a call in progress, then ends the warm session. A call made
+        after this (a share op still holding the Bridge) still runs, but ends the
+        session it opens before returning, so nothing outlives the Bridge."""
+        with self._lock:
+            self._retired = True
+            self.reset()

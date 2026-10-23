@@ -1,10 +1,45 @@
 # Building, serving, and updating the dashboard
 
-Steps 4 through 6 in full: assembling the datadir, reusing or
-launching the server, and the post-launch offer to change things.
+Step 0.5, and Steps 4 through 7 in full: the Claude CLI preflight, assembling the
+datadir, reusing or launching the server, and the post-launch offer to change things.
 
 
 > Steps referenced here that are documented elsewhere: **Step 2.75** → [budget-ingest.md](budget-ingest.md); **Step 3** → [data-fetch.md](data-fetch.md).
+
+## Step 0.5 — Claude CLI preflight
+
+Report sharing (`scripts/share_bridge.py`) runs a headless `claude` session that
+inherits the operator's own Carta connector. That needs the `claude` CLI — the
+Claude Code binary, from Anthropic — installed and signed in. Detect it now, before
+the data-fetch wait in Steps 2.5-3, so a missing CLI is resolved up front rather than
+surfacing as a sharing failure much later.
+
+**This step never fails the skill.** The dashboard itself needs none of this — only
+report sharing does. A launch without a working `claude` CLI still proceeds; sharing
+just won't work until it's fixed, which `serve.py` and the dashboard surface on their
+own (see [report-sharing.md](report-sharing.md)).
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/preflight_claude.py" check
+```
+
+The search covers an explicit `MANCO_CLAUDE_BIN` override, PATH, the usual install
+locations, and the binary of the Claude Code session running this skill
+(`CLAUDE_CODE_EXECPATH`) — so a desktop or IDE user with nothing on PATH is still
+found, same as this skill's own session right now.
+
+- `claude_bin=<path>` → capture the path for Step 5b. No output to the user, whatever
+  `claude_auth=` says — a signed-out CLI only affects sharing, which reports its own
+  problem when the operator tries it.
+- `claude_bin=none` → ask via `AskUserQuestion` before installing anything:
+  > "Sharing reports from the dashboard needs the Claude Code CLI (`claude`), which
+  > isn't installed here. Want me to install it? (runs Anthropic's installer)"
+  - **Yes** → run `preflight_claude.py install`. It uses Anthropic's native installer
+    and falls back to npm. Then use the printed path. If it still prints
+    `claude_bin=none`, say the install didn't succeed and treat it as **No**.
+  - **No** → continue. The dashboard works; report sharing surfaces its own
+    "Couldn't start a Claude session for sharing — is Claude Code installed?"
+    message until the operator installs and signs in.
 
 ## How the app is served — no build step for app edits
 
@@ -274,6 +309,11 @@ nohup python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.
 ```
 
 `<user_src_dir>` is the `user_src_dir` value from Step 4.8's `check` output.
+
+Append `--claude-bin "<path>"` only when Step 0.5 found one (`claude_bin=<path>`,
+not `none`). `serve.py` runs the same search itself when it's omitted, and finds
+the binary again if the given path disappears (a Claude Code auto-update deletes
+old versions), so the flag is a hint rather than a requirement.
 
 To test report sharing with one particular connector (a test connector, say), add
 `--share-mcp-server <connector_name>` so shares use only that one — see

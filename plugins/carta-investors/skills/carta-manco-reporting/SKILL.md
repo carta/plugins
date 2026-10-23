@@ -70,6 +70,8 @@ allowed-tools:
   - Bash(uv --version)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py *)
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" *)'
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/preflight_claude.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/preflight_claude.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py *)
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py *)
@@ -93,7 +95,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.108.12</carta-plugin>
+<carta-plugin>carta-investors:6.108.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -165,6 +167,7 @@ every invocation regardless.
 | Step | Run it? | What it does | Detail |
 |---|---|---|---|
 | 0 | always | Say hello, install `uv` if it's missing, run the surface check, capture the firm, probe the local cache, finish the greeting | [firm-resolution.md](references/firm-resolution.md) |
+| 0.5 | always | Claude CLI preflight — find (or offer to install) the `claude` CLI report sharing needs, before the data-fetch wait | [serve-and-update.md](references/serve-and-update.md) |
 | 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-lookup.md](references/firm-lookup.md) |
 | 1.5 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit (same condition as Step 1) | ManCo eligibility hard gate — confirms an active Fund Admin subscription and an active management company before proceeding | [firm-lookup.md](references/firm-lookup.md) |
 | 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-lookup.md](references/firm-lookup.md) |
