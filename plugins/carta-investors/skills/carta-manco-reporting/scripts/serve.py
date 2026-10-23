@@ -377,10 +377,12 @@ def _run_share_op(op, params):
         elif op == "share":
             result = share_ops.share(bridge, store, DATA_DIR, params["report_id"],
                                      params.get("shared_with"), emit, force=bool(params.get("force")),
-                                     people=params.get("people"), updating=bool(params.get("updating")))
+                                     people=params.get("people"), updating=bool(params.get("updating")),
+                                     view=params.get("view"))
         elif op == "publish-as-new":
             result = share_ops.publish_as_new(bridge, store, DATA_DIR, params["report_id"],
-                                              params.get("shared_with"), emit, people=params.get("people"))
+                                              params.get("shared_with"), emit, people=params.get("people"),
+                                              view=params.get("view"))
         elif op == "delete":
             result = share_ops.delete(bridge, store, DATA_DIR, params["report_id"], emit)
         else:

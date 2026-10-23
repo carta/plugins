@@ -79,7 +79,7 @@ export default function BudgetActualsAccounts({ budget, entries, drilldown, acco
   const { filters, setFilters, range, setRange, breakoutKey, setBreakoutKey, restored } =
     useAccountToolbar({
       prefsKey: prefsKeyFor(accountsData, budget?.id),
-      year, asOfMonth, defaultRange, breakouts,
+      year, asOfMonth, defaultRange, breakouts, sharedView: budget?.view,
     });
   const breakout = useMemo(
     () => pickBreakout(breakouts, accountsData, budget, breakoutKey),

@@ -6,6 +6,7 @@ import { AlertIcon, CloudUploadIcon, UsersIcon } from "./icons.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
 import { ownShare } from "./reportState.js";
 import { duplicateReport, REPORT_ACTIONS } from "../state/useReports.js";
+import { sharerView } from "../views/budgetPrefs.js";
 
 export function fmtDate(iso) {
   if (!iso) return null;
@@ -44,7 +45,7 @@ const NEEDS_DECISION = {
   deleted: "The shared copy was deleted — select Update to share it again or keep it private.",
 };
 
-export default function ReportNotice({ report, asOf, firmName, reportsApi, onOpenReport, onShareDone }) {
+export default function ReportNotice({ report, asOf, firmName, reportsApi, accountsData, onOpenReport, onShareDone }) {
   const [busy, setBusy] = useState(false);
   const [duplicateError, setDuplicateError] = useState(null);
   const [updating, setUpdating] = useState(false);
@@ -75,7 +76,10 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, onOpe
     setUpdating(true);
     setUpdateError(null);
     try {
-      const outcome = shareOutcome(await reportsApi.runShareOp(REPORT_ACTIONS.SHARE, { report_id: report.id, updating: true }));
+      // An update re-sends the payload, so it carries the sharer's current view too.
+      const view = sharerView(accountsData, report.id);
+      const params = { report_id: report.id, updating: true, ...(view ? { view } : {}) };
+      const outcome = shareOutcome(await reportsApi.runShareOp(REPORT_ACTIONS.SHARE, params));
       if (outcome.kind === "decide") setUpdateError(`Couldn't share the update. ${NEEDS_DECISION[outcome.status]}`);
       else if (outcome.kind === "partial") setUpdateError(outcome.message);
       else onShareDone?.(UPDATED);

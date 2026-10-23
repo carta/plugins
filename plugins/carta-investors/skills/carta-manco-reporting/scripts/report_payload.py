@@ -42,6 +42,7 @@ MAX_VALUE_ALIASES = _CONTRACT["limits"]["max_value_aliases"]
 MAX_NAME_LENGTH = _CONTRACT["limits"]["max_name_length"]
 MAX_SOURCE_CLIENT_LENGTH = _CONTRACT["limits"]["max_source_client_length"]
 MAX_SOURCE_VERSION_LENGTH = _CONTRACT["limits"]["max_source_version_length"]
+MAX_VIEW_BYTES = _CONTRACT["limits"]["max_view_bytes"]
 
 NODE_KINDS = frozenset(_CONTRACT["node_kinds"])
 VIEW_KINDS = frozenset(_CONTRACT["view_kinds"])
@@ -123,6 +124,8 @@ def validate(payload: Any) -> None:
         raise PayloadError("payload.period_kind must be one of %s" % sorted(PERIOD_KINDS))
     if "value_aliases" in payload:
         _check_value_aliases(payload["value_aliases"])
+    if "view" in payload:
+        check_view(payload["view"])
     budget = _keys(payload["budget"], "payload.budget", BUDGET_KEYS, BUDGET_KEYS)
     dimensions = budget["dimensions"]
     if not isinstance(dimensions, list) or not all(isinstance(d, str) and d for d in dimensions):
@@ -146,6 +149,16 @@ def _check_value_aliases(aliases: Any) -> None:
             raise PayloadError("payload.value_aliases[%r] must be a list of tags" % value)
         for tag in tags:
             _text(tag, "payload.value_aliases[%r]" % value, MAX_LABEL_LENGTH)
+
+
+def check_view(view: Any) -> None:
+    """``view``: the sharer's own Budget vs Actuals filters, for the recipient to open the
+    report as the sharer saw it. Carta stores it without reading it, so only its type and
+    size are checked."""
+    if not isinstance(view, dict):
+        raise PayloadError("payload.view must be a JSON object")
+    if len(json.dumps(view).encode("utf-8")) > MAX_VIEW_BYTES:
+        raise PayloadError("payload.view is over %d bytes" % MAX_VIEW_BYTES)
 
 
 def _check_node(node: Any, path: str, scoped: bool) -> None:

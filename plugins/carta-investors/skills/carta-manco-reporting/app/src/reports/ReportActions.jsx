@@ -17,7 +17,7 @@ export const hasSharePanel = (report) => !!(report?.editable || report?.read_onl
 
 // The Budget vs Actuals header's report controls: Share, which also holds Export, and a menu
 // for renaming, duplicating, hiding and deleting.
-export default function ReportActions({ report, reportsApi, firmName, entityName, exportProps, hosted, onOpenReport, onShareDone }) {
+export default function ReportActions({ report, reportsApi, firmName, entityName, exportProps, hosted, accountsData, onOpenReport, onShareDone }) {
   const [open, setOpen] = useState(null); // "share" | "rename" | "confirm-delete"
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState(null);
@@ -80,6 +80,7 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
           </HoverTip>
           {open === "share" && (
             <ShareDialog report={report} reportsApi={reportsApi} firmName={firmName} entityName={entityName}
+              accountsData={accountsData}
               exportProps={exportProps} hosted={hosted} anchorRef={shareRef} onClose={() => setOpen(null)}
               onDone={onShareDone} onBusyChange={onShareBusy} />
           )}

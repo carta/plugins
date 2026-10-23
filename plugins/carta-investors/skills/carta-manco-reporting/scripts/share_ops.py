@@ -12,7 +12,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import report_payload
 import report_store
@@ -157,12 +157,13 @@ def share(
     force: bool = False,
     people: Optional[List[Dict[str, Any]]] = None,
     updating: bool = False,
+    view: Any = None,
 ) -> Dict[str, Any]:
     """Publish a report, or push its changes when it is already shared (see _share). When Carta
     refuses a recipient, the saved list of people is out of date, so it is dropped."""
     try:
         return _share(bridge, store, data_dir, report_id, shared_with, emit,
-                      force=force, people=people, updating=updating)
+                      force=force, people=people, updating=updating, view=view)
     except ShareError as e:
         if e.code == "invalid_recipient":
             forget_shareable_users(data_dir)
@@ -179,6 +180,7 @@ def _share(
     force: bool = False,
     people: Optional[List[Dict[str, Any]]] = None,
     updating: bool = False,
+    view: Any = None,
 ) -> Dict[str, Any]:
     """Publish a report, or push its changes when it is already shared.
 
@@ -195,6 +197,11 @@ def _share(
     share record, an update (`updating`: the app showed this report as already shared, or
     `shared_with` is None) returns {"status": "deleted"} without calling Carta, for the app
     to ask about. Only publish_as_new, or a share made with an explicit list, creates one.
+
+    `view` is the sharer's Budget vs Actuals filters for this report, sent as payload.view
+    when the contract accepts it and dropped when it doesn't. A view that differs from the
+    one last sent re-sends the payload; the payload fingerprint leaves it out, since the
+    build that compares against it never sees a view.
     """
     ctx = _context(data_dir)
     doc = store.load()
@@ -215,7 +222,9 @@ def _share(
         # Sharing was stopped (maybe from another tab) after the app drew this report as
         # shared; re-creating it from a stale view would reach everyone with ledger access.
         return {"status": "deleted"}
-    sends_payload = (not is_update) or link.get("dirty") or shared_with is None
+    sent, view_fingerprint = _with_view(payload, view)
+    view_changed = view_fingerprint is not None and view_fingerprint != link.get("view_fingerprint")
+    sends_payload = (not is_update) or link.get("dirty") or view_changed or shared_with is None
     try:
         report_payload.validate(payload)
         report_payload.check_name(name)
@@ -236,7 +245,7 @@ def _share(
             args["shared_with"] = shared_with
         if sends_payload:
             args.update(schema_version=report_payload.SCHEMA_VERSION,
-                        payload_compact=report_payload.compact(payload), snapshot_basis=basis)
+                        payload_compact=report_payload.compact(sent), snapshot_basis=basis)
         if not force and link.get("updated_at"):
             args["expected_updated_at"] = link["updated_at"]
         emit("Updating the shared report…")
@@ -253,7 +262,7 @@ def _share(
             "fund_uuid": ctx["fund_uuid"],
             "name": name,
             "schema_version": report_payload.SCHEMA_VERSION,
-            "payload_compact": report_payload.compact(payload),
+            "payload_compact": report_payload.compact(sent),
             "snapshot_basis": basis,
             "source": source,
         }
@@ -263,10 +272,24 @@ def _share(
         response = _envelope(bridge.call("fa__create__budget_report", args, emit))
     shared = _shared_meta(response["report"])
     shared["people"] = _recipient_people(shared.get("shared_with"), shared.get("people"), people, link.get("people"))
+    shared["view_fingerprint"] = view_fingerprint if sends_payload else link.get("view_fingerprint")
     # Not sending the payload means it matches the one last sent (it would be marked
     # changed otherwise), so its fingerprint stands either way.
     store.record_shared(report_id, shared, payload)
     return {"status": "ok", "uuid": response["report"].get("uuid")}
+
+
+def _with_view(payload: Dict[str, Any], view: Any) -> Tuple[Dict[str, Any], Optional[str]]:
+    """(payload to send, fingerprint of the view it carries): `payload` with `view` added
+    when the contract accepts the two together, else `payload` unchanged and None."""
+    if view is None:
+        return payload, None
+    with_view = dict(payload, view=view)
+    try:
+        report_payload.validate(with_view)
+    except report_payload.PayloadError:
+        return payload, None
+    return with_view, report_store.payload_fingerprint(view)
 
 
 def _recipient_people(ids: Any, from_carta: Any, picked: Any, known: Any) -> List[Dict[str, Any]]:
@@ -286,10 +309,10 @@ def _recipient_people(ids: Any, from_carta: Any, picked: Any, known: Any) -> Lis
 
 def publish_as_new(bridge: Any, store: report_store.ReportStore, data_dir: Path, report_id: str,
                    shared_with: Optional[List[int]], emit: Emit,
-                   people: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                   people: Optional[List[Dict[str, Any]]] = None, view: Any = None) -> Dict[str, Any]:
     """The owner deleted the shared copy meanwhile: share this report as a new one."""
     store.clear_shared(report_id)
-    return share(bridge, store, data_dir, report_id, shared_with or [], emit, people=people)
+    return share(bridge, store, data_dir, report_id, shared_with or [], emit, people=people, view=view)
 
 
 def delete(bridge: Any, store: report_store.ReportStore, data_dir: Path, report_id: str,

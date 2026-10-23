@@ -789,11 +789,14 @@ def _period_start(ws):
 
 def _guess_period_year(ws) -> int | None:
     """Best-effort year extraction from the sub-title band
-    (\'For the Period Ending <month> <day>, <year>\')."""
+    (\'For the Period Ending <month> <day>, <year>\'), else the year of the
+    date the sheet says it runs through, wherever in the title band that sits.
+    A share needs a year, and a title like "Apr–Jun" states none in B2/B3."""
     for r in (2, 3):
         v = ws.cell(r, 2).value
         if isinstance(v, str):
             m = re.search(r"20\d{2}", v)
             if m:
                 return int(m.group(0))
-    return None
+    end = _period_end(ws)
+    return int(end[:4]) if end else None

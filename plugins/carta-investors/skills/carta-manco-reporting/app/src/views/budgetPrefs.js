@@ -54,6 +54,13 @@ export function readPrefs(store, key) {
   }
 }
 
+/** The toolbar state this browser saved for one report, to send as the
+ *  share's `view`; null when there is none. */
+export function sharerView(accountsData, reportId) {
+  const key = prefsKeyFor(accountsData, reportId);
+  return key ? readPrefs(localStore(), key) : null;
+}
+
 export function writePrefs(store, key, prefs) {
   try {
     store?.setItem(key, JSON.stringify(prefs));

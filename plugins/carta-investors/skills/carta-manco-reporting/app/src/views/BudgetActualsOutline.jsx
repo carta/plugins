@@ -73,7 +73,9 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   const breakouts = useMemo(() => rowBreakouts(accountsData, budget),
                             [accountsData, budget]);
   // Kept across reloads and in the URL, as the other two layouts keep their toolbars.
-  const { breakoutKey, setBreakoutKey } = useViewToolbar({ prefsKey: prefsKeyFor(accountsData, budget?.id), breakouts });
+  const { breakoutKey, setBreakoutKey } = useViewToolbar({
+    prefsKey: prefsKeyFor(accountsData, budget?.id), breakouts, sharedView: budget?.view,
+  });
   const breakout = useMemo(() => {
     if (breakoutKey === "none") return null;
     if (breakoutKey) return breakouts.find(b => b.key === breakoutKey) || null;

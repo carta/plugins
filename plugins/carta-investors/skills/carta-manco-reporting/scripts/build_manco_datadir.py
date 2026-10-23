@@ -4829,6 +4829,8 @@ def snapshot_budget_entry(b, as_of_month):
         # (crosstab budgets carry the same info per by_tag_value
         # entry as carta_tags).
         "value_aliases":  b.get("value_aliases") or {},
+        # The sharer's Budget vs Actuals filters, on a report shared with you.
+        **({"view": b["view"]} if "view" in b else {}),
         # Every view this budget's data structurally supports,
         # beyond view_kinds[0] above; views[view_kinds[0]] always
         # equals rows/by_tag_value above.
@@ -4957,7 +4959,16 @@ def read_excel_budget(dashboard_dir, as_of_month, budget_file=None):
     except Exception as e:
         print(f"warn: {p.name} present but failed to parse: {e}", file=sys.stderr)
         return None
+    resolved = _resolve_excel_budget(dashboard_dir, as_of_month, p, data)
+    # A shared report carries the sharer's Budget vs Actuals filters; the app
+    # opens it with them when the reader has saved none of their own.
+    if resolved is not None and "view" in data:
+        resolved["view"] = data["view"]
+    return resolved
 
+
+def _resolve_excel_budget(dashboard_dir, as_of_month, p, data):
+    """read_excel_budget()'s aggregation, over the already-loaded `data` read from `p`."""
     rows = data.get("rows") or []
     if not rows:
         return None
@@ -6057,7 +6068,7 @@ def build(args):
         # ready instead of sharing stale rows.
         _reports.discard_share_payload(_b["id"])
         try:
-            _payload = canonical_budget.share_payload(_b, _report_currency)
+            _payload = canonical_budget.share_payload(_b, _report_currency, fallback_year=args.as_of_year)
             if _payload is not None:
                 _reports.write_share_payload(_b["id"], _payload)
                 _b["report"] = _reports.mark_if_payload_moved(_b["id"], _payload) or _b.get("report")

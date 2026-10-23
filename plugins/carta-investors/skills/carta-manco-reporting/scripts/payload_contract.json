@@ -10,16 +10,17 @@
     "max_value_aliases": 1000,
     "max_name_length": 255,
     "max_source_client_length": 64,
-    "max_source_version_length": 32
+    "max_source_version_length": 32,
+    "max_view_bytes": 4096
   },
-  "node_kinds": ["line", "section_header", "subsection_header", "subtotal", "summary", "total"],
+  "node_kinds": ["line", "group_header", "section_header", "subsection_header", "subtotal", "summary", "total"],
   "view_kinds": ["by-account", "by-line-item", "by-tag-crosstab"],
   "granularities": ["monthly", "quarterly"],
   "period_kinds": ["annual", "ytd_through_as_of"],
   "derived_rules": ["net_income", "expression"],
   "payload_keys": {
     "required": ["period_year", "period_granularity", "currency", "native_view_kind", "budget"],
-    "optional": ["period_kind", "value_aliases"]
+    "optional": ["period_kind", "value_aliases", "view"]
   },
   "budget_keys": ["dimensions", "nodes"],
   "node_keys": {

@@ -9,6 +9,7 @@ import { fmtDate, sharerName } from "./ReportNotice.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
 import { ownShare } from "./reportState.js";
 import { actSaved, REPORT_ACTIONS } from "../state/useReports.js";
+import { sharerView } from "../views/budgetPrefs.js";
 import { ClaudePrompt, claudeFixPrompt } from "./claudeFix.jsx";
 
 // The report's Share | Export panel, anchored under the header button. Wording is agreed
@@ -64,7 +65,7 @@ function sameSet(a, b) {
   return true;
 }
 
-export default function ShareDialog({ report, reportsApi, firmName, entityName, exportProps, hosted, anchorRef, onClose, onDone, onBusyChange }) {
+export default function ShareDialog({ report, reportsApi, firmName, entityName, exportProps, hosted, accountsData, anchorRef, onClose, onDone, onBusyChange }) {
   const link = ownShare(report);
   // The picker shows who a share reaches: offered for a new share only when the server can
   // create one, and always for an existing share so its audience stays visible. Stop
@@ -197,7 +198,12 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
     setBusy(true);
     setError(null);
     try {
-      const outcome = shareOutcome(await reportsApi.runShareOp(op, { report_id: report.id, ...extra }));
+      // A share carries the Budget vs Actuals toolbar as the sharer left it for
+      // this report, so recipients open it the same way.
+      const sends = op === REPORT_ACTIONS.SHARE || op === REPORT_ACTIONS.PUBLISH_AS_NEW;
+      const view = sends ? sharerView(accountsData, report.id) : null;
+      const params = { report_id: report.id, ...extra, ...(view ? { view } : {}) };
+      const outcome = shareOutcome(await reportsApi.runShareOp(op, params));
       if (outcome.kind === "decide") {
         setOutcome(outcome.status);
         return;

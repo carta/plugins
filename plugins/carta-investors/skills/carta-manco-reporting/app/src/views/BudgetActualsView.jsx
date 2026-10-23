@@ -114,7 +114,9 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   const isRecognizedView = viewKind != null;
   const {
     showAll, setShowAll, showHidden, setShowHidden, throughToday, setThroughToday, breakoutKey, setBreakoutKey,
-  } = useViewToolbar({ prefsKey: isTagCrosstab ? prefsKeyFor(accountsData, budget?.id) : null, breakouts });
+  } = useViewToolbar({
+    prefsKey: isTagCrosstab ? prefsKeyFor(accountsData, budget?.id) : null, breakouts, sharedView: budget?.view,
+  });
   // A callback-ref, not useRef: a stable ref's identity never re-attaches
   // if the view first mounts on a non-crosstab budget. See useStickyHeader.
   const [theadEl, setTheadEl] = useState(null);
@@ -251,6 +253,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
                 reportsApi={reportsApi}
                 firmName={displayFirmName(snapshot?.firmName)}
                 exportProps={exportProps}
+                accountsData={accountsData}
                 hosted={hosted}
                 onOpenReport={onOpenReport}
                 onShareDone={onShareDone}
@@ -264,7 +267,8 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
       <Capped>
       {reportsApi?.available && report && (
         <div data-export-exclude>
-          <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi} onOpenReport={onOpenReport} onShareDone={onShareDone} />
+          <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi}
+            accountsData={accountsData} onOpenReport={onOpenReport} onShareDone={onShareDone} />
         </div>
       )}
       <div style={styles.metaRow}>

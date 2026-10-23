@@ -397,7 +397,7 @@ def budget_from_canonical(payload, *, report_id, name):
     """A shared report's payload, back in the parsed-budget shape build_manco_datadir reads.
 
     `payload` is the share envelope: {period_year, period_granularity, currency,
-    native_view_kind, period_kind?, value_aliases?, budget: {dimensions, nodes}}.
+    native_view_kind, period_kind?, value_aliases?, view?, budget: {dimensions, nodes}}.
     The result renders like any imported budget; `read_only` marks it as a report
     someone else shared, so nothing asks mapping questions about it.
     """
@@ -429,6 +429,9 @@ def budget_from_canonical(payload, *, report_id, name):
         budget["tag_values"] = scopes
     if payload.get("value_aliases"):
         budget["value_aliases"] = payload["value_aliases"]
+    # The sharer's Budget vs Actuals filters, for the app to open the report with.
+    if isinstance(payload.get("view"), dict):
+        budget["view"] = payload["view"]
     return budget
 
 
@@ -447,18 +450,22 @@ def _native_view_kind(canonical):
     return BY_TAG_CROSSTAB if crosstab else BY_LINE_ITEM
 
 
-def share_payload(budget, currency):
+def share_payload(budget, currency, fallback_year=None):
     """The payload a report is shared with: the canonical body in its envelope.
 
     `budget` is a resolved budget entry (after mapping); each node's gl_codes are
     the mapping's answers, so a recipient sees the sharer's mapped accounts.
     `currency` is the ManCo's own; sharing needs one.
+    `fallback_year` dates a budget whose workbook stated no year (a crosstab titled
+    "Apr–Jun"): the share contract needs one, and the snapshot's as-of year is the
+    year its actuals are compared over.
     """
-    canonical = to_canonical(budget, mapped_gl_first=True)
+    period_year = budget.get("period_year") or fallback_year
+    canonical = to_canonical(budget, period_year, mapped_gl_first=True)
     if canonical is None:
         return None
     payload = {
-        "period_year": budget.get("period_year"),
+        "period_year": period_year,
         "period_granularity": budget.get("period_granularity"),
         "period_kind": budget.get("period_kind") or "annual",
         "currency": currency,
