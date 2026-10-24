@@ -319,6 +319,8 @@ def _cohort_covered(r):
 SCENARIO_EDIT_FIELDS = ("valuationB", "markMultiple", "futureDilution",
                         "includeInNav", "exited", "exitTimingQ", "waterfallMode",
                         "archived", "notes", "secondaries")
+# The baseline's flat assumptions. MUST match BASELINE_ASSUMPTION_DEFAULTS in app/src/model/slices.js.
+BASELINE_ASSUMPTION_DEFAULTS = {"carryRate": 0.20, "spRate": 0.102, "spSensitivityRate": 0.13, "staleDays": 90}
 # Assumption maps keyed by fund id — pruned to the surviving funds on refresh.
 FUND_KEYED_ASSUMPTIONS = ("carryRates", "preferredReturns", "catchupRates",
                           "catchupLimits", "feeLoads", "followOnRatios",
@@ -455,7 +457,7 @@ def build(rawdir, out, meta):
     firm_name = meta["name"]
     firm_id = meta.get("firmId")      # optional integer Carta ID (may be null), for cache lookup
     firm_uuid = meta.get("firmUuid")
-    carry_default = meta.get("carryRate", 0.20)
+    carry_default = meta.get("carryRate", BASELINE_ASSUMPTION_DEFAULTS["carryRate"])
     # "production" or "nonprod" — which Carta MCP server this build's data came
     # from (Step 1). Threaded into snapshot.source so serve.py can tell the
     # browser's Snowplow tracker which collector to use. A pre-fix cache with
@@ -1101,7 +1103,8 @@ def build(rawdir, out, meta):
 
     # Seed per-fund waterfall assumptions from the Carta config so the baseline
     # scenario is pre-set (the sliders start there); funds without a config fall
-    # back to the flat carry_default and disabled pref/catch-up.
+    # back to the flat carry_default and disabled pref/catch-up. MUST match baselineAssumptions
+    # in server/worker.js.
     carry_rates_seed, pref_seed, cu_rate_seed, cu_limit_seed = {}, {}, {}, {}
     for f in funds.values():
         wf = waterfall_of.get(f["uuid"])
@@ -1124,8 +1127,10 @@ def build(rawdir, out, meta):
             "id": "baseline", "name": "Baseline", "locked": True, "createdAt": nav,
             "assumptions": {"carryRate": carry_default, "carryRates": carry_rates_seed,
                             "preferredReturns": pref_seed, "catchupRates": cu_rate_seed,
-                            "catchupLimits": cu_limit_seed, "spRate": 0.102,
-                            "spSensitivityRate": 0.13, "staleDays": 90, "feeLoads": {}, "followOnRatios": {}, "recyclingRatios": {}},
+                            "catchupLimits": cu_limit_seed, "spRate": BASELINE_ASSUMPTION_DEFAULTS["spRate"],
+                            "spSensitivityRate": BASELINE_ASSUMPTION_DEFAULTS["spSensitivityRate"],
+                            "staleDays": BASELINE_ASSUMPTION_DEFAULTS["staleDays"],
+                            "feeLoads": {}, "followOnRatios": {}, "recyclingRatios": {}},
             "companies": companies,
         }],
     }
