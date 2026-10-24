@@ -3,6 +3,7 @@ import { ALL_FUNDS } from "../../ui/components.jsx";
 import { scenarioTable, scenarioRow, exitDateIrr } from "../../model/scenarios.js";
 import { scenarioFund, fundIdsOf } from "../../model/funds.js";
 import { waterfallCfgFor, exitHorizonFor } from "../../model/reprice.js";
+import { FUND_WATERFALL_KEYS } from "../../model/slices.js";
 
 // Shared per-fund scenario model for the Returns-family views (LP Returns, GP
 // Economics, and the Portfolio analysis and LP returns themes on the Reports tab): ONE
@@ -38,7 +39,7 @@ export function useScenarioModel({
   // Drop this fund's per-scenario overrides so the waterfall falls back to the
   // Carta configuration (snapshot.funds[].waterfall) again.
   const revertWaterfall = () => {
-    for (const key of ["carryRates", "preferredReturns", "catchupRates", "catchupLimits"]) {
+    for (const key of FUND_WATERFALL_KEYS) {
       const m = { ...(portfolio.assumptions[key] || {}) };
       delete m[fundId];
       setAssumption(key, m);

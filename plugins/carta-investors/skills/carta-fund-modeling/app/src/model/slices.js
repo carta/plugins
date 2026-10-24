@@ -15,6 +15,8 @@ export const EDIT_FIELDS = ["valuationB", "markMultiple", "futureDilution",
 // The baseline's flat assumptions. MUST match BASELINE_ASSUMPTION_DEFAULTS in
 // scripts/build_datadir.py, so the hosted and local baselines model the same carry and benchmark.
 export const BASELINE_ASSUMPTION_DEFAULTS = { carryRate: 0.2, spRate: 0.102, spSensitivityRate: 0.13, staleDays: 90 };
+// A fund with entries in these maps is modelled with its own waterfall instead of the flat carryRate.
+export const FUND_WATERFALL_KEYS = ["carryRates", "preferredReturns", "catchupRates", "catchupLimits"];
 
 /** Reset every editable input in a slice body to its default. */
 export function normalizeToDefaults(body) {
