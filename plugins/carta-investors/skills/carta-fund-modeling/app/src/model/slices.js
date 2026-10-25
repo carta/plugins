@@ -12,9 +12,13 @@ export const EDIT_FIELDS = ["valuationB", "markMultiple", "futureDilution",
   "includeInNav", "exited", "exitTimingQ", "waterfallMode", "archived", "notes",
   "secondaries"];
 
+// Fund Construction's public-market comparison rates. MUST match MARKET_REFS in scripts/build_datadir.py.
+export const MARKET_REFS = { spLongRun: 0.102, spActualHotDecade: 0.13, nasdaqActual: 0.17, treasury10y: 0.044 };
 // The baseline's flat assumptions. MUST match BASELINE_ASSUMPTION_DEFAULTS in
 // scripts/build_datadir.py, so the hosted and local baselines model the same carry and benchmark.
-export const BASELINE_ASSUMPTION_DEFAULTS = { carryRate: 0.2, spRate: 0.102, spSensitivityRate: 0.13, staleDays: 90 };
+export const BASELINE_ASSUMPTION_DEFAULTS = {
+  carryRate: 0.2, spRate: MARKET_REFS.spLongRun, spSensitivityRate: MARKET_REFS.spActualHotDecade, staleDays: 90,
+};
 // A fund with entries in these maps is modelled with its own waterfall instead of the flat carryRate.
 export const FUND_WATERFALL_KEYS = ["carryRates", "preferredReturns", "catchupRates", "catchupLimits"];
 

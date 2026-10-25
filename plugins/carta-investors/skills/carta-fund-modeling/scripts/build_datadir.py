@@ -215,6 +215,23 @@ def fid(name):
     return re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-").upper()
 
 
+def fund_display_name(name, vintage):
+    # No year at all when vintage is unknown: a stand-in glyph surfaces as � in the app.
+    bare = re.sub(r",? (L\.?P\.?|LP|LLC)$", "", name)
+    return "%s (%s, %s)" % (fid(name), bare, vintage) if vintage else "%s (%s)" % (fid(name), bare)
+
+
+def cohort_standing(has_nav, lp_tvpi, net_irr, vintage):
+    if not has_nav:
+        return "No month-end NAV close booked yet — holdings from booked investments only."
+    irr = " · %.1f%% net IRR" % (net_irr * 100) if net_irr is not None else ""
+    return "%.2fx net LP TVPI%s (vintage %s)." % (lp_tvpi, irr, vintage if vintage else "—")
+
+
+def default_mark(firm_name):
+    return {"text": (firm_name[:3] or "FND").upper(), "bg": "#4F46E5", "fg": "#FFFFFF"}
+
+
 def norm_co(n):
     """Normalize a company name for fuzzy matching across datasets."""
     n = re.sub(r"\(.*?\)", "", n or "").strip().lower()
@@ -319,8 +336,11 @@ def _cohort_covered(r):
 SCENARIO_EDIT_FIELDS = ("valuationB", "markMultiple", "futureDilution",
                         "includeInNav", "exited", "exitTimingQ", "waterfallMode",
                         "archived", "notes", "secondaries")
+# Fund Construction's public-market comparison rates. MUST match MARKET_REFS in app/src/model/slices.js.
+MARKET_REFS = {"spLongRun": 0.102, "spActualHotDecade": 0.13, "nasdaqActual": 0.17, "treasury10y": 0.044}
 # The baseline's flat assumptions. MUST match BASELINE_ASSUMPTION_DEFAULTS in app/src/model/slices.js.
-BASELINE_ASSUMPTION_DEFAULTS = {"carryRate": 0.20, "spRate": 0.102, "spSensitivityRate": 0.13, "staleDays": 90}
+BASELINE_ASSUMPTION_DEFAULTS = {"carryRate": 0.20, "spRate": MARKET_REFS["spLongRun"],
+                                "spSensitivityRate": MARKET_REFS["spActualHotDecade"], "staleDays": 90}
 # Assumption maps keyed by fund id — pruned to the surviving funds on refresh.
 FUND_KEYED_ASSUMPTIONS = ("carryRates", "preferredReturns", "catchupRates",
                           "catchupLimits", "feeLoads", "followOnRatios",
@@ -465,7 +485,7 @@ def build(rawdir, out, meta):
     # plugin, so an unclassified build is far more likely real production
     # usage than a staff test session — staff noise is filterable downstream.
     carta_env = meta.get("cartaEnvironment") or "production"
-    mark = meta.get("mark") or {"text": (firm_name[:3] or "FND").upper(), "bg": "#4F46E5", "fg": "#FFFFFF"}
+    mark = meta.get("mark") or default_mark(firm_name)
 
     # ---- GP commitment (REAL) — GP partners' committed capital, else GP paid-in. ----
     # Sourced entirely from the DWH: the GP partners' recorded commitment
@@ -660,14 +680,6 @@ def build(rawdir, out, meta):
         fmetrics.get(u, {}).get("currency") for u in funds if fmetrics.get(u, {}).get("currency"))
     firm_currency = cur_counts.most_common(1)[0][0] if cur_counts else None
     mixed_currency = len(cur_counts) > 1
-
-    def display(f):
-        # "<id> (Bare Name, YYYY)" — but omit the ", YYYY" entirely when vintage is
-        # unknown rather than emitting a placeholder. A missing-vintage fund used to
-        # render "(Bare Name, —)"; that trailing "— " placeholder is what surfaced as
-        # a � in the app, so a fund name must never carry a stand-in glyph.
-        bare = re.sub(r",? (L\.?P\.?|LP|LLC)$", "", f["name"])
-        return "%s (%s, %s)" % (f["id"], bare, f["vintage"]) if f["vintage"] else "%s (%s)" % (f["id"], bare)
 
     # ---- per-fund monthly cashflows + firm NAV/TVPI trend ----
     flows_by_fund = collections.defaultdict(list)
@@ -1041,20 +1053,15 @@ def build(rawdir, out, meta):
         # the vintage: real vintage, else the earliest cash-flow year, else nav year.
         first_flow_year = min((int(d[:4]) for d, _ in flows_by_fund.get(f["uuid"], []) if len(d) >= 4 and d[:4].isdigit()), default=None)
         calc_vint = vint or first_flow_year or (int(nav[:4]) if len(nav) >= 4 and nav[:4].isdigit() else 2020)
-        if f["hasNav"]:
-            standing = "%.2fx net LP TVPI%s (vintage %s)." % (
-                f["lpTvpi"], (" · %.1f%% net IRR" % (nirr * 100)) if nirr is not None else "", vint if vint else "—")
-        else:
-            standing = "No month-end NAV close booked yet — holdings from booked investments only."
         # Null, not $0, for a fund with no NAV close: $0 would look like a booked figure.
         nav_val = (lambda v, d=2: round(v, d)) if f["hasNav"] else (lambda v, d=2: None)
         snap_funds.append({
-            "id": i, "name": display(f), "type": f["type"], "vintage": vint, "hasNav": f["hasNav"],
+            "id": i, "name": fund_display_name(f["name"], vint), "type": f["type"], "vintage": vint, "hasNav": f["hasNav"],
             "committed": nav_val(f["committed"]), "lpPaidIn": nav_val(f["lpPaidIn"]),
             "lpDistributed": nav_val(f["lpDistributed"]), "overviewLpNav": nav_val(f["lpNav"]),
             "lpDpi": nav_val(f["lpDpi"], 4), "lpRvpi": nav_val(f["lpRvpi"], 4), "lpTvpi": nav_val(f["lpTvpi"], 4),
             "netLpIrr": round(nirr, 4) if nirr is not None else None,
-            "cohortStanding": standing, "gpCapitalNav": nav_val(f["gpNav"]),
+            "cohortStanding": cohort_standing(f["hasNav"], f["lpTvpi"], nirr, vint), "gpCapitalNav": nav_val(f["gpNav"]),
             "waterfall": waterfall_of.get(f["uuid"]),
             "gpCommit": (lambda g: round(g, 2) if g is not None else None)(gp_commit_of(f["uuid"], f["gpContrib"])),
             "grossMoic": fmetrics.get(f["uuid"], {}).get("grossMoic"),
@@ -1095,7 +1102,7 @@ def build(rawdir, out, meta):
                                   "dryPowder": round(f["dryPowder"], 2)} for f in funds.values()},
         "navSeries": nav_series, "benchmarks": benchmarks, "benchmarksMeta": benchmarks_meta,
         "reprice": {"grossCarryRate": carry_default, "marksAsOf": nav},
-        "marketRefs": {"spLongRun": 0.102, "spActualHotDecade": 0.13, "nasdaqActual": 0.17, "treasury10y": 0.044},
+        "marketRefs": MARKET_REFS,
         "cashflows": cashflows, "windDownYear": windDownYear, "mostCompelling": most,
         "readMe": ["%s — Carta Fund Admin data, as of %s." % (firm_name, nav),
                    "Net IRR is xirr of dated LP cash flows + ending NAV (estimate). Accrued carry today is the booked ALLOCATIONS figure."],
