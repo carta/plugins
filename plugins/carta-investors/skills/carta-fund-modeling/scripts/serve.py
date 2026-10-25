@@ -411,8 +411,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _shell(self, qs):
         # Shell (index.html) and app share the /firm/<slug>/<page> path; only the
-        # iframe's own document carries ?frame=1, so it alone gets app.html. Not a
-        # security boundary — the token gates /api data, not the shell.
+        # iframe's own document carries ?frame=1 (FRAME_PARAM in app/src/route.js),
+        # so it alone gets app.html. Not a security boundary — the token gates /api
+        # data, not the shell.
         name = "app.html" if qs.get("frame") == ["1"] else "index.html"
         return self._send_file(WEB_DIR / name)
 

@@ -14,6 +14,8 @@
 // fires no event of its own, so navigate() dispatches NAV_EVENT to notify them.
 
 export const NAV_EVENT = "fm:navigate";
+// Marks the app document embedded in the outer shell's iframe; scripts/serve.py reads it too.
+export const FRAME_PARAM = "frame";
 
 export const CARTA_ID_RE = /^[1-9][0-9]*$/;
 export const FIRM_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

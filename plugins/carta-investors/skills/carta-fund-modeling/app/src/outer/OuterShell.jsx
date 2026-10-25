@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ChatPanel from "../ui/ChatPanel.jsx";
 import { onFromApp, postToApp } from "./bridge.js";
+import { FRAME_PARAM } from "../route.js";
 
 export function reloadApp() {
   const f = document.getElementById("fm-app");
@@ -36,7 +37,7 @@ export default function OuterShell({ features }) {
   // reload the iframe and drop in-app state.
   const [src] = useState(() => {
     const u = new URL(window.location.href);
-    u.searchParams.set("frame", "1");
+    u.searchParams.set(FRAME_PARAM, "1");
     return u.pathname + u.search;
   });
   // One serve.py serves one firm's data dir, so a single stable session id is
@@ -58,7 +59,7 @@ export default function OuterShell({ features }) {
   useEffect(() => onFromApp("route", ({ firm, tab } = {}) => {
     const url = new URL(window.location.href);
     url.pathname = firm ? `/firm/${encodeURIComponent(firm)}${tab ? `/${tab}` : ""}` : "/";
-    url.searchParams.delete("frame");
+    url.searchParams.delete(FRAME_PARAM);
     if (url.href !== window.location.href) window.history.replaceState({}, "", url);
   }), []);
 
