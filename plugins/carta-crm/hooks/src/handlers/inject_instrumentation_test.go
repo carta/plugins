@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -415,6 +416,47 @@ func TestInjectInstrumentation_CumulativeTokensFromTranscript(t *testing.T) {
 	}
 	if instr.CumulativeTokens == nil || *instr.CumulativeTokens != 30 {
 		t.Errorf("cumulative_tokens = %v, want 30", instr.CumulativeTokens)
+	}
+}
+
+func TestInjectInstrumentation_SecondCallAddsAppendedTokensAndNoPlugin(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	transcriptPath := writeTranscript(t,
+		`{"type":"assistant","message":{"id":"msg_A","usage":{"input_tokens":10,"output_tokens":20}}}`,
+	)
+	stdin := `{"tool_name":"some_tool","tool_input":{},"session_id":"s1","transcript_path":"` + transcriptPath + `"}`
+	if _, err := InjectInstrumentation([]byte(stdin)); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(transcriptPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"type":"assistant","message":{"id":"msg_B","usage":{"input_tokens":1,"output_tokens":2}}}` + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr struct {
+		Plugins          []session.PluginRef `json:"plugins"`
+		CumulativeTokens *int64              `json:"cumulative_tokens"`
+	}
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	if instr.CumulativeTokens == nil || *instr.CumulativeTokens != 33 {
+		t.Errorf("cumulative_tokens = %v, want 33", instr.CumulativeTokens)
+	}
+	// The token usage cache shares the session state dir with the plugin records.
+	wantPlugins := []session.PluginRef{{Name: "carta-crm", Version: "1.0.0"}}
+	if !slices.Equal(instr.Plugins, wantPlugins) {
+		t.Errorf("plugins = %v, want %v", instr.Plugins, wantPlugins)
 	}
 }
 

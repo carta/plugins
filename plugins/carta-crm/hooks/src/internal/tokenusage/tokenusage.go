@@ -3,10 +3,14 @@ package tokenusage
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"com.carta.claude_plugins.hooks/internal/session"
 )
 
 // usageSnapshot is the subset of an assistant message's usage object needed
@@ -39,32 +43,54 @@ type assistantLine struct {
 	} `json:"message"`
 }
 
-// accumulateFile folds one transcript's assistant-turn usage into seen, keyed
-// by message id so streamed chunks collapse to their final snapshot.
-func accumulateFile(path string, seen map[string]usageSnapshot) error {
+// sessionCache keeps a session's per-message totals and the byte offset read
+// so far in each transcript file, so each call reads only the appended bytes.
+type sessionCache struct {
+	MainPath string           `json:"main_path"`
+	Offsets  map[string]int64 `json:"offsets"`
+	Usage    map[string]int64 `json:"usage"`
+}
+
+func newSessionCache(mainPath string) sessionCache {
+	return sessionCache{MainPath: mainPath, Offsets: map[string]int64{}, Usage: map[string]int64{}}
+}
+
+// accumulateFrom folds the assistant-turn usage of path, from offset on, into
+// usage, keyed by message id so streamed chunks collapse to their final
+// snapshot. It returns the offset after the last complete line: a line still
+// being written is read again on the next call.
+func accumulateFrom(path string, offset int64, usage map[string]int64) (int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return offset, err
 	}
 	defer f.Close()
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return offset, err
+	}
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.Contains(line, `"type":"assistant"`) {
+	reader := bufio.NewReaderSize(f, 64*1024)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err == io.EOF {
+			return offset, nil
+		}
+		if err != nil {
+			return offset, err
+		}
+		offset += int64(len(line))
+		if !bytes.Contains(line, []byte(`"type":"assistant"`)) {
 			continue
 		}
 		var a assistantLine
-		if err := json.Unmarshal([]byte(line), &a); err != nil || a.Type != "assistant" {
+		if err := json.Unmarshal(line, &a); err != nil || a.Type != "assistant" {
 			continue
 		}
 		if a.Message.ID == "" || a.Message.Usage == nil {
 			continue
 		}
-		seen[a.Message.ID] = *a.Message.Usage
+		usage[a.Message.ID] = a.Message.Usage.total()
 	}
-	return scanner.Err()
 }
 
 // CumulativeSessionTokens sums usage across every assistant turn in a single
@@ -73,36 +99,80 @@ func CumulativeSessionTokens(transcriptPath string) (int64, bool) {
 	if transcriptPath == "" {
 		return 0, false
 	}
-	seen := map[string]usageSnapshot{}
-	if err := accumulateFile(transcriptPath, seen); err != nil {
+	usage := map[string]int64{}
+	if _, err := accumulateFrom(transcriptPath, 0, usage); err != nil {
 		return 0, false
 	}
-	return sumSeen(seen), len(seen) > 0
+	return sumUsage(usage), len(usage) > 0
 }
 
 // CumulativeSessionTokensForSession sums usage across a whole conversation:
 // the main transcript plus every subagent sidechain. transcriptPath may point
 // at either — a subagent's own turns still count toward the session total.
-func CumulativeSessionTokensForSession(transcriptPath string) (int64, bool) {
+// The sum is cached under the session's state dir, so a call reads only the
+// bytes appended since the previous call.
+func CumulativeSessionTokensForSession(sessionID, transcriptPath string) (int64, bool) {
 	mainPath := mainTranscriptPath(transcriptPath)
 	if mainPath == "" {
 		return 0, false
 	}
 
+	cachePath := session.TokenUsagePath(sessionID)
+	files := append([]string{mainPath}, sidechainFiles(mainPath)...)
+	cache := loadSessionCache(cachePath, mainPath, files)
+
 	// A read failure on one file shouldn't drop usage already folded from the rest.
-	seen := map[string]usageSnapshot{}
-	_ = accumulateFile(mainPath, seen)
-	for _, sidechain := range sidechainFiles(mainPath) {
-		_ = accumulateFile(sidechain, seen)
+	changed := false
+	for _, path := range files {
+		offset, _ := accumulateFrom(path, cache.Offsets[path], cache.Usage)
+		if offset != cache.Offsets[path] {
+			cache.Offsets[path] = offset
+			changed = true
+		}
+	}
+	if changed {
+		_ = saveSessionCache(cachePath, cache)
 	}
 
-	return sumSeen(seen), len(seen) > 0
+	return sumUsage(cache.Usage), len(cache.Usage) > 0
 }
 
-func sumSeen(seen map[string]usageSnapshot) int64 {
+// loadSessionCache returns the cached state for mainPath, or an empty cache
+// when there is none, it is unreadable, it belongs to another transcript, or
+// a file is now shorter than its cached offset (so it was rewritten).
+func loadSessionCache(cachePath, mainPath string, files []string) sessionCache {
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		return newSessionCache(mainPath)
+	}
+	var cache sessionCache
+	if err := json.Unmarshal(data, &cache); err != nil || cache.MainPath != mainPath || cache.Offsets == nil || cache.Usage == nil {
+		return newSessionCache(mainPath)
+	}
+	for _, path := range files {
+		info, err := os.Stat(path)
+		if err == nil && info.Size() < cache.Offsets[path] {
+			return newSessionCache(mainPath)
+		}
+	}
+	return cache
+}
+
+func saveSessionCache(cachePath string, cache sessionCache) error {
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		return err
+	}
+	data, err := json.Marshal(cache)
+	if err != nil {
+		return err
+	}
+	return session.WriteFileAtomic(cachePath, data, 0o644)
+}
+
+func sumUsage(usage map[string]int64) int64 {
 	var total int64
-	for _, usage := range seen {
-		total += usage.total()
+	for _, tokens := range usage {
+		total += tokens
 	}
 	return total
 }
