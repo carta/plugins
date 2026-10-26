@@ -1,10 +1,10 @@
-import { H1, H2, JumpLinks, FundPicker } from "../../ui/components.jsx";
-import { scopedFundId } from "../returns/useScenarioModel.js";
+import { H1, H2, JumpLinks, FundPicker, EmptyState, MixedCurrencyNote, ALL_FUNDS } from "../../ui/components.jsx";
 import { concentrationAcrossAll } from "../../model/concentration.js";
 import { useFirmData } from "../../state/FirmData.jsx";
 import { trackClick } from "../../analytics.js";
 import PowerLaw from "../returns/PowerLaw.jsx";
 import LpReport from "../returns/LpReport.jsx";
+import { POWER_LAW_TITLE, EXIT_IMPACT_TITLE, LP_SENSITIVITY_TITLE } from "../returns/chartTitles.js";
 import CohortStanding from "../CohortStanding.jsx";
 import FundTheme from "./FundTheme.jsx";
 import PacingCard, { hasPacingChart } from "./Pacing.jsx";
@@ -12,16 +12,27 @@ import ConcentrationCard from "./Concentration.jsx";
 
 // The page's themes, in order. A theme has its jump link and heading, its analytics
 // name (FundModeling.Reports.Jump.<viewName>), and its charts. A per-fund theme
-// (`perFund`) has charts that follow the page's fund picker in the jump-link bar. A chart whose
-// data this firm lacks is left out, and so is a theme left with no charts.
+// (`perFund`) has charts that follow the page's fund picker in the jump-link bar. A chart that
+// models one fund carries `allFunds`, what it draws while the picker is on All funds, given
+// the entry's own `render` as its second argument; a firm-wide chart, or one that draws its
+// own all-funds state (Return the fund, LP glidepath), has none and draws its `render` either way. A chart whose data this firm
+// lacks is left out, and so is a theme left with no charts.
+const SELECT_FUND = "Select a fund to see this chart.";
+const selectFund = (text) => () => <EmptyState icon="pending" text={text} />;
+// An all-funds chart that adds funds' amounts together; funds in more than one currency can't be added.
+// Without a `render` of its own it draws the entry's `render`, which then pools every fund.
+const combined = (title, render) => (p, own) => (p.mixedCurrency ? <MixedCurrencyNote title={title} /> : (render ?? own)(p));
+
 const THEMES = [
   {
     // pacing and concentration are firm-wide; the power-law charts follow the fund scope
     id: "portfolio-analysis", label: "Portfolio analysis", viewName: "PortfolioAnalysis", perFund: true,
     reports: [
-      { id: "power-law-curve", available: () => true, render: (p) => <PowerLaw section="curve" {...p.returnsProps} /> },
+      { id: "power-law-curve", available: () => true, render: (p) => <PowerLaw section="curve" {...p.returnsProps} />,
+        allFunds: combined(POWER_LAW_TITLE, selectFund(SELECT_FUND)) },
       { id: "return-the-fund", available: () => true, render: (p) => <PowerLaw section="return-the-fund" {...p.returnsProps} /> },
-      { id: "net-tvpi-sensitivity", available: () => true, render: (p) => <PowerLaw section="sensitivity" {...p.returnsProps} /> },
+      { id: "net-tvpi-sensitivity", available: () => true, render: (p) => <PowerLaw section="sensitivity" {...p.returnsProps} />,
+        allFunds: combined(EXIT_IMPACT_TITLE, selectFund(SELECT_FUND)) },
       { id: "pacing", available: (p) => hasPacingChart(p.pacing), render: (p) => <PacingCard funds={p.snapshot.funds} /> },
       { id: "concentration", available: (p) => !!concentrationAcrossAll(p.snapshot, p.portfolio),
         render: (p) => <ConcentrationCard snapshot={p.snapshot} portfolio={p.portfolio} mixed={p.mixedCurrency} /> },
@@ -30,7 +41,8 @@ const THEMES = [
   {
     id: "lp-returns", label: "LP returns", viewName: "LpReturns", perFund: true, needsNav: true,
     reports: [
-      { id: "lp-return-sensitivity", available: () => true, render: (p) => <LpReport section="sensitivity" {...p.returnsProps} /> },
+      { id: "lp-return-sensitivity", available: () => true, render: (p) => <LpReport section="sensitivity" {...p.returnsProps} />,
+        allFunds: combined(LP_SENSITIVITY_TITLE, selectFund(SELECT_FUND)) },
       { id: "lp-glidepath", available: () => true, render: (p) => <LpReport section="glidepath" {...p.returnsProps} /> },
     ],
   },
@@ -55,17 +67,18 @@ export default function Reports({ returnsProps, snapshot, portfolio, fundStates,
   const themes = THEMES
     .map((t) => ({ ...t, reports: t.reports.filter((r) => r.available(props)) }))
     .filter((t) => t.reports.length);
+  const allFunds = returnsProps.fundScope === ALL_FUNDS;
   const jump = (id) => trackClick(`FundModeling.Reports.Jump.${themes.find((t) => sectionId(t) === id).viewName}`);
   return (
     <div>
       <H1>Reports</H1>
       <JumpLinks sections={themes.map((t) => [sectionId(t), t.label])} onJump={jump}
         actions={themes.some((t) => t.perFund) && snapshot.funds.length > 0 && (
-          <FundPicker funds={snapshot.funds} value={scopedFundId(snapshot, returnsProps.fundScope)}
-            onChange={returnsProps.setFundScope} includeAll={false} triggerLabel="Fund" />
+          <FundPicker funds={snapshot.funds} value={returnsProps.fundScope}
+            onChange={returnsProps.setFundScope} triggerLabel="Fund" />
         )} />
       {themes.map((t) => {
-        const charts = t.reports.map((r) => <div key={r.id} data-testid={`report-${r.id}`} style={{ marginBottom: 32 }}>{r.render(props)}</div>);
+        const charts = t.reports.map((r) => <div key={r.id} data-testid={`report-${r.id}`} style={{ marginBottom: 32 }}>{allFunds && r.allFunds ? r.allFunds(props, r.render) : r.render(props)}</div>);
         return (
           <section key={t.id} id={sectionId(t)} style={{ marginBottom: 24 }}>
             {t.perFund

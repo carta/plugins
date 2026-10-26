@@ -4,10 +4,11 @@ import { NoNavState } from "../returns/FundHeader.jsx";
 
 /** A per-fund theme on the Reports page (see Reports.jsx's THEMES): its heading over
  *  its charts. With `needsNav`, a fund that has no month-end NAV close shows why in place of the
- *  charts, since they are all built from its LP cash flows. */
+ *  charts, since they are all built from its LP cash flows. Under All funds no one fund is
+ *  picked, so the charts draw their own all-funds state. */
 export default function FundTheme({ title, returnsProps, needsNav, children }) {
   const m = useScenarioModel(returnsProps);
   const header = <H2>{title}</H2>;
-  if (needsNav && m.fs.hasNav === false) return <>{header}<NoNavState fs={m.fs} /></>;
+  if (needsNav && !m.allMode && m.fs.hasNav === false) return <>{header}<NoNavState fs={m.fs} /></>;
   return <>{header}{children}</>;
 }

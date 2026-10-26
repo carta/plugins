@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, shortCompany } from "../../ui/format.js";
 import { H3, InfoTip, TIP_TRIGGER_STYLE } from "../../ui/components.jsx";
+import { POWER_LAW_TITLE } from "./chartTitles.js";
 
 // The "standard" venture power-law exponent: returns decay ~ rank^-1 (Zipf).
 // Anchored to this fund's own top holding, so the reference asks "given your best
@@ -145,7 +146,7 @@ export default function PowerLawChart({ companies, fundName }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ marginBottom: 16 }}>
-        <H3>Power law ranking</H3>
+        <H3>{POWER_LAW_TITLE}</H3>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }} role="img"
         aria-label={`Return multiple by rank for ${fundName}, log-log, vs a standard venture power law`}>

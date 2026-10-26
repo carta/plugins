@@ -503,8 +503,9 @@ export const GLOBAL_CSS = `
   .card { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: 0; box-shadow: none; }
   .card:hover { box-shadow: var(--shadow-hover); }
   /* Ink's real Tile has no hover elevation — StatBar (components.jsx) opts out of the
-     app's usual card-lifts-on-hover convention to match. */
-  .card.stat-bar:hover { box-shadow: none; }
+     app's usual card-lifts-on-hover convention to match. A boxed empty state has nothing
+     to act on, so it doesn't lift either. */
+  .card.stat-bar:hover, .card.empty-card:hover { box-shadow: none; }
   .panel { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: 0; box-shadow: none; }
   .panel:hover { box-shadow: var(--shadow-hover); }
 

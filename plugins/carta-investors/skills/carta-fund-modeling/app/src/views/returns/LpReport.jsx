@@ -4,7 +4,8 @@ import { fmtM, fmtPct, fmtAsOf, fmt$ } from "../../ui/format.js";
 import { H3, MethodNote, SourceNote, Badge } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { useScenarioModel } from "./useScenarioModel.js";
-import Glidepath from "./Glidepath.jsx";
+import Glidepath, { GlidepathAllFunds } from "./Glidepath.jsx";
+import { LP_SENSITIVITY_TITLE } from "./chartTitles.js";
 
 /** Net to LPs across exit multiples — distributions, profit and net LP IRR vs the
  *  public-market benchmark, with the scenario's current marks highlighted. */
@@ -33,7 +34,7 @@ function LpSensitivity({ m, readOnly }) {
   const markLabel = readOnly ? "current marks" : "scenario mark";
   return (
     <div>
-      <H3 as="div" style={{ marginBottom: 4 }}>LP return sensitivity</H3>
+      <H3 as="div" style={{ marginBottom: 4 }}>{LP_SENSITIVITY_TITLE}</H3>
       <MethodNote>
         Net to LPs across exit multiples — distributions, profit and net LP IRR vs the benchmark; current marks highlighted.
         The public-market benchmark is set on the <strong>LP Returns</strong> tab and the exit horizon on <strong>Companies</strong>.
@@ -87,10 +88,10 @@ export default function LpReport({ section, ...props }) {
   return (
     <div>
       {section === "sensitivity" && <LpSensitivity m={m} readOnly={readOnly} />}
-      {section === "glidepath" && (
+      {section === "glidepath" && (m.allMode ? <GlidepathAllFunds /> : (
         <Glidepath snapshot={snapshot} fundState={m.fs} portfolio={portfolio}
           setAssumption={setAssumption} readOnly={readOnly} />
-      )}
+      ))}
     </div>
   );
 }

@@ -556,7 +556,7 @@ export function Segmented({ options, value, onChange, small, disabled, locked })
   );
 }
 
-/** Fund scope dropdown — "All Funds" plus one entry per fund (names, not ids).
+/** Fund scope dropdown — "All funds" plus one entry per fund (names, not ids).
  *  Replaces the overflowing per-view segmented strips. `value` is "ALL" or a
  *  fund id; options come from snapshot.funds. Custom menu (not native select)
  *  so 18 long fund names render cleanly and theme in dark mode. */
@@ -704,13 +704,13 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
   );
 }
 
-/** Fund-scope single-select — "All Funds" plus one entry per fund (names, not
+/** Fund-scope single-select — "All funds" plus one entry per fund (names, not
  *  ids). A thin fund-domain wrapper around the generic `Dropdown` above:
- *  builds the option list (with the "All Funds" divider) and hands it off.
+ *  builds the option list (with the "All funds" divider) and hands it off.
  *  `triggerLabel` passes through, for a self-labeling "Fund: …" trigger. */
-export function FundPicker({ funds, value, onChange, allLabel = "All Funds", includeAll = true, triggerLabel }) {
+export function FundPicker({ funds, value, onChange, includeAll = true, triggerLabel }) {
   const opts = [
-    ...(includeAll ? [{ id: ALL_FUNDS, label: allLabel }] : []),
+    ...(includeAll ? [{ id: ALL_FUNDS, label: "All funds" }] : []),
     ...funds.map((f, i) => ({ id: f.id, label: fundLabel(f.name || f.id), separatorBefore: includeAll && i === 0 })),
   ];
   return <Dropdown options={opts} value={value} onChange={onChange} testId="fund-picker" triggerLabel={triggerLabel} />;

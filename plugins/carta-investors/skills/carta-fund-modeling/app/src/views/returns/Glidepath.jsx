@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, fmtPct } from "../../ui/format.js";
-import { H3, Eyebrow, MethodNote, SourceNote, Segmented, Slider, StatBar, Badge, fundLabel } from "../../ui/components.jsx";
+import { H3, Eyebrow, MethodNote, SourceNote, Segmented, Slider, StatBar, Badge, EmptyState, fundLabel } from "../../ui/components.jsx";
 import { fundGlidepath } from "../../model/glidepath.js";
 
 // realized (DPI) vs unrealized (RVPI) band colors; TVPI is the ink line on top.
@@ -144,6 +144,27 @@ function GlidepathChart({ g }) {
 
 /** The LP glidepath report: chart, projection knobs and per-year table. `fundState`
  *  is the live (repriced) per-fund state; the parent owns fund selection. */
+const GlidepathHeading = ({ children }) => (
+  <>
+    <H3 as="div" style={{ marginBottom: 4 }}>LP glidepath</H3>
+    <MethodNote>{children}</MethodNote>
+  </>
+);
+
+/** The glidepath under All funds: a fund's path from calls to wind-down has no firm-wide
+ *  form (funds of different vintages blur the arc, and each projects on its own
+ *  settings), so its heading stays over a boxed prompt to pick a fund. */
+export function GlidepathAllFunds() {
+  return (
+    <div>
+      <GlidepathHeading>Actuals to Today, then a projection.</GlidepathHeading>
+      <div className="card empty-card">
+        <EmptyState icon="pending" text="Select a fund to see how its LP returns develop over the fund's life." />
+      </div>
+    </div>
+  );
+}
+
 export default function Glidepath({ snapshot, fundState, portfolio, setAssumption, readOnly }) {
   const fundId = fundState?.id;
   const asOfYear = +String(snapshot.source?.navAsOf).slice(0, 4);
@@ -169,10 +190,7 @@ export default function Glidepath({ snapshot, fundState, portfolio, setAssumptio
 
   return (
     <div>
-      <H3 as="div" style={{ marginBottom: 4 }}>LP glidepath</H3>
-      <MethodNote>
-        Actuals to Today, then a projection at {knobs.navGrowthPct}% NAV growth.
-      </MethodNote>
+      <GlidepathHeading>Actuals to Today, then a projection at {knobs.navGrowthPct}% NAV growth.</GlidepathHeading>
 
       {!g ? (
         <div className="card" style={{ padding: "22px 24px", ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>

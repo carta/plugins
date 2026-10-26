@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, shortCompany } from "../../ui/format.js";
-import { H3, MethodNote, SourceNote, Slider, Segmented, MultiFundPicker, fundLabel } from "../../ui/components.jsx";
+import { H3, MethodNote, SourceNote, Slider, Segmented, MultiFundPicker, EmptyState, fundLabel } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { exitValueImpact, fundCompanyReturns } from "../../model/sensitivity.js";
 import { returnTheFundSolutions } from "../../model/returnthefund.js";
 import { useScenarioModel } from "./useScenarioModel.js";
 import PowerLawChart from "./PowerLawChart.jsx";
+import { EXIT_IMPACT_TITLE } from "./chartTitles.js";
 
 const TOP_N = 15;
 
@@ -56,7 +57,7 @@ function ExitImpactCard({ snapshot, portfolio, fs }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ marginBottom: 4 }}>
-        <H3>Top holdings by Net TVPI impact</H3>
+        <H3>{EXIT_IMPACT_TITLE}</H3>
       </div>
       <MethodNote>
         Each holding's value is scaled ±{pctLabel}, one at a time, and run through the LP make-whole waterfall; the bars rank where the fund's Net TVPI is most exposed, and the impacts aren't additive.
@@ -100,6 +101,26 @@ const RTF_COLS = [
 
 const RTF_STEP = 0.25, RTF_HEADROOM = 10; // slider ceiling rides this many × above current
 
+const RtfHeading = () => (
+  <>
+    <H3>“Return the fund” analysis</H3>
+    <p style={{ ...sans, fontSize: FS.small, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)", margin: "0 0 12px" }}>
+      Sets of live holdings whose exits would lift the fund to your target gross MOIC, lowest exit multiple first.
+    </p>
+  </>
+);
+
+/** Return the fund under All funds: it backsolves one fund's target, so it has no
+ *  all-funds form; its heading stays over a boxed prompt to pick a fund. */
+const ReturnTheFundAllFunds = () => (
+  <div style={{ marginBottom: 16 }}>
+    <RtfHeading />
+    <div className="card empty-card">
+      <EmptyState icon="pending" text="Select a fund to see an analysis of how your investments would need to perform to return the fund." />
+    </div>
+  </div>
+);
+
 function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config, setConfig }) {
   // totals (currentMoic etc.) are target-independent — used to seed & floor the slider
   // and to list the eligible movers for the company picker.
@@ -132,10 +153,7 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
   const fill = (t - sliderMin) / RTF_HEADROOM;
   return (
     <div style={{ marginBottom: 16 }}>
-      <H3>“Return the fund” analysis</H3>
-      <p style={{ ...sans, fontSize: FS.small, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)", margin: "0 0 12px" }}>
-        Sets of live holdings whose exits would lift the fund to your target gross MOIC, lowest exit multiple first.
-      </p>
+      <RtfHeading />
       {/* The slider sits left; the solution-space controls sit right-aligned on the
           same row, wrapping below it on narrow widths. */}
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start", margin: "4px 0 14px" }}>
@@ -238,10 +256,10 @@ export default function PowerLaw({ section, ...props }) {
       {section === "curve" && <PowerLawChart companies={returns} fundName={fundLabel(m.fs.name)} />}
       {/* target is stored per fund in the scenario's assumptions, so each scenario
           keeps its own and it persists like the other scenario settings. */}
-      {section === "return-the-fund" && (
+      {section === "return-the-fund" && (m.allMode ? <ReturnTheFundAllFunds /> : (
         <ReturnTheFund portfolio={portfolio} fundId={m.fundId} readOnly={readOnly}
           target={rtfTarget} setTarget={setRtfTarget} config={rtfConfig} setConfig={setRtfConfig} />
-      )}
+      ))}
       {section === "sensitivity" && <ExitImpactCard snapshot={snapshot} portfolio={portfolio} fs={m.fs} />}
     </div>
   );
