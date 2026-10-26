@@ -1,7 +1,16 @@
 {
   "carta-cap-table": null,
   "carta-captable-home-build": null,
-  "carta-compensation-app": null,
+  "carta-compensation-app": {
+    "category": "compensation",
+    "name": "Total Compensation app",
+    "order": 40,
+    "tag": "App",
+    "prompts": [
+      "Launch the compensation console for {{COMPANY}}",
+      "Open the pay benchmarks for {{COMPANY}} so I can filter them by job area"
+    ]
+  },
   "carta-compensation-benchmarks": {
     "category": "compensation",
     "name": "Market pay benchmarks",

@@ -6,6 +6,10 @@ const PLUGIN = "carta-cap-table";
 // this artifact never sees, which would raise the banner almost daily.
 const SKILL = "carta-captable-home-build";
 const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
+const BUILT_AT = "{{BUILT_AT}}";
+// A fresh build is already the newest the user can get. Matches carta-mcp's week-old
+// release pick, so after this window the banner names only a release a rebuild reaches.
+const QUIET_AFTER_BUILD_DAYS = 7;
 // Names the cap table and the company: carta-investors publishes its own "Carta Home",
 // and a prompt either page could have written would route to the wrong skill.
 const UPDATE_PROMPT = "Rebuild my Carta Home cap table artifact for " + BAKED_COMPANY_NAME;
@@ -18,6 +22,13 @@ const DISMISS_KEY = "captableHome.dismissedUpdateVersion";
 function parseMajorMinor(v) {
   const m = /^(\d+)\.(\d+)\.\d+$/.exec(String(v || ""));
   return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+// An unparseable stamp counts as fresh: better to miss a banner than to raise a wrong one.
+function isFreshBuild(builtAt, now) {
+  const built = Date.parse(builtAt);
+  if (Number.isNaN(built)) return true;
+  return now - built < QUIET_AFTER_BUILD_DAYS * DAY_MS;
 }
 
 function isUpdateAvailable(current, latest) {
@@ -45,15 +56,15 @@ function dismissUpdateBanner(version) {
   if (slot) slot.innerHTML = "";
 }
 
-const UPDATE_COPY_ICON =
-  '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
-const UPDATE_COPY_LABEL = UPDATE_COPY_ICON + "Copy this prompt";
+// Icon + "Copy this prompt", swapping to "✓ Copied" for a beat so the click is
+// acknowledged in place rather than by a toast.
+const UPDATE_COPY_LABEL = copyIconSvg() + "Copy this prompt";
 
 function copyUpdatePrompt(btn) {
   trackPrompt("CaptableHome.UpdateBanner.Copy", UPDATE_PROMPT, "other");
   copyText(UPDATE_PROMPT, () => {
     btn.textContent = "✓ Copied";
-    setTimeout(() => { btn.innerHTML = UPDATE_COPY_LABEL; }, 2000);
+    setTimeout(() => { btn.innerHTML = UPDATE_COPY_LABEL; }, COPIED_TIP_MS);
   });
 }
 
@@ -96,6 +107,7 @@ function extractVersionPayload(res) {
 
 // Silent on every failure: no banner beats a banner the user cannot act on.
 async function checkForUpdate() {
+  if (isFreshBuild(BUILT_AT, Date.now())) return;
   if (!(await mcpAvailable())) return;
   try {
     const res = await _mcp("fetch", {

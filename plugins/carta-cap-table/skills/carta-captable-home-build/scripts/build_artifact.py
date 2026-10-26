@@ -48,6 +48,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
@@ -149,7 +150,8 @@ def read_version():
 
 
 def read_skill_directory():
-    """Return the baked Skill Directory: a list of {skill, category, name, order, prompts}.
+    """Return the baked Skill Directory: a list of {skill, category, name, order, prompts},
+    plus `tag` and `whatsNew` where an entry sets them.
 
     Opt-outs (null) are dropped, and so is any skill this install does not carry: the
     file is plugin-level and always published, but a skill without `publish: true` never
@@ -168,14 +170,30 @@ def read_skill_directory():
     for skill, entry in sorted(data.items()):
         if entry is None or not (SKILLS_ROOT / skill / "SKILL.md").exists():
             continue
-        entries.append({
+        baked = {
             "skill": skill,
             "category": entry["category"],
             "name": entry["name"],
             "order": entry.get("order", 0),
             "prompts": entry["prompts"],
-        })
+        }
+        baked.update({k: entry[k] for k in ("tag", "whatsNew") if k in entry})
+        entries.append(baked)
     return entries
+
+
+def read_skill_opt_outs():
+    """Return the skills the directory file opts out with null, that this install carries.
+
+    The bake drops them from the list, but the published list the page reads from
+    plugin:list:skills can lag this file and still carry one of them, so What's new keeps
+    these out by name.
+    """
+    data = json.loads(DIRECTORY_FILE.read_text())
+    return sorted(
+        skill for skill, entry in data.items()
+        if entry is None and (SKILLS_ROOT / skill / "SKILL.md").exists()
+    )
 
 
 def directory_json(entries):
@@ -207,8 +225,11 @@ def build(mcp_server, corporation_id, company_name):
     parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
     parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
     skill_directory = directory_json(read_skill_directory())
+    skill_opt_outs = directory_json(read_skill_opt_outs())
     # The directory is content like any source part, so it moves the build id too.
-    build_id = compute_build_id(template, {**parts, DIRECTORY_FILE.name: skill_directory})
+    build_id = compute_build_id(
+        template, {**parts, DIRECTORY_FILE.name: skill_directory + skill_opt_outs}
+    )
 
     out = template
     for filename, marker in {**MARKERS, **VENDOR_MARKERS}.items():
@@ -228,34 +249,25 @@ def build(mcp_server, corporation_id, company_name):
         if token in out:
             sys.exit("ERROR: unresolved marker {} after assembly".format(token))
 
-    out = out.replace("{{CARTA_MCP_SERVER}}", mcp_server)
-    if "{{CARTA_MCP_SERVER}}" in out:
-        sys.exit("ERROR: {{CARTA_MCP_SERVER}} still present after substitution")
-
-    out = out.replace("{{CORPORATION_ID}}", corporation_id)
-    if "{{CORPORATION_ID}}" in out:
-        sys.exit("ERROR: {{CORPORATION_ID}} still present after substitution")
-
-    # JSON-encode: the name lands inside a JS string literal in one concatenated
-    # <script>, so a quote or backslash in it would be a SyntaxError killing every card.
-    out = out.replace("{{COMPANY_NAME_JSON}}", json.dumps(company_name))
-    if "{{COMPANY_NAME_JSON}}" in out:
-        sys.exit("ERROR: {{COMPANY_NAME_JSON}} still present after substitution")
-
-    out = out.replace("{{SKILL_DIRECTORY_JSON}}", skill_directory)
-    if "{{SKILL_DIRECTORY_JSON}}" in out:
-        sys.exit("ERROR: {{SKILL_DIRECTORY_JSON}} still present after substitution")
-
-    out = out.replace("{{PAGE_TITLE}}", page_title(company_name))
-    if "{{PAGE_TITLE}}" in out:
-        sys.exit("ERROR: {{PAGE_TITLE}} still present after substitution")
-
-    out = out.replace("{{BUILD_ID}}", build_id)
-
+    # One pass over the assembled page, so a substituted value (a company name that spells
+    # out another marker) is never scanned again.
     version = read_version()
-    out = out.replace("{{ARTIFACT_VERSION}}", version)
-    if "{{ARTIFACT_VERSION}}" in out:
-        sys.exit("ERROR: {{ARTIFACT_VERSION}} still present after substitution")
+    values = {
+        "CARTA_MCP_SERVER": mcp_server,
+        "CORPORATION_ID": corporation_id,
+        # The name lands as a JS value in the page's one <script>: a quote or backslash
+        # would be a SyntaxError killing every card, and `</script>` or `<!--` would end
+        # or derail the script.
+        "COMPANY_NAME_JSON": script_json(company_name),
+        "SKILL_DIRECTORY_JSON": skill_directory,
+        "SKILL_OPT_OUTS_JSON": skill_opt_outs,
+        "PAGE_TITLE": page_title(company_name),
+        "BUILD_ID": build_id,
+        # The update banner stays quiet for a week after this time (see app/version-check.js).
+        "BUILT_AT": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ARTIFACT_VERSION": version,
+    }
+    out = re.sub(r"\{\{(" + "|".join(values) + r")\}\}", lambda m: values[m.group(1)], out)
 
     return out, build_id, version
 

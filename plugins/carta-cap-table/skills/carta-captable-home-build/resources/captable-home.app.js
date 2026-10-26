@@ -76,6 +76,9 @@ function copyTextFallback(str) {
   } catch (e) { return false; }
 }
 
+// How long a "Copied" confirmation stays up before the control returns to its resting state.
+const COPIED_TIP_MS = 2200;
+
 function copyText(str, onCopied) {
   const viaFallback = () => {
     if (copyTextFallback(str)) { onCopied(); } else { showToast('Could not copy to clipboard'); }
@@ -87,7 +90,13 @@ function copyText(str, onCopied) {
   }
 }
 
-const COPY_ICON_SVG = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+function copyIconSvg(px = 11) {
+  return `<svg width="${px}" height="${px}" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+}
+const COPY_ICON_SVG = copyIconSvg();
+
+// One day, for every window the page measures in days.
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Closes a drill-down page: the user has just read the data, so this is where the
 // same question carries into chat. Unresolved prompt on the button, resolved on screen.
@@ -110,8 +119,13 @@ function fpCopyPrompt(btn) {
   copyText(text, () => {
     btn.textContent = "✓ Copied";
     btn.classList.add("copied");
-    setTimeout(() => { btn.innerHTML = COPY_ICON_SVG + "Copy"; btn.classList.remove("copied"); }, 2000);
+    setTimeout(() => { btn.innerHTML = COPY_ICON_SVG + "Copy"; btn.classList.remove("copied"); }, COPIED_TIP_MS);
   });
+}
+
+// The viewer asked their system for less motion: no typing effect, no carousel rotation or fade.
+function prefersReducedMotion() {
+  return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 }
 
 function showToast(msg) {
@@ -121,10 +135,13 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove("show"), 2800);
 }
 
+// How a prompt names the company: its name, or "this company" when the page has none.
+const companyNoun = () => _selectedCompanyName || "this company";
+
 // A copied prompt lands in a chat that has no idea what the page is showing, so
 // name the company in it. Resolved at copy time, never written back to the DOM.
 function resolvePrompt(text) {
-  return String(text || "").replace(/\{\{COMPANY\}\}/g, _selectedCompanyName || "this company");
+  return String(text || "").replace(/\{\{COMPANY\}\}/g, () => companyNoun());
 }
 
 // getComputedStyle() resolves light-dark() to the color in effect; getPropertyValue()
@@ -318,24 +335,38 @@ const BAKED_COMPANY_NAME = {{COMPANY_NAME_JSON}};
 
 // The Skill Directory as it stood at build time, from .claude-plugin/skill-directory.json
 // with opt-outs and skills absent from the install already dropped: a list of
-// {skill, category, name, order, prompts}. It is the fallback — app/skill-directory.js
-// replaces _directorySkills with the published list once it arrives.
+// {skill, category, name, order, prompts}, plus `tag` and `whatsNew` where an entry sets
+// them. It is the fallback — app/skill-directory.js replaces _directorySkills with the
+// published list once it arrives.
 const BAKED_SKILL_DIRECTORY = {{SKILL_DIRECTORY_JSON}};
 let _directorySkills = BAKED_SKILL_DIRECTORY;
+// The skills the directory file opts out with `null`. The published list from
+// plugin:list:skills can lag this build and still carry one of them, so What's new checks
+// this list too rather than trust whatever the published list holds.
+const BAKED_SKILL_OPT_OUTS = {{SKILL_OPT_OUTS_JSON}};
 
 // Every in-flight fetch compares against this after each await and discards its
 // result if it no longer matches.
 let _selectedCorporationId = null;
-let _selectedCompanyName = "";
+// The prompt cards paint before any fetch, so they already name the baked company.
+let _selectedCompanyName = BAKED_COMPANY_NAME;
+
+// The company is baked at build time, so the title needs no lookup. An empty name
+// hides the "| Company" part and leaves a plain "Carta Home".
+function setCompanyTitle(name) {
+  const title = document.getElementById("company-title");
+  const label = document.getElementById("company-title-name");
+  if (!title || !label) return;
+  label.textContent = name || "";
+  title.hidden = !name;
+}
 
 function selectCompany(corporationId, name) {
   _selectedCorporationId = corporationId;
   _selectedCompanyName = name || "";
-  document.getElementById("company-subtitle").textContent = _selectedCompanyName || "Cap table for this company.";
-  // Repaint every surface holding a {{COMPANY}} prompt so it names the new company.
+  setCompanyTitle(_selectedCompanyName);
+  // Repaint the surfaces holding a {{COMPANY}} prompt so it names this company.
   renderDirectory();
-  renderCapabilities();
-  renderWhatsNew();
   resetDashboardState();
   setAllCardsLoading();
   loadCompanyData(corporationId);
@@ -358,6 +389,15 @@ function switchTab(id) {
   });
 }
 
+// Microapps are local React apps, so they only launch in Claude Code — a copied prompt does
+// nothing in a Cowork chat. APP_TAG is the `tag` value in skill-directory.json, which pages
+// already deployed match too; APP_TAG_LABEL is only what the pill reads.
+const APP_TAG = 'App';
+const APP_TAG_LABEL = 'Microapp';
+const APP_TAG_TIP = 'Microapps are interactive apps built for a specific job and loaded with your Carta data. Build one with a Carta-provided skill in Claude Code, then customize it with Claude to fit how you work.';
+// What a copied microapp prompt or set-up command confirms with.
+const APP_COPIED_TIP = 'Copied. Paste into the chat in the Claude Code tab.';
+
 // Each category in DIR_CATEGORIES order, holding its entries sorted by `order`. An
 // entry naming no known category is dropped, and a category left empty is hidden.
 function directoryCategories(entries) {
@@ -367,6 +407,30 @@ function directoryCategories(entries) {
       .filter(e => e.category === cat.id)
       .sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name)),
   })).filter(cat => cat.skills.length);
+}
+
+const APP_LAUNCH_NOTE = 'Launches in Claude Code — paste this prompt there.';
+
+function renderDirectorySkill(s) {
+  const isApp = s.tag === APP_TAG;
+  const copiedLabel = isApp ? APP_COPIED_TIP : 'Copied!';
+  const body = (s.prompts && s.prompts.length)
+    ? s.prompts.map(p => `<div class="dir-skill-prompt">
+              <span class="dir-skill-prompt-text">"${escHtml(resolvePrompt(p))}"</span>
+              <button class="dir-copy-btn" data-prompt="${escHtml(p)}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)">${COPY_ICON_SVG}</button>
+            </div>`).join('')
+    : `<div class="dir-skill-note">${escHtml(s.note || '')}</div>`;
+  // The pill's tooltip is its own element, tied to the pill by id for screen readers.
+  const tipId = `dir-tip-${escHtml(s.skill)}`;
+  const tag = isApp
+    ? ` <span class="dir-skill-tag" tabindex="0" aria-describedby="${tipId}">${APP_TAG_LABEL}<span class="dir-skill-tip" role="tooltip" id="${tipId}">${escHtml(APP_TAG_TIP)}</span></span>`
+    : '';
+  return `
+          <li class="dir-skill-item">
+            <div class="dir-skill-name">${escHtml(s.name)}${tag}</div>
+            ${body}
+            ${isApp ? `<div class="dir-skill-note">${APP_LAUNCH_NOTE}</div>` : ''}
+          </li>`;
 }
 
 function renderDirectory() {
@@ -381,19 +445,7 @@ function renderDirectory() {
       </div>
       <div class="dir-cat-tagline">${escHtml(cat.tagline)}</div>
       <ul class="dir-skill-list">
-        ${cat.skills.map(s => {
-          const body = (s.prompts && s.prompts.length)
-            ? s.prompts.map(p => `<div class="dir-skill-prompt">
-              <span class="dir-skill-prompt-text">"${escHtml(resolvePrompt(p))}"</span>
-              <button class="dir-copy-btn" data-prompt="${escHtml(p)}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
-            </div>`).join('')
-            : `<div class="dir-skill-note">${escHtml(s.note || '')}</div>`;
-          return `
-          <li class="dir-skill-item">
-            <div class="dir-skill-name">${escHtml(s.name)}</div>
-            ${body}
-          </li>`;
-        }).join('')}
+        ${cat.skills.map(renderDirectorySkill).join('')}
       </ul>
     </div>
   `).join('');
@@ -403,9 +455,9 @@ function dirCopyPrompt(btn) {
   const text = resolvePrompt(btn.dataset.prompt);
   trackPrompt("CaptableHome.Directory.Copy", text, "static");
   const feedback = () => {
-    btn.textContent = 'Copied!';
+    btn.textContent = btn.dataset.copiedLabel || 'Copied!';
     btn.classList.add('copied');
-    setTimeout(() => { btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'; btn.classList.remove('copied'); }, 2000);
+    setTimeout(() => { btn.innerHTML = COPY_ICON_SVG; btn.classList.remove('copied'); }, COPIED_TIP_MS);
   };
   copyText(text, feedback);
 }
@@ -422,8 +474,9 @@ function populateFallback() {
 
 console.log("[captable-home] build {{BUILD_ID}}");
 trackHome("render", "CaptableHome.View");
+setCompanyTitle(BAKED_COMPANY_NAME);
 renderDirectory();
-// The capabilities, what's-new, banner and news sections init from their own files:
+// The suggested prompts, what's-new, banner and news sections init from their own files:
 // the bundle is one script, so their consts are still in the temporal dead zone here.
 mcpAvailable().then(live => {
   if (!live) {

@@ -25,9 +25,9 @@
     </div>
   </div>
 
-  <h1 class="page-title">Carta Home</h1>
-  <!-- selectCompany() in captable-home.app.js writes the built-for company here. -->
-  <p class="page-subtitle" id="company-subtitle">Loading this company's cap table…</p>
+  <!-- setCompanyTitle() in captable-home.app.js writes the built-for company into #company-title. -->
+  <h1 class="page-title">Carta Home<span class="page-title-firm" id="company-title" hidden><span class="page-title-sep" aria-hidden="true">|</span><span id="company-title-name"></span></span></h1>
+  <p class="page-subtitle">Your home base for cap table data, plugin updates and news.</p>
 
   <!-- Filled by version-check.js when a newer build of this artifact is published. -->
   <div id="update-banner-slot"></div>
@@ -37,20 +37,14 @@
   <div id="connection-banner-slot"></div>
 
   <div class="tab-bar">
-    <button class="tab-btn active" id="tab-btn-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab-btn active" id="tab-btn-dashboard" onclick="switchTab('dashboard')">Home</button>
     <button class="tab-btn" id="tab-btn-directory" onclick="switchTab('directory')">Skill directory</button>
   </div>
 
   <div id="tab-dashboard" class="tab-pane active">
 
-    <section id="capabilities-section">
-      <p class="section-label">What to try next</p>
-      <!-- Personalized when get_current_user returns recommendations, static otherwise. -->
-      <div class="cap-grid" id="cap-grid"></div>
-    </section>
-
     <section id="dashboards-section">
-      <p class="section-label">Dashboards</p>
+      <p class="section-label">Your dashboards</p>
 
       <!-- Headline totals for the selected company — a summary, not a tile, so it
            carries no card chrome and nothing to click. -->
@@ -60,7 +54,7 @@
 
       <div class="card-grid">
 
-        <div class="skill-card">
+        <div class="skill-card dash-card">
           <div class="card-header">
             <div class="card-header-text">
               <div class="card-title">Cap table</div>
@@ -71,11 +65,11 @@
             <div class="loading-row">Loading…</div>
           </div>
           <div class="card-footer">
-            <button class="run-btn" onclick="openCapTablePage()">View full cap table →</button>
+            <button class="run-btn" onclick="openCapTablePage()">View full cap table <span class="cta-arrow" aria-hidden="true">→</span></button>
           </div>
         </div>
 
-        <div class="skill-card">
+        <div class="skill-card dash-card">
           <div class="card-header">
             <div class="card-header-text">
               <div class="card-title">Round history</div>
@@ -86,11 +80,11 @@
             <div class="loading-row">Loading…</div>
           </div>
           <div class="card-footer">
-            <button class="run-btn" onclick="openRoundsPage()">View round history →</button>
+            <button class="run-btn" onclick="openRoundsPage()">View round history <span class="cta-arrow" aria-hidden="true">→</span></button>
           </div>
         </div>
 
-        <div class="skill-card">
+        <div class="skill-card dash-card">
           <div class="card-header">
             <div class="card-header-text">
               <div class="card-title">Option pool</div>
@@ -101,11 +95,11 @@
             <div class="loading-row">Loading…</div>
           </div>
           <div class="card-footer">
-            <button class="run-btn" onclick="openOptionPoolPage()">View all option plans →</button>
+            <button class="run-btn" onclick="openOptionPoolPage()">View all option plans <span class="cta-arrow" aria-hidden="true">→</span></button>
           </div>
         </div>
 
-        <div class="skill-card">
+        <div class="skill-card dash-card">
           <div class="card-header">
             <div class="card-header-text">
               <div class="card-title">Stakeholders</div>
@@ -116,11 +110,11 @@
             <div class="loading-row">Loading…</div>
           </div>
           <div class="card-footer">
-            <button class="run-btn" onclick="openStakeholdersPage()">View all stakeholders →</button>
+            <button class="run-btn" onclick="openStakeholdersPage()">View all stakeholders <span class="cta-arrow" aria-hidden="true">→</span></button>
           </div>
         </div>
 
-        <div class="skill-card span-full">
+        <div class="skill-card dash-card span-full">
           <div class="card-header">
             <div class="card-header-text">
               <div class="card-title">Drafts</div>
@@ -131,16 +125,36 @@
             <div class="loading-row">Loading…</div>
           </div>
           <div class="card-footer">
-            <button class="run-btn" onclick="openDraftsPage()">View all drafts →</button>
+            <button class="run-btn" onclick="openDraftsPage()">View all drafts <span class="cta-arrow" aria-hidden="true">→</span></button>
           </div>
         </div>
 
       </div>
     </section>
 
+    <section id="capabilities-section">
+      <p class="section-label">Suggested for you</p>
+      <!-- Filled by renderCapabilities(): personalized prompts, padded from CAP_PROMPTS. -->
+      <div class="cap-grid" id="cap-grid"></div>
+    </section>
+
+    <!-- What's new and Plugin news share one band under a rule. -->
+    <div class="wn-band">
+    <!-- The featured microapp, recently launched skills and the config fallback cards;
+         filled and un-hidden by renderWhatsNew() in app/whats-new.js once get_current_user answers. -->
     <section id="whats-new-section" hidden>
-      <p class="section-label">What's new</p>
-      <div class="whats-new-grid" id="whats-new-grid"></div>
+      <h2 class="wn-heading">What's new</h2>
+      <div class="wn-carousel" id="wn-carousel"
+           onmouseenter="wnPause('hovered', true)" onmouseleave="wnPause('hovered', false)"
+           onfocusin="wnPause('focused', true)"
+           onfocusout="if (!this.contains(event.relatedTarget)) wnPause('focused', false)">
+        <div class="wn-index">
+          <div id="wn-index-items" role="tablist" aria-label="What's new"></div>
+          <button class="wn-see-all" onclick="switchTab('directory')">See all skills and microapps <span aria-hidden="true">→</span></button>
+        </div>
+        <div class="wn-center" id="wn-center" role="tabpanel"></div>
+        <div class="wn-preview" id="wn-preview"></div>
+      </div>
     </section>
 
     <section id="plugin-news-section">
@@ -150,37 +164,45 @@
       <div class="plugin-news-grid" id="plugin-news-grid">
 
         <a class="plugin-news-card" href="https://carta.com/events/" target="_blank" rel="noopener">
-          <div class="plugin-news-thumb plugin-news-thumb--fake"><span class="plugin-news-fake-play">▶</span></div>
+          <div class="plugin-news-thumb plugin-news-thumb--fake">
+            <span class="plugin-news-fake-play">▶</span>
+            <span class="plugin-news-fake-title">Carta events and recordings</span>
+          </div>
           <div class="plugin-news-content">
             <span class="plugin-news-tag">Webinars</span>
             <p class="plugin-news-title">Carta events and recordings</p>
             <p class="plugin-news-desc">Live sessions and on-demand recordings on equity, fundraising, and cap table management.</p>
-            <span class="plugin-news-cta">Watch now →</span>
+            <span class="plugin-news-cta">Watch now <span class="cta-arrow" aria-hidden="true">→</span></span>
           </div>
         </a>
 
         <a class="plugin-news-card" href="https://carta.com/customer-stories/" target="_blank" rel="noopener">
-          <div class="plugin-news-thumb plugin-news-thumb--fake"></div>
+          <div class="plugin-news-thumb plugin-news-thumb--fake">
+            <span class="plugin-news-fake-title">How teams run equity on Carta</span>
+          </div>
           <div class="plugin-news-content">
             <span class="plugin-news-tag">Customer story</span>
             <p class="plugin-news-title">How teams run equity on Carta</p>
             <p class="plugin-news-desc">What founders and finance teams changed about their equity workflow, in their own words.</p>
-            <span class="plugin-news-cta">Read more →</span>
+            <span class="plugin-news-cta">Read more <span class="cta-arrow" aria-hidden="true">→</span></span>
           </div>
         </a>
 
         <a class="plugin-news-card" href="https://carta.com/learn/" target="_blank" rel="noopener">
-          <div class="plugin-news-thumb plugin-news-thumb--fake"></div>
+          <div class="plugin-news-thumb plugin-news-thumb--fake">
+            <span class="plugin-news-fake-title">Equity and cap table guides</span>
+          </div>
           <div class="plugin-news-content">
             <span class="plugin-news-tag">Guide</span>
             <p class="plugin-news-title">Equity and cap table guides</p>
             <p class="plugin-news-desc">Plain-language explainers on option pools, 409A valuations, SAFEs, and dilution.</p>
-            <span class="plugin-news-cta">Read more →</span>
+            <span class="plugin-news-cta">Read more <span class="cta-arrow" aria-hidden="true">→</span></span>
           </div>
         </a>
 
       </div>
     </section>
+    </div><!-- /wn-band -->
 
     <div style="text-align:right;padding:12px 0 4px;">
       <span class="build-stamp" style="font-size:11px;color:var(--ink-color-global-text-subtle);font-variant-numeric:tabular-nums;">v{{ARTIFACT_VERSION}} · build {{BUILD_ID}}</span>

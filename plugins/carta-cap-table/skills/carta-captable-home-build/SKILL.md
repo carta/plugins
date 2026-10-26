@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.100.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.101.0</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -103,16 +103,36 @@ which claims its own artifact and its own URL.
     because it is a list. Set names arrive already entity-escaped from the API and are
     decoded before display.
 - **The company** — baked in at build time as `BAKED_CORPORATION_ID` /
-  `BAKED_COMPANY_NAME`, written into the page subtitle and driving every card's data. The
+  `BAKED_COMPANY_NAME`, written into the page heading ("Carta Home | <company>") and driving
+  every card's data. The `<title>` comes from `page_title()` in the build script. The
   page has no picker: it loads its one company and nothing else, and remembers nothing
   between opens. To serve another company, build again for that company.
-- **What to try next** — four prompt cards. Personalized from
+- **Suggested for you** — four editable prompt cards under a category chip (Ownership,
+  Equity, Governance or Compensation, read off the prompt's words). Personalized from
   `get_current_user`'s `recommendations` when it returns any, padded out with the static
   `CAP_PROMPTS` from the config. A pad is skipped when a personalized prompt already
-  covers one of its `topics`, so the grid never shows two cards on one subject.
-- **What's new** — recently shipped cap-table capabilities, from `WHATS_NEW` in the
-  config, each with a copyable prompt. Update it when a release adds something a user
-  would want to try; the section hides itself when the list is empty.
+  covers one of its `topics`, so the row never shows two cards on one subject. The company
+  name in each prompt is an editable blank (`[[COMPANY]]` in a pad) that types itself in
+  when the row scrolls into view; Copy takes whatever the viewer left in the box and says
+  "Copied. Paste into chat." The prompts on screen are handed to What's new so it never
+  repeats one.
+- **What's new** — a carousel of up to four items (`app/whats-new.js`), rotating every
+  five seconds until the viewer picks one, and pausing while the pointer or focus is
+  inside it. Order: unlocked microapps, then the newest recent skills from Contentful,
+  then locked microapps. The one microapp, Total Compensation (`WHATS_NEW_MICROAPPS`),
+  carries a "Microapp" pill, a "What's a microapp?" popover, and a "Set up in Claude Code"
+  button that copies `/carta-compensation-app`. It is unlocked when `get_current_user`
+  reports `has_ctc: true`; otherwise it is locked and links to the Total Compensation demo
+  page (tagged `utm_campaign=carta-home-whatsnew-total-compensation`) with no set-up
+  button. The skills are `pluginPrompt` entries from the prompts space with a go-live date
+  in the last 60 days, shown only when `has_cap_table` is true, and skipped when the skill
+  is not listed in the Skill Directory, when the Skill Directory file opts it out (`null`
+  or `"whatsNew": false`), when it is the microapp's own skill, or when its prompt is
+  already in Suggested for you. The `WHATS_NEW` cards in the config paint at load and stay
+  whenever no profile arrives (no connector, a failed or unanswered `get_current_user`),
+  when no product flag is known, or when Carta supplies nothing; they pass the same Skill
+  Directory checks. Each item's preview is a static picture; `WHATS_NEW_SKILL_OUTPUTS` says
+  which kind (document, register, spreadsheet, chart, or an answer in chat) a skill gets.
 - **Plugin news** — Carta events, customer stories, and guides. The template ships static
   fallback cards; `live-content.js` replaces them with live Contentful entries tagged
   `NEWS_TAG`. Every failure path keeps the static cards, so the row is never empty.
@@ -124,12 +144,13 @@ which claims its own artifact and its own URL.
   the baked list. See `docs/skill-directory.md` in the marketplace repo for the entry
   format.
 
-Every prompt — the What to try next cards, the foot of each drill-down page, and the
-directory's copy buttons — is written with a `{{COMPANY}}` placeholder and resolved at
-copy time by `resolvePrompt()` to the built-for company's name (or "this company" when it
-is somehow blank). A copied prompt lands in a chat that has no page context, so it has
-to name its own subject. Keep `{{COMPANY}}` a standalone noun — `for {{COMPANY}}`, never
-`{{COMPANY}}'s` — so the fallback still reads as a sentence. `[square brackets]` mark a
+Every prompt names the company, because a copied prompt lands in a chat that has no page
+context. The foot of each drill-down page, the directory's copy buttons and the `WHATS_NEW`
+cards write it as a `{{COMPANY}}` placeholder, which `resolvePrompt()` fills with the
+built-for company's name (or "this company" when it is somehow blank). The Suggested for
+you pads write it as a `[[COMPANY]]` blank instead (see Suggested for you above), and Copy takes
+whatever text is in the box. Keep either form a standalone noun —
+`for {{COMPANY}}`, never `{{COMPANY}}'s` — so the fallback still reads as a sentence. `[square brackets]` mark a
 value the user fills in.
 
 Each dashboard's prompt sits at the foot of its **page**, not on its tile: the user has
@@ -155,13 +176,15 @@ rejects with `not_in_manifest`:
 - `cap_table_chart` — renders the ownership composition bar
 - `call_tool` — the non-deprecated dispatcher for every other colon-namespaced command
   (`cap_table:get:...`, `cap_table:list:...`) that the cards use, plus
-  `marketing:list:content` / `marketing:get:asset_data` for the Plugin news row. The
-  marketing commands only exist on some environments; a missing one leaves the static
-  news cards in place.
+  `marketing:list:content` / `marketing:get:asset_data` for the Plugin news row and
+  `marketing:list:content` for What's new's recent skills. The marketing commands only
+  exist on some environments; a missing one leaves the static news cards in place and
+  What's new on its microapp or fallback cards.
 - `fetch` — carries `plugin:get:version` for the update banner and `plugin:list:skills`
   for the Skill Directory, and remains the legacy
   dispatch path for environments without `call_tool`
-- `get_current_user` — `recommendations` for the Capabilities cards
+- `get_current_user` — called once; its profile supplies `recommendations` for Suggested
+  for you and `has_ctc` / `has_cap_table` for What's new
 - `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
 
 ## Source layout — the artifact is BUILT, not hand-edited
@@ -172,19 +195,19 @@ the full file in context. Edit the small source file for what you're changing:
 
 | File | What it holds | Edit it to… |
 |------|---------------|-------------|
-| `resources/captable-home.config.js` | all page content: `DIR_CATEGORIES` (directory categories: `id`, name, tagline), `CAP_PROMPTS` (What to try next fallbacks + dedupe `topics`), `DASHBOARD_PROMPTS` (one per drill-down page, keyed by page id), `WHATS_NEW`, `NEWS_TAG` | change the directory's categories, the capability, dashboard or what's-new prompts, or which Contentful tag feeds Plugin news |
+| `resources/captable-home.config.js` | all page content: `DIR_CATEGORIES` (directory categories: `id`, name, tagline), `CAP_PROMPTS` (Suggested for you pads + dedupe `topics`), `DASHBOARD_PROMPTS` (one per drill-down page, keyed by page id), `WHATS_NEW` (fallback cards), `WHATS_NEW_MICROAPPS`, `WHATS_NEW_SKILL_OUTPUTS`, `NEWS_TAG` | change the directory's categories, the capability, dashboard or what's-new prompts, or which Contentful tag feeds Plugin news |
 | `resources/captable-home.app.js` | shared/core runtime logic (`_mcp`, `_mcpResultCandidates`, `_mcpErrorMessage`, format helpers, `fullPagePrompt`/`fpCopyPrompt`, the baked company constants + `selectCompany`, `loadCompanyData`, tab switching, Skill Directory render, fallback empty states) | change behavior for anything not yet split into its own file |
 | `resources/app/ownership.js` | the ownership composition bar (`drawOwnershipChart` + `ownershipLegendHtml`, both used by the Cap table page) + the Fully diluted summary strip, all from `cap_table_chart`; the categorical palette and its surface/label color helpers; the shared `statTile` helper; and `applyAmountRaised`, which dashboards.js calls with the financing currency | change how the stacked bar, its legend, the FD stat tiles, the dilution meter, or the amount-raised currency logic render |
 | `resources/app/option-pool.js` | Option pool tile (one meter per plan) + its full-page per-plan table | change option-pool rendering |
 | `resources/app/stakeholders.js` | Stakeholders tile (total stat tile + bar per type) + its full-page by-type table | change the stakeholder count/breakdown rendering |
 | `resources/app/drafts.js` | Drafts tile + full-page table; merges the two `draft_sets` calls | change how merged drafts render |
 | `resources/app/dashboards.js` | the Cap table and Round history tiles, `openDashboardPage`/`closeDashboardPage` and every `open*Page()` entry point, plus the one `financing_history` fetch that feeds both the round history and the FD summary's currency | change the cap-table or round-history dashboards, or how any drill-down page opens |
-| `resources/app/capabilities.js` | What to try next — recommendation fetch, static padding, copy | change how capability cards are chosen or rendered |
-| `resources/app/whats-new.js` | What's new — renders `WHATS_NEW` | change how what's-new cards render (edit the content in the config) |
-| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`; `null` opts a skill out | change which skills show or their example prompts — no rebuild needed once published |
-| `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`), validates it, and re-renders over the baked list | change how the published list is merged or when it loads |
-| `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
-| `resources/app/live-content.js` | Plugin news — live Contentful fetch, adapters, asset resolution | change which content types render or how news cards look |
+| `resources/app/capabilities.js` | Suggested for you — editable prompt cards, category chips, typing-in blanks, copy; and the page's one `get_current_user` call (`fetchUserEnrichment`) that feeds this row and What's new | change how prompt cards are chosen or rendered |
+| `resources/app/whats-new.js` | What's new — carousel engine, item selection, microapp and skill previews | change how the carousel picks, orders or renders items (edit the microapp and fallback cards in the config) |
+| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"` shows the Microapp pill) and `whatsNew` (`false` keeps the skill out of What's new); `null` opts a skill out of both | change which skills show or their example prompts — no rebuild needed once published |
+| `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`), validates it, keeps each skill's baked `tag` / `whatsNew` when the server omits them, and re-renders over the baked list | change how the published list is merged or when it loads |
+| `resources/app/version-check.js` | update banner: stays quiet for a week after the build (`BUILT_AT`), then reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
+| `resources/app/live-content.js` | Plugin news — live Contentful fetch, adapters, asset resolution; and `_listWhatsNewPrompts`, the Contentful fetch behind What's new's skills | change which content types render or how news cards look |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/captable-home.css` | styles (Ink tokens) | change appearance |
 | `resources/captable-home.template.html` | HTML skeleton + injection markers | change page structure |
@@ -211,8 +234,9 @@ takes the whole page with it. Two rules follow:
 The build inlines `captable-home.css` → `/* __CAPTABLE_HOME_CSS__ */`,
 `captable-home.tracker.js` → `/* __CAPTABLE_HOME_TRACKER_JS__ */`, `captable-home.config.js`
 → `/* __CAPTABLE_HOME_CONFIG_JS__ */`, and the concatenated app JS →
-`/* __CAPTABLE_HOME_APP_JS__ */`, then substitutes `{{CARTA_MCP_SERVER}}`, producing one
-self-contained HTML.
+`/* __CAPTABLE_HOME_APP_JS__ */`, then substitutes `{{CARTA_MCP_SERVER}}`, the company, the
+baked Skill Directory and its opted-out skills, and the build time (`BUILT_AT`), producing
+one self-contained HTML.
 
 ## Versioning — bump this skill's entry when you change the artifact
 
@@ -369,7 +393,7 @@ the only difference between a first publish and a redeploy.
 Artifact({
   file_path: "<outputs-directory>/captable-home-<slug>.html",
   url: "<url from Step 2 — omit entirely on a first publish>",
-  description: "Cap table home for <Company> — a fully diluted summary, and Cap table, Round history, Option pool, Stakeholders and Drafts dashboards, plus What to try next, What's new, Plugin news, and a Skill Directory.",
+  description: "Cap table home for <Company> — a fully diluted summary, and Cap table, Round history, Option pool, Stakeholders and Drafts dashboards, plus Suggested for you, What's new, Plugin news, and a Skill Directory.",
   favicon: "📊",
   label: "Redeployed from skill bundle",
   capabilities: {
@@ -473,7 +497,8 @@ change, update the sketch and the text together and bump the date.
 |------|------------------|
 | Cap table dashboard (tile, stacked bar and table) | `cap_table_chart` — one call, held in `_capTableChartData`, feeding all three plus the FD summary's share counts |
 | Round history dashboard | `cap_table:list:financing_history` — one row per share class, already aggregated and date-sorted, carrying `closing_date`, `original_issue_price`, `shares_issued`, `post_money`, and `cash_raised_by_currency`. |
-| What to try next | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
+| Suggested for you | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
+| What's new | the same `get_current_user` profile (`has_ctc` unlocks the microapp, `has_cap_table` gates the skills), plus `marketing:list:content` with `content_type: pluginPrompt`, `space: prompts`, newest `goLiveDate` first |
 | Update banner | `plugin:get:version` via `fetch`, with `plugin` + `skill` params |
 | Skill Directory | baked from `.claude-plugin/skill-directory.json` at build time, then `plugin:list:skills` via `fetch` with `plugin` — entries at the plugin's stable tag, only for published skills. `skills: null` or an unusable list keeps the baked one |
 | Plugin news | `marketing:list:content` (tag `NEWS_TAG`, `tag_source: "metadata"`) then `marketing:get:asset_data` per image. Images must arrive as `data:` URIs — the sandbox CSP is `img-src 'self' data:`, so a remote asset URL renders nothing |

@@ -83,6 +83,17 @@ function _richTextSnippet(rt) {
 // A missing or bad date sorts to 0, i.e. the end of the row.
 const _newsTs = (s) => { const t = Date.parse(s); return Number.isNaN(t) ? 0 : t; };
 
+// A sort date as e.g. "Jul 29, 2026", or "" when there is no valid date.
+function _dateLabel(sortDate) {
+  const t = _newsTs(sortDate);
+  if (!t) return "";
+  try {
+    return new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch (e) {
+    return "";
+  }
+}
+
 const NEWS_ADAPTERS = {
   caseStudy(f, entries) {
     return {
@@ -92,8 +103,9 @@ const NEWS_ADAPTERS = {
         || _truncateSnippet(_seoField(f, entries, "description"))
         || _richTextSnippet(f.body),
       url: f.slug ? `https://carta.com/customer-stories/${encodeURIComponent(f.slug)}/` : "",
-      ctaLabel: "Read more →",
+      ctaLabel: "Read more",
       sortDate: f.displayDate || "",
+      dateLabel: _dateLabel(f.displayDate),
       featuredImageLink: f.featuredImage || null,
       logoImageLink: f.logoImage || null,
       seoImageLink: _seoLink(f, entries, "image"),
@@ -106,8 +118,9 @@ const NEWS_ADAPTERS = {
       headline: (f.title || "").trim(),
       snippet: _truncateSnippet(_seoField(f, entries, "description")) || _richTextSnippet(f.description),
       url: f.slug ? `https://carta.com/events/${encodeURIComponent(f.slug)}/` : "",
-      ctaLabel: "Watch recording →",
+      ctaLabel: "Watch recording",
       sortDate: f.startTime || "",
+      dateLabel: _dateLabel(f.startTime),
       featuredImageLink: f.thumbnailImage || f.featuredImage || null,
       logoImageLink: null,
       seoImageLink: null,
@@ -123,8 +136,9 @@ const NEWS_ADAPTERS = {
       headline: (f.displayTitle || "").trim(),
       snippet: _truncateSnippet(_seoField(f, entries, "description")),
       url: slug ? `https://carta.com/${slug}/` : "",
-      ctaLabel: "Read more →",
+      ctaLabel: "Read more",
       sortDate: f.displayDate || "",
+      dateLabel: _dateLabel(f.displayDate),
       featuredImageLink: f.featuredImage || null,
       logoImageLink: null,
       seoImageLink: _seoLink(f, entries, "image"),
@@ -200,14 +214,14 @@ function renderLiveContent(cards) {
            <img src="${cs.featuredUrl}" alt="${escHtml(cs.headline)}" loading="lazy" />
            ${cs.logoUrl ? `<div class="cs-logo-chip"><img src="${cs.logoUrl}" alt="${escHtml(cs.headline)} logo" loading="lazy" onerror="this.closest('.cs-logo-chip').remove()" /></div>` : ""}
          </div>`
-      : `<div class="plugin-news-thumb plugin-news-thumb--fake"></div>`;
+      : `<div class="plugin-news-thumb plugin-news-thumb--fake"><span class="plugin-news-fake-title">${escHtml(cs.headline)}</span></div>`;
     card.innerHTML = `
       ${thumb}
       <div class="plugin-news-content">
         ${cs.eyebrow ? `<span class="plugin-news-tag">${escHtml(cs.eyebrow)}</span>` : ""}
         <p class="plugin-news-title">${escHtml(cs.headline)}</p>
         <p class="plugin-news-desc">${escHtml(cs.snippet)}</p>
-        ${cs.ctaLabel ? `<span class="plugin-news-cta">${escHtml(cs.ctaLabel)}</span>` : ""}
+        ${cs.ctaLabel ? `<span class="plugin-news-cta">${escHtml(cs.ctaLabel)} <span class="cta-arrow" aria-hidden="true">→</span></span>` : ""}
       </div>`;
     card.addEventListener("click", () => trackHome("click", "CaptableHome.PluginNews.ReadMore"));
     grid.appendChild(card);
@@ -215,3 +229,57 @@ function renderLiveContent(cards) {
 }
 
 fetchLiveContent();
+
+// ── What's new: pluginPrompt entries for skills that recently went live ──
+// Entries from the prompts space (In-App Upsells, selected with `space`; delivery tokens
+// are space-scoped so the server keys off that name). A data pipeline fills `goLiveDate`
+// from each skill's go-live history.
+//
+// Returns [{text, plugin, goLiveDate, skill}] with goLiveDate as the raw field value. The
+// recency window, plugin access and de-dupe against the prompts on screen are applied by
+// selectWhatsNew() in app/whats-new.js, which has the user's profile. Always returns an
+// array: an empty one leaves What's new on the microapp or the config fallback, which is a
+// normal outcome (no bridge, command absent on this env, nothing new) and must never throw
+// into the render path.
+//
+// No server-side plugin filter: the `fields` param takes one equality filter, and the space
+// holds entries for more than one plugin. Newest go-live first, because the server's `limit`
+// applies after ordering and so keeps the freshest entries.
+async function _listWhatsNewPrompts() {
+  const CONTENT_TYPE = "pluginPrompt";
+  const SPACE = "prompts";
+  const FETCH = 50;
+  const ORDER = "-fields.goLiveDate";
+  try {
+    // _mcp() resolves the connector itself and throws when it is unavailable, which the
+    // catch below turns into the fallback.
+    const obj = _newsUnwrap(await _mcp("call_tool", {
+      name: "marketing__list__content",
+      arguments: {
+        content_type: CONTENT_TYPE,
+        space: SPACE,
+        order: ORDER,
+        limit: String(FETCH),
+      },
+    }));
+    // A tool's return arrives as {result: "<json string>"}, and _newsUnwrap hands back
+    // whatever `result` held, so parse the string form.
+    const payload = typeof obj === "string" ? JSON.parse(obj) : obj;
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    return items
+      .map((it) => {
+        const f = it?.fields || {};
+        const text = typeof f.prompt === "string" ? f.prompt.trim() : "";
+        const plugin = typeof f.plugin === "string" ? f.plugin.trim() : "";
+        // The CDA omits empty optional fields, so goLiveDate may be absent entirely.
+        const goLiveDate = typeof f.goLiveDate === "string" ? f.goLiveDate.trim() : "";
+        // The skill the prompt runs, which What's new names the item by.
+        const skill = typeof f.skill === "string" ? f.skill.trim() : "";
+        return text ? { text, plugin, goLiveDate, skill } : null;
+      })
+      .filter(Boolean);
+  } catch (err) {
+    console.error("[captable-home] what's new prompts fetch failed — falling back", err);
+    return [];
+  }
+}
