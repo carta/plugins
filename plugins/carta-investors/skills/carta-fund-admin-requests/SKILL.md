@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.114.18</carta-plugin>
+<carta-plugin>carta-investors:6.114.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -55,10 +55,11 @@ Names are verbatim. `<SERVER>` is whichever Carta MCP server this session has.
 | Send a new request | `call_tool({"name": "fa__create__fund-admin-message", "arguments": {"message": "<message>"}})` |
 | Read a request + Carta's replies | `read_tool({"name": "fa__list__workflow-message", "arguments": {"workflow_id": <workflow_id>}})` |
 | Reply on an existing request | `call_tool({"name": "fa__create__workflow-message", "arguments": {"workflow_id": <workflow_id>, "message": "<message>"}})` |
-| List a firm's requests (**staff only**) | `read_tool({"name": "fa__list__workflow", "arguments": {"firm_uuid": "<firm_uuid>", "template_type": "request-generic", "page_size": 50}})` |
+| List the firm's requests | `read_tool({"name": "fa__list__firm-workflow", "arguments": {"workflow_templates": ["request-generic"], "statuses": ["active"]}})` |
+| List tasks waiting on the user | `read_tool({"name": "fa__list__gp-workhub-active-task", "arguments": {"pending_actor": "customer"}})` |
 
-`fa__create__fund-admin-message` takes **no** `firm_uuid` — the request is always
-about the session's active firm. It returns `{"workflow_id": <id>}`, the case number.
+None of these take a `firm_uuid` — they always act on the session's active firm.
+`fa__create__fund-admin-message` returns `{"workflow_id": <id>}`, the case number.
 
 ---
 
@@ -140,47 +141,45 @@ One call opens one case. Two unrelated asks are two calls, not one merged messag
 
 ## Flow 2 — What's open
 
-Staff callers list with `fa__list__workflow`. Non-staff callers have no list
-command yet, so ask for the case number instead:
+1. List open requests with `fa__list__firm-workflow`. It returns one page at a
+   time: pass `after` = the previous `next` until `has_next` is false. Its rows
+   cover requests filed in Carta and through this assistant.
+2. List tasks waiting on the user with `fa__list__gp-workhub-active-task`, paged
+   the same way. Keep rows whose `workflow_template` is `request-generic`; their
+   `workflow_id`s are the requests that need the user.
+3. For the **Completed** count, list `fa__list__firm-workflow` with
+   `"statuses": ["complete", "canceled"]`, paged the same way, and count the rows
+   across all pages. Skip it when the user only asked what is open.
 
-> I can pull up a specific request if you have its case number. Listing every open
-> request isn't available to your account yet.
+`count` covers one page only. Build every group and count from all pages.
 
-Group listed rows into three. **Read `status` first** — it is an integer, and `2`
-and `3` are terminal, so they outrank whoever the row is pending on:
+Group the requests into three:
 
-| Group | Comes from | Means |
+| Group | Comes from | Status reads |
 |---|---|---|
-| **Completed** | `status` is `2` (complete) or `3` (canceled) | Closed |
-| **Tasks to complete** | `last_task.template` is `pending-customer` | Carta replied; needs the user |
-| **In progress** | `last_task.template` is `pending-carta` or `new` | Carta has it |
+| **Tasks to complete** | `status` is `active` and its `workflow_id` is in step 2 | Ready for you |
+| **In progress** | `status` is `active`, not in step 2 | Working |
+| **Completed** | `status` is `complete` or `canceled` | Done / Canceled |
 
-An unrecognised `last_task.template` goes under **In progress** — show it rather
-than hide it. Age comes from `last_activity_at`, falling back to `created_at`.
+Age comes from `last_activity_at`, falling back to `created_at`.
 
-Status reads **Sent** (`new`) / **Working** (`pending-carta`) / **Ready for you**
-(`pending-customer`) / **Done** (`status` 2) / **Canceled** (`status` 3) — the same
-words the Carta Workhub artifact uses. Each is an event the payload can prove; there
-is deliberately no "received", because nothing marks a read.
-
-There is **no `state` field and no `_links` block** on this payload. Do not read
-either, and do not build a URL yourself. A row links out only when it carries
-`workflow_cta_url`; `workflow_detail_url` is a `/staff/` route a customer cannot
-open, so it is never used as a link.
+Do not build a URL yourself. A row links out only through `_links.web_url`; a row
+with an empty `url` has no page and no link.
 
 Render each group as its own table, `#` first so the user can open one by number:
 
 | # | Request | Status | Age |
 |---|---|---|---|
-| 1 | [Split the Q3 capital call](<workflow_cta_url>) | Ready for you | 2d |
+| 1 | [Split the Q3 capital call](<web_url>) | Ready for you | 2d |
 
 `request-generic` is a DM workflow, so it has **no subject**. Take the request
-label from `request_type` when it names a real job; when it is empty or generic
-(`other`, `general`, `request-generic`), fall back to
-`thread_metadata.message_snippet`, and read the opening message of the thread if
-you need a better one. Trim to one line. Link the label itself — never a separate
-"Open" or "View" column. Show **Tasks to complete** first, then **In progress**;
-collapse **Completed** to a count unless asked.
+label from `display_name` when it names a real job; when it is empty or one of
+fund-admin's fallback names (`Request`, `New request`, `Processing new request`,
+`Review request`, `Request completed`), read the opening message with
+`fa__list__workflow-message` — only for the rows you show.
+Trim to one line. Link the label itself — never a separate "Open" or "View"
+column. Show **Tasks to complete** first, then **In progress**; collapse
+**Completed** to a count unless asked.
 
 Close with:
 
@@ -234,7 +233,6 @@ Then offer **Back to queue**.
 | Messaging not enabled for the account | Gate 0 message; stop — no retry, no other channel |
 | No active firm in the session | Call `list_contexts`, then `set_context`; retry once |
 | `fa__create__fund-admin-message` returns no `workflow_id` | Say the request may not have been created and to check with their Carta team before resending — do **not** resend automatically, it would open a second case |
-| User asks to list requests but is not staff | Flow 2 non-staff message; ask for a case number |
 | `workflow_id` not found | Wrong case number — ask them to confirm it |
 | User wants to attach a file | Not supported yet: describe the document in the message and say the team will ask for it |
 | User is reporting a plugin bug | Not a Fund Admin request — call `fa:create:feedback` directly |
