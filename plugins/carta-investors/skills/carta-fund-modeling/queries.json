@@ -237,7 +237,7 @@
         "       TOTAL_NET_ASSET_BALANCE                  AS nav",
         "FROM FUND_ADMIN.PARTNER_DATA",
         "WHERE fund_uuid IN ({fund_uuids}) AND IS_LIMITED_PARTNER = TRUE",
-        "ORDER BY commitment DESC NULLS LAST"
+        "ORDER BY commitment DESC NULLS LAST, fund_uuid, partner_name, partner_country, partner_state, partner_class_name, contributed, distributed, nav"
       ],
       "wide": [
         "SELECT *, TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment,",
@@ -262,7 +262,7 @@
         "       TOTAL_NET_ASSET_BALANCE                  AS nav",
         "FROM FUND_ADMIN.PARTNER_DATA",
         "WHERE fund_uuid IN ({fund_uuids}) AND IS_GENERAL_PARTNER = TRUE",
-        "ORDER BY commitment DESC NULLS LAST"
+        "ORDER BY commitment DESC NULLS LAST, fund_uuid, partner_name, partner_country, partner_state, contributed, distributed, nav"
       ],
       "wide": [
         "SELECT *, TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment,",
@@ -296,7 +296,8 @@
         "JOIN gp_map m ON m.GP_ENTITY_NAME = a.FUND_NAME",
         "WHERE a.ALLOCATION_BUCKET_NAME = 'Carried interest accrued'",
         "  AND a.ENTITY_TYPE_NAME = 'GP'",
-        "GROUP BY 1, 2, 3, 4"
+        "GROUP BY 1, 2, 3, 4",
+        "ORDER BY fund_uuid, fund_name, gp_entity_name, partner_name"
       ]
     },
     "waterfall": {

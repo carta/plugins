@@ -452,6 +452,7 @@ def load_logos(rawdir):
     return out
 
 
+# MUST match investmentHistoryFrom in server/worker.js.
 def investment_history(comp_map, fund_ids):
     # type: (dict, dict) -> dict
     """Each fund's checks, one row per security: {fundId: [{id, name, checks: [{date, cost, asset, cls}]}]}.
@@ -1143,6 +1144,7 @@ def build(rawdir, out, meta):
     }
 
     # ---- LP base (per-LP, aggregated firm-wide) ----
+    # MUST match lpBaseFrom in server/worker.js.
     lp_agg = collections.OrderedDict()
     for r in parse_table(find(rawdir, "partners")):
         name = col(r, "partner_name")
@@ -1213,6 +1215,7 @@ def build(rawdir, out, meta):
                "byRegion": by_region, "lps": lp_rows} if lps_all else None
 
     # ---- GP base (per-GP-partner carry, keyed by fund id) → gp-base.json ----
+    # MUST match gpBaseFrom in server/worker.js.
     # Primary source: the gp_carry stem (§7b) — REAL per-partner 'Carried interest
     # accrued' allocations booked INSIDE each GP entity (ALLOCATIONS,
     # ENTITY_TYPE_NAME='GP'), joined to the LP fund via the fund-level GP allocation.
@@ -1476,6 +1479,7 @@ def build_fee_history(rows, slug_of, as_of):
     return {"asOf": as_of, "funds": by_fund} if by_fund else None
 
 
+# MUST match expenseHistoryFrom in server/worker.js.
 def build_expense_history(rows, slug_of, as_of):
     """What each fund booked to its expense accounts, by account and calendar year, keyed by snapshot
     fund id: { fundId: [{ name, byYear: { "2024": 58310.0 } }] }, biggest account first. None with no rows."""

@@ -413,7 +413,7 @@ Collection appear, and a company must also be a tracked holding to surface on it
 ## Hosted variants → `queries.json` `hosted`
 The hosted app (`server/worker.js`) runs the local `nav_latest`, `fund_metrics`, `cohort`, `ownership`,
 `corporations`, `captable`, `waterfall`, `accrued_carry`, `distributed_carry`, `deal_irr`, `financing`,
-`fee_schedules`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
+`fee_schedules`, `partners`, `gp_partners`, `gp_carry`, `expense_ledger`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
 the §0 directory query (`ops_benchmarks` holds no firm data and has no scope; `financials` is row-scoped by
 `set_context`, as locally). It pages every query (`server/dwh-pages.js`) in blob pages of 10,000 rows, the DWH's
 row cap; a blob has no inline size cap. A page over the DWH's 16 MiB page cap is `too_large`: it is retried at the
@@ -425,8 +425,8 @@ the query's own `QUALIFY` or `GROUP BY` partition; these are unique only in the 
 warehouse, so recheck them if their table changes: `(fund_uuid, month_end_date)` for `nav_history` and
 `cashflows`, `(fund_uuid, performance_quarter_start_date)` for `cohort`, `(fund_id, config_name)` for
 `waterfall`, `(fund_id, period_order)` for `fee_schedules` and `(fund_uuid, general_ledger_asset_id)` for
-`investments`. A query stops after 500 pages, which keeps 17 queries under the Worker's 10,000 subrequests a
-load. Only `nav_latest`,
+`investments`; `partners` and `gp_partners` order by every column they select. A query stops after 400 pages,
+a cap chosen so every hosted query together stays under the Worker's 10,000 subrequests a load. Only `nav_latest`,
 `fund_metrics` and the three hosted queries below are required: one that fails rejects the load, so a partial
 snapshot is never saved. Any other one that fails is left out whole and the firm still loads, without that data
 (no `company.capTable` (§15), no `company.financials` (§14), and so on). The snapshot's `source.queries` records,
