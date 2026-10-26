@@ -77,6 +77,21 @@ export const fmtM = (n) => {
   return sign + SYMBOL + millions.toFixed(1) + "M";
 };
 
+/** Parse a typed amount into units. The unit comes from what was typed: a k/m/b suffix
+ *  scales it, a bare number with a thousands comma is whole units ("$2,500,000"), and any
+ *  other bare number is millions ("2.5" → 2.5M, like fmtM's display). Null when unreadable. */
+export function parseAmount(text) {
+  const raw = String(text ?? "");
+  const m = raw.replace(/[^0-9.kmb-]/gi, "").toLowerCase().match(/^(-?\d*\.?\d+)([kmb])?$/);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!m[2]) return raw.includes(",") ? n : n * 1e6;
+  return n * { k: 1e3, m: 1e6, b: 1e9 }[m[2]];
+}
+
+/** The edit text for an amount: bare millions (2 decimals), which parseAmount reads back. */
+export const fmtAmountInput = (amount) => String(+(amount / 1e6).toFixed(2));
+
 export const fmtB = (n) => {
   if (n == null || !Number.isFinite(Number(n))) return "—";
   const v = Number(n);

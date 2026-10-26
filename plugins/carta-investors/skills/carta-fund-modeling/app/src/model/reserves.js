@@ -37,17 +37,35 @@ export function reservesEarmarked(portfolio) {
   const byFund = {};
   for (const c of (portfolio.companies || [])) {
     if (c.archived || c.realized || c.defunct) continue;
-    const defended = clamp0(FULL_RESERVE_DILUTION - (c.futureDilution ?? 0));
-    if (defended <= 0) continue;
+    if (dilutionDefended(c.futureDilution) <= 0) continue;
     for (const p of c.positions) {
       // stake value being defended = marked FV BEFORE the dilution haircut
       const markFv = positionReprice(c, p, { live: true, dilution: 0 }).repricedFv;
-      const amt = defended * markFv;
+      const amt = reserveForDilution(markFv, c.futureDilution);
       total += amt;
       byFund[p.fundId] = (byFund[p.fundId] || 0) + amt;
     }
   }
   return { total, byFund };
+}
+
+/** Share of the baseline dilution a company defends at a given expected dilution. */
+export const dilutionDefended = (dilution) => clamp0(FULL_RESERVE_DILUTION - (dilution ?? 0));
+
+/** Reserve a company earmarks at a given expected dilution: the share of the
+ *  baseline dilution it defends × its marked FV (pre-dilution). */
+export function reserveForDilution(markFvGross, dilution) {
+  return dilutionDefended(dilution) * markFvGross;
+}
+
+/** Inverse of `reserveForDilution`: the expected dilution implied by a reserve
+ *  dollar amount. The reserve is clamped to what the company can defend
+ *  ($0 … FULL_RESERVE_DILUTION × markFvGross), so the result stays in
+ *  [0, FULL_RESERVE_DILUTION]. Null when there is no marked FV to defend. */
+export function dilutionForReserve(markFvGross, reserve) {
+  if (!(markFvGross > 0) || !Number.isFinite(reserve)) return null;
+  const capped = Math.min(Math.max(reserve, 0), reserveForDilution(markFvGross, 0));
+  return FULL_RESERVE_DILUTION - capped / markFvGross;
 }
 
 /** One company's baseline reserve — the FULL_RESERVE_DILUTION × its Carta-mark

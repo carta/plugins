@@ -71,21 +71,11 @@ function GlidepathChart({ g }) {
   const hc = hoverI != null ? rows[hoverI] : null;
   const tipLeft = hc ? Math.max(8, Math.min(92, (x(hoverI) / W) * 100)) : 0;
   const lab = { ...sans, fontSize: FS.micro, fill: MICRO };
+  const legendText = { ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", gap: 8 };
 
   return (
-    <div className="card" style={{ padding: "16px 20px 12px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 6 }}>
-        <H3>DPI · RVPI · TVPI over the fund's life</H3>
-        <span style={{ flex: 1 }} />
-        {[["Realized (DPI)", C_DPI], ["Unrealized (RVPI)", C_RVPI]].map(([t, c]) => (
-          <span key={t} style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: c }} />{t}
-          </span>
-        ))}
-        <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 14, height: 0, borderTop: `2px dashed ${C_TVPI}` }} />TVPI
-        </span>
-      </div>
+    <div>
+      <H3 as="div" style={{ marginBottom: 6 }}>DPI · RVPI · TVPI over the fund's life</H3>
       <div style={{ position: "relative" }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }} role="img" aria-label="DPI, RVPI and TVPI over the fund's life">
           {/* y gridlines */}
@@ -138,6 +128,17 @@ function GlidepathChart({ g }) {
           </div>
         )}
       </div>
+      {/* Under the plot, no rule; indented to the plot's left gutter (PL, as a share of the viewBox width). */}
+      <div data-testid="glidepath-legend" style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 12, paddingLeft: `${(PL / W) * 100}%` }}>
+        {[["Realized (DPI)", C_DPI], ["Unrealized (RVPI)", C_RVPI]].map(([t, c]) => (
+          <span key={t} style={legendText}>
+            <span style={{ width: 10, height: 10, background: c, display: "inline-block" }} />{t}
+          </span>
+        ))}
+        <span style={legendText}>
+          <span style={{ width: 14, height: 0, borderTop: `2px dashed ${C_TVPI}`, display: "inline-block" }} />TVPI
+        </span>
+      </div>
     </div>
   );
 }
@@ -171,7 +172,7 @@ export default function Glidepath({ snapshot, fundState, portfolio, setAssumptio
     <div>
       <H3 as="div" style={{ marginBottom: 4 }}>LP glidepath</H3>
       <MethodNote>
-        {fundState ? fundLabel(fundState.name) : "The fund"}'s LP multiples over its life, at this scenario's marks. Left of “Today” is actual (from Carta cashflows + NAV marks); right is a projection: remaining uncalled commitment is called over the investment period and deployed at the fund's current multiple, and the resulting value is realized over the horizon. At 0% NAV growth today's TVPI is held flat — RVPI simply converts into DPI over time; raise NAV growth to model further appreciation. Repricing companies or toggling exits moves the Today anchor and the whole path.
+        Actuals to Today, then a projection at {knobs.navGrowthPct}% NAV growth.
       </MethodNote>
 
       {!g ? (
@@ -231,8 +232,8 @@ export default function Glidepath({ snapshot, fundState, portfolio, setAssumptio
                     <td style={cell}>{fmtM(r.paidIn)}</td>
                     <td style={cell}>{fmtM(r.cumDist)}</td>
                     <td style={{ ...cell, color: "var(--ink-color-global-text-subtle)" }}>{fmtM(r.nav)}</td>
-                    <td style={{ ...cell, color: C_DPI, fontWeight: 700 }}>{fmtX(r.dpi)}</td>
-                    <td style={{ ...cell, color: C_RVPI }}>{fmtX(r.rvpi)}</td>
+                    <td style={{ ...cell, color: C_DPI, fontWeight: 400 }}>{fmtX(r.dpi)}</td>
+                    <td style={{ ...cell, color: C_RVPI, fontWeight: 400 }}>{fmtX(r.rvpi)}</td>
                     <td style={{ ...cell, fontWeight: 700 }}>{fmtX(r.tvpi)}</td>
                   </tr>
                 );

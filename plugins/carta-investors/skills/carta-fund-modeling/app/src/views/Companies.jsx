@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { tightSans, sans, inkNum, FS, MICRO, NOTICE, SMALL_1, SMALL_2 } from "../ui/theme.js";
-import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn } from "../ui/format.js";
+import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn, parseAmount, fmtAmountInput } from "../ui/format.js";
 
 // pretty round name: "seed" → "Seed", "a" → "Series A", "pre-seed" → "Pre-seed"
 const roundLabel = (r) => {
@@ -23,7 +23,7 @@ import { fundExitProceeds, fundProceedsCurve, normClass } from "../model/liqpref
 import { scenarioDealIrr } from "../model/dealIrr.js";
 import { isStaleMark, daysBetween, fundIdsOf, ownFundHeldAs, fundCurrency } from "../model/funds.js";
 import { zeroOutFund, resetFundToCarta, zeroOutAll, resetAllToCarta, companiesInFund, crossFundCompanies, applyReserveDilution } from "../model/slices.js";
-import { FULL_RESERVE_DILUTION, companyBaseReserve } from "../model/reserves.js";
+import { FULL_RESERVE_DILUTION, companyBaseReserve, dilutionDefended, reserveForDilution, dilutionForReserve } from "../model/reserves.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { companyOwnership } from "../model/ownership.js";
 import { trackClick } from "../analytics.js";
@@ -922,6 +922,38 @@ function CompanyRow({ company, updateCompany, assumptions, snapshot, onToggle, o
 
 // A company's detail window — opened from its table row or its box on the map,
 // so both views show the same tabs, sliders and Returns preview.
+// Click-to-type reserve amount: the dilution is implied from it (bare number = millions).
+export function ReserveInput({ amount, max, onCommit, locked }) {
+  const [edit, setEdit] = useState(null); // { text, initial } — initial is the prefill
+  const style = { ...inkNum, fontSize: FS.value, fontWeight: 700, color: "var(--ink-color-global-text-default)" };
+  // Leaving the field untouched leaves the company unchanged (reserve → dilution is not
+  // one-to-one: a 50% dilution shows $0, which would read back as 30%).
+  const commit = () => {
+    if (edit && edit.text !== edit.initial) {
+      const n = parseAmount(edit.text);
+      if (n != null) onCommit(n);
+    }
+    setEdit(null);
+  };
+  if (edit == null) {
+    const open = () => { if (locked) return; const t = fmtAmountInput(amount); setEdit({ text: t, initial: t }); };
+    return (
+      <button onClick={open} disabled={locked || !(max > 0)}
+        title={locked ? "Locked — duplicate into a scenario to edit" : "Click to type a reserve amount — dilution is implied"}
+        style={{ ...style, background: "transparent", border: "none", borderBottom: "1px dashed var(--ink-color-global-text-subtle)", padding: 0, cursor: locked ? "not-allowed" : "text" }}>
+        {fmtM(amount)}
+      </button>
+    );
+  }
+  return (
+    <input autoFocus aria-label="Reserve amount" className="numin" type="text" inputMode="decimal" value={edit.text}
+      onFocus={(e) => e.target.select()} onChange={(e) => setEdit({ ...edit, text: e.target.value })} onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEdit(null); }}
+      title={`Amount in millions, or add k/m/b — up to ${fmtM(max)}`}
+      style={{ ...style, width: 90, padding: "1px 6px" }} />
+  );
+}
+
 function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, ownership, onDragStart, onDragEnd, fundStates, firmAgg, firmLpDelta, firmGpCarry, sliceName, fundScope, onOpenFundSection }) {
   // which detail sub-modal is open — 'positions' | 'captable' | 'financials' |
   // 'partialsales' | null (null = the Scenario-inputs tab, the default)
@@ -939,12 +971,16 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
   const { cfg, dilutionCfg, uplift, canReprice } = companyRepriceState(company, updateCompany);
   // FV aggregates + curFv from the shared helper so this row and dealIrrOf agree
   const { live, totalFv, totalCost, totalProceeds, curFv } = companyFvState(company, { canReprice });
-  // Reserve earmarked for THIS company (matches the sidebar total's per-company
-  // term): pro-rata follow-on to defend the stake ≈ (dilution defended) × its
-  // marked FV pre-dilution, where dilution defended = 30% baseline − its dilution.
-  const dilutionDefended = Math.max(0, FULL_RESERVE_DILUTION - (company.futureDilution ?? 0));
+  // Reserve earmarked for THIS company — the same reserves.js rule as the sidebar total.
+  const defended = dilutionDefended(company.futureDilution);
   const markFvGross = company.positions.reduce((s, p) => s + positionReprice(company, p, { live: true, dilution: 0 }).repricedFv, 0);
-  const companyReserve = dilutionDefended * markFvGross;
+  const companyReserve = reserveForDilution(markFvGross, company.futureDilution);
+  const maxReserve = reserveForDilution(markFvGross, 0);
+  // Typing a reserve amount sets the dilution it implies (same lever as the slider).
+  const setReserve = (amount) => {
+    const dil = dilutionForReserve(markFvGross, amount);
+    if (dil != null) { trackClick("FundModeling.Companies.SetReserve"); updateCompany(company.id, { futureDilution: dil, includeInNav: true }); }
+  };
   // Baseline counterpart for the Company-impact delta — shares its formula
   // with reserves.js's baseReservesEarmarked via companyBaseReserve, so the
   // two never drift apart.
@@ -1238,10 +1274,10 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
                   <div style={{ marginTop: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <div style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>
-                        <strong style={{ ...inkNum, fontSize: FS.value, color: "var(--ink-color-global-text-default)" }}>{fmtM(companyReserve)}</strong> reserve earmarked
+                        <ReserveInput amount={companyReserve} max={maxReserve} onCommit={setReserve} locked={readOnly} /> reserve earmarked
                       </div>
                       <InfoTip label="What does reserve earmarked mean?" width={320}>
-                        {fmtPct(dilutionDefended)} of dilution defended × {fmtM(markFvGross)} marked FV
+                        {fmtPct(defended)} of dilution defended × {fmtM(markFvGross)} marked FV
                       </InfoTip>
                     </div>
                     {ownInfo.pct != null && (
