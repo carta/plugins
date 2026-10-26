@@ -84,7 +84,7 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 	platform := resolvePlatform()
 
 	var tokens *int64
-	if total, ok := tokenusage.CumulativeSessionTokensForSession(evt.TranscriptPath); ok {
+	if total, ok := tokenusage.CumulativeSessionTokensForSession(evt.SessionID, evt.TranscriptPath); ok {
 		tokens = &total
 	}
 
