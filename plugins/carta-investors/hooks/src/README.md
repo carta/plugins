@@ -26,7 +26,7 @@ the fail-open shape for that hook event instead.
 
 | Name | Hook event | Reads | Effect |
 |---|---|---|---|
-| `inject-instrumentation` | PreToolUse | `tool_name`, `tool_input`, `session_id`, `prompt_id`, `permission_mode`, `effort`, `agent_id`, `transcript_path`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_REMOTE` | adds `_instrumentation_v2` to `tool_input`, incl. `cumulative_tokens` summed from the transcript |
+| `inject-instrumentation` | PreToolUse | `tool_name`, `tool_input`, `session_id`, `prompt_id`, `permission_mode`, `effort`, `agent_id`, `transcript_path`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_REMOTE` | adds `_instrumentation_v2` to `tool_input`, incl. `cumulative_tokens` summed from the transcript and its subagent transcripts; each call reads only the bytes added since the previous call |
 | `capture-active-skill` | PreToolUse | `session_id`, `tool_input.skill` | records the active skill for the session |
 | `capture-slash-skill` | UserPromptSubmit | `session_id`, `prompt` | records a `/skill` invocation; always returns zero bytes |
 | `capture-model` | SessionStart | `session_id`, `model` | records the session's model |
@@ -61,7 +61,7 @@ Each handler reads its state from one of three locations.
 |---|---|---|
 | `CLAUDE_PLUGIN_ROOT` | none | `.claude-plugin/plugin.json`; gives the plugin name and version |
 | `CLAUDE_PLUGIN_DATA` | `/tmp/claude-<plugin>/` | per-plugin session file; holds the skill list |
-| `CARTA_SESSION_STATE_DIR` | `$TMPDIR/carta-instrumentation/<session>/` | shared across plugins; one JSON file per plugin, plus `.last-skill` and `.model` |
+| `CARTA_SESSION_STATE_DIR` | `$TMPDIR/carta-instrumentation/<session>/` | shared across plugins; one JSON file per plugin, plus `.last-skill`, `.model` and `.token-usage` (per-message token totals and the transcript offsets already read) |
 
 Each PreToolUse handler writes its own plugin's record first. It then merges
 all plugins' records into one session state. This order stops the last hook

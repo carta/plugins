@@ -141,11 +141,17 @@ func WriteRecord(sessionID, pluginName, version string, skills []string) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(filepath.Join(dir, pluginName+".json"), data, 0o644)
+	return WriteFileAtomic(filepath.Join(dir, pluginName+".json"), data, 0o644)
 }
 
-// writeFileAtomic writes via temp file + rename so readers never see a torn write.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+// TokenUsagePath returns the session's token usage cache file. It has no
+// ".json" suffix, so MergeSessionState does not read it as a plugin record.
+func TokenUsagePath(sessionID string) string {
+	return filepath.Join(SessionStateDir(sessionID), ".token-usage")
+}
+
+// WriteFileAtomic writes via temp file + rename so readers never see a torn write.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
