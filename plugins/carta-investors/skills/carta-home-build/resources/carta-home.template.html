@@ -140,10 +140,10 @@
          onfocusin="wnPause('focused', true)"
          onfocusout="if (!this.contains(event.relatedTarget)) wnPause('focused', false)">
       <div class="wn-index">
-        <div id="wn-index-items" role="tablist" aria-label="What's new"></div>
+        <div id="wn-index-items" role="tablist" aria-label="What's new" aria-orientation="vertical"></div>
         <button class="wn-see-all" onclick="switchTab('directory')">See all skills and microapps →</button>
       </div>
-      <div class="wn-center" id="wn-center"></div>
+      <div class="wn-center" id="wn-center" role="tabpanel"></div>
       <div class="wn-preview" id="wn-preview"></div>
     </div>
   </section>

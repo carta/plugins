@@ -1,7 +1,7 @@
 // ── What's new: a carousel of featured microapps and recently launched skills ──
 // Depends on core.js (carta-home.app.js): _mcp(), _mcpResultCandidates(), readProductFlag(),
-// escHtml(), writeClipboard(), trackHome(), trackPrompt(), PROMPT_SOURCE, promptTag(), prefersReducedMotion(),
-// PROMPT_TAGS, _directorySkills, APP_TAG_TIP, COPIED_TIP_MS, PROMPT_COPIED_TIP; on carta-home.config.js:
+// escHtml(), writeClipboard(), trackHome(), trackPrompt(), PROMPT_SOURCE, prefersReducedMotion(),
+// onFirstView(), _directorySkills, APP_TAG_TIP, COPIED_TIP_MS, PROMPT_COPIED_TIP; on carta-home.config.js:
 // WHATS_NEW_MICROAPPS, WHATS_NEW_SKILL_OUTPUTS.
 
 // A skill prompt qualifies when its goLiveDate is within the last WHATS_NEW_WINDOW_DAYS
@@ -43,15 +43,15 @@ function directoryEntry(skillId) {
   return (Array.isArray(_directorySkills) ? _directorySkills : []).find(s => s.skill === skillId);
 }
 
-// The Skill Directory's `"whatsNew": false` keeps a skill out of the carousel, however new
-// its Contentful entry, and so does being a featured microapp's own skill: the product is
-// already in the carousel. Any other skill the directory doesn't list, or lists without the
-// field, stays eligible.
+// A skill is featured only when the current Skill Directory lists it: a public install
+// strips unpublished skills, and a card for a skill the user doesn't have is a dead end.
+// The directory's `"whatsNew": false` keeps a skill out however new its Contentful entry,
+// and so does being a featured microapp's own skill: the product is already in the carousel.
 const FEATURED_SKILLS = new Set(WHATS_NEW_MICROAPPS.map(m => m.skill));
 function featuredInWhatsNew(entry) {
   const id = whatsNewSkillId(entry);
   const known = directoryEntry(id);
-  return !FEATURED_SKILLS.has(id) && !(known && known.whatsNew === false);
+  return !!known && known.whatsNew !== false && !FEATURED_SKILLS.has(id);
 }
 
 // What a Contentful entry's skill hands back (see WHATS_NEW_SKILL_OUTPUTS).
@@ -155,17 +155,17 @@ function showcaseMicroapps(profile, organizationPk = _wn.organizationPk) {
   return [...items.filter(m => !m.locked), ...items.filter(m => m.locked)];
 }
 
-// A skill unknown to the Skill Directory is named by its prompt's category. A skill with
-// `whatsNewCopy` in the directory leads with that outcome headline and body; otherwise the
-// headline is its prompt, quoted, over a stock line.
+// A featured skill is always listed in the Skill Directory (featuredInWhatsNew). One with
+// `whatsNewCopy` leads with that outcome headline and body; otherwise the headline is its
+// prompt, quoted, over a stock line.
 function showcaseSkill(entry) {
   const id = whatsNewSkillId(entry);
   const known = directoryEntry(id);
-  const copy = known && known.whatsNewCopy;
+  const copy = known.whatsNewCopy;
   return {
     kind: "skill",
-    key: "skill-" + (id || entry.text),
-    title: known ? known.name : PROMPT_TAGS[promptTag(entry.text)].label + " skill",
+    key: "skill-" + id,
+    title: known.name,
     headline: copy ? copy.headline : "“" + entry.text + "”",
     description: copy ? copy.body : "A new skill for Claude. Copy the prompt, paste it into chat, and Claude runs it on your Carta data.",
     prompt: entry.text,
@@ -182,6 +182,12 @@ function skillOutputKind(skillId, category) {
 // WHATS_NEW_SLOTS. A qualifying skill takes a slot, so the last item in that order waits.
 function selectShowcaseItems(profile, entries, shownAbove, now = Date.now()) {
   const skills = selectWhatsNew(entries, whatsNewPluginAccess(profile), shownAbove, now).map(showcaseSkill);
+  // Two prompts for one skill would share a key; the rank tells them apart.
+  const taken = new Set();
+  skills.forEach((sk, rank) => {
+    if (taken.has(sk.key)) sk.key += "-rank-" + rank;
+    taken.add(sk.key);
+  });
   const apps = showcaseMicroapps(profile);
   const open = apps.filter(m => !m.locked).slice(0, WHATS_NEW_SLOTS - skills.length);
   return [...open, ...skills, ...apps.filter(m => m.locked)].slice(0, WHATS_NEW_SLOTS);
@@ -193,7 +199,9 @@ function selectShowcaseItems(profile, entries, shownAbove, now = Date.now()) {
 // `last` is the latest renderWhatsNew call, so a derived flag that resolves later, or the
 // published Skill Directory, can re-render with it (wnRefresh); `derived` holds those flags (true/false, null when the lookup failed).
 // `organizationPk` is the firm's organization account, once resolveDataCollection settles on one.
-const _wn = { items: [], active: 0, rotateTimer: null, fadeTimer: null, hovered: false, focused: false, stopped: false, minHeight: 0, last: null, derived: {}, organizationPk: null };
+const _wn = { items: [], active: 0, rotateTimer: null, fadeTimer: null, hovered: false, focused: false, stopped: false, minHeight: 0, last: null, derived: {}, organizationPk: null,
+  // Rotation waits until the carousel has been on screen, so a visitor arrives on item 01.
+  seen: false, observer: null };
 
 function renderWhatsNew(profile, entries, shownAbove) {
   const section = document.getElementById("whats-new-section");
@@ -217,7 +225,18 @@ function renderWhatsNew(profile, entries, shownAbove) {
   }
   _wnRenderIndex();
   _wnRenderPanel();
+  _wnWatchForFirstView(carousel);
   _wnRestartTimer();
+}
+
+function _wnWatchForFirstView(carousel) {
+  if (_wn.seen || _wn.observer || !carousel) return;
+  _wn.observer = onFirstView(carousel, 0.3, () => {
+    _wn.seen = true;
+    _wnRestartTimer();
+  });
+  // No observer to wait on: the carousel counts as seen, so it rotates at once.
+  if (!_wn.observer) _wn.seen = true;
 }
 
 // ── Data Collection: unlocks Portfolio Analytics ──
@@ -301,8 +320,9 @@ function _wnRenderIndex() {
   // Rewriting the list drops the focus inside it; hand it to the active item.
   const hadFocus = list.contains(document.activeElement);
   list.innerHTML = _wn.items.map((it, i) => `
-    <button class="wn-index-item${i === _wn.active ? " active" : ""}" role="tab"
-            aria-selected="${i === _wn.active}" onclick="wnSelect(${i})">
+    <button class="wn-index-item${i === _wn.active ? " active" : ""}" role="tab" id="wn-tab-${i}"
+            aria-selected="${i === _wn.active}" aria-controls="wn-center" tabindex="${i === _wn.active ? 0 : -1}"
+            onclick="wnSelect(${i})" onkeydown="wnTabKey(event, ${i})">
       ${i === _wn.active ? '<span class="wn-timer"></span>' : ""}
       <span class="wn-index-num">${String(i + 1).padStart(2, "0")}</span>
       <span class="wn-index-text">
@@ -359,6 +379,7 @@ function _wnRenderPanel() {
   if (!center || !preview || !it) return;
   // Rewriting a panel drops the focus inside it; hand it to the new item's first control.
   const focusIn = [center, preview].find(el => el.contains(document.activeElement));
+  center.setAttribute("aria-labelledby", "wn-tab-" + _wn.active);
   center.innerHTML = _wnPanelHtml(it);
   preview.innerHTML = _wnPreviewHtml(it);
   if (focusIn) (focusIn.querySelector("button, a") || center.querySelector("button, a"))?.focus();
@@ -367,6 +388,18 @@ function _wnRenderPanel() {
     _wn.minHeight = carousel.offsetHeight;
     carousel.style.minHeight = _wn.minHeight + "px";
   }
+}
+
+// Arrow keys, Home and End move the selection along the tabs and carry focus with it. The
+// tabs stand in a column, so Up and Down step through them; Left and Right do the same.
+function wnTabKey(e, i) {
+  const last = _wn.items.length - 1;
+  const prev = i === 0 ? last : i - 1, next = i === last ? 0 : i + 1;
+  const to = { ArrowUp: prev, ArrowLeft: prev, ArrowDown: next, ArrowRight: next, Home: 0, End: last }[e.key];
+  if (to === undefined) return;
+  e.preventDefault();
+  wnSelect(to);
+  document.getElementById("wn-index-items")?.children[to]?.focus();
 }
 
 // A viewer's own pick stops the rotation for good, so it never moves them along.
@@ -396,7 +429,7 @@ function _wnRestartTimer() {
   clearInterval(_wn.rotateTimer);
   _wn.rotateTimer = null;
   const carousel = document.getElementById("wn-carousel");
-  const rotates = _wn.items.length > 1 && !prefersReducedMotion() && !_wn.stopped;
+  const rotates = _wn.items.length > 1 && !prefersReducedMotion() && !_wn.stopped && _wn.seen;
   if (carousel) carousel.classList.toggle("wn-rotating", rotates);
   if (!rotates || _wn.hovered || _wn.focused) return;
   _wnRenderIndex(); // a fresh timer bar starts its fill from the top
@@ -437,6 +470,7 @@ function wnToggleHelp(btn, event) {
   event.stopPropagation();
   const pop = btn.closest(".wn-help").querySelector(".wn-popover");
   const open = pop.hidden;
+  if (open) trackHome("click", "CartaHome.WhatsNew.MicroappHelp");
   pop.hidden = !open;
   btn.setAttribute("aria-expanded", String(open));
 }

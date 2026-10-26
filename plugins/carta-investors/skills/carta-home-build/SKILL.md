@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.116.2</carta-plugin>
+<carta-plugin>carta-investors:6.116.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -137,16 +137,16 @@ own sidebar tile.
   account). Until that answers, or if it can't be asked, the matches are ambiguous, the settings
   call fails any other way, or the reply is unreadable, Portfolio Analytics stays out of the carousel rather than flash open or upsell a firm that may have it; it takes
   its slot when the answer lands, without moving the viewer off the item they're on. One skill that went live
-  in the last 60 days (Contentful `pluginPrompt`) takes one slot: never one the Skill Directory
-  marks `"whatsNew": false` and never a featured microapp's own skill (the product is already
+  in the last 60 days (Contentful `pluginPrompt`) takes one slot: only a skill the current Skill
+  Directory lists, never one it marks `"whatsNew": false` and never a featured microapp's own skill (the product is already
   in the carousel), a deck, document or spreadsheet skill before a chat answer, newest
   first within each (`rankWhatsNew`). It sits after the open microapps and
   before the locked ones, so the last item in that order drops out of the four, with a copyable prompt and a preview of what it hands back
   (`WHATS_NEW_SKILL_OUTPUTS`). Shown once `get_current_user` answers; an answer with none of
   the microapps' `get_current_user` flags known keeps it hidden rather than upsell a paying
-  customer. Rotates every 5s, pauses
-  while hovered or focused, stops for good once the viewer picks an item, and stands still
-  under reduced motion.
+  customer. Rotates every 5s, starting the first time the carousel is on screen, pauses
+  while hovered or focused, stops for good once the viewer picks an item (a key press on the
+  tabs counts as a pick), and stands still under reduced motion.
 - **Firm auto-detection** — calls `list_contexts` without a firm name filter; extracts the
   active firm UUID and name from the response. All DWH queries use `FIRM_ID = '${firmId}'`
   dynamically — the artifact works for any Carta firm with no code changes.
@@ -248,7 +248,7 @@ need the full file in context. Edit the small source file for what you're changi
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |
 | `resources/app/segment-dashboards.js` | LP summary card: which firms get it, its warehouse query, and the 2/3-card grid | change who sees that card or what it shows |
-| `resources/app/whats-new.js` | What's new carousel: featured microapps (locked by product flag, linked in-app or to a carta.com demo page or not at all; the Data Collection lookup behind Portfolio Analytics), one new skill from Contentful (skipping `whatsNew: false` and featured microapps' own skills, visual outputs first) with a preview of its output (`WHATS_NEW_SKILL_OUTPUTS` in the config file), rotation, and the microapp preview mockups (microapp list lives in `WHATS_NEW_MICROAPPS` in the config file above) | change which microapps are featured or how they lock, how many new skills join, or the carousel's behaviour |
+| `resources/app/whats-new.js` | What's new carousel: featured microapps (locked by product flag, linked in-app or to a carta.com demo page or not at all; the Data Collection lookup behind Portfolio Analytics), one new skill from Contentful (only one the current Skill Directory lists, skipping `whatsNew: false` and featured microapps' own skills, visual outputs first) with a preview of its output (`WHATS_NEW_SKILL_OUTPUTS` in the config file), rotation, and the microapp preview mockups (microapp list lives in `WHATS_NEW_MICROAPPS` in the config file above) | change which microapps are featured or how they lock, how many new skills join, or the carousel's behaviour |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/carta-home.css` | styles (Ink tokens) | change appearance |
 | `resources/carta-home.template.html` | HTML skeleton + injection markers | change page structure |

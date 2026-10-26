@@ -1491,10 +1491,6 @@
   border: 1px solid var(--ink-color-global-surface-lightgray-hover);
   background: var(--carta-surface-paper);
 }
-@media (max-width: 860px) {
-  .wn-carousel { grid-template-columns: 200px minmax(0, 1fr); }
-  .wn-preview { display: none; }
-}
 .wn-index {
   display: flex;
   flex-direction: column;
@@ -1654,6 +1650,18 @@
   align-items: center;
   margin-left: -24px;
   padding: 14px 18px 14px 0;
+}
+/* After the base rules above, so the narrow layouts win the cascade. */
+@media (max-width: 860px) {
+  .wn-carousel { grid-template-columns: 200px minmax(0, 1fr); }
+  .wn-preview { display: none; }
+}
+@media (max-width: 600px) {
+  .wn-carousel { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  .wn-index { border-right: none; border-bottom: 1px solid var(--ink-color-global-surface-lightgray-hover); }
+  .wn-center { padding: 24px 20px; }
+  .wn-headline { font-size: 24px; }
+  .wn-cta { height: auto; min-height: 36px; padding: 8px 16px; max-width: 100%; text-align: left; }
 }
 .wn-preview-btn {
   display: block;

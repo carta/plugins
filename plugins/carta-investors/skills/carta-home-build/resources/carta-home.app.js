@@ -1456,6 +1456,20 @@ function renderCapabilities(recs) {
   return shown;
 }
 
+// Calls `fn` once, the first time `threshold` of `el` is on screen. Returns the observer,
+// so a caller can stop waiting, or null where the page has no IntersectionObserver; the
+// caller then acts at once.
+function onFirstView(el, threshold, fn) {
+  if (typeof IntersectionObserver === "undefined") return null;
+  const io = new IntersectionObserver(entries => {
+    if (!entries.some(e => e.isIntersecting)) return;
+    io.disconnect();
+    fn();
+  }, { threshold });
+  io.observe(el);
+  return io;
+}
+
 // The editable parts type themselves in, one after another left to right, the first
 // time the row is 40% on screen, so each card reads as a sentence with a blank that
 // fills in. Skipped under reduced motion and where there's no observer.
@@ -1476,25 +1490,21 @@ function typeTokensWhenSeen(grid) {
     };
     grid.addEventListener("pointerdown", touch, { capture: true });
     grid.addEventListener("focusin", touch, { capture: true });
+    grid._touch = touch;
   }
-  if (typeof IntersectionObserver === "undefined") return;
   if (prefersReducedMotion()) return;
   const tokens = Array.from(grid.querySelectorAll(".cap-token"));
   if (!tokens.length) return;
-  tokens.forEach(t => { t.textContent = ""; t.dataset.typing = ""; });
   let timer = null;
   const later = (fn, ms) => { timer = setTimeout(fn, ms); };
-  const io = new IntersectionObserver(entries => {
-    if (!entries.some(e => e.isIntersecting)) return;
-    io.disconnect();
-    later(() => typeToken(tokens, 0, later), CAP_TYPE_DELAY_MS);
-  }, { threshold: 0.4 });
+  const io = onFirstView(grid, 0.4, () => later(() => typeToken(tokens, 0, later), CAP_TYPE_DELAY_MS));
+  if (!io) return;  // no observer: the blanks keep their words and nothing types
+  tokens.forEach(t => { t.textContent = ""; t.dataset.typing = ""; });
   grid._stopTyping = () => {
     clearTimeout(timer);
     io.disconnect();
     tokens.forEach(t => { t.textContent = t.dataset.token; delete t.dataset.typing; });
   };
-  io.observe(grid);
 }
 
 // Reads the word when its turn comes, so a firm name that resolved meanwhile types in.
@@ -1537,6 +1547,9 @@ function capCopy(btn) {
   trackPrompt(d.track, d.prompt ? promptText({ text: d.prompt }) : "", d.source || PROMPT_SOURCE.STATIC,
     { skill: d.skill, rank: d.rank === undefined ? undefined : Number(d.rank) });
   const box = btn.closest(".cap-box");
+  // A copy can arrive before the row was seen or touched (a programmatic click, a script);
+  // it counts as a touch, so typing stops and every blank holds its full word.
+  btn.closest("#cap-grid")?._touch?.();
   // innerText, so whatever the viewer typed into the prompt is what gets copied.
   const text = box.querySelector(".cap-card-text").innerText.trim();
   const feedback = () => {
