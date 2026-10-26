@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.99.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.100.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -143,7 +143,9 @@ If the user asks about a specific company ("how does Acme's option pool compare?
 **Required inputs**: None — portfolio enumeration is automatic.
 
 **AI computation**: Yes — portfolio benchmark statistics (median, min, max for option pool sizes, SAFE caps, round sizes) are AI-derived from aggregated cap table data.
-Trigger the AI computation gate (see carta-interaction-reference §6.2) before outputting any benchmark statistics or portfolio comparisons.
+Before you fetch data or compute, call `AskUserQuestion` (never plain text) with: "No saved Carta model matches these terms. I can compute portfolio benchmarks using AI — this would be Claude's analysis, not Carta data. Would you like me to proceed?" If the user says no, stop: no output, no fallback. If the user says yes, start the computed output with:
+
+> ⚠️ **Claude's analysis** — computed from cap table data, not from a saved Carta model. Verify with counsel before relying on these numbers.
 
 **Subagent prohibition**: Not applicable.
 

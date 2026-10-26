@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -31,11 +34,32 @@ func TestInjectContext_KnownPluginWithBlurb(t *testing.T) {
 	if hookEventName != "SessionStart" {
 		t.Errorf("hookEventName = %q, want %q", hookEventName, "SessionStart")
 	}
-	if !strings.Contains(additionalContext, "AI COMPUTATION AUTHORIZATION GATE") {
-		t.Errorf("additionalContext = %q, want carta-cap-table's AI-computation-gate block", additionalContext)
+	want := `<EXTREMELY_IMPORTANT>You have carta-cap-table tools available. Before ANY Carta cap table tool call, invoke the matching Skill('carta-cap-table:...') first. For a single fact or a short answer, or when no other skill matches, invoke Skill('carta-cap-table:carta-cap-table'): it has the read commands, the answer rules and how to report a bug. In every answer: give the as-of date of each Carta figure, never invent a value, give no legal, tax or financial advice, ask with AskUserQuestion before you compute figures Carta has not saved and label them Claude's analysis, and make no change until the user confirms it. IMPORTANT: Skill is a deferred tool — if its schema is not yet loaded, you MUST call ToolSearch with query "select:Skill" first, then invoke the Skill tool.</EXTREMELY_IMPORTANT>` +
+		"\n" + `<carta-plugin name="carta-cap-table" version="1.0.0" />`
+	if additionalContext != want {
+		t.Errorf("additionalContext = %q, want %q", additionalContext, want)
 	}
-	if !strings.Contains(additionalContext, `<carta-plugin name="carta-cap-table" version="1.0.0" />`) {
-		t.Errorf("additionalContext = %q, want the identity tag", additionalContext)
+}
+
+// The cap table blurb is in every session's context, so it stays under 200
+// tokens, counted at the usual 4 characters per token.
+func TestInjectContext_CapTableBlurbFitsTokenBudget(t *testing.T) {
+	const maxTokens = 200
+	if tokens := len(pluginBlurbs["carta-cap-table"]) / 4; tokens > maxTokens {
+		t.Errorf("carta-cap-table blurb is about %d tokens, want at most %d", tokens, maxTokens)
+	}
+}
+
+func TestInjectContext_CapTableBlurbSkillsExist(t *testing.T) {
+	refs := regexp.MustCompile(`Skill\('carta-cap-table:([a-z0-9-]+)'\)`).FindAllStringSubmatch(pluginBlurbs["carta-cap-table"], -1)
+	if len(refs) != 1 {
+		t.Fatalf("blurb names %d skills, want 1", len(refs))
+	}
+	for _, ref := range refs {
+		path := filepath.Join("..", "..", "..", "plugins", "carta-cap-table", "skills", ref[1], "SKILL.md")
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("blurb names Skill('carta-cap-table:%s'), but %s does not exist", ref[1], path)
+		}
 	}
 }
 
@@ -91,39 +115,70 @@ func TestInjectContext_InvestorsBlurbRoutesActionsToFundAdmin(t *testing.T) {
 	}
 }
 
+// feedbackRuleFragments are the load-bearing feedback rules. carta-investors'
+// feedbackBlurb and the carta-cap-table core skill each carry them.
+var feedbackRuleFragments = []string{
+	`call_tool({"name": "fa__create__feedback"`,
+	`search_tools("report a bug feedback")`,
+	`do not retry a call that came back "Unknown tool"`,
+}
+
+func missingFeedbackRules(text string) []string {
+	var missing []string
+	for _, fragment := range feedbackRuleFragments {
+		if !strings.Contains(strings.ToLower(text), strings.ToLower(fragment)) {
+			missing = append(missing, fragment)
+		}
+	}
+	return missing
+}
+
+func TestInjectContext_CapTableSkillCarriesFeedbackRules(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "plugins", "carta-cap-table", "skills", "carta-cap-table", "SKILL.md")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, found := strings.Cut(string(body), "\n## Report a bug or request a feature\n")
+	if !found {
+		t.Fatalf("%s has no \"Report a bug or request a feature\" section", path)
+	}
+	if missing := missingFeedbackRules(section); len(missing) != 0 {
+		t.Errorf("%s feedback section is missing %q", path, missing)
+	}
+	if !strings.Contains(section, "Never call `mutate` for it.") {
+		t.Errorf("%s feedback section does not rule out the mutate gateway path", path)
+	}
+}
+
 // The feedback command is reachable only through call_tool, and only when its
 // own feature flag is on. A blurb that names `mutate` or fires blind turns
 // every handled error into a second, unhandled one.
 func TestInjectContext_FeedbackBlurbNamesCallToolAndChecksAvailability(t *testing.T) {
-	for _, plugin := range []string{"carta-cap-table", "carta-investors"} {
-		t.Run(plugin, func(t *testing.T) {
-			setupPluginRoot(t, plugin, "1.0.0")
+	setupPluginRoot(t, "carta-investors", "1.0.0")
 
-			out, err := InjectContext([]byte(`{"hook_event_name":"SessionStart"}`))
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, additionalContext := parseSessionStartOutput(t, out)
+	out, err := InjectContext([]byte(`{"hook_event_name":"SessionStart"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, additionalContext := parseSessionStartOutput(t, out)
 
-			for _, want := range []string{
-				`call_tool({"name": "fa__create__feedback"`,
-				`search_tools("report a bug feedback")`,
-				"CHECK THE COMMAND IS THERE BEFORE YOU CALL IT",
-				"do not retry a call that came back \"Unknown tool\"",
-			} {
-				if !strings.Contains(additionalContext, want) {
-					t.Errorf("additionalContext is missing %q", want)
-				}
-			}
-			// `mutate` is gateway-gated off by default, so the blurb may only
-			// name it to forbid it.
-			if strings.Contains(additionalContext, `call mutate(command="fa:create:feedback") directly`) {
-				t.Error("the blurb still tells the model to file feedback through the mutate gateway")
-			}
-			if !strings.Contains(additionalContext, `Do NOT call mutate(command="fa:create:feedback")`) {
-				t.Error("the blurb does not rule out the mutate gateway path")
-			}
-		})
+	if missing := missingFeedbackRules(feedbackBlurb); len(missing) != 0 {
+		t.Errorf("feedbackBlurb is missing %q", missing)
+	}
+	if !strings.Contains(additionalContext, feedbackBlurb) {
+		t.Error("additionalContext does not carry feedbackBlurb")
+	}
+	if !strings.Contains(additionalContext, "CHECK THE COMMAND IS THERE BEFORE YOU CALL IT") {
+		t.Error("additionalContext is missing the availability check")
+	}
+	// `mutate` is gateway-gated off by default, so the blurb may only
+	// name it to forbid it.
+	if strings.Contains(additionalContext, `call mutate(command="fa:create:feedback") directly`) {
+		t.Error("the blurb still tells the model to file feedback through the mutate gateway")
+	}
+	if !strings.Contains(additionalContext, `Do NOT call mutate(command="fa:create:feedback")`) {
+		t.Error("the blurb does not rule out the mutate gateway path")
 	}
 }
 

@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.99.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.100.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -72,7 +72,7 @@ These three awards can carry signature requests: **option grants**, **RSAS (rest
 - **A single award** → you also need its type (`OPTION_GRANT`, `RSA`, or `PIU`) and the award itself. The company-wide list (below) returns these, so start there if you don't already know which award you mean.
 - **A portfolio** → you need the portfolio. Get it from `list_accounts` (portfolios appear as `organization_pk:` entries) — this is the investor or firm view across the companies they hold or manage.
 
-If a required input is missing, ask for it with `AskUserQuestion` before fetching (see carta-interaction-reference §4.1).
+If a required input is missing, ask for it with `AskUserQuestion` before fetching.
 
 ## Data Retrieval
 

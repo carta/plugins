@@ -1,92 +1,18 @@
 ---
 name: carta-discover-commands
 description: >-
-  META-DISCOVERY ONLY — answers the question "what cap-table tools or commands exist?" when the user is lost about what's available. NEVER use this skill for any request that names a cap-table topic (stakeholders, grants, vesting, SAFEs, notes, valuations, ownership, waterfall, financing, exposure, etc.) — those are always direct data requests, even if the user phrases them vaguely. The matching specialist skill wins every time over this one.
-when_to_use: >-
-  Use ONLY when the user explicitly admits they don't know what's
-  available and asks a meta question about the toolset itself —
-  literal phrasings like "I don't know where to begin", "what kinds
-  of cap-table data can I even access", "can you give me a tour of
-  the available commands", "which tools are even available for this
-  domain", or "point me in the right direction with no specific
-  topic in mind". Do NOT fire on any utterance that names a specific
-  cap-table noun (stakeholders, shareholders, holders, employees,
-  grants, options, vesting, SAFEs, notes, 409A, valuations, ownership,
-  waterfall, exit, financing, rounds, exposure, conversions, etc.) —
-  even if the verb sounds discovery-flavored ("show me X", "render X",
-  "find X", "compare X"), the named noun means it's a direct data
-  request and a specialist skill owns it. When in doubt between this
-  skill and a specialist, pick the specialist.
+  Retired. Do not load. To find a Carta cap table command, call search_tools, or load
+  carta-cap-table:carta-cap-table.
+user-invocable: false
+model: inherit
 allowed-tools:
-  - mcp__carta__call_tool
-  - mcp__carta__read_tool
-  - mcp__carta__list_contexts
-  - mcp__carta__set_context
-  - mcp__carta__list_accounts
-  - mcp__carta__search_tools
-  - mcp__claude_ai_Carta__call_tool
-  - mcp__claude_ai_Carta__read_tool
-  - mcp__claude_ai_Carta__list_contexts
-  - mcp__claude_ai_Carta__set_context
-  - mcp__claude_ai_Carta__list_accounts
-  - mcp__claude_ai_Carta__search_tools
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
-  - AskUserQuestion
-  - Bash(cat "${CLAUDE_PLUGIN_DATA}/cache/commands.json"*)
+  - Skill(carta-cap-table:carta-cap-table)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.99.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.100.0</carta-plugin>
 
-<!-- Part of the official Carta AI Agent Plugin -->
+# Retired
 
-# Discover Commands
-
-Use the command registry to find available commands when no specific skill covers the user's request. A prior `discover` call in this environment caches the full registry to disk — read that cache first and only hit the network on a miss.
-
-## Step 0 — Read the cached command registry (do this first)
-
-The plugin's PostToolUse hook writes the full command registry to `${CLAUDE_PLUGIN_DATA}/cache/commands.json` after any `discover` call. Read it before making any MCP call:
-
-```bash
-cat "${CLAUDE_PLUGIN_DATA}/cache/commands.json" 2>/dev/null || true
-```
-
-If the file exists and is valid, treat it as the command list and validate it before use:
-
-- **Freshness** — the JSON has a `cached_at` ISO timestamp. If `cached_at` is more than **24 hours** old, treat the cache as stale and fall through to Step 1 (this matches the 24h TTL the welcome/accounts caches use).
-- **Version** — the JSON has a `plugin_version`. If it does not match the running plugin version (see the `<carta-plugin version=… />` tag injected at session start), treat the cache as stale and fall through to Step 1.
-- **Shape** — the command list lives under the `commands` key (an array). If the file is empty, unparseable, or `commands` is missing/empty, fall through to Step 1.
-
-When the cache is valid and fresh, **skip Steps 1–2's network call** — pick the best-matching command directly from the cached `commands` array (same `name` / `description` / `inputSchema` fields as the live `search_tools` result) and go straight to Step 3. This removes a network round-trip on warm sessions.
-
-## Step 1 — Search for Relevant Commands (cache miss / stale only)
-
-```
-search_tools({"query": "<keyword from user's request>"})
-```
-
-Use a keyword that captures the user's intent (e.g. "valuation", "grant", "safe", "stakeholder").
-
-## Step 2 — Pick the Best Match
-
-Review the returned tools. Each has:
-- `name`: the tool name to pass to `read_tool` or `call_tool` (e.g. `cap_table__get__stakeholders`)
-- `description`: what it returns
-- `read_only`: `true` if the tool only reads data — run it with `read_tool`; otherwise use `call_tool`
-
-Only the top results also have `inputSchema` (the required and optional parameters). The others have `required_params` and `optional_params` (parameter names only), which are usually enough to call the tool. If you need a parameter's type or allowed values, call `search_tools({"query": "<tool name>"})` with its exact name: that tool comes back first, with its `inputSchema`.
-
-## Step 3 — Execute
-
-```
-read_tool({"name": "<tool_name>", "arguments": { ...params }})   // read_only: true
-call_tool({"name": "<tool_name>", "summary": "<one sentence for the approval dialog>", "arguments": { ...params }})   // read_only: false
-```
-
-You still need `corporation_id` for most commands — get it from `list_accounts` if you don't have it.
+This skill is retired. Invoke `Skill('carta-cap-table:carta-cap-table')` now: it lists the
+read commands for a single fact or a short answer and how to find any other command with `search_tools`.

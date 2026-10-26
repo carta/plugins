@@ -1,16 +1,16 @@
 ---
 name: carta-reporting
 description: >-
-  Default skill for all cap table data-display queries — use this whenever the user wants
-  to see, list, or explore equity data for a single company. Covers grants, vesting
-  schedules, stakeholders, securities, SAFEs, convertible notes, round history, preferred
-  holders, liquidation seniority, and rights & preferences. Also handles any request
-  starting with "Generate Carta Excel —" (the artifact prompt bar payload).
-  Defers to specialized skills for: SAFE/note conversion math,
-  voting rights, issuance, modifying issuables, per-stakeholder vesting detail
-  (use carta-grant-vesting for "How much has [name] vested?"), round history lookup
-  (use carta-round-history for "What was our Series B round?"), and SAFE/convertible
-  conversion math. Not for cross-portfolio data.
+  Build a custom cap table report or file for one company — filtered, sorted, or
+  multi-column tables of grants, stakeholders, securities, SAFEs, convertible notes,
+  preferred holders, liquidation seniority, and rights & preferences, delivered as an
+  interactive artifact, markdown or Excel. Also handles any request starting with
+  "Generate Carta Excel —" (the artifact prompt bar payload). For a single fact or a
+  short answer (one holder's ownership, the largest grants, one stakeholder), use
+  carta-cap-table. Defers to specialized skills for: SAFE/note conversion math, voting
+  rights, issuance, modifying issuables, per-stakeholder vesting detail (use
+  carta-grant-vesting for "How much has [name] vested?"), and round history lookup (use
+  carta-round-history for "What was our Series B round?"). Not for cross-portfolio data.
 model: sonnet
 allowed-tools:
   - ToolSearch
@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.99.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.100.0</carta-plugin>
 
 # Custom Reports
 

@@ -30,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.99.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.100.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -153,7 +153,7 @@ Show the history table and trend summary (see Presentation section).
 ## Gates
 
 **Required inputs**: `corporation_id`.
-If missing, call `AskUserQuestion` before proceeding (see carta-interaction-reference §4.1).
+If missing, call `AskUserQuestion` before proceeding.
 
 **AI computation**: No — this skill presents Carta data directly.
 

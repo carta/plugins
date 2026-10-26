@@ -13,8 +13,9 @@ func init() {
 	registry.Register("inject-context", registry.SessionStart, InjectContext)
 }
 
-// feedbackBlurb is the in-session bug-report instruction, shared verbatim by
-// every plugin that files feedback — one const so the two copies cannot drift.
+// feedbackBlurb is carta-investors' in-session bug-report instruction.
+// carta-cap-table carries the same rules in its carta-cap-table skill; the
+// shared feedbackRuleFragments list in the tests keeps the two copies aligned.
 //
 // long-comment-ok: the call shape and the availability check are both
 // load-bearing and neither is obvious from the text.
@@ -43,11 +44,7 @@ Always include flowSummary: a short narrative of the flow that led here — what
 // and trivially testable with no fixture files/dirs. A plugin absent from
 // this map gets just the identity tag.
 var pluginBlurbs = map[string]string{
-	"carta-cap-table": strings.Join([]string{
-		`<EXTREMELY_IMPORTANT>You have carta-cap-table tools available. Before ANY tool call, invoke the matching Skill('carta-cap-table:...') first. The skill defines what to fetch, what inputs are required, and how to present results. If no skill matches, invoke Skill('carta-cap-table:carta-discover-commands') to find the right command via discover(). Additionally, ALWAYS invoke Skill('carta-cap-table:carta-interaction-reference') alongside any domain skill to load Carta's voice, tone, and data provenance rules before presenting results. IMPORTANT: Skill is a deferred tool — if its schema is not yet loaded, you MUST call ToolSearch with query "select:Skill" first, then invoke the Skill tool.</EXTREMELY_IMPORTANT>`,
-		`<EXTREMELY_IMPORTANT>AI COMPUTATION AUTHORIZATION GATE: When a carta-cap-table skill's Gates section declares "AI computation: Yes", you MUST call AskUserQuestion BEFORE fetching data or computing. Use this prompt, replacing [X]: "No saved Carta model matches these terms. I can compute [X] using AI — this would be Claude's analysis, not Carta data. Would you like me to proceed?" Do NOT write this as plain text — use the AskUserQuestion tool so execution blocks. User says yes: proceed, label output as Claude's analysis. User says no: stop — no output, no fallback.</EXTREMELY_IMPORTANT>`,
-		feedbackBlurb,
-	}, "\n"),
+	"carta-cap-table": `<EXTREMELY_IMPORTANT>You have carta-cap-table tools available. Before ANY Carta cap table tool call, invoke the matching Skill('carta-cap-table:...') first. For a single fact or a short answer, or when no other skill matches, invoke Skill('carta-cap-table:carta-cap-table'): it has the read commands, the answer rules and how to report a bug. In every answer: give the as-of date of each Carta figure, never invent a value, give no legal, tax or financial advice, ask with AskUserQuestion before you compute figures Carta has not saved and label them Claude's analysis, and make no change until the user confirms it. IMPORTANT: Skill is a deferred tool — if its schema is not yet loaded, you MUST call ToolSearch with query "select:Skill" first, then invoke the Skill tool.</EXTREMELY_IMPORTANT>`,
 	"carta-investors": strings.Join([]string{
 		`<EXTREMELY_IMPORTANT>You have carta-investors tools available via the Carta MCP server (list_tables, describe_table, execute_query). Before ANY tool call, invoke the matching Skill('carta-investors:...') first. The skill defines what to query, what inputs are required, and how to present results. If no skill matches a QUESTION, use list_tables to browse available datasets and describe_table to understand schemas. If no skill or command matches an ACTION the user wants performed, do NOT fall back to querying the warehouse — see the fund-admin request block below. IMPORTANT: Skill is a deferred tool — if its schema is not yet loaded, you MUST call ToolSearch with query "select:Skill" first, then invoke the Skill tool.</EXTREMELY_IMPORTANT>`,
 		feedbackBlurb,

@@ -15,8 +15,6 @@ Every hook dispatches to the shared Go hooks binary in `tools/hooks/` via
 | PreToolUse | Skill | `dispatch.sh capture-active-skill` | Record which carta skills have been loaded this session |
 | PreToolUse | Carta MCP | `dispatch.sh inject-instrumentation` | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise) |
 | UserPromptSubmit | — | `dispatch.sh capture-slash-skill` | Record explicitly-invoked skills (bare `/skill` slash commands) |
-| PostToolUse | Carta MCP | `dispatch.sh cache-commands` | Cache discover() results to CLAUDE_PLUGIN_DATA/cache/commands.json |
-| PostToolUse | Carta MCP | `dispatch.sh track-corporation` | Track corporation_id from fetch() calls in CLAUDE_PLUGIN_DATA/prefs.json |
 
 ## Carta MCP matcher
 

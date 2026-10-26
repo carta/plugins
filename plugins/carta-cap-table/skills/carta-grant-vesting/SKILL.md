@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.99.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.100.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -174,7 +174,7 @@ Lead with a one-sentence plain-English summary before showing the table (see Pre
 
 **Required inputs**: `corporation_id`, `grant_id`, and grant type (options, RSU, SAR, or CBU).
 If you only have a company name, resolve it to a `corporation_id` first (Step 0) — never pass a name string as `corporation_id`.
-If grant type is missing or ambiguous, call `AskUserQuestion` before proceeding (see carta-interaction-reference §4.1).
+If grant type is missing or ambiguous, call `AskUserQuestion` before proceeding.
 If `grant_id` is unknown, use Step 1 of the Workflow to search by holder name.
 
 **AI computation**: No — this skill presents Carta data directly.

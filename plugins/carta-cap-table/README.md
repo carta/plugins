@@ -30,8 +30,9 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 
 | Skill | Description |
 |-------|-------------|
+| `carta-cap-table` | Answer rules for every cap table answer, and a single fact or a short answer — ownership, one stakeholder, largest grants, totals |
 | `carta-portfolio-alerts` | Detect red flags and time-sensitive issues |
-| `carta-reporting` | Display cap table data — grants, stakeholders, preferred holders, liquidation seniority, SAFEs, notes, round history, and more |
+| `carta-reporting` | Custom cap table reports and files — filtered, sorted tables, Excel and markdown exports |
 | `carta-field-definitions` | Explain a column or field within a specific Carta report |
 | `carta-valuation-history` | 409A valuation history |
 | `carta-hmrc-limits` | UK HMRC EMI/CSOP limit usage — company allowance and per-holder headroom |
@@ -47,8 +48,6 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-issuance` | Issue certificates, option grants and profits interest units; draft shares, grants or units, or resume from a draft set |
 | `carta-modify-issuables` | Amend issued certificates and option grants — dates, legend, notes, quantity, exercise price |
 | `carta-captable-home-build` | Build or redeploy the `Carta Home - <company>` live artifact — ownership, fully diluted summary, option pool, stakeholders, drafts, and a skill directory for one company |
-| `carta-interaction-reference` | Behavioral rules for presenting cap table data (voice, tone, precision, provenance) |
-| `carta-discover-commands` | Find the right MCP command when unsure |
 
 ## MCP Server
 
