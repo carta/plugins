@@ -43,6 +43,7 @@ MAX_NAME_LENGTH = _CONTRACT["limits"]["max_name_length"]
 MAX_SOURCE_CLIENT_LENGTH = _CONTRACT["limits"]["max_source_client_length"]
 MAX_SOURCE_VERSION_LENGTH = _CONTRACT["limits"]["max_source_version_length"]
 MAX_VIEW_BYTES = _CONTRACT["limits"]["max_view_bytes"]
+MAX_VARIANCE_BY_CATEGORY_BYTES = _CONTRACT["limits"]["max_variance_by_category_bytes"]
 
 NODE_KINDS = frozenset(_CONTRACT["node_kinds"])
 VIEW_KINDS = frozenset(_CONTRACT["view_kinds"])
@@ -126,6 +127,8 @@ def validate(payload: Any) -> None:
         _check_value_aliases(payload["value_aliases"])
     if "view" in payload:
         check_view(payload["view"])
+    if "variance_by_category" in payload:
+        check_variance_by_category(payload["variance_by_category"])
     budget = _keys(payload["budget"], "payload.budget", BUDGET_KEYS, BUDGET_KEYS)
     dimensions = budget["dimensions"]
     if not isinstance(dimensions, list) or not all(isinstance(d, str) and d for d in dimensions):
@@ -159,6 +162,17 @@ def check_view(view: Any) -> None:
         raise PayloadError("payload.view must be a JSON object")
     if len(json.dumps(view).encode("utf-8")) > MAX_VIEW_BYTES:
         raise PayloadError("payload.view is over %d bytes" % MAX_VIEW_BYTES)
+
+
+def check_variance_by_category(variance_by_category: Any) -> None:
+    """``variance_by_category``: the client's own ranking of its budget categories by how
+    far actuals ran from plan, for a reader with no way to rebuild it (the ranking needs
+    the client's own GL mapping and workbook categories, not just this payload's nodes).
+    Carta stores it without reading it, so only its type and size are checked."""
+    if not isinstance(variance_by_category, dict):
+        raise PayloadError("payload.variance_by_category must be a JSON object")
+    if len(json.dumps(variance_by_category).encode("utf-8")) > MAX_VARIANCE_BY_CATEGORY_BYTES:
+        raise PayloadError("payload.variance_by_category is over %d bytes" % MAX_VARIANCE_BY_CATEGORY_BYTES)
 
 
 def _check_node(node: Any, path: str, scoped: bool) -> None:

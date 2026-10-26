@@ -11,7 +11,8 @@
     "max_name_length": 255,
     "max_source_client_length": 64,
     "max_source_version_length": 32,
-    "max_view_bytes": 4096
+    "max_view_bytes": 4096,
+    "max_variance_by_category_bytes": 16384
   },
   "node_kinds": ["line", "group_header", "section_header", "subsection_header", "subtotal", "summary", "total"],
   "view_kinds": ["by-account", "by-line-item", "by-tag-crosstab"],
@@ -20,7 +21,7 @@
   "derived_rules": ["net_income", "expression"],
   "payload_keys": {
     "required": ["period_year", "period_granularity", "currency", "native_view_kind", "budget"],
-    "optional": ["period_kind", "value_aliases", "view"]
+    "optional": ["period_kind", "value_aliases", "view", "variance_by_category"]
   },
   "budget_keys": ["dimensions", "nodes"],
   "node_keys": {

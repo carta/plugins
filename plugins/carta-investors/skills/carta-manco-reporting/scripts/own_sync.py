@@ -30,18 +30,56 @@ under it, and forget deletes whatever uuid remove() actually dismissed, which
 can differ from the uuid forget already deleted if a push stamped a new one
 in between.
 
+A pushed payload's optional `variance_by_category` (the Top Categories of
+Variance chart's data, trimmed to this one report) needs fund-admin's
+budget_report payload validator to accept that key. A Carta that doesn't
+(predating carta/fund-admin#97557) refuses a push that carries it.
+
 Python-stdlib only, 3.9-safe.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+import export_budget_bundle
+import report_payload
 import report_store
 import share_ops
 from share_bridge import ShareError
 
 Emit = Callable[[str], None]
+
+_VARIANCE_CATEGORY_FIELDS = ("name", "budget", "actual", "variance")
+
+
+def _variance_by_category_for(data_dir: Path, report_id: str) -> Optional[Dict[str, Any]]:
+    """`report_id`'s own entry from the dashboard's snapshot.varianceByCategory (the Top
+    Categories of Variance chart's data), for just this one report (own_sync pushes one
+    at a time), with each category trimmed to the four fields the chart renders — a
+    synced report can't support the drill-down fields (gl_codes, carta_tags, scopes,
+    excluded_claims, monthly/quarterly_budget) any more than a shared-in report can.
+    Everything else on the entry (period, budget_period, excluded, label) is carried as
+    the snapshot holds it, same as the manual-upload bundle.
+
+    None when the snapshot has nothing for this report. push_if_changed is what decides
+    whether the entry actually ships — it needs the whole payload to know whether adding
+    it would push the report over report_payload's overall size limit, not just this
+    entry's own."""
+    try:
+        snapshot = json.loads((data_dir / "snapshot.json").read_text())
+    except (OSError, ValueError):
+        return None
+    variance = export_budget_bundle._own_variance(snapshot.get("varianceByCategory"), {report_id})
+    if not variance:
+        return None
+    own = variance["budgets"][0]
+    categories = own.get("categories") or []
+    if not categories:
+        return None
+    trimmed = dict(own, categories=[{k: c.get(k) for k in _VARIANCE_CATEGORY_FIELDS} for c in categories])
+    return {"budgets": [trimmed], "default_id": variance["default_id"]}
 
 
 def push_if_changed(
@@ -74,6 +112,14 @@ def push_if_changed(
         payload = store.read_share_payload(report_id)
     except report_store.ReportEditError:
         return None
+    variance = _variance_by_category_for(data_dir, report_id)
+    if variance is not None:
+        with_variance = dict(payload, variance_by_category=variance)
+        try:
+            report_payload.validate(with_variance)
+            payload = with_variance
+        except report_payload.PayloadError:
+            pass  # the payload with variance attached is over a limit; push it without
     fingerprint = report_store.payload_fingerprint(payload)
     sync = report.get("own_sync") or {}
     if sync.get("payload_fingerprint") == fingerprint:
