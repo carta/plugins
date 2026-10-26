@@ -112,13 +112,23 @@
       transform: none;
       padding: 12px 14px;
     }
+    /* Hidden tooltips still take layout height; the cap on the inner body keeps the
+       tooltip from stretching the page. It clips the body, not the tooltip, so the
+       caret drawn outside the box stays visible. Every row is one line (the group
+       classes below truncate with an ellipsis), so the worst case is fixed by
+       TOOLTIP_MAX_MERGES (5) and TOOLTIP_MAX_MERGED_NAMES (3) in the script: intro
+       64 + label 30 + 5 groups x 84 + 4 gaps x 10 = 554px, under the cap. Raising
+       either constant means raising this max-height. */
+    .tooltip-wide .tt-body { max-height: 640px; overflow: hidden; }
     .tooltip-wide::after { left: 28px; transform: none; }
     .tooltip-wide .tt-intro { color: rgba(255, 255, 255, 0.95); margin-bottom: 10px; }
     .tooltip-wide .tt-section-label { color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; margin-top: 4px; }
     .tooltip-wide .tt-group { margin-bottom: 10px; }
     .tooltip-wide .tt-group:last-child { margin-bottom: 0; }
-    .tooltip-wide .tt-group-canonical { color: #FFFFFF; font-weight: 600; font-size: 12px; line-height: 18px; margin-bottom: 2px; }
-    .tooltip-wide .tt-group-merged { color: rgba(255, 255, 255, 0.78); font-size: 11.5px; line-height: 16px; padding-left: 10px; }
+    .tooltip-wide .tt-group-canonical { color: #FFFFFF; font-weight: 600; font-size: 12px; line-height: 18px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tooltip-wide .tt-group-merged { color: rgba(255, 255, 255, 0.78); font-size: 11.5px; line-height: 16px; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tooltip-wide .tt-more { color: rgba(255, 255, 255, 0.7); font-style: italic; font-size: 11.5px; line-height: 16px; }
+    .tooltip-wide .tt-group-merged .tt-more { padding-left: 0; }
     .tooltip-wide .tt-empty { color: rgba(255, 255, 255, 0.85); font-style: italic; }
 
     .table-title { font-size: 16px; font-weight: 500; line-height: 28px; color: var(--text-default); margin-bottom: 12px; }
@@ -300,9 +310,16 @@
       margin-bottom: 16px;
     }
     .filter-controls { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-subtle); }
-    .filter-select {
-      height: 32px; padding: 0 8px; border-radius: 4px; font-size: 13px; font-family: inherit;
+    .filter-select, .filter-btn {
+      height: 32px; border-radius: 4px; font-size: 13px; font-family: inherit;
       border: 1px solid var(--border-default); background: var(--surface-bg); color: var(--text-default);
+    }
+    .filter-select { padding: 0 8px; }
+    .filter-btn { padding: 0 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .filter-btn:hover { background: var(--surface-underlay); }
+    .footer-note .carta-link {
+      font: inherit; background: none; border: none; padding: 0; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px;
     }
     .filter-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
     .filter-tab {
@@ -797,14 +814,18 @@
     // company drops out of the Live/Exited filter. spa_fuzzy keeps only the
     // best-scoring row per SPA name, so a second candidate can only add a match.
     //
-    // The alias is read in two passes, and the ORDER matters. First a marker
+    // The alias is read in three passes, and the ORDER matters. First a marker
     // form -- "(dba BrandCo)", "(FKA: OldCo, Inc.)", separator [ :]+ so the
     // colon variants are not missed. Failing that, the WHOLE parenthetical
     // ("Airtable (Formagrid, Inc.)" -> "Formagrid, Inc."), because plenty of
     // firms write Brand (Legal Name) with no marker word at all -- at one firm
     // that is 705 of 772 companies, and marker-only matching does nothing for
     // them. A parenthetical that is not a name ("(a Delaware corporation)")
-    // just becomes a candidate that matches nothing, which is harmless.
+    // just becomes a candidate that matches nothing, which is harmless. Last, a
+    // marker with no parentheses -- "Newname Ltd. f.k.a. Cedar Hill" -- takes the
+    // text after it. Markers accept dotted spellings (F.K.A.) and must follow a
+    // space or comma, so "Takata" does not read as "AKA". The same markers cut
+    // the name itself before the suffix strip, so the primary name is "NEWNAME".
     //
     // The cost of the bare-parenthetical pass is that one company's brand can
     // equal another's legal name -- "Astra (Astra Space, Inc.)" vs "Astra
@@ -822,7 +843,10 @@
     // inside a word -- "HoldCo" -> "HOLD" via CO, "LLP" -> "L" via LP, and
     // "Inc." -> "" which matches everything. Longer alternatives come before
     // their own prefixes (INCORPORATED before INC, CORPORATION before CORP).
-    // COMPANY is deliberately absent: it carries meaning in real names.
+    // HOLDINGS? takes both spellings ("Birch Holding" / "Birch Holdings"),
+    // and HOLDINGS? +COMPANY goes first so "Cedar Hill Holding Company" strips to
+    // "CEDAR HILL". A bare COMPANY is deliberately absent: it carries meaning in
+    // real names.
     //
     // Coverage counts read norm_investments_base, never norm_investments —
     // counting the post-UNION ALL rows double-counts every aliased company in
@@ -841,9 +865,9 @@
       spa_issuer AS (SELECT EXTRACTION_ID, FIRM_ID, CASE WHEN TYPEOF(RAW_JSON:company:name) = 'OBJECT' AND RAW_JSON:company:name:value::VARCHAR IS NOT NULL THEN RAW_JSON:company:name:value::VARCHAR WHEN TYPEOF(RAW_JSON:company:name) != 'OBJECT' AND RAW_JSON:company:name IS NOT NULL THEN RAW_JSON:company:name::VARCHAR ELSE ATTRIBUTES:name::VARCHAR END AS ISSUER_NAME FROM spa_rec WHERE RECORD_TYPE = 'company'),
       spa_purchaser AS (SELECT r.EXTRACTION_ID, CASE WHEN TYPEOF(f.VALUE:name) = 'OBJECT' THEN f.VALUE:name:value::VARCHAR ELSE f.VALUE:name::VARCHAR END AS PURCHASER_NAME, CASE WHEN TYPEOF(f.VALUE:entity_type) = 'OBJECT' THEN f.VALUE:entity_type:value::VARCHAR ELSE f.VALUE:entity_type::VARCHAR END AS ENTITY_TYPE, CASE WHEN TYPEOF(f.VALUE:share_class_name) = 'OBJECT' THEN f.VALUE:share_class_name:value::VARCHAR ELSE f.VALUE:share_class_name::VARCHAR END AS SHARE_CLASS_NAME, CASE WHEN TYPEOF(f.VALUE:shares_purchased_by_cash) = 'OBJECT' THEN f.VALUE:shares_purchased_by_cash:value::NUMBER ELSE f.VALUE:shares_purchased_by_cash::NUMBER END AS SHARES_PURCHASED, CASE WHEN TYPEOF(f.VALUE:total_amount_paid) = 'OBJECT' THEN f.VALUE:total_amount_paid:value::NUMBER(38,2) ELSE f.VALUE:total_amount_paid::NUMBER(38,2) END AS TOTAL_AMOUNT_PAID FROM spa_rec r, LATERAL FLATTEN(input => r.RAW_JSON:purchasers) f WHERE r.RECORD_TYPE = 'company' AND r.RAW_JSON IS NOT NULL AND ARRAY_SIZE(r.RAW_JSON:purchasers) > 0 UNION ALL SELECT EXTRACTION_ID, ATTRIBUTES:name::VARCHAR, ATTRIBUTES:entity_type::VARCHAR, ATTRIBUTES:share_class_name::VARCHAR, ATTRIBUTES:shares_purchased_by_cash::NUMBER, ATTRIBUTES:total_amount_paid::NUMBER(38,2) FROM spa_rec WHERE RECORD_TYPE = 'investor' AND EXTRACTION_ID IN (SELECT EXTRACTION_ID FROM spa_rec WHERE RECORD_TYPE = 'company' AND COALESCE(ARRAY_SIZE(RAW_JSON:purchasers), 0) = 0)),
       spa_deal AS (SELECT EXTRACTION_ID, TRY_TO_DATE(CASE WHEN TYPEOF(RAW_JSON:transaction_summary:closing_dates[0]) = 'OBJECT' AND RAW_JSON:transaction_summary:closing_dates[0]:value::VARCHAR IS NOT NULL THEN RAW_JSON:transaction_summary:closing_dates[0]:value::VARCHAR WHEN TYPEOF(RAW_JSON:transaction_summary:closing_dates[0]) != 'OBJECT' AND RAW_JSON:transaction_summary:closing_dates[0] IS NOT NULL THEN RAW_JSON:transaction_summary:closing_dates[0]::VARCHAR ELSE ATTRIBUTES:effective_date::VARCHAR END) AS CLOSING_DATE FROM spa_rec WHERE RECORD_TYPE = 'stock_purchase'),
-      norm_investments_base AS (SELECT ISSUER_NAME AS INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS NAME_NORM, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), IFF(REGEXP_LIKE(UPPER(TRIM(REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1))), '(.{0,2}|[0-9].*|SERIES.*|.*COMPANY|HELD .*|INVESTMENT .*|HOLDINGS?|GROUP|CAYMAN|BVI|PTY|DELAWARE|OFFSHORE|ONSHORE|FEEDER)'), NULL, REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1))) AS ALIAS_RAW FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME HAVING MAX(CASE WHEN ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') THEN 1 ELSE 0 END) = 1),
-      norm_investments AS (SELECT INV_NAME, NAME_NORM, 0 AS IS_ALIAS FROM norm_investments_base UNION ALL SELECT INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ALIAS_RAW), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS NAME_NORM, 1 AS IS_ALIAS FROM norm_investments_base WHERE ALIAS_RAW IS NOT NULL AND TRIM(ALIAS_RAW) <> ''),
-      norm_spa AS (SELECT DISTINCT i.ISSUER_NAME AS SPA_NAME, LOWER(TRIM(i.ISSUER_NAME)) AS NORM_KEY, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(i.ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS NAME_NORM FROM spa_issuer i WHERE i.FIRM_ID = '${FIRM_UUID}' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> ''),
+      norm_investments_base AS (SELECT ISSUER_NAME AS INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS? +COMPANY|HOLDINGS?|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS NAME_NORM, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), IFF(REGEXP_LIKE(UPPER(TRIM(REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1))), '(.{0,2}|[0-9].*|SERIES.*|.*COMPANY|HELD .*|INVESTMENT .*|HOLDINGS?|GROUP|CAYMAN|BVI|PTY|DELAWARE|OFFSHORE|ONSHORE|FEEDER)'), NULL, REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1)), REGEXP_SUBSTR(ISSUER_NAME, '[ ,]+(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^(]+)', 1, 1, 'ie', 3)) AS ALIAS_RAW FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME HAVING MAX(CASE WHEN ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') THEN 1 ELSE 0 END) = 1),
+      norm_investments AS (SELECT INV_NAME, NAME_NORM, 0 AS IS_ALIAS FROM norm_investments_base UNION ALL SELECT INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ALIAS_RAW), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS? +COMPANY|HOLDINGS?|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS NAME_NORM, 1 AS IS_ALIAS FROM norm_investments_base WHERE ALIAS_RAW IS NOT NULL AND TRIM(ALIAS_RAW) <> ''),
+      norm_spa AS (SELECT DISTINCT i.ISSUER_NAME AS SPA_NAME, LOWER(TRIM(i.ISSUER_NAME)) AS NORM_KEY, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(i.ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS? +COMPANY|HOLDINGS?|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS NAME_NORM FROM spa_issuer i WHERE i.FIRM_ID = '${FIRM_UUID}' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> ''),
       spa_fuzzy AS (SELECT s.SPA_NAME, s.NORM_KEY, i.INV_NAME AS MATCHED_INV_NAME, ROW_NUMBER() OVER (PARTITION BY s.SPA_NAME ORDER BY JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) DESC NULLS LAST, i.IS_ALIAS, i.INV_NAME) AS RN FROM norm_spa s LEFT JOIN norm_investments i ON JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) >= 90),
       canonical_company AS (SELECT NORM_KEY, COALESCE(MIN(MATCHED_INV_NAME), MAX(SPA_NAME)) AS CANONICAL_NAME FROM spa_fuzzy WHERE RN = 1 GROUP BY NORM_KEY)`;
 
@@ -949,7 +973,7 @@
       return `WITH entity_link AS (SELECT DISTINCT FIRM_ID, ENTITY_LINK_ID, CORPORATION_ID FROM FUND_ADMIN.CORPORATION_ENTITY_LINKS_V2 WHERE FIRM_ID = '${FIRM_UUID}' AND CORPORATION_ID IS NOT NULL),
         soi_corp AS (SELECT DISTINCT a.ISSUER_NAME, l.CORPORATION_ID FROM FUND_ADMIN.AGGREGATE_INVESTMENTS a JOIN entity_link l ON a.FIRM_ID = l.FIRM_ID AND a.ENTITY_LINK_ID = l.ENTITY_LINK_ID WHERE a.FIRM_ID = '${FIRM_UUID}' AND a.ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') AND a.ISSUER_NAME IS NOT NULL),
         latest AS (SELECT CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME, SECURITY_CLASS_TYPE, AS_CONVERTED_SHARCLASS_STOCK_TYPE, STAKEHOLDER_FULLY_DILUTED_OWNERSHIP FROM FUND_ADMIN.STAKEHOLDER_CAP_TABLE WHERE CORPORATION_ID IN (SELECT CORPORATION_ID FROM soi_corp) QUALIFY AS_OF_DATE = MAX(AS_OF_DATE) OVER (PARTITION BY CORPORATION_ID)),
-        holders AS (SELECT CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME, MAX(STAKEHOLDER_FULLY_DILUTED_OWNERSHIP) AS OWNERSHIP FROM latest WHERE SECURITY_CLASS_TYPE = 'note_block' OR (SECURITY_CLASS_TYPE IN ('share_class', 'warrant_block') AND AS_CONVERTED_SHARCLASS_STOCK_TYPE = 'Preferred') GROUP BY CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME),
+        holders AS (SELECT CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME, MAX(STAKEHOLDER_FULLY_DILUTED_OWNERSHIP) AS OWNERSHIP FROM latest WHERE (SECURITY_CLASS_TYPE = 'note_block' OR (SECURITY_CLASS_TYPE IN ('share_class', 'warrant_block') AND AS_CONVERTED_SHARCLASS_STOCK_TYPE = 'Preferred')) AND COALESCE(LOWER(TRIM(STAKEHOLDER_NAME)), '') NOT IN ('outside investors', 'outside investor') AND COALESCE(LOWER(TRIM(STAKEHOLDER_GROUP_NAME)), '') NOT IN ('outside investors', 'outside investor') GROUP BY CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME),
         ranked AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID ORDER BY OWNERSHIP DESC NULLS LAST, STAKEHOLDER_ID) AS RN FROM holders)
         SELECT s.ISSUER_NAME, s.CORPORATION_ID, COALESCE(FLOOR((h.RN - 1) / ${CAP_HOLDERS_PER_ROW}), 0) AS CHUNK, TO_JSON(ARRAY_AGG(IFF(h.STAKEHOLDER_ID IS NULL, NULL, OBJECT_CONSTRUCT('s', h.STAKEHOLDER_NAME, 'g', h.STAKEHOLDER_GROUP_NAME, 'o', ROUND(h.OWNERSHIP, 6)))) WITHIN GROUP (ORDER BY h.OWNERSHIP DESC NULLS LAST, h.STAKEHOLDER_ID)) AS HOLDERS_JSON
         FROM soi_corp s LEFT JOIN ranked h ON s.CORPORATION_ID = h.CORPORATION_ID
@@ -1661,6 +1685,10 @@
     // has; `shown` is the whole list unless it is long (LONG_LIST_ROWS or more) and
     // there are investors at two or more companies to narrow it to. `trimmable`
     // is true when the toggle has something to switch.
+    // Together these bound the tooltip's height; keep `.tooltip-wide .tt-body` max-height in the CSS above in step.
+    const TOOLTIP_MAX_MERGES = 5;
+    const TOOLTIP_MAX_MERGED_NAMES = 3;
+
     function visibleCoInvestors(filter) {
       const all = getFilteredCoInvestors(filter);
       const multi = all.filter(inv => inv.companyCount >= 2);
@@ -1744,8 +1772,7 @@
         : '';
       const view = visibleCoInvestors(currentFilter);
       const singlesToggle = view.trimmable
-        ? '<button class="chip-more" onclick="setShowSingles(' + !showSingles + ')">' +
-            (showSingles ? 'Show only investors at 2+ companies' : 'Show all ' + view.total.toLocaleString('en-US') + ' co-investors') + '</button>'
+        ? singlesToggleButton('filter-btn', 'Show all ' + formatCount(view.total) + ' co-investors')
         : '';
       html += '<div class="filter-controls">' + singlesToggle + sourceSelect +
         '<label class="filter-check"><input type="checkbox" onchange="setHideIndividuals(this.checked)"' +
@@ -1781,10 +1808,16 @@
       let groupingsHTML = '<div class="tt-intro">Some firms invest through multiple legal vehicles (separate fund entities). We grouped them under one canonical name so each firm counts once.</div>';
       if (groupings.length > 0) {
         const mergeWord = groupings.length === 1 ? 'merge' : 'merges';
-        groupingsHTML += '<div class="tt-section-label">' + groupings.length + ' ' + mergeWord + ' applied</div>';
-        groupings.forEach(function (g) {
-          const lines = (g.merged || []).map(function (n) { return '· ' + esc(n); }).join('<br>');
-          groupingsHTML += '<div class="tt-group"><div class="tt-group-canonical">' + esc(g.canonical) + '</div><div class="tt-group-merged">' + lines + '</div></div>';
+        const shownNote = groupings.length > TOOLTIP_MAX_MERGES ? ' · ' + TOOLTIP_MAX_MERGES + ' largest shown' : '';
+        groupingsHTML += '<div class="tt-section-label">' + groupings.length + ' ' + mergeWord + ' applied' + shownNote + '</div>';
+        // A firm with hundreds of vehicles would otherwise list every one: show
+        // the biggest merges and say so in the label.
+        const biggest = groupings.slice().sort(function (a, b) { return (b.merged || []).length - (a.merged || []).length; });
+        biggest.slice(0, TOOLTIP_MAX_MERGES).forEach(function (g) {
+          const names = g.merged || [];
+          const lines = names.slice(0, TOOLTIP_MAX_MERGED_NAMES).map(function (n) { return '· ' + esc(n); });
+          if (names.length > TOOLTIP_MAX_MERGED_NAMES) lines.push('<span class="tt-more">+' + (names.length - TOOLTIP_MAX_MERGED_NAMES) + ' more</span>');
+          groupingsHTML += '<div class="tt-group"><div class="tt-group-canonical">' + esc(g.canonical) + '</div><div class="tt-group-merged">' + lines.join('<br>') + '</div></div>';
         });
       } else {
         groupingsHTML += '<div class="tt-empty">No multi-vehicle merges in this report.</div>';
@@ -1794,7 +1827,7 @@
         '<div class="metric-card has-tooltip" tabindex="0" aria-describedby="unique-tooltip">' +
           '<div class="metric-label">Unique Co-Investors <span class="tooltip-icon" aria-hidden="true">i</span></div>' +
           '<div class="metric-value">' + uniqueCount + '</div>' +
-          '<div class="tooltip tooltip-wide" id="unique-tooltip" role="tooltip">' + groupingsHTML + '</div>' +
+          '<div class="tooltip tooltip-wide" id="unique-tooltip" role="tooltip"><div class="tt-body">' + groupingsHTML + '</div></div>' +
         '</div>' +
         '<div class="metric-card">' +
           '<div class="metric-label">Top Co-Investor</div>' +
@@ -1850,13 +1883,16 @@
       // The counts are the tab's, never the portfolio total.
       const scope = filter === 'all' ? 'portfolio' : filter;
       const view = visibleCoInvestors(filter);
-      const count = n => n.toLocaleString('en-US');
       const note = view.shown.length < view.total
-        ? 'Showing ' + count(view.shown.length) + ' of ' + count(view.total) + ' co-investors at 2 or more of your ' +
+        ? 'Showing ' + formatCount(view.shown.length) + ' of ' + formatCount(view.total) + ' co-investors at 2 or more of your ' +
             scope + ' companies.'
-        : 'Showing all ' + count(view.total) + ' co-investors named on the SPAs and cap tables for your ' +
+        : 'Showing all ' + formatCount(view.total) + ' co-investors named on the SPAs and cap tables for your ' +
             scope + ' companies.';
-      html += '<div class="footer-note">' + esc(note) + '</div>';
+      // The filter bar's toggle is easy to miss, so the sentence that says the
+      // list is trimmed carries the way out of it.
+      const toggle = !view.trimmable ? ''
+        : ' ' + singlesToggleButton('carta-link', 'Show all ' + formatCount(view.total));
+      html += '<div class="footer-note">' + esc(note) + toggle + '</div>';
       document.getElementById('page-footer').innerHTML = html;
     }
 
@@ -1878,6 +1914,17 @@
     function setSource(source) {
       currentSource = source;
       refresh();
+    }
+
+    function formatCount(n) {
+      return n.toLocaleString('en-US');
+    }
+
+    // One markup for the filter bar's toggle and the footer's: only the class and the
+    // "show everything" label differ.
+    function singlesToggleButton(cls, showAllLabel) {
+      return '<button class="' + cls + '" onclick="setShowSingles(' + !showSingles + ')">' +
+        (showSingles ? 'Show only investors at 2+ companies' : showAllLabel) + '</button>';
     }
 
     function setShowSingles(show) {
