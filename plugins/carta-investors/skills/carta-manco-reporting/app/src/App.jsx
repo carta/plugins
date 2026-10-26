@@ -98,20 +98,23 @@ export default function App() {
   const toggleTheme = () => { trackClick("MancoReporting.App.ToggleTheme"); setDark((d) => !d); };
 
   // Parallel fetch snapshot + accounts (accounts is optional; drill-downs
-  // just don't render if it's absent). Returns its promise so a report change
-  // (which the server has already rebuilt both into) can await the refetch.
+  // just don't render if it's absent). Returns a promise of whether the snapshot read
+  // came back not_ready, so a caller that just finished a load-firm run (below) can tell
+  // "rebuilt, here's the data" from "still not ready" and decide whether to run it again.
   // A background refetch that fails at the network level while a snapshot is
   // shown keeps that snapshot up and only records the failure.
   const lastFetchRef = useRef(0);
   const snapshotRef = useRef(null);
   const fetchData = useCallback(({ background = false } = {}) => {
     lastFetchRef.current = Date.now();
+    let snapshotNotReady = false;
     return Promise.all([
       fetch("/api/snapshot")
         .then(r => r.json())
         .then(data => {
           if (data?.error) {
             failSnapshot(data.error);
+            snapshotNotReady = data.error === NOT_READY;
             return;
           }
           if (data?.ops) {
@@ -139,7 +142,7 @@ export default function App() {
           setAccountsData(data);
         })
         .catch(() => trackRender("MancoReporting.App.AccountsUnavailable")),
-    ]);
+    ]).then(() => snapshotNotReady);
   }, [failSnapshot]);
   const reportsApi = useReports({ onChanged: fetchData });
   const hostedApp = useHostedApp();
@@ -194,7 +197,30 @@ export default function App() {
   // Auto-load: when the snapshot comes back not_ready, drive /api/load-firm's SSE
   // progress stream. /api/reports can depend on the firm just loaded, and the read on
   // mount ran before it had, so reload it too once the firm is in.
-  const { loadStatus, loadError } = useLoadFirm(notReady, () => { fetchData(); reportsApi.reload(); });
+  //
+  // loadAttempt forces a second run when the run that just finished didn't fix it: a
+  // deploy landing mid-load can mean the version that ran it stamped the documents with
+  // an id the version now serving (this refetch) no longer recognizes, so the refetch
+  // reads not_ready again with no load running behind it. loadTrigger folds that into
+  // one value useLoadFirm's effect reruns on: 0 while nothing should be loading, else a
+  // number that changes on every attempt, so a forced retry (notReady unchanged) reruns
+  // it the same way a fresh not_ready (notReady false -> true) does.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadRetriedRef = useRef(false);
+  const loadTrigger = notReady ? loadAttempt + 1 : 0;
+  const { loadStatus, loadError } = useLoadFirm(loadTrigger, async () => {
+    const stillNotReady = await fetchData();
+    reportsApi.reload();
+    if (!stillNotReady) {
+      loadRetriedRef.current = false;
+    } else if (loadRetriedRef.current) {
+      loadRetriedRef.current = false;
+      setSnapshotError("The app was updated while loading. Reload the page.");
+    } else {
+      loadRetriedRef.current = true;
+      setLoadAttempt((a) => a + 1);
+    }
+  });
 
   // A failure from the load itself (not a transient "still building") is a real error,
   // not "still loading" — leaving notReady set would read as a load that never finishes.
