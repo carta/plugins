@@ -10,15 +10,17 @@ import { FUND_WATERFALL_KEYS } from "../../model/slices.js";
 // source of truth for the waterfall config, the S&P rate, the per-multiple
 // scenario grid and the "today's marks" slice. Returns plain values only (no
 // JSX) — each view renders its own sections.
+/** The one fund a per-fund view models: exit modeling is inherently per-fund, so
+ *  when the global scope is All Funds it falls back to the first fund. */
+export const scopedFundId = (snapshot, fundScope) => (fundScope === ALL_FUNDS ? fundIdsOf(snapshot)[0] : fundScope);
+
 export function useScenarioModel({
   snapshot, portfolio, fundStates, baseAssumptions, fundScope, setAssumption,
   exitHorizonOverrides,
 }) {
-  const FUND_IDS = fundIdsOf(snapshot);
-  // exit modeling is inherently per-fund — when the global scope is All Funds,
-  // fall back to the first fund and surface a hint to pick one
+  // surfaces a hint to pick one fund while the global scope is All Funds
   const allMode = fundScope === ALL_FUNDS;
-  const fundId = allMode ? FUND_IDS[0] : fundScope;
+  const fundId = scopedFundId(snapshot, fundScope);
   // full waterfall config for this fund — carry + preferred return + GP catch-up,
   // pre-set from Carta config and overridable per fund in the active scenario
   const wf = useMemo(() => waterfallCfgFor(portfolio.assumptions, snapshot, fundId),

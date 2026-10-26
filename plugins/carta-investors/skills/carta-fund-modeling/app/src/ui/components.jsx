@@ -344,8 +344,9 @@ const JUMP_GAP = 16;
  *  section in view shown solid. Same `sections` and scroll tracking as SectionChips;
  *  `onJump(id)` is called on a click. It pins below the app's top bar, and on a click
  *  sets the target section's scroll-margin to the two bars' current heights plus a
- *  gap, so the section's heading lands just below them even when either bar wraps. */
-export function JumpLinks({ sections, onJump }) {
+ *  gap, so the section's heading lands just below them even when either bar wraps.
+ *  `actions` (a page-wide control, e.g. a fund picker) sits at the bar's right end. */
+export function JumpLinks({ sections, onJump, actions }) {
   const { active, go } = useSectionNav(sections);
   const top = usePinnedHeight();
   const navRef = useRef(null);
@@ -365,6 +366,7 @@ export function JumpLinks({ sections, onJump }) {
           <ArrowDownIcon size={14} strokeWidth={1.8} />{label}
         </button>
       ))}
+      {actions && <div style={{ marginLeft: "auto" }}>{actions}</div>}
     </nav>
   );
 }
@@ -704,13 +706,14 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
 
 /** Fund-scope single-select — "All Funds" plus one entry per fund (names, not
  *  ids). A thin fund-domain wrapper around the generic `Dropdown` above:
- *  builds the option list (with the "All Funds" divider) and hands it off. */
-export function FundPicker({ funds, value, onChange, allLabel = "All Funds", includeAll = true }) {
+ *  builds the option list (with the "All Funds" divider) and hands it off.
+ *  `triggerLabel` passes through, for a self-labeling "Fund: …" trigger. */
+export function FundPicker({ funds, value, onChange, allLabel = "All Funds", includeAll = true, triggerLabel }) {
   const opts = [
     ...(includeAll ? [{ id: ALL_FUNDS, label: allLabel }] : []),
     ...funds.map((f, i) => ({ id: f.id, label: fundLabel(f.name || f.id), separatorBefore: includeAll && i === 0 })),
   ];
-  return <Dropdown options={opts} value={value} onChange={onChange} testId="fund-picker" />;
+  return <Dropdown options={opts} value={value} onChange={onChange} testId="fund-picker" triggerLabel={triggerLabel} />;
 }
 
 /** Multi-select fund dropdown — a checkbox list with a select-all/clear row, used
