@@ -11,6 +11,12 @@ import { fmtM, fmtX, fmtPct } from "../ui/format.js";
 import { H3, SourceNote, fundNameOnly, Eyebrow, StatTile } from "../ui/components.jsx";
 import { cohortPercentile } from "../model/benchmarks.js";
 
+// How the cohort benchmarks are built. The empty state draws no bars, so its note leaves out
+// the sentence about them.
+const COHORT_NOTE = "Funds are grouped into a cohort of anonymized funds on Carta, based on their vintage and size.";
+const BAR_NOTE = "Each bar interpolates the fund's percentile between them so funds can be compared across cohorts.";
+const COVERAGE_NOTE = "Some cohorts aren't large enough to show meaningful data.";
+
 const TICKS = [50, 75, 90, 95];
 const METRICS = [{ id: "tvpi", label: "TVPI" }, { id: "dpi", label: "DPI" }, { id: "moic", label: "Gross MOIC" }];
 
@@ -222,7 +228,7 @@ export default function CohortStanding({ snapshot, fundStates }) {
     const emptyBody =
       snapshot.benchmarksMeta?.reason === "no_cohort_file"
         ? `Cohort benchmarks weren't loaded for ${firm}. This is usually a data-access limitation — the fund's role may not have read access to TEMPORAL_FUND_COHORT_BENCHMARKS. It is not a firm-context narrowing issue (the cohort table is pre-aggregated across firms).`
-        : `Carta has not published peer cohort benchmarks for ${firm}'s funds (no vintage / AUM / entity-type cohort in TEMPORAL_FUND_COHORT_BENCHMARKS across their recent quarters). When cohort data becomes available it will appear here automatically.`;
+        : `Carta has not published peer cohort benchmarks for ${firm}'s funds. When cohort data becomes available it will appear here automatically.`;
     return (
       <div>
         <div className="card" style={{ padding: "52px 24px", textAlign: "center" }}>
@@ -234,8 +240,7 @@ export default function CohortStanding({ snapshot, fundStates }) {
           </div>
         </div>
         <SourceNote style={{ fontSize: FS.small, marginTop: 14 }}>
-          Source: Carta TEMPORAL_FUND_COHORT_BENCHMARKS — bars render only when a fund's vintage/size
-          cohort has published marks.
+          {`${COHORT_NOTE} ${COVERAGE_NOTE}`}
         </SourceNote>
       </div>
     );
@@ -303,10 +308,7 @@ export default function CohortStanding({ snapshot, fundStates }) {
         </div>
       )}
       <SourceNote style={{ fontSize: FS.small, marginTop: 14 }}>
-        Source: Carta TEMPORAL_FUND_COHORT_BENCHMARKS. When a fund's vintage/size cohort has published marks, each bar
-        interpolates the fund's percentile between them so positions compare across vintages — the value and percentile
-        key are printed under each tick. Carta has not published peer cohorts for every fund, so some bars show "no
-        cohort"; Net TVPI and Net IRR under the fund name are always shown regardless of cohort coverage.
+        {`${COHORT_NOTE} ${BAR_NOTE} ${COVERAGE_NOTE}`}
       </SourceNote>
     </div>
   );

@@ -27,6 +27,9 @@ function LpSensitivity({ m, readOnly }) {
   const SLICE_BG = "var(--row-selected)";
   // fmt$(0), not "$0" — the zero must carry the fund's currency, not a hardcoded $
   const c$ = (n) => (n === 0 ? fmt$(0) : fmtM(n));
+  // every value but Edge reads in the default text colour (cell weight comes from
+  // table.ledger td); Edge keeps its signed colouring
+  const plain = { color: "var(--ink-color-global-text-default)" };
   const markLabel = readOnly ? "current marks" : "scenario mark";
   return (
     <div>
@@ -43,7 +46,7 @@ function LpSensitivity({ m, readOnly }) {
           <tbody>
             {exitRows.map((r) => (
               <tr key={r.isSlice ? "slice" : r.multiple} style={r.isSlice ? { background: SLICE_BG } : undefined}>
-                <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                <td style={{ ...plain, whiteSpace: "nowrap" }}>
                   {r.isSlice ? (
                     <span style={{ color: "var(--ink-color-global-link-default)" }}>
                       {r.multiple.toFixed(2)}×
@@ -53,10 +56,10 @@ function LpSensitivity({ m, readOnly }) {
                     `${r.multiple}×`
                   )}
                 </td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{c$(r.lpDistributions)}</td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{c$(r.lpNetProfit)}</td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{fmtPct(r.netLpIrr)}</td>
-                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{fmtPct(r.spIrr)}</td>
+                <td style={{ ...inkNum, ...plain, textAlign: "right", fontSize: FS.value }}>{c$(r.lpDistributions)}</td>
+                <td style={{ ...inkNum, ...plain, textAlign: "right", fontSize: FS.value }}>{c$(r.lpNetProfit)}</td>
+                <td style={{ ...inkNum, ...plain, textAlign: "right", fontSize: FS.value }}>{fmtPct(r.netLpIrr)}</td>
+                <td style={{ ...inkNum, ...plain, textAlign: "right", fontSize: FS.value }}>{fmtPct(r.spIrr)}</td>
                 <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: r.edge == null ? "var(--ink-color-global-text-subtle)" : r.edge >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>
                   {r.edge == null ? "n/m" : (r.edge >= 0 ? "+" : "−") + fmtPct(Math.abs(r.edge))}
                 </td>

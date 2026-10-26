@@ -1,14 +1,14 @@
 import { useMemo } from "react";
-import { FS, inkNum, sans, MICRO, PALETTE } from "../../ui/theme.js";
+import { FS, inkNum, sans, MICRO } from "../../ui/theme.js";
 import { shortFund } from "../../ui/format.js";
 import { H3 } from "../../ui/components.jsx";
 import { quarterlySeries, trailingAvg } from "../../model/pacing.js";
 import { useFirmData } from "../../state/FirmData.jsx";
-import { topRounded } from "../construction/charts.jsx";
 
 const W = 960, H = 300, PL = 34, PR = 12, PB = 34;
 export const PT = 34;
-const RADIUS_SUBTLE = 4; // --ink-size-global-radius-subtle
+// Fund colours: Ink's data-viz Level 2 rung (the app's --local-data-viz-*-2, theme.js), in Ink's series order.
+const FUND_TINTS = ["blue", "turquoise", "brown", "yellow", "lime", "positive", "negative"].map((hue) => `var(--local-data-viz-${hue}-2)`);
 
 /** Y-axis labels for a chart topped at `yMax` companies: every whole step up to it
  *  (1, 2, 3 … on a small chart, wider steps past five), always ending at the max.
@@ -21,7 +21,7 @@ export function yAxisTicks(yMax) {
 }
 
 function CadenceChart({ quarters, trail, FUNDS, FUND_TINT }) {
-  // Tallest stack reaches the plot top; the pace label sits in the margin above it.
+  // Tallest stack reaches the plot top.
   const yMax = Math.max(1, ...quarters.map((r) => r.total));
   const slot = (W - PL - PR) / quarters.length;
   const bw = Math.min(16, slot * 0.62);
@@ -47,7 +47,6 @@ function CadenceChart({ quarters, trail, FUNDS, FUND_TINT }) {
       ))}
       {quarters.map((r, i) => {
         let acc = 0;
-        const top = FUNDS.filter((fid) => r.byFund[fid]).pop();
         return (
           <g key={r.q}>
             <title>{`${r.q.replace("-", " ")} · ${r.total} new compan${r.total === 1 ? "y" : "ies"}`}</title>
@@ -56,10 +55,7 @@ function CadenceChart({ quarters, trail, FUNDS, FUND_TINT }) {
               if (!n) return null;
               const y1 = y(acc + n), h = y(acc) - y(acc + n);
               acc += n;
-              const bh = Math.max(h - 1, 1.5), bx = x(i) - bw / 2;
-              // Only the top segment of a column is rounded, so the stack stays flush with the baseline.
-              if (fid !== top) return <rect key={fid} x={bx} y={y1} width={bw} height={bh} fill={FUND_TINT[fid]} />;
-              return <path key={fid} fill={FUND_TINT[fid]} d={topRounded(bx, y1, bw, bh, RADIUS_SUBTLE)} />;
+              return <rect key={fid} x={x(i) - bw / 2} y={y1} width={bw} height={Math.max(h - 1, 1.5)} style={{ fill: FUND_TINT[fid] }} />;
             })}
           </g>
         );
@@ -70,7 +66,8 @@ function CadenceChart({ quarters, trail, FUNDS, FUND_TINT }) {
         if (!last) return null;
         const cx = x(trail.length - 1), cy = y(last.avg);
         const label = `${last.avg.toFixed(1)}/qtr · trailing yr`;
-        const lw = label.length * 7.2 + 14, lx = W - PR - lw, ly = 2;
+        // Just above the latest point, kept inside the SVG.
+        const lw = label.length * 7.2 + 14, lx = Math.min(cx + 9, W - PR - lw), ly = Math.max(cy - 27, 2);
         return (
           <g>
             <circle cx={cx} cy={cy} r="5" style={{ fill: "var(--ink-color-global-surface-background-default)", stroke: "var(--ink-color-global-text-default)" }} strokeWidth="2" />
@@ -97,7 +94,7 @@ export default function PacingCard({ funds = [] }) {
   const monthly = pacingData?.monthly;
   const newCount = (fid) => (monthly[fid] || []).reduce((s, [, c]) => s + c, 0);
   const FUNDS = monthly ? Object.keys(monthly).filter((fid) => monthly[fid]?.length).sort((a, b) => newCount(b) - newCount(a)) : [];
-  const FUND_TINT = Object.fromEntries(FUNDS.map((fid, i) => [fid, PALETTE[i % PALETTE.length]]));
+  const FUND_TINT = Object.fromEntries(FUNDS.map((fid, i) => [fid, FUND_TINTS[i % FUND_TINTS.length]]));
   const quarters = useMemo(() => pacingQuarters(pacingData), [pacingData]);
   const trail = useMemo(() => trailingAvg(quarters), [quarters]);
   if (!quarters.length) return null;

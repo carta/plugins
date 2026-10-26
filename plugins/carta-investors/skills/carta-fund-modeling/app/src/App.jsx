@@ -513,7 +513,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
           {sliceTools}
         </>}
         <span style={{ flex: 1 }} />
-        {features.updateData && <UpdateDataButton />}
+        {features.updateData && <UpdateDataButton features={features} firm={firm} />}
         {themeToggle}
         {chatToggle}
       </div>
@@ -529,7 +529,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
         {switchFirm}
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)" }}>{statusLine}</span>
-        {features.updateData && <UpdateDataButton />}
+        {features.updateData && <UpdateDataButton features={features} firm={firm} />}
         {themeToggle}
         {chatToggle}
       </div>

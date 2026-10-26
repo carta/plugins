@@ -126,7 +126,7 @@ export default function PowerLawChart({ companies, fundName }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ marginBottom: 16 }}>
-        <H3>Return power law · holdings by rank</H3>
+        <H3>Power law ranking</H3>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }} role="img"
         aria-label={`Return multiple by rank for ${fundName}, log-log, vs a standard venture power law`}>

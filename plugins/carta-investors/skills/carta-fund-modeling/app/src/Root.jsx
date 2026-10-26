@@ -11,7 +11,7 @@ import { FS, sans } from "./ui/theme.js";
 import { parseRoute, navigate, subscribeNav, isFirmId } from "./route.js";
 import { postToOuter } from "./bridge-client.js";
 import { FirmAccess } from "./firm-access.js";
-import { runFirmLoad } from "./state/firmLoad.js";
+import { runFirmLoad, CONNECTING_STEP } from "./state/firmLoad.js";
 
 export default function Root({ features }) {
   // The URL path is the source of truth for the selected firm.
@@ -71,7 +71,7 @@ export default function Root({ features }) {
       const snap = await fetch(`/api/snapshot${q}`).then((r) => r.json());
       if (snap?.error === "not_ready") {
         // No data yet — fetch from MCP via SSE stream
-        setLoadingStep("Connecting to Carta…");
+        setLoadingStep(CONNECTING_STEP);
         try {
           await runFirmLoad(firm, (step) => { if (live) setLoadingStep(step); });
         } catch (e) {

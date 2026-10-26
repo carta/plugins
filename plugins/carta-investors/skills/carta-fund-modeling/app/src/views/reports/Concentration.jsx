@@ -24,6 +24,8 @@ export default function ConcentrationCard({ snapshot, portfolio, mixed }) {
   const top = c.holdings.slice(0, 10);
   const maxFv = top[0].fv;
   const subtle = "var(--ink-color-global-text-subtle)";
+  // IRR / Share / FV read as plain figures: regular weight, default text colour (no sign colouring).
+  const valueText = { textAlign: "right", fontSize: FS.value, fontWeight: 400, color: "var(--ink-color-global-text-default)" };
   return (
     <div style={{ marginBottom: 16 }}>
       {/* Sub-head stacked under the title with no gap; its own 20px leading spaces them. */}
@@ -51,12 +53,11 @@ export default function ConcentrationCard({ snapshot, portfolio, mixed }) {
                         background: i < 5 ? "var(--ink-button-background-color-primary-base-default)" : "var(--ink-color-global-surface-lightgray-active)" }} />
                     </div>
                   </td>
-                  <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value,
-                    color: irr == null ? subtle : irr >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>
+                  <td style={{ ...inkNum, ...valueText }}>
                     {irr == null ? "—" : fmtPct(irr)}
                   </td>
-                  <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{((h.fv / c.total) * 100).toFixed(1)}%</td>
-                  <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{fmtM(h.fv)}</td>
+                  <td style={{ ...inkNum, ...valueText }}>{((h.fv / c.total) * 100).toFixed(1)}%</td>
+                  <td style={{ ...inkNum, ...valueText }}>{fmtM(h.fv)}</td>
                 </tr>
               );
             })}

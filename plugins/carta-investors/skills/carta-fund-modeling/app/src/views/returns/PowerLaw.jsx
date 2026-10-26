@@ -19,11 +19,11 @@ function SwingBar({ lowVal, highVal, baseVal, pct }) {
     <div style={{ position: "relative", height: 24, minWidth: 160 }}>
       <span style={{ position: "absolute", left: pct(baseVal), top: 0, bottom: 0, width: 1, background: "var(--ink-color-global-text-default)", opacity: 0.55 }} />
       {redTo > dLo && (
-        <span style={{ position: "absolute", top: 5, height: 14, borderRadius: "var(--ink-size-global-radius-subtle)", background: "var(--local-data-viz-negative-2)",
+        <span data-testid="swing-bar-down" style={{ position: "absolute", top: 5, height: 14, background: "var(--local-data-viz-negative-2)",
           left: pct(dLo), width: `calc(${pct(redTo)} - ${pct(dLo)})` }} />
       )}
       {dHi > greenFrom && (
-        <span style={{ position: "absolute", top: 5, height: 14, borderRadius: "var(--ink-size-global-radius-subtle)", background: "var(--local-data-viz-positive-2)",
+        <span data-testid="swing-bar-up" style={{ position: "absolute", top: 5, height: 14, background: "var(--local-data-viz-positive-2)",
           left: pct(greenFrom), width: `calc(${pct(dHi)} - ${pct(greenFrom)})` }} />
       )}
     </div>
@@ -132,43 +132,47 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
   const fill = (t - sliderMin) / RTF_HEADROOM;
   return (
     <div style={{ marginBottom: 16 }}>
-      <H3>Return the fund</H3>
+      <H3>“Return the fund” analysis</H3>
       <p style={{ ...sans, fontSize: FS.small, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)", margin: "0 0 12px" }}>
         Sets of live holdings whose exits would lift the fund to your target gross MOIC, lowest exit multiple first.
       </p>
-      <div style={{ maxWidth: 440, margin: "4px 0 14px" }}>
-        <Slider label="Target fund gross MOIC" value={t} min={sliderMin} max={sliderMax} step={RTF_STEP}
-          onChange={setTarget} fmt={(v) => fmtX(v)} fill={fill} locked={readOnly}
-          valueSize={FS.bodyLg} labelKind="strong" />
-        <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 4 }}>
-          Current gross MOIC {fmtX(currentMoic)}
-          {alreadyThere ? ` — already clears ${fmtX(t)}.` : ` · needs ${fmtM(gap)} more exit value to reach ${fmtX(t)}.`}
+      {/* The slider sits left; the solution-space controls sit right-aligned on the
+          same row, wrapping below it on narrow widths. */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start", margin: "4px 0 14px" }}>
+        <div style={{ flex: "1 1 320px", maxWidth: 440 }}>
+          <Slider label="Target fund gross MOIC" value={t} min={sliderMin} max={sliderMax} step={RTF_STEP}
+            onChange={setTarget} fmt={(v) => fmtX(v)} fill={fill} locked={readOnly}
+            valueSize={FS.bodyLg} labelKind="strong" />
+          <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 4 }}>
+            Current gross MOIC {fmtX(currentMoic)}
+            {alreadyThere ? ` — already clears ${fmtX(t)}.` : ` · needs ${fmtM(gap)} more exit value to reach ${fmtX(t)}.`}
+          </div>
         </div>
-      </div>
-      {/* Degrees of freedom on the solution space: which holdings may move, and how
-          many can share one solution. Both persist per fund/scenario like the target. */}
-      {!alreadyThere && (
-        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start", margin: "0 0 14px" }}>
-          <div>
-            <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginBottom: 5 }}>Companies that can flex</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <Segmented small locked={readOnly} value={mode}
-                options={[{ id: "auto", label: "Auto · top holdings" }, { id: "custom", label: "Custom" }]}
-                onChange={(md) => setConfig(md === "custom" ? { mode: "custom", flexIds } : { mode: "auto" })} />
-              {mode === "custom" && (
-                <MultiFundPicker label="companies" funds={movers} selected={new Set(flexIds)}
-                  onChange={(set) => setConfig({ mode: "custom", flexIds: [...set] })} />
-              )}
+        {/* Degrees of freedom on the solution space: which holdings may move, and how
+            many can share one solution. Both persist per fund/scenario like the target. */}
+        {!alreadyThere && (
+          <div data-testid="rtf-controls" style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start", marginLeft: "auto" }}>
+            <div>
+              <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginBottom: 5 }}>Companies that can flex</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <Segmented small locked={readOnly} value={mode}
+                  options={[{ id: "auto", label: "Auto · top holdings" }, { id: "custom", label: "Custom" }]}
+                  onChange={(md) => setConfig(md === "custom" ? { mode: "custom", flexIds } : { mode: "auto" })} />
+                {mode === "custom" && (
+                  <MultiFundPicker label="companies" funds={movers} selected={new Set(flexIds)}
+                    onChange={(set) => setConfig({ mode: "custom", flexIds: [...set] })} />
+                )}
+              </div>
+            </div>
+            <div>
+              <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginBottom: 5 }}>Max companies per solution</div>
+              <Segmented small locked={readOnly} value={maxSet}
+                options={[1, 2, 3, 4, 5].map((n) => ({ id: n, label: String(n) }))}
+                onChange={(n) => setConfig({ maxSet: n })} />
             </div>
           </div>
-          <div>
-            <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginBottom: 5 }}>Max companies per solution</div>
-            <Segmented small locked={readOnly} value={maxSet}
-              options={[1, 2, 3, 4, 5].map((n) => ({ id: n, label: String(n) }))}
-              onChange={(n) => setConfig({ maxSet: n })} />
-          </div>
-        </div>
-      )}
+        )}
+      </div>
       {res.poolTruncated && (
         <div style={{ ...sans, fontSize: FS.micro, color: MICRO, margin: "-6px 0 12px" }}>
           Search limited to the 14 largest-cost of your selected holdings.

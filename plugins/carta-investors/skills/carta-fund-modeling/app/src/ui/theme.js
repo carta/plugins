@@ -180,8 +180,9 @@ export const GLOBAL_CSS = `
     --tag-yellow-bg:   light-dark(var(--ink-color-global-brand-yellow-20), var(--ink-color-global-brand-yellow-100));
     --stripe-repriced: light-dark(var(--ink-color-global-brand-yellow-50), var(--ink-color-global-brand-yellow-70));
     /* Data-viz rungs Ink leaves untokenized (it tokenizes level 3 only): the
-       Companies map's fund fills and its on-fill change colors, and the Net TVPI
-       sensitivity chart's swing bars (level 2). Brand aliases
+       Companies map's fund fills and its on-fill change colors, the Net TVPI
+       sensitivity chart's swing bars (level 2) and the Investment pacing chart's
+       fund fills (level 2). Brand aliases
        where Ink has the color; turquoise, brown and lime levels 1-2 are hex. */
     --local-data-viz-blue-1:      var(--ink-color-global-brand-blue-40);
     --local-data-viz-blue-2:      var(--ink-color-global-brand-blue-60);
