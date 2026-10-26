@@ -86,6 +86,9 @@ export function fundHoldingsAcrossAll(companies) {
   return out.sort((a, b) => b.fv - a.fv);
 }
 
+/** Whether a fund counts in the firm's pooled Net TVPI: it has paid-in capital. */
+export const countsInFirmTvpi = (f) => (f.lpPaidIn || 0) > 0;
+
 /** Firm make-whole rerun: reprice each paid-in fund at the slice's marks
  *  (its uplift vs Carta plus any per-fund what-if delta) and roll the LP NAVs
  *  up to a firm TVPI on summed paid-in. Pure; no exit toggles (matches the
@@ -106,7 +109,7 @@ function firmReprice(snapshot, portfolio, perFundDelta = {}) {
   let lpDistributed = 0;
   let lpPaidIn = 0;
   for (const f of snapshot.funds) {
-    if (!(f.lpPaidIn > 0)) continue;
+    if (!countsInFirmTvpi(f)) continue;
     const base = {
       lpNav: snapshot.baseLpNav[f.id],
       lpPaidIn: f.lpPaidIn,

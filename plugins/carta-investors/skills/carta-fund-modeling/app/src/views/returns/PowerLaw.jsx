@@ -36,10 +36,12 @@ function SwingBar({ lowVal, highVal, baseVal, pct }) {
  *  Built bottoms-up: each company's realizable value is scaled ±exitDelta and
  *  flowed through the LP make-whole waterfall, so Net TVPI (net LP total value
  *  over paid-in, net of carry) is an OUTPUT. Ranked by the size of that swing. */
-function ExitImpactCard({ snapshot, portfolio, fs }) {
-  const t = useMemo(() => exitValueImpact(snapshot, portfolio, fs), [snapshot, portfolio, fs]);
+function ExitImpactCard({ snapshot, portfolio, states, allMode }) {
+  const t = useMemo(() => exitValueImpact(portfolio, states), [portfolio, states]);
   if (t.baseMultiple == null) return null;
-  const rows = t.companies.filter((c) => c.swing != null).slice(0, TOP_N);
+  // Under All funds, leave out the firm's own funds held as companies: pooling would list that capital a second time beside the companies the other fund holds directly.
+  const listed = allMode ? t.companies.filter((c) => !ownFundHeldAs(snapshot.funds, c)) : t.companies;
+  const rows = listed.filter((c) => c.swing != null).slice(0, TOP_N);
   if (!rows.length) return null;
   // shared multiple scale across every endpoint + the baseline, with padding
   const vals = [t.baseMultiple, ...rows.flatMap((c) => [c.lowMultiple, c.highMultiple])];
@@ -61,7 +63,7 @@ function ExitImpactCard({ snapshot, portfolio, fs }) {
         <H3>{EXIT_IMPACT_TITLE}</H3>
       </div>
       <MethodNote>
-        Each holding's value is scaled ±{pctLabel}, one at a time, and run through the LP make-whole waterfall; the bars rank where the fund's Net TVPI is most exposed, and the impacts aren't additive.
+        Each holding's value is scaled ±{pctLabel}, one at a time, and run through the LP make-whole waterfall; the bars rank where {allMode ? "the firm's Net TVPI across all funds" : "the fund's Net TVPI"} is most exposed, and the impacts aren't additive.
       </MethodNote>
       <TableScroll>
         <table className="ledger sheet">
@@ -257,6 +259,8 @@ export default function PowerLaw({ section, ...props }) {
     ...(portfolio.assumptions?.rtfConfig || {}),
     [m.fundId]: { ...(portfolio.assumptions?.rtfConfig?.[m.fundId] || {}), ...patch },
   });
+  // the Net TVPI sensitivity pools every fund with paid-in capital under All funds
+  const states = useMemo(() => (m.allMode ? props.fundStates : [m.fs]), [m.allMode, props.fundStates, m.fs]);
   return (
     <div>
       {section === "curve" && <PowerLawChart companies={returns} fundName={m.allMode ? "All funds" : fundLabel(m.fs.name)} allFunds={m.allMode} />}
@@ -266,7 +270,7 @@ export default function PowerLaw({ section, ...props }) {
         <ReturnTheFund portfolio={portfolio} fundId={m.fundId} readOnly={readOnly}
           target={rtfTarget} setTarget={setRtfTarget} config={rtfConfig} setConfig={setRtfConfig} />
       ))}
-      {section === "sensitivity" && <ExitImpactCard snapshot={snapshot} portfolio={portfolio} fs={m.fs} />}
+      {section === "sensitivity" && <ExitImpactCard snapshot={snapshot} portfolio={portfolio} states={states} allMode={m.allMode} />}
     </div>
   );
 }

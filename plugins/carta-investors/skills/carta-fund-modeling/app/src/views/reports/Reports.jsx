@@ -32,7 +32,7 @@ const THEMES = [
         allFunds: combined(POWER_LAW_TITLE) },
       { id: "return-the-fund", available: () => true, render: (p) => <PowerLaw section="return-the-fund" {...p.returnsProps} /> },
       { id: "net-tvpi-sensitivity", available: () => true, render: (p) => <PowerLaw section="sensitivity" {...p.returnsProps} />,
-        allFunds: combined(EXIT_IMPACT_TITLE, selectFund(SELECT_FUND)) },
+        allFunds: combined(EXIT_IMPACT_TITLE) },
       { id: "pacing", available: (p) => hasPacingChart(p.pacing), render: (p) => <PacingCard funds={p.snapshot.funds} /> },
       { id: "concentration", available: (p) => !!concentrationAcrossAll(p.snapshot, p.portfolio),
         render: (p) => <ConcentrationCard snapshot={p.snapshot} portfolio={p.portfolio} mixed={p.mixedCurrency} /> },
