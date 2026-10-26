@@ -115,7 +115,7 @@ export function calculations(plan, res) {
     formula: `Investable = commitments − management fees − fund expenses${ahead ? " + recycled proceeds" : ""}`,
     steps: [step("", "Commitments", $(t.committed)), step("−", "Management fees", $(t.fees)), step("−", "Fund expenses", $(t.expenses)), ...(ahead ? [step("+", "Recycled proceeds", $(t.recycled))] : [])],
     result: $(t.investable), value: t.investable,
-    note: "Fees depend on what's invested and what's invested depends on fees, so the model repeats the sum until the two agree.",
+    note: "Fees depend on what's invested and what's invested depends on fees, so the calculation repeats the sum until the two agree.",
   });
   const calledSteps = [step("", "Invested in companies", $(t.invested)), step("+", "Management fees", $(t.fees)), step("+", "Fund expenses", $(t.expenses))];
   if (t.cashLeft > 0.5) calledSteps.push(step("+", "Cash called but not invested", $(t.cashLeft)));

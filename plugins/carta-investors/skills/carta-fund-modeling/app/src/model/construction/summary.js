@@ -171,7 +171,7 @@ export function milestones(plan, result) {
     const row = q.find((r) => r.dpi != null && r.dpi >= x);
     if (row) out.push({ id: x === 1 ? "dpi1" : `dpi${x}`, kind: "cash", label: x === 1 ? "Money back (DPI 1.0×)" : `DPI ${x.toFixed(1)}×`, short: x === 1 ? "Money back" : `DPI ${x}×`, date: row.date });
   }
-  if (q.length) out.push({ id: "end", kind: "fund", label: g.evergreen ? "End of model" : "Fund ends", short: g.evergreen ? "End of model" : "Fund ends", date: q.at(-1).date });
+  if (q.length) out.push({ id: "end", kind: "fund", label: g.evergreen ? "End of plan" : "Fund ends", short: g.evergreen ? "End of plan" : "Fund ends", date: q.at(-1).date });
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 

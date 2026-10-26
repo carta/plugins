@@ -79,7 +79,7 @@ function Ledger({ plan, res }) {
         <Btn onClick={copy} data-testid="ledger-copy">{copied ? "Copied" : "Copy table"}</Btn>
       </div>
       <div style={{ ...sans, fontSize: FS.small, color: subtle, marginBottom: 10, maxWidth: "75ch" }}>
-        Every flow the model uses, in {ccy}. The totals row ties to the headline figures. Copy table pastes into a spreadsheet with full precision.
+        Every flow the plan uses, in {ccy}. The totals row ties to the headline figures. Copy table pastes into a spreadsheet with full precision.
       </div>
       <div style={{ overflow: "auto", maxHeight: 460 }}>
         <table className="ledger" data-testid="calc-ledger-table" style={{ minWidth: 1100 }}>
@@ -131,7 +131,7 @@ export default function CalculationsTab({ plan, res }) {
       <style>{CSS}</style>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         <div style={{ ...sans, fontSize: FS.body, color: subtle, flex: "1 1 320px", maxWidth: "75ch" }}>
-          How every figure in this model is worked out, step by step with this plan's own numbers, so you can check any of it by hand.
+          How every figure in this plan is worked out, step by step with this plan's own numbers, so you can check any of it by hand.
         </div>
         <Segmented small value={view} onChange={(v) => { trackClick(`FundModeling.FundConstruction.Calculations.View.${v}`); setView(v); }}
           options={[{ id: "how", label: "How it's calculated", testId: "calc-view-how" }, { id: "ledger", label: "Cash-flow ledger", testId: "calc-view-ledger" }]} />

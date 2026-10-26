@@ -1,7 +1,7 @@
 // One report structure for both modes, which the page renders and the CSV download flattens.
 import { fmtMIn, fmtX, fmtPct, fmtOwn, fmtYm, fmtYears, fmtCount } from "../../ui/format.js";
 import { CALL_FREQUENCIES, FEE_BASES, deriveGeneral, gpCommitPctOf, lpLabels, waterfallTerms } from "./plan.js";
-import { writeupDocument, includedCount } from "./writeup.js";
+import { writeupDocument, includedCount, DRAFT_LABEL } from "./writeup.js";
 import { EVERGREEN_YEARS, termMonthsOf, termYearsOf, expenseTotalOf } from "./feeTiers.js";
 import { marketSummary } from "./market.js";
 import { assumptions } from "./summary.js";
@@ -135,7 +135,7 @@ function writeupSections(plan, result, ctx) {
   if (!includedCount(plan)) return [];
   return writeupDocument(plan, result, ctx).filter((d) => d.included && (d.text || (d.id === "team" && d.facts.length))).map((d) => ({
     id: `writeup-${d.id}`, title: d.title,
-    ...(d.source === "draft" ? { note: "Draft from the model" } : {}),
+    ...(d.source === "draft" ? { note: DRAFT_LABEL } : {}),
     ...(d.text ? { text: d.text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean) } : {}),
     ...(d.id === "team" && d.facts.length ? { kv: d.facts } : {}),
   }));

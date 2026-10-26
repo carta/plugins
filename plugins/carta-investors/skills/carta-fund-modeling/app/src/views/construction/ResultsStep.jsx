@@ -152,19 +152,19 @@ export function SensitivityGrid({ plan, compact = false, risk = null }) {
   );
 }
 
-/** Finalizing opens the model view; the steps stay editable afterwards. */
+/** Finalizing opens the plan view; the steps stay editable afterwards. */
 function FinalizeBar({ plan, onFinalize }) {
   if (!onFinalize) return null;
   return (
     <div data-testid="finalize-bar" className="card" style={{ ...sans, padding: "14px 18px", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap",
       background: "var(--accent-soft)" }}>
       <div style={{ flex: 1, minWidth: 240 }}>
-        <div style={{ fontSize: FS.bodyLg, fontWeight: 600 }}>{plan.finalizedAt ? "Back to the model" : "Happy with this plan?"}</div>
+        <div style={{ fontSize: FS.bodyLg, fontWeight: 600 }}>{plan.finalizedAt ? "Back to the plan" : "Happy with this plan?"}</div>
         <div style={{ fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 2 }}>
-          {plan.finalizedAt ? "Your changes are already in the model." : "Finalize it to open the full model view."} You can always come back to these steps to keep adjusting and iterating.
+          {plan.finalizedAt ? "Your changes are already in the plan." : "Finalize it to open the full plan view."} You can always come back to these steps to keep adjusting and iterating.
         </div>
       </div>
-      <Btn kind="primary" size="comfortable" onClick={onFinalize} data-testid="finalize-plan">{plan.finalizedAt ? "View model" : "Finalize model"}</Btn>
+      <Btn kind="primary" size="comfortable" onClick={onFinalize} data-testid="finalize-plan">{plan.finalizedAt ? "View plan" : "Finalize plan"}</Btn>
     </div>
   );
 }
@@ -191,7 +191,7 @@ export default function ResultsStep({ plan, result, onStep, onFinalize, snapshot
   return (
     <div data-testid="results-step">
       <StepHeader title="Summary">
-        Everything this plan assumes, with the outcome it produces. Net figures are after fees, expenses and carry; gross figures are before them. The full analysis is in the model view once you finalize.
+        Everything this plan assumes, with the outcome it produces. Net figures are after fees, expenses and carry; gross figures are before them. The full analysis is in the plan view once you finalize.
       </StepHeader>
       {result.warnings.map((w) => (
         <div key={w} role="alert" style={{ ...sans, fontSize: FS.small, marginBottom: 10, display: "flex", gap: 8, alignItems: "center" }}>

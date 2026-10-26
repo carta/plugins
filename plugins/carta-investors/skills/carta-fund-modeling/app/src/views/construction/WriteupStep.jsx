@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { FS, sans, inkNum } from "../../ui/theme.js";
 import { Btn, Checkbox, InfoTip, TextArea } from "../../ui/components.jsx";
 import ConfirmDialog from "../../ui/ConfirmDialog.jsx";
-import { WRITEUP_SECTIONS, sectionState, writeupDocument, writeupDraft, writeupFacts, writeupText, isIncluded } from "../../model/construction/writeup.js";
+import { WRITEUP_SECTIONS, sectionState, writeupDocument, writeupDraft, writeupFacts, writeupText, isIncluded, DRAFT_LABEL } from "../../model/construction/writeup.js";
 import { buildFaq } from "../../model/construction/faq.js";
 import { breakevenExits, runScenarios, tornado } from "../../model/construction/analysis.js";
 import { trackClick } from "../../analytics.js";
@@ -30,7 +30,7 @@ function IncludeBox({ plan, update, sid }) {
   const on = isIncluded(plan, sid);
   return (
     <span data-testid={`writeup-${sid}-include`}>
-      <Checkbox checked={on} label="Add to write-up" title="Show this section in the model view, the copied write-up and the summary report"
+      <Checkbox checked={on} label="Add to write-up" title="Show this section in the plan view, the copied write-up and the summary report"
         onChange={(v) => {
           trackClick(`FundModeling.FundConstruction.Writeup.${v ? "Include" : "Exclude"}`);
           update((p) => {
@@ -57,7 +57,7 @@ export function Facts({ id, facts, heading = true }) {
   const tiles = facts.filter((f) => !f.fund && !f.company && !f.wide), wide = facts.filter((f) => f.wide);
   return (
     <div data-testid={`writeup-${id}-facts`} style={{ borderTop: RULE, borderBottom: RULE, padding: "10px 0", margin: "0 0 12px" }}>
-      {heading && <div style={{ ...sans, fontSize: FS.micro, fontWeight: 600, letterSpacing: "0.04em", color: subtle, marginBottom: 8 }}>{funds.length || cos.length ? "TRACK RECORD IN CARTA" : "FROM THE MODEL"}</div>}
+      {heading && <div style={{ ...sans, fontSize: FS.micro, fontWeight: 600, letterSpacing: "0.04em", color: subtle, marginBottom: 8 }}>{funds.length || cos.length ? "TRACK RECORD IN CARTA" : "FROM THE PLAN"}</div>}
       {tiles.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(132px, 1fr))", gap: "10px 20px" }}>
           {tiles.map((f) => (
@@ -137,20 +137,20 @@ function WriteupSection({ sid, plan, update, result, ctx }) {
         onChange={(e) => write(e.target.value)} placeholder={`For example: ${s.example}`} minRows={s.autofill === "draft" ? 5 : 4} />
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 6, ...sans, fontSize: FS.small, color: subtle }}>
         <span data-testid={`writeup-${sid}-status`}>
-          {st.source === "draft" ? "Draft from the model. It updates with the plan until you edit it." : st.source === "written" ? "Your text." : "Not written yet."}
+          {st.source === "draft" ? "Draft from the plan. It stays in sync with the plan until you edit it." : st.source === "written" ? "Your text." : "Not written yet."}
         </span>
         <span>{words(st.text)} words</span>
         <span style={{ flex: 1 }} />
         {st.source === "empty" && <Btn kind="link" onClick={outline} data-testid={`writeup-${sid}-outline`}>Start from the questions</Btn>}
-        {draft && st.source === "written" && <Btn kind="link" onClick={() => setConfirm(true)} data-testid={`writeup-${sid}-redraft`}>Re-draft from model</Btn>}
+        {draft && st.source === "written" && <Btn kind="link" onClick={() => setConfirm(true)} data-testid={`writeup-${sid}-redraft`}>Re-draft from plan</Btn>}
       </div>
       {st.stale && (
         <div role="status" data-testid={`writeup-${sid}-stale`} style={{ ...sans, fontSize: FS.small, marginTop: 6, color: "var(--ink-color-global-feedback-warning-strong, inherit)" }}>
-          The model has changed since you edited this, so its figures may be out of date.{" "}
-          <Btn kind="link" onClick={() => setConfirm(true)}>Re-draft from model</Btn>
+          The plan has changed since you edited this, so its figures may be out of date.{" "}
+          <Btn kind="link" onClick={() => setConfirm(true)}>Re-draft from plan</Btn>
         </div>
       )}
-      {confirm && <ConfirmDialog title="Replace your text with the model's draft?" message="Your text in this section is replaced by a fresh draft from the model, which then updates with the plan."
+      {confirm && <ConfirmDialog title="Replace your text with the plan's draft?" message="Your text in this section is replaced by a fresh draft from the plan, which then stays in sync with it."
         confirmLabel="Use the draft" onConfirm={useDraft} onCancel={() => setConfirm(false)} />}
     </div>
   );
@@ -159,7 +159,7 @@ function WriteupSection({ sid, plan, update, result, ctx }) {
 // One stable component per section, so typing never remounts the text box.
 const VIEWS = Object.fromEntries(WRITEUP_SECTIONS.map((s) => [s.id, (props) => <WriteupSection sid={s.id} {...props} />]));
 
-const summaryOf = (d) => (d.source === "written" ? (d.text.length > 110 ? `${d.text.slice(0, 110)}…` : d.text) : d.source === "draft" ? "Draft from the model" : "Not written yet");
+const summaryOf = (d) => (d.source === "written" ? (d.text.length > 110 ? `${d.text.slice(0, 110)}…` : d.text) : d.source === "draft" ? DRAFT_LABEL : "Not written yet");
 
 export default function WriteupStep(props) {
   const { plan, result, snapshot, companies } = props;
@@ -175,11 +175,11 @@ export default function WriteupStep(props) {
   return (
     <div data-testid="writeup-step">
       <StepHeader title="Fund write-up (optional)">
-        The story LPs read beside the numbers, in the order of the standard LP due diligence questionnaire (ILPA DDQ 2.0). Sections the model can answer start as a draft from your plan and stay up to date until you edit them. Tick "Add to write-up" on each section you want in the model's LP due diligence tab, the copied write-up and the summary report. Nothing is added until you tick it.
+        The story LPs read beside the numbers, in the order of the standard LP due diligence questionnaire (ILPA DDQ 2.0). Sections the plan can answer start as a draft from your plan and stay up to date until you edit them. Tick "Add to write-up" on each section you want in the plan's LP due diligence tab, the copied write-up and the summary report. Nothing is added until you tick it.
       </StepHeader>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", margin: "0 0 12px", ...sans, fontSize: FS.body }}>
         <span data-testid="writeup-progress"><b>{added}</b> of {WRITEUP_SECTIONS.length} sections added to the write-up</span>
-        <span style={{ color: subtle }}>· {written} written · {doc.filter((d) => d.source === "draft").length} drafted from the model</span>
+        <span style={{ color: subtle }}>· {written} written · {doc.filter((d) => d.source === "draft").length} drafted from the plan</span>
         <span style={{ flex: 1 }} />
         <Btn onClick={async () => { setCopied(await copyWriteup(plan, doc)); setTimeout(() => setCopied(false), 2000); }} disabled={!added} data-testid="writeup-copy">{copied ? "Copied" : "Copy write-up"}</Btn>
       </div>
@@ -189,7 +189,7 @@ export default function WriteupStep(props) {
 }
 WriteupStep.flat = true;
 
-/** `faq` reuses the answers the model view already built. */
+/** `faq` reuses the answers the plan view already built. */
 export function WriteupDoc({ plan, res, snapshot, companies, faq, onEdit }) {
   const ctx = useMemo(() => ({ snapshot, companies, faq }), [snapshot, companies, faq]);
   const doc = useMemo(() => writeupDocument(plan, res, ctx), [plan, res, ctx]);
@@ -199,7 +199,7 @@ export function WriteupDoc({ plan, res, snapshot, companies, faq, onEdit }) {
     <div data-testid="writeup-doc">
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <div style={{ ...sans, fontSize: FS.body, color: subtle, flex: "1 1 320px", maxWidth: "75ch" }}>
-          The fund's write-up, in the order of the standard LP due diligence questionnaire (ILPA DDQ 2.0). Sections marked as drafts come from the model and update with the plan.
+          The fund's write-up, in the order of the standard LP due diligence questionnaire (ILPA DDQ 2.0). Sections marked as drafts come from the plan and stay in sync with it.
         </div>
         {onEdit && <Btn onClick={() => onEdit("writeup")} data-testid="writeup-edit">Edit write-up</Btn>}
         <Btn onClick={async () => { setCopied(await copyWriteup(plan, doc)); setTimeout(() => setCopied(false), 2000); }} disabled={!shown.length} data-testid="writeup-doc-copy">{copied ? "Copied" : "Copy write-up"}</Btn>
@@ -213,7 +213,7 @@ export function WriteupDoc({ plan, res, snapshot, companies, faq, onEdit }) {
           <section key={d.id} data-testid={`writeup-doc-${d.id}`} style={{ padding: "14px 0", borderBottom: "1px solid var(--ink-color-global-border-subtle)" }}>
             <h3 style={{ ...sans, fontSize: FS.bodyLg, fontWeight: 600, margin: "0 0 6px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {d.title}
-              {d.source === "draft" && <span style={{ fontSize: FS.micro, fontWeight: 600, color: subtle, border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 10, padding: "0 8px" }}>Draft from the model</span>}
+              {d.source === "draft" && <span style={{ fontSize: FS.micro, fontWeight: 600, color: subtle, border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 10, padding: "0 8px" }}>{DRAFT_LABEL}</span>}
             </h3>
             {d.text
               ? <div style={{ ...sans, fontSize: FS.body, lineHeight: 1.6, whiteSpace: "pre-wrap", maxWidth: "75ch" }}>{d.text}</div>

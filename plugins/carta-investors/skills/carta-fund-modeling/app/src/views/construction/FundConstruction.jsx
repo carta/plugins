@@ -245,7 +245,7 @@ export default function FundConstruction({ snapshot, firm, companies }) {
     return (
       <div>
         {header}
-        <EmptyState type="page" icon="pending" text="Model your next fund">
+        <EmptyState type="page" icon="pending" text="Plan your next fund">
           <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", maxWidth: 460, margin: "0 auto 16px" }}>
             Choose how you'd like to build it, then see the projected returns. We'll start you off with values from your most recent fund.
           </div>
@@ -283,7 +283,7 @@ export default function FundConstruction({ snapshot, firm, companies }) {
       <style>{FC_CSS}</style>
       <div data-testid="fc-toolbar" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 var(--ink-spacing-global-vertical-normal)" }}>
         <Btn onClick={() => setOpenId(null)} data-testid="all-plans">← All plans</Btn>
-        {result?.ok && isComplete(plan) && <Btn onClick={() => setView("model")} data-testid="back-to-model">← Back to model</Btn>}
+        {result?.ok && isComplete(plan) && <Btn onClick={() => setView("model")} data-testid="back-to-model">← Back to plan</Btn>}
         <span style={{ ...sans, fontSize: FS.h3, fontWeight: 600 }} data-testid="plan-name">{plan.name}</span>
         <span data-testid="plan-mode" style={{ display: "flex" }}><Badge tone={plan.mode === "light" ? "neutral" : "info"}>{modeLabel(plan.mode)}</Badge></span>
         <Badge tone="info">BETA</Badge>

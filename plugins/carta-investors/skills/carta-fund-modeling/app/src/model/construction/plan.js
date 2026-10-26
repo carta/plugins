@@ -28,7 +28,7 @@ export const stepLabel = (id) => [...STEPS, ...LIGHT_STEPS].find((s) => s.id ===
 /** Picked when a plan is started; only the `ready` ones can be chosen. */
 export const PLAN_MODES = [
   { id: "light", label: "Light", ready: true,
-    blurb: "A quick model from a handful of inputs: company count, check size, reserves and how the portfolio turns out." },
+    blurb: "A quick plan from a handful of inputs: company count, check size, reserves and how the portfolio turns out." },
   { id: "advanced", label: "Advanced", ready: true,
     blurb: "Set every assumption step by step: sectors, check sizes, follow-ons, fees and waterfall." },
 ];

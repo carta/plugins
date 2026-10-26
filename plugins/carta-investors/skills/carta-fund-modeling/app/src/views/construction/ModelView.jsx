@@ -359,7 +359,7 @@ export default function ModelView({ plan, result, onBack, onEdit, snapshot, comp
       <div className="mv-body">
         <div style={{ minWidth: 0 }}>
           <Summary plan={plan} res={res} />
-          <div className="mv-tabs" role="tablist" aria-label="Model" data-testid="model-tabs">
+          <div className="mv-tabs" role="tablist" aria-label="Plan" data-testid="model-tabs">
             {TABS.map((t) => (
               <button key={t.id} type="button" role="tab" className="mv-tab" aria-selected={tab === t.id} data-testid={`mv-tab-${t.id}`} onClick={() => pick(t.id)}>{t.label}</button>
             ))}

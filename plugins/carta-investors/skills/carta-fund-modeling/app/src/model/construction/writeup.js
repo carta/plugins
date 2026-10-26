@@ -5,6 +5,9 @@ import { storyline } from "./summary.js";
 import { whatItTakes } from "./light.js";
 import { positionCurrencies } from "./riskMarket.js";
 import { ownFundHeldAs } from "../funds.js";
+/** Shown wherever a section is still the plan's draft: the write-up step, its summary and the summary report. */
+export const DRAFT_LABEL = "Draft from the plan";
+
 
 /** In reading order. `faq` lists the answers a draft is built from; `autofill` is "draft", "facts" (figures beside the user's text) or "none". */
 export const WRITEUP_SECTIONS = [
