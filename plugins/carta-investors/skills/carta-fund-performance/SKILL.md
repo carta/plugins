@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.115.2</carta-plugin>
+<carta-plugin>carta-investors:6.115.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -64,7 +64,7 @@ A family row is built from its funds' latest month-end rows in `AGGREGATE_FUND_M
 
 - **Summed:** Committed capital, Total value, NAV, Contributions, Distributions, Invested (cost basis) and the LP-only dollar columns. Uncalled capital is committed minus contributions, so it is the sum too. A column any fund lacks is blank for the family, never a short total.
 - **Recomputed, never averaged:** LP TVPI, DPI and RVPI are the summed LP dollars over summed LP paid-in; MOIC is the funds' summed value (MOIC × cost of investments) over summed cost.
-- **Net IRR:** IRRs can't be added or averaged, so the family shows Carta's own family Net IRR, the figure the app's fund list shows on the family row. The page reads the family's Carta id with `fa:get:fund` on one member fund, then `fa:get:fund-irr` with `fund_family_carta_pk`, as of the funds' latest month-end (today while that month is still running). If either read fails, the family reads N/A with a note. The family has no quarterly Net IRR line on either chart.
+- **Net IRR:** IRRs can't be added or averaged, so the family's LP Net IRR is recalculated. Every fund's dated LP contributions and distributions (`JOURNAL_ENTRIES`, balanced month by month to `PARTNER_MONTHLY_NAV_CALCULATIONS`) and their LP NAV at the shared as-of month-end are pooled and passed to the warehouse's `CALCULATE_IRR` function. The same query recalculates each fund alone, and the family figure is shown only when every fund comes within 0.1 points of its own Carta Net IRR. Otherwise, or when the funds are closed through different months, it reads N/A with a note. The family has no quarterly Net IRR line on either chart.
 - **Gross IRR:** not shown for a family; gross IRRs can't be added or averaged either.
 - **LP MOIC:** blank for a family; it has no published formula to rebuild from the summed columns.
 - **Quarterly series:** built from the funds' month-end rows. At each finished quarter every fund that has started contributes its latest row in or before the quarter, and the ratios are recomputed from the sums.
@@ -89,7 +89,7 @@ publish the template itself: its Home link is a placeholder.
 
 ## Step 2 — Publish the artifact
 
-Publish the rendered file with the Artifact tool. The artifact calls `fetch` (`dwh:execute:query`, plus `fa:get:fund` and `fa:get:fund-irr` for a fund family's Net IRR),
+Publish the rendered file with the Artifact tool. The artifact calls `fetch` (`dwh:execute:query`),
 `list_contexts` and `set_context`, so grant exactly those, plus `track_ui_event` for the page's usage analytics. Set `server` to the viewer's
 Carta connector display name from `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md`
 (the plugin's `references/`, not this skill's); the page looks that name up at runtime.
