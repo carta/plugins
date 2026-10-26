@@ -4413,6 +4413,8 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   var data = views ? views[0] : all;
   var COLORS = ['var(--c-old)', 'var(--c-mid)', 'var(--c-cur)'];
   var STRENGTH = { strong: 'Strong', moderate: 'Moderate', weak: 'Weak' };
+  // Mirrors YEAR_STRENGTH_THRESHOLDS in carta/crm (apis/api/src/components/adviser-tracker/adviser-tracker.constants.ts).
+  var YEAR_BANDS = { strong: { share: 'top quarter', min: 250 }, moderate: { share: 'top 60%', min: 25 } };
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var cy = data.window.to, cm = +data.asOf.slice(5, 7);
@@ -4534,12 +4536,24 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   function yearGrade(rel, year) {
     return (rel.byYear || []).filter(function (g) { return g.year === year; })[0] || null;
   }
-  // One plain sentence on why a year has its grade: its count, its people and the year, which runs to asOf for the current year.
+  // One band of the per-year grade in words: "the <share> of the banks shown and at least <min>", from YEAR_BANDS.
+  function bandText(level) {
+    var b = YEAR_BANDS[level];
+    return 'the ' + b.share + ' of the banks shown and at least ' + b.min.toLocaleString('en-US');
+  }
+  function bandRule(level) {
+    return STRENGTH[level] + ' means ' + bandText(level) + '.';
+  }
+  // Why a year has its grade, in one plain sentence with no numbers. The counts sit under the grade in the cell,
+  // and "How to read this" states the rule with its numbers.
   function yearReason(g) {
     var when = 'in ' + g.year + (g.year === cy ? ' so far' : '');
-    if (!g.interactions) return 'No email or meeting between our team and anyone at this bank ' + when + '.';
-    return STRENGTH[g.strength] + ': ' + g.interactions.toLocaleString('en-US') + (g.interactions === 1 ? ' email or meeting' : ' emails and meetings') +
-      ' between our team and ' + g.contacts.toLocaleString('en-US') + (g.contacts === 1 ? ' person' : ' people') + ' at this bank ' + when + '.';
+    return {
+      none: 'No emails or meetings with anyone at this bank ' + when + '.',
+      strong: 'One of our busiest banks ' + when + ': our team was in touch with it more than with most of the other banks shown.',
+      moderate: 'Steady contact ' + when + ', but not enough for Strong.',
+      weak: 'Little contact ' + when + ', not enough for Moderate.'
+    }[g.interactions ? g.strength : 'none'];
   }
   // No label for a bank with no interaction. A result that carries no count shows the label alone.
   // A bank with deals carries the reason, the same rule as the build's check_domain line. A bank with no deals has nothing to explain.
@@ -4773,8 +4787,8 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   function strengthRule() {
     var perYear = data.rows.some(function (r) { return (r.relationship.byYear || []).length; });
     return perYear
-      // The bands mirror YEAR_STRENGTH_THRESHOLDS in carta/crm (apis/api/src/components/adviser-tracker/adviser-tracker.constants.ts).
-      ? 'Relationship strength and contacts count the selected year only: every email and meeting between our team and the bank that year. 500 or more is Strong, 50 to 499 is Moderate and under 50 is Weak. The current year counts the months so far. A bank with no interaction has no grade. '
+      ? 'Relationship strength and contacts count the selected year only. Each email or meeting between our team and the bank counts once, however many people are on it. ' +
+        bandRule('strong') + ' ' + bandRule('moderate') + ' Every other bank is Weak. The current year counts the months so far. A bank with no interaction has no grade. '
       // The bands mirror getContactStrength in carta/crm (apis/api/src/components/common/helpers/getContactStrength.ts).
       : 'Relationship strength grades the closest pair of one person on our team and one contact at the bank, over all years. Each email or meeting is worth 1 point, falling about 2.5% a month. A pair with 10 or more points is Strong, 3 to under 10 is Moderate and under 3 is Weak. A bank with no interaction has no grade. ';
   }
