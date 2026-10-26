@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.98.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.98.2</carta-plugin>
 
 # CTC Scorecard
 
@@ -304,6 +304,7 @@ read_tool({"name": "compensation__get__employee-scorecard",
 > - **no `reverse_sort`** (or any other sort-direction param) and **no `name` / `employee_id`** — sort direction and person lookups are handled on the collected rows (see **Sorting a list** and **Single-employee lookup** below);
 > - **no top-level `level`** — level is reachable only through the `job_filters` CSV;
 > - **no `location`** — location cannot be filtered server-side. If the user asks to filter by location (e.g. "show me below-market employees in Austin"), fetch the roster, filter client-side on `location.home_location` / `location.work_location`, and tell the user you filtered locally.
+> - **no `focus`** — focus cannot be filtered server-side, and `job_filters` (`"JobArea,Level,LimitingLevel"`) has no slot for it. If a focus is given, narrow `job_filters` to its job area, sweep per **Path 2** (Path 1's `score` counts cannot be narrowed by focus), keep only rows whose `title.role.focus` equals it exactly, and tell the user you filtered locally. Dedupe and the render gate still apply to the full sweep, before the focus filter.
 
 Optional filters (pass through verbatim — translate user phrasing to the values in Step 2b):
 
@@ -362,7 +363,7 @@ There is **no single-employee scorecard endpoint**, and the scorecard command ha
 Then:
 - **Exactly one match** → render that single row (you can use the per-employee table with one row, or narrate the fields inline).
 - **Multiple matches** (common with a partial/common name) → list the matches and ask which one with `AskUserQuestion`; do not assume the first.
-- **Zero matches after a complete sweep** (`unique_rows == total_results`) → *"No employee named '[name]' is in this corporation's scorecard. Check the spelling, or ask for the full roster."* If you narrowed with `job_filters`, say the search covered only that job area / level and offer to search the whole roster.
+- **Zero matches after a complete sweep** (`unique_rows == total_results`) → *"No employee named '[name]' is in this corporation's scorecard. Check the spelling, or ask for the full roster."* — **only when no filter narrowed the search**. If any did — a server param (`job_filters`, `score`, `leader`) or a local filter (focus, location) — name the filters that applied, say the person isn't among the employees they keep, and offer to search the whole roster. A row a filter dropped is still on the roster. `score` is the trap: it also hides every employee with a null overall band.
 - **Zero matches, sweep stopped at the 25-page cap** → do not say the person is absent; follow the **HARD PAGE CAP** rule in Step 4a → Path 2 (say the roster was too large to search in full, offer to narrow, and wait).
 
 > **Anti-pattern — never sort-and-pick to answer an individual question.** Do NOT pull one page sorted by `NAME` and read off the top row — that returns whoever sorts first alphabetically (e.g. "A Robot"), not the person asked about. Always match the person's name or id against every collected row. `sort_field` is for ordering a *list* the user asked to see, not for locating one person.
@@ -395,7 +396,7 @@ Overall band (combined salary + equity):
 Want the salary / equity / total-cash breakdown, or the per-person table? Just ask.
 
 ---
-*Data source: Companies with post money valuations between [peer_group_label]. Benchmarks released [Month YYYY].*
+*Data source: Companies with [peer_group_dimension_phrase] [peer_group_label]. Benchmarks released [Month YYYY].*
 ```
 
 Percentages on this path are a share of the **scored** population (Low+Mid+High), not the full roster — say so. Never imply the three counts cover everyone.
@@ -416,7 +417,7 @@ Percentages on this path are a share of the **scored** population (Low+Mid+High)
 Ask me to "show employees below market" if you want the per-person table.
 
 ---
-*Data source: Companies with post money valuations between [peer_group_label]. Benchmarks released [Month YYYY].*
+*Data source: Companies with [peer_group_dimension_phrase] [peer_group_label]. Benchmarks released [Month YYYY].*
 ```
 
 The per-metric total is the number of rows with a non-null band for that metric — it can differ slightly per metric. Compute each percentage as `count / total * 100` rounded to the nearest integer; if `total == 0`, render `—` instead of `0%`.
@@ -503,7 +504,7 @@ Response shape per employee:
 **50** employees checked. **12** Low, **28** Mid, **10** High.
 
 ---
-*Data source: Companies with post money valuations between [peer_group_label]. Benchmarks released [Month YYYY].*
+*Data source: Companies with [peer_group_dimension_phrase] [peer_group_label]. Benchmarks released [Month YYYY].*
 ```
 
 **Which band to show for a bare "who's below/above market?" (no metric named).** Prefer the **overall `score`** when it's available — it's the combined equity+salary quick-glance band. Label it explicitly as the overall score, and offer a follow-up to drill into a specific ratio:
@@ -562,9 +563,13 @@ Every response that includes scorecard data MUST end with the citation footer in
 
 ```
 ---
-*Data source: Companies with post money valuations between [peer_group_label]. Benchmarks released [Month YYYY].*
+*Data source: Companies with [peer_group_dimension_phrase] [peer_group_label]. Benchmarks released [Month YYYY].*
 ```
 
+- `peer_group_dimension_phrase`: from `compensation:get:plan` → `peer_group.dimension`. Three exact phrasings — do **NOT** hardcode `post money valuations between` regardless of the corp:
+  - `post_money` → *"post money valuations between"*
+  - `capital_raised` → *"capital raised between"*
+  - `headcount` → *"headcount of"*
 - `peer_group_label`: from `compensation:get:plan` → `peer_group.label` (e.g. `"$50M-$100M"`).
 - `Month YYYY`: derived from `benchmark_version.created` ISO timestamp (e.g. `"2026-05-06T..."` → `"May 2026"`). Not a version number.
 
