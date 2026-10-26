@@ -58,7 +58,13 @@ is sent (`scripts/report_payload.py`) and again by Carta.
 - The connector is picked from the cache's Carta environment. A non-production cache never
   uses a production connector.
 - `--share-mcp-server <name>` (or `MANCO_SHARE_MCP_SERVER`) pins one connector, for example
-  a test connector. The startup banner prints which connectors sharing will use.
+  a test connector. The startup banner prints which connectors sharing will use. The pin is
+  also recorded to `<dashboard_dir>/.share-mcp-server` (`manco_paths.write_share_mcp_server`),
+  so `own_sync.py`'s detached post-build sweep — which runs in its own process, with no access
+  to `serve.py`'s flags — pushes and retires own-sync mirrors through that same connector. A
+  live `serve.py` re-reads this file on every `_get_bridge()` call and rebuilds its own cached
+  Bridge whenever the pin has moved since that Bridge was built, so a relaunch that changes or
+  clears the pin takes effect on the running daemon too, not just on sweeps spawned after it.
 - The `claude` binary the bridge starts is found by `scripts/preflight_claude.py`
   (Step 0.5): `--claude-bin` (or `MANCO_CLAUDE_BIN`) pins one explicitly; otherwise PATH,
   the usual install locations, and the launching Claude Code session's own binary

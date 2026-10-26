@@ -22,13 +22,31 @@ hosted microapp would keep showing a report the user deleted locally.
 
 push_if_changed and forget each read before making a slow Carta call and only
 write afterward, so the two can race each other across threads (serve.py
-handles requests on threads). Every uuid either of them creates or already
-holds ends up either recorded on a live local report or deleted in Carta —
-never left live with nothing local claiming it — even when they overlap:
-push_if_changed deletes its own new uuid upstream if the report vanishes
-under it, and forget deletes whatever uuid remove() actually dismissed, which
-can differ from the uuid forget already deleted if a push stamped a new one
-in between.
+handles requests on threads) or across processes (a detached sweep, see
+main() below, and a live serve.py handling a removal at the same time).
+Every uuid either of them creates or already holds ends up either recorded
+on a live local report or deleted in Carta — never left live with nothing
+local claiming it — even when they overlap: push_if_changed deletes its own
+new uuid upstream if the report vanishes under it, and forget deletes
+whatever uuid remove() actually dismissed, which can differ from the uuid
+forget already deleted if a push stamped a new one in between.
+
+main() additionally serializes every *sweep* on one dashboard behind a
+cross-process lock (`.own-sync.lock`, same O_EXCL scheme as
+report_store._FileLock, `observe_stale=True`): a build that finishes while
+the same dashboard's previous sweep is still running would otherwise spawn a
+second one, and two sweeps racing the same report would each call
+fa__create__budget_report for it, with record_own_sync's last write winning
+and the other's uuid orphaned in Carta with nothing local pointing at it any
+more. For as long as main() holds the lock, a background heartbeat thread
+refreshes its mtime on a fixed interval, independent of how long any single
+Carta call inside the sweep takes — a bridge turn can run well past any one
+timeout (a relay turn, a retry, a reset), so staleness must track whether
+the holding *process* is still alive, never how long one call or how many
+reports a sweep has. A waiter blocks until the holder either releases the
+lock or its heartbeat thread stops (the process crashed) for
+`_SWEEP_LOCK_STALE_AFTER`, timed on the waiter's own monotonic clock
+(`_FileLock`'s `observe_stale` explains why).
 
 A pushed payload's optional `variance_by_category` (the Top Categories of
 Variance chart's data, trimmed to this one report) needs fund-admin's
@@ -39,13 +57,20 @@ Python-stdlib only, 3.9-safe.
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
+import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 import export_budget_bundle
+import manco_paths
+import preflight_claude
 import report_payload
 import report_store
+import share_bridge
 import share_ops
 from share_bridge import ShareError
 
@@ -175,9 +200,103 @@ def forget(
     """
     report = store.check_removable(report_id, expected_etag=expected_etag)
     uuid = report_store.ReportStore.own_sync_uuid(report)
-    ctx = share_ops.context(data_dir)
     if uuid:
-        share_ops.delete_upstream(bridge, ctx, uuid, emit)
+        share_ops.delete_upstream(bridge, share_ops.context(data_dir), uuid, emit)
     dismissed = store.remove(report_id)
     if dismissed and dismissed != uuid:
-        share_ops.delete_upstream(bridge, ctx, dismissed, emit)
+        share_ops.delete_upstream(bridge, share_ops.context(data_dir), dismissed, emit)
+
+
+def sweep(data_dir: Path, user_id: int, bridge: Any) -> None:
+    """Push every own, eligible report in this dashboard's reports.json, one at a
+    time. Best-effort and silent: a report that fails to push (an invalid
+    payload, a Carta error) is skipped — logged to stderr, never raised — so one
+    bad report never stops the rest. push_if_changed itself already skips a
+    report that's read-only (shared with you), unbuilt, or unchanged.
+
+    main()'s production caller (build_manco_datadir.py's _spawn_sync_sweep)
+    redirects this stderr to manco_paths.own_sync_log_file, so a skipped push
+    still leaves a record a maintainer can read."""
+    store = report_store.ReportStore(data_dir)
+    for report in store.load()["reports"]:
+        try:
+            push_if_changed(bridge, store, data_dir, report["id"], user_id, lambda message: None)
+        except Exception as e:
+            print("[own_sync] push %r skipped: %r" % (report["id"], e), file=sys.stderr)
+
+
+# A sweep's lock counts as stale only once the *process* holding it has
+# stopped running, never because one Carta call or the sweep as a whole is
+# slow: a single bridge turn can legitimately run well past any one timeout
+# (a relay turn, a retry, a reset to a fresh session), so nothing about how
+# long a call or a sweep takes can bound how long the lock may need to stay
+# held. main()'s heartbeat thread refreshes it every
+# _SWEEP_LOCK_HEARTBEAT_INTERVAL for as long as the process is alive; only a
+# crash stops that, and _SWEEP_LOCK_STALE_AFTER is a fixed multiple of the
+# interval so a waiter reclaims a lock a crashed holder left behind.
+_SWEEP_LOCK_HEARTBEAT_INTERVAL = 30.0
+_SWEEP_LOCK_STALE_AFTER = 4 * _SWEEP_LOCK_HEARTBEAT_INTERVAL
+
+
+def _heartbeat(lock_path: Path, interval: float, stop: threading.Event) -> None:
+    """Keep `lock_path`'s mtime fresh on its own thread for as long as the
+    calling process holds it, so main()'s lock never looks abandoned while
+    the process holding it is still alive — independent of how long any
+    single Carta call inside the sweep it's guarding takes."""
+    while not stop.wait(interval):
+        try:
+            os.utime(lock_path, None)
+        except OSError:
+            pass
+
+
+def main(argv: Optional[list] = None) -> int:
+    """Entry point for the detached sweep build_manco_datadir.py spawns after
+    every build: push every report whose payload differs from its last push,
+    or that has never been pushed, without making the build itself wait on it.
+
+    Exits 0 and does nothing when there's no operator id to sync as yet (the
+    plugin-level ${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md hasn't run
+    for this dashboard), or no working `claude` CLI to reach Carta through —
+    both are "try again next build", not failures.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data-dir", required=True)
+    args = parser.parse_args(argv)
+    data_dir = Path(args.data_dir).expanduser()
+
+    user_id = manco_paths.read_user_id(data_dir)
+    if user_id is None:
+        return 0
+    probed = preflight_claude.probe()
+    if probed["reason"] != preflight_claude.REASON_OK:
+        return 0
+
+    # An abandoned lock frees itself once it goes stale, so there's nothing a
+    # finite wait would gain over the lock's own staleness check — wait as
+    # long as it takes for the dashboard's previous sweep to either finish or
+    # stop refreshing it.
+    lock_path = manco_paths.own_sync_lock_file(data_dir)
+    lock = report_store._FileLock(lock_path, timeout=float("inf"), stale_after=_SWEEP_LOCK_STALE_AFTER,
+                                   observe_stale=True)
+    with lock:
+        stop_heartbeat = threading.Event()
+        heartbeat = threading.Thread(target=_heartbeat, args=(lock_path, _SWEEP_LOCK_HEARTBEAT_INTERVAL, stop_heartbeat),
+                                     daemon=True)
+        heartbeat.start()
+        bridge = share_bridge.Bridge(str(data_dir), manco_paths.read_carta_environment(data_dir),
+                                     override=manco_paths.read_share_mcp_server(data_dir),
+                                     claude_bin=probed["bin"])
+        try:
+            sweep(data_dir, user_id, bridge)
+        finally:
+            bridge.close()
+            # Stop (and wait for) the heartbeat before releasing the lock:
+            # it must never refresh a lock this process no longer holds.
+            stop_heartbeat.set()
+            heartbeat.join()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

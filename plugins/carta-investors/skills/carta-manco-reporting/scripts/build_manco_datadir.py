@@ -5262,6 +5262,44 @@ def _resolve_excel_budget(dashboard_dir, as_of_month, p, data):
 
 # --- Assemble --------------------------------------------------------------
 
+def _spawn_sync_sweep(dashboard_dir):
+    """Best-effort, fire-and-forget: push any new or changed own-sync reports to
+    Carta after this build, without this process waiting on it. own_sync.main()
+    is silent-safe on its own — no Claude CLI, no known user id yet, or nothing
+    changed all exit 0 having done nothing. A report that fails to push is
+    skipped and noted in <dashboard_dir>/own_sync.log rather than raised, so a
+    maintainer can see why one report never shows up on the hosted microapp
+    without that detail vanishing into a detached process nobody reads. This
+    truncates the log on every build, not just the first one to spawn a sweep
+    for a dashboard — a build that finishes while an earlier sweep is still
+    running erases that sweep's own record.
+
+    Must be a genuinely detached OS process, not a thread: rebuild() re-invokes
+    this very script via subprocess.run(..., capture_output=True), which blocks
+    until every fd it handed the child is closed. A thread would die with (or
+    block the exit of) this process, and an inherited stdout/stderr pipe would
+    keep that subprocess.run() call waiting on the sweep's own exit instead of
+    this build's.
+    """
+    script = Path(__file__).resolve().parent / "own_sync.py"
+    log_path = manco_paths.own_sync_log_file(dashboard_dir)
+    try:
+        log = open(log_path, "w")
+    except OSError:
+        return  # best-effort — a build must never fail because the sweep's log couldn't open
+    try:
+        subprocess.Popen(
+            [sys.executable, str(script), "--data-dir", str(dashboard_dir)],
+            cwd=str(script.parent),
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log,
+            start_new_session=True,
+        )
+    except OSError:
+        pass  # best-effort — a build must never fail because the sweep couldn't launch
+    finally:
+        log.close()  # the child's own dup'd fd keeps writing after this one closes
+
+
 def build(args):
     raw       = Path(args.raw_dir)
     dashboard = Path(args.dashboard_dir)
@@ -6229,6 +6267,8 @@ def build(args):
     print(f"Fund-fee funds displayed: {len(fee_funds)} (of {len(fund_totals)} total)", file=sys.stderr)
     print(f"Fund-fee years: {fee_labels}", file=sys.stderr)
     print(f"Wrote: {dashboard}/snapshot.json + accounts.json", file=sys.stderr)
+
+    _spawn_sync_sweep(dashboard)
 
 
 def main():

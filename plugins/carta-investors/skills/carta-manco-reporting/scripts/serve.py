@@ -60,6 +60,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import manco_paths
+import own_sync
 import preflight_claude
 import report_store
 import share_bridge
@@ -87,6 +88,7 @@ _share_state = {"status": "idle"}
 _finished_share_jobs = {}  # job id -> its final state, oldest first
 FINISHED_SHARE_JOBS_KEPT = 20
 _bridge = None
+_bridge_override = None  # which .share-mcp-server pin the cached _bridge was built with
 _bridge_lock = threading.Lock()
 # Whether the `claude` CLI that report sharing needs can run. Checked (and
 # refreshed) before a share op rather than gating the dashboard itself — browsing
@@ -197,47 +199,6 @@ def _read_firm_id(data_dir):
     return firm_id if firm_id > 0 else None
 
 
-def _read_carta_environment(data_dir):
-    """This firm's cached snapshot.cartaEnvironment ("production" or
-    "nonprod"), served to the tracker and deciding which Carta connectors
-    report sharing may use. Defaults to "production" on any
-    read/parse failure or a pre-upgrade cache built before this field
-    existed — an unclassified build is far more likely real production
-    usage than a staff test session."""
-    try:
-        data = json.loads((data_dir / "snapshot.json").read_text())
-        return data.get("cartaEnvironment") or "production"
-    except (OSError, ValueError):
-        return "production"
-
-
-def _user_id_file(data_dir):
-    return data_dir / ".user-id"
-
-
-def _read_user_id(data_dir):
-    """The launching user's integer Carta id, so events name a person rather than a device."""
-    try:
-        user_id = int(_user_id_file(data_dir).read_text().strip())
-    except (OSError, ValueError):
-        return None
-    return user_id if user_id > 0 else None
-
-
-def _write_user_id(data_dir, raw):
-    """Record the launching user. No id means no MCP, not a new person — so keep the last one."""
-    try:
-        user_id = int(str(raw).strip())
-    except (TypeError, ValueError):
-        return
-    if user_id <= 0:
-        return
-    try:
-        _user_id_file(data_dir).write_text(str(user_id))
-    except OSError:
-        pass
-
-
 def _rebuild():
     """Re-run the build the way the skill last ran it → (ok, message), one at a time."""
     import build_manco_datadir  # only needed for writes; keeps a read-only launch light
@@ -251,16 +212,30 @@ def _reports_listing():
     return {
         "reports": [dict(report_store.ReportStore.metadata(r), hidden=bool(r.get("hidden")))
                     for r in doc["reports"]],
-        "share_target": share_bridge.describe_target(_read_carta_environment(DATA_DIR), SHARE_MCP_SERVER),
+        "share_target": share_bridge.describe_target(manco_paths.read_carta_environment(DATA_DIR),
+                                                       manco_paths.read_share_mcp_server(DATA_DIR)),
     }, store.etag()
 
 
 def _get_bridge():
-    global _bridge
+    """The live daemon's cached Bridge, rebuilt whenever .share-mcp-server's pin
+    has moved since it was built — a relaunch can change or clear the pin while
+    this server keeps running, and a stale Bridge would keep pushing/forgetting
+    through the connector the *previous* launch was pinned to."""
+    global _bridge, _bridge_override
     with _bridge_lock:
+        pin = manco_paths.read_share_mcp_server(DATA_DIR)
+        if _bridge is not None and pin != _bridge_override:
+            # Its session is a long-lived `claude -p` subprocess: dropping the
+            # reference alone would leave it running until the idle timeout.
+            # Closed on its own thread so this call never waits out a share
+            # already using it.
+            threading.Thread(target=_bridge.close, daemon=True).start()
+            _bridge = None
         if _bridge is None:
-            _bridge = share_bridge.Bridge(str(DATA_DIR), _read_carta_environment(DATA_DIR),
-                                          override=SHARE_MCP_SERVER, claude_bin=CLAUDE_BIN)
+            _bridge = share_bridge.Bridge(str(DATA_DIR), manco_paths.read_carta_environment(DATA_DIR),
+                                          override=pin, claude_bin=CLAUDE_BIN)
+            _bridge_override = pin
         return _bridge
 
 
@@ -616,8 +591,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # tracker without a relaunch.
             return self._send(200, {
                 "firmId": _read_firm_id(DATA_DIR),
-                "environment": _read_carta_environment(DATA_DIR),
-                "userId": _read_user_id(DATA_DIR),
+                "environment": manco_paths.read_carta_environment(DATA_DIR),
+                "userId": manco_paths.read_user_id(DATA_DIR),
             })
         if path == "/api/reports":
             listing, etag = _reports_listing()
@@ -727,11 +702,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif action == "unlink":
                 result = store.clear_shared(report_id, expected_etag=expected)
             else:
-                store.remove(report_id, expected_etag=expected)
+                # own_sync.forget is the one way to remove a report that may have been
+                # synced: report_store.ReportStore.remove alone would leave an orphaned
+                # mirror live in Carta forever. It only touches Carta (and so only needs
+                # the bridge) when this report actually has one.
+                own_sync.forget(_get_bridge(), store, DATA_DIR, report_id, lambda m: None,
+                                expected_etag=expected)
                 result = {"id": report_id, "removed": True}
         except report_store.ReportEditError as e:
             status = {"conflict": 409, "not_found": 404, "read_only": 403, "busy": 409}.get(e.code, 400)
             return self._send(status, {"error": e.code, "message": str(e)})
+        except share_bridge.ShareError as e:
+            # The local removal never ran (forget checks removability before touching
+            # Carta, and bails before store.remove on a real Carta failure) — the report
+            # is untouched, so the operator can just retry once Carta/Claude is reachable.
+            return self._send(502, {"error": e.code, "message": str(e)})
         ok, message = _rebuild()
         listing, etag = _reports_listing()
         return self._send(200, {"report": result, "rebuilt": ok, "message": message,
@@ -868,7 +853,10 @@ def main():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else _default_src_dir(DATA_DIR, WEB_DIR)
     # Before the reuse probe: a relaunch onto a live daemon must still refresh the id it serves.
-    _write_user_id(DATA_DIR, args.user_id)
+    manco_paths.write_user_id(DATA_DIR, args.user_id)
+    # Same reason: own_sync.py's detached sweep reads this pin too, so a test
+    # connector this launch is scoped to also covers that sweep's pushes.
+    manco_paths.write_share_mcp_server(DATA_DIR, SHARE_MCP_SERVER)
 
     port_file = DATA_DIR / ".port"
     token_file = DATA_DIR / ".token"
@@ -909,7 +897,7 @@ def main():
     if args.detach:
         _detach_or_warn()
 
-    targets = share_bridge.candidate_servers(_read_carta_environment(DATA_DIR), SHARE_MCP_SERVER)
+    targets = share_bridge.candidate_servers(manco_paths.read_carta_environment(DATA_DIR), SHARE_MCP_SERVER)
     print("[serve] report sharing uses Carta connector(s): %s%s" % (
         ", ".join(targets), " (pinned)" if SHARE_MCP_SERVER else ""), flush=True)
     threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()

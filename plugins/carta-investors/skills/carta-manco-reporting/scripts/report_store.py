@@ -85,15 +85,40 @@ def _copy_name(source_name: str) -> str:
 
 
 class _FileLock:
-    """A lock file shared by the build and the app server, which run as separate
-    processes. O_EXCL creation is atomic on every platform; a lock older than
-    _LOCK_STALE_AFTER is treated as left behind by a crashed process."""
+    """A lock file shared by processes that may run separately — the build and
+    the app server here, own_sync.py's detached sweep too (own_sync.py passes
+    its own, longer `stale_after`). O_EXCL creation is atomic on every
+    platform; a lock whose mtime hasn't moved in over `stale_after` (default
+    `_LOCK_STALE_AFTER`) is treated as left behind by a crashed holder — a
+    caller that refreshes its own lock's mtime while it still holds it (a
+    heartbeat) can run past that long without being reclaimed.
 
-    def __init__(self, path: Path) -> None:
+    `observe_stale=True` switches the staleness check from wall-clock
+    (`time.time()`, compared against the file's mtime) to one the waiter
+    times entirely on its own `time.monotonic()`: it watches the mtime it
+    observes and only reclaims the lock once that same mtime has sat
+    unchanged for `stale_after` of the waiter's *own* elapsed time. A laptop
+    suspend advances wall-clock time but not monotonic time for both the
+    holder and the waiter alike, so a holder whose heartbeat would have
+    refreshed the lock before and after the suspend can't be seen as stale
+    just because the wall clock jumped across it — the pre-suspend mtime a
+    wall-clock check compares against is already stale the instant the
+    machine wakes, even though the process holding the lock never stopped
+    making progress. Leave this off for `ReportStore`'s own short-lived
+    writer lock: `_LOCK_TIMEOUT` is shorter than `_LOCK_STALE_AFTER`, so a
+    waiter observing staleness would always hit "busy" before it could ever
+    see an mtime hold still for the full `stale_after`."""
+
+    def __init__(self, path: Path, timeout: float = _LOCK_TIMEOUT, stale_after: float = _LOCK_STALE_AFTER,
+                 observe_stale: bool = False) -> None:
         self._path = path
+        self._timeout = timeout
+        self._stale_after = stale_after
+        self._observe_stale = observe_stale
 
     def __enter__(self) -> "_FileLock":
-        deadline = time.time() + _LOCK_TIMEOUT
+        deadline = time.time() + self._timeout
+        seen_mtime, seen_at = None, None
         while True:
             try:
                 fd = os.open(str(self._path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -101,10 +126,19 @@ class _FileLock:
                 return self
             except FileExistsError:
                 try:
-                    if time.time() - self._path.stat().st_mtime > _LOCK_STALE_AFTER:
-                        self._path.unlink()
-                        continue
+                    mtime = self._path.stat().st_mtime
                 except FileNotFoundError:
+                    continue
+                if self._observe_stale:
+                    now = time.monotonic()
+                    if mtime != seen_mtime:
+                        seen_mtime, seen_at = mtime, now
+                    elif now - seen_at > self._stale_after:
+                        self._path.unlink(missing_ok=True)
+                        seen_mtime, seen_at = None, None
+                        continue
+                elif time.time() - mtime > self._stale_after:
+                    self._path.unlink(missing_ok=True)
                     continue
                 if time.time() > deadline:
                     raise ReportEditError("reports are busy; try again", "busy")

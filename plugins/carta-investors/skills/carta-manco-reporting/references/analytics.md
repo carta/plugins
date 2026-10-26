@@ -276,9 +276,11 @@ hand-vendored rather than generated, stays in place across a rebuild. It warns i
 - `firmId` becomes an `iglu:com.carta/firm/jsonschema/1-1-0` context on every event, so
   telemetry joins on the real Carta id rather than a slugified firm name. It is omitted
   entirely when the id does not resolve — a placeholder would pollute the firm dimension.
-- `userId` comes from `serve.py --user-id`, which is **optional**. A launch that omits it
-  emits events with no user attached, so measure the unattributed share before trusting
-  any per-user figure.
+- `userId` comes from `<dashboard_dir>/.user-id` (`manco_paths.read_user_id`) — written by
+  `serve.py --user-id` at launch, or earlier by the build-path flow in
+  `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md`, whichever ran last. It's **optional**:
+  a dashboard nothing has written it for yet emits events with no user attached, so measure
+  the unattributed share before trusting any per-user figure.
 - `environment` is `nonprod` only when stated explicitly; anything else means production.
 
 ## Not instrumented

@@ -96,6 +96,97 @@ def raw_dir_for(firm_slug, manco_slug):
     return dashboard_dir_for(firm_slug, manco_slug) / "raw"
 
 
+def user_id_file(dashboard_dir):
+    return pathlib.Path(dashboard_dir) / ".user-id"
+
+
+def read_user_id(dashboard_dir):
+    """The operator's own Carta user id, written by the skill's own flow
+    (the plugin-level ${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md,
+    shared with carta-fund-modeling and carta-portfolio-analytics-app) after
+    `get_current_user` resolves it. None when it hasn't been written yet, or
+    holds anything but a positive integer — every caller treats that the same
+    as "not yet known", never an error."""
+    try:
+        user_id = int(user_id_file(dashboard_dir).read_text().strip())
+    except (OSError, ValueError):
+        return None
+    return user_id if user_id > 0 else None
+
+
+def write_user_id(dashboard_dir, raw):
+    """Record the operator's own Carta user id. No id means no MCP, not a new
+    person — so keep whatever was recorded last rather than clearing it."""
+    try:
+        user_id = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return
+    if user_id <= 0:
+        return
+    try:
+        user_id_file(dashboard_dir).write_text(str(user_id))
+    except OSError:
+        pass
+
+
+def share_mcp_server_file(dashboard_dir):
+    return pathlib.Path(dashboard_dir) / ".share-mcp-server"
+
+
+def read_share_mcp_server(dashboard_dir):
+    """The connector name serve.py was pinned to (its `--share-mcp-server` flag,
+    or the MANCO_SHARE_MCP_SERVER env var it falls back to), or None for "use
+    this environment's default connectors". own_sync.py's detached sweep reads
+    this the same way, so a pinned test connector covers a build's own-sync
+    pushes too — not just the shares serve.py itself makes — and `forget`'s
+    later delete goes through the same connector a push used."""
+    try:
+        value = share_mcp_server_file(dashboard_dir).read_text().strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def write_share_mcp_server(dashboard_dir, value):
+    """Record (or clear) the pinned connector. Unlike write_user_id, an absent
+    value here is meaningful — "no pin, use the default" — so it's written
+    through rather than ignored."""
+    f = share_mcp_server_file(dashboard_dir)
+    try:
+        if value:
+            f.write_text(str(value))
+        else:
+            f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def own_sync_lock_file(dashboard_dir):
+    """Cross-process lock serializing own_sync.py's sweeps on one dashboard
+    (see own_sync.py's module docstring and main())."""
+    return pathlib.Path(dashboard_dir) / ".own-sync.lock"
+
+
+def own_sync_log_file(dashboard_dir):
+    """Where build_manco_datadir.py's _spawn_sync_sweep redirects a detached
+    sweep's stderr, so a report that fails to push leaves a record."""
+    return pathlib.Path(dashboard_dir) / "own_sync.log"
+
+
+def read_carta_environment(dashboard_dir):
+    """This firm's cached snapshot.cartaEnvironment ("production" or
+    "nonprod"), served to the tracker and deciding which Carta connectors
+    report sharing (and own-sync) may use. Defaults to "production" on any
+    read/parse failure or a pre-upgrade cache built before this field
+    existed — an unclassified build is far more likely real production
+    usage than a staff test session."""
+    try:
+        data = json.loads((pathlib.Path(dashboard_dir) / "snapshot.json").read_text())
+        return data.get("cartaEnvironment") or "production"
+    except (OSError, ValueError):
+        return "production"
+
+
 def snapshot_age_days(dashboard_dir):
     p = dashboard_dir / "snapshot.json"
     if not p.exists():
