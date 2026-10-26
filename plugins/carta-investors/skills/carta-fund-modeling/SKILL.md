@@ -44,6 +44,16 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__Claude_Browser__navigate
+  - mcp__Claude_Browser__tabs_context
+  - mcp__Claude_Browser__tabs_create
+  - mcp__Claude_in_Chrome__tabs_context_mcp
+  - mcp__Claude_in_Chrome__tabs_create_mcp
+  - mcp__Claude_in_Chrome__navigate
+  - mcp__claude-in-chrome__tabs_context_mcp
+  - mcp__claude-in-chrome__tabs_create_mcp
+  - mcp__claude-in-chrome__navigate
+  - ToolSearch
   - Read
   - Write
   - AskUserQuestion
@@ -55,7 +65,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.114.20</carta-plugin>
+<carta-plugin>carta-investors:6.114.21</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -106,7 +116,8 @@ browser to open, so the dashboard URL goes nowhere. The skill must not run there
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" detect-surface
 ```
 - Output contains **`surface=sandboxed`** → **stop immediately.** Do **not** scan caches, resolve a firm, touch
-  the MCP, or launch `serve.py`. Reply with this message (substance verbatim), then end the turn:
+  the Carta MCP, or launch `serve.py`. **Open the hosted app** with the bare link, then reply with this message
+  (substance verbatim), then end the turn:
   > Fund Modeling is hosted by Carta at **https://fund-modeling.carta.cloud** — open it in your browser, sign in
   > with Carta, and pick your firm. Building the app locally needs a Claude Code session running on your own
   > machine; it can't run in a sandboxed session: Cowork, or a Claude Code cloud session (in Claude Desktop,
@@ -118,7 +129,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" de
   deep link here: a sandboxed session does not reliably have the MCP.)
 
   This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to launch anyway, and do **not**
-  fall back to another surface or tool — a sandboxed verdict will not change on retry.
+  fall back to another surface or tool — a sandboxed verdict will not change on retry. (Opening the hosted link in the in-app browser is not a fallback; it is part of this reply.)
 - Otherwise (**`surface=local`**, the normal case) → continue to **Gate 1** silently. Say nothing about this
   check — it stays quiet, like the rest of Step 0.
 
@@ -140,8 +151,8 @@ Skip the question when the invocation already chose: "hosted", "online" or fund-
 "local", "build", "refresh", or reopening a local dashboard → local. A pasted Carta firm URL chooses neither,
 so ask as usual.
 
-- **Hosted, no firm named** → reply with the link, then end the turn: "Open **https://fund-modeling.carta.cloud**
-  in your browser, sign in with Carta, and pick your firm." Do **not** scan caches, touch the MCP or launch
+- **Hosted, no firm named** → **Open the hosted app** with the bare link, then reply with it and end the turn: "Open **https://fund-modeling.carta.cloud**
+  in your browser, sign in with Carta, and pick your firm." Do **not** scan caches, touch the Carta MCP or launch
   `serve.py`.
 - **Hosted, firm named** (name, Carta firm URL or UUID) → the app reopens the last firm used in the browser, so a
   bare link can open the wrong firm. Link straight to the firm the user named instead. The only MCP calls allowed are
@@ -150,12 +161,25 @@ so ask as usual.
   Step 1; a URL/UUID goes in as the `firm_id` it takes) — read-only, **never `set_context`**, which would change
   the user's active firm. Pick the firm by Step 1's *Resolve the firm* rules, without `AskUserQuestion`; if they
   leave no single firm, fall back. The hosted app names a firm by its **Carta ID**, the integer `carta_id`
-  that `list_contexts` returns for it, or by its firm UUID (`firm_id`) when `carta_id` is null. Reply with
-  `https://fund-modeling.carta.cloud/firm/<carta_id>` (else `/firm/<firm_id>`) and end the turn: "Open
+  that `list_contexts` returns for it, or by its firm UUID (`firm_id`) when `carta_id` is null. **Open the hosted app** with
+  `https://fund-modeling.carta.cloud/firm/<carta_id>` (else `/firm/<firm_id>`), then reply and end the turn: "Open
   **\<link\>** and sign in with Carta to open **\<canonical name\>**." Do **not** launch `serve.py` or scan
-  caches. Fall back to the bare link plus the **Switch firm** line from Gate 0, naming the firm as typed, when
+  caches. Fall back: **Open the hosted app** with the bare link, then reply with it plus the **Switch firm** line from Gate 0, naming the firm as typed, when
   there is no Carta MCP or `list_contexts` leaves no single firm. Never put a firm name in the link.
 - **Local** → continue to **Step 0** silently.
+
+### Open the hosted app
+
+Every hosted hand-off opens the link first, then gives the reply, then ends the turn. The reply with the link is
+always given, so a failed or missing browser costs the user nothing.
+
+Read `${CLAUDE_PLUGIN_ROOT}/references/gate-in-app-browser.md` (the plugin's own `references/`, not this skill's; do
+not search for it) and follow it to set `browser_family`.
+
+- `browser_family` is `none` → skip opening and give the link only.
+- Otherwise open the link in a **new tab**: the family's tabs-context tool, then its tabs-create tool, then `navigate`
+  to the link in that tab. Make one attempt. If it fails, say nothing about the failure and give the link only. Do not
+  retry or try another family. The user signs in with Carta on the opened page; never sign in for them.
 
 ## Step 0 — Resolve identity + check the local cache
 
