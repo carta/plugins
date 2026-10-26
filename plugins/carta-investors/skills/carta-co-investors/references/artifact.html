@@ -299,6 +299,12 @@
       gap: 4px;
       margin-bottom: 16px;
     }
+    .filter-controls { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-subtle); }
+    .filter-select {
+      height: 32px; padding: 0 8px; border-radius: 4px; font-size: 13px; font-family: inherit;
+      border: 1px solid var(--border-default); background: var(--surface-bg); color: var(--text-default);
+    }
+    .filter-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
     .filter-tab {
       display: inline-flex;
       align-items: center;
@@ -477,11 +483,21 @@
     const PAGE_CONCURRENCY = 4;
     const MAX_PAGES = 500;
 
+    // Holders per Query C row: ~90 bytes each escaped, so a row stays far under the 200 KiB inline page.
+    const CAP_HOLDERS_PER_ROW = 500;
+
     let DATA = null;
     let welcomeCalledThisSession = false;
 
     // Active filter: 'all' | 'live' | 'exited'
     let currentFilter = 'all';
+    // Which source's evidence counts: 'all' | 'spa' | 'cap'
+    let currentSource = 'all';
+    let hideIndividuals = false;
+    // A list this long is trimmed to investors at two or more companies unless the
+    // viewer asks for everything; a shorter list is always shown whole.
+    const LONG_LIST_ROWS = 150;
+    let showSingles = false;
 
     // ── Page state ────────────────────────────────────────────────────────────
 
@@ -904,6 +920,44 @@
         ORDER BY ISSUER_NAME`;
     }
 
+    // Query C — current holders from the stakeholder-level cap table, nested as a
+    // compact JSON string (short keys s/g/o: stakeholder, group, fully diluted
+    // ownership), as Query R nests rounds. A company's holders come back in chunks
+    // of CAP_HOLDERS_PER_ROW, one row per (company, corporation, chunk): per-holder rows would run
+    // to tens of thousands for a large firm, while one row per company could pass
+    // the server's inline page limit when a company has thousands of holders, and
+    // an oversize row fails the whole query. Every row stays bounded, and
+    // groupCapTable appends the chunks of one company back into one holder list.
+    // A company with cap table rows but no investor holders comes back as one row
+    // with an empty array, which is how the page tells it from a company the firm
+    // cannot see at all.
+    //
+    // Company identity is the SOI record: AGGREGATE_INVESTMENTS.ENTITY_LINK_ID ->
+    // CORPORATION_ENTITY_LINKS_V2 -> CORPORATION_ID, so ISSUER_NAME is the same
+    // INV_NAME that Query S's canonical_company resolves SPA issuers to. The table
+    // is row-access controlled; a company the firm cannot see yields no rows.
+    //
+    // Investor holders only: note blocks, and preferred share classes and warrants
+    // ('SHARCLASS' is the column's spelling). Common stock and option plans are the
+    // founders and employees. The ownership column repeats on every row of a holder,
+    // so it is aggregated with MAX, never summed.
+    //
+    // The ORDER BY is (ISSUER_NAME, CORPORATION_ID, CHUNK), unique per row, so
+    // offset paging returns each row once. STAKEHOLDER_ID makes the holder ranking
+    // total, so a holder is in exactly one chunk, and the order inside a chunk.
+        function buildCapTableSql() {
+      return `WITH entity_link AS (SELECT DISTINCT FIRM_ID, ENTITY_LINK_ID, CORPORATION_ID FROM FUND_ADMIN.CORPORATION_ENTITY_LINKS_V2 WHERE FIRM_ID = '${FIRM_UUID}' AND CORPORATION_ID IS NOT NULL),
+        soi_corp AS (SELECT DISTINCT a.ISSUER_NAME, l.CORPORATION_ID FROM FUND_ADMIN.AGGREGATE_INVESTMENTS a JOIN entity_link l ON a.FIRM_ID = l.FIRM_ID AND a.ENTITY_LINK_ID = l.ENTITY_LINK_ID WHERE a.FIRM_ID = '${FIRM_UUID}' AND a.ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') AND a.ISSUER_NAME IS NOT NULL),
+        latest AS (SELECT CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME, SECURITY_CLASS_TYPE, AS_CONVERTED_SHARCLASS_STOCK_TYPE, STAKEHOLDER_FULLY_DILUTED_OWNERSHIP FROM FUND_ADMIN.STAKEHOLDER_CAP_TABLE WHERE CORPORATION_ID IN (SELECT CORPORATION_ID FROM soi_corp) QUALIFY AS_OF_DATE = MAX(AS_OF_DATE) OVER (PARTITION BY CORPORATION_ID)),
+        holders AS (SELECT CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME, MAX(STAKEHOLDER_FULLY_DILUTED_OWNERSHIP) AS OWNERSHIP FROM latest WHERE SECURITY_CLASS_TYPE = 'note_block' OR (SECURITY_CLASS_TYPE IN ('share_class', 'warrant_block') AND AS_CONVERTED_SHARCLASS_STOCK_TYPE = 'Preferred') GROUP BY CORPORATION_ID, STAKEHOLDER_ID, STAKEHOLDER_NAME, STAKEHOLDER_GROUP_NAME),
+        ranked AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID ORDER BY OWNERSHIP DESC NULLS LAST, STAKEHOLDER_ID) AS RN FROM holders)
+        SELECT s.ISSUER_NAME, s.CORPORATION_ID, COALESCE(FLOOR((h.RN - 1) / ${CAP_HOLDERS_PER_ROW}), 0) AS CHUNK, TO_JSON(ARRAY_AGG(IFF(h.STAKEHOLDER_ID IS NULL, NULL, OBJECT_CONSTRUCT('s', h.STAKEHOLDER_NAME, 'g', h.STAKEHOLDER_GROUP_NAME, 'o', ROUND(h.OWNERSHIP, 6)))) WITHIN GROUP (ORDER BY h.OWNERSHIP DESC NULLS LAST, h.STAKEHOLDER_ID)) AS HOLDERS_JSON
+        FROM soi_corp s LEFT JOIN ranked h ON s.CORPORATION_ID = h.CORPORATION_ID
+        WHERE s.CORPORATION_ID IN (SELECT CORPORATION_ID FROM latest)
+        GROUP BY s.ISSUER_NAME, s.CORPORATION_ID, COALESCE(FLOOR((h.RN - 1) / ${CAP_HOLDERS_PER_ROW}), 0)
+        ORDER BY ISSUER_NAME, CORPORATION_ID, CHUNK`;
+    }
+
     // ── Transform ─────────────────────────────────────────────────────────────
 
     function toFloat(v) {
@@ -953,32 +1007,111 @@
     const ROMAN_RE = /\s+(VIII|VII|XII|XI|XIII|IX|IV|VI|V|III|II|I|X)$/i;
     const DIGITS_RE = /\s+[0-9]+$/;
 
-    // First matching grouping wins, mirroring the file order the SQL CASE used.
+    // The grouping in canonical-investors.json a name belongs to, or null. First
+    // match wins, mirroring the file order the SQL CASE uses. Whitespace is
+    // squashed first so a newline or non-breaking space inside a name cannot
+    // defeat an anchored pattern.
+    function canonicalGroupFor(name) {
+      const squashed = (name || '').replace(/\s+/g, ' ').trim();
+      for (const group of CANONICAL_GROUPINGS) {
+        if (group.patterns.some(p => sqlIlike(squashed, p))) return group;
+      }
+      return null;
+    }
+
     // Unmatched names fall through to suffix/series stripping so "Acme Ventures
     // III, L.P." and "Acme Ventures II" collapse to one canonical row.
     function applyCanonical(name) {
-      for (const group of CANONICAL_GROUPINGS) {
-        if (group.patterns.some(p => sqlIlike(name, p))) return group.canonical;
-      }
-      const cleaned = name.replace(SUFFIX_RE, '').replace(ROMAN_RE, '').replace(DIGITS_RE, '').trim();
-      return cleaned || name;
+      const squashed = (name || '').replace(/\s+/g, ' ').trim();
+      const group = canonicalGroupFor(squashed);
+      if (group) return group.canonical;
+      const cleaned = squashed.replace(SUFFIX_RE, '').replace(ROMAN_RE, '').replace(DIGITS_RE, '').trim();
+      return cleaned || squashed;
     }
 
     const LEGAL_SUFFIX_RE = / (LP|LLC|LTD|LIMITED|INC|CORP|CORPORATION|GP|PBC)$/;
     const TRAILING_ROMAN_RE = / (I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII)$/;
 
-    // Upper-case, drop the punctuation that varies between spellings of the same
-    // vehicle ("Acme Fund VI, L.P." vs "Acme Fund VI, LP"), close up hyphens and
-    // dashes ("Fund VIII - Entrepreneurs" vs "Fund VIII–Entrepreneurs"), collapse
-    // whitespace. Mode B's firm_vehicle SQL applies the same rule.
+    // Upper-case, drop diacritics, straighten quotes, drop the punctuation that
+    // varies between spellings of the same vehicle ("Acme Fund VI, L.P." vs "Acme
+    // Fund VI, LP"), close up hyphens and dashes ("Fund VIII - Entrepreneurs" vs
+    // "Fund VIII–Entrepreneurs"), collapse whitespace of every kind (newlines and
+    // non-breaking spaces included). Mode B's firm_vehicle SQL applies the same
+    // rule, except for diacritics.
     function normalizeName(name) {
-      return (name || '').toUpperCase().replace(/[.,]/g, '').replace(/ *[-‐‑‒–—] */g, '-').replace(/ +/g, ' ').trim();
+      return (name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+        .replace(/[’‘`´]/g, "'").replace(/[.,]/g, '').replace(/ *[-‐‑‒–—] */g, '-')
+        .replace(/\s+/g, ' ').trim();
+    }
+
+    // Letters and digits only: "FJ Labs", "F&J Labs" and "FJLabs" all read FJLABS.
+    function compactName(normalized) {
+      return normalized.replace(/[^A-Z0-9]/g, '');
     }
 
     // Drop the legal suffix and any series numeral, so "Acme Growth Fund I, LP"
     // and "Acme Growth Fund, LP" reduce to the same stem.
     function stemName(normalized) {
       return normalized.replace(LEGAL_SUFFIX_RE, '').replace(TRAILING_ROMAN_RE, '').trim();
+    }
+
+    // The one identity of an investor, whichever source named it: canonical
+    // grouping first, then normalised, stripped of its legal suffix and series
+    // numeral, and compacted so spacing and punctuation never split an investor
+    // ("Upper90 Fund" and "Upper 90 Fund"). Mode B groups on the same expression.
+    function investorKey(name) {
+      const norm = normalizeName(applyCanonical(name));
+      return compactName(stemName(norm)) || compactName(norm);
+    }
+
+    // What is left of a name once the words every fund family shares are gone:
+    // "Mantis Capital Fund I, LP" and "Mantis Capital" both reduce to MANTIS.
+    // Used where two names at the same company are compared, never across
+    // companies, and only when at least LOOSE_STEM_MIN characters remain.
+    const LOOSE_WORD_RE = /^(FUND|FUNDS|CAPITAL|VENTURES|VENTURE|PARTNERS|PARTNER|GROWTH|OPPORTUNITY|OPPORTUNITIES|MANAGEMENT|HOLDINGS|GROUP|SERIES|THE|OF|LP|LLC|LLP|LTD|LIMITED|INC|CORP|CORPORATION|CO|COMPANY|GP|PBC|PLC|I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII|XIV|XV|[0-9]+)$/;
+    const LOOSE_STEM_MIN = 4;
+    function looseStem(name) {
+      const tokens = normalizeName(name).split(/[^A-Z0-9]+/).filter(t => t && !LOOSE_WORD_RE.test(t));
+      const stem = tokens.join('');
+      return stem.length >= LOOSE_STEM_MIN ? stem : '';
+    }
+
+    function namesRelated(a, b) {
+      const x = looseStem(a), y = looseStem(b);
+      return x !== '' && y !== '' && (x.includes(y) || y.includes(x));
+    }
+
+    // Who a cap table holder is. The group name is often a shared GP or custodian
+    // label ("Fund GP") over unrelated vehicles, so it is trusted only when it is a
+    // known grouping or visibly the same name as the stakeholder:
+    //   a. canonical grouping matched on the stakeholder name;
+    //   b. canonical grouping matched on the group name;
+    //   c. the group name, when it and the stakeholder name contain one another;
+    //   d. the stakeholder name.
+    // Returns the name to feed to applyCanonical. Mode B's cap_identity applies the same order.
+    function holderIdentity(stakeholder, group) {
+      if (canonicalGroupFor(stakeholder)) return stakeholder;
+      if (group && canonicalGroupFor(group)) return group;
+      if (group && namesRelated(group, stakeholder)) return group;
+      return stakeholder;
+    }
+
+    // The one place that decides whether an investor is a person. SPA purchasers
+    // carry an entity type, and it wins. Cap table holders do not, so for those the
+    // name decides, conservatively: a known investor (any canonical grouping) or a
+    // name with an institution word is never a person, and only a 2-4 word
+    // capitalised name beyond that counts. A lone word never does.
+    const INDIVIDUAL_TYPE_RE = /individual|person|natural/i;
+    const INSTITUTION_WORD_RE = /\b(LP|LLC|LLP|LTD|LIMITED|INC|CORP|CORPORATION|CO|COMPANY|FUND|FUNDS|CAPITAL|VENTURES|VENTURE|PARTNERS|PARTNERSHIP|HOLDINGS|TRUST|FOUNDATION|GROUP|INVESTMENTS|INVESTORS|MANAGEMENT|EQUITY|ASSOCIATES|SPV|GP|PBC|PLC|GMBH|AG|BV|SA|LABS|LAB|FAMILY|OFFICE|ENTERPRISES|BANK|UNIVERSITY|ACCELERATOR|GLOBAL|ANGEL|ANGELS|PORTFOLIO|CATALYST|ATLANTIC|LEVERAGE|WAVE|STUDIO|STUDIOS|MEDIA|TECH|SOFTWARE|NETWORK|SYSTEMS|HEALTH|BIO|INTERNATIONAL|COLLECTIVE|SERVICES|FINANCE|FINANCIAL|SYNDICATE|CIRCLE|HQ|VC|TECHNOLOGY|MARKETS|DEAL|ADVISORS|ADVISOR|ADVISORY|FOUNDERS|FOUNDER|GIFFORD|AVENUE|MOONSHOT|MOONSHOTS)\b/;
+    const PERSON_NAME_RE = /^[A-Z][A-Za-z'’.-]*( [A-Z][A-Za-z'’.-]*){1,3}$/;
+    function isKnownInvestor(name) {
+      const norm = normalizeName(name);
+      return canonicalGroupFor(name) !== null || CANONICAL_GROUPINGS.some(g => normalizeName(g.canonical) === norm);
+    }
+    function isIndividualInvestor(entityType, name) {
+      if (entityType && entityType !== '—') return INDIVIDUAL_TYPE_RE.test(entityType);
+      const trimmed = (name || '').trim();
+      return PERSON_NAME_RE.test(trimmed) && !INSTITUTION_WORD_RE.test(normalizeName(trimmed)) && !isKnownInvestor(trimmed);
     }
 
     // A stem is only used for matching when it still carries two or more words.
@@ -997,6 +1130,32 @@
         .filter(m => m.norm);
     }
 
+    // The firm's own name as a compact string, or null when it is too short to
+    // look for inside other names: a firm called "Vela" must not wipe out every
+    // co-investor with Vela in its name.
+    function firmNameCompact(firmName) {
+      const stem = stemName(normalizeName(firmName));
+      const words = stem.split(/[^A-Z0-9]+/).filter(Boolean);
+      const compact = compactName(stem);
+      return words.length >= 2 || compact.length >= 6 ? compact : null;
+    }
+
+    // True when whole words of the name, run together, spell the firm's name
+    // ("F&J Labs Telenor Co-Invest", "FJLabs Fund IV").
+    function containsFirmName(norm, firmCompact) {
+      const words = norm.split(/[^A-Z0-9]+/).filter(Boolean);
+      for (let i = 0; i < words.length; i++) {
+        let run = '';
+        for (let j = i; j < words.length && run.length < firmCompact.length; j++) {
+          run += words[j];
+          if (run === firmCompact) return true;
+        }
+      }
+      return false;
+    }
+
+    const FIRM_NAME_COMPACT = firmNameCompact(FIRM_NAME);
+
     // The firm name alone until Query V returns; setFirmVehicles adds the rest.
     let FIRM_VEHICLE_MATCHERS = vehicleMatchers([FIRM_NAME]);
 
@@ -1005,16 +1164,20 @@
       FIRM_VEHICLE_MATCHERS = vehicleMatchers([FIRM_NAME, ...names]);
     }
 
-    // True when the purchaser IS one of the firm's own vehicles.
+    // True when the name IS one of the firm's own vehicles — the one rule for SPA
+    // purchasers and cap table holders alike.
     //
-    // Matching is anchored at a word boundary, never a bare substring, and the
-    // two loose directions — purchaser shorter than the listed vehicle, and stem
-    // equality — require at least two words on the short side. Acme Ventures has
-    // a fund named "Vela I, LP"; without that floor, a real co-investor called
-    // "Vela" is silently dropped from every report.
+    // Vehicle matching is anchored at a word boundary, never a bare substring, and
+    // the two loose directions — purchaser shorter than the listed vehicle, and
+    // stem equality — require at least two words on the short side. Acme Ventures
+    // has a fund named "Vela I, LP"; without that floor, a real co-investor called
+    // "Vela" is silently dropped from every report. Separately, the firm's own name
+    // anywhere in the name as whole words marks a vehicle ("Apollo Co-Invest Acme
+    // Ventures GmbH & Co. KG"), when the firm name is long enough to be specific.
     function matchesFirmVehicle(purchaserName) {
       const norm = normalizeName(purchaserName);
       if (!norm) return false;
+      if (FIRM_NAME_COMPACT !== null && containsFirmName(norm, FIRM_NAME_COMPACT)) return true;
       const stem = usableStem(norm);
       const multiWord = norm.includes(' ');
       return FIRM_VEHICLE_MATCHERS.some(v =>
@@ -1033,50 +1196,157 @@
       return a.localeCompare(b) <= 0 ? a : b;
     }
 
-    function buildCoInvestors(summaryRows) {
-      const byCanonical = new Map();
+    // Cap table rows by company: whether the company has any rows (it has a Query C
+    // row) and its investor holders, decoded from HOLDERS_JSON. Like Query R's
+    // ROUNDS_JSON it arrives as a real array or a JSON-encoded string.
+    function groupCapTable(capRows) {
+      const byCompany = new Map();
+      for (const row of capRows) {
+        const company = (row.ISSUER_NAME || '').trim();
+        if (!company) continue;
+        let c = byCompany.get(company);
+        if (!c) { c = { holders: [] }; byCompany.set(company, c); }
+        let decoded = row.HOLDERS_JSON;
+        try {
+          if (typeof decoded === 'string') decoded = decoded.trim() ? JSON.parse(decoded) : [];
+        } catch (e) {
+          console.warn('could not parse HOLDERS_JSON for ' + company, e);
+          continue;
+        }
+        if (!Array.isArray(decoded)) continue;
+        for (const h of decoded) {
+          const stakeholder = ((h && h.s) || '').trim();
+          if (!stakeholder) continue;
+          c.holders.push({
+            stakeholder,
+            group: (h.g || '').trim() || stakeholder,
+            ownership: toFloat(h.o),
+          });
+        }
+      }
+      return byCompany;
+    }
+
+    // Every co-investor across SPAs and cap tables, one entry per investor.
+    //
+    // Every sighting of an investor — an SPA purchaser or a cap table holder at one
+    // company — is named, then identities are united in two steps. Equal
+    // investorKey is one investor, anywhere. Beyond that, inside a single company
+    // an SPA purchaser and a cap table holder with the same looseStem are one
+    // investor ("Mantis Capital Fund I, LP" on the SPA, "Mantis Capital" on the
+    // cap table), and that union holds everywhere the investor appears, so nobody
+    // is counted twice. Nothing else is compared across companies and there is no
+    // fuzzy similarity in the page.
+    //
+    // Also returns what the drill-down needs for companies with cap table rows:
+    // current holders, and "past investors" (named on an SPA, absent from the
+    // current cap table, still counted as co-investors).
+    function buildCoInvestors(summaryRows, capRows) {
+      const sightings = [];
+      function sight(company, source, name, rawName, entityType, ownership) {
+        sightings.push({ company, source, name, rawName, entityType, ownership, key: investorKey(name), loose: looseStem(name) });
+      }
+
       for (const row of summaryRows) {
         const purchaser = (row.PURCHASER_NAME || '').trim();
         if (!purchaser) continue;
         if (matchesFirmVehicle(purchaser)) continue;
-        const canonical = applyCanonical(purchaser);
-        // Key on normalizeName, as Mode B's co-investor grouping does: SPAs for the
-        // same investor arrive shouted, title-cased and differently punctuated
-        // ("ACME CO., LP" alongside "Acme Co, LP"), and a literal key renders that
-        // investor as two rows.
-        const key = normalizeName(canonical);
-        let entry = byCanonical.get(key);
-        if (!entry) {
-          entry = { name: canonical, rawNames: [], entityType: row.ENTITY_TYPE || '—', companies: new Set() };
-          byCanonical.set(key, entry);
-        } else {
-          entry.name = betterCased(entry.name, canonical);
-        }
-        if (!entry.rawNames.includes(purchaser)) entry.rawNames.push(purchaser);
         // Trimmed like buildCompanyRounds' and buildCompanyStatus' keys: a
         // portfolio name stored with stray whitespace otherwise misses both maps.
         for (const c of coerceArray(row.COMPANIES)) {
           const company = c.trim();
-          if (company) entry.companies.add(company);
+          if (company) sight(company, 'spa', applyCanonical(purchaser), purchaser, row.ENTITY_TYPE, 0);
         }
       }
 
-      const all = [...byCanonical.values()].map(entry => {
-        const companies = [...entry.companies].sort();
+      const capByCompany = groupCapTable(capRows || []);
+      const capCompanies = [];
+      for (const [company, cap] of capByCompany) {
+        if (cap.holders.length) capCompanies.push(company);
+        for (const h of cap.holders) {
+          const identity = holderIdentity(h.stakeholder, h.group);
+          if (matchesFirmVehicle(h.stakeholder) || matchesFirmVehicle(identity)) continue;
+          sight(company, 'cap', applyCanonical(identity), h.stakeholder, null, h.ownership || 0);
+        }
+      }
+
+      const parent = new Map(sightings.map(s => [s.key, s.key]));
+      const find = k => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
+      const union = (a, b) => { parent.set(find(a), find(b)); };
+      const byCompany = new Map();
+      for (const s of sightings) {
+        if (!byCompany.has(s.company)) byCompany.set(s.company, []);
+        byCompany.get(s.company).push(s);
+      }
+      for (const group of byCompany.values()) {
+        const spaByLoose = new Map();
+        // Every SPA key of a stem, not one: two SPA vehicles of a family that
+        // compact to different keys are both the cap table's holder.
+        for (const s of group) if (s.source === 'spa' && s.loose) (spaByLoose.get(s.loose) || spaByLoose.set(s.loose, []).get(s.loose)).push(s.key);
+        for (const s of group) if (s.source === 'cap') for (const key of spaByLoose.get(s.loose) || []) union(s.key, key);
+      }
+
+      const byRoot = new Map();
+      for (const s of sightings) {
+        const root = find(s.key);
+        let entry = byRoot.get(root);
+        if (!entry) {
+          entry = { name: s.name, rawNames: [], entityType: '—', evidence: {} };
+          byRoot.set(root, entry);
+        } else {
+          entry.name = betterCased(entry.name, s.name);
+        }
+        if (s.entityType && entry.entityType === '—') entry.entityType = s.entityType;
+        if (!entry.rawNames.includes(s.rawName)) entry.rawNames.push(s.rawName);
+        const ev = entry.evidence[s.company] || (entry.evidence[s.company] = { spa: false, cap: false });
+        ev[s.source] = true;
+      }
+
+      const companyHolders = {};
+      for (const company of capByCompany.keys()) companyHolders[company] = { holdersByRoot: new Map(), past: [] };
+      for (const s of sightings) {
+        if (s.source !== 'cap') continue;
+        const root = find(s.key);
+        const held = companyHolders[s.company].holdersByRoot.get(root) || { entry: byRoot.get(root), ownership: 0 };
+        held.ownership += s.ownership;
+        companyHolders[s.company].holdersByRoot.set(root, held);
+      }
+
+      const all = [...byRoot.values()].map(entry => {
+        const companies = Object.keys(entry.evidence).sort();
         return {
           name: entry.name,
           rawNames: [...entry.rawNames].sort(),
           companyCount: companies.length,
-          entityType: entry.entityType || '—',
+          entityType: entry.entityType,
+          individual: isIndividualInvestor(entry.entityType, entry.name),
           companies,
+          evidence: entry.evidence,
         };
       });
       // Sort by overlap, then name so ties order deterministically across loads.
       all.sort((a, b) => (b.companyCount - a.companyCount) || a.name.localeCompare(b.name));
 
-      // Every co-investor, single-company overlaps included. The report makes no
-      // judgment about which overlaps are worth listing.
-      return all;
+      for (const inv of all) {
+        for (const company of inv.companies) {
+          const ev = inv.evidence[company];
+          // Past only against a cap table that lists investor holders, the same
+          // condition as capCompanies: with none there is nobody to compare against.
+          const cap = capByCompany.get(company);
+          if (cap && cap.holders.length > 0 && ev.spa && !ev.cap) companyHolders[company].past.push(inv.name);
+        }
+      }
+      const holdersOut = {};
+      for (const [company, { holdersByRoot, past }] of Object.entries(companyHolders)) {
+        const holders = [...holdersByRoot.values()]
+          .map(h => ({ name: h.entry.name, ownership: h.ownership }))
+          .sort((a, b) => (b.ownership - a.ownership) || a.name.localeCompare(b.name));
+        holdersOut[company] = { holders, past: past.sort((a, b) => a.localeCompare(b)) };
+      }
+
+      // Every co-investor, single-company overlaps included; the page decides how
+      // many rows to show (see visibleCoInvestors).
+      return { coInvestors: all, companyHolders: holdersOut, capCompanies: capCompanies.sort() };
     }
 
     function normalizeClosingDate(val) {
@@ -1191,12 +1461,12 @@
         return;
       }
 
-      let summaryRows, roundsRows, statusRows, vehicleRows;
+      let summaryRows, roundsRows, statusRows, vehicleRows, capRows;
       try {
         setLoadingStatus('Loading co-investor data from Carta…');
-        // Fully independent — issue all four concurrently so the wait is the
+        // Fully independent — issue all five concurrently so the wait is the
         // slowest query rather than their sum.
-        [summaryRows, roundsRows, statusRows, vehicleRows] = await Promise.all([
+        [summaryRows, roundsRows, statusRows, vehicleRows, capRows] = await Promise.all([
           fetchAllRows(buildSummarySql, 'Query S'),
           fetchAllRows(buildRoundsSql, 'Query R'),
           // Status only narrows the Live/Exited tabs, so it must never fail the
@@ -1211,6 +1481,12 @@
             console.warn('vehicles query failed; excluding the firm name only', err);
             return [];
           }),
+          // Cap tables add holders to the SPA picture, so a failure here degrades
+          // the report to SPA-only rather than blocking it.
+          fetchAllRows(buildCapTableSql, 'Query C').catch(err => {
+            console.warn('cap table query failed; showing SPA data only', err);
+            return [];
+          }),
         ]);
       } catch (error) {
         showError(
@@ -1221,12 +1497,12 @@
         return;
       }
 
-      // Zero rows here is ambiguous — no SPAs on file, or a firm context that
-      // resolved to nothing. Say both rather than asserting the first.
-      if (summaryRows.length === 0) {
+      // Zero rows from both sources is ambiguous — nothing on file, or a firm
+      // context that resolved to nothing. Say both rather than asserting the first.
+      if (summaryRows.length === 0 && capRows.length === 0) {
         showError(
-          'No SPA documents were found for ' + FIRM_NAME + '. Either no stock purchase ' +
-          'agreements have been uploaded yet, or your account does not have access to ' +
+          'No SPA documents or detailed cap tables were found for ' + FIRM_NAME + '. Either none ' +
+          'have been uploaded or shared yet, or your account does not have access to ' +
           "this firm's documents."
         );
         return;
@@ -1235,10 +1511,14 @@
       setLoadingStatus('Building your report…');
 
       setFirmVehicles(vehicleRows);
-      const coInvestors = buildCoInvestors(summaryRows);
-      const { spa, total } = coverageFromSummary(summaryRows);
+      const { coInvestors, companyHolders, capCompanies } = buildCoInvestors(summaryRows, capRows);
+      const { spa, total: summaryTotal } = coverageFromSummary(summaryRows);
       const companyRounds = buildCompanyRounds(roundsRows);
       const companyStatus = statusRows.length ? buildCompanyStatus(statusRows) : null;
+      // With no SPAs the summary carries no denominator; the portfolio list does.
+      const total = summaryTotal || (companyStatus ? Object.keys(companyStatus).length : 0);
+      const spaCompanies = new Set(Object.keys(companyRounds));
+      coInvestors.forEach(inv => inv.companies.forEach(c => { if (inv.evidence[c].spa) spaCompanies.add(c); }));
 
       const now = new Date();
       const generatedAt = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1256,14 +1536,13 @@
         },
         coInvestors,
         companyRounds,
+        companyHolders,
+        capCompanies,
+        spaCompanies: [...spaCompanies].sort(),
       };
       if (companyStatus) DATA.companyStatus = companyStatus;
 
-      renderHeader();
-      renderFilterBar();
-      renderMetrics('all');
-      renderMainTable('all');
-      renderFooter('all');
+      refresh();
       showContent();
     }
 
@@ -1341,10 +1620,14 @@
     // Companies past this count collapse behind a "+N more" toggle.
     const CHIP_LIMIT = 8;
 
+    function hasDrawer(c) {
+      return Boolean((DATA.companyRounds && DATA.companyRounds[c]) || (DATA.companyHolders && DATA.companyHolders[c]));
+    }
+
     function companyChip(c) {
-      // A company with no round data has nothing to show in the drawer —
-      // render it inert rather than as a button that opens nothing.
-      if (DATA.companyRounds && DATA.companyRounds[c]) {
+      // A company with neither round data nor cap table holders has nothing to
+      // show in the drawer — render it inert rather than as a button that opens nothing.
+      if (hasDrawer(c)) {
         return '<button class="company-link" onclick="openDrawer(\'' + escAttr(jsString(c)) + '\')">' + esc(c) + '</button>';
       }
       return '<span class="company-link" style="cursor:default;opacity:0.5;pointer-events:none">' + esc(c) + '</span>';
@@ -1357,17 +1640,35 @@
 
     // Every co-investor the tab has anything to say about. A row must keep at
     // least one company or it would render with an empty overlap cell.
+    function sourcePasses(evidence) {
+      if (currentSource === 'spa') return evidence.spa;
+      if (currentSource === 'cap') return evidence.cap;
+      return true;
+    }
+
     function getFilteredCoInvestors(filter) {
       return DATA.coInvestors
+        .filter(inv => !(hideIndividuals && inv.individual))
         .map(inv => {
-          const filtered = inv.companies.filter(c => passesFilter(c, filter));
+          const filtered = inv.companies.filter(c => passesFilter(c, filter) && sourcePasses(inv.evidence[c]));
           return { ...inv, companies: filtered, companyCount: filtered.length };
         })
         .filter(inv => inv.companyCount > 0)
         .sort((a, b) => (b.companyCount - a.companyCount) || a.name.localeCompare(b.name));
     }
 
-    // Count of portfolio companies with an SPA that match a filter.
+    // What the table shows for a filter. `total` is every co-investor the tab
+    // has; `shown` is the whole list unless it is long (LONG_LIST_ROWS or more) and
+    // there are investors at two or more companies to narrow it to. `trimmable`
+    // is true when the toggle has something to switch.
+    function visibleCoInvestors(filter) {
+      const all = getFilteredCoInvestors(filter);
+      const multi = all.filter(inv => inv.companyCount >= 2);
+      const trimmable = all.length >= LONG_LIST_ROWS && multi.length > 0 && multi.length < all.length;
+      return { all, total: all.length, shown: trimmable && !showSingles ? multi : all, trimmable };
+    }
+
+    // Portfolio companies covered by each source for a filter.
     //
     // `companyRounds` is keyed by SPA issuer, and an SPA whose issuer matched no
     // portfolio investment still gets a key (Query R canonicalises it to the raw
@@ -1376,9 +1677,27 @@
     // *portfolio companies* holding at least one matching SPA, so the All tab
     // reads that instead, and matches the header. Live/Exited are already safe:
     // an unmatched issuer has no `companyStatus` entry, so `passesFilter` drops it.
-    function spaCountForFilter(filter) {
-      if (filter === 'all') return DATA.meta.spaCoverage;
-      return Object.keys(DATA.companyRounds).filter(name => passesFilter(name, filter)).length;
+    // Cap table companies are portfolio companies by construction (Query C starts
+    // from the SOI), and carry the SOI's name, so overlap with the SPA side is an
+    // exact name match.
+    function coverageForFilter(filter) {
+      const spaNames = DATA.spaCompanies.filter(n => passesFilter(n, filter));
+      const capNames = DATA.capCompanies.filter(n => passesFilter(n, filter));
+      const spa = filter === 'all' ? DATA.meta.spaCoverage : spaNames.length;
+      const both = capNames.filter(n => spaNames.includes(n)).length;
+      return { spa, cap: capNames.length, both, covered: spa + capNames.length - both, total: totalForFilter(filter) };
+    }
+
+    function coverageSentence(c) {
+      return c.spa + ' companies from SPAs, ' + c.cap + ' from cap tables, ' + c.both +
+        ' from both, ' + c.covered + ' covered in total';
+    }
+
+    function companySourceLabel(name) {
+      const spa = DATA.spaCompanies.includes(name);
+      const cap = DATA.capCompanies.includes(name);
+      if (spa && cap) return 'From SPAs and cap table';
+      return cap ? 'From cap table' : 'From SPAs';
     }
 
     // Total portfolio companies that match a filter (from companyStatus map)
@@ -1392,34 +1711,46 @@
 
     function renderHeader() {
       const m = DATA.meta;
-      const spaPct = m.totalCompanies > 0 ? Math.round(m.spaCoverage / m.totalCompanies * 100) : 0;
+      const c = coverageForFilter('all');
+      const coveredPct = c.total > 0 ? Math.round(c.covered / c.total * 100) : 0;
       document.getElementById('page-header').innerHTML =
         '<h1>' + esc(m.firmName) + ' — Co-Investor Analysis</h1>' +
-        '<p>' + m.spaCoverage + ' of your ' + m.totalCompanies + ' portfolio companies have an SPA on file (' + spaPct + '%)</p>';
+        '<p>' + c.covered + ' of your ' + c.total + ' portfolio companies have an SPA or detailed cap table on file (' + coveredPct + '%)</p>';
     }
 
     function renderFilterBar() {
       const s = DATA.companyStatus;
       // Query T is optional. Without it every Live/Exited tab would read 0 and
-      // filter the table down to nothing, so render no bar at all.
-      if (!s || Object.keys(s).length === 0) {
-        document.getElementById('filter-bar').innerHTML = '';
-        return;
-      }
-      const allCount = Object.keys(s).length;
-      const liveCount = Object.values(s).filter(v => v === true).length;
-      const exitedCount = Object.values(s).filter(v => v === false).length;
+      // filter the table down to nothing, so render no tabs at all.
+      let html = '';
+      if (s && Object.keys(s).length > 0) {
+        const allCount = Object.keys(s).length;
+        const liveCount = Object.values(s).filter(v => v === true).length;
+        const exitedCount = Object.values(s).filter(v => v === false).length;
 
-      function tab(id, label, count) {
-        const active = currentFilter === id ? ' active' : '';
-        return '<button class="filter-tab' + active + '" onclick="setFilter(\'' + id + '\')">' +
-          label + '<span class="filter-count">' + count + '</span></button>';
+        const tab = (id, label, count) => {
+          const active = currentFilter === id ? ' active' : '';
+          return '<button class="filter-tab' + active + '" onclick="setFilter(\'' + id + '\')">' +
+            label + '<span class="filter-count">' + count + '</span></button>';
+        };
+        html += tab('all', 'All', allCount) + tab('live', 'Live', liveCount) + tab('exited', 'Exited', exitedCount);
       }
 
-      document.getElementById('filter-bar').innerHTML =
-        tab('all', 'All', allCount) +
-        tab('live', 'Live', liveCount) +
-        tab('exited', 'Exited', exitedCount);
+      // The source filter only means something when a cap table was readable.
+      const option = (id, label) => '<option value="' + id + '"' + (currentSource === id ? ' selected' : '') + '>' + label + '</option>';
+      const sourceSelect = DATA.capCompanies.length
+        ? '<select class="filter-select" aria-label="Source" onchange="setSource(this.value)">' +
+            option('all', 'All sources') + option('spa', 'SPAs') + option('cap', 'Cap tables') + '</select>'
+        : '';
+      const view = visibleCoInvestors(currentFilter);
+      const singlesToggle = view.trimmable
+        ? '<button class="chip-more" onclick="setShowSingles(' + !showSingles + ')">' +
+            (showSingles ? 'Show only investors at 2+ companies' : 'Show all ' + view.total.toLocaleString('en-US') + ' co-investors') + '</button>'
+        : '';
+      html += '<div class="filter-controls">' + singlesToggle + sourceSelect +
+        '<label class="filter-check"><input type="checkbox" onchange="setHideIndividuals(this.checked)"' +
+        (hideIndividuals ? ' checked' : '') + '> Hide individuals</label></div>';
+      document.getElementById('filter-bar').innerHTML = html;
     }
 
     function renderMetrics(filter) {
@@ -1428,15 +1759,15 @@
       const uniqueCount = ci.length;
 
       // Coverage tile
-      const spaCount = spaCountForFilter(filter);
-      const total = totalForFilter(filter);
-      const spaPct = total > 0 ? Math.round(spaCount / total * 100) : 0;
-      const coverageLabel = filter === 'live' ? 'Live SPA Coverage' : filter === 'exited' ? 'Exited SPA Coverage' : 'Portfolio Coverage';
-      const coverageValue = spaCount + ' / ' + total + ' — ' + spaPct + '%';
-      const missing = Math.max(total - spaCount, 0);
+      const cov = coverageForFilter(filter);
+      const total = cov.total;
+      const coveredPct = total > 0 ? Math.round(cov.covered / total * 100) : 0;
+      const coverageLabel = filter === 'live' ? 'Live Coverage' : filter === 'exited' ? 'Exited Coverage' : 'Portfolio Coverage';
+      const coverageValue = cov.covered + ' / ' + total + ' — ' + coveredPct + '%';
+      const missing = Math.max(total - cov.covered, 0);
       const coverageTooltip =
-        'Co-investor analysis only covers portfolio companies with a Stock Purchase Agreement (SPA) uploaded to Carta. ' +
-        spaCount + ' of ' + total + (filter === 'all' ? ' portfolio' : filter === 'live' ? ' live' : ' exited') + ' companies have an SPA on file' +
+        'Co-investor analysis covers portfolio companies with a Stock Purchase Agreement (SPA) uploaded to Carta, or a detailed cap table shared with you. ' +
+        cov.covered + ' of ' + total + (filter === 'all' ? ' portfolio' : filter === 'live' ? ' live' : ' exited') + ' companies are covered' +
         (missing > 0 ? ' — the remaining ' + missing + ' are not yet visible in this report.' : '.');
 
       // Top co-investor
@@ -1473,6 +1804,7 @@
         '<div class="metric-card has-tooltip" tabindex="0" aria-describedby="coverage-tooltip">' +
           '<div class="metric-label">' + esc(coverageLabel) + ' <span class="tooltip-icon" aria-hidden="true">i</span></div>' +
           '<div class="metric-value" style="font-size:20px;line-height:40px">' + esc(coverageValue) + '</div>' +
+          '<div class="metric-sub">' + esc(coverageSentence(cov)) + '</div>' +
           '<div class="tooltip" id="coverage-tooltip" role="tooltip">' + esc(coverageTooltip) + '</div>' +
         '</div>';
     }
@@ -1480,16 +1812,17 @@
     // "No rows" and "no co-investors" are different claims. Say which one it is.
     function emptyStateMessage(filter) {
       const scope = filter === 'all' ? 'portfolio' : filter;
-      if (spaCountForFilter(filter) === 0) {
-        return 'None of your ' + scope + ' companies have an SPA on file, so there is' +
+      if (coverageForFilter(filter).covered === 0) {
+        return 'None of your ' + scope + ' companies have an SPA or detailed cap table on file, so there is' +
           ' nothing to compare here.';
       }
-      return 'The SPAs for your ' + scope + ' companies name no purchaser other than' +
+      return 'The SPAs and cap tables for your ' + scope + ' companies name no investor other than' +
         ' your own vehicles.';
     }
 
     function renderMainTable(filter) {
-      const ci = getFilteredCoInvestors(filter);
+      const view = visibleCoInvestors(filter);
+      const ci = view.shown;
       if (ci.length === 0) {
         document.getElementById('main-table').innerHTML =
           '<p style="padding:24px;color:var(--text-subtle);font-size:14px">' +
@@ -1514,41 +1847,73 @@
     function renderFooter(filter) {
       const m = DATA.meta;
       let html = '<a class="carta-link" href="' + BASE_URL + '/investors/firm/' + m.firmCartaId + '/portfolio/documents/" target="_blank">View SPA source documents in Carta ↗</a>';
-      // The table holds nothing back, so the note says what it covers rather
-      // than what it omits. The count is the tab's, never the portfolio total.
+      // The counts are the tab's, never the portfolio total.
       const scope = filter === 'all' ? 'portfolio' : filter;
-      const shown = getFilteredCoInvestors(filter).length;
-      const note = 'Showing all ' + shown + ' co-investors named on the SPAs for your ' +
-        scope + ' companies.';
+      const view = visibleCoInvestors(filter);
+      const count = n => n.toLocaleString('en-US');
+      const note = view.shown.length < view.total
+        ? 'Showing ' + count(view.shown.length) + ' of ' + count(view.total) + ' co-investors at 2 or more of your ' +
+            scope + ' companies.'
+        : 'Showing all ' + count(view.total) + ' co-investors named on the SPAs and cap tables for your ' +
+            scope + ' companies.';
       html += '<div class="footer-note">' + esc(note) + '</div>';
       document.getElementById('page-footer').innerHTML = html;
     }
 
     // ── Filter switching ──────────────────────────────────────────────────────
 
+    function refresh() {
+      renderHeader();
+      renderFilterBar();
+      renderMetrics(currentFilter);
+      renderMainTable(currentFilter);
+      renderFooter(currentFilter);
+    }
+
     function setFilter(filter) {
       currentFilter = filter;
-      renderFilterBar();
-      renderMetrics(filter);
-      renderMainTable(filter);
-      renderFooter(filter);
+      refresh();
+    }
+
+    function setSource(source) {
+      currentSource = source;
+      refresh();
+    }
+
+    function setShowSingles(show) {
+      showSingles = show;
+      refresh();
+    }
+
+    function setHideIndividuals(hide) {
+      hideIndividuals = hide;
+      refresh();
     }
 
     // ── Drawer ────────────────────────────────────────────────────────────────
 
-    function openDrawer(name) {
-      const rounds = DATA.companyRounds && DATA.companyRounds[name];
-      if (!rounds) return;
+    function currentHoldersHtml(cap) {
+      let html = '<div class="drawer-round-label">Current holders</div>';
+      if (cap.holders.length === 0) {
+        html += '<p class="drawer-subtitle">No investor holders on the current cap table.</p>';
+      } else {
+        html += '<div class="table-container"><table><thead><tr><th>Investor</th><th style="text-align:right">Current fully diluted ownership</th></tr></thead><tbody>';
+        cap.holders.forEach(h => {
+          html += '<tr><td>' + esc(h.name) + '</td><td class="number">' + pct(h.ownership) + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      if (cap.past.length) {
+        html += '<div class="drawer-round-label">Past investors</div>' +
+          '<p class="drawer-subtitle">' + cap.past.map(esc).join(' · ') + '</p>';
+      }
+      return html;
+    }
 
-      document.getElementById('drawer-title').textContent = name;
-      const first = rounds[0];
-      document.getElementById('drawer-subtitle').textContent = roundLabel(first.shareClass, first.closingDate);
-
+    function roundsHtml(rounds) {
       let html = '';
       rounds.forEach((round) => {
-        if (rounds.length > 1) {
-          html += '<div class="drawer-round-label">' + esc(roundLabel(round.shareClass, round.closingDate)) + '</div>';
-        }
+        html += '<div class="drawer-round-label">' + esc(roundLabel(round.shareClass, round.closingDate)) + '</div>';
         html += '<div class="table-container"><table><thead><tr><th>Investor</th><th>Type</th><th style="text-align:right">% of round</th><th style="text-align:right">Amount paid</th></tr></thead><tbody>';
         const sorted = [...round.investors].sort((a, b) => (b.pctOfRound || 0) - (a.pctOfRound || 0));
         sorted.forEach(inv => {
@@ -1563,8 +1928,18 @@
         });
         html += '</tbody><tfoot><tr><td colspan="3">Total raised</td><td class="number">' + fmt(total, round.currency) + '</td></tr></tfoot></table></div>';
       });
+      return html;
+    }
 
-      document.getElementById('drawer-content').innerHTML = html;
+    function openDrawer(name) {
+      const rounds = DATA.companyRounds && DATA.companyRounds[name];
+      const cap = DATA.companyHolders && DATA.companyHolders[name];
+      if (!rounds && !cap) return;
+
+      document.getElementById('drawer-title').textContent = name;
+      document.getElementById('drawer-subtitle').textContent = companySourceLabel(name);
+      document.getElementById('drawer-content').innerHTML =
+        (cap ? currentHoldersHtml(cap) : '') + (rounds ? roundsHtml(rounds) : '');
       document.getElementById('drawer').classList.add('open');
       document.getElementById('backdrop').classList.add('open');
     }

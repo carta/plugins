@@ -58,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.115.3</carta-plugin>
+<carta-plugin>carta-investors:6.116.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -250,9 +250,10 @@ page's card, so it was retired and old `/captable` links redirect into the Compa
 
 When a company has no cap table the tab says why, from its `entityKind`: a Carta customer that has not shared it, a paper company, or a general-ledger-only issuer. The Overview table offers an **Issuer type** column and filter on the same field.
 
-The named-shareholder register (`STAKEHOLDER_CAP_TABLE`) is **not** in the client-accessible
-data set, so the app never fetches it — there is no per-holder or co-investor breakdown, and
-the cap table is share-class level only.
+The named-shareholder register (`STAKEHOLDER_CAP_TABLE`) is readable for companies that grant the
+firm Detailed cap table access, but the app does not fetch it: it shows no per-holder or co-investor
+breakdown, and its cap table is share-class level only. For who holds what, point the user to
+`carta-co-investors` (current holders and co-investors) or `carta-explore-data`.
 
 Two things to know when running it:
 

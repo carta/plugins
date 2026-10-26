@@ -396,9 +396,10 @@ equal the recorded `cash_raised_usd` for a preferred class. It ties out exactly 
 (one class: 7,408,921 × 3.45 × 1.0 = 25,560,777 = `cash_raised_usd`). That identity is what
 makes the app's liquidation-preference stack trustworthy.
 
-The named-shareholder register (`STAKEHOLDER_CAP_TABLE`) is deliberately **not** fetched: it
-is not in the client-accessible data set, so the app never queries it and shows no per-holder
-or co-investor breakdown. The cap table above is share-class level only.
+The named-shareholder register (`STAKEHOLDER_CAP_TABLE`) is deliberately **not** fetched. It is
+readable for companies that grant the firm Detailed cap table access, but the app's cap table is
+share-class level only and shows no per-holder or co-investor breakdown; `carta-co-investors`
+and `carta-explore-data` read it.
 
 **Holdings detail needs no new query.** The Cap table tab's "our holdings" section reads
 per-asset Schedule-of-Investments lines straight out of `holdings.ndjson` (§3) — fund, asset,
