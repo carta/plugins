@@ -61,7 +61,7 @@ const dotSwatch = (color, ring) => (
 
 /** Keys the two lines and the dot encodings. Sits under the plot, indented to the
  *  plot's left gutter (PL as a share of the viewBox width, which scales with it). */
-function PowerLawLegend({ hasAbove, hasBelow, hasExited }) {
+function PowerLawLegend({ hasAbove, hasBelow, hasExited, allFunds }) {
   return (
     <div style={{ ...sans, fontSize: FS.micro, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)",
       display: "flex", flexWrap: "wrap", columnGap: 16, rowGap: 4, marginTop: 8, paddingLeft: `${(PL / W) * 100}%` }}>
@@ -72,7 +72,7 @@ function PowerLawLegend({ hasAbove, hasBelow, hasExited }) {
           The typical venture pattern: the #2 holding returns half as much as #1, #3 a third, #4 a quarter, and so on.
         </InfoTip>
       </LegendItem>
-      <LegendItem swatch={lineSwatch(FIT_COLOR)}>This fund's fitted decay</LegendItem>
+      <LegendItem swatch={lineSwatch(FIT_COLOR)}>{allFunds ? "Fitted decay across all funds" : "This fund's fitted decay"}</LegendItem>
       {hasAbove && <LegendItem swatch={dotSwatch(ABOVE_COLOR)}>Above standard</LegendItem>}
       {hasBelow && <LegendItem swatch={dotSwatch(BELOW_COLOR)}>Below standard</LegendItem>}
       {hasExited && <LegendItem swatch={dotSwatch(MICRO, true)}>Exited</LegendItem>}
@@ -85,8 +85,9 @@ function PowerLawLegend({ hasAbove, hasBelow, hasExited }) {
  *  log–log axes so a power law is a straight line. The dashed reference is the
  *  standard rank^-1 power law anchored to the fund's top holding; the solid line
  *  is the fund's own fitted decay. Dots above the reference (green) beat the
- *  power-law expectation at their rank; below (red) fall short. */
-export default function PowerLawChart({ companies, fundName }) {
+ *  power-law expectation at their rank; below (red) fall short. With `allFunds` the
+ *  holdings are every fund's, ranked together. */
+export default function PowerLawChart({ companies, fundName, allFunds }) {
   // All hooks must run before any early return (Rules of Hooks) — a fund with
   // <2 positive holdings makes `model` null below, and hoisting keeps the hook
   // count stable when switching to/from such a fund (else React throws).
@@ -227,7 +228,7 @@ export default function PowerLawChart({ companies, fundName }) {
 
       {/* a key shows only for a mark the chart draws */}
       <PowerLawLegend hasAbove={pts.some((p) => p.tone === "above")} hasBelow={pts.some((p) => p.tone === "below")}
-        hasExited={pts.some((p) => p.realized)} />
+        hasExited={pts.some((p) => p.realized)} allFunds={allFunds} />
     </div>
   );
 }

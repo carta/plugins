@@ -29,7 +29,7 @@ const THEMES = [
     id: "portfolio-analysis", label: "Portfolio analysis", viewName: "PortfolioAnalysis", perFund: true,
     reports: [
       { id: "power-law-curve", available: () => true, render: (p) => <PowerLaw section="curve" {...p.returnsProps} />,
-        allFunds: combined(POWER_LAW_TITLE, selectFund(SELECT_FUND)) },
+        allFunds: combined(POWER_LAW_TITLE) },
       { id: "return-the-fund", available: () => true, render: (p) => <PowerLaw section="return-the-fund" {...p.returnsProps} /> },
       { id: "net-tvpi-sensitivity", available: () => true, render: (p) => <PowerLaw section="sensitivity" {...p.returnsProps} />,
         allFunds: combined(EXIT_IMPACT_TITLE, selectFund(SELECT_FUND)) },

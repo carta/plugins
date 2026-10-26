@@ -3,6 +3,7 @@ import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, shortCompany } from "../../ui/format.js";
 import { H3, MethodNote, SourceNote, Slider, Segmented, MultiFundPicker, EmptyState, fundLabel } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
+import { fundIdsOf, ownFundHeldAs } from "../../model/funds.js";
 import { exitValueImpact, fundCompanyReturns } from "../../model/sensitivity.js";
 import { returnTheFundSolutions } from "../../model/returnthefund.js";
 import { useScenarioModel } from "./useScenarioModel.js";
@@ -238,7 +239,12 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
 export default function PowerLaw({ section, ...props }) {
   const { snapshot, portfolio, readOnly, setAssumption } = props;
   const m = useScenarioModel(props);
-  const returns = useMemo(() => fundCompanyReturns(portfolio, m.fundId), [portfolio, m.fundId]);
+  // Under All funds a record that is one of the firm's own funds (a feeder investing
+  // through a parallel fund) drops out: pooling would count that capital twice.
+  const returns = useMemo(() => {
+    if (!m.allMode) return fundCompanyReturns(portfolio, [m.fundId]);
+    return fundCompanyReturns(portfolio, fundIdsOf(snapshot)).filter((c) => !ownFundHeldAs(snapshot.funds, c));
+  }, [portfolio, snapshot, m.allMode, m.fundId]);
   // The Return-the-fund target lives in the scenario's assumptions (per fund), so each
   // scenario keeps its own and it persists like every other scenario setting — through
   // reloads and server restarts, not just this session.
@@ -253,7 +259,7 @@ export default function PowerLaw({ section, ...props }) {
   });
   return (
     <div>
-      {section === "curve" && <PowerLawChart companies={returns} fundName={fundLabel(m.fs.name)} />}
+      {section === "curve" && <PowerLawChart companies={returns} fundName={m.allMode ? "All funds" : fundLabel(m.fs.name)} allFunds={m.allMode} />}
       {/* target is stored per fund in the scenario's assumptions, so each scenario
           keeps its own and it persists like the other scenario settings. */}
       {section === "return-the-fund" && (m.allMode ? <ReturnTheFundAllFunds /> : (

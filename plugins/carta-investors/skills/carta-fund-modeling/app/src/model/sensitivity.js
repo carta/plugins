@@ -32,20 +32,21 @@ export function fundCompanies(slice, fundId) {
   return out;
 }
 
-/** Per-company GROSS return multiple for a fund: TOTAL value ÷ invested cost,
+/** Per-company GROSS return multiple across one or more funds: TOTAL value ÷ invested cost,
  *  ranked by multiple descending (rank 1 = best). Total value = residual fair
  *  value (repriced to the scenario's marks) PLUS realized proceeds
  *  (distributions), so realized/exited holdings show their real return (their
  *  residual FV is 0 but proceeds carry the exit), and partially-realized
- *  holdings combine both. Write-downs (marked toward zero, no proceeds)
+ *  holdings combine both. A company held by several of `fundIds` sums its value
+ *  and cost over those positions. Write-downs (marked toward zero, no proceeds)
  *  legitimately sit at the tail. Feeds the Power Law chart. Pure. */
-export function fundCompanyReturns(slice, fundId) {
+export function fundCompanyReturns(slice, fundIds) {
   const out = [];
   for (const c of slice.companies || []) {
     if (c.archived) continue;
     let value = 0, cost = 0;
     for (const p of c.positions || []) {
-      if (p.fundId !== fundId) continue;
+      if (!fundIds.includes(p.fundId)) continue;
       value += positionTotalValue(c, p);
       cost += p.cost || 0;
     }
