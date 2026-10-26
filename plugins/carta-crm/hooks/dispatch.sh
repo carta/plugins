@@ -65,11 +65,6 @@ case "$subcommand" in
         printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}'
         exit 0
         ;;
-    cache-commands | track-corporation)
-        # PostToolUse: silently best-effort, but still expects the envelope back.
-        printf '%s' '{"hookSpecificOutput":{"hookEventName":"PostToolUse"}}'
-        exit 0
-        ;;
     capture-model-switch)
         # PostModelSwitch: fires async, cannot block, but still expects the
         # hookSpecificOutput envelope back (hookio.PostModelSwitchOK).

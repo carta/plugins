@@ -32,13 +32,10 @@ the fail-open shape for that hook event instead.
 | `capture-model` | SessionStart | `session_id`, `model` | records the session's model |
 | `inject-context` | SessionStart | `hook_event_name` | adds a per-plugin blurb to `additionalContext` |
 | `prune-session-data` | SessionStart | — | prunes session files older than 24h from `CLAUDE_PLUGIN_DATA/sessions` |
-| `cache-commands` | PostToolUse | `tool_name`, `tool_response` | caches a `discover()` call's result to `CLAUDE_PLUGIN_DATA/cache/commands.json` |
-| `track-corporation` | PostToolUse | `tool_name`, `tool_input.params.corporation_id` | records the corporation id from a `fetch()` call to `CLAUDE_PLUGIN_DATA/prefs.json` |
 
 Source: `handlers/inject_instrumentation.go`, `handlers/capture_skills.go`,
 `handlers/capture_model.go`, `handlers/inject_context.go`,
-`handlers/prune_session_data.go`, `handlers/carta-cap-table/cache_commands.go`,
-`handlers/carta-cap-table/track_corporation.go`.
+`handlers/prune_session_data.go`.
 
 ## Instrumentation payload
 

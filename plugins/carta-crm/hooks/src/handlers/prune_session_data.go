@@ -25,10 +25,9 @@ const maxSessionAge = 24 * time.Hour
 // directory once its session ends. It is fully best-effort: any filesystem
 // error is swallowed so a broken data dir never blocks the session.
 //
-// It does not create CLAUDE_PLUGIN_DATA/{sessions,cache} itself — each
-// writer (session.AppendSkill, session.WriteModel, cache-commands' cache
-// writes, etc.) creates its own directory lazily on first write, so a
-// central mkdir here would be redundant.
+// It does not create CLAUDE_PLUGIN_DATA/sessions itself — each writer
+// (session.AppendSkill, session.WriteModel, etc.) creates its own directory
+// lazily on first write, so a central mkdir here would be redundant.
 func PruneSessionData(stdin []byte) ([]byte, error) {
 	dataDir := os.Getenv("CLAUDE_PLUGIN_DATA")
 	if dataDir != "" {
