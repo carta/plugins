@@ -357,7 +357,7 @@ export function JumpLinks({ sections, onJump, actions }) {
     go(id);
   };
   return (
-    <nav ref={navRef} aria-label="Jump to section" style={{ position: "sticky", top, zIndex: 5, background: "var(--ink-color-global-surface-background-default)",
+    <nav ref={navRef} aria-label="Jump to section" data-pinned-bar style={{ position: "sticky", top, zIndex: 5, background: "var(--ink-color-global-surface-background-default)",
       display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 0", marginBottom: 22, borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
       <span style={{ ...sans, fontSize: FS.body, fontWeight: 600, color: "var(--ink-color-global-text-subtle)", marginRight: 2 }}>Jump to:</span>
       {sections.map(([id, label]) => (

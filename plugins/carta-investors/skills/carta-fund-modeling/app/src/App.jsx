@@ -506,7 +506,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
 
   // ── top context bar + live metrics (wide layout) ──
   const topBar = (
-    <div data-testid="app-topbar" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--ink-color-global-surface-background-default)", borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
+    <div data-testid="app-topbar" data-pinned-bar style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--ink-color-global-surface-background-default)", borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 24px", flexWrap: "wrap" }}>
         {!scenariosOff && <>
           <span style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>Scenario: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 700 }}>{slice.name}</strong></span>

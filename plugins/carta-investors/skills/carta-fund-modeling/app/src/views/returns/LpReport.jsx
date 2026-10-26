@@ -73,9 +73,9 @@ function LpSensitivity({ m, readOnly }) {
   );
 }
 
-/** LP Returns report — one of the fund's LP charts; the Reports page's LP returns
- *  theme heading carries the fund picker and stands in for both charts when the fund
- *  has no NAV close. `section` picks the chart: "sensitivity"
+/** LP Returns report — one of the fund's LP charts; the Reports page's fund picker,
+ *  in the jump-link bar, picks the fund, and the LP returns theme stands in for both
+ *  charts when the fund has no NAV close. `section` picks the chart: "sensitivity"
  *  (net-to-LP grid across exit multiples) or "glidepath" (LP multiples over the
  *  fund's life, chart + per-year table). */
 export default function LpReport({ section, ...props }) {

@@ -180,7 +180,8 @@ export const GLOBAL_CSS = `
     --tag-yellow-bg:   light-dark(var(--ink-color-global-brand-yellow-20), var(--ink-color-global-brand-yellow-100));
     --stripe-repriced: light-dark(var(--ink-color-global-brand-yellow-50), var(--ink-color-global-brand-yellow-70));
     /* Data-viz rungs Ink leaves untokenized (it tokenizes level 3 only): the
-       Companies map's fund fills and its on-fill change colors. Brand aliases
+       Companies map's fund fills and its on-fill change colors, and the Net TVPI
+       sensitivity chart's swing bars (level 2). Brand aliases
        where Ink has the color; turquoise, brown and lime levels 1-2 are hex. */
     --local-data-viz-blue-1:      var(--ink-color-global-brand-blue-40);
     --local-data-viz-blue-2:      var(--ink-color-global-brand-blue-60);
@@ -193,8 +194,10 @@ export const GLOBAL_CSS = `
     --local-data-viz-lime-1:      #DDFB74;
     --local-data-viz-lime-2:      #C9EC56;
     --local-data-viz-positive-1:  var(--ink-color-global-brand-green-40);
+    --local-data-viz-positive-2:  var(--ink-color-global-brand-green-60);
     --local-data-viz-positive-4:  var(--ink-color-global-brand-green-90);
     --local-data-viz-negative-1:  var(--ink-color-global-brand-red-50);
+    --local-data-viz-negative-2:  var(--ink-color-global-brand-red-60);
     --local-data-viz-negative-4:  var(--ink-color-global-brand-red-90);
     --row-selected:    light-dark(rgba(40,93,163,.07), rgba(139,171,214,.12));
     --total-row-bg:    var(--ink-color-global-feedback-info-subtle);

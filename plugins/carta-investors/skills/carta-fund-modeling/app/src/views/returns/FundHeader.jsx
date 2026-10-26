@@ -2,9 +2,9 @@ import { FS, sans } from "../../ui/theme.js";
 import { fmtX } from "../../ui/format.js";
 import { FundPicker, EmptyState, fundLabel } from "../../ui/components.jsx";
 
-/** Heading of a per-fund Returns view: the title with its single-fund picker, then
- *  the fund's Net TVPI at Carta marks. `Heading` is H1 on a tab of its own and H2
- *  under the Reports title; omit `cartaNet` to leave the marks line off (Reports' themes do). */
+/** Heading of a per-fund Returns tab: the title with its single-fund picker, then
+ *  the fund's Net TVPI at Carta marks. `Heading` is the tab's H1; omit `cartaNet` to
+ *  leave the marks line off (the no-NAV state does). */
 export default function FundHeader({ Heading, title, funds, fundId, setFundScope, cartaNet }) {
   return (
     <>

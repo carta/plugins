@@ -41,7 +41,7 @@ function JumpBar({ sections, top, onJump, trailing }) {
     setActive(id);
   };
   return (
-    <nav aria-label="Jump to section" data-testid="jump-bar" style={{ position: "sticky", top, zIndex: 13, display: "flex", gap: 8, overflowX: "auto",
+    <nav aria-label="Jump to section" data-testid="jump-bar" data-pinned-bar style={{ position: "sticky", top, zIndex: 13, display: "flex", gap: 8, overflowX: "auto",
       padding: "8px 0", margin: "0 0 16px", background: "var(--ink-color-global-surface-background-default)",
       borderBottom: "1px solid var(--ink-color-global-border-subtle)" }}>
       <span style={{ ...sans, fontSize: FS.micro, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", alignSelf: "center",

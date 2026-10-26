@@ -84,7 +84,8 @@ const sameWidths = (a, b) => !!a && !!b && a.length === b.length && a.every((w, 
  *  Ports Ink's own StickyTableHeader technique (a fixed-position clone of the
  *  header, not plain CSS position:sticky — see carta/ink NewTable/virtualizer/
  *  StickyTableHeader.ts): once the real <thead> would otherwise scroll out from
- *  under the app's own sticky top bar, a fixed clone floats in its place, sized/
+ *  under the bars pinned above it (every element marked `data-pinned-bar`: the
+ *  app's sticky top bar, a page's own sticky bars), a fixed clone floats in its place, sized/
  *  positioned from live measurements each scroll/resize. React gets the simpler
  *  half of Ink's version for free — no cloneNode() or the click-forwarding hack
  *  Ink needs, since the clone is real React markup sharing the same handlers.
@@ -136,10 +137,11 @@ export function useStickyHeader(ref, enabled = true) {
     const measure = () => {
       const thead = table.querySelector("thead");
       if (!thead) return;
-      const topbarH = document.querySelector('[data-testid="app-topbar"]')?.getBoundingClientRect().height || 0;
+      // Pin below the lowest pinned bar (data-pinned-bar: the app's top bar, Reports' jump links, …).
+      const pinTop = Math.max(0, ...[...document.querySelectorAll("[data-pinned-bar]")].map((el) => el.getBoundingClientRect().bottom));
       const tableRect = table.getBoundingClientRect();
       const headH = thead.getBoundingClientRect().height;
-      const floating = tableRect.top < topbarH && tableRect.bottom > topbarH + headH;
+      const floating = tableRect.top < pinTop && tableRect.bottom > pinTop + headH;
       if (!floating) {
         setSticky((s) => (s.floating ? { ...s, floating: false } : s));
         return;
@@ -150,9 +152,9 @@ export function useStickyHeader(ref, enabled = true) {
       const slotRect = hEl ? hEl.getBoundingClientRect() : tableRect;
       const scrollLeft = hEl ? hEl.scrollLeft : 0;
       const colWidths = [...thead.querySelectorAll("th")].map((th) => th.getBoundingClientRect().width);
-      setSticky((s) => (s.floating && s.top === topbarH && s.left === slotRect.left && s.width === slotRect.width && s.scrollLeft === scrollLeft && sameWidths(s.colWidths, colWidths)
+      setSticky((s) => (s.floating && s.top === pinTop && s.left === slotRect.left && s.width === slotRect.width && s.scrollLeft === scrollLeft && sameWidths(s.colWidths, colWidths)
         ? s // nothing actually moved — skip the re-render
-        : { floating: true, top: topbarH, left: slotRect.left, width: slotRect.width, colWidths, scrollLeft }));
+        : { floating: true, top: pinTop, left: slotRect.left, width: slotRect.width, colWidths, scrollLeft }));
     };
 
     // rAF-batched, matching Ink's own StickyTableHeader.ts scroll handler — a raw
@@ -192,6 +194,9 @@ export function useStickyHeader(ref, enabled = true) {
 /** The `<thead>` for a ledger table. Sortable columns render an Ink sort button;
  *  the rest render a plain label. Pair with `useTableSort` and a bespoke `<tbody>`.
  *
+ *  A non-sortable column may carry `labelAt` (a CSS length/percentage of the cell's
+ *  content width): its label is centred on that x instead of sitting at the edge.
+ *
  *  A column may carry an optional `help` string; when present it becomes the
  *  header cell's native `title` tooltip (hover to see a column's formula/meaning).
  *
@@ -218,6 +223,8 @@ export function TableHead({ cols, sort, onSort, sticky }) {
                     right-aligned data below — same as Companies.jsx's own SortableTh */}
                 {colAlign(c) === "right" ? <><SortIcon />{c.label}</> : <>{c.label}<SortIcon /></>}
               </button>
+            ) : c.labelAt ? (
+              <span style={{ position: "relative", left: c.labelAt, display: "inline-block", transform: "translateX(-50%)", whiteSpace: "nowrap" }}>{c.label}</span>
             ) : c.label}
           </th>
         );

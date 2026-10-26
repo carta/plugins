@@ -16,14 +16,14 @@ function SwingBar({ lowVal, highVal, baseVal, pct }) {
   const dLo = Math.min(lowVal, highVal), dHi = Math.max(lowVal, highVal);
   const redTo = Math.min(dHi, baseVal), greenFrom = Math.max(dLo, baseVal);
   return (
-    <div style={{ position: "relative", flex: 1, height: 22 }}>
-      <span style={{ position: "absolute", left: pct(baseVal), top: -2, bottom: -2, width: 1.5, background: "var(--ink-color-global-text-default)", opacity: 0.55 }} />
+    <div style={{ position: "relative", height: 24, minWidth: 160 }}>
+      <span style={{ position: "absolute", left: pct(baseVal), top: 0, bottom: 0, width: 1, background: "var(--ink-color-global-text-default)", opacity: 0.55 }} />
       {redTo > dLo && (
-        <span style={{ position: "absolute", top: 4, height: 14, borderRadius: 3, background: "rgba(229,36,49,.45)",
+        <span style={{ position: "absolute", top: 5, height: 14, borderRadius: "var(--ink-size-global-radius-subtle)", background: "var(--local-data-viz-negative-2)",
           left: pct(dLo), width: `calc(${pct(redTo)} - ${pct(dLo)})` }} />
       )}
       {dHi > greenFrom && (
-        <span style={{ position: "absolute", top: 4, height: 14, borderRadius: 3, background: "rgba(45,158,144,.5)",
+        <span style={{ position: "absolute", top: 5, height: 14, borderRadius: "var(--ink-size-global-radius-subtle)", background: "var(--local-data-viz-positive-2)",
           left: pct(greenFrom), width: `calc(${pct(dHi)} - ${pct(greenFrom)})` }} />
       )}
     </div>
@@ -45,42 +45,44 @@ function ExitImpactCard({ snapshot, portfolio, fs }) {
   const pad = Math.max(0.01, (hi - lo) * 0.08);
   lo -= pad; hi += pad;
   const pct = (v) => `${((v - lo) / (hi - lo)) * 100}%`;
+  const pctLabel = `${(t.exitDelta * 100).toFixed(0)}%`;
+  const cols = [
+    { label: "Holding", align: "left" },
+    { label: `−${pctLabel}` },
+    { label: "Net TVPI", align: "left", labelAt: pct(t.baseMultiple) },
+    { label: `+${pctLabel}`, align: "left" },
+    { label: "± impact" },
+  ];
   return (
-    <div className="card" style={{ padding: "18px 22px 14px", marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 4 }}>
         <H3>Top holdings by Net TVPI impact</H3>
-        <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
-          Net TVPI around {fmtX(t.baseMultiple)} · top {Math.min(TOP_N, t.count)} of {t.count} holdings
-        </span>
       </div>
       <MethodNote>
-        Each holding's value is scaled ±{(t.exitDelta * 100).toFixed(0)}% and run through the LP make-whole waterfall; the bars rank where the fund's Net TVPI is most exposed.
+        Each holding's value is scaled ±{pctLabel}, one at a time, and run through the LP make-whole waterfall; the bars rank where the fund's Net TVPI is most exposed, and the impacts aren't additive.
       </MethodNote>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "4px 0 6px", ...sans, fontSize: FS.micro, fontWeight: 600,
-        color: MICRO }}>
-        <span style={{ width: 150, flex: "none" }}>Holding</span>
-        <span style={{ width: 54, textAlign: "right", flex: "none" }}>−{(t.exitDelta * 100).toFixed(0)}%</span>
-        <span style={{ flex: 1, textAlign: "center" }}>Net TVPI</span>
-        <span style={{ width: 54, textAlign: "left", flex: "none" }}>+{(t.exitDelta * 100).toFixed(0)}%</span>
-        <span style={{ width: 64, textAlign: "right", flex: "none" }}>± impact</span>
-      </div>
-      {rows.map((c, i) => (
-        <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0",
-          borderTop: `1px solid var(--ink-color-global-border-subtle)` }}>
-          <span style={{ ...sans, fontSize: FS.body, fontWeight: 500, color: "var(--ink-color-global-text-default)", width: 150, flex: "none",
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`${c.name} · ${fmtM(c.fv)}`}>
-            <span style={{ ...inkNum, color: MICRO, marginRight: 7 }}>{i + 1}</span>{shortCompany(c.name)}
-          </span>
-          <span style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 54, textAlign: "right", flex: "none" }}>{fmtX(Math.min(c.lowMultiple, c.highMultiple))}</span>
-          <SwingBar lowVal={c.lowMultiple} highVal={c.highMultiple} baseVal={t.baseMultiple} pct={pct} />
-          <span style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 54, textAlign: "left", flex: "none" }}>{fmtX(Math.max(c.lowMultiple, c.highMultiple))}</span>
-          <span style={{ ...inkNum, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", width: 64, textAlign: "right", flex: "none" }}
-            title="Net TVPI swing across this holding's ± range">±{fmtX(c.swing / 2)}</span>
-        </div>
-      ))}
-      <SourceNote>
-        Source: Carta Fund Admin. Each holding is scaled ±{(t.exitDelta * 100).toFixed(0)}% and flowed through the make-whole waterfall, one at a time — so the impacts rank exposure and aren't additive.
-      </SourceNote>
+      <TableScroll>
+        <table className="ledger sheet">
+          <TableHead cols={cols} />
+          <tbody>
+            {rows.map((c) => (
+              <tr key={c.id}>
+                <td style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-default)", whiteSpace: "nowrap" }} title={`${c.name} · ${fmtM(c.fv)}`}>
+                  {shortCompany(c.name)}
+                </td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{fmtX(Math.min(c.lowMultiple, c.highMultiple))}</td>
+                {/* greedy column: soaks up the table's slack so the bar gets the width */}
+                <td style={{ width: "100%" }}>
+                  <SwingBar lowVal={c.lowMultiple} highVal={c.highMultiple} baseVal={t.baseMultiple} pct={pct} />
+                </td>
+                <td style={{ ...inkNum, textAlign: "left", fontSize: FS.value }}>{fmtX(Math.max(c.lowMultiple, c.highMultiple))}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}
+                  title="Net TVPI swing across this holding's ± range">±{fmtX(c.swing / 2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
     </div>
   );
 }
@@ -130,16 +132,10 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
   const fill = (t - sliderMin) / RTF_HEADROOM;
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-        <H3>Return the fund</H3>
-        <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>which holdings, at what exit, lift the fund to a target gross MOIC</span>
-      </div>
-      <MethodNote>
-        Gross terms (value ÷ invested cost, before fees and carry). Set a target fund gross MOIC; each row is a set of live
-        holdings (up to your “Max companies” setting) that, if each exits at the same multiple on invested cost, together get the
-        fund there — ranked by the lowest multiple needed. By default the search flexes the fund's largest holdings; switch to
-        Custom to choose exactly which holdings may move. Other holdings stay at current marks; realized / written-off holdings can't move.
-      </MethodNote>
+      <H3>Return the fund</H3>
+      <p style={{ ...sans, fontSize: FS.small, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)", margin: "0 0 12px" }}>
+        Sets of live holdings whose exits would lift the fund to your target gross MOIC, lowest exit multiple first.
+      </p>
       <div style={{ maxWidth: 440, margin: "4px 0 14px" }}>
         <Slider label="Target fund gross MOIC" value={t} min={sliderMin} max={sliderMax} step={RTF_STEP}
           onChange={setTarget} fmt={(v) => fmtX(v)} fill={fill} locked={readOnly}
@@ -209,16 +205,12 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
         </table>
         </TableScroll>
       )}
-      <SourceNote>
-        Source: Carta Fund Admin holdings (invested cost + value at current marks, incl. realized proceeds). Each combo assumes its
-        companies exit at the same gross multiple — one illustrative path, not the only one. Company names confidential.
-      </SourceNote>
     </div>
   );
 }
 
-/** Power Law — one of the fund's power-law charts; the Reports page's Portfolio
- *  analysis theme heading carries the fund picker. `section` picks the chart: "curve" (returns
+/** Power Law — one of the fund's power-law charts; the Reports page's fund picker,
+ *  in the jump-link bar, picks the fund. `section` picks the chart: "curve" (returns
  *  by rank), "return-the-fund" (the backsolve) or "sensitivity" (Net TVPI exposure
  *  by holding). */
 export default function PowerLaw({ section, ...props }) {

@@ -52,7 +52,7 @@ export default function SummaryBar({ plan, result }) {
   const held = ok ? (m.reserveRatio == null ? null : m.reserveRatio / (1 + m.reserveRatio)) : part?.held ?? null;
   const irr = (v) => (v == null ? "—" : fmtPct(v, 1));
   return (
-    <div ref={ref} data-testid="construction-summary" data-compact={compact || undefined} style={{ position: "sticky", top, zIndex: 15, margin: "0 0 var(--ink-spacing-global-vertical-normal)",
+    <div ref={ref} data-testid="construction-summary" data-pinned-bar data-compact={compact || undefined} style={{ position: "sticky", top, zIndex: 15, margin: "0 0 var(--ink-spacing-global-vertical-normal)",
       background: "var(--ink-color-global-surface-background-default)", paddingTop: 8 }}>
       <div className="card" style={{ padding: compact ? "8px 20px" : "14px 20px", display: "grid", gap: compact ? "4px var(--ink-spacing-global-horizontal-large)" : "var(--ink-spacing-global-vertical-small) var(--ink-spacing-global-horizontal-large)",
         gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", alignItems: "start" }}>
