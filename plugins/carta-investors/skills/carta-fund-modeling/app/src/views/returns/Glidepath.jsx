@@ -75,7 +75,6 @@ function GlidepathChart({ g }) {
 
   return (
     <div>
-      <H3 as="div" style={{ marginBottom: 6 }}>DPI · RVPI · TVPI over the fund's life</H3>
       <div style={{ position: "relative" }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }} role="img" aria-label="DPI, RVPI and TVPI over the fund's life">
           {/* y gridlines */}

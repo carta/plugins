@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, shortCompany } from "../../ui/format.js";
-import { H3 } from "../../ui/components.jsx";
+import { H3, InfoTip, TIP_TRIGGER_STYLE } from "../../ui/components.jsx";
 
 // The "standard" venture power-law exponent: returns decay ~ rank^-1 (Zipf).
 // Anchored to this fund's own top holding, so the reference asks "given your best
@@ -9,6 +9,19 @@ import { H3 } from "../../ui/components.jsx";
 const STD_K = 1;
 
 const W = 960, H = 440, PL = 54, PR = 44, PT = 22, PB = 44;
+// hover card: fixed width; the name wraps at word breaks onto as many lines as it needs
+const TIP_W = 186, TIP_PAD = 11, TIP_LINE = 15, TIP_NAME_CHARS = 26; // ~chars that fit the card at FS.small bold
+
+/** `text` broken at spaces into lines of at most `max` characters (a longer word keeps its own line). */
+function wrapWords(text, max) {
+  const lines = [];
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const last = lines[lines.length - 1];
+    if (last != null && (last + " " + word).length <= max) lines[lines.length - 1] = last + " " + word;
+    else lines.push(word);
+  }
+  return lines;
+}
 const PLOTW = W - PL - PR, PLOTH = H - PT - PB;
 const log10 = (x) => Math.log10(x);
 
@@ -51,7 +64,13 @@ function PowerLawLegend({ hasAbove, hasBelow, hasExited }) {
   return (
     <div style={{ ...sans, fontSize: FS.micro, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)",
       display: "flex", flexWrap: "wrap", columnGap: 16, rowGap: 4, marginTop: 8, paddingLeft: `${(PL / W) * 100}%` }}>
-      <LegendItem swatch={lineSwatch(MICRO, REF_DASH)}>Standard power law (rank⁻¹)</LegendItem>
+      <LegendItem swatch={lineSwatch(MICRO, REF_DASH)}>
+        <InfoTip portal placement="top" width={260} trigger={
+          <span tabIndex={0} style={TIP_TRIGGER_STYLE}>Standard power law</span>
+        }>
+          The typical venture pattern: the #2 holding returns half as much as #1, #3 a third, #4 a quarter, and so on.
+        </InfoTip>
+      </LegendItem>
       <LegendItem swatch={lineSwatch(FIT_COLOR)}>This fund's fitted decay</LegendItem>
       {hasAbove && <LegendItem swatch={dotSwatch(ABOVE_COLOR)}>Above standard</LegendItem>}
       {hasBelow && <LegendItem swatch={dotSwatch(BELOW_COLOR)}>Below standard</LegendItem>}
@@ -181,7 +200,8 @@ export default function PowerLawChart({ companies, fundName }) {
         {/* hover tooltip — the only place a company name appears */}
         {hovered && (() => {
           const flip = hovered.cx > PL + PLOTW * 0.6;
-          const tw = 186, th = 46;
+          const nameLines = wrapWords(shortCompany(hovered.name), TIP_NAME_CHARS);
+          const tw = TIP_W, th = 46 + (nameLines.length - 1) * TIP_LINE;
           const tx = flip ? hovered.cx - tw - 12 : hovered.cx + 12;
           const ty = Math.max(PT, Math.min(hovered.cy - th / 2, H - PB - th));
           return (
@@ -193,8 +213,10 @@ export default function PowerLawChart({ companies, fundName }) {
                   filter: "drop-shadow(0 2px 6px rgba(0,0,0,.12))",
                 }}
                 strokeWidth="1" />
-              <text x={tx + 11} y={ty + 18} style={{ ...sans, fontSize: FS.small, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>{shortCompany(hovered.name)}</text>
-              <text x={tx + 11} y={ty + 34} style={{ ...inkNum, fontSize: FS.small, fill: "var(--ink-color-global-text-subtle)" }}>
+              <text x={tx + TIP_PAD} y={ty + 18} style={{ ...sans, fontSize: FS.small, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>
+                {nameLines.map((line, i) => <tspan key={i} x={tx + TIP_PAD} dy={i ? TIP_LINE : 0}>{line}</tspan>)}
+              </text>
+              <text x={tx + TIP_PAD} y={ty + 34 + (nameLines.length - 1) * TIP_LINE} style={{ ...inkNum, fontSize: FS.small, fill: "var(--ink-color-global-text-subtle)" }}>
                 #{hovered.rank} · {fmtX(hovered.moic)} · {fmtM(hovered.value)}{hovered.realized ? " · exited" : ""}
               </text>
             </g>

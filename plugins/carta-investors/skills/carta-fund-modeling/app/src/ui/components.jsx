@@ -983,6 +983,9 @@ const BADGE_TONE = {
 // the point it marks, and it flips to the other side when there's no room above
 // (or below) that point.
 // `style` adds to the wrapper, e.g. to position it absolutely around its trigger.
+// The look of a text label that opens an InfoTip on hover or focus.
+export const TIP_TRIGGER_STYLE = { borderBottom: "1px dotted currentColor", cursor: "help" };
+
 export function InfoTip({ label, children, width = 300, trigger, portal = false, placement = "bottom", anchor = "edge", style }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false); // stays true after first show so opacity can transition back to 0 on hide

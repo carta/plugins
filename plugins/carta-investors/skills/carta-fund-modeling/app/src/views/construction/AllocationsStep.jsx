@@ -1,7 +1,7 @@
 // Shown as the Strategy step.
 import { useMemo, useState } from "react";
 import { FS, sans } from "../../ui/theme.js";
-import { Btn, Dropdown, Segmented, TextInput, StatBar, InfoTip } from "../../ui/components.jsx";
+import { Btn, Dropdown, Segmented, TextInput, StatBar, InfoTip, TIP_TRIGGER_STYLE } from "../../ui/components.jsx";
 import { fmtMIn, fmtFullIn, fmtX, fmtPct, fmtOwn } from "../../ui/format.js";
 import { FOLLOW_ON_MODES, defaultAllocation, defaultFollowOns, validateAllocations, validateSectors, stepLabel, horizonYears, evenYearlyCounts } from "../../model/construction/plan.js";
 import { companyTemplate } from "../../model/construction/engine.js";
@@ -80,7 +80,7 @@ function ProRataCheck({ i, st, funnel, a, ccy }) {
   const priorFollowOn = i - 1 > a.entryStage;
   return (
     <InfoTip portal placement="top" width={300} trigger={
-      <span data-testid={`prorata-${i}`} tabIndex={0} style={{ borderBottom: "1px dotted currentColor", cursor: "help" }}>
+      <span data-testid={`prorata-${i}`} tabIndex={0} style={TIP_TRIGGER_STYLE}>
         ≈ {fmtFullIn(into.check, ccy)}
       </span>
     }>
