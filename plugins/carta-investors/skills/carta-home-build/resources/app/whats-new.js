@@ -155,16 +155,19 @@ function showcaseMicroapps(profile, organizationPk = _wn.organizationPk) {
   return [...items.filter(m => !m.locked), ...items.filter(m => m.locked)];
 }
 
-// A skill unknown to the Skill Directory is named by its prompt's category.
+// A skill unknown to the Skill Directory is named by its prompt's category. A skill with
+// `whatsNewCopy` in the directory leads with that outcome headline and body; otherwise the
+// headline is its prompt, quoted, over a stock line.
 function showcaseSkill(entry) {
   const id = whatsNewSkillId(entry);
   const known = directoryEntry(id);
+  const copy = known && known.whatsNewCopy;
   return {
     kind: "skill",
     key: "skill-" + (id || entry.text),
     title: known ? known.name : PROMPT_TAGS[promptTag(entry.text)].label + " skill",
-    headline: entry.text,
-    description: "A new skill for Claude. Copy the prompt, paste it into chat, and Claude runs it on your Carta data.",
+    headline: copy ? copy.headline : "“" + entry.text + "”",
+    description: copy ? copy.body : "A new skill for Claude. Copy the prompt, paste it into chat, and Claude runs it on your Carta data.",
     prompt: entry.text,
     copyText: entry.text, copyLabel: "the prompt", copiedTip: PROMPT_COPIED_TIP,
     output: whatsNewOutput(entry),
@@ -334,7 +337,7 @@ function _wnPanelHtml(it) {
       </span>` : "";
   return `
     <span class="wn-chip">${escHtml(it.title)}</span>
-    <p class="wn-headline">${it.kind === "skill" ? "“" + escHtml(it.headline) + "”" : escHtml(it.headline)}</p>
+    <p class="wn-headline">${escHtml(it.headline)}</p>
     <p class="wn-desc">${escHtml(it.description)}</p>
     <div class="wn-ctas">${cta}${help}
       <span class="wn-copied-tip" role="status">${escHtml(it.copiedTip)}</span>

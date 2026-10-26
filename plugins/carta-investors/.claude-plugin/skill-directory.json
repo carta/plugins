@@ -14,7 +14,11 @@
     "order": 30,
     "prompts": [
       "Build a brand board for {{FIRM}} from our website"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Turn your firm's website into a ready-to-use brand board",
+      "body": "Pulls colors, fonts, logos and imagery from your website into an HTML, PDF or slide brand board, then saves it to Carta for future decks."
+    }
   },
   "carta-compliance-routing": {
     "category": "compliance",
@@ -22,7 +26,11 @@
     "order": 10,
     "prompts": [
       "Prepare our Form ADV: Regulatory AUM and Schedule D by fund"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Prepare Form ADV regulatory AUM and Schedule D",
+      "body": "Turns Carta fund and investor data into an interactive filing guide and Excel file, counting each LP once and flagging what you enter by hand."
+    }
   },
   "carta-consolidating-financial-reports": {
     "category": "fund-accounting",
@@ -31,7 +39,11 @@
     "prompts": [
       "Show me my firm's balance sheet as of this month",
       "Show me my firm's P&L as of this month"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Build a firm-wide P&L, balance sheet and trial balance",
+      "body": "Reads live Carta Fund Admin data into Excel, with the entities you pick side by side and an optional P&L by department or tag."
+    }
   },
   "carta-co-investors": {
     "category": "portfolio",
@@ -39,7 +51,11 @@
     "order": 30,
     "prompts": [
       "Who are other investors who have co-invested in my portfolio companies?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "See who invests alongside you across your portfolio",
+      "body": "Ranks your most frequent co-investors from stock purchase agreements in Carta, in an interactive report where any company opens its round-by-round investors."
+    }
   },
   "carta-data-collection": {
     "category": "portfolio",
@@ -48,7 +64,11 @@
     "prompts": [
       "Set up data collection for {{FIRM}}'s portfolio companies",
       "Which portfolio companies have not sent their numbers this quarter?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Collect financials and KPIs from every portfolio company",
+      "body": "Opens a prefilled request form from your Carta portfolio roster, sends one-off or recurring requests, and shows who is overdue so you can chase them."
+    }
   },
   "carta-download-tearsheet": {
     "category": "lp-reporting",
@@ -65,7 +85,11 @@
     "order": 20,
     "prompts": [
       "What is the NAV of each of my funds as of the latest quarter?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Ask about NAV, IRR or ownership in plain English",
+      "body": "Queries the Carta data warehouse and answers in chat with a clean table, adding any CRM or portfolio data your firm loads alongside it."
+    }
   },
   "carta-fund-admin-requests": {
     "category": "fund-admin",
@@ -74,7 +98,11 @@
     "prompts": [
       "Ask my fund admin team to [describe the task]",
       "What requests do I have open with Carta?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Hand any task to your Carta Fund Admin team",
+      "body": "Drafts a detailed request naming the fund, period and amounts, sends it only after you approve, then tracks your Carta team's replies in chat."
+    }
   },
   "carta-fund-forecasting": {
     "category": "fund-modeling",
@@ -83,7 +111,11 @@
     "requires": "tactyc",
     "prompts": [
       "What is my funds' TVPI projected at fund close?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Check projected TVPI and IRR at fund close",
+      "body": "Reads your Carta Fund Forecasting models and answers in chat, showing today's numbers next to the planned and current forecasts at fund close."
+    }
   },
   "carta-fund-modeling": {
     "category": "fund-modeling",
@@ -102,7 +134,11 @@
     "prompts": [
       "What transactions does Carta need me to explain?",
       "Draft answers for my uncategorized cash transactions"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Draft answers for every unreconciled bank transaction",
+      "body": "Works out each transaction from your Carta vendors, partners and past answers, shows every draft beside the chat, and sends nothing until you approve."
+    }
   },
   "carta-home-build": null,
   "carta-loan-dashboard": null,
@@ -116,7 +152,11 @@
       "Compare YTD actuals against the budget",
       "Build what-if scenarios over our budget",
       "Build a fund/ManCo budget in Excel from Carta prior-year actuals"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Plan next year's ManCo budget from last year's actuals",
+      "body": "Pulls Carta Fund Admin actuals into an Excel budget workbook, then tracks pacing against plan and models what-ifs like new hires or fund raises."
+    }
   },
   "carta-manco-reporting": {
     "category": "manco",
@@ -144,7 +184,11 @@
       "Show me the schedule of investments for my firm",
       "Show me the TVPI, DPI, MOIC and IRR for my funds",
       "How do our funds compare to peer benchmarks?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "View each fund's holdings and its peer ranking",
+      "body": "Opens a refreshable Schedule of Investments from Carta data in your sidebar, and ranks fund IRR, TVPI and DPI against peers of the same vintage."
+    }
   },
   "carta-portfolio-valuations": {
     "category": "portfolio",
@@ -153,7 +197,11 @@
     "prompts": [
       "Work on {{FIRM}}'s portfolio valuations for this quarter",
       "Which of {{FIRM}}'s portfolio companies need new valuations?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Start this quarter's valuations across many companies at once",
+      "body": "Opens your Carta portfolio valuations dashboard, shows which companies need a new valuation, and creates drafts for one company or many in a single pass."
+    }
   },
   "carta-spa-audit": {
     "category": "portfolio",
@@ -161,7 +209,11 @@
     "order": 60,
     "prompts": [
       "Which of our investments are missing an executed SPA?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Find investments missing a signed stock purchase agreement",
+      "body": "Sorts every equity investment in Carta into missing, unsigned, signed or not needed, ranked by cost basis in an interactive report you can drill into."
+    }
   },
   "carta-waterfall-modeling": {
     "category": "portfolio",
@@ -169,7 +221,11 @@
     "order": 80,
     "prompts": [
       "Who gets paid, and how much, if [portfolio company] exits at $[amount]?"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Model who gets paid, and how much, at exit",
+      "body": "Runs a waterfall on a portfolio company's Carta cap table, shows each holder's payout in chat or Excel, and can update your holding values."
+    }
   },
   "carta-workhub-build": null,
   "carta-upload-firm-document": {
@@ -179,7 +235,11 @@
     "prompts": [
       "Upload [file path] to {{FIRM}}'s Documents page",
       "Add this side letter to our firm documents in Carta"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Upload files straight to your firm's Carta Documents page",
+      "body": "Sends one or many files from your computer to your firm's Documents page in Carta, which then classifies each document for you automatically."
+    }
   },
   "carta-download-firm-document": {
     "category": "fund-admin",
@@ -188,6 +248,10 @@
     "prompts": [
       "Get me the LPA from {{FIRM}}'s Documents page",
       "Download our audit engagement letter from Carta"
-    ]
+    ],
+    "whatsNewCopy": {
+      "headline": "Fetch any LPA, side letter or notice from Carta",
+      "body": "Searches your firm's Carta Documents page by title, type or fund, then saves the file to your Downloads folder or hands you a link."
+    }
   }
 }
