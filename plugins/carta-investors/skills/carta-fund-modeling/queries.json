@@ -457,13 +457,13 @@
     },
     "investments": {
       "sql": [
-        "SELECT issuer_name, entity_link_id, fund_uuid, general_ledger_asset_id, fund_name, fund_entity_type_name, asset_name, asset_class_type,",
+        "SELECT issuer_name, entity_link_id, general_ledger_issuer_id, fund_uuid, general_ledger_asset_id, fund_name, fund_entity_type_name, asset_name, asset_class_type,",
         "       count_remaining_shares, remaining_value, remaining_value_per_share,",
         "       total_cost, total_proceeds, total_unrealized_gain_loss, investment_date,",
         "       is_active_investment, is_public_asset, latest_fmv_effective_date, latest_update_effective_date",
         "FROM FUND_ADMIN.AGGREGATE_INVESTMENTS",
         "WHERE fund_uuid IN ({fund_uuids})",
-        "ORDER BY issuer_name, fund_uuid, general_ledger_asset_id"
+        "ORDER BY remaining_value DESC NULLS LAST, fund_uuid, general_ledger_asset_id"
       ]
     }
   }
