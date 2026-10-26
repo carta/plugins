@@ -54,6 +54,9 @@ export function scenarioIrr(fund, m) {
   return xirr(flows);
 }
 
+/** A scenario row with its Net LP IRR and the benchmark comparison attached. */
+export const withBench = (row, irr, spRate) => ({ ...row, netLpIrr: irr, spIrr: spRate, edge: irr == null ? null : irr - spRate });
+
 // `exitDate` selects the IRR convention per row: an ISO date → exit-on-that-date
 // (terminal there, Method A); null → wind-down terminal (Method B, back-compat).
 // The app passes the fund's assumed exit horizon (default = navAsOf year-end) to
@@ -64,7 +67,7 @@ export function scenarioTable(fund, cfg = 0.2, spRate = 0.102, exitDate = null, 
     const row = scenarioRow(fund, m, cfg);
     // exitDate null → wind-down basis (back-compat); an ISO date → exit on it.
     const irr = exitDate == null ? scenarioIrr(fund, m) : exitDateIrr(fund, exitDate, m, interim);
-    return { ...row, netLpIrr: irr, spIrr: spRate, edge: irr == null ? null : irr - spRate };
+    return withBench(row, irr, spRate);
   });
 }
 
@@ -76,6 +79,13 @@ export function scenarioTable(fund, cfg = 0.2, spRate = 0.102, exitDate = null, 
  * horizon (same multiple, later date → lower IRR).
  */
 export function exitDateIrr(fund, exitDate, m, interim = []) {
+  const flows = exitDateFlows(fund, exitDate, m, interim);
+  return flows == null ? null : xirr(flows);
+}
+
+/** The dated flows `exitDateIrr` runs XIRR on (fund flows through `exitDate`, modeled
+ *  interim legs, one terminal on `exitDate`); null when nothing is called by then. */
+export function exitDateFlows(fund, exitDate, m, interim = []) {
   const flows = fund.flows.filter((f) => f.date <= exitDate);
   if (!flows.some((f) => f.amount < 0)) return null; // nothing called yet — n/m
   const grossPaidIn = flows.reduce((s, f) => s + (f.amount < 0 ? -f.amount : 0), 0);
@@ -85,7 +95,33 @@ export function exitDateIrr(fund, exitDate, m, interim = []) {
   const legs = interim.filter((l) => l && l.date && l.date <= exitDate && l.amount > 0);
   const early = legs.reduce((s, l) => s + l.amount, 0);
   const terminal = Math.max(0, m * grossPaidIn - distributed - early);
-  return xirr([...flows, ...legs, { date: exitDate, amount: terminal }]);
+  return [...flows, ...legs, { date: exitDate, amount: terminal }];
+}
+
+/** Whether a pooled entry counts: it has paid-in and something called by its exit date. */
+export const poolable = (e) => e.fund.paidInTotal > 0 && exitDateFlows(e.fund, e.exitDate, 1, e.interim) != null;
+
+/**
+ * The scenario grid pooled across funds: every fund delivers the same net multiple
+ * m, so LP dist. = m × Σ paid-in and profit = (m − 1) × Σ paid-in. Net LP IRR is
+ * the XIRR of the union of each fund's `exitDateFlows` (own exit date, own interim
+ * legs). `entries` are `{ fund, exitDate, interim, implied }`; `implied` is the
+ * fund's current-marks multiple, and the pooled "current marks" row (`isSlice`)
+ * uses Σ(implied × paid-in) ÷ Σ paid-in. Entries that are not `poolable` drop out
+ * of every column.
+ */
+export function pooledScenarioTable(entries, spRate = 0.102) {
+  const live = entries.filter(poolable);
+  const paidIn = live.reduce((s, e) => s + e.fund.paidInTotal, 0);
+  const rowAt = (m, multipleOf) => {
+    const flows = live.flatMap((e) => exitDateFlows(e.fund, e.exitDate, multipleOf(e), e.interim) || []);
+    const irr = xirr(flows);
+    return withBench({ multiple: m, lpDistributions: m * paidIn, lpNetProfit: (m - 1) * paidIn }, irr, spRate);
+  };
+  const rows = SCENARIO_MULTIPLES.map((m) => rowAt(m, () => m));
+  const implied = live.reduce((s, e) => s + e.implied * e.fund.paidInTotal, 0) / paidIn;
+  if (!(implied > 0)) return rows;
+  return [...rows, { ...rowAt(implied, (e) => e.implied), isSlice: true }].sort((a, b) => a.multiple - b.multiple);
 }
 
 /**

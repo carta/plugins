@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { ALL_FUNDS } from "../../ui/components.jsx";
-import { scenarioTable, scenarioRow, exitDateIrr } from "../../model/scenarios.js";
+import { ALL_FUNDS, fundLabel } from "../../ui/components.jsx";
+import { scenarioTable, scenarioRow, exitDateIrr, poolable, withBench } from "../../model/scenarios.js";
 import { scenarioFund, fundIdsOf } from "../../model/funds.js";
 import { waterfallCfgFor, exitHorizonFor } from "../../model/reprice.js";
 import { FUND_WATERFALL_KEYS } from "../../model/slices.js";
@@ -9,7 +9,30 @@ import { FUND_WATERFALL_KEYS } from "../../model/slices.js";
 // Economics, and the Portfolio analysis and LP returns themes on the Reports tab): ONE
 // source of truth for the waterfall config, the S&P rate, the per-multiple
 // scenario grid and the "today's marks" slice. Returns plain values only (no
-// JSX) — each view renders its own sections.
+// JSX) — each view renders its own sections. Under All funds it models the first
+// fund; the LP sensitivity grid pools every fund separately via `pooledEntries`.
+// Where a fund's marks land: the implied Net TVPI if today's repriced LP NAV (plus
+// anything already distributed) were ultimately delivered on total paid-in incl.
+// scheduled future calls.
+const impliedMultiple = (state, fund) => (state.lpNav + state.lpDistributed) / fund.paidInTotal;
+
+/** The funds the pooled LP sensitivity grid covers under All funds, each on its own
+ *  exit horizon and current-marks multiple. Inclusion follows `poolable`; a fund
+ *  with paid-in that is not poolable has its display name returned in `excluded`. */
+export function pooledEntries(snapshot, fundStates, assumptions) {
+  const entries = [], excluded = [];
+  for (const id of fundIdsOf(snapshot)) {
+    const f = fundStates.find((x) => x.id === id);
+    const fd = scenarioFund(snapshot, id);
+    if (!f) continue;
+    const entry = { fund: fd, exitDate: exitHorizonFor(assumptions, snapshot, id),
+      interim: f.secondaryLegs || [], implied: impliedMultiple(f, fd) };
+    if (poolable(entry)) entries.push(entry);
+    else if (fd.paidInTotal > 0) excluded.push(fundLabel(snapshot.funds.find((x) => x.id === id).name));
+  }
+  return { entries, excluded };
+}
+
 /** The one fund a per-fund view models: exit modeling is inherently per-fund, so
  *  when the global scope is All Funds it falls back to the first fund. */
 export const scopedFundId = (snapshot, fundScope) => (fundScope === ALL_FUNDS ? fundIdsOf(snapshot)[0] : fundScope);
@@ -18,7 +41,7 @@ export function useScenarioModel({
   snapshot, portfolio, fundStates, baseAssumptions, fundScope, setAssumption,
   exitHorizonOverrides,
 }) {
-  // surfaces a hint to pick one fund while the global scope is All Funds
+  // true while the global scope is All Funds (views show a pick-a-fund hint or pool)
   const allMode = fundScope === ALL_FUNDS;
   const fundId = scopedFundId(snapshot, fundScope);
   // full waterfall config for this fund — carry + preferred return + GP catch-up,
@@ -70,15 +93,13 @@ export function useScenarioModel({
   const table = useMemo(() => scenarioTable(fund, wf, spRate, exitDate, interim),
     [fund, wf, spRate, exitDate, interim]);
 
-  // Where THIS SLICE's marks land: the implied Net TVPI if today's
-  // repriced LP NAV (plus anything already distributed) were ultimately
-  // delivered on total paid-in incl. scheduled future calls.
-  const implied = (fs.lpNav + fs.lpDistributed) / fund.paidInTotal;
+  // Where THIS SLICE's marks land.
+  const implied = impliedMultiple(fs, fund);
   const sliceRows = useMemo(() => {
     if (!(implied > 0)) return [...table];
     const row = scenarioRow(fund, implied, wf);
     const irr = exitDateIrr(fund, exitDate, implied, interim);
-    const slice = { ...row, netLpIrr: irr, spIrr: spRate, edge: irr == null ? null : irr - spRate, isSlice: true };
+    const slice = { ...withBench(row, irr, spRate), isSlice: true };
     return [...table, slice].sort((a, b) => a.multiple - b.multiple);
   }, [table, fund, implied, wf, spRate, exitDate, interim]);
 

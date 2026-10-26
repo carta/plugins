@@ -42,7 +42,7 @@ const THEMES = [
     id: "lp-returns", label: "LP returns", viewName: "LpReturns", perFund: true, needsNav: true,
     reports: [
       { id: "lp-return-sensitivity", available: () => true, render: (p) => <LpReport section="sensitivity" {...p.returnsProps} />,
-        allFunds: combined(LP_SENSITIVITY_TITLE, selectFund(SELECT_FUND)) },
+        allFunds: combined(LP_SENSITIVITY_TITLE) },
       { id: "lp-glidepath", available: () => true, render: (p) => <LpReport section="glidepath" {...p.returnsProps} /> },
     ],
   },
