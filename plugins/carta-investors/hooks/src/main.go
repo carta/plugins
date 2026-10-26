@@ -20,7 +20,6 @@ import (
 	"os"
 
 	_ "com.carta.claude_plugins.hooks/handlers"
-	_ "com.carta.claude_plugins.hooks/handlers/carta-cap-table"
 	"com.carta.claude_plugins.hooks/internal/hookio"
 	"com.carta.claude_plugins.hooks/registry"
 )
