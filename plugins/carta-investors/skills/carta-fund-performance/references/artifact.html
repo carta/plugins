@@ -185,6 +185,12 @@
     @media (max-width: 640px) { .perf-container { --perf-page-pad: 24px; padding: var(--perf-page-pad) 16px; } }
 
     /* ── Fund switcher (SOI's): a bordered "Fund <name>" segment with a searchable list ── */
+    .perf-view-toggle { display: inline-flex; align-items: center; gap: 8px; }
+    .perf-view-toggle[hidden] { display: none; }
+    .perf-family-note, .perf-list-note { margin: 0 0 12px; font-size: 12px; line-height: 18px; color: var(--ink-color-global-text-subtle); }
+    /* The member names wrap inside the width the fund names set: zero width keeps a long
+       family from widening the column and pushing the last columns off the table. */
+    .perf-family-sub { display: block; width: 0; min-width: 100%; white-space: normal; font-size: 11px; line-height: 14px; color: var(--ink-color-global-text-subtle); font-weight: 400; }
     .switcher-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
     .fund-switcher {
       position: relative;
@@ -665,11 +671,13 @@
           <div class="combo" id="perf-fund-combo"></div>
         </span>
       </div>
+      <div class="perf-view-toggle" id="perf-view-toggle" hidden></div>
     </div>
   <!-- ── All-funds list view ── -->
   <div id="perf-list-view"></div>
   <!-- ── Single-fund detail view (charts) ── -->
   <div id="perf-detail-view" style="display:none;">
+    <p class="perf-family-note" id="perf-family-note" hidden></p>
     <div class="perf-metrics-strip" id="perf-page-metrics"></div>
     <section class="perf-chart-card perf-peer-card" id="perf-peer-card" aria-labelledby="perf-peer-title">
       <div class="perf-chart-header"><h2 class="perf-chart-title" id="perf-peer-title">Net IRR</h2></div>
@@ -970,9 +978,206 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// ── Fund-family roll-up ──
+// Pure functions: no page, no queries. tests/carta-investors/test_fund_performance_family_rollup.py
+// runs everything between the two perf-rollup markers in node.
+// A family is every fund sharing a FUND_FAMILY_ID (FUND_ADMIN.FUNDS). Its dollar columns add up
+// and its ratios are recomputed from those sums, never averaged. Net IRR cannot be built from
+// the funds' IRRs, so a family row carries none.
+// perf-rollup:start
+const PERF_FAMILY_KEY = 'family:';
+const PERF_LIST_ROWS = 50;
+// Dollar columns that add up across a family. A column any member lacks stays empty for the
+// family, so a total is never short a fund.
+const PERF_SUMMED_COLS = [
+  'FUND_SIZE', 'TOTAL_VALUE', 'ENDING_TOTAL_NAV', 'TOTAL_CAP_CONTRIBUTION', 'TOTAL_DISTRIBUTION',
+  'TOTAL_COST_OF_INVESTMENTS', 'LP_VALUE', 'ENDING_LP_NAV', 'TOTAL_LP_CAP_CONTRIBUTION', 'TOTAL_LP_DISTRIBUTION',
+];
+// A query value as a finite number, else null.
+const _perfNum = v => { const n = v == null ? NaN : parseFloat(v); return isFinite(n) ? n : null; };
+// A month-end as YYYY-MM-DD. The header date and the peer chart's last quarter both
+// read it through _perfDay, and both ask _perfMonthToDate whether that month is still
+// running, so the chart always ends at the date the header shows.
+const _perfDay = d => String(d).substring(0, 10);
+const _pfSum = (rows, key) => {
+  let total = 0;
+  for (const r of rows) { const n = _perfNum(r[key]); if (n == null) return null; total += n; }
+  return total;
+};
+const _pfRatio = (top, bottom) => (top != null && bottom != null && bottom > 0 ? top / bottom : null);
+// Gross MOIC is value ÷ cost of investments, so each fund's value is its MOIC × its cost;
+// the family's MOIC is the summed values over the summed costs.
+function _pfMoic(rows) {
+  let value = 0, cost = 0;
+  for (const r of rows) {
+    const moic = _perfNum(r.TOTAL_MOIC), c = _perfNum(r.TOTAL_COST_OF_INVESTMENTS);
+    if (moic == null || c == null) return null;
+    value += moic * c; cost += c;
+  }
+  return _pfRatio(value, cost);
+}
+
+// Funds sharing a family id, for families of two or more: Map(familyId → fund rows).
+function perfFamilyGroups(fundRows) {
+  const groups = new Map();
+  fundRows.forEach(r => {
+    if (!r.FUND_FAMILY_ID) return;
+    if (!groups.has(r.FUND_FAMILY_ID)) groups.set(r.FUND_FAMILY_ID, []);
+    groups.get(r.FUND_FAMILY_ID).push(r);
+  });
+  for (const [id, rows] of groups) if (rows.length < 2) groups.delete(id);
+  return groups;
+}
+
+// Amounts in different currencies never add up, so a family is rolled up only when every
+// fund reports the same currency. A fund with no reporting currency matches nothing, so a
+// family with one (or all) of them is not rolled up either.
+const perfFamilyCurrencies = members => [...new Set(members.map(m => m.FUND_REPORTING_CURRENCY ?? null))];
+const perfFamilyCombinable = members => {
+  const currencies = perfFamilyCurrencies(members);
+  return currencies.length === 1 && currencies[0] != null;
+};
+
+// Peer benchmark percentiles come per fund and cannot be merged across cohorts, so the
+// family is benchmarked against one member's cohort: the earliest vintage (the family's
+// first close, whose cohort covers every quarter the family has existed), the larger fund
+// on a tie.
+function perfBenchmarkFund(members) {
+  const vintage = m => (m.VINTAGE_DATE ? _perfDay(m.VINTAGE_DATE) : '9999-99-99');
+  return members.slice().sort((a, b) =>
+    vintage(a).localeCompare(vintage(b)) || (_perfNum(b.FUND_SIZE) ?? -1) - (_perfNum(a.FUND_SIZE) ?? -1)
+    || String(a.FUND_UUID).localeCompare(String(b.FUND_UUID)))[0];
+}
+
+function perfRollupFamily(members) {
+  const first = members[0];
+  const days = members.map(m => m.MONTH_END_DATE).filter(Boolean);
+  const vintages = members.map(m => m.VINTAGE_DATE).filter(Boolean).sort();
+  const row = {
+    FUND_NAME: first.FUND_FAMILY_NAME || first.FUND_NAME,
+    FUND_UUID: PERF_FAMILY_KEY + first.FUND_FAMILY_ID,
+    FUND_FAMILY_ID: first.FUND_FAMILY_ID,
+    FUND_FAMILY_NAME: first.FUND_FAMILY_NAME,
+    FUND_REPORTING_CURRENCY: first.FUND_REPORTING_CURRENCY ?? null,
+    MONTH_END_DATE: days.length ? days.slice().sort().pop() : null,
+    VINTAGE_DATE: vintages[0] ?? null,
+    // Net and gross IRR can't be added or averaged. LP MOIC has no published formula, so it
+    // can't be rebuilt from the summed columns either; the page shows each as unavailable.
+    NET_LP_IRR: null, DEAL_IRR: null, LP_MOIC: null,
+    _family: true,
+    _asOfDates: days,
+    _members: members.map(m => ({ uuid: m.FUND_UUID, name: m.FUND_NAME })),
+    _benchmarkUuid: perfBenchmarkFund(members).FUND_UUID,
+    _benchmarkName: perfBenchmarkFund(members).FUND_NAME,
+  };
+  PERF_SUMMED_COLS.forEach(k => { row[k] = _pfSum(members, k); });
+  row.LP_TVPI = _pfRatio(row.LP_VALUE, row.TOTAL_LP_CAP_CONTRIBUTION);
+  row.LP_DPI = _pfRatio(row.TOTAL_LP_DISTRIBUTION, row.TOTAL_LP_CAP_CONTRIBUTION);
+  row.LP_RVPI = _pfRatio(row.ENDING_LP_NAV, row.TOTAL_LP_CAP_CONTRIBUTION);
+  row.TOTAL_MOIC = _pfMoic(members);
+  return row;
+}
+
+// The rows the list shows, largest NAV first. view 'family': each family of two or more funds
+// becomes one row (a family whose funds do not all report one currency stays as its funds and
+// is named in notices); every other fund stays as itself. view 'fund': the funds as queried.
+function perfGroupEntities(fundRows, view) {
+  const notices = [];
+  let entities = fundRows.slice();
+  if (view === 'family') {
+    const groups = perfFamilyGroups(fundRows);
+    const done = new Set();
+    entities = [];
+    for (const r of fundRows) {
+      const members = groups.get(r.FUND_FAMILY_ID);
+      if (!members) { entities.push(r); continue; }
+      if (done.has(r.FUND_FAMILY_ID)) continue;
+      done.add(r.FUND_FAMILY_ID);
+      if (perfFamilyCombinable(members)) entities.push(perfRollupFamily(members));
+      else {
+        notices.push({ familyName: r.FUND_FAMILY_NAME, currencies: perfFamilyCurrencies(members).filter(Boolean) });
+        entities.push(...members);
+      }
+    }
+  }
+  const nav = e => _perfNum(e.ENDING_TOTAL_NAV);
+  entities.sort((a, b) => (nav(a) == null) - (nav(b) == null) || (nav(b) ?? 0) - (nav(a) ?? 0));
+  return { entities: entities.slice(0, PERF_LIST_ROWS), notices };
+}
+
+// Quarter helpers on YYYY-MM-DD strings (no Date, so no time-zone drift).
+function _pfQuarterStart(day) {
+  const month = parseInt(day.substring(5, 7), 10);
+  return `${day.substring(0, 4)}-${String(Math.floor((month - 1) / 3) * 3 + 1).padStart(2, '0')}-01`;
+}
+function _pfQuarterEnd(quarterStart) {
+  const y = parseInt(quarterStart.substring(0, 4), 10), m = parseInt(quarterStart.substring(5, 7), 10);
+  return new Date(Date.UTC(y, m + 2, 0)).toISOString().substring(0, 10);
+}
+
+// The family's quarterly LP TVPI, DPI and MOIC, from its funds' month-end rows: at each
+// finished quarter every fund that has started contributes its latest row in or before the
+// quarter, and the sums are divided as in the list. A fund that has not started yet adds
+// nothing; a quarter where a started fund has no figure stays empty.
+function perfFamilySeries(monthlyRows, memberUuids, todayIso) {
+  const perFund = memberUuids.map(uuid => {
+    const byQuarter = new Map();
+    monthlyRows.filter(r => r.FUND_UUID === uuid && r.MONTH_END_DATE).forEach(r => {
+      const q = _pfQuarterStart(_perfDay(r.MONTH_END_DATE)), held = byQuarter.get(q);
+      if (!held || _perfDay(r.MONTH_END_DATE) > _perfDay(held.MONTH_END_DATE)) byQuarter.set(q, r);
+    });
+    return byQuarter;
+  });
+  const quarters = [...new Set(perFund.flatMap(m => [...m.keys()]))].sort().filter(q => _pfQuarterEnd(q) <= todayIso);
+  return quarters.map(q => {
+    const parts = perFund.map(m => {
+      const upTo = [...m.keys()].filter(k => k <= q).sort();
+      return upTo.length ? m.get(upTo[upTo.length - 1]) : null;
+    }).filter(Boolean);
+    const contributions = _pfSum(parts, 'TOTAL_LP_CAP_CONTRIBUTION');
+    return {
+      PERFORMANCE_QUARTER_START_DATE: q,
+      LP_TVPI: _pfRatio(_pfSum(parts, 'LP_VALUE'), contributions),
+      LP_DPI: _pfRatio(_pfSum(parts, 'TOTAL_LP_DISTRIBUTION'), contributions),
+      MOIC: _pfMoic(parts),
+    };
+  });
+}
+
+// Peer percentile columns the family chart reads, besides Net IRR's (a family has no Net IRR,
+// so it shows no Net IRR band either).
+const PERF_PEER_COLS = ['LP_TVPI_25', 'LP_TVPI_50', 'LP_TVPI_75', 'LP_DPI_25', 'LP_DPI_50', 'LP_DPI_75', 'MOIC_25', 'MOIC_50', 'MOIC_75'];
+const PERF_COHORT_COLS = ['VINTAGE_YEAR', 'ENTITY_TYPE_NAME', 'FUND_AUM_BUCKET', 'FUND_COUNT'];
+const PERF_NET_IRR_COLS = ['NET_LP_IRR', 'NET_IRR', 'NET_LP_IRR_25TH', 'NET_LP_IRR_50TH', 'NET_LP_IRR_75TH'];
+
+// The family's series in the shape of TEMPORAL_FUND_COHORT_BENCHMARKS rows, so the charts read it
+// like a fund's: each quarter carries the benchmark fund's percentiles for the same quarter.
+function perfFamilyBenchmarkRows(key, series, benchmarkRows) {
+  const peers = new Map(benchmarkRows.filter(r => r.PERFORMANCE_QUARTER_START_DATE)
+    .map(r => [_pfQuarterStart(_perfDay(r.PERFORMANCE_QUARTER_START_DATE)), r]));
+  const last = benchmarkRows[benchmarkRows.length - 1] || {};
+  return series.map(s => {
+    const peer = peers.get(s.PERFORMANCE_QUARTER_START_DATE) || {};
+    const row = { FUND_UUID: key, ...s };
+    PERF_NET_IRR_COLS.forEach(k => { row[k] = null; });
+    PERF_PEER_COLS.forEach(k => { row[k] = peer[k] ?? null; });
+    PERF_COHORT_COLS.forEach(k => { row[k] = last[k] ?? null; });
+    return row;
+  });
+}
+// Every benchmark-table column a fund or family page reads, for the queries to select.
+const PERF_BENCH_COLS = ['PERFORMANCE_QUARTER_START_DATE', 'LP_TVPI', 'LP_DPI', 'MOIC',
+  ...PERF_NET_IRR_COLS, ...PERF_PEER_COLS, ...PERF_COHORT_COLS].join(', ');
+// perf-rollup:end
+
 // ── Fund Performance page ──
 let perfFunds = [];
 let perfCurrentFundUuid = null;
+// Funds roll up into their fund family by default; 'fund' lists the underlying funds.
+const PERF_VIEWS = { family: { label: 'Fund family' }, fund: { label: 'Underlying funds' } };
+let _perfView = 'family';
+let _perfFundRows = [];        // one row per underlying fund, as queried
+let _perfEntities = new Map(); // key (fund uuid, or family:<id>) → the row the list shows
 
 function _perfShowListView() {
   document.getElementById('perf-page').scrollTop = 0;
@@ -999,10 +1204,6 @@ function perfOpenFundDetail(uuid, name) {
 // funds can report through different month-ends, so it names the latest and says so.
 let _perfListAsOf = [];
 const _perfToday = () => new Date().toISOString().substring(0, 10);
-// A month-end as YYYY-MM-DD. The header date and the peer chart's last quarter both
-// read it through _perfDay, and both ask _perfMonthToDate whether that month is still
-// running, so the chart always ends at the date the header shows.
-const _perfDay = d => String(d).substring(0, 10);
 // Carta stamps the current month's figures with that month's last day, a date that
 // hasn't happened yet: those figures are month to date.
 const _perfMonthToDate = d => _perfDay(d) > _perfToday();
@@ -1199,6 +1400,82 @@ function _perfListSkeleton() {
     <div class="shimmer-table">${row('shimmer-table-header').replace(/shimmer-td/g, 'shimmer-th')}${row('shimmer-row').repeat(6)}</div>`;
 }
 
+// Every column the fund page reads from a fund's latest month-end row: the list needs them
+// all so a family's row (and its detail page) can be summed from its funds' rows.
+const PERF_SNAPSHOT_COLS = `MONTH_END_DATE, FUND_REPORTING_CURRENCY,
+          FUND_SIZE, TOTAL_MOIC, NET_LP_IRR, LP_DPI,
+          TOTAL_VALUE, ENDING_TOTAL_NAV, TOTAL_CAP_CONTRIBUTION, TOTAL_DISTRIBUTION,
+          TOTAL_COST_OF_INVESTMENTS, DEAL_IRR, VINTAGE_DATE,
+          LP_TVPI, LP_RVPI, LP_MOIC,
+          LP_VALUE, ENDING_LP_NAV, TOTAL_LP_CAP_CONTRIBUTION, TOTAL_LP_DISTRIBUTION`;
+// Fund rows are grouped into families before the list is cut to PERF_LIST_ROWS, so the
+// query reads past that. It returns family funds first, so this limit can only ever drop
+// standalone funds and never splits a family.
+const PERF_FUND_QUERY_LIMIT = 500;
+
+// One row per fund (its latest month-end), with its family from FUND_ADMIN.FUNDS.
+function _perfFundListSql(withFamily) {
+  if (!withFamily) {
+    return `SELECT
+          FUND_NAME, FUND_UUID, FUND_REPORTING_CURRENCY,
+          NET_LP_IRR, LP_TVPI, LP_DPI, LP_RVPI, TOTAL_MOIC,
+          TOTAL_VALUE,
+          ENDING_TOTAL_NAV,
+          FUND_SIZE,
+          TOTAL_DISTRIBUTION,
+          TOTAL_CAP_CONTRIBUTION,
+          MONTH_END_DATE
+        FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
+        WHERE FUND_UUID IS NOT NULL
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY FUND_UUID ORDER BY MONTH_END_DATE DESC NULLS LAST) = 1
+        ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST`;
+  }
+  const cols = PERF_SNAPSHOT_COLS.split(',').map(c => 'm.' + c.trim()).join(', ');
+  return `SELECT
+          m.FUND_NAME, m.FUND_UUID, f.FUND_FAMILY_ID, f.FUND_FAMILY_NAME, ${cols}
+        FROM FUND_ADMIN.AGGREGATE_FUND_METRICS m
+        LEFT JOIN FUND_ADMIN.FUNDS f ON f.FUND_UUID = m.FUND_UUID
+        WHERE m.FUND_UUID IS NOT NULL
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY m.FUND_UUID ORDER BY m.MONTH_END_DATE DESC NULLS LAST) = 1
+        ORDER BY (f.FUND_FAMILY_ID IS NULL), m.ENDING_TOTAL_NAV DESC NULLS LAST`;
+}
+
+// Draws the list for the current view from the funds already queried: the switcher, the
+// graph and the table all read the same rows.
+function _perfRenderList(listEl) {
+  const { entities, notices } = perfGroupEntities(_perfFundRows, _perfView);
+  _perfEntities = new Map(entities.map(e => [e.FUND_UUID, e]));
+  perfFunds = entities.map(e => ({ name: e.FUND_NAME, uuid: e.FUND_UUID }));
+  _perfListAsOf = entities.flatMap(e => e._asOfDates || [e.MONTH_END_DATE]);
+  _perfSetAsOf(_perfListAsOf);
+  _perfAllFundsLoaded = true;
+  _perfRenderViewToggle();
+  perfRenderFundSwitcher();
+  _perfRenderFundsTable(entities, listEl, notices);
+  perfLoadOverviewChart(entities);
+}
+
+// "View: Fund family | Underlying funds", shown only when the firm has a family to roll up.
+function _perfRenderViewToggle() {
+  const el = document.getElementById('perf-view-toggle');
+  if (!el) return;
+  el.hidden = perfFamilyGroups(_perfFundRows).size === 0;
+  el.innerHTML = `<span class="fund-switcher-label">View</span>
+    <div class="perf-seg" role="radiogroup" aria-label="View">${_perfSegButtons(PERF_VIEWS, 'view')}</div>`;
+  el.querySelectorAll('.perf-seg-btn').forEach(b => b.setAttribute('aria-checked', String(b.dataset.value === _perfView)));
+}
+
+document.getElementById('perf-view-toggle')?.addEventListener('click', e => {
+  const btn = e.target.closest('.perf-seg-btn');
+  if (!btn || btn.dataset.value === _perfView || !_perfFundRows.length) return;
+  _perfView = btn.dataset.value;
+  trackUi("change", "FundPerformance.View." + _perfView);
+  // A family has no counterpart in the other view, so the toggle always lands on the list.
+  _perfShowListView();
+  _perfRenderList(document.getElementById('perf-list-view'));
+  document.querySelector(`#perf-view-toggle .perf-seg-btn[data-value="${_perfView}"]`)?.focus();
+});
+
 async function perfLoadAllFunds() {
   const listEl = document.getElementById('perf-list-view');
   if (!listEl) return;
@@ -1212,36 +1489,13 @@ async function perfLoadAllFunds() {
   const eyebrow = document.getElementById('perf-firm-name-label');
   if (eyebrow && _perfFirmName) eyebrow.textContent = _perfFirmName;
   try {
-    const r = await _mcp("fetch", {
-      command: 'dwh:execute:query',
-      params: {
-        sql: `SELECT
-          FUND_NAME, FUND_UUID, FUND_REPORTING_CURRENCY,
-          NET_LP_IRR, LP_TVPI, LP_DPI, LP_RVPI, TOTAL_MOIC,
-          TOTAL_VALUE,
-          ENDING_TOTAL_NAV,
-          FUND_SIZE,
-          TOTAL_DISTRIBUTION,
-          TOTAL_CAP_CONTRIBUTION,
-          MONTH_END_DATE
-        FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
-        WHERE FUND_UUID IS NOT NULL
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY FUND_UUID ORDER BY MONTH_END_DATE DESC NULLS LAST) = 1
-        ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST
-        LIMIT 50`,
-        format: 'ndjson',
-      },
-    });
-    if (!r.isError) {
-      const rows = parseDWH(r).filter(row => row.FUND_UUID);
+    // The family columns come from FUND_ADMIN.FUNDS. If that query is refused the page
+    // falls back to the plain fund query, where every fund is its own row.
+    for (const withFamily of [true, false]) {
+      const rows = ((await _perfQueryRows(_perfFundListSql(withFamily), PERF_FUND_QUERY_LIMIT)) || []).filter(row => row.FUND_UUID);
       if (rows.length > 0) {
-        perfFunds = rows.map(row => ({ name: row.FUND_NAME, uuid: row.FUND_UUID }));
-        _perfListAsOf = rows.map(row => row.MONTH_END_DATE);
-        _perfSetAsOf(_perfListAsOf);
-        _perfAllFundsLoaded = true;
-        perfRenderFundSwitcher();
-        _perfRenderFundsTable(rows, listEl);
-        perfLoadOverviewChart(rows);
+        _perfFundRows = rows;
+        _perfRenderList(listEl);
         return;
       }
     }
@@ -1254,16 +1508,17 @@ async function perfLoadAllFunds() {
 // Multiples (TVPI, DPI, RVPI, MOIC): two decimals in figures, one on chart axes.
 const _perfMultiple = { fmt: v => v.toFixed(2) + 'x', tick: v => v.toFixed(1) + 'x' };
 // A table cell's multiple, from the raw query value.
-const _perfMultipleCell = v => { const n = v == null ? NaN : parseFloat(v); return isFinite(n) ? _perfMultiple.fmt(n) : '—'; };
+const _perfMultipleCell = v => { const n = _perfNum(v); return n != null ? _perfMultiple.fmt(n) : '—'; };
 // Net IRR, in percent: one decimal, + on gains (Ink rule 6), exact zero unsigned.
 const _perfIrr = n => `${n > 0 ? '+' : ''}${n.toFixed(1)}%`;
 // A table cell's Net IRR, from the raw query value.
-const _perfIrrCell = v => { const n = v == null ? NaN : parseFloat(v); return isFinite(n) ? _perfIrr(n) : '—'; };
+const _perfIrrCell = v => { const n = _perfNum(v); return n != null ? _perfIrr(n) : '—'; };
 
 const _PERF_COLS = [
   // Net IRR is signed, so it carries the positive/negative feedback color. Exact zero
   // stays neutral text-default.
-  { key: 'NET_LP_IRR',           label: 'Net IRR',              group: 'returns', fmt: v => {
+  { key: 'NET_LP_IRR',           label: 'Net IRR',              group: 'returns', fmt: (v, row) => {
+      if (row && row._family) return _perfTip(PERF_FAMILY_IRR_TIP, 'n/a');
       const txt = _perfIrrCell(v);
       const n = parseFloat(v);
       if (!isFinite(n) || n === 0) return txt;
@@ -1278,6 +1533,11 @@ const _PERF_COLS = [
   { key: 'TOTAL_CAP_CONTRIBUTION',label: 'Contributions',        group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Capital called from investors, counted on the call due date.' },
   { key: 'TOTAL_DISTRIBUTION',   label: 'Distributions',        group: 'capital', fmt: (v, row) => v != null ? fmtFull(parseFloat(v), row && row.FUND_REPORTING_CURRENCY) : '—',        tip: 'Cash and in-kind returned to investors.' },
 ];
+// A family has no Net IRR: IRRs cannot be added or averaged, and the warehouse holds no
+// combined cash-flow series that reproduces Carta's figure.
+const PERF_FAMILY_IRR_REASON = "Net IRR can't be added or averaged across funds, so a fund family has none.";
+const PERF_FAMILY_METHOD = 'Dollar amounts are added together; TVPI, DPI, RVPI and MOIC are recalculated from the combined amounts.';
+const PERF_FAMILY_IRR_TIP = PERF_FAMILY_IRR_REASON + " Switch to Underlying funds to see each fund's Net IRR.";
 // A measure's name, as the funds table heads its column.
 const _perfColLabel = key => _PERF_COLS.find(c => c.key === key).label;
 
@@ -1305,9 +1565,10 @@ function _perfFundRowsHtml(rows) {
   const chevron = '<svg class="perf-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
   return rows.map(row => {
     const name = escHtml(row.FUND_NAME ?? 'Fund');
+    const sub = row._family ? `<span class="perf-family-sub">${escHtml(row._members.map(m => m.name).join(' + '))}</span>` : '';
     const cells = _PERF_COLS.map(c => `<td>${c.fmt(row[c.key], row)}</td>`).join('');
     return `<tr data-uuid="${escHtml(row.FUND_UUID ?? '')}">
-      <td><button type="button" class="perf-fund-name-link">${name}</button></td>${cells}
+      <td><button type="button" class="perf-fund-name-link">${name}</button>${sub}</td>${cells}
       <td class="perf-row-action-col"><span class="perf-row-action" aria-hidden="true"><span class="perf-row-action-label">View</span>${chevron}</span></td>
     </tr>`;
   }).join('');
@@ -1324,7 +1585,7 @@ function _perfSortBy(key) {
   if (body) body.innerHTML = _perfFundRowsHtml(perfSortRows(_perfTableRows, _perfSort.key, _perfSort.dir));
 }
 
-function _perfRenderFundsTable(rows, container) {
+function _perfRenderFundsTable(rows, container, notices = []) {
   _perfTableRows = rows;
   const ariaSort = key => (_perfSort.key === key ? _perfSort.dir : 'none');
   // Numeric headers put the icon before the label, as Ink's sortable Table does. Each
@@ -1343,6 +1604,10 @@ function _perfRenderFundsTable(rows, container) {
   };
 
   if (perfOverviewChartInst) { perfOverviewChartInst.destroy(); perfOverviewChartInst = null; }
+  // What a family row is built from, and any family kept as its funds.
+  const listNotes = [];
+  if (rows.some(r => r._family)) listNotes.push(`Fund family rows combine their funds. ${PERF_FAMILY_METHOD} ${PERF_FAMILY_IRR_REASON}`);
+  notices.forEach(n => listNotes.push(`${n.familyName} is shown as separate funds because its funds do not all report one known currency${n.currencies.length ? ' (' + n.currencies.join(', ') + ')' : ''}; amounts in different currencies are never added together.`));
   container.innerHTML = `
     <section class="perf-chart-card perf-overview-card" id="perf-overview-card" aria-labelledby="perf-overview-title">
       <div class="perf-chart-header"><h2 class="perf-chart-title" id="perf-overview-title">Net IRR</h2></div>
@@ -1353,6 +1618,7 @@ function _perfRenderFundsTable(rows, container) {
         <div class="shimmer-bone perf-chart-bone" id="perf-overview-skeleton"></div>
       </div>
     </section>
+    ${listNotes.map(t => `<p class="perf-list-note">${escHtml(t)}</p>`).join('')}
     <div class="perf-table-wrap">
     <div class="perf-table-scroll">
       <table class="perf-funds-table">
@@ -1506,40 +1772,75 @@ function perfOverviewSeries(rows, state, funds) {
   return { labels: dates.map(_fmtQtr), datasets: [...solid, ...dashed] };
 }
 
-async function perfLoadOverviewChart(fundRows) {
-  const ids = fundRows.map(r => r.FUND_UUID).filter(u => _PERF_UUID_RE.test(u || '')).slice(0, PERF_OVERVIEW_QUERY_FUNDS);
-  let rows = [];
-  if (ids.length) {
-    try {
-      const r = await _mcp("fetch", {
-        command: 'dwh:execute:query',
-        params: {
-          sql: `SELECT FUND_UUID, FUND_NAME, PERFORMANCE_QUARTER_START_DATE,
-                       NET_LP_IRR, NET_LP_IRR_50TH, LP_TVPI, LP_TVPI_50, LP_DPI, LP_DPI_50
+// The rows of one dwh query, or null when it failed.
+async function _perfQueryRows(sql, limit) {
+  try {
+    const r = await _mcp("fetch", {
+      command: 'dwh:execute:query',
+      params: { sql, format: 'ndjson', response_mode: 'inline', ...(limit ? { limit } : {}) },
+    });
+    return r && !r.isError ? parseDWH(r) : null;
+  } catch (_) { return null; }
+}
+const _perfInList = uuids => uuids.filter(u => _PERF_UUID_RE.test(u || '')).map(u => `'${u}'`).join(', ');
+
+// The one query for TEMPORAL_FUND_COHORT_BENCHMARKS series: the overview graph, a fund's detail
+// page and a family's benchmark fund all read it.
+const _perfSeriesSql = uuids => `SELECT FUND_UUID, FUND_NAME, ${PERF_BENCH_COLS}
                 FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
-                WHERE FUND_UUID IN (${ids.map(u => `'${u}'`).join(', ')})
-                ORDER BY PERFORMANCE_QUARTER_START_DATE, FUND_NAME`,
-          format: 'ndjson',
-          response_mode: 'inline',
-          limit: PERF_OVERVIEW_QUERY_LIMIT,
-        },
-      });
-      if (r && !r.isError) rows = parseDWH(r);
-    } catch (_) {}
-  }
+                WHERE FUND_UUID IN (${_perfInList(uuids)})
+                ORDER BY PERFORMANCE_QUARTER_START_DATE, FUND_NAME`;
+
+// The family's month-end history: the columns its quarterly TVPI, DPI and MOIC are summed from.
+const _perfFamilyMonthlySql = uuids => `SELECT FUND_UUID, MONTH_END_DATE,
+                       LP_VALUE, TOTAL_LP_CAP_CONTRIBUTION, TOTAL_LP_DISTRIBUTION,
+                       TOTAL_MOIC, TOTAL_COST_OF_INVESTMENTS
+                FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
+                WHERE FUND_UUID IN (${_perfInList(uuids)})
+                ORDER BY MONTH_END_DATE`;
+
+// A family's quarterly series as benchmark-table rows (see perfFamilyBenchmarkRows), or null
+// when its month-end history can't be read. `benchmarkRows` are the benchmark fund's own rows.
+function _perfFamilyRows(family, monthly, benchmarkRows) {
+  if (!monthly) return null;
+  const series = perfFamilySeries(monthly, family._members.map(m => m.uuid), _perfToday());
+  return perfFamilyBenchmarkRows(family.FUND_UUID, series, benchmarkRows || []);
+}
+
+let _perfOverviewLoad = 0;
+async function perfLoadOverviewChart(entityRows) {
+  const load = ++_perfOverviewLoad;
+  const shown = entityRows.slice(0, PERF_OVERVIEW_QUERY_FUNDS);
+  const families = shown.filter(e => e._family);
+  // Funds are read from the benchmark table; a family is built from its funds' month-end
+  // rows, with the peer percentiles of its benchmark fund.
+  const fundIds = [...shown.filter(e => !e._family).map(e => e.FUND_UUID), ...families.map(f => f._benchmarkUuid)];
+  const [fundRowsRaw, ...familyMonthly] = await Promise.all([
+    fundIds.length ? _perfQueryRows(_perfSeriesSql([...new Set(fundIds)]), PERF_OVERVIEW_QUERY_LIMIT) : Promise.resolve([]),
+    ...families.map(f => _perfQueryRows(_perfFamilyMonthlySql(f._members.map(m => m.uuid)), PERF_OVERVIEW_QUERY_LIMIT)),
+  ]);
+  if (load !== _perfOverviewLoad) return;
+  const fundSeries = fundRowsRaw || [];
+  const rows = [...fundSeries];
+  families.forEach((f, i) => {
+    const benchmark = fundSeries.filter(r => r.FUND_UUID === f._benchmarkUuid);
+    rows.push(...(_perfFamilyRows(f, familyMonthly[i], benchmark) || []));
+  });
   const card = document.getElementById('perf-overview-card');
   if (!card) return;
   const withData = new Set(rows.map(r => r.FUND_UUID));
   // NAV order, same as the table underneath.
-  const funds = fundRows.filter(r => withData.has(r.FUND_UUID));
+  const funds = shown.filter(r => withData.has(r.FUND_UUID));
   if (!funds.length) { card.remove(); return; }
   const labels = _perfShortFundLabels(funds.map(r => String(r.FUND_NAME ?? 'Fund')));
   _perfOverviewRows = rows;
   _perfLegendAnimated = false;
   _perfOverviewFunds = funds.map((r, i) => ({
-    uuid: r.FUND_UUID, name: r.FUND_NAME, label: labels[i], color: null,
+    uuid: r.FUND_UUID, name: r.FUND_NAME, label: labels[i], color: null, family: !!r._family,
   }));
   _perfOverview = _perfOverviewDefaults();
+  // A family has no Net IRR line, so a graph that includes one opens on TVPI.
+  if (_perfOverviewFunds.some(f => f.family)) _perfOverview.metric = 'TVPI';
   _perfShowFunds(_perfDefaultFunds());
   _perfWireOverviewCard(card);
   _perfRenderOverviewControls();
@@ -1755,9 +2056,11 @@ function _perfRenderOverviewLegend() {
   const peerKey = _perfOverview.showPeer && _perfOverviewHasPeer()
     ? `<span class="perf-overview-peer-key${pop}" style="--i:${_perfOverviewFunds.length}"><span class="perf-overview-dash"></span>Dashed line = peer median (P50)</span>`
     : '';
+  const familyIrr = _perfOverview.metric === 'NET_IRR' && _perfOverviewFunds.some(f => f.family && shown.includes(f.uuid))
+    ? `<p class="perf-list-note">${escHtml(PERF_FAMILY_IRR_REASON)} Pick TVPI or DPI to see a family\u2019s line.</p>` : '';
   el.innerHTML = `
     <div class="perf-compare-head"><span class="fund-switcher-label">Compare funds</span><span class="perf-compare-rule">${rule}</span></div>
-    <div class="perf-compare-chips" role="group" aria-label="Compare funds">${chips}${peerKey}</div>`;
+    <div class="perf-compare-chips" role="group" aria-label="Compare funds">${chips}${peerKey}</div>${familyIrr}`;
   _perfLegendAnimated = true;
 }
 
@@ -1865,7 +2168,16 @@ async function perfLoadFund(uuid) {
   // viewer has opened another fund or gone back to the list.
   const stale = () => perfCurrentFundUuid !== uuid;
   // The id goes into SQL below, so only a well-formed UUID is queried.
-  const queryable = _PERF_UUID_RE.test(uuid || '');
+  // A fund family is built from its funds, which each pass the same check.
+  const family = _perfEntities.get(uuid)?._family ? _perfEntities.get(uuid) : null;
+  const queryable = family ? family._members.every(m => _PERF_UUID_RE.test(m.uuid || '')) : _PERF_UUID_RE.test(uuid || '');
+  const familyNote = document.getElementById('perf-family-note');
+  if (familyNote) {
+    familyNote.hidden = !family;
+    familyNote.textContent = family
+      ? `Fund family view of ${family._members.map(m => m.name).join(' + ')}. ${PERF_FAMILY_METHOD} ${PERF_FAMILY_IRR_REASON} Peer benchmarks use the cohort of ${family._benchmarkName}.`
+      : '';
+  }
   if (perfPeerChartInst) { perfPeerChartInst.destroy(); perfPeerChartInst = null; }
   _perfPeerData = null;
   _perfSetAsOf([]);
@@ -1912,16 +2224,11 @@ async function perfLoadFund(uuid) {
     // ── Fire both queries in parallel ──
     // Include MONTH_END_DATE so we can use the snapshot as a trailing data point
     // on charts when TEMPORAL_FUND_COHORT_BENCHMARKS lags behind.
-    const snapPromise = _mcp("fetch", {
+    // A family's snapshot is its row in the list, already summed from its funds.
+    const snapPromise = family ? null : _mcp("fetch", {
       command: 'dwh:execute:query',
       params: {
-        sql: `SELECT
-          MONTH_END_DATE, FUND_REPORTING_CURRENCY,
-          FUND_SIZE, TOTAL_MOIC, NET_LP_IRR, LP_DPI,
-          TOTAL_VALUE, ENDING_TOTAL_NAV, TOTAL_CAP_CONTRIBUTION, TOTAL_DISTRIBUTION,
-          TOTAL_COST_OF_INVESTMENTS, DEAL_IRR, VINTAGE_DATE,
-          LP_TVPI, LP_RVPI, LP_MOIC,
-          LP_VALUE, ENDING_LP_NAV, TOTAL_LP_CAP_CONTRIBUTION, TOTAL_LP_DISTRIBUTION
+        sql: `SELECT ${PERF_SNAPSHOT_COLS}
         FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
         WHERE FUND_UUID = '${uuid}'
         ORDER BY MONTH_END_DATE DESC NULLS LAST
@@ -1932,29 +2239,26 @@ async function perfLoadFund(uuid) {
 
     // One statement for the first call and its retry, so the two can't drift apart.
     // uuid passed the _PERF_UUID_RE check above (queryable) before reaching here.
-    const seriesSql = `SELECT
-          PERFORMANCE_QUARTER_START_DATE,
-          NET_LP_IRR, NET_IRR, LP_TVPI, LP_DPI, MOIC,
-          NET_LP_IRR_25TH, NET_LP_IRR_50TH, NET_LP_IRR_75TH,
-          LP_TVPI_25, LP_TVPI_50, LP_TVPI_75,
-          LP_DPI_25, LP_DPI_50, LP_DPI_75,
-          MOIC_25, MOIC_50, MOIC_75,
-          VINTAGE_YEAR, ENTITY_TYPE_NAME, FUND_AUM_BUCKET, FUND_COUNT
-        FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
-        WHERE FUND_UUID = '${uuid}'
-        ORDER BY PERFORMANCE_QUARTER_START_DATE ASC`;
-    const seriesPromise = _mcp("fetch", {
-      command: 'dwh:execute:query',
-      params: {
-        sql: seriesSql,
-        format: 'ndjson',
-      },
-    });
+    const seriesSql = _perfSeriesSql([uuid]);
+    const seriesPromise = family
+      ? Promise.all([
+          _perfQueryRows(_perfFamilyMonthlySql(family._members.map(m => m.uuid)), PERF_OVERVIEW_QUERY_LIMIT),
+          _perfQueryRows(_perfSeriesSql([family._benchmarkUuid])),
+        ]).then(([monthly, benchmark]) => _perfFamilyRows(family, monthly, benchmark))
+      : _mcp("fetch", {
+          command: 'dwh:execute:query',
+          params: {
+            sql: seriesSql,
+            format: 'ndjson',
+          },
+        });
 
     // ── Render snapshot (metrics strip + table) as soon as it resolves ──
     try {
-      const rS = await snapPromise;
-      if (rS && !rS.isError) {
+      const rS = family ? null : await snapPromise;
+      if (family) {
+        snapshotRow = { ...family };
+      } else if (rS && !rS.isError) {
         const rows = parseDWH(rS);
         if (rows.length > 0) snapshotRow = rows[0];
       } else {
@@ -1982,7 +2286,7 @@ async function perfLoadFund(uuid) {
 
     // Render metrics strip + table immediately — don't wait for charts
     if (snapshotRow) {
-      _perfSetAsOf([snapshotRow.MONTH_END_DATE]);
+      _perfSetAsOf(snapshotRow._asOfDates || [snapshotRow.MONTH_END_DATE]);
       perfSetStatus(null);
       perfRenderMetrics(snapshotRow);
       perfRenderMetricsTable(snapshotRow);
@@ -1990,34 +2294,38 @@ async function perfLoadFund(uuid) {
 
     // ── Now await the series query and render charts ──
     try {
-      let r = await seriesPromise;
-      if (!r || r.isError) {
-        r = await _mcp("fetch", {
-          command: 'dwh:execute:query',
-          params: {
-            sql: seriesSql,
-            format: 'ndjson',
-            response_mode: 'inline',
-          },
-        });
-      }
-      if (r && !r.isError) {
-        const rows = parseDWH(r);
-        if (rows.length > 0) {
-          seriesData = _parseSeriesRows(rows);
-          const lastRow = rows[rows.length - 1];
-          const lastIrr = [...rows].reverse().find(row => row.NET_IRR != null);
-          if (lastIrr) {
-            fundNetIrr = lastIrr.NET_IRR;
-            fundNetIrrDate = lastIrr.PERFORMANCE_QUARTER_START_DATE;
-          }
-          seriesData._cohort = {
-            vintageYear: lastRow.VINTAGE_YEAR,
-            entityType: lastRow.ENTITY_TYPE_NAME,
-            aumBucket: lastRow.FUND_AUM_BUCKET,
-            fundCount: lastRow.FUND_COUNT,
-          };
+      let rows = null;
+      if (family) {
+        rows = await seriesPromise;
+      } else {
+        let r = await seriesPromise;
+        if (!r || r.isError) {
+          r = await _mcp("fetch", {
+            command: 'dwh:execute:query',
+            params: {
+              sql: seriesSql,
+              format: 'ndjson',
+              response_mode: 'inline',
+            },
+          });
         }
+        if (r && !r.isError) rows = parseDWH(r);
+      }
+      if (rows && rows.length > 0) {
+        seriesData = _parseSeriesRows(rows);
+        const lastRow = rows[rows.length - 1];
+        const lastIrr = [...rows].reverse().find(row => row.NET_IRR != null);
+        if (lastIrr) {
+          fundNetIrr = lastIrr.NET_IRR;
+          fundNetIrrDate = lastIrr.PERFORMANCE_QUARTER_START_DATE;
+        }
+        seriesData._cohort = {
+          vintageYear: lastRow.VINTAGE_YEAR,
+          entityType: lastRow.ENTITY_TYPE_NAME,
+          aumBucket: lastRow.FUND_AUM_BUCKET,
+          fundCount: lastRow.FUND_COUNT,
+          benchmarkName: family ? family._benchmarkName : null,
+        };
       }
     } catch (_) {}
     if (stale()) return;
@@ -2091,13 +2399,17 @@ async function perfLoadFund(uuid) {
     perfRenderMetricsTable(null);
   }
   if (seriesData) {
+    seriesData._family = !!family;
+    // A family has no Net IRR line, so its chart opens on TVPI.
+    if (seriesData._family && _perfPeerMetric === 'NET_IRR') _perfPeerMetric = 'TVPI';
     perfDrawCharts(seriesData);
     // Show cohort label below metrics strip
     const cohortEl = document.getElementById('perf-cohort-label');
     if (cohortEl && seriesData._cohort) {
     const c = seriesData._cohort;
-    const hasBenchmarkData = seriesData.some(d => d.BENCHMARK_P50_NET_IRR != null);
+    const hasBenchmarkData = seriesData.some(d => d.BENCHMARK_P50_NET_IRR != null || d.BENCHMARK_P50_TVPI != null);
     const parts = [];
+    if (c.benchmarkName) parts.push(`${c.benchmarkName} cohort`);
     if (c.vintageYear) parts.push(c.vintageYear);
     if (c.entityType)  parts.push(c.entityType);
     if (c.aumBucket)   parts.push(c.aumBucket.replace(/-/g, '\u2013') + ' AUM');
@@ -2106,7 +2418,7 @@ async function perfLoadFund(uuid) {
       cohortEl.textContent = parts.length ? 'Benchmarks: ' + parts.join(' \u00b7 ') : '';
 
     } else if (parts.length) {
-      cohortEl.innerHTML = 'Cohort: ' + parts.join(' \u00b7 ') + ' &mdash; <em>peer benchmark data not yet available for this cohort</em>';
+      cohortEl.innerHTML = 'Cohort: ' + parts.map(escHtml).join(' \u00b7 ') + ' &mdash; <em>peer benchmark data not yet available for this cohort</em>';
     } else {
       cohortEl.textContent = '';
     }
@@ -2175,6 +2487,9 @@ function perfRenderMetrics(s, loading = false) {
 function _perfIrrCallout(s, loading) {
   const label = `<div class="perf-metric-label">${_perfTip(PERF_IRR_TIPS.net, 'Net IRR')}</div>`;
   if (loading) return `<div class="perf-metric perf-metric-irr">${label}<div class="perf-metric-val"><span class="shimmer-bone shimmer-val"></span></div></div>`;
+  if (s._family) return `<div class="perf-metric perf-metric-irr">${label}
+    <div class="perf-metric-val">${_perfTip(PERF_FAMILY_IRR_TIP, 'Not available for a family')}</div>
+  </div>`;
   const net = _perfIrrCell(s.NET_LP_IRR), gross = _perfIrrCell(s.DEAL_IRR);
   const grossPart = gross === '—'
     ? _perfTip(PERF_IRR_TIPS.missing, 'Gross not reported')
@@ -2213,7 +2528,8 @@ function perfRenderMetricsTable(s, loading = false) {
     const q = _fmtQtr(_perfDay(d));
     return q !== _fmtQtr(_perfDay(asOf)) && _perfDay(d) < _perfDay(asOf) ? ` (${q})` : '';
   };
-  const irr = (v, c) => loading || v === undefined ? bone : _perfIrrCell(v) + irrQuarter(v, c);
+  const irr = (v, c) => loading || v === undefined ? bone
+    : s._family ? _perfTip(PERF_FAMILY_IRR_TIP, 'n/a') : _perfIrrCell(v) + irrQuarter(v, c);
   const dlr = v => loading ? bone : v != null ? fmtFull(parseFloat(v), s.FUND_REPORTING_CURRENCY) : '—';
   // [label, value for one side, formatter(value, side)]
   const rows = [
@@ -2276,9 +2592,10 @@ function _perfPeerSummary() {
   const m = PERF_PEER_METRICS[_perfPeerMetric];
   const q = perfPeerQuartile(_perfPeerData, _perfPeerMetric);
   const c = _perfPeerData._cohort || {};
+  if (_perfPeerData._family && _perfPeerMetric === 'NET_IRR') { el.textContent = PERF_FAMILY_IRR_REASON + ' Pick TVPI, DPI or MOIC to compare the family with peers.'; return; }
   if (!q) { el.textContent = `No peer benchmark yet for this fund's cohort, so ${m.label} shows the fund alone.`; return; }
   const peers = [c.vintageYear && `${c.vintageYear} vintage`, c.entityType].filter(Boolean).join(' ');
-  const detail = [c.fundCount && `${c.fundCount} funds`, `as of ${q.quarter}`].filter(Boolean).join(', ');
+  const detail = [c.benchmarkName && `${c.benchmarkName}\u2019s cohort`, c.fundCount && `${c.fundCount} funds`, `as of ${q.quarter}`].filter(Boolean).join(', ');
   el.innerHTML = `${escHtml(m.label)}: <strong>${PERF_QUARTILE_NAMES[q.quartile - 1]}</strong> vs ${escHtml(peers || 'peer')} funds <span class="perf-peer-detail">(${escHtml(detail)})</span>`;
 }
 
@@ -2392,4 +2709,4 @@ window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change"
   if (perfOverviewChartInst) { perfOverviewChartInst.destroy(); perfOverviewChartInst = null; perfDrawOverviewChart(); }
 });
 </script>
-<script type="application/json" id="artifact-baseline">{"version":null,"lines":"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"}</script>
+<script type="application/json" id="artifact-baseline">{"version":null,"lines":"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"}</script>
