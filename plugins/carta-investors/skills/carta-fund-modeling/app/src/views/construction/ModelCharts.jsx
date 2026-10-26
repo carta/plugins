@@ -40,7 +40,7 @@ export function StatStrip({ items, testId }) {
           </div>
           <div style={{ ...inkNum, fontSize: FS.h3 ?? 20, fontWeight: 700, lineHeight: "28px", whiteSpace: "nowrap" }}>{it.value}</div>
           {it.sub && (
-            <div style={{ ...sans, fontSize: FS.micro, fontWeight: 600, whiteSpace: "nowrap",
+            <div style={{ ...sans, fontSize: FS.micro, fontWeight: 600, overflowWrap: "anywhere",
               color: it.tone === "good" ? "var(--ink-color-global-feedback-positive-strong)" : it.tone === "bad" ? "var(--ink-color-global-feedback-negative-strong)" : subtle }}>{it.sub}</div>
           )}
         </div>
