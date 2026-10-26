@@ -84,7 +84,7 @@
     "name": "Risk & expiration alerts",
     "order": 10,
     "prompts": [
-      "What's expiring soon across our 409A valuations, SAFEs, and option pool?",
+      "What's expiring soon across our 409A valuations, SAFEs, option pool, and 83(b) deadlines?",
       "Which convertible notes mature in the next 90 days?",
       "Is the option pool running low at {{COMPANY}}?"
     ]

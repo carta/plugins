@@ -8,7 +8,8 @@ when_to_use: >-
   portfolio (convertible notes, debt instruments), which companies are
   running low on something (option pool below a threshold, runway), which
   SAFEs are approaching their valuation-cap trigger or expiring before
-  conversion across the portfolio, or to run a portfolio health audit or
+  conversion across the portfolio, which 83(b) elections are not filed or
+  have a filing deadline coming up, or to run a portfolio health audit or
   red-flag scan. For raw multi-company data without a risk or
   time or threshold lens, prefer a portfolio data-query skill. For
   statistical norms across the portfolio, prefer a portfolio-benchmarks
@@ -33,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.98.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.99.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -59,8 +60,9 @@ For each company, these are the relevant checks:
 - `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool check
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- note maturity check (summary includes `maturity.nearest_date`)
 - `read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": corporation_id}})` -- SAFE exposure check
+- `read_tool({"name": "cap_table__list__83b_elections", "arguments": {"company": corporation_id, "status": "not_filed"}})` -- 83(b) deadline check
 
-The gateway defaults to `detail=summary` for list commands. All four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes.
+The gateway defaults to `detail=summary` for list commands. The first four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes. The 83(b) list always returns its `summary` with the rows: `not_filed_open` and `next_deadline` count only deadlines today or later.
 
 If the user asks about a specific check only (e.g. "any expiring 409As?"), fetch only the relevant command per company.
 
@@ -71,6 +73,7 @@ If the user asks about a specific check only (e.g. "any expiring 409As?"), fetch
 From 409A: `expiration_date`, `price`, `effective_date`
 From cap table option plans: `available_ownership`, `name`
 From convertible notes (summary): `maturity.nearest_date`, `maturity.total_outstanding_debt`, `by_status`, `by_type`
+From 83(b) elections: `summary.not_filed_open`, `summary.next_deadline`; each row's `holder_name`, `label`, `type`, `deadline`
 
 ## Workflow
 
@@ -82,7 +85,7 @@ Call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 nume
 
 Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. Each fetch call is independent and will execute concurrently.
 
-For example, with 5 companies and all 4 checks, issue all 20 fetch calls at once:
+For example, with 5 companies and all 5 checks, issue all 25 fetch calls at once:
 
 ```
 read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 1}})
@@ -130,6 +133,14 @@ Use `maturity.nearest_date` and `maturity.total_outstanding_debt` from the conve
 
 Sum outstanding SAFE amounts per company.
 
+#### 5. 83(b) Elections Not Filed
+
+| Check | Critical | Warning | Info | Rationale |
+|-------|----------|---------|------|-----------|
+| 83(b) deadline | A `not_filed` row with `deadline` within 7 days | A `not_filed` row with `deadline` later than 7 days | A `not_filed` row with `deadline` in the past | The IRS 30-day window cannot be extended; a past deadline is a record to confirm with the holder, not an action |
+
+The list can include holders outside the US, who do not file an 83(b). Name the holder and the security label for each finding.
+
 ### Step 4 — Present Results
 
 Present a summary dashboard (see Presentation section).
@@ -138,7 +149,7 @@ Present a summary dashboard (see Presentation section).
 
 **Required inputs**: None — portfolio enumeration is automatic.
 
-**AI computation**: Yes — severity classifications (critical, warning, info) for 409A expiry, option pool health, note maturity, and SAFE exposure are AI-derived.
+**AI computation**: Yes — severity classifications (critical, warning, info) for 409A expiry, option pool health, note maturity, SAFE exposure, and 83(b) deadlines are AI-derived.
 Trigger the AI computation gate (see carta-interaction-reference §6.2) before outputting any severity classifications or health assessments.
 
 **Subagent prohibition**: Not applicable.
