@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { MixedCurrencyText } from "../../ui/components.jsx";
+import { Num, MixedCurrencyText } from "../../ui/components.jsx";
 import { fmtM } from "../../ui/format.js";
 import { computeReserves, reserveOptsOf, hasCommittedCapital } from "../../model/reserves.js";
-import { WidgetCard, WidgetStat, WidgetNote, BarRows, BarRow, widgetFundName } from "./WidgetCard.jsx";
+import { WidgetCard, WidgetStat, WidgetNote, BarRows, BarRow, ThinBar, SUBTLE, ACCENT, widgetFundName } from "./WidgetCard.jsx";
 
 const FUND_ROWS = 3; // funds listed under the headline; every fund is on the Reserves tab
 
@@ -44,6 +44,36 @@ export function DryPowderWidget({ snapshot, portfolio, mixed, firmName, onNaviga
         </BarRows>
       )}
       {rest.length > 0 && <WidgetNote testId="ov-reserves-note">{fmtM(restLeft)} dry powder in {restWords}</WidgetNote>}
+    </WidgetCard>
+  );
+}
+
+/** Carry accrued — the firm's GP carry at this scenario's marks (firm.gpCarry): Carta's
+ *  accrued carry at Baseline, plus carry banked on modeled exits, which is why GP
+ *  Economics calls the same figure "Modeled GP carry". Under it, a bar of how much of
+ *  the carry earned so far (distributed plus accrued) has been distributed to the GP.
+ *  Firm-wide sums, so a mixed-currency firm gets the notice instead. */
+export function CarryWidget({ firm, snapshot, fundStates, onNavigate, span }) {
+  const view = { tab: "gp-economics", name: "GpCarry" };
+  if (firm.mixedCurrency) return <WidgetCard title="Carry accrued" view={view} onNavigate={onNavigate} testId="ov-widget-carry" span={span}><MixedCurrencyText /></WidgetCard>;
+  const distributed = fundStates.reduce((s, f) => s + (snapshot.gpEconomics?.[f.id]?.carryDistributed || 0), 0);
+  const earned = distributed + firm.gpCarry;
+  return (
+    <WidgetCard title="Carry accrued" view={view} onNavigate={onNavigate} testId="ov-widget-carry" span={span}>
+      <WidgetStat value={<Num value={firm.gpCarry} fmt={fmtM} />} />
+      {earned > 0.5 ? (
+        <div style={{ marginTop: 14 }}>
+          <div data-testid="ov-carry-bar" style={{ display: "flex" }}>
+            <ThinBar parts={[{ value: distributed, color: ACCENT }]} max={earned} height={10}
+              title={`Distributed ${fmtM(distributed)} · accrued ${fmtM(firm.gpCarry)}`} />
+          </div>
+          <div style={{ ...SUBTLE, marginTop: 8 }}>
+            {distributed > 0.5 ? `${fmtM(distributed)} distributed` : "None distributed yet"}
+          </div>
+        </div>
+      ) : (
+        <div style={{ ...SUBTLE, marginTop: 16 }}>No fund has earned carry at these marks.</div>
+      )}
     </WidgetCard>
   );
 }

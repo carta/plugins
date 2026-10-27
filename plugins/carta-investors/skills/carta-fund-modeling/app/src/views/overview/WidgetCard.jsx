@@ -8,7 +8,7 @@ export const widgetClass = (span) => `card ov-span-${span}`;
 /** Secondary text on the dashboard: small and subtle. */
 export const SUBTLE = { ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" };
 
-/** Every card's inner padding, so the page reads as one grid; the hero's summary card alone is roomier. */
+/** Every card's inner padding, so the page reads as one grid. */
 const PAD = "18px 20px";
 
 /** One Firm Overview widget: a card with a title, an optional subtitle, a "View →"
@@ -18,11 +18,11 @@ const PAD = "18px 20px";
  *  `section` is the id of the element on that tab to scroll to.
  *  A card with none of the three has no header row.
  *  `span` is the widget's width in the dashboard's 12-column grid (see `.ov-bento`);
- *  `className` adds classes, `pad` overrides PAD. */
-export function WidgetCard({ title, subtitle, view, onNavigate, testId, span = 4, pad = PAD, className, children }) {
+ *  `className` adds classes. */
+export function WidgetCard({ title, subtitle, view, onNavigate, testId, span = 4, className, children }) {
   return (
     <section className={className ? `${widgetClass(span)} ${className}` : widgetClass(span)} data-testid={testId}
-      style={{ padding: pad, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      style={{ padding: PAD, display: "flex", flexDirection: "column", minWidth: 0 }}>
       {(title || subtitle || view) && (
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
           {title && <H3>{title}</H3>}

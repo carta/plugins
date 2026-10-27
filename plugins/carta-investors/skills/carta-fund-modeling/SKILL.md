@@ -69,7 +69,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.121.11</carta-plugin>
+<carta-plugin>carta-investors:6.121.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -506,9 +506,9 @@ helpers only.
 
 **Do not stop after the fund-level stems** — `financing` supplies each company's last priced round, `captable`
 populates its cap table on the dashboard, and `corporations` is the id bridge those enrichments (cap table AND
-"Latest round" on Overview) resolve through. All three are file-required (see contract below): a missing
+"Last priced round" in a Companies row's Cap table tab) resolve through. All three are file-required (see contract below): a missing
 `<stem>.ndjson` hard-fails the build, so skipping them can no longer silently yield "0 cap tables" / blank
-"Latest round" fields, indistinguishable from a firm that legitimately has none.
+"Last priced round" fields, indistinguishable from a firm that legitimately has none.
 
 `financing`, `captable` and `corporations` filter by corporation, but they take **only the `fund_uuid` list** —
 their corporation scope is a subquery over `FUND_CORPORATION_OWNERSHIP` (see queries.md §11). **Never** rewrite
@@ -718,7 +718,7 @@ React/Sucrase version bump.
 New interactive elements: call `trackClick(elementId)` (or `trackRender(elementId)` for view/dialog mounts)
 (import from `../analytics.js` or the correct relative path) at the top of the handler, IDs as
 `FundModeling.<Area>.<Specific>` (e.g.
-`FundModeling.Overview.ExportClick`) — skip sort clicks, keystrokes, dropdown changes. The tracker bundle at
+`FundModeling.Overview.OpenFund`) — skip sort clicks, keystrokes, dropdown changes. The tracker bundle at
 `webapp/vendor/mcp-ui-tracker.global.js` is vendored from `@carta/mcp-ui-tracker`'s `build:browser` output — if
 the upstream library changes, rebuild and overwrite that file.
 
