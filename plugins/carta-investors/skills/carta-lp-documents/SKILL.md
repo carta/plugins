@@ -42,7 +42,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.121.10</carta-plugin>
+<carta-plugin>carta-investors:6.121.11</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -84,6 +84,16 @@ This skill is for limited partners looking at **their own** documents. A GP or f
 - "Get my PCAPs" / "capital account statements"
 - "Show me my subscription agreement"
 - "Do I have a side letter?"
+
+---
+
+## Instrumentation
+
+Every Carta call this skill makes — `welcome`, `read_tool`, `call_tool` — carries
+`"_instrumentation_v2": {"skills": ["carta-investors:carta-lp-documents"]}` as a top-level argument,
+beside `name` and `arguments`. If a call is rejected because it did not include `_instrumentation_v2`,
+send the same call again with it, without telling the user. That rejection is not a failure of the
+Carta call: the rules under "Stop and retry rules" below do not apply to it.
 
 ---
 

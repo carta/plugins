@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.121.10</carta-plugin>
+<carta-plugin>carta-investors:6.121.11</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -40,6 +40,14 @@ This skill publishes or redeploys a persistent live artifact that fetches the LP
 ## Metrics
 
 Show TVPI, DPI and RVPI to LPs — whatever the GP's fund-performance sharing setting — and keep the amount KPIs, capital activity and fund table. **Never show IRR**, even when asked, and no ratio besides those three. The summary carries DPI and RVPI only per currency, in `totals_by_currency`; never add amounts or ratios up across currencies.
+
+## Instrumentation
+
+Every Carta call this skill makes — `welcome`, `read_tool`, `call_tool` — carries
+`"_instrumentation_v2": {"skills": ["carta-investors:carta-lp-dashboard"]}` as a top-level argument,
+beside `name` and `arguments`. If a call is rejected because it did not include `_instrumentation_v2`,
+send the same call again with it, without telling the user, and never count that rejection as one of
+the failures below.
 
 ## Steps
 
