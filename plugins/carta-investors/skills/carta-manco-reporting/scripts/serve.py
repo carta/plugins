@@ -349,7 +349,11 @@ def _refresh_claude_status_later():
 
 def _startup_claude_probe():
     """Resolve and print the claude CLI's status once at launch, in the background so
-    a slow `claude auth status` never delays the printed dashboard URL."""
+    a slow `claude auth status` never delays the printed dashboard URL. Once sharing
+    is confirmed available, also settles every own-synced report's name against
+    Carta right away — own_sync.sweep() does the same before every build's push, but
+    this brings a rename made on the hosted app while the dashboard was closed onto
+    it at launch, without waiting on the next build's sweep to get around to it."""
     ok = _refresh_claude_status()
     with _claude_lock:
         bin_path, reason = CLAUDE_BIN, _CLAUDE_STATUS["reason"]
@@ -359,6 +363,15 @@ def _startup_claude_probe():
     state = ("logged in" if ok else
             "logged out" if reason == preflight_claude.REASON_NOT_LOGGED_IN else "sign-in unknown")
     print("[serve] claude CLI: %s (%s)" % (bin_path, state), flush=True)
+    if ok:
+        _reconcile_own_sync_names_at_startup()
+
+
+def _reconcile_own_sync_names_at_startup():
+    try:
+        own_sync.reconcile_names(report_store.ReportStore(DATA_DIR), DATA_DIR, _get_bridge())
+    except Exception as e:
+        print("[serve] own-sync name reconcile skipped: %r" % e, file=sys.stderr, flush=True)
 
 
 # ── Sign-in to Claude (POST /api/claude-signin) ──

@@ -357,6 +357,18 @@ def delete(bridge: Any, store: report_store.ReportStore, data_dir: Path, report_
     return {"status": "ok"}
 
 
+def list_reports(bridge: Any, ctx: Dict[str, Any], emit: Emit) -> Optional[List[Dict[str, Any]]]:
+    """fa:get:budget_reports' listing for `ctx`'s entity, or None when the answer isn't
+    trustworthy enough to act on: a flaky call can come back as `{}`, and trusting that
+    as "nothing is shared/synced" would prune every report a caller already has. The one
+    place both pull() (shared-in reports) and own_sync.reconcile_names (own-synced
+    reports' names) apply this same guard, so the rule never drifts between the two."""
+    listing = bridge.call("fa__get__budget_reports", {"fund_uuid": ctx["fund_uuid"]}, emit)
+    if isinstance(listing, dict) and isinstance(listing.get("reports"), list):
+        return listing["reports"]
+    return None
+
+
 def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emit) -> Dict[str, Any]:
     """Load the reports shared with you and refresh the ones you already have.
 
@@ -365,11 +377,8 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
     """
     ctx = context(data_dir)
     emit("Loading shared reports…")
-    listing = bridge.call("fa__get__budget_reports", {"fund_uuid": ctx["fund_uuid"]}, emit)
-    # A flaky call can come back as {} — trusting that as "nothing is shared" would
-    # drop every report already pulled, so only a real list prunes.
-    trustworthy = isinstance(listing, dict) and isinstance(listing.get("reports"), list)
-    reports = listing["reports"] if trustworthy else []
+    listing = list_reports(bridge, ctx, emit)
+    reports = listing or []
     doc = store.load()
     dismissed = store.dismissed_uuids(doc)
     local = {store.shared_uuid(r): r for r in doc["reports"] if store.shared_uuid(r)}
@@ -406,7 +415,7 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
             "budget": canonical.budget_from_canonical(fetched["payload"], report_id="pending", name=info.get("name") or "Shared report"),
             "shared": _shared_meta(info),
         })
-    upstream = {m.get("uuid") for m in reports if m.get("uuid")} if trustworthy else None
+    upstream = {m.get("uuid") for m in reports if m.get("uuid")} if listing is not None else None
     counts = store.upsert_pulled(pulled, upstream)
     counts["skipped"] = skipped
     return {"status": "ok", "counts": counts}

@@ -6,13 +6,19 @@ with `shared_with` always pinned to the caller's own user id — this never make
 a report visible to anyone else, and never touches `report["shared"]` (the
 deliberate-sharing link the Share dialog reads).
 
-A report is pushed only when its payload has moved since the last successful
-push, mirroring report_store.mark_if_payload_moved's dirty check for shared
-reports. report_store.ReportStore.dismissed_uuids folds in every report's own
-sync uuid, so a mirror this dashboard pushed is never imported back by
-share_ops.pull as if someone else had shared it — only for *this* local
-reports.json, though: a mirror pushed from a different checkout of the same
-dashboard (a second machine, a reinstalled skill) has no local record and
+A report is pushed only when its payload or its name has moved since the last
+successful push (`own_sync.payload_fingerprint`/`pushed_name`), mirroring
+report_store.mark_if_payload_moved's dirty check for shared reports — a
+name-only move sends just the name, never the payload. reconcile_names runs
+first, at the start of every sweep: it settles the other direction, a rename
+made on the hosted app, back onto the local report before push_if_changed
+looks at anything, so the two directions never fight over the same name (see
+reconcile_names's own docstring for the three-way comparison that decides
+whose rename wins). report_store.ReportStore.dismissed_uuids folds in every
+report's own sync uuid, so a mirror this dashboard pushed is never imported
+back by share_ops.pull as if someone else had shared it — only for *this*
+local reports.json, though: a mirror pushed from a different checkout of the
+same dashboard (a second machine, a reinstalled skill) has no local record and
 would still come back as a pulled copy there.
 
 Removing a synced report locally must go through `forget`, not
@@ -62,6 +68,7 @@ import json
 import os
 import sys
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -115,13 +122,16 @@ def push_if_changed(
     user_id: int,
     emit: Emit,
 ) -> Optional[Dict[str, Any]]:
-    """Push `report_id`'s current payload to Carta as a report visible to nobody but
-    `user_id`, when it has moved since the last successful push for this report.
+    """Push `report_id`'s current payload and name to Carta as a report visible to
+    nobody but `user_id`, when either has moved since the last successful push for
+    this report. A report renamed while its payload fingerprint is unchanged sends
+    just the name — no payload, no snapshot_basis — so renaming here never resends
+    a budget nothing changed.
 
     Returns the report's metadata (report_store.ReportStore.metadata shape,
     including the new `own_sync` field) after a push, or None when nothing
     needed sending: the report is read-only (shared with you, not yours to
-    mirror), hasn't been built yet, or its payload is unchanged.
+    mirror), hasn't been built yet, or neither its payload nor its name moved.
 
     `report_id` can also be removed locally (by another thread's own_sync.forget,
     or a plain report_store.ReportStore.remove on a report nothing had synced yet)
@@ -146,16 +156,19 @@ def push_if_changed(
         except report_payload.PayloadError:
             pass  # the payload with variance attached is over a limit; push it without
     fingerprint = report_store.payload_fingerprint(payload)
+    name = report["name"]
     sync = report.get("own_sync") or {}
-    if sync.get("payload_fingerprint") == fingerprint:
+    payload_changed = sync.get("payload_fingerprint") != fingerprint
+    name_changed = sync.get("pushed_name") != name
+    if not payload_changed and not name_changed:
         return None
 
     ctx = share_ops.context(data_dir)
     uuid = sync.get("uuid")
     if uuid:
-        emit("Syncing your report to the hosted app…")
+        emit("Syncing your report to the hosted app…" if payload_changed else "Renaming your report in the hosted app…")
         args = {"fund_uuid": ctx["fund_uuid"], "report_uuid": uuid, "shared_with": [user_id]}
-        args.update(share_ops.report_args(ctx, report["name"], payload, check_basis=True))
+        args.update(share_ops.report_args(ctx, name, payload, check_basis=payload_changed))
         try:
             response = share_ops.envelope(bridge.call("fa__mutate__budget_report", args, emit))
         except ShareError as e:
@@ -165,10 +178,10 @@ def push_if_changed(
     if not uuid:
         emit("Saving your report for the hosted app…")
         args = {"fund_uuid": ctx["fund_uuid"], "shared_with": [user_id]}
-        args.update(share_ops.report_args(ctx, report["name"], payload, check_basis=True, source=share_ops.source()))
+        args.update(share_ops.report_args(ctx, name, payload, check_basis=True, source=share_ops.source()))
         response = share_ops.envelope(bridge.call("fa__create__budget_report", args, emit))
     pushed_uuid = response["report"].get("uuid")
-    result = store.record_own_sync(report_id, pushed_uuid, payload)
+    result = store.record_own_sync(report_id, pushed_uuid, payload, name)
     if result is None and pushed_uuid:
         # report_id was removed locally while the bridge call above was in flight:
         # record_own_sync already dismissed pushed_uuid so a pull won't re-import it,
@@ -207,17 +220,122 @@ def forget(
         share_ops.delete_upstream(bridge, share_ops.context(data_dir), dismissed, emit)
 
 
+def _parse_dt(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _is_later(a: Any, b: Any) -> bool:
+    """Whether ISO timestamp `a` is strictly after `b` — Carta's own report
+    `updated_at` compared against this dashboard's. An unparsable or missing `a`
+    never wins; an unparsable or missing `b` always loses to a parsable `a`."""
+    parsed_a = _parse_dt(a)
+    if parsed_a is None:
+        return False
+    parsed_b = _parse_dt(b)
+    return parsed_b is None or parsed_a > parsed_b
+
+
+def _reconcile_one_name(store: report_store.ReportStore, report: Dict[str, Any], mirror: Dict[str, Any]) -> None:
+    """Settle one report's name against its mirror's current name in Carta, by the
+    three-way comparison reconcile_names documents: local name, mirror name, and
+    the name last pushed (`own_sync.pushed_name`) — all three read from the same
+    snapshot of reports.json reconcile_names took before its listing call, not a
+    fresh load here: `report` is that snapshot's own dict, and it is what
+    store.apply_synced_name is told to expect still holds before it writes."""
+    mirror_name = mirror.get("name")
+    if not isinstance(mirror_name, str):
+        return
+    # Stripped the same way report_store.rename()/apply_synced_name store a name: without
+    # this, a mirror name Carta hands back with surrounding whitespace never equals the
+    # stripped pushed_name apply_synced_name just stored for it, so every later sweep reads
+    # "only the mirror changed" again — reapplying the same name forever, bumping updated_at
+    # and marking any deliberate share link dirty on every pass, and never actually settling.
+    mirror_name = mirror_name.strip()
+    sync = report.get("own_sync") or {}
+    pushed_name = sync.get("pushed_name")
+    local_name = report["name"]
+    if mirror_name == pushed_name:
+        return  # nothing moved upstream since the last push; a local-only change (if
+                # any) is push_if_changed's job, run right after this in sweep()
+    if local_name == pushed_name:
+        # only the mirror changed
+        store.apply_synced_name(report["id"], mirror_name, expected_name=local_name, expected_pushed_name=pushed_name)
+        return
+    if local_name != mirror_name and _is_later(mirror.get("updated_at"), report.get("updated_at")):
+        # both changed; Carta's is newer
+        store.apply_synced_name(report["id"], mirror_name, expected_name=local_name, expected_pushed_name=pushed_name)
+    # else: both changed and the local edit is newer (or they already match) —
+    # leave it; push_if_changed resends it since pushed_name no longer matches.
+
+
+def reconcile_names(store: report_store.ReportStore, data_dir: Path, bridge: Any,
+                     emit: Emit = lambda message: None) -> None:
+    """Bring a rename made on the hosted app onto the local report, without waiting for
+    the next push: settles every own-synced, editable report's name against its current
+    name in Carta. Never touches a report shared with you (read-only) or a report's own
+    `shared` link — only `own_sync`.
+
+    Two guards protect this against two different races, each against the one it alone
+    prevents:
+
+    reports.json is snapshotted (store.load()) *before* the slow Carta listing call, not
+    after, so the three-way comparison in _reconcile_one_name is always made against the
+    same state the listing was fetched against. Without that, a push landing elsewhere
+    while this listing is still in flight — recording a new pushed_name while the listing
+    still carries the old mirror name — would read as "only the mirror changed" once
+    compared against a fresh reports.json a load taken after the listing would see instead.
+
+    store.apply_synced_name is also given the exact local name and pushed_name the snapshot
+    held, and writes only if both are still what's on disk right when it runs. This is what
+    stops a rename or a push that lands *after* the snapshot (between it and
+    apply_synced_name's own write) from being overwritten — the snapshot's ordering alone
+    says nothing about that later window.
+
+    Best-effort and silent, like sweep() itself: a dashboard predating report sharing, a
+    listing Carta refuses, or any other error here never stops the push side sweep() runs
+    right after.
+    """
+    doc = store.load()
+    try:
+        ctx = share_ops.context(data_dir)
+        reports = share_ops.list_reports(bridge, ctx, emit)
+    except ShareError as e:
+        print("[own_sync] name reconcile skipped: %r" % e, file=sys.stderr)
+        return
+    if reports is None:
+        return
+    by_uuid = {m.get("uuid"): m for m in reports if isinstance(m, dict) and m.get("uuid")}
+    for report in doc["reports"]:
+        try:
+            if report_store.ReportStore.metadata(report)["read_only"]:
+                continue
+            uuid = report_store.ReportStore.own_sync_uuid(report)
+            mirror = by_uuid.get(uuid) if uuid else None
+            if mirror is not None:
+                _reconcile_one_name(store, report, mirror)
+        except Exception as e:
+            print("[own_sync] name reconcile for %r skipped: %r" % (report.get("id"), e), file=sys.stderr)
+
+
 def sweep(data_dir: Path, user_id: int, bridge: Any) -> None:
-    """Push every own, eligible report in this dashboard's reports.json, one at a
-    time. Best-effort and silent: a report that fails to push (an invalid
-    payload, a Carta error) is skipped — logged to stderr, never raised — so one
-    bad report never stops the rest. push_if_changed itself already skips a
-    report that's read-only (shared with you), unbuilt, or unchanged.
+    """Settle every own-synced report's name against Carta (reconcile_names), then
+    push every own, eligible report in this dashboard's reports.json, one at a
+    time. The push side is best-effort and silent: a report that fails to push
+    (an invalid payload, a Carta error) is skipped — logged to stderr, never
+    raised — so one bad report never stops the rest. push_if_changed itself
+    already skips a report that's read-only (shared with you), unbuilt, or
+    unchanged.
 
     main()'s production caller (build_manco_datadir.py's _spawn_sync_sweep)
     redirects this stderr to manco_paths.own_sync_log_file, so a skipped push
     still leaves a record a maintainer can read."""
     store = report_store.ReportStore(data_dir)
+    reconcile_names(store, data_dir, bridge)
     for report in store.load()["reports"]:
         try:
             push_if_changed(bridge, store, data_dir, report["id"], user_id, lambda message: None)

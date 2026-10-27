@@ -345,6 +345,18 @@ class ReportStore:
             raise ReportEditError("this report was shared with you and can't be changed; duplicate it to make your own copy", "read_only")
         return report
 
+    @staticmethod
+    def _apply_name(report: dict, name: str) -> None:
+        """What giving a report a new name does to its row, whoever decided the name
+        should change: stamp it, bump `updated_at`, and mark a deliberate share link
+        dirty so Update resends it. The one home for that, shared by rename() and
+        apply_synced_name() — the two ever call it with a name report_payload.check_name
+        has already passed."""
+        report["name"] = name
+        report["updated_at"] = _now()
+        if report.get("shared"):
+            report["shared"]["dirty"] = True
+
     def rename(self, report_id: str, name: str, *, expected_etag: Optional[str] = None) -> Dict[str, Any]:
         name = str(name or "").strip()
         try:
@@ -353,10 +365,7 @@ class ReportStore:
             raise ReportEditError(str(e))
         with self.transaction(expected_etag) as doc:
             report = self._own(doc, report_id)
-            report["name"] = name
-            report["updated_at"] = _now()
-            if report.get("shared"):
-                report["shared"]["dirty"] = True
+            self._apply_name(report, name)
             return self.metadata(report)
 
     def duplicate(
@@ -468,11 +477,18 @@ class ReportStore:
                 shared["dirty"] = True
             return self.metadata(report)
 
-    def record_own_sync(self, report_id: str, uuid: Optional[str], payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def record_own_sync(self, report_id: str, uuid: Optional[str], payload: Dict[str, Any],
+                         name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Stamp a report's private sync link to Carta after a push to own_sync.push_if_changed,
-        with a fingerprint of the payload sent, so the next push can tell whether it moved
-        again. Kept apart from `shared` — this link is never visible to anyone but the
-        report's own owner, and the Share dialog must never read it.
+        with a fingerprint of the payload sent and the name sent alongside it (`pushed_name`),
+        so the next push can tell whether either moved again. Kept apart from `shared` — this
+        link is never visible to anyone but the report's own owner, and the Share dialog must
+        never read it.
+
+        `name` is optional only so a caller seeding a record directly (own_sync's own tests)
+        can omit it; own_sync.push_if_changed itself always passes the name it just sent, and
+        a record with no `pushed_name` simply differs from every real name, forcing a resend
+        on the next push.
 
         Returns the report's metadata, or None when `report_id` was removed while the
         push was in flight. Either way `uuid` must not end up live in Carta with
@@ -488,8 +504,44 @@ class ReportStore:
             report["own_sync"] = {
                 "uuid": uuid,
                 "payload_fingerprint": payload_fingerprint(payload),
+                "pushed_name": name,
                 "synced_at": _now(),
             }
+            return self.metadata(report)
+
+    def apply_synced_name(self, report_id: str, name: str, *, expected_name: Optional[str],
+                           expected_pushed_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Apply a name own_sync.reconcile_names found changed on the Carta mirror, the same
+        way a local rename() would (_apply_name: stamps the name, bumps updated_at, marks a
+        deliberate share link dirty), plus stamping `own_sync.pushed_name` so the next push
+        never resends this same name back to Carta as if it had changed here first.
+
+        `expected_name`/`expected_pushed_name` are the local name and own_sync.pushed_name
+        reconcile_names actually decided this change from, read before its slow Carta listing
+        call. Nothing is written unless both still match what's on disk right now: a push
+        that recorded a new pushed_name, or a local rename, landing between that read and this
+        write would otherwise be overwritten by a decision already stale by the time it runs —
+        reconcile_names's own docstring has the full race this guards against.
+
+        Returns the report's metadata, or None when the report was removed, the mirror name
+        fails report_payload.check_name once stripped, or either expectation no longer holds —
+        reconcile_names treats all three the same: nothing to apply."""
+        name = str(name or "").strip()
+        try:
+            check_name(name)
+        except PayloadError:
+            return None
+        with self.transaction() as doc:
+            try:
+                report = self.find(doc, report_id)
+            except ReportEditError:
+                return None
+            if report["name"] != expected_name:
+                return None
+            if (report.get("own_sync") or {}).get("pushed_name") != expected_pushed_name:
+                return None
+            self._apply_name(report, name)
+            report["own_sync"]["pushed_name"] = name
             return self.metadata(report)
 
     def clear_shared(self, report_id: str, *, expected_etag: Optional[str] = None) -> Dict[str, Any]:

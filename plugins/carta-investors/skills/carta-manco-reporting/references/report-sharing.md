@@ -12,7 +12,8 @@ All from the report controls beside **Export**, and none of it needs Claude in t
 
 | Action | What happens |
 |---|---|
-| Rename / Duplicate | Local only. A duplicate holds its own copy of the budget and keeps the report's budget mapping. |
+| Rename | Local, and also reaches your own synced copy in the hosted app (own_sync.py) when the report is one of your own. A rename made on the hosted app comes back here at the next rebuild (the dashboard rebuilds after each change made in it) or at this dashboard's next launch. |
+| Duplicate | Local only. Holds its own copy of the budget and keeps the report's budget mapping. |
 | Hide | Local and hosted. Hidden reports come back from the sidebar's **Show N hidden**. |
 | Share | Only the people you add (where a new share starts), or everyone who can view the entity's accounting. People are picked from that same list, which the dashboard saves for a day in `.shareable-users.json` (**Refresh** under the list asks Carta again; a recipient Carta refuses clears it). |
 | Update | Sends the owner's later changes. Until then recipients keep the version they have. When the report has no share (sharing was stopped, maybe in another tab), nothing is sent: the app is told the shared copy was deleted and asks whether to share it as new or keep it private. A share reaches everyone only when the Share dialog sends an explicit choice of everyone. |
