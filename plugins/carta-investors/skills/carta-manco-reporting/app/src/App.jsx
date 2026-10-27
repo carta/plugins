@@ -315,6 +315,24 @@ export default function App() {
     })(),
   };
 
+  // On the hosted app, nothing in the sidebar (firm name, nav items) is real until the
+  // snapshot lands — it's all the "Loading…" placeholder plus items that may not even
+  // apply to this firm. Covering the whole page instead reads as one loading state
+  // rather than a part-loaded shell. The local dev server has no such placeholder
+  // problem (there's always exactly one firm, already known), so it keeps the sidebar.
+  if (hostedApp && !error && (notReady || !snapshot)) {
+    return (
+      <>
+        <style>{GLOBAL_CSS}</style>
+        <LoadingScreen
+          fullPage
+          label={loadStatus || (notReady ? LOAD_FIRM_LABEL : "Loading…")}
+          step={notReady ? loadFirmStepProgress(loadStatus) : undefined}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <style>{GLOBAL_CSS}</style>
