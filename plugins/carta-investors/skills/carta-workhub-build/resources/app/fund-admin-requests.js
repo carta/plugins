@@ -795,8 +795,7 @@ function farPaintParts(parts, reviews, appViews) {
   whTimingMark(`painted ${FAR_QUEUE_TABS.filter(key => farTabRead(parts, key)).join(', ') || 'no tab'}`);
 }
 
-// Three sources, most complete first; the id path is the floor. The first two are
-// read together, so a source that answers nothing never delays the next.
+// The task queue, with the workflow ids this artifact recorded as its floor.
 // With `keepOnFailure`, a read that fails in any part leaves the queue on screen as it was
 // and resolves false, so a background refresh never blanks cards the viewer is looking at.
 async function farFetchRequests({ keepOnFailure = false } = {}) {
@@ -806,33 +805,23 @@ async function farFetchRequests({ keepOnFailure = false } = {}) {
   let loaded = false;
   // Local, so a read still out from an earlier load cannot report into this one.
   const failures = {};
-  // The queue's failures matter only when the queue is what renders.
-  let fromScoped = false;
   try {
-    const scoped = _mcp('fetch', {
-      command: 'fa:list:fund-admin-message',
-      params: { page_size: FAR_PAGE_SIZE },
-    }).then(farResults, () => null);
     const flags = Promise.all([ccrReviewAvailable(), farTaskAppViews()]);
     const onPart = _farRows === null
       ? (parts) => flags.then(([reviews, appViews]) => farPaintParts(parts, reviews, appViews))
         .catch(e => console.error('[far] early paint —', e))
       : null;
-    const queue = _benchmarkFirmId ? Promise.all([farFetchQueue(onPart, failures), flags]) : null;
-    // Unread when the scoped list answers; this keeps its failure from going unhandled.
-    queue?.catch(() => {});
-    let rows = await scoped;
-    fromScoped = Boolean(rows);
+    let rows = null;
     let reviews = true;
     let appViews = new Set();
 
-    if (!rows && queue) [rows, [reviews, appViews]] = await queue;
+    if (_benchmarkFirmId) [rows, [reviews, appViews]] = await Promise.all([farFetchQueue(onPart, failures), flags]);
 
     if (rows) {
       _farPartial = false;
       _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, appViews)).filter(r => r.id != null);
       // With the whole task list failed, the requests filed from here still show.
-      if (!fromScoped && failures.todo && failures.progress) {
+      if (failures.todo && failures.progress) {
         const shown = new Set(_farRows.map(r => String(r.id)));
         _farRows = _farRows.concat((await farFetchFromIds()).filter(r => !shown.has(String(r.id))));
         _farPartial = true;
@@ -851,7 +840,7 @@ async function farFetchRequests({ keepOnFailure = false } = {}) {
     _farPartial = true;
     _farRows = ccrQueueRows([]);
   }
-  const failed = !loaded || (!fromScoped && Object.keys(failures).length > 0);
+  const failed = !loaded || Object.keys(failures).length > 0;
   if (prev && failed) {
     _farRows = prev.rows;
     _farPartial = prev.partial;
@@ -864,7 +853,7 @@ async function farFetchRequests({ keepOnFailure = false } = {}) {
     _farLoadedAt = new Date();
     _farRefreshTriedAt = Date.now();
   }
-  _farTabErrors = fromScoped ? {} : Object.assign({}, failures);
+  _farTabErrors = Object.assign({}, failures);
   renderFarSection();
   whTimingMark("queue painted");
   // A seeded build's period card comes from a second read, so the queue paints first

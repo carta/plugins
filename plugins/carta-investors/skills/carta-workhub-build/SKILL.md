@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.121.14</carta-plugin>
+<carta-plugin>carta-investors:6.121.15</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -338,13 +338,10 @@ A card links out only when its row carries `_links.web_url` (set only when `url`
 
 ## Listing sources, in order
 
-1. `fa:list:fund-admin-message` — the customer-facing list. **Not built yet in carta-mcp.**
-2. `fa:list:gp-workhub-active-task` plus `fa:list:firm-workflow` — see Queue.
-3. Workflow ids this artifact recorded in `localStorage`.
+1. `fa:list:gp-workhub-active-task` plus `fa:list:firm-workflow` — see Queue.
+2. Workflow ids this artifact recorded in `localStorage`.
 
-1 and 2 are read together, so 1 answering nothing costs no extra wait.
-
-Path 3 cannot see requests raised by email or phone, so the UI says so rather than implying
+Path 2 cannot see requests raised by email or phone, so the UI says so rather than implying
 the list is complete.
 
 ## MCP tools required inside the artifact
