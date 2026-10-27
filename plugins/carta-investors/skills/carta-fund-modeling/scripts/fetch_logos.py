@@ -72,7 +72,7 @@ _UUID_RE = re.compile(
 )
 
 # A firm-uploaded "logo" that's actually a multi-MB marketing photo is still
-# only ever rendered at 32x32px (Overview.jsx's activity-feed avatar) — cap the
+# only ever rendered as a small round avatar (views/reports/Activity.jsx's FeedAvatar) — cap the
 # embedded bytes generously rather than let one oversized asset bloat every
 # dashboard load. 500KB is far above any real brand-mark logo.
 MAX_LOGO_BYTES = 500_000
@@ -81,7 +81,7 @@ MAX_LOGO_BYTES = 500_000
 # an HTML error page saved under an image-looking name) never gets written to
 # disk as a "logo": build_datadir.py's load_logos() only checks this file's
 # extension (see EXT_MIME there), not its bytes, and the browser has no fallback
-# once a broken data: URI reaches Overview.jsx. This also doubles as the
+# once a broken data: URI reaches the activity feed. This also doubles as the
 # authoritative extension source: a real logo's presigned URL path is often the
 # company's bare domain (e.g. ".../joinmidi.com"), not a filename, so the URL's
 # own "extension" can't be trusted at all — reading the real format from the

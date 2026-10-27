@@ -1,171 +1,12 @@
 import { useMemo, useState } from "react";
 import { FS, inkNum, sans, MICRO, PALETTE } from "../ui/theme.js";
-import { fmt$, fmtM, fmtX, fmtPct, fmtAsOf, fmtOwn, shortFund } from "../ui/format.js";
-import { Num, SourceNote, H1, H3, SectionChips, Segmented, Bubble, Avatar, fundNameOnly, MultiFundPicker, MixedCurrencyNote } from "../ui/components.jsx";
+import { fmt$, fmtM, fmtX, fmtPct, fmtOwn, shortFund } from "../ui/format.js";
+import { Num, SourceNote, H1, H3, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
 import { firmRollup } from "../model/funds.js";
 import { fundAvgOwnership } from "../model/ownership.js";
-import { recentActivity } from "../model/activity.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { trackClick } from "../analytics.js";
-
-// pretty round name (mirrors the Companies helper): "a" → "Series A", "seed" → "Seed"
-const roundLabel = (r) => {
-  const s = String(r || "").trim();
-  if (!s) return "";
-  if (/^pre[-\s]?seed$/i.test(s)) return "Pre-seed";
-  if (/^seed$/i.test(s)) return "Seed";
-  if (/^[a-z]\d?$/i.test(s)) return "Series " + s.toUpperCase();
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
-
-/** Recent activity — the firm's latest investments as cards: which fund, how
- *  much, when, and the company's latest priced round for context. Firm-wide, so
- *  a mixed-currency firm gets the notice instead (amounts can't share a symbol). */
-// Recent-activity lanes: filter label + per-card tag + accent color. Order is the
-// filter-tab order; the model tags each event with one of these `type`s.
-const ACTIVITY_META = {
-  investment: { label: "New", feedLabel: "New investment", bubble: "positive" },
-  followOn: { label: "Follow-on", feedLabel: "Follow-on investment", bubble: "notice" },
-  valuation: { label: "Valuations", feedLabel: "Valuation update", bubble: "info" },
-  exit: { label: "Exits", feedLabel: "Exit", bubble: "neutral" },
-};
-const ACTIVITY_ORDER = ["investment", "followOn", "valuation", "exit"];
-const ACTIVITY_LIMIT = 12; // rows shown per active filter
-
-// The headline amount per lane: exits show proceeds, valuations the current mark,
-// investments/follow-ons the check size.
-const activityAmount = (r) => (r.type === "exit" ? r.proceeds : r.type === "valuation" ? r.mark : r.cost);
-
-// Feed-row avatar fallback: first letter of up to the first two MEANINGFUL
-// words ("Acme Health, Inc." → "AH", legal suffix excluded). A single
-// remaining word (e.g. "BrightLeaf, Inc." → "BrightLeaf") falls back to its
-// camelCase humps ("BrightLeaf" → "BL", "MyPlatform" → "MP") so one-word,
-// compound-brand names still read as two distinct initials.
-const LEGAL_SUFFIXES = new Set(["inc", "incorporated", "corp", "corporation", "co", "llc", "llp", "lp", "ltd", "limited", "pbc", "plc", "pc"]);
-const initialsOf = (name) => {
-  const base = name.replace(/\(.*\)/, ""); // drop a trailing "(dba X)" / "(acquired Y)" parenthetical
-  const words = (base.match(/[A-Za-z0-9]+/g) || []).filter((w) => !LEGAL_SUFFIXES.has(w.toLowerCase()));
-  if (words.length === 0) return "";
-  if (words.length === 1) {
-    const humps = words[0].match(/[A-Z][a-z0-9]*/g) || [];
-    return (humps.length >= 2 ? humps.slice(0, 2).map((w) => w[0]).join("") : words[0].slice(0, 2)).toUpperCase();
-  }
-  return words.slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-};
-
-// Deterministic pick of an initials-avatar color per company, so a feed of many
-// different companies doesn't render as a wall of identical gray circles — the
-// same company always lands on the same color. Drawn from PALETTE (theme.js) —
-// the same categorical data-viz hues the fund charts use — skipping index 0
-// (brand-black, the charts' "lead fund" special case) and the trailing
-// brand-gray-30 fallback slot, neither of which is a real data-viz color.
-const INITIALS_COLORS = PALETTE.slice(1, 9);
-const colorFor = (name) => {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return INITIALS_COLORS[Math.abs(h) % INITIALS_COLORS.length];
-};
-
-// Feed-row avatar: Ink's real Avatar (see ui/components.jsx) at its standard
-// 38px size, always the round circle — a real logo renders via `imageUrl`,
-// never Ink's separate non-circular `variant="company"` box. Avatar itself
-// degrades to `initials` if the logo is missing or fails to load (a corrupt/
-// truncated file fetch_logos.py's own validation makes rare, not impossible),
-// so a non-empty `initials` is always passed here even when a logo is present.
-function FeedAvatar({ logo, name }) {
-  return (
-    <Avatar imageUrl={logo || undefined}
-      initials={initialsOf(name) || name.slice(0, 2).toUpperCase() || "?"} initialsColor={colorFor(name)}
-      // nudge down to the company-name text's visual top (its 28px line-height
-      // has ~6px of leading above the actual glyph-cap top) rather than the
-      // row's box top, which sits a few px above where the name text starts
-      style={{ marginTop: 6 }} />
-  );
-}
-
-// The per-lane context line under the fund/security chips. Valuation rows
-// match the design spec's "Multiplier" row exactly: "{moic}× MOIC" in the inherited
-// subtle/regular tone, gap-12, then an arrow + colored medium-weight delta
-// group (gap-4 between the arrow and its text, matching the DeltaTd caret
-// spacing used in the fund table above) — no "Mark"/"·" framing.
-function ActivityContext({ r }) {
-  let content;
-  if (r.type === "valuation") {
-    const up = (r.gain || 0) >= 0;
-    const deltaColor = up ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)";
-    content = (
-      <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span>{fmtX(r.moic)} MOIC</span>
-        <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4, color: deltaColor, fontWeight: 500 }}>
-          <span aria-hidden style={{ fontSize: FS.micro, lineHeight: 1 }}>{up ? "▲" : "▼"}</span>
-          <span>{fmtM(Math.abs(r.gain || 0))} vs cost</span>
-        </span>
-      </span>
-    );
-  } else if (r.type === "exit") {
-    content = <>Realized <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{fmtX(r.moic)}</strong> on {fmtM(r.cost)} cost</>;
-  } else if (r.round) {
-    content = <>Latest round: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{roundLabel(r.round)}</strong>{r.postMoney ? ` · ${fmtM(r.postMoney)} post-money valuation` : ""}</>;
-  }
-  if (!content) return null;
-  return <div style={{ ...sans, fontSize: FS.body, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)" }}>{content}</div>;
-}
-
-function RecentActivityCard({ rows, mixed }) {
-  const [filter, setFilter] = useState("all");
-  if (!rows.length) return null;
-  // amounts can't share a symbol across currencies — keep the firm-wide guard
-  if (mixed) return <MixedCurrencyNote title="Recent portfolio activity" />;
-
-  // only offer tabs for lanes that actually have events; "All" is always present
-  const present = ACTIVITY_ORDER.filter((t) => rows.some((r) => r.type === t));
-  const options = [{ id: "all", label: "All" }, ...present.map((t) => ({ id: t, label: ACTIVITY_META[t].label }))];
-  const active = options.some((o) => o.id === filter) ? filter : "all";
-  const shown = (active === "all" ? rows : rows.filter((r) => r.type === active)).slice(0, ACTIVITY_LIMIT);
-
-  return (
-    <div style={{ marginTop: 18 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-        <H3>Recent portfolio activity</H3>
-        <span style={{ marginLeft: "auto" }}><Segmented small options={options} value={active} onChange={setFilter} /></span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {shown.map((r, ri) => {
-          const meta = ACTIVITY_META[r.type];
-          const last = ri === shown.length - 1;
-          return (
-          <div key={r.key} style={{ display: "flex", gap: 12, alignItems: "flex-start",
-            padding: "16px 0", borderBottom: last ? "none" : "1px solid var(--ink-color-global-border-subtle)" }}>
-            <FeedAvatar logo={r.logo} name={r.name} />
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ ...sans, fontSize: FS.h3, lineHeight: "28px", fontWeight: 500, color: "var(--ink-color-global-text-default)" }}>{r.name}</span>
-                  <Bubble variant={meta.bubble}>{meta.feedLabel}</Bubble>
-                  <span style={{ marginLeft: "auto" }} />
-                  <span style={{ ...sans, fontSize: FS.value, lineHeight: "24px", color: "var(--ink-color-global-text-subtle)", whiteSpace: "nowrap" }}>{r.date ? fmtAsOf(r.date) : "—"}</span>
-                </div>
-                {r.fundNames.length > 0 && (
-                  <span style={{ ...sans, fontSize: FS.value, lineHeight: "24px", color: "var(--ink-color-global-text-subtle)" }}>{r.fundNames.map(fundNameOnly).join(", ")}</span>
-                )}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ ...sans, fontSize: FS.value, lineHeight: "24px", fontWeight: 500, color: "var(--ink-color-global-text-default)" }}>{fmtM(activityAmount(r))}</span>
-                  {r.securities && r.securities.length > 0 && (
-                    <span style={{ ...sans, fontSize: FS.value, lineHeight: "24px", color: "var(--ink-color-global-text-subtle)" }}>{r.securities.join(", ")}</span>
-                  )}
-                </div>
-                <ActivityContext r={r} />
-              </div>
-            </div>
-          </div>
-        );})}
-      </div>
-    </div>
-  );
-}
 
 /** LP NAV over time, stacked by fund, with the firm TVPI as an overlaid line on
  *  a secondary axis. Columns come from snapshot.navSeries[].byFund (per-fund
@@ -412,21 +253,11 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
   // fund-table sort — defaults to Fund name A-Z; a third click on any header clears
   // to the reported (unsorted) row order, same as every other useTableSort caller
   const { sorted: sortedFunds, sort: fundSort, onSort: onFundSort } = useTableSort(fundStates, fundCols, { i: 0, dir: "asc" });
-  const activityRows = useMemo(
-    () => recentActivity(portfolio.companies, snapshot.funds, snapshot.source?.navAsOf),
-    [portfolio, snapshot]
-  );
-  const sections = [
-    ["ov-summary", "Summary"],
-    activityRows.length && ["ov-activity", "Recent activity"],
-  ].filter(Boolean);
 
   return (
     <div>
       <H1>Firm Overview</H1>
-      <SectionChips sections={sections} />
 
-      <section id="ov-summary" style={{ scrollMarginTop: 64 }}>
       {/* firm NAV/TVPI trend — the firm scorecard now lives in the persistent top metric bar */}
       <div style={{ marginBottom: 16 }}>
         <TrendCard snapshot={snapshot} fundStates={fundStates} firmNow={firmNow} />
@@ -505,9 +336,6 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
           {firm.realizedLoss > 0.5 && <>, realizing {fmt$(firm.realizedLoss)} below the marks</>}.</>
         )}
       </SourceNote>
-      </section>
-
-      {activityRows.length > 0 && <section id="ov-activity" style={{ scrollMarginTop: 64 }}><RecentActivityCard rows={activityRows} mixed={firm.mixedCurrency} /></section>}
     </div>
   );
 }

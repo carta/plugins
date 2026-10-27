@@ -914,7 +914,7 @@ def build(rawdir, out, meta):
             "active": col(r, "is_active_investment", "is_active").lower() == "true",
             "public": col(r, "is_public_asset", "is_public").lower() == "true",
             "date": col(r, "investment_date", "date"),
-            # dates that drive the Overview "Recent activity" feed's non-investment
+            # dates that drive the "Recent activity" feed's non-investment
             # lanes: fmvDate = when this position was last remarked (valuation-update
             # events); updateDate = last touched (the exit-date proxy, since Fund
             # Admin exposes no explicit realization date).
@@ -1602,7 +1602,7 @@ STEM_CONTRACT = [
     # "Latest round" enrichment). But an ABSENT file means Wave 2 was skipped, which is
     # indistinguishable from that legitimate case unless it hard-fails: silently missing
     # `corporations` breaks the entity_link -> corporation_uuid bridge, so `lastRound`
-    # (Overview "Recent activity" cards) and captable-derived fields quietly go blank for
+    # ("Recent activity" cards) and captable-derived fields quietly go blank for
     # every company, even ones with real financing/cap-table data sitting in the DWH.
     ("captable",      "file", ["corporation_id", "security_class_name",
                                "security_class_type_detailed", "seniority", "multiplier",

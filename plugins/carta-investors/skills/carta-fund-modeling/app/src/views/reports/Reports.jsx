@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { H1, H2, JumpLinks, FundPicker, EmptyState, MixedCurrencyNote, ALL_FUNDS } from "../../ui/components.jsx";
 import { concentrationAcrossAll } from "../../model/concentration.js";
+import { recentActivity } from "../../model/activity.js";
 import { useFirmData } from "../../state/FirmData.jsx";
 import { trackClick } from "../../analytics.js";
 import PowerLaw from "../returns/PowerLaw.jsx";
@@ -9,6 +11,7 @@ import CohortStanding from "../CohortStanding.jsx";
 import FundTheme from "./FundTheme.jsx";
 import PacingCard, { hasPacingChart } from "./Pacing.jsx";
 import ConcentrationCard from "./Concentration.jsx";
+import RecentActivityCard from "./Activity.jsx";
 
 // The page's themes, in order. A theme has its jump link and heading, its analytics
 // name (FundModeling.Reports.Jump.<viewName>), and its charts. A per-fund theme
@@ -25,7 +28,7 @@ const combined = (title, render) => (p, own) => (p.mixedCurrency ? <MixedCurrenc
 
 const THEMES = [
   {
-    // pacing and concentration are firm-wide; the power-law charts follow the fund scope
+    // pacing, concentration and recent activity are firm-wide; the power-law charts follow the fund scope
     id: "portfolio-analysis", label: "Portfolio analysis", viewName: "PortfolioAnalysis", perFund: true,
     reports: [
       { id: "power-law-curve", available: () => true, render: (p) => <PowerLaw section="curve" {...p.returnsProps} />,
@@ -36,6 +39,7 @@ const THEMES = [
       { id: "pacing", available: (p) => hasPacingChart(p.pacing), render: (p) => <PacingCard funds={p.snapshot.funds} /> },
       { id: "concentration", available: (p) => !!concentrationAcrossAll(p.snapshot, p.portfolio),
         render: (p) => <ConcentrationCard snapshot={p.snapshot} portfolio={p.portfolio} mixed={p.mixedCurrency} /> },
+      { id: "activity", available: (p) => p.activity.length > 0, render: (p) => <RecentActivityCard rows={p.activity} mixed={p.mixedCurrency} onShowMore={p.onShowActivity} /> },
     ],
   },
   {
@@ -60,10 +64,14 @@ const sectionId = (theme) => `reports-${theme.id}`;
 /** Reports tab — the less-used firm and fund charts on one long page, grouped into
  *  themes, with sticky jump links to each theme. `returnsProps` is what the
  *  Returns-family views take (the Power Law and LP charts read their fund scope and
- *  scenario settings from it). */
-export default function Reports({ returnsProps, snapshot, portfolio, fundStates, mixedCurrency }) {
+ *  scenario settings from it). `onShowActivity` opens the full activity page. */
+export default function Reports({ returnsProps, snapshot, portfolio, fundStates, mixedCurrency, onShowActivity }) {
   const { pacing } = useFirmData();
-  const props = { returnsProps, snapshot, portfolio, fundStates, mixedCurrency, pacing };
+  const activity = useMemo(
+    () => recentActivity(portfolio.companies, snapshot.funds, snapshot.source?.navAsOf),
+    [portfolio, snapshot]
+  );
+  const props = { returnsProps, snapshot, portfolio, fundStates, mixedCurrency, pacing, activity, onShowActivity };
   const themes = THEMES
     .map((t) => ({ ...t, reports: t.reports.filter((r) => r.available(props)) }))
     .filter((t) => t.reports.length);

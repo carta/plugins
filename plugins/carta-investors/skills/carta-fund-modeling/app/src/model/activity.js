@@ -1,4 +1,4 @@
-// Recent-activity feed for the Overview tab. Built entirely from the position-level
+// Recent-activity feed for the Reports tab. Built entirely from the position-level
 // data the builder writes (see build_datadir.py): each position carries its
 // investment_date (markDate), latest FMV effective date (fmvDate), last-update date
 // (updateDate), invested cost, current mark (cartaFv), realized proceeds, security

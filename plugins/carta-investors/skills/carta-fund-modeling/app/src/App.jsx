@@ -15,6 +15,7 @@ import LpReturns from "./views/returns/LpReturns.jsx";
 import GpEconomics from "./views/returns/GpEconomics.jsx";
 import Reserves from "./views/Reserves.jsx";
 import Report from "./views/Report.jsx";
+import { ActivityPage } from "./views/reports/Activity.jsx";
 import Reports from "./views/reports/Reports.jsx";
 import FundConstruction from "./views/construction/FundConstruction.jsx";
 import ScenarioDialog from "./ui/ScenarioDialog.jsx";
@@ -50,7 +51,10 @@ const TABS = [
   // plant → sprout
   ["construction", "Plan New Fund", ["M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3", "M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4", "M5 21h14"]],
 ];
-const TAB_IDS = TABS.map(([id]) => id);
+// Pages with no nav item of their own, each mapped to the tab whose nav item stays lit
+// on it: the full activity feed opens from the Reports activity card.
+const SUB_PAGES = { activity: "reports" };
+const TAB_IDS = [...TABS.map(([id]) => id), ...Object.keys(SUB_PAGES)];
 // Plans a new fund rather than viewing the portfolio, so no scenario applies to it.
 const NEW_FUND_TAB = "construction";
 const DEFAULT_TAB = "overview";
@@ -59,6 +63,7 @@ const DEFAULT_TAB = "overview";
 // by the same tab id used in routing/TABS above.
 const TAB_VIEW_NAMES = {
   overview: "Overview",
+  activity: "Activity",
   companies: "Companies",
   "lp-returns": "LpReturns",
   "gp-economics": "GpEconomics",
@@ -213,6 +218,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   // (never hardcoded USD); drives fmt$/fmtM/fmtB across the app.
   setDisplayCurrency(snapshot?.source?.currency);
   const [tab, setTab] = useTabRoute(firm);
+  const navTab = SUB_PAGES[tab] ?? tab;
   const lastPortfolioTab = useRef(DEFAULT_TAB);
   useEffect(() => {
     if (tab !== NEW_FUND_TAB) lastPortfolioTab.current = tab;
@@ -338,6 +344,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
 
   const locked = !!slice.locked;
   // Row drill-down lands on LP Returns (the default returns view for a fund).
+  const openPage = (page) => { setTab(page); contentRef.current?.scrollTo({ top: 0 }); };
   const openFund = (id) => { if (id) setFundScope(id); setTab("lp-returns"); contentRef.current?.scrollTo({ top: 0 }); };
   // Deep-link from the Performance sidebar: LP-returns label → LP Returns tab,
   // GP-returns (GP carry) label → GP Economics tab. Each section is now its own
@@ -456,7 +463,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
       </div>
       <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
         {TABS.map(([id, label, icon]) => (
-          <NavItem key={id} id={id} label={label} icon={icon} active={tab === id} onClick={() => selectTab(id)} />
+          <NavItem key={id} id={id} label={label} icon={icon} active={navTab === id} onClick={() => selectTab(id)} />
         ))}
       </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px" }} />
@@ -527,9 +534,9 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
       <div style={{ display: "flex", gap: 4, overflowX: "auto" }}>
         {TABS.map(([id, label]) => (
           <button key={id} onClick={() => selectTab(id)} data-testid={`tab-${id}`}
-            style={{ ...sans, fontSize: FS.body, fontWeight: tab === id ? 600 : 500, padding: "7px 13px", border: "none",
+            style={{ ...sans, fontSize: FS.body, fontWeight: navTab === id ? 600 : 500, padding: "7px 13px", border: "none",
               borderRadius: 4, cursor: "pointer", whiteSpace: "nowrap",
-              background: tab === id ? "var(--ink-color-global-surface-lightgray-default)" : "transparent", color: tab === id ? "var(--ink-button-background-color-primary-base-default)" : "var(--ink-color-global-text-subtle)" }}>
+              background: navTab === id ? "var(--ink-color-global-surface-lightgray-default)" : "transparent", color: navTab === id ? "var(--ink-button-background-color-primary-base-default)" : "var(--ink-color-global-text-subtle)" }}>
             {label}
           </button>
         ))}
@@ -608,7 +615,10 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
               {tab === "gp-economics" && <GpEconomics {...returnsProps} />}
               {tab === "reports" && (
                 <Reports returnsProps={returnsProps} snapshot={snapshot} portfolio={slice}
-                  fundStates={fundStates} mixedCurrency={firmAgg.mixedCurrency} />
+                  fundStates={fundStates} mixedCurrency={firmAgg.mixedCurrency} onShowActivity={() => openPage("activity")} />
+              )}
+              {tab === "activity" && (
+                <ActivityPage snapshot={snapshot} portfolio={slice} mixed={firmAgg.mixedCurrency} onBack={() => openPage("reports")} />
               )}
               {tab === "construction" && <FundConstruction snapshot={snapshot} firm={firm} companies={baseSlice?.companies} />}
               {tab === "export" && <Report doc={doc} snapshot={snapshot} baseSlice={baseSlice} />}

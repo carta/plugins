@@ -1,17 +1,7 @@
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { tightSans, sans, inkNum, FS, MICRO, NOTICE, SMALL_1, SMALL_2 } from "../ui/theme.js";
-import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn, parseAmount, fmtAmountInput } from "../ui/format.js";
-
-// pretty round name: "seed" → "Seed", "a" → "Series A", "pre-seed" → "Pre-seed"
-const roundLabel = (r) => {
-  const s = String(r || "").trim();
-  if (!s) return "";
-  if (/^pre[-\s]?seed$/i.test(s)) return "Pre-seed";
-  if (/^seed$/i.test(s)) return "Seed";
-  if (/^[a-z]\d?$/i.test(s)) return "Series " + s.toUpperCase();
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
+import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn, parseAmount, fmtAmountInput, roundLabel } from "../ui/format.js";
 import { H1, Btn, Toggle, Num, ChevronDownIcon, InfoTip, FundPicker, Dropdown, Badge, Eyebrow, MenuItem, useDismissable, ALL_FUNDS, MethodNote, SourceNote, fundLabel, POPOVER_SHADOW, GlobalFilter, SearchInput, DeltaCaret, Modal, EmptyState, Slider } from "../ui/components.jsx";
 import { useTableSort, SortIcon, useStickyHeader, TableScroll, TableHead } from "../ui/table.jsx";
 import RepriceControl from "../ui/RepriceControl.jsx";

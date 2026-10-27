@@ -69,7 +69,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.121.4</carta-plugin>
+<carta-plugin>carta-investors:6.121.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -586,7 +586,7 @@ console: do **not** fetch tearsheets, schedule of investments, or cash-flow stat
 
 ### Step 2b — Company logos (optional — best-effort, never blocks the build)
 
-> **What's happening:** Fetching each portfolio company's real logo (if Carta has one on file) to replace the initials placeholder on the Overview activity feed.
+> **What's happening:** Fetching each portfolio company's real logo (if Carta has one on file) to replace the initials placeholder on the Reports activity feed.
 
 This is **not** a DWH stem and has no fetch gate — a firm with no logos, or a portco-logo call that errors,
 degrades silently to the initials avatar every company already falls back to. It needs no `fund_uuid`/

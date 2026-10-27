@@ -117,6 +117,16 @@ export const fmtAsOf = (iso) => {
   return m ? `${m[2]}-${m[3]}-${m[1]}` : String(iso);
 };
 
+// pretty round name: "seed" → "Seed", "a" → "Series A", "pre-seed" → "Pre-seed"
+export const roundLabel = (r) => {
+  const s = String(r || "").trim();
+  if (!s) return "";
+  if (/^pre[-\s]?seed$/i.test(s)) return "Pre-seed";
+  if (/^seed$/i.test(s)) return "Seed";
+  if (/^[a-z]\d?$/i.test(s)) return "Series " + s.toUpperCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
 /** The fund display name embeds an ALL-CAPS slug prefix for dense tables
  *  ("ACME-VENTURES-FUND-IV-L-P (Acme Ventures Fund IV, 2021)"). The
  *  picker only needs the readable, already-title-cased part — strip the slug
