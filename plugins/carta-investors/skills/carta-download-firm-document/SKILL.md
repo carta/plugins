@@ -1,7 +1,7 @@
 ---
 name: carta-download-firm-document
 description: >-
-  Download a document from your firm's Documents page in Carta (LPA, NDA, side letter, engagement letter, capital call notice, and so on). Finds the document by title, type or fund, confirms which one when several match, then saves it to your Downloads folder once you confirm (Claude Code), or gives a short-lived download link (Cowork, claude.ai). Never reads the file. TRIGGER: "download the LPA from our documents", "get me the NDA from {firm}'s documents page", "send me a link to our engagement letter in Carta", "download a document from my firm", "find and download the side letter we uploaded", "I need the {document} from Carta's Documents page". NOT FOR: documents shared with LPs or an LP's own documents (use carta-gp-lp-documents or carta-lp-documents); uploading a file to Carta (use carta-upload-firm-document); tear sheets (use carta-download-tearsheet).
+  Download a document from your firm's Documents page in Carta (LPA, NDA, side letter, engagement letter, capital call notice, and so on). Finds the document by title, type or fund, confirms which one when several match (or, when you ask for every match such as "all NDAs from last month", gathers the matches and confirms the batch), then saves it to your Downloads folder once you confirm (Claude Code), or gives a short-lived download link (Cowork, claude.ai). Never reads the file. TRIGGER: "download the LPA from our documents", "get me the NDA from {firm}'s documents page", "send me a link to our engagement letter in Carta", "download a document from my firm", "find and download the side letter we uploaded", "I need the {document} from Carta's Documents page". NOT FOR: documents shared with LPs or an LP's own documents (use carta-gp-lp-documents or carta-lp-documents); uploading a file to Carta (use carta-upload-firm-document); tear sheets (use carta-download-tearsheet).
 version: 0.1.0
 model: inherit
 allowed-tools:
@@ -26,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.117.3</carta-plugin>
+<carta-plugin>carta-investors:6.118.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -56,7 +56,7 @@ if one is rejected for missing it, send it again with it, without telling the us
 | 3. Save it | `curl` to `~/Downloads` — Gate 3d, Claude Code only |
 
 Every link minted in step 2 is recorded in Carta's document access log, so mint
-one only for a document the user chose, at most 5 per run.
+one only for a document the user chose, at most 20 per run (the run's cap).
 
 ---
 
@@ -111,13 +111,39 @@ call_tool({"name": "fa__list__firm-documents", "arguments": {"firm_uuid": "<firm
   `document_types` filter needs Carta's exact type name, and a near-miss matches
   nothing. Match the type against each row's `document_type` instead
   ("NDA" → `Non-Disclosure Agreement (NDA)`), and keep the rows that fit.
-  None fit and `has_next` is true → say so and offer the next page.
+  None fit and `has_next` is true → say so and offer the next page (the
+  every-match step below pages on its own instead).
 - `fund_ids` — only when the user named a fund and you already have its
   fund-admin integer id. Do not go looking for one; mention the fund in
   `search` instead.
 
 Results come newest first. Each row is `{id, title, document_type, fund_name,
 partner_name, date}`; the response also carries `has_next` and `next`.
+
+### Every match
+
+When the user asks for every document that matches ("all NDAs from last
+month", "every side letter for Fund II"), this step replaces 2b: the matches
+are the choice, so there is no pick question.
+
+1. Keep the rows that fit the request (type, fund, date). Call 2a again with
+   `after` set to the previous `next` until `has_next` is false, the rows are
+   older than a date range the user gave, the kept rows reach the run's cap,
+   or 5 calls are done.
+2. Keep at most the run's cap of rows, newest first. That number is the
+   batch: the table, the confirm and the links minted all use it.
+3. The batch is cut short when step 2 dropped a matching row, or paging
+   stopped on the cap or step 1's call limit while `has_next` was still true.
+4. No rows kept and not cut short → as `None, with filters` in 2b. No rows
+   kept and cut short → say none of the documents checked so far match, and
+   offer to look further. Otherwise show every kept row in the table below;
+   if cut short, add under it: "More documents may match. Ask me for the next
+   ones after these." The next ones: call 2a again with the same `after` as
+   this batch's last call, and skip the rows already in this batch. Never
+   present a cut-short batch as every match.
+5. Confirm the batch before any link is minted. Save mode: 3b's confirm.
+   Link mode: `AskUserQuestion` — "Get links for these <N> documents?" —
+   **Get links** ← recommended → 3c; **Cancel** → stop, no link is minted.
 
 ### 2b — pick
 
@@ -128,15 +154,16 @@ partner_name, date}`; the response also carries `has_next` and `next`.
 | None, with filters | Say nothing matched, and offer to search again without the type or with fewer words. Never pick a near match on your own |
 | None, no filters | The firm's Documents page is empty for this user. Say so and stop |
 
-Show at most 5 rows, then "+ N more" when `has_next` is true or more rows came
-back. Never show `id`s.
+In 2b, show at most 5 rows, then "+ N more" when `has_next` is true or
+more rows came back. Never show `id`s.
 
 | # | Title | Type | Fund | Date |
 |---|---|---|---|---|
 | 1 | <title> | <document_type> | <fund_name or —> | <date> |
 
 Show more only when asked: call 2a again with `after` set to the previous
-response's `next`. Never page through the whole list unasked.
+response's `next`. Never page through the whole list unasked, except in the
+every-match step above.
 
 ## Gate 3 — get the file
 
@@ -157,11 +184,12 @@ these labels, in this order:
 - **Just give me the link** → 3c, then report as in link mode
 - **Cancel** → stop. No link is minted.
 
-In link mode, go straight to 3c: a link writes nothing.
+In link mode, go straight to 3c: a link writes nothing. A batch from the
+every-match step is confirmed there first.
 
 ### 3c — mint the link
 
-For each chosen document (at most 5 per run):
+For each chosen document, up to the run's cap:
 
 ```
 call_tool({"name": "fa__get__firm-document-download-url", "arguments": {"firm_uuid": "<firm_uuid>", "document_id": "<document_id>"}})
@@ -240,10 +268,10 @@ leave it out when there is no `carta_id`.
 | 404 from the link, document not found | Search again (Gate 2) — the document may have been removed |
 | The link response says the document can't be downloaded through Carta MCP | "This document can't be downloaded from here; open it from the firm's Documents page in Carta." Do not retry |
 | Link expired | Mint one fresh link for that document when the user asks |
-| User cancels at the download confirm | Stop. No link is minted, nothing is saved |
+| User cancels at the download confirm, or at the every-match batch confirm | Stop. No link is minted, nothing is saved |
 | `url` from 3c is not `https://…amazonaws.com` or `https://documents.carta.com/…` | Do not save; say the file couldn't be saved, then give the link |
 | `curl` fails twice, or can't connect | Say the file couldn't be saved, then give the link; do not vary the command |
-| More than 5 documents wanted | Do the first 5, then offer the rest in another round |
+| More documents wanted than the run's cap | Do as many as the cap allows, then offer the rest in another round. In the every-match step, say more may match (steps 3–4) |
 | User asks to upload a file | That is `carta-upload-firm-document` |
 | User asks to delete, rename or replace a document | Not supported here; they can do it from the Documents page in Carta |
 | User asks you to read or summarize the file | Not something this skill does; the file is in their Downloads folder (save mode) or behind the link (link mode) |
