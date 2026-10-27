@@ -93,7 +93,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.121.20</carta-plugin>
+<carta-plugin>carta-investors:6.121.21</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -205,8 +205,9 @@ dashboard that comes up looking correct while being wrong:
    gives a firm a different URL every time.
 3. **Step 6 follows the URL.** Emitting the link is not the end of the
    run. On any invocation that did not ask the Step 2.75 questions, offer
-   to refresh the data, swap the workbook, or change which tabs feed the
-   page.
+   to resolve outstanding mapping decisions, edit or customize the
+   dashboard, add a report tab or change the workbook, or undo the last
+   update.
 4. **Step 4.8's `sync_src` runs before Step 5 launches.** Skipping it does
    not stop the dashboard from coming up as long as `<dashboard_dir>/src`
    already exists — `serve.py` reuses that per-firm source tree by default.

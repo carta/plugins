@@ -506,27 +506,47 @@ Add the **Undo the last dashboard update** option below only when `archives` is
 non-empty — an app-source update has to have actually happened (Step 4.8) for there to
 be anything to undo, so most invocations omit it.
 
-After the orientation line, ask a single `AskUserQuestion`:
+After the orientation line, ask a single `AskUserQuestion`. Actuals are
+re-pulled from the warehouse on every invocation (Step 2.5/Step 3, see
+[data-fetch.md](data-fetch.md)), so the menu has no data-refresh option. The
+exception is a run where the pull couldn't run and Step 3 served the cached
+`raw/` (data-fetch.md's "serve the cache, dated as itself"): the numbers on
+screen are then as of `raw_as_of`, not current. If the operator asks, through
+the free-text option, to retry the pull, go back to Step 2.6 and Step 3, then
+Step 4.
 
 > **Anything to update?** The dashboard is live at the link above.
 
-- **Nothing — just looking** ← put first; it is the common case
-- **Refresh the Carta data** → re-run Step 3, then Step 4
-- **Point at a different or updated Excel budget** → re-run Step 2.75a-ii
-  onward with the new path, replacing the workbook ref
-- **Change which tabs feed Budget vs Actuals** → re-run Step 2.75a-ii
-  against the workbook already on file, so the operator can add or drop
-  sheets without re-supplying it
-- **Resolve the lines that found no actuals** → the fallback for lines
-  left unanswered at Step 4.7, or ones a later re-parse introduced. Offer
-  it whenever the build printed a mapping-decision count, and lead with
+Order the options so the one most likely to be why the operator came back
+leads the list. `AskUserQuestion` takes at most four options: two are always
+present and two are conditional, and a run can show all four, so merge any new
+option into an existing one.
+
+- **Resolve outstanding mapping decisions** *(only when Step 4's `gaps:`
+  line reports budget lines that need a mapping decision or accounts that
+  carry spend no budget line reports)* — lead with this one whenever it applies: an
+  operator who left a question open last time is more likely back to
+  finish it than to ask for anything else. It covers both directions Step
+  4.7 asks about — a budget line that found no matching Carta account,
+  and a Carta account carrying spend no budget line reports — whichever
+  the operator left unanswered, or a later re-parse introduced. Lead with
   the one table Step 4.7 describes rather than a question per line. A row
   already confirmed doesn't resurface here on its own — it isn't
-  unresolved — but the operator can still name one directly ("row 3 should
-  be the fee account instead") through the free-text option below; record
-  the new answer with `record_mapping.py` the same way Step 4.7 does (see
+  unresolved — but the operator can still name one directly ("row 3
+  should be the fee account instead", "account 7105 belongs on the
+  marketing line") through the free-text option below; record the new
+  answer with `record_mapping.py` the same way Step 4.7 does (see
   [budget-unresolved.md](budget-unresolved.md)'s "Recording answers") and
-  rebuild
+  rebuild.
+- **Make an edit or customize the dashboard** → free text: ask what to
+  change, then apply it under `<user_src_dir>` the same way "How the app
+  is served" above describes — never to `app/src` or `raw/*`. No rebuild
+  needed; reload the page to verify, per that section's rule, before
+  telling the operator it's done.
+- **Add a report tab or change the budget workbook** → re-run Step 2.75a-ii.
+  If the operator gives a new workbook path, use it and replace the workbook
+  ref; otherwise run against the workbook already on file, which lets them add
+  a sheet as a new report or drop a tab that's no longer wanted.
 - **Undo the last dashboard update** *(only when an archive exists)* → restore the
   most recent entry from `rollback --list` (newest-first; take `archives[0].id`):
   ```bash
@@ -542,16 +562,19 @@ After the orientation line, ask a single `AskUserQuestion`:
 Anything else the operator types goes through `AskUserQuestion`'s free-text
 option — treat it as a request and route it to the matching step.
 
-**After any change, rebuild (Step 4) and tell them to reload the page —
-do not relaunch the server.** `serve.py` reads the data files per request
-and sends `Cache-Control: no-store`, and the port and token persist in the
-data dir, so the URL already in their browser picks up the rebuild on a
-refresh. Restarting would hand them a second URL for the same dashboard
-and leave an orphaned process on the old port.
+**After a data or mapping change, rebuild (Step 4) and tell them to reload
+the page — do not relaunch the server.** `serve.py` reads the data files
+per request and sends `Cache-Control: no-store`, and the port and token
+persist in the data dir, so the URL already in their browser picks up the
+rebuild on a refresh. Restarting would hand them a second URL for the same
+dashboard and leave an orphaned process on the old port. A pure UI edit
+under `<user_src_dir>` needs no Step-4 rebuild at all — that is the whole
+point of "How the app is served" above.
 
-Say one line: *"Rebuilt — refresh the page to see it."* Then offer the
+Say one line — *"Rebuilt — refresh the page to see it"* after a rebuild,
+*"Done — refresh the page to see it"* after a UI-only edit. Then offer the
 same question again, so several changes can be made in one sitting, until
-the operator picks "Nothing".
+the operator has nothing left to change.
 
 ## Step 7 — Export the budget for the hosted app
 
