@@ -783,7 +783,8 @@ def main():
         # Map: output column position j → original column index (None for unknown)
         new_to_old_col = [orig_col_name_to_idx.get(col["name"]) for col in cols]
 
-        # Sort with index tracking
+        # Sort the rows before formulas, so running_sum and delta follow the requested order.
+        # A group_by sorts again after grouping, to order the groups by the columns they have.
         rows, orig_indices = sort_rows_with_indices(cols, rows, orig_indices, sort_spec)
 
         n_before_formulas = len(cols)
@@ -792,6 +793,8 @@ def main():
         new_to_old_col.extend([None] * (len(cols) - n_before_formulas))
 
         cols, rows, summary_meta = apply_aggregations(cols, rows, aggregations)
+        if aggregations and aggregations.get("type") == "group_by":
+            rows = sort_rows(cols, rows, sort_spec)
         # Data rows in the full result: after grouping, without the totals row, before the preview cut.
         kept_count = len(rows) - (summary_meta or {}).get("count", 0)
 
