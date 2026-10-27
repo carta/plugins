@@ -6,7 +6,7 @@ description: >
   (fund-family rollup), Companies (per-company repricing, LP make-whole waterfall, carry banking,
   partial sales), LP Returns and GP Economics (exit scenarios, XIRR, carry), Reserves
   (dry-powder planning), Reports (power law, LP sensitivity, DPI/RVPI/TVPI glidepath, peer-cohort
-  benchmarks, pacing, concentration), and Fund Construction (beta: model a NEW fund step by step —
+  benchmarks, pacing, concentration), and Plan New Fund (beta: model a NEW fund step by step —
   sectors, allocations, fees, recycling, waterfall, LPs — into projected TVPI/DPI/IRR). Also hosted at
   fund-modeling.carta.cloud. Invoke with a firm name, e.g. "fund modeling for Demo Capital" or "model
   portfolio scenarios for a firm". Fund Admin only. NOT for reading existing Tactyc/Fund Forecasting funds —
@@ -69,7 +69,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.118.3</carta-plugin>
+<carta-plugin>carta-investors:6.118.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -679,7 +679,7 @@ they can paste the URL into the address bar. `webapp/` is the committed prebuilt
 verbatim — no Node or build needed at runtime.
 
 After giving the URL, add one short post-launch line (not a menu):
-"A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · publish a scenario to share it with your firm · plan your next fund on the Fund Construction tab · say 'refresh' to pull fresh Carta data."
+"A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · publish a scenario to share it with your firm · plan your next fund on the Plan New Fund tab · say 'refresh' to pull fresh Carta data."
 
 ## Scenario sharing
 In the local build, firm admins publish/pull scenarios across the firm — **built into the app** (a SHARED

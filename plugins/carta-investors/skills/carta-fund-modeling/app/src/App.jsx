@@ -48,7 +48,7 @@ const TABS = [
   // download → download
   ["export", "Export", ["M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5"]],
   // plant → sprout
-  ["construction", "Fund Construction", ["M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3", "M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4", "M5 21h14"]],
+  ["construction", "Plan New Fund", ["M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3", "M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4", "M5 21h14"]],
 ];
 const TAB_IDS = TABS.map(([id]) => id);
 // Plans a new fund rather than viewing the portfolio, so no scenario applies to it.
@@ -455,7 +455,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
         </div>
       </div>
       <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
-        {TABS.filter(([id]) => id !== NEW_FUND_TAB).map(([id, label, icon]) => (
+        {TABS.map(([id, label, icon]) => (
           <NavItem key={id} id={id} label={label} icon={icon} active={tab === id} onClick={() => selectTab(id)} />
         ))}
       </div>
@@ -487,15 +487,6 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
           : <div style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", padding: "2px 12px 4px" }}>None yet — load to check.</div>}
       </>}
       <span style={{ flex: 1, minHeight: 10 }} />
-      <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "6px 8px 9px" }} />
-      <div style={{ padding: "0 8px 4px" }}>
-        <Eyebrow color={MICRO}>New fund</Eyebrow>
-      </div>
-      <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
-        {TABS.filter(([id]) => id === NEW_FUND_TAB).map(([id, label, icon]) => (
-          <NavItem key={id} id={id} label={label} icon={icon} active={tab === id} onClick={() => selectTab(id)} />
-        ))}
-      </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px 0" }} />
       <div style={{ padding: "9px 9px 0" }}>
         <span style={{ ...tightSans, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.01em" }}>Carta Fund Modeling</span>
