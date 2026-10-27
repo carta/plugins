@@ -144,7 +144,6 @@ def _prepare_sheet(sheet):
 def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_meta=None,
                  currency=None, row_currencies=None):
     base_symbol    = (currency or {}).get("symbol", "$")
-    base_money_fmt = _money_format(base_symbol)
     row_currencies = row_currencies or []
 
     last_col = get_column_letter(len(columns))
@@ -263,18 +262,16 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                 cell = ws.cell(row=row_idx, column=col_idx, value=val)
 
             if col["type"] == "money":
-                if is_summary:
-                    cell.number_format = base_money_fmt
+                # A totals row carries the currency its amounts were added up in, like any row.
+                zero_idx = col_idx - 1
+                if isinstance(row_curr, list):
+                    cell_curr = row_curr[zero_idx] if zero_idx < len(row_curr) else None
+                    sym = cell_curr["symbol"] if cell_curr else base_symbol
+                elif row_curr:
+                    sym = row_curr["symbol"]
                 else:
-                    zero_idx = col_idx - 1
-                    if isinstance(row_curr, list):
-                        cell_curr = row_curr[zero_idx] if zero_idx < len(row_curr) else None
-                        sym = cell_curr["symbol"] if cell_curr else base_symbol
-                    elif row_curr:
-                        sym = row_curr["symbol"]
-                    else:
-                        sym = base_symbol
-                    cell.number_format = _money_format(sym)
+                    sym = base_symbol
+                cell.number_format = _money_format(sym)
             elif col["type"] in FORMAT_MAP:
                 cell.number_format = FORMAT_MAP[col["type"]]
 

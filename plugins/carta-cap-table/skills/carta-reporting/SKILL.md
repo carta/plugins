@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.101.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.101.4</carta-plugin>
 
 # Custom Reports
 
@@ -488,7 +488,8 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `original_row_count` > ~1,000 rows | Large dataset | "This report has a lot of rows — want to narrow it down by date range, report type, or a specific person?" |
 | `401` / session expired | Auth expired | "It looks like your Carta session expired — reconnect and try again." |
 | `user_report_pk` missing from response | Transient API error | "Something went wrong generating this report — it may be a temporary issue. Try again in a moment, or contact your Carta team if it keeps happening." |
-| `missing_columns` or `skipped_formulas` non-empty | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
+| `mixed_currency_columns` non-empty | That column's amounts are in more than one currency, so its totals (summary or per group), `pct_of_total`, `running_sum` and `delta` were left out — those formulas are also listed in `skipped_formulas`. Never total them yourself. | "'[Column]' has amounts in several currencies, so I left its total out rather than add them together." |
+| `missing_columns` or `skipped_formulas` non-empty (other than for `mixed_currency_columns`) | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
 | `unknown_filter_columns` non-empty | A filter named a column this sheet does not have, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't filter on '[Column]' — it isn't in this report, so these rows are unfiltered. Here are the columns I can filter on: […]" Offer to re-run against a real column. |
 | `unsupported_filters` non-empty | A `>`, `<`, `>=` or `<=` filter named a text column, which has no order, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't apply '[Column] [op] [value]' — '[Column]' is text, so these rows are unfiltered on it." Offer `=`, `!=` or `contains` instead, or a numeric or date column. |
 | `structural_rows_dropped` > 0 | The sheet has section headings or total rows, and a filter, sort, column pick, formula or aggregation was applied, which cannot keep them in place. | "Section headings and totals were left out because of the filters/sort — say so if you want them back unsorted." |
@@ -604,15 +605,26 @@ All fields except the file source are optional — omit or set to `null` to skip
                          "missing_columns": [], "unknown_filter_columns": [],
                          "unsupported_filters": [],
                          "skipped_formulas": [], "structural_rows_dropped": N,
+                         "mixed_currency_columns": [],   // merged tabs: every list stat is the union over the merged sources
                          "merged_from": [...], "schema_warnings": [...]}},   // last two: merged tabs only
   "warnings": {"unknown_sheets": {"requested": [...], "available": [...]},
                "merge_sources_missing": [{"target": ..., "source": ...}]}   // keys present only when raised
 }
 ```
 
-A merged tab carries the `unknown_filter_columns` and `unsupported_filters` of the sources merged into it.
-
 With `--out <file>`, this JSON is written to the file and stdout carries `{"out": <file>, "stats": {...}}`, plus `"warnings"` when non-empty.
+
+A money column's total, group totals, `pct_of_total`, `running_sum` and `delta` combine its
+amounts across rows, so they run only over amounts in one currency (the sheet's base currency, or a row or cell
+override). Over several currencies the aggregate is `null`, the column is left out of
+`summary_meta.ops` and the formula is skipped; `mixed_currency_columns` names it. A total or
+group row whose amounts are all in a non-base currency carries it in `row_currencies`.
+
+A merged tab built from more than one source has no `summary_meta`: each source's Total row stays a
+literal value in its own currency, and Excel writes no `SUM` across sources. Each list stat of a
+merged tab (`missing_columns`, `unknown_filter_columns`, `unsupported_filters`, `skipped_formulas`,
+`mixed_currency_columns`) is the union over the merged sources, in first-seen order, so a source's
+skipped formula or unrun filter still shows.
 
 `kept_row_count` is the data rows in the result, before the preview cut: after grouping, without a summary totals row. `displayed_row_count` counts the displayed rows other than section headings and `_t` totals rows (a summary aggregation's Total row is counted), so it is < `kept_row_count` exactly when a preview cut data rows.
 
