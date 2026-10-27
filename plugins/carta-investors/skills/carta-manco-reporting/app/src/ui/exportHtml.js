@@ -57,9 +57,15 @@ export function exportPropsFor(snapshot, { targetId, pageLabel, slug, eventPage 
   };
 }
 
-function cloneWithoutExcluded(el) {
+export function cloneWithoutExcluded(el) {
   const clone = el.cloneNode(true);
   clone.querySelectorAll("[data-export-exclude]").forEach((n) => n.remove());
+  // data-source (webapp/jsx-runtime-shim.js) stamps every host element with
+  // its own file's app-relative path, for pinpoint's anchor resolution — an
+  // internal detail of this app's build, not part of the report a reader
+  // downloads. Strip it from both the root and every descendant.
+  clone.removeAttribute("data-source");
+  clone.querySelectorAll("[data-source]").forEach((n) => n.removeAttribute("data-source"));
   return clone;
 }
 

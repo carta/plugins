@@ -18,11 +18,12 @@ const SUCRASE_OPTS = {
 // Cache name encodes version+config; activate() deletes non-matching caches, so a
 // bump or config flip forces a clean re-transpile.
 const SUCRASE_VERSION = "3.35.1";
-const CONFIG_TOKEN = "jsx-auto-prod";
+const CONFIG_TOKEN = "jsx-auto-prod-datasrc";
 const CACHE_NAME = `manco-transpile-${SUCRASE_VERSION}-${CONFIG_TOKEN}`;
 
-// `self` only exists in a browser/SW context — not in vitest's default node
-// environment. Guard the registrations so this module stays importable there.
+// Guard the top-level self.addEventListener(...) registrations: vitest imports
+// this file directly to unit-test rewriteJsxRuntimeSpecifier, and `self` only
+// exists in a browser/SW context.
 const SW = typeof self !== "undefined" ? self : undefined;
 
 if (SW) {
@@ -89,6 +90,12 @@ async function transpileJsx(url) {
     )});`;
   }
 
+  // Point the transpiled output's react/jsx-runtime import at this file's own
+  // shim instance (carrying its source path via ?src=) instead of the shared
+  // vendor runtime, so every rendered host element can be stamped with the
+  // file that emitted it.
+  outputCode = rewriteJsxRuntimeSpecifier(outputCode, appSrcPath(url.pathname));
+
   // no-cache so the browser re-consults the SW on reload instead of serving its
   // own HTTP-cached copy (which would skip the SW and miss edits).
   const response = new Response(outputCode, {
@@ -99,6 +106,47 @@ async function transpileJsx(url) {
   });
   await cache.put(cacheUrl.href, response.clone());
   return response;
+}
+
+// Pure — exported for unit tests. Sucrase's automatic JSX runtime emits
+// `from "react/jsx-runtime"` (single or double quotes); redirect that to the
+// per-file shim so its own ?src= carries this file's app-relative path.
+export function rewriteJsxRuntimeSpecifier(code, srcPath) {
+  // srcPath is the raw request pathname (appSrcPath does not decode it) —
+  // the exact name serve.py resolved on disk, from a firm's own SRC_DIR,
+  // which the firm's users and the chat agent can rename files in. It's
+  // untrusted and must be both URL-encoded here (a "+", "&", "#" or '"' in
+  // whatever escaping it already carries would otherwise corrupt the query
+  // string or the emitted import statement) and substituted via a replacer
+  // function rather than a template inside the replacement string (a literal
+  // "$&"/"$'" in a filename would otherwise be read as a replacement
+  // pattern). jsx-runtime-shim.js reads it back with
+  // `new URL(import.meta.url).searchParams.get("src")`, which decodes it
+  // once — matching the one encoding done here, so the round trip reproduces
+  // serve.py's own raw pathname.
+  return code.replace(
+    /(from\s*)(["'])react\/jsx-runtime\2/g,
+    (_m, from) => from + JSON.stringify("/jsx-runtime-shim.js?src=" + encodeURIComponent(srcPath)),
+  );
+}
+
+// Maps a served request pathname to the repo-app-relative path pinpoint's
+// change-target resolver expects. scripts/serve.py serves the canonical
+// source tree (SRC_DIR, the firm's own per-firm copy — never the plugin's
+// app/src) at /src/*, so /src/views/Overview.jsx is stamped as
+// app/src/views/Overview.jsx: that "app/src/" is the convention chat_session.py's
+// MANCO_APP_NOTE and anchor_preamble's strip_prefix expect, not a literal
+// on-disk path. Anything else same-origin under .jsx falls back to the
+// pathname with its leading slash stripped (webapp/ ships no .jsx).
+//
+// `pathname` is left exactly as the URL parser gave it (still whatever
+// percent-encoding it carries), never decoded here: serve.py's do_GET also
+// takes the raw request path with no unquoting (it has no SimpleHTTPRequestHandler
+// decode step in its path), so the name served and the name stamped must stay
+// byte-for-byte the same string, or the stamp names a file that isn't the one
+// the browser actually requested.
+export function appSrcPath(pathname) {
+  return pathname.startsWith("/src/") ? `app${pathname}` : pathname.slice(1);
 }
 
 async function hashText(text) {
