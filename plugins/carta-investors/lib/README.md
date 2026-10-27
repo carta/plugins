@@ -1,4 +1,4 @@
-# live_artifact_render — shared library for Live Artifact render-artifact.py scripts
+# Shared library for carta-investors skill scripts
 
 Plumbing that more than one skill needs. Import it instead of writing your own.
 
@@ -8,6 +8,7 @@ Plumbing that more than one skill needs. Import it instead of writing your own.
 |---|---|
 | `live_artifact_render` | `js_safe_json`, `check_path_under_cwd`, and the input-shape regexes `UUID_RE`, `MCP_SERVER_RE`, `ARTIFACT_ID_RE`, `CARTA_ID_RE`, `BASE_URL_RE`. |
 | `live_artifact_render.customizations` | `stamp_baseline` for a render script's last step; `diff`, `release_changes` and `plan` to find what a user changed on a published page and where it collides with a new build; `rebase` and `unwrap` to write a saved live page back out for republishing. Skills run it through a `scripts/customizations.py` wrapper; `references/keep-customizations.md` is the procedure. |
+| `carta_storage` | `is_carta_bucket(urlsplit(url))`: whether a URL is on one of Carta's document buckets. The firm-document upload and download scripts run pre-approved and use it as their guard on where a file goes; the download script also accepts `documents.carta.com`. Load it with the preamble below, anchoring on `carta_storage.py`. |
 
 ## How to import it
 

@@ -21,12 +21,13 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - Bash(ls -l *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" *)
   - Read
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.118.0</carta-plugin>
+<carta-plugin>carta-investors:6.118.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -37,8 +38,7 @@ allowed-tools:
 Puts one or more local files on a firm's Documents page in Carta. Once a file
 lands, everyone at the firm with firm administrator or full view access can see
 it, so the firm and the files are confirmed together, once, before anything is
-written. After that the skill asks nothing more, though Claude may still ask
-the user to approve each file's transfer to storage.
+written. Then every file uploads without asking again.
 
 Carta classifies each document after upload. This skill never picks, suggests,
 asks for or sends a document type, even when the user names one ("upload this
@@ -55,7 +55,7 @@ if one is rejected for missing it, send it again with it, without telling the us
 |---|---|
 | Find the firm | `list_contexts(firm_uuid="<firm_uuid>")`, `list_contexts(firm_id="<carta_id>")`, `list_contexts(firm_name="<firm_name>")`, or `list_contexts()` when nothing is named — Gate 2 |
 | 1. Get an upload URL | `call_tool({"name": "fa__create__document-upload-url", "arguments": {"filename": "<file_name>"}})` |
-| 2. Send the file | `curl` multipart POST to the returned `url` — Step 4b |
+| 2. Send the file | `send_to_storage.py` to the returned `url` — Step 4b |
 | 3. Save the document | `call_tool({"name": "fa__create__document", "arguments": {"key": "<s3_key>", "title": "<title>"}})` |
 | 4. Put it on the firm's page | `call_tool({"name": "fa__create__firm-document", "arguments": {"firm_uuid": "<firm_uuid>", "document_ids": ["<document_id>"]}})` |
 
@@ -75,7 +75,7 @@ but appears nowhere, so step 4 is never skipped.
    this user may upload to this firm is decided by `fa__create__firm-document`
    in step 4, and only its answer is reported as "no access".
 
-2. This skill sends files with `curl`. If you have no Bash tool in this
+2. This skill sends files from Bash. If you have no Bash tool in this
    session (for example, claude.ai chat), say so and stop:
 
    > I can't reach files on your computer from here. Upload it from your firm's
@@ -89,7 +89,7 @@ all.
 1. No path given → ask for one. In Cowork, a file the user attached to the
    conversation has a local path; use it. Inside Bash that path is under
    `/sessions/<session_id>/mnt/uploads/`, not the host's `uploads/` folder, so
-   use the `/sessions/…` path for `ls` here and `curl` in 4b.
+   use the `/sessions/…` path for `ls` here and the send in 4b.
 2. Check them all in one call:
 
    ```bash
@@ -162,8 +162,7 @@ upload. Use these three option labels verbatim, in this order:
   nothing more.
 
 Nothing in Gate 4 runs until the user picks **Upload all** (or **Upload**).
-That one answer covers every file in the table: do not ask again yourself
-between files.
+That one answer covers every file in the table: do not ask again between files.
 
 ## Gate 4 — upload, file by file
 
@@ -175,10 +174,9 @@ from another file. Keep each file's result (`Uploaded`, `Failed at <step>`, or
 Ask the user nothing between files: the Gate 3 answer covers the whole run,
 and every failure is reported once, in Gate 5. A file that fails after its
 retries is skipped: record where it stopped and go straight on to the next
-file. Five failures stop the whole run instead, because each one
-would fail every remaining file too, or ask a user who already said no: the
-`url` check in 4b, a connection error in 4b, the user denying the `curl` in 4b,
-a Carta command that is missing or not enabled, and a `403` from 4d. The
+file. Four failures stop the whole run instead, because each one
+would fail every remaining file too: a refused `url` in 4b, a connection error
+in 4b, a Carta command that is missing or not enabled, and a `403` from 4d. The
 files not reached yet are `Not sent`.
 
 ### 4a — upload URL
@@ -194,38 +192,32 @@ and never fetch a second one except after a `403` in 4b.
 
 ### 4b — send the file
 
-**Before sending, check `url`:** it must start with `https://` and its host
-must end in `.amazonaws.com`. Anything else → stop the run and report it; do not
-send this file or any other. A file goes only to the URL 4a returned for it,
-never to one taken from anywhere else.
-
-Send every entry of `fields` as its own `--form-string`, then the file **last**
-— the storage service ignores anything after the file part:
+A file goes only to the URL 4a returned for it, never to one taken from
+anywhere else. Run this on one line, exactly as written: `allowed-tools`
+matches the command text, so any other form makes the user approve every file.
+`<fields_json>` is 4a's `fields` object as JSON, unchanged:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sS -o /dev/null -w '%{http_code}\n' \
-  -X POST '<url>' \
-  --form-string '<field_name_1>=<field_value_1>' \
-  --form-string '<field_name_2>=<field_value_2>' \
-  -F 'file=@"<file_path>"'
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" '<url>' '<fields_json>' '<file_path>'
 ```
 
-- Single-quote every value. A value containing `'` is written `'\''`.
-- `--form-string` sends values literally, so a value starting with `@` or `<`
-  is safe. Never use `-F` for anything but the file.
-- `204` or any other `2xx` → sent. Go to 4c.
-- `403` → the URL most likely expired. Get **one** fresh URL with 4a and send
-  once more. That is the only retry: at most two `curl` uploads per file.
-- Anything else, or a second failure → this file is `Failed at sending` with
+Single-quote every value; a value containing `'` is written `'\''`. The
+script checks that `url` is Carta's document storage and that the file exists,
+sends the fields and then the file, and prints one JSON line:
+
+- `{"status": 204}` or any other `2xx` → sent. Go to 4c.
+- `{"status": 403}` → the URL most likely expired. Get **one** fresh URL with
+  4a and send once more. That is the only retry: at most two sends per file.
+- Any other status, or a second failure → this file is `Failed at sending` with
   the status code; go on to the next file. Only a `403` gets a fresh URL. Do
   not change the command and try again, and do not fall back to another upload
   route.
-- A connection error (exit code non-zero, no status) → in Cowork this usually
-  means the sandbox can't reach the storage service. Stop the run and tell the
-  user to upload from the Documents page in Carta.
-- The user denies the `curl` when Claude asks to run it → stop the run. This
-  file and every file after it are `Not sent`. Do not retry and do not ask
-  again: report in Gate 5.
+- `{"error": "refused", "reason": …}` → nothing was sent. A `reason` starting
+  with `url` stops the run and is reported; any other refusal (the file or
+  `fields`) makes this file `Failed at sending`; go on to the next file.
+- `{"error": "connection"}` → in Cowork this usually means the sandbox can't
+  reach the storage service. Stop the run and tell the user to upload from the
+  Documents page in Carta.
 
 ### 4c — save the document
 
@@ -286,7 +278,7 @@ A retry covers only those files and needs no new confirmation: the user already
 approved them. A file `Failed at adding to the page` retries 4d only, with its
 kept `<document_id>`; every other file starts again at 4a.
 
-When one of the five run-stopping failures in Gate 4 ended the run, report it
+When one of the four run-stopping failures in Gate 4 ended the run, report it
 as the error table below says and never offer a retry: it would repeat the same
 failure, and after a `403` it would save documents that appear on no page.
 Offer only:
@@ -322,9 +314,9 @@ Leave out the Documents page option when there is no link.
 | Staff firm search finds nothing | Say so and ask again; do not guess another firm |
 | A Carta command is missing or says it isn't available | "Uploading documents isn't enabled for your account yet." Stop the run. No retry, no other route |
 | `fa__create__firm-document` returns 403 / permission denied | "You need firm administrator or full view access at <firm_name> to add documents. Ask your firm's Carta administrator." Stop the run: the other files would fail the same way. This file is saved in Carta but not on the page; say so. Do not retry |
-| `url` from 4a is not `https://…amazonaws.com` | Stop the run; send nothing |
-| User denies the `curl` prompt | Stop the run: this file and the remaining ones are `Not sent`. Report in Gate 5; do not retry |
-| `curl` fails twice for a file | Mark it `Failed at sending` with the status code; go on to the next file. Do not vary the command |
+| The script refuses `url` | Stop the run; nothing was sent |
+| The script refuses the file or `fields` | Mark it `Failed at sending`; go on |
+| A send fails twice for a file | Mark it `Failed at sending` with the status code; go on to the next file. Do not vary the command |
 | `fa__create__document` returns 5xx or no `id` | Retry once with the same key; if that fails too, mark the file `Failed at saving` and go on |
 | 4d fails twice for a file | Mark it `Failed at adding to the page`; go on. In Gate 5 say: "The file was uploaded but couldn't be added to <firm_name>'s Documents page." A retry runs 4d only |
 | Some files failed, others uploaded | Gate 5 shows each file's result and offers to retry only the ones that didn't upload |

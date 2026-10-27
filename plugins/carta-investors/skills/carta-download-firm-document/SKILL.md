@@ -21,12 +21,13 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - Bash(ls -l *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-download-firm-document/scripts/save_to_downloads.py" *)
   - Read
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.118.0</carta-plugin>
+<carta-plugin>carta-investors:6.118.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -53,7 +54,7 @@ if one is rejected for missing it, send it again with it, without telling the us
 | Find the firm | `list_contexts(firm_uuid="<firm_uuid>")`, `list_contexts(firm_id="<carta_id>")`, `list_contexts(firm_name="<firm_name>")`, or `list_contexts()` when nothing is named — Gate 1 |
 | 1. Find the document | `call_tool({"name": "fa__list__firm-documents", "arguments": {"firm_uuid": "<firm_uuid>", "search": "<title_text>"}})` |
 | 2. Get its link | `call_tool({"name": "fa__get__firm-document-download-url", "arguments": {"firm_uuid": "<firm_uuid>", "document_id": "<document_id>"}})` |
-| 3. Save it | `curl` to `~/Downloads` — Gate 3d, Claude Code only |
+| 3. Save it | `save_to_downloads.py` to `~/Downloads` — Gate 3d, Claude Code only |
 
 Every link minted in step 2 is recorded in Carta's document access log, so mint
 one only for a document the user chose, at most 20 per run (the run's cap).
@@ -210,33 +211,25 @@ end of 3d:
 
 ### 3d — save it (save mode)
 
-**Before saving, check `url`:** it must start with `https://` and its host must
-either end in `.amazonaws.com` or be exactly `documents.carta.com`. Anything
-else → do not run `curl`; say the file couldn't be saved, then give the link in
-the link-mode report format.
-
-Name the file `<safe_filename>`: `filename` with `/ \ : * ? " < > |` and
-control characters removed and leading dots and spaces trimmed (empty → the
-document's title, sanitized the same way). Never overwrite a file:
+Run this once per document, on one line, exactly as written: `allowed-tools`
+matches the command text, so any other form makes the user approve every file.
+`<filename>` and `<title>` are 3c's `filename` and the document's title:
 
 ```bash
-ls -l ~/Downloads/'<safe_filename>'
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-download-firm-document/scripts/save_to_downloads.py" '<url>' '<filename>' '<title>'
 ```
 
-If it exists, add ` (1)`, ` (2)`, … before the extension and check again. Then:
+Single-quote every value; a value containing `'` is written `'\''`. The
+script checks that `url` is Carta's document storage, saves under a safe name without overwriting
+an existing file (adding ` (1)`, ` (2)`, …), and prints one JSON line:
 
-```bash
-curl --proto '=https' --tlsv1.2 -sS -f -o ~/Downloads/'<safe_filename>' -w '%{http_code}\n' '<url>'
-```
-
-Single-quote every value; a value containing `'` is written `'\''`.
-
-- `200` → `ls -l ~/Downloads/'<safe_filename>'` for the size, then report:
-  > Saved **<filename>** to `~/Downloads/<safe_filename>` (<size>).
-- `403` → the link most likely expired. Mint **one** fresh link (3c) and run
-  `curl` once more. That is the only retry: at most two `curl` runs per
-  document.
-- Anything else, a second failure, or a connection error → say the file
+- `{"status": 200, "path": …, "bytes": …}` → report:
+  > Saved **<filename>** to `<path>` (<bytes as KB or MB>).
+- `{"status": 403}` → the link most likely expired. Mint **one** fresh link
+  (3c) and run the script once more. That is the only retry: at most two runs
+  per document.
+- `{"error": "refused", …}`, any other status, a second failure, or
+  `{"error": "connection"}` → say the file
   couldn't be saved, then give the link in the link-mode report format, so the
   user can still download it. Do not change the command and try again.
 
@@ -269,8 +262,8 @@ leave it out when there is no `carta_id`.
 | The link response says the document can't be downloaded through Carta MCP | "This document can't be downloaded from here; open it from the firm's Documents page in Carta." Do not retry |
 | Link expired | Mint one fresh link for that document when the user asks |
 | User cancels at the download confirm, or at the every-match batch confirm | Stop. No link is minted, nothing is saved |
-| `url` from 3c is not `https://…amazonaws.com` or `https://documents.carta.com/…` | Do not save; say the file couldn't be saved, then give the link |
-| `curl` fails twice, or can't connect | Say the file couldn't be saved, then give the link; do not vary the command |
+| The script refuses the link | Nothing was saved; say the file couldn't be saved, then give the link |
+| A save fails twice, or can't connect | Say the file couldn't be saved, then give the link; do not vary the command |
 | More documents wanted than the run's cap | Do as many as the cap allows, then offer the rest in another round. In the every-match step, say more may match (steps 3–4) |
 | User asks to upload a file | That is `carta-upload-firm-document` |
 | User asks to delete, rename or replace a document | Not supported here; they can do it from the Documents page in Carta |
