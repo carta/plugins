@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>__ARTIFACT_TITLE__</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* === Carta Ink tokens === */
+    :root {
+      color-scheme: light;
+      --surface-bg: #FFFFFF;
+      --surface-underlay: #F1F1F1;
+      --surface-lightgray: #F1F1F1;
+      --surface-lightgray-hover: #E9EAEA;
+      --surface-blue: #EAF0F8;
+      --text-default: #1A1A1A;
+      --text-subtle: #656B6B;
+      --border-default: #A7AAAA;
+      --border-subtle: #DEDFDF;
+      --info-strong: #285DA3;
+      /* Ink data-viz categorical order (level 3) */
+      --dv1: #285DA3; --dv2: #2D9E90; --dv3: #DDB31F; --dv4: #65BBBD;
+      --dv5: #94B524; --dv6: #B29990; --dv7: #656B6B;
+      --r-card: 8px; --r-input: 4px; --r-pill: 24px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--surface-bg); color: var(--text-default); padding: 28px 28px 80px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container { max-width: 1180px; margin: 0 auto; }
+    .header { margin-bottom: 20px; }
+    .header h1 { font-size: 26px; font-weight: 600; line-height: 34px; letter-spacing: -0.01em; }
+    .header p { color: var(--text-subtle); font-size: 13px; margin-top: 4px; }
+
+    /* Tabs */
+    .tab-bar { display: flex; gap: 2px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 24px; }
+    .tab-btn {
+      background: none; border: none; font: inherit; cursor: pointer; padding: 10px 16px;
+      font-size: 14px; font-weight: 500; color: var(--text-subtle);
+      border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .12s;
+    }
+    .tab-btn:hover { color: var(--text-default); }
+    .tab-btn.active { color: var(--info-strong); border-bottom-color: var(--info-strong); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* KPI tiles */
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .metric-card { background: var(--surface-bg); border: 1px solid var(--border-subtle); border-radius: var(--r-card); padding: 18px 20px; }
+    .metric-label { font-size: 11px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+    .metric-value { font-size: 28px; font-weight: 600; line-height: 42px; font-variant-numeric: tabular-nums; }
+    .metric-value.text { font-size: 19px; line-height: 30px; overflow-wrap: anywhere; }
+    .metric-sub { font-size: 12px; color: var(--text-subtle); margin-top: 2px; }
+
+    /* Cards */
+    .card { border: 1px solid var(--border-subtle); border-radius: var(--r-card); padding: 22px; margin-bottom: 24px; }
+    .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .card .sub { font-size: 12px; color: var(--text-subtle); margin-bottom: 18px; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 860px) { .card-grid { grid-template-columns: 1fr; } }
+
+    /* Horizontal bars (provision frequency) */
+    .bar-row { display: grid; grid-template-columns: 200px 1fr 96px; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; }
+    .bar-row:last-child { margin-bottom: 0; }
+    .bar-row .bl { color: var(--text-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { display: block; background: var(--surface-underlay); height: 20px; border-radius: var(--r-input); overflow: hidden; }
+    .bar-fill { display: block; height: 20px; background: var(--info-strong); border-radius: var(--r-input); min-width: 2px; }
+    .bar-row .bv { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-subtle); }
+    .bar-row .bv b { color: var(--text-default); font-weight: 600; }
+
+    /* Toolbar (search + filters). Text fields set their own background: left unset, they
+       take the OS field color, which some hosts paint dark under a dark-mode OS. */
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .search { font: inherit; font-size: 13px; padding: 8px 12px; border: 1px solid var(--border-default); border-radius: var(--r-input); min-width: 260px; background: var(--surface-bg); color: var(--text-default); }
+    .search::placeholder { color: var(--text-subtle); }
+    .search:focus { outline: none; border-color: var(--info-strong); box-shadow: 0 0 0 3px var(--surface-blue); }
+    .count { font-size: 12px; color: var(--text-subtle); margin-left: auto; }
+
+    /* Multi-select dropdown (Ink filter) */
+    .ms { position: relative; }
+    .ms-btn { font: inherit; font-size: 13px; padding: 8px 14px; border: 1px solid var(--border-default); border-radius: var(--r-pill); background: var(--surface-bg); cursor: pointer; color: var(--text-default); display: inline-flex; align-items: center; gap: 6px; }
+    .ms-btn:hover { background: var(--surface-lightgray); }
+    .ms-btn.on { border-color: var(--info-strong); background: var(--surface-blue); color: var(--info-strong); }
+    .ms-btn .caret { font-size: 9px; color: var(--text-subtle); }
+    .ms-panel { position: absolute; z-index: 50; top: calc(100% + 6px); left: 0; min-width: 240px; max-height: 320px; overflow: auto; background: var(--surface-bg); border: 1px solid var(--border-subtle); border-radius: var(--r-card); box-shadow: 0 6px 20px rgba(0,0,0,0.12); padding: 8px; display: none; }
+    .ms-panel.open { display: block; }
+    .ms-search { width: 100%; font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border-default); border-radius: var(--r-input); margin-bottom: 6px; background: var(--surface-bg); color: var(--text-default); }
+    .ms-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-input); cursor: pointer; font-size: 13px; }
+    .ms-opt:hover { background: var(--surface-lightgray); }
+    .ms-opt input { accent-color: var(--info-strong); }
+    .ms-clear { font: inherit; font-size: 12px; color: var(--info-strong); background: none; border: none; cursor: pointer; padding: 6px 8px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { text-align: left; font-weight: 600; color: var(--text-subtle); border-bottom: 1px solid var(--border-default); padding: 9px 10px; cursor: pointer; user-select: none; white-space: nowrap; }
+    thead th:hover { color: var(--text-default); }
+    thead th .arrow { color: var(--info-strong); font-size: 10px; }
+    tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
+    tbody tr:hover { background: #FAFAFA; }
+    .chip { display: inline-block; background: var(--surface-lightgray); color: var(--text-default); font-size: 11px; padding: 2px 8px; margin: 0 4px 3px 0; border-radius: var(--r-input); white-space: nowrap; }
+    .muted { color: var(--text-subtle); }
+    .note { font-size: 12px; color: var(--text-subtle); margin-top: 14px; }
+
+    .brand { position: fixed; bottom: 16px; right: 22px; font-size: 10px; letter-spacing: 0.08em; color: var(--text-subtle); text-transform: uppercase; pointer-events: none; }
+    .brand b { color: var(--text-default); font-weight: 600; letter-spacing: 0.02em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 id="dash-title"></h1>
+      <p id="dash-sub"></p>
+    </div>
+    <div class="tab-bar" id="tab-bar"></div>
+
+    <div class="tab-pane" id="tab-overview">
+      <div class="metrics-grid" id="kpi-grid"></div>
+      <div class="card-grid">
+        <div class="card"><h2>Provision frequency</h2><div class="sub">Share of NDAs that carry each provision</div><div id="chart-provisions"></div></div>
+        <div class="card"><h2>Governing law jurisdiction</h2><div class="sub">Share of NDAs by the law that governs them</div><div id="chart-jurisdictions"></div><div class="note" id="jurisdiction-note"></div></div>
+      </div>
+    </div>
+
+    <div class="tab-pane" id="tab-expiring">
+      <div class="card"><h2>Expiring in the next 2 years</h2><div class="sub" id="expiring-sub"></div>
+        <div id="table-expiring"></div>
+        <div class="note" id="expiring-note"></div>
+      </div>
+    </div>
+
+    <div class="tab-pane" id="tab-restrictions">
+      <div class="card"><h2>Active restrictions — non-solicit, no-contact &amp; non-circumvention</h2><div class="sub" id="restrictions-sub"></div>
+        <div id="table-restrictions"></div>
+        <div class="note">"NDA expiry" is the expiration date of the NDA as a whole (executed date + the NDA's term), <b>not</b> the duration of the individual provision — a non-solicit and a no-contact in the same NDA can run for different lengths. "Unknown / perpetual" means no NDA expiry could be computed; the restriction may still apply.</div>
+      </div>
+    </div>
+
+    <div class="tab-pane" id="tab-counterparties">
+      <div class="card"><h2>Counterparties</h2><div class="sub" id="counterparties-sub"></div>
+        <div id="table-counterparties"></div>
+      </div>
+    </div>
+  </div>
+  <div class="brand">Powered by <b>Carta</b></div>
+
+  <script type="application/json" id="nda-data">__LOAN_DATA__</script>
+  <script>
+    const DATA = JSON.parse(document.getElementById('nda-data').textContent);
+    const HAS_WF = !!(DATA.meta && DATA.meta.hasWorkflow);
+    const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const fmt = n => (n == null ? "" : Number(n).toLocaleString());
+    const DV = ['#285DA3','#2D9E90','#DDB31F','#65BBBD','#94B524','#B29990','#656B6B'];
+    const splitList = v => v ? String(v).split(',').map(s => s.trim()).filter(Boolean) : [];
+
+    // ---- Horizontal bars, scaled out of 100% of all NDAs (track = 100%) ----
+    function horizontalBars(elId, items, labelKey, valueKey, pctKey) {
+      const el = document.getElementById(elId);
+      if (!items || !items.length) { el.innerHTML = '<p class="muted">No data.</p>'; return; }
+      el.innerHTML = items.map(d => {
+        const pctNum = pctKey && d[pctKey] != null ? Number(d[pctKey]) : null;
+        const w = pctNum != null ? Math.max(0.5, Math.min(100, pctNum)) : 0;
+        const pct = pctNum != null ? pctNum + '%' : '';
+        return '<div class="bar-row"><span class="bl" title="' + esc(d[labelKey]) + '">' + esc(d[labelKey]) +
+          '</span><span class="bar-track"><span class="bar-fill" style="width:' + w + '%"></span></span>' +
+          '<span class="bv"><b>' + pct + '</b> · ' + fmt(d[valueKey]) + '</span></div>';
+      }).join('');
+    }
+
+    // ---- Roll a long ranked list down to top N + "Other" ----
+    function topNWithOther(items, key, valueKey, n) {
+      if (!items || items.length <= n + 1) return items.slice();
+      const top = items.slice(0, n);
+      const rest = items.slice(n);
+      const restCount = rest.reduce((s, d) => s + (d[valueKey] || 0), 0);
+      const restPct = rest.reduce((s, d) => s + (d.pct || 0), 0);
+      const other = {}; other[key] = 'Other (' + rest.length + ')'; other[valueKey] = restCount; other.pct = Math.round(restPct * 10) / 10;
+      return top.concat([other]);
+    }
+
+    // ---- Multi-select dropdown ----
+    let msSeq = 0;
+    function multiSelect(label, options, onChange) {
+      const id = 'ms' + (msSeq++);
+      const selected = new Set();
+      const withSearch = options.length > 8;
+      const wrap = document.createElement('div');
+      wrap.className = 'ms';
+      wrap.innerHTML =
+        '<button class="ms-btn" type="button">' + esc(label) + ' <span class="caret">▾</span></button>' +
+        '<div class="ms-panel">' + (withSearch ? '<input class="ms-search" placeholder="Search…">' : '') +
+        '<div class="ms-list"></div><button class="ms-clear" type="button">Clear</button></div>';
+      const btn = wrap.querySelector('.ms-btn');
+      const panel = wrap.querySelector('.ms-panel');
+      const list = wrap.querySelector('.ms-list');
+      const search = wrap.querySelector('.ms-search');
+
+      function renderList(q) {
+        const opts = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options;
+        list.innerHTML = opts.map(o =>
+          '<label class="ms-opt"><input type="checkbox" value="' + esc(o) + '"' + (selected.has(o) ? ' checked' : '') + '>' + esc(o) + '</label>').join('') ||
+          '<div class="ms-opt muted">No matches</div>';
+        list.querySelectorAll('input').forEach(cb => cb.addEventListener('change', () => {
+          if (cb.checked) selected.add(cb.value); else selected.delete(cb.value);
+          syncBtn(); onChange(selected);
+        }));
+      }
+      function syncBtn() {
+        btn.classList.toggle('on', selected.size > 0);
+        btn.firstChild.textContent = selected.size ? (label + ' (' + selected.size + ') ') : (label + ' ');
+      }
+      btn.addEventListener('click', e => { e.stopPropagation(); panel.classList.toggle('open'); if (search) search.focus(); });
+      panel.addEventListener('click', e => e.stopPropagation());
+      if (search) search.addEventListener('input', () => renderList(search.value));
+      wrap.querySelector('.ms-clear').addEventListener('click', () => { selected.clear(); renderList(search ? search.value : ''); syncBtn(); onChange(selected); });
+      document.addEventListener('click', () => panel.classList.remove('open'));
+      renderList('');
+      return { el: wrap, selected };
+    }
+
+    // ---- Sortable / filterable table ----
+    function makeTable(elId, columns, rows, opts) {
+      opts = opts || {};
+      const cols = columns.filter(c => !(c.workflow && !HAS_WF));
+      let sortKey = opts.defaultSort || cols[0].key;
+      let sortDir = opts.defaultDir || 1;
+      let query = "";
+      const el = document.getElementById(elId);
+      const searchKeys = opts.searchKeys || cols.map(c => c.key);
+      let refresh = () => {};  // set once drawBody exists; filter changes call this (not a full rebuild)
+      const filters = (opts.filters || []).map(f => {
+        const options = f.options || Array.from(new Set(rows.flatMap(r => f.type === 'contains' ? splitList(r[f.field]) : [r[f.field]]).filter(Boolean))).sort();
+        const ms = multiSelect(f.label, options, () => refresh());
+        return Object.assign({}, f, { ms });
+      });
+
+      function passesFilters(row) {
+        return filters.every(f => {
+          if (!f.ms.selected.size) return true;
+          if (f.type === 'contains') { const vals = splitList(row[f.field]); return Array.from(f.ms.selected).some(s => vals.includes(s)); }
+          return f.ms.selected.has(row[f.field]);
+        });
+      }
+      function view() {
+        let r = rows.filter(passesFilters);
+        if (query) { const q = query.toLowerCase(); r = r.filter(row => searchKeys.some(k => String(row[k] == null ? "" : row[k]).toLowerCase().includes(q))); }
+        const col = cols.find(c => c.key === sortKey) || {};
+        return r.slice().sort((a, b) => {
+          let x = col.sortKey ? a[col.sortKey] : a[sortKey], y = col.sortKey ? b[col.sortKey] : b[sortKey];
+          // Blank / unknown values (e.g. "Unknown / perpetual" expiry) always sink to the
+          // bottom, regardless of sort direction — they're absent data, not the top of the list.
+          const blank = v => v === null || v === undefined || v === '';
+          if (blank(x) && !blank(y)) return 1;
+          if (blank(y) && !blank(x)) return -1;
+          if (blank(x) && blank(y)) return 0;
+          if (col.type === 'num') { x = Number(x) || 0; y = Number(y) || 0; return (x - y) * sortDir; }
+          x = String(x).toLowerCase(); y = String(y).toLowerCase();
+          return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
+        });
+      }
+
+      // Build toolbar ONCE so dropdowns stay open across selections.
+      const tools = document.createElement('div');
+      tools.className = 'toolbar';
+      const s = document.createElement('input');
+      s.type = 'search'; s.className = 'search'; s.placeholder = 'Search…';
+      s.addEventListener('input', e => { query = e.target.value; refresh(); });
+      tools.appendChild(s);
+      filters.forEach(f => tools.appendChild(f.ms.el));
+      const cnt = document.createElement('span'); cnt.className = 'count';
+      tools.appendChild(cnt);
+      const tbl = document.createElement('table');
+      el.innerHTML = ''; el.appendChild(tools); el.appendChild(tbl);
+
+      function drawBody() {
+        const rr = view();
+        cnt.textContent = rr.length + ' of ' + rows.length;
+        let h = '<thead><tr>';
+        cols.forEach(c => { const arr = sortKey === c.key ? ('<span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>') : ''; h += '<th data-k="' + c.key + '">' + esc(c.label) + ' ' + arr + '</th>'; });
+        h += '</tr></thead><tbody>';
+        if (!rr.length) h += '<tr><td colspan="' + cols.length + '" class="muted">No matching rows.</td></tr>';
+        rr.forEach(row => { h += '<tr>' + cols.map(c => '<td>' + (c.render ? c.render(row[c.key], row) : esc(row[c.key])) + '</td>').join('') + '</tr>'; });
+        h += '</tbody>';
+        tbl.innerHTML = h;
+        tbl.querySelectorAll('th').forEach(th => th.addEventListener('click', () => { const k = th.getAttribute('data-k'); if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = (cols.find(c => c.key === k) || {}).type === 'num' ? -1 : 1; } drawBody(); }));
+      }
+      refresh = drawBody;
+      drawBody();
+    }
+
+    const chip = v => v ? splitList(v).map(x => '<span class="chip">' + esc(x) + '</span>').join('') : '<span class="muted">—</span>';
+    const orDash = v => v ? esc(v) : '<span class="muted">—</span>';
+    const perpetual = v => v ? esc(v) : '<span class="muted">Unknown / perpetual</span>';
+
+    // ---- Tabs ----
+    const TABS = [{id:'overview',label:'Overview'},{id:'expiring',label:'Expiring'},{id:'restrictions',label:'Restrictions'},{id:'counterparties',label:'Counterparties'}];
+    function switchTab(id) { TABS.forEach(t => { document.getElementById('tab-' + t.id).classList.toggle('active', t.id === id); document.getElementById('btn-' + t.id).classList.toggle('active', t.id === id); }); }
+    document.getElementById('tab-bar').innerHTML = TABS.map(t => '<button class="tab-btn" id="btn-' + t.id + '">' + t.label + '</button>').join('');
+    TABS.forEach(t => document.getElementById('btn-' + t.id).addEventListener('click', () => switchTab(t.id)));
+
+    // ---- Render ----
+    (function render() {
+      const k = DATA.kpis || {};
+      document.getElementById('dash-title').textContent = (DATA.meta.firmName || 'NDA') + ' — NDA insights';
+      document.getElementById('dash-sub').textContent = 'Carta Law document intelligence · ' + fmt(k.totalNdas) + ' NDAs · generated ' + (DATA.meta.generatedAt || '');
+
+      const tiles = [
+        {l: 'Total NDAs', v: fmt(k.totalNdas)},
+        {l: 'Counterparties', v: fmt(k.counterparties)},
+        {l: 'Active restrictions', v: fmt(k.restrictedCompanies), s: 'companies we cannot solicit/contact'},
+        {l: 'Expiring in the next 2 years', v: fmt(k.expiringNext2Years)},
+        {l: 'Top governing law jurisdiction', v: esc(k.topGovLaw), text: true},
+      ];
+      document.getElementById('kpi-grid').innerHTML = tiles.map(t =>
+        '<div class="metric-card"><div class="metric-label">' + t.l + '</div>' +
+        '<div class="metric-value' + (t.text ? ' text' : '') + '">' + t.v + '</div>' +
+        (t.s ? '<div class="metric-sub">' + t.s + '</div>' : '') + '</div>').join('');
+
+      horizontalBars('chart-provisions', DATA.provisionFrequency, 'provision', 'count', 'pct');
+      horizontalBars('chart-jurisdictions', topNWithOther(DATA.jurisdictions || [], 'jurisdiction', 'count', 8), 'jurisdiction', 'count', 'pct');
+      const jCaptured = (DATA.jurisdictions || []).reduce((s, j) => s + j.count, 0);
+      const jNotCaptured = (k.totalNdas || 0) - jCaptured;
+      if (jNotCaptured > 0) document.getElementById('jurisdiction-note').textContent = 'Excludes ' + fmt(jNotCaptured) + ' NDAs with no governing law captured.';
+
+      // Expiring
+      document.getElementById('expiring-sub').textContent = fmt((DATA.expiring || []).length) + ' NDAs expire in the next 2 years';
+      makeTable('table-expiring', [
+        {key: 'counterparty', label: 'Counterparty'},
+        {key: 'deal', label: 'Deal', workflow: true, render: orDash},
+        {key: 'executed', label: 'Executed'},
+        {key: 'term', label: 'Term', sortKey: 'termMonths', type: 'num'},
+        {key: 'expiry', label: 'Expiry'},
+      ], DATA.expiring || [], {defaultSort: 'expiry', searchKeys: ['counterparty', 'deal']});
+      document.getElementById('expiring-note').textContent =
+        'Expiry is computed from executed date + term; only NDAs with both are shown (' + fmt(k.withExecDate) + ' of ' + fmt(k.totalNdas) + ' NDAs have a captured start date).';
+
+      // Restrictions
+      document.getElementById('restrictions-sub').textContent =
+        fmt((DATA.restrictions || []).length) + ' counterparties under an active non-solicit, no-contact, or non-circumvention provision';
+      makeTable('table-restrictions', [
+        {key: 'counterparty', label: 'Counterparty'},
+        {key: 'restrictions', label: 'Restriction(s)', render: chip},
+        {key: 'bindingUntil', label: 'NDA expiry', render: perpetual},
+        {key: 'deals', label: 'Deal(s)', workflow: true, render: chip},
+      ], DATA.restrictions || [], {
+        defaultSort: 'bindingUntil', searchKeys: ['counterparty', 'deals'],
+        filters: [{label: 'Restriction', field: 'restrictions', type: 'contains', options: ['Non-solicitation', 'Contact restrictions', 'Non-circumvention']}],
+      });
+
+      // Counterparties
+      document.getElementById('counterparties-sub').textContent = fmt((DATA.counterparties || []).length) + ' distinct counterparties';
+      makeTable('table-counterparties', [
+        {key: 'counterparty', label: 'Counterparty'},
+        {key: 'ndaCount', label: 'NDAs', type: 'num'},
+        {key: 'govLaw', label: 'Governing law', render: orDash},
+        {key: 'deals', label: 'Deal(s)', workflow: true, render: chip},
+      ], DATA.counterparties || [], {
+        defaultSort: 'ndaCount', defaultDir: -1, searchKeys: ['counterparty', 'deals', 'govLaw'],
+        filters: [
+          {label: 'Governing law', field: 'govLaw', type: 'equals'},
+          {label: 'Deal', field: 'deals', type: 'contains'},
+        ],
+      });
+
+      switchTab('overview');
+    })();
+  </script>
+</body>
+</html>

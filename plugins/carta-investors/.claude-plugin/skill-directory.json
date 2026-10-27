@@ -215,6 +215,20 @@
       "body": "Sorts every equity investment in Carta into missing, unsigned, signed or not needed, ranked by cost basis in an interactive report you can drill into."
     }
   },
+  "carta-nda-dashboard": {
+    "category": "portfolio",
+    "name": "NDA insights dashboard",
+    "order": 65,
+    "prompts": [
+      "Build an NDA insights dashboard for {{FIRM}}",
+      "Which counterparties can't we solicit or contact right now, and when do those restrictions end?",
+      "Which of our NDAs expire in the next two years?"
+    ],
+    "whatsNewCopy": {
+      "headline": "See every NDA's restrictions, expiries and counterparties",
+      "body": "Reads the NDAs Carta has on file for your firm into a dashboard of active non-solicits, upcoming expiries, governing law and counterparties you can filter."
+    }
+  },
   "carta-waterfall-modeling": {
     "category": "portfolio",
     "name": "Waterfall modeling",
