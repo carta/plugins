@@ -51,9 +51,9 @@ function extractDirectoryPayload(res) {
 async function loadPublishedDirectory() {
   if (!(await mcpAvailable())) return;
   try {
-    const res = await _mcp("fetch", {
-      command: "plugin:list:skills",
-      params: { plugin: SKILL_DIRECTORY_PLUGIN },
+    const res = await _mcp("read_tool", {
+      name: "plugin__list__skills",
+      arguments: { plugin: SKILL_DIRECTORY_PLUGIN },
     });
     const entries = normalizeDirectoryEntries(extractDirectoryPayload(res)?.skills, BAKED_SKILL_DIRECTORY);
     if (!entries || JSON.stringify(entries) === JSON.stringify(_directorySkills)) return;

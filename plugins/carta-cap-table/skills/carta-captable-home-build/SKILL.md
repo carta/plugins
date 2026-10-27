@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.101.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.102.1</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -180,9 +180,9 @@ rejects with `not_in_manifest`:
   `marketing:list:content` for What's new's recent skills. The marketing commands only
   exist on some environments; a missing one leaves the static news cards in place and
   What's new on its microapp or fallback cards.
-- `fetch` — carries `plugin:get:version` for the update banner and `plugin:list:skills`
-  for the Skill Directory, and remains the legacy
-  dispatch path for environments without `call_tool`
+- `read_tool` — carries `plugin:get:version` for the update banner and `plugin:list:skills`
+  for the Skill Directory. It runs reads without asking the viewer, so neither check
+  interrupts the page load
 - `get_current_user` — called once; its profile supplies `recommendations` for Suggested
   for you and `has_ctc` / `has_cap_table` for What's new
 - `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
@@ -401,7 +401,7 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["cap_table_chart", "call_tool", "fetch", "get_current_user", "track_ui_event"]
+          tools: ["cap_table_chart", "call_tool", "read_tool", "get_current_user", "track_ui_event"]
         }
       ]
     }
@@ -499,8 +499,8 @@ change, update the sketch and the text together and bump the date.
 | Round history dashboard | `cap_table:list:financing_history` — one row per share class, already aggregated and date-sorted, carrying `closing_date`, `original_issue_price`, `shares_issued`, `post_money`, and `cash_raised_by_currency`. |
 | Suggested for you | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
 | What's new | the same `get_current_user` profile (`has_ctc` unlocks the microapp, `has_cap_table` gates the skills), plus `marketing:list:content` with `content_type: pluginPrompt`, `space: prompts`, newest `goLiveDate` first |
-| Update banner | `plugin:get:version` via `fetch`, with `plugin` + `skill` params |
-| Skill Directory | baked from `.claude-plugin/skill-directory.json` at build time, then `plugin:list:skills` via `fetch` with `plugin` — entries at the plugin's stable tag, only for published skills. `skills: null` or an unusable list keeps the baked one |
+| Update banner | `plugin:get:version` via `read_tool`, with `plugin` + `skill` arguments |
+| Skill Directory | baked from `.claude-plugin/skill-directory.json` at build time, then `plugin:list:skills` via `read_tool` with `plugin` — entries at the plugin's stable tag, only for published skills. `skills: null` or an unusable list keeps the baked one |
 | Plugin news | `marketing:list:content` (tag `NEWS_TAG`, `tag_source: "metadata"`) then `marketing:get:asset_data` per image. Images must arrive as `data:` URIs — the sandbox CSP is `img-src 'self' data:`, so a remote asset URL renders nothing |
 | Ownership composition bar (on the Cap table page) | `cap_table_chart` — `chart_data.share_classes` and `chart_data.warrant_blocks` by `fully_diluted_ownership`, `chart_data.option_plans` by `outstanding_ownership + available_ownership`, largest first and capped at six segments, plus "Rest of the company" when `chart_data.totals.total_fully_diluted_ownership` is less than the whole |
 | Fully diluted summary | `cap_table_chart` — `chart_data.totals` for share counts, or `total_fully_diluted_ownership` when every share class row's `quantity_semantics` is `PERCENT` or `INVESTED_CAPITAL` (same call again, no extra fetch), upgraded by the Round history dashboard's `cap_table:list:financing_history` response, which the dashboard hands over via `applyAmountRaised` — one currency renders plainly, more than one renders a per-currency breakdown (never summed), none/failure keeps the unitless fallback |

@@ -110,9 +110,9 @@ async function checkForUpdate() {
   if (isFreshBuild(BUILT_AT, Date.now())) return;
   if (!(await mcpAvailable())) return;
   try {
-    const res = await _mcp("fetch", {
-      command: "plugin:get:version",
-      params: { plugin: PLUGIN, skill: SKILL },
+    const res = await _mcp("read_tool", {
+      name: "plugin__get__version",
+      arguments: { plugin: PLUGIN, skill: SKILL },
     });
     const payload = extractVersionPayload(res);
     // The response also carries `plugin_version` — never compare against it.
