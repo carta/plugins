@@ -261,14 +261,19 @@ export const SourceNote = ({ children, style }) => (
   </p>
 );
 
+/** Why a firm-wide figure is missing for a mixed-currency firm, for any card to show in its place. */
+export const MixedCurrencyText = () => (
+  <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>
+    Not shown — this firm's funds report in multiple currencies, which can't be summed into a firm-wide total.
+  </div>
+);
+
 // Firm-wide aggregations can't be summed across currencies — a mixed-currency
 // firm gets this notice instead of a meaningless combined total.
 export const MixedCurrencyNote = ({ title }) => (
   <div className="card" style={{ padding: "18px 22px", marginTop: 18 }}>
     <H3 as="div" style={{ marginBottom: 6 }}>{title}</H3>
-    <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>
-      Not shown — this firm's funds report in multiple currencies, which can't be summed into a firm-wide total.
-    </div>
+    <MixedCurrencyText />
   </div>
 );
 
@@ -318,10 +323,12 @@ export function SectionChips({ sections }) {
 
 const ArrowDownIcon = icon(["M12 5v14", "m19 12-7 7-7-7"]);
 
+export const APP_TOPBAR = '[data-testid="app-topbar"]';
+
 /** Summed live height of the pinned bars named by `selectors` (the app's sticky top
  *  bar by default), so a bar that pins inside the content pane can pin just below
  *  them rather than under them. */
-export function usePinnedHeight(selectors = ['[data-testid="app-topbar"]']) {
+export function usePinnedHeight(selectors = [APP_TOPBAR]) {
   const [h, setH] = useState(0);
   const key = selectors.join("|");
   useEffect(() => {
@@ -337,27 +344,35 @@ export function usePinnedHeight(selectors = ['[data-testid="app-topbar"]']) {
 }
 
 // gap left between the pinned jump links and a section's heading after a jump
-const JUMP_GAP = 16;
+export const JUMP_GAP = 16;
+export const JUMP_NAV_LABEL = "Jump to section";
+export const JUMP_NAV = `nav[aria-label="${JUMP_NAV_LABEL}"]`;
+const PINNED_BARS = `${APP_TOPBAR}, ${JUMP_NAV}`;
+
+/** Sets `el`'s scroll margin so a scroll to it lands just below the app's top bar and the page's jump links. */
+export function landBelowPinnedBars(el) {
+  const pinned = [...document.querySelectorAll(PINNED_BARS)].reduce((h, bar) => h + bar.getBoundingClientRect().height, 0);
+  el.style.scrollMarginTop = `${pinned + JUMP_GAP}px`;
+}
 
 /** Sticky "Jump to:" links for a long page of themed sections — grey pills with a
  *  down arrow (so they read as scrolling the page, not as tabs that swap it), the
  *  section in view shown solid. Same `sections` and scroll tracking as SectionChips;
  *  `onJump(id)` is called on a click. It pins below the app's top bar, and on a click
- *  sets the target section's scroll-margin to the two bars' current heights plus a
- *  gap, so the section's heading lands just below them even when either bar wraps.
+ *  lands the target section below both bars with landBelowPinnedBars, so its heading
+ *  sits just below them even when either bar wraps.
  *  `actions` (a page-wide control, e.g. a fund picker) sits at the bar's right end. */
 export function JumpLinks({ sections, onJump, actions }) {
   const { active, go } = useSectionNav(sections);
   const top = usePinnedHeight();
-  const navRef = useRef(null);
   const jump = (id) => {
     onJump?.(id);
     const el = document.getElementById(id);
-    if (el && navRef.current) el.style.scrollMarginTop = `${top + navRef.current.getBoundingClientRect().height + JUMP_GAP}px`;
+    if (el) landBelowPinnedBars(el);
     go(id);
   };
   return (
-    <nav ref={navRef} aria-label="Jump to section" data-pinned-bar style={{ position: "sticky", top, zIndex: 5, background: "var(--ink-color-global-surface-background-default)",
+    <nav aria-label={JUMP_NAV_LABEL} data-pinned-bar style={{ position: "sticky", top, zIndex: 5, background: "var(--ink-color-global-surface-background-default)",
       display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 0", marginBottom: 22, borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
       <span style={{ ...sans, fontSize: FS.body, fontWeight: 600, color: "var(--ink-color-global-text-subtle)", marginRight: 2 }}>Jump to:</span>
       {sections.map(([id, label]) => (
@@ -870,13 +885,13 @@ export function Slider({ label, value, min, max, step, onChange, fmt, accent, va
  *  "eyebrow" (uppercase micro, default for top) | "strong" (600-weight default-text)
  *  | "muted" (micro subtle) | "plain" (12px/400 sentence-case, Ink's real Tile
  *  label style — text-subtle, which is Ink's gray-80 in this app's palette),
- *  align, style. */
+ *  align, weight (value font weight; 700 by default), style. */
 export function StatTile({ label, value, sub, color = "var(--ink-color-global-text-default)",
-  labelPos = "top", size = "display", serif: useSerif, labelTone, align = "left", style }) {
+  labelPos = "top", size = "display", serif: useSerif, labelTone, align = "left", weight = 700, style }) {
   const tone = labelTone ?? (labelPos === "top" ? "eyebrow" : "strong");
   const valStyle = useSerif
-    ? { ...tightSans, fontSize: size === "h3" ? FS.h3 : FS.display, fontWeight: 700, color, letterSpacing: "0", lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }
-    : { ...inkNum, fontSize: size === "h3" ? FS.h3 : FS.display, fontWeight: 700, color, letterSpacing: "0", lineHeight: 1.05 };
+    ? { ...tightSans, fontSize: FS[size] ?? FS.display, fontWeight: weight, color, letterSpacing: "0", lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }
+    : { ...inkNum, fontSize: FS[size] ?? FS.display, fontWeight: weight, color, letterSpacing: "0", lineHeight: 1.05 };
   const labelEl = tone === "eyebrow"
     ? <Eyebrow color={MICRO} style={{ whiteSpace: "nowrap" }}>{label}</Eyebrow>
     : <div style={tone === "muted"

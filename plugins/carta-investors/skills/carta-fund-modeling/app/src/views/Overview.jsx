@@ -3,7 +3,7 @@ import { FS, inkNum, sans, MICRO, PALETTE } from "../ui/theme.js";
 import { fmt$, fmtM, fmtX, fmtPct, fmtOwn, shortFund } from "../ui/format.js";
 import { Num, SourceNote, H1, H3, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
-import { firmRollup } from "../model/funds.js";
+import { gpCarryOf, baseGpCarryOf } from "../model/funds.js";
 import { fundAvgOwnership } from "../model/ownership.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { trackClick } from "../analytics.js";
@@ -192,13 +192,9 @@ const makeFundCols = (avgOwnOf) => [
   { label: "Gross MOIC", get: (f) => f.grossMoic ?? null },
   { label: "Avg Own %", get: (f) => avgOwnOf(f) },
   { label: "Net LP IRR", get: (f) => f.netLpIrr ?? null },
-  { label: "GP Carry", get: (f) => (f.accruedCarry || 0) + (f.carryBanked || 0) },
+  { label: "GP Carry", get: gpCarryOf },
   { label: "GP NAV", get: (f) => f.gpCapitalNavLive },
 ];
-
-// GP carry a fund holds at this scenario's marks: booked accrued carry that
-// survives the LP make-whole + carry crystallized from any exit toggles.
-const gpCarryOf = (f) => (f.accruedCarry || 0) + (f.carryBanked || 0);
 
 // A numeric cell that surfaces its scenario move vs the Carta baseline ON HOVER:
 // the value tints green/red with a ▲/▼ caret when it changed, and the tooltip
@@ -221,10 +217,8 @@ function DeltaTd({ cur, base, fmt, eps = 0, bold }) {
     </td>
   );
 }
-export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }) {
-  const firm = firmRollup(fundStates);
+export default function Overview({ fundStates, snapshot, portfolio, firm, onOpenFund }) {
   const firmRvpi = firm.lpPaidIn > 0 ? firm.lpNav / firm.lpPaidIn : 0;
-  const firmGpCarry = firm.accruedCarry + firm.carryBanked + firm.gpCapitalNavLive;
   // Authoritative "today" figures for the trend's last column, so its endpoint
   // ties out EXACTLY to the header metric bar + the fund table (rather than the
   // navSeries quarter-end, which lags the nav-as-of month). Never cross
@@ -299,7 +293,7 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
                   <DeltaTd cur={avgNow[f.id]} base={avgBase[f.id]} fmt={fmtOwn} eps={0.0001} />
                   {/* Net LP IRR — Carta booked; reprices never restate it, so no scenario delta */}
                   <td style={RT}>{f.netLpIrr == null ? "—" : fmtPct(f.netLpIrr)}</td>
-                  <DeltaTd cur={gpCarryOf(f)} base={f.baseAccruedCarry} fmt={fmt$} eps={0.5} />
+                  <DeltaTd cur={gpCarryOf(f)} base={baseGpCarryOf(f)} fmt={fmt$} eps={0.5} />
                   {dash ?? <DeltaTd cur={f.gpCapitalNavLive} base={f.gpCapitalNav} fmt={fmt$} eps={0.5} />}
                 </tr>
               );})}
@@ -321,7 +315,7 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
                     average ownership across funds/currencies), so the total stays blank */}
                 <td style={{ ...RT, color: "var(--ink-color-global-text-subtle)" }}>—</td>
                 <td style={{ ...RT, color: "var(--ink-color-global-text-subtle)" }}>—</td>
-                <td style={RT}>{firm.mixedCurrency ? "—" : <Num value={firm.accruedCarry + firm.carryBanked} fmt={fmt$} />}</td>
+                <td style={RT}>{firm.mixedCurrency ? "—" : <Num value={firm.gpCarry} fmt={fmt$} />}</td>
                 <td style={RT}>{firm.mixedCurrency ? "—" : <Num value={firm.gpCapitalNavLive} fmt={fmt$} />}</td>
               </tr>
             </tbody>

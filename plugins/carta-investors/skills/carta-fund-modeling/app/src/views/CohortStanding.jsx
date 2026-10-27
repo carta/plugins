@@ -9,7 +9,7 @@
 import { FS, sans, inkNum, MICRO } from "../ui/theme.js";
 import { fmtM, fmtX, fmtPct } from "../ui/format.js";
 import { H3, SourceNote, fundNameOnly, Eyebrow, StatTile } from "../ui/components.jsx";
-import { cohortPercentile } from "../model/benchmarks.js";
+import { cohortPercentile, hasCohortSpread, isBenchmarkable } from "../model/benchmarks.js";
 
 // How the cohort benchmarks are built. The empty state draws no bars, so its note leaves out
 // the sentence about them.
@@ -176,17 +176,11 @@ export default function CohortStanding({ snapshot, fundStates }) {
   // Each fund evaluates ALL THREE metrics independently — a fund can be
   // benchmarked on TVPI but uncohorted on DPI, so this is a map, not one value.
   const rows = fundStates.map((f) => {
-    if (f.hasNav === false || !(f.lpPaidIn > 0)) return { f, kind: "deploying", metrics: null };
+    if (!isBenchmarkable(f)) return { f, kind: "deploying", metrics: null };
     const metrics = {};
     for (const m of METRICS) {
       const cohortMarks = snapshot.benchmarks[f.id]?.[m.id];
-      // A cohort is usable as soon as ANY published mark is nonzero — even if
-      // the median (p50) is 0 (common for DPI mid-J-curve, where the bottom
-      // half of the cohort hasn't distributed yet), a nonzero p75/p90/p95
-      // still gives a real spread to place this fund against. Only a cohort
-      // where EVERY published mark is 0/absent is truly degenerate (no spread
-      // to compare against at all).
-      const hasMarks = cohortMarks && ["p5", "p10", "p25", "p50", "p75", "p90", "p95"].some((k) => (cohortMarks[k] ?? 0) > 0);
+      const hasMarks = hasCohortSpread(cohortMarks);
       const val = metricVal(f, m.id);
       if (!hasMarks) {
         metrics[m.id] = { kind: "uncohorted", val, cohortMarks: null, reason: "degenerate_cohort" };

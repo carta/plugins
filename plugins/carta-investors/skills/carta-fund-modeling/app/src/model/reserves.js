@@ -175,6 +175,11 @@ export function computeReserves(snapshot, portfolio, opts = {}) {
   return { funds, totals };
 }
 
+/** computeReserves options from a scenario's saved assumptions. */
+export const reserveOptsOf = (a = {}) => ({
+  feeLoads: a.feeLoads || {}, followOnRatios: a.followOnRatios || {}, recyclingRatios: a.recyclingRatios || {},
+});
+
 /**
  * Firm-wide count of new deals the dry powder can fund = Σ floor(new-deal capacity
  * ÷ that fund's average check). The average check is the per-fund override
@@ -195,6 +200,12 @@ export function newDealCount({ funds }, avgChecks = {}) {
     return sum + (check > 0 && f.newDeal > 0 ? Math.floor(f.newDeal / check) : 0);
   }, 0);
 }
+
+/** Whether a fund has committed capital worth showing. Anything that renders as
+ *  "$0.0M committed" (< $50k, incl. GP shells / uninitialized vehicles) has nothing
+ *  to allocate and just clutters a reserves view. fmtM rounds to one $M decimal, so
+ *  < 50_000 is exactly the set that shows "$0.0M". */
+export const hasCommittedCapital = (fund) => Math.abs(fund.committed) >= 50_000;
 
 /** Funds that are nearly tapped out (deployment ≥ threshold) — reserve-discipline flags. */
 export function nearlyDeployed(reserves, threshold = 0.85) {

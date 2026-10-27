@@ -944,7 +944,7 @@ export function ReserveInput({ amount, max, onCommit, locked }) {
   );
 }
 
-function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, ownership, onDragStart, onDragEnd, fundStates, firmAgg, firmLpDelta, firmGpCarry, sliceName, fundScope, onOpenFundSection }) {
+function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, ownership, onDragStart, onDragEnd, fundStates, firmAgg, sliceName, fundScope, onOpenFundSection }) {
   // which detail sub-modal is open — 'positions' | 'captable' | 'financials' |
   // 'partialsales' | null (null = the Scenario-inputs tab, the default)
   const [openModal, setOpenModal] = useState(null);
@@ -998,9 +998,8 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
   const ownDiluted = ownInfo.pct != null && (company.futureDilution ?? 0) > 0;
 
   // ── Accordion summary strip: FV / LP NAV / Carry, each a current (scenario)
-  //    value + its change vs the Carta mark (same StatBar the firm-level
-  //    MetricBar uses), plus ownership when a detailed Carta cap table is on
-  //    file. Ownership's headline is the post-dilution figure — the same
+  //    value + its change vs the Carta mark, plus ownership when a detailed
+  //    Carta cap table is on file. Ownership's headline is the post-dilution figure — the same
   //    "current scenario value" convention as the other three tiles — with the
   //    pre-dilution Carta-on-file pct as the reference delta (signed negative,
   //    since dilution only ever reduces ownership).
@@ -1321,7 +1320,7 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
       </div>
       {fundStates && firmAgg && (
         <div style={{ flex: "0 0 300px" }}>
-          <ReturnsPreviewContent fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
+          <ReturnsPreviewContent fundStates={fundStates} firmAgg={firmAgg}
             fundScope={fundScope} snapshot={snapshot} portfolio={portfolio}
             onOpenFundSection={onOpenFundSection} activeFundIds={companyFundIds(company)}
             companyImpact={companyImpactRows} draggingSlider={draggingSlider}
@@ -1479,7 +1478,7 @@ function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden, locked
   );
 }
 
-export default function Companies({ portfolio, snapshot, exitHorizonOverrides, updateCompany, updateSlice, setAssumption, readOnly, onOpenCompany, reload, flush, holdingsPulled, fundScope, setFundScope, fundStates, firmAgg, firmLpDelta, firmGpCarry, sliceName, onOpenFundSection }) {
+export default function Companies({ portfolio, snapshot, exitHorizonOverrides, updateCompany, updateSlice, setAssumption, readOnly, onOpenCompany, reload, flush, holdingsPulled, fundScope, setFundScope, fundStates, firmAgg, sliceName, onOpenFundSection }) {
   // fund filter is the GLOBAL scope (driven by the header picker): "all" ⇔ ALL_FUNDS
   const fundFilter = fundScope === ALL_FUNDS ? "all" : fundScope;
   const [confirm, setConfirm] = useState(null); // {title, message, confirmLabel, danger, onConfirm} or null
@@ -1829,7 +1828,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
           updateCompany={updateCompany} refDate={refDate} staleDays={staleDays}
           assumptions={portfolio.assumptions} portfolio={portfolio} snapshot={snapshot} readOnly={readOnly} onOpenCompany={onOpenCompany}
           onDragStart={onSliderDragStart} onDragEnd={onSliderDragEnd}
-          fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
+          fundStates={fundStates} firmAgg={firmAgg}
           sliceName={sliceName} fundScope={fundScope} onOpenFundSection={onOpenFundSection} />
       )}
 

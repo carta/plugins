@@ -11,6 +11,18 @@ export function ordinal(n) {
   return `${v}${suffix}`;
 }
 
+const MARK_KEYS = ["p5", "p10", "p25", "p50", "p75", "p90", "p95"];
+
+/**
+ * Whether a cohort's marks give a spread to rank a fund against. A cohort is usable
+ * as soon as ANY published mark is nonzero — even if the median (p50) is 0 (common
+ * for DPI mid-J-curve, where the bottom half of the cohort hasn't distributed yet),
+ * a nonzero p75/p90/p95 still gives a real spread to place a fund against. Only a
+ * cohort where EVERY published mark is 0/absent is truly degenerate.
+ */
+export const hasCohortSpread = (marks) =>
+  !!marks && MARK_KEYS.some((k) => (marks[k] ?? 0) > 0);
+
 /**
  * Where a TVPI sits in its vintage cohort, interpolating between the known
  * percentile marks. cohort: {p5, p10, p25, p50, p75, p90, p95} (any subset,
@@ -22,7 +34,7 @@ export function ordinal(n) {
  */
 export function cohortPercentile(tvpi, cohort) {
   if (!cohort) return null;
-  const marks = ["p5", "p10", "p25", "p50", "p75", "p90", "p95"]
+  const marks = MARK_KEYS
     .filter((k) => cohort[k] != null)
     .map((k) => ({ p: Number(k.slice(1)), tvpi: cohort[k] }));
   if (!marks.length) return null;
@@ -38,6 +50,9 @@ export function cohortPercentile(tvpi, cohort) {
   }
   return null;
 }
+
+/** A fund with called capital and a closed NAV month — one that can be ranked in its cohorts. */
+export const isBenchmarkable = (f) => f.hasNav !== false && f.lpPaidIn > 0;
 
 /**
  * S&P-equivalent multiple: compound each LP contribution at `rate` to the

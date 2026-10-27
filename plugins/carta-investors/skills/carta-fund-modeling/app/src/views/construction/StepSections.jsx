@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FS, sans } from "../../ui/theme.js";
-import { Badge, CheckCircleIcon, ChevronDownIcon, usePinnedHeight } from "../../ui/components.jsx";
+import { APP_TOPBAR, Badge, CheckCircleIcon, ChevronDownIcon, JUMP_NAV_LABEL, usePinnedHeight } from "../../ui/components.jsx";
 import { fmtMIn, fmtPct } from "../../ui/format.js";
 import { validateGeneral, effectiveGeneral, validateFees, validateRecycling, validateWaterfall, validateLps, deriveGeneral, waterfallTerms } from "../../model/construction/plan.js";
 import { validateLightFees, validatePortfolio, validateOutcomes } from "../../model/construction/light.js";
@@ -18,7 +18,7 @@ const isEmpty = (e) => Object.keys(e).length === 0;
 const secId = (id) => `fc-sec-${id}`;
 
 // the app's top bar and the pinned summary bar, so the jump bar pins just below both
-const PINNED_ABOVE = ['[data-testid="app-topbar"]', '[data-testid="construction-summary"]'];
+const PINNED_ABOVE = [APP_TOPBAR, '[data-testid="construction-summary"]'];
 
 function JumpBar({ sections, top, onJump, trailing }) {
   const [active, setActive] = useState(sections[0].id);
@@ -41,7 +41,7 @@ function JumpBar({ sections, top, onJump, trailing }) {
     setActive(id);
   };
   return (
-    <nav aria-label="Jump to section" data-testid="jump-bar" data-pinned-bar style={{ position: "sticky", top, zIndex: 13, display: "flex", gap: 8, overflowX: "auto",
+    <nav aria-label={JUMP_NAV_LABEL} data-testid="jump-bar" data-pinned-bar style={{ position: "sticky", top, zIndex: 13, display: "flex", gap: 8, overflowX: "auto",
       padding: "8px 0", margin: "0 0 16px", background: "var(--ink-color-global-surface-background-default)",
       borderBottom: "1px solid var(--ink-color-global-border-subtle)" }}>
       <span style={{ ...sans, fontSize: FS.micro, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", alignSelf: "center",

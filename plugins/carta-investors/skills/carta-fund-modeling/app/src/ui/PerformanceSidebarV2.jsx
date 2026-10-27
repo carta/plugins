@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { FS, sans, inkNum, SIDEBAR_PANEL_BG } from "./theme.js";
 import { fmtM, fmtX, fmtPct } from "./format.js";
 import { Num, Btn, ALL_FUNDS, fundLabel, DeltaCaret } from "./components.jsx";
-import { scenarioFund, firmBaseRollup } from "../model/funds.js";
+import { scenarioFund, firmBaseRollup, gpCarryOf, baseGpCarryOf } from "../model/funds.js";
 import { scenarioRow, exitDateIrr } from "../model/scenarios.js";
 import { waterfallCfgFor, exitHorizonFor } from "../model/reprice.js";
 import { reservesEarmarked, baseReservesEarmarked } from "../model/reserves.js";
@@ -149,11 +149,9 @@ function FundCard({ f, snapshot, portfolio, onOpenFundSection, isLast, reserves,
           rollup (Σ fund = firm) and zeroing a company moves both by the same amount.
           The at-exit GP carry (full waterfall + catch-up) lives in the Returns · GP
           returns tab this row links to; it isn't the current-state figure this panel
-          otherwise shows. Baseline has no banked carry (exit toggles are scenario-only
-          edits), so the delta compares against `baseAccruedCarry` alone — same
-          convention firmBaseRollup uses for the firm-wide figure. */}
-      <Row label="Carry" value={f.accruedCarry + f.carryBanked} fmt={fmtM}
-        delta={(f.accruedCarry + f.carryBanked) - f.baseAccruedCarry} forceDelta alignCols
+          otherwise shows. The delta is against baseGpCarryOf, as in firmBaseRollup. */}
+      <Row label="Carry" value={gpCarryOf(f)} fmt={fmtM}
+        delta={gpCarryOf(f) - baseGpCarryOf(f)} forceDelta alignCols
         onClick={onOpenFundSection && (() => onOpenFundSection(f.id, "gp-returns"))}
         title={`Open ${name} in Returns · GP returns`} />
       {/* Always visible (even at $0) rather than disappearing once dilution is
@@ -193,7 +191,7 @@ function FundCard({ f, snapshot, portfolio, onOpenFundSection, isLast, reserves,
  *  @param distributionsAffected optional bool — this company's DPI/LP
  *  distributions rows only move once it's actually realized/exited (only then
  *  does its reprice reach the fund's distribution waterfall); see FundCard. */
-export function ReturnsPreviewContent({ fundStates, firmAgg, firmLpDelta, firmGpCarry, fundScope, snapshot, portfolio, onOpenFundSection, activeFundIds, companyImpact, draggingSlider, distributionsAffected }) {
+export function ReturnsPreviewContent({ fundStates, firmAgg, fundScope, snapshot, portfolio, onOpenFundSection, activeFundIds, companyImpact, draggingSlider, distributionsAffected }) {
   // Base list respects the global fund-scope picker. When a company is
   // hovered/expanded on the Companies table (activeFundIds set), narrow the
   // list to only the fund(s) that company actually touches — rather than
@@ -205,7 +203,7 @@ export function ReturnsPreviewContent({ fundStates, firmAgg, firmLpDelta, firmGp
 
   // Firm-wide vs-baseline deltas — always over the FULL firm (fundStates, not the
   // fund-scope-filtered `funds` used for the Fund impact list below), same scope
-  // App.jsx already uses for firmLpDelta. firmBaseRollup() is firmRollup()'s
+  // firmRollup() uses for lpNavDelta. firmBaseRollup() is firmRollup()'s
   // baseline counterpart (model/funds.js) — keeps this rollup math in one place
   // rather than re-summing fundStates ad hoc here.
   const firmBase = firmBaseRollup(fundStates);
@@ -249,13 +247,13 @@ export function ReturnsPreviewContent({ fundStates, firmAgg, firmLpDelta, firmGp
           <>
             <Row label="Invested" value={firmAgg.invested} fmt={fmtM} alignCols />
             <Row label="FV" value={firmAgg.fv} fmt={fmtM} delta={firmAgg.fv - firmBase.fv} forceDelta alignCols />
-            <Row label="LP NAV" value={firmAgg.lpNav} fmt={fmtM} delta={firmLpDelta} forceDelta alignCols />
+            <Row label="LP NAV" value={firmAgg.lpNav} fmt={fmtM} delta={firmAgg.lpNavDelta} forceDelta alignCols />
             <Row label="TVPI" value={firmAgg.tvpi} fmt={(n) => fmtX(n)} delta={firmAgg.tvpi - firmBase.tvpi} eps={0.005} forceDelta alignCols />
             <Row label="DPI" value={firmAgg.dpi} fmt={(n) => fmtX(n)} delta={firmAgg.dpi - firmBase.dpi} eps={0.005} forceDelta alignCols
               dim={draggingSlider != null && !distributionsAffected} />
             <Row label="LP distributions" value={firmAgg.lpDistributed} fmt={fmtM} delta={firmAgg.lpDistributed - firmBase.lpDistributed} forceDelta alignCols
               dim={draggingSlider != null && !distributionsAffected} />
-            <Row label="Carry" value={firmGpCarry} fmt={fmtM} delta={firmGpCarry - firmBase.gpCarry} forceDelta alignCols />
+            <Row label="Carry" value={firmAgg.gpCarry} fmt={fmtM} delta={firmAgg.gpCarry - firmBase.gpCarry} forceDelta alignCols />
           </>
         )}
       </div>

@@ -104,7 +104,7 @@ function useNarrow() {
  *  valuation/carry/exit edit updates these instantly. Shown only on Firm Overview.
  *  Titled "Firm metrics" inside the card via StatBar's `title` prop, matching
  *  the design spec's "Summary" tile (title + key values inside one bordered card). */
-function MetricBar({ firm, firmBase, firmLpDelta, firmGpCarry, narrow }) {
+function MetricBar({ firm, firmBase, narrow }) {
   // Horizontal padding matches <main>'s own narrow/wide padding (App.jsx's maxWidth:1320
   // block below) so this card's edges line up with the page content under it — both boxes
   // share the same 1320 maxWidth and box-sizing:border-box, so padding parity is what aligns them.
@@ -127,9 +127,9 @@ function MetricBar({ firm, firmBase, firmLpDelta, firmGpCarry, narrow }) {
   // the metric's own formatter (× for TVPI, $ for the rest) and its own epsilon.
   const tvpiDelta = firm.tvpi - firmBase.tvpi;
   const items = [
-    { label: "LP NAV", value: firm.lpNav, fmt: fmtM, delta: firmLpDelta, dfmt: (n) => fmtM(n), eps: 0.5 },
+    { label: "LP NAV", value: firm.lpNav, fmt: fmtM, delta: firm.lpNavDelta, dfmt: (n) => fmtM(n), eps: 0.5 },
     { label: "TVPI", value: firm.tvpi, fmt: (n) => fmtX(n), delta: tvpiDelta, dfmt: (n) => n.toFixed(2) + "×", eps: 0.005 },
-    { label: "GP carry", value: firmGpCarry, fmt: fmtM, delta: firmGpCarry - firmBase.gpCarry, dfmt: (n) => fmtM(n), eps: 0.5 },
+    { label: "GP carry", value: firm.gpCarry, fmt: fmtM, delta: firm.gpCarry - firmBase.gpCarry, dfmt: (n) => fmtM(n), eps: 0.5 },
     { label: "LP distributions", value: firm.lpDistributed, fmt: fmtM, delta: firm.lpDistributed - firmBase.lpDistributed, dfmt: (n) => fmtM(n), eps: 0.5 },
   ];
   return (
@@ -358,13 +358,6 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   // live firm rollup for the persistent metric bar — reflects this slice's marks
   const firmAgg = firmRollup(fundStates);
   const firmBase = firmBaseRollup(fundStates); // Carta baseline — for vs-Carta deltas
-  const firmLpDelta = fundStates.reduce((s, f) => s + (f.lpNav - f.baseLpNav), 0);
-  // GP carry = carried interest only (accrued that survives the make-whole +
-  // carry banked from exits). The GP's own capital NAV (gpCapitalNavLive) is the
-  // GP commitment, NOT carry — it's shown separately as the Overview "GP NAV"
-  // column — so it's excluded here. This makes the header/sidebar "GP carry"
-  // tie out to the Overview GP Carry column exactly.
-  const firmGpCarry = firmAgg.accruedCarry + firmAgg.carryBanked;
 
   // what the Returns-family views take: LP Returns, GP Economics, and the Power Law and LP reports on Reports
   const returnsProps = {
@@ -515,7 +508,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
         {themeToggle}
         {chatToggle}
       </div>
-      {tab === "overview" && <MetricBar firm={firmAgg} firmBase={firmBase} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry} narrow={false} />}
+      {tab === "overview" && <MetricBar firm={firmAgg} firmBase={firmBase} narrow={false} />}
     </div>
   );
 
@@ -590,13 +583,14 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
 
         <div ref={contentRef} style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto" }}>
           {narrow ? narrowHeader : topBar}
-          {narrow && tab === "overview" && <MetricBar firm={firmAgg} firmBase={firmBase} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry} narrow={true} />}
+          {narrow && tab === "overview" && <MetricBar firm={firmAgg} firmBase={firmBase} narrow={true} />}
 
           <main style={{ maxWidth: 1320, padding: narrow ? "22px 18px 48px" : "28px 40px 64px" }}>
             <div key={tab} className="pagein">
               {tab === "overview" && (
                 <Overview fundStates={fundStates} snapshot={snapshot} portfolio={slice}
-                  sliceName={slice.name} onOpenFund={openFund} />
+                  firm={firmAgg}
+                  onOpenFund={openFund} />
               )}
               {tab === "reserves" && (
                 <Reserves snapshot={snapshot} portfolio={slice}
@@ -608,7 +602,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
                   updateCompany={updateCompany} updateSlice={update} setAssumption={setAssumption}
                   readOnly={locked} reload={reload} flush={flush}
                   holdingsPulled={holdingsPulled} fundScope={fundScope} setFundScope={setFundScope}
-                  fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
+                  fundStates={fundStates} firmAgg={firmAgg}
                   sliceName={slice.name} onOpenFundSection={openFundSection} />
               )}
               {tab === "lp-returns" && <LpReturns {...returnsProps} />}

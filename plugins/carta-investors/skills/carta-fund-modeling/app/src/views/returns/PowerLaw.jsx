@@ -5,7 +5,7 @@ import { H3, MethodNote, SourceNote, Slider, Segmented, MultiFundPicker, EmptySt
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { fundIdsOf, ownFundHeldAs } from "../../model/funds.js";
 import { exitValueImpact, fundCompanyReturns } from "../../model/sensitivity.js";
-import { returnTheFundSolutions } from "../../model/returnthefund.js";
+import { returnTheFundSolutions, rtfTargetBand, rtfSearch } from "../../model/returnthefund.js";
 import { useScenarioModel } from "./useScenarioModel.js";
 import PowerLawChart from "./PowerLawChart.jsx";
 import { EXIT_IMPACT_TITLE } from "./chartTitles.js";
@@ -102,8 +102,6 @@ const RTF_COLS = [
   { label: "Combined value", get: (s) => s.companies.reduce((t, c) => t + c.neededValue, 0) },
 ];
 
-const RTF_STEP = 0.25, RTF_HEADROOM = 10; // slider ceiling rides this many × above current
-
 const RtfHeading = () => (
   <>
     <H3>“Return the fund” analysis</H3>
@@ -128,32 +126,17 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
   // totals (currentMoic etc.) are target-independent — used to seed & floor the slider
   // and to list the eligible movers for the company picker.
   const totals = useMemo(() => returnTheFundSolutions(portfolio, fundId, 1), [portfolio, fundId]);
-  const curMoic = totals.currentMoic || 1;
   // RTF config (per fund, per scenario): which holdings may move + max combo size.
-  const cfg = config || {};
-  const mode = cfg.mode === "custom" ? "custom" : "auto";
-  const maxSet = cfg.maxSet ?? 3;
   const movers = totals.eligible || []; // every eligible holding — the picker's universe
-  const autoPoolIds = [...movers].sort((a, b) => b.cost - a.cost).slice(0, 12).map((e) => e.id);
-  const flexIds = cfg.flexIds ?? autoPoolIds; // seed custom from today's auto pool, then prune
-  const candidateIds = mode === "custom" ? flexIds : null;
-  // The slider is a fixed band that rides above the fund's current gross MOIC: the
-  // floor is the nearest clean 0.25 step ABOVE current (e.g. 1.75× for a 1.51× fund),
-  // and the ceiling is RTF_HEADROOM (10×) above that floor. Anchoring to current means
-  // the target is always > current — so there are always solutions and the table never
-  // blanks — and it keeps working no matter how high current is (a company repriced
-  // enough to push the fund past 10× still gets a usable band above it).
-  const sliderMin = Math.max(1, Math.floor(curMoic / RTF_STEP) * RTF_STEP + RTF_STEP);
-  const sliderMax = sliderMin + RTF_HEADROOM;
-  // `target` comes from the scenario's saved assumptions (via the parent); until this
-  // scenario's slider has been dragged it's undefined → fall back to a seed just above
-  // current. Clamp into the band either way.
-  const t = Math.min(sliderMax, Math.max(sliderMin, target ?? Math.max(2, Math.ceil(curMoic))));
+  const { mode, maxSet, flexIds, candidateIds } = rtfSearch(config, movers);
+  // `target` comes from the scenario's saved assumptions (via the parent), clamped
+  // into the band that rides above the fund's current gross MOIC.
+  const { min: sliderMin, max: sliderMax, step, target: t } = rtfTargetBand(totals.currentMoic, target);
   const res = useMemo(() => returnTheFundSolutions(portfolio, fundId, t, { maxSet, candidateIds }),
-    [portfolio, fundId, t, maxSet, mode, cfg.flexIds]); // candidateIds is derived from mode + flexIds
+    [portfolio, fundId, t, maxSet, mode, config?.flexIds]); // candidateIds is derived from mode + flexIds
   const { currentMoic, gap, alreadyThere, solutions } = res;
   const { sorted: rtfRows, sort: rtfSort, onSort: onRtfSort } = useTableSort(solutions, RTF_COLS);
-  const fill = (t - sliderMin) / RTF_HEADROOM;
+  const fill = (t - sliderMin) / (sliderMax - sliderMin);
   return (
     <div style={{ marginBottom: 16 }}>
       <RtfHeading />
@@ -161,7 +144,7 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
           same row, wrapping below it on narrow widths. */}
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start", margin: "4px 0 14px" }}>
         <div style={{ flex: "1 1 320px", maxWidth: 440 }}>
-          <Slider label="Target fund gross MOIC" value={t} min={sliderMin} max={sliderMax} step={RTF_STEP}
+          <Slider label="Target fund gross MOIC" value={t} min={sliderMin} max={sliderMax} step={step}
             onChange={setTarget} fmt={(v) => fmtX(v)} fill={fill} locked={readOnly}
             valueSize={FS.bodyLg} labelKind="strong" />
           <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 4 }}>

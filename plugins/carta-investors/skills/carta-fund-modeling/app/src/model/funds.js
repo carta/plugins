@@ -5,7 +5,7 @@
 import { upliftByFund, fundReprice, waterfallCfgFor, positionReprice, BOOKED_CARRY_RATE,
          secondaryEvents, hasSecondaryPlan, retainedFraction } from "./reprice.js";
 import { splitProfit } from "./waterfall.js";
-import { cohortPercentile } from "./benchmarks.js";
+import { cohortPercentile, hasCohortSpread } from "./benchmarks.js";
 import { fundNameOnly } from "../ui/format.js";
 
 /** Fund ids in display order, derived from the snapshot (no hardcoded list). */
@@ -171,8 +171,8 @@ export function computeFundStates(snapshot, portfolio) {
     const rvpi = f.lpPaidIn > 0 ? lpNav / f.lpPaidIn : 0;
     const tvpi = f.lpPaidIn > 0 ? (lpNav + lpDistributed) / f.lpPaidIn : 0;
     const marks = snapshot.benchmarks[f.id]?.tvpi ?? null;
-    // LV predates Carta's benchmark era — its row exists with all-null marks
-    const cohort = marks && Object.values(marks).some((v) => v != null) ? marks : null;
+    // no cohort without a mark above zero, e.g. a fund older than Carta's benchmarks (all-null row)
+    const cohort = hasCohortSpread(marks) ? marks : null;
     return {
       id: f.id,
       name: f.name,
@@ -220,6 +220,14 @@ export function computeFundStates(snapshot, portfolio) {
   });
 }
 
+/** GP carry a fund holds at the scenario's marks: carried interest only — booked
+ *  accrued carry that survives the LP make-whole + carry banked from exit toggles.
+ *  The GP's own capital NAV (gpCapitalNavLive) is its commitment, not carry. */
+export const gpCarryOf = (f) => (f.accruedCarry || 0) + (f.carryBanked || 0);
+
+/** gpCarryOf at the Carta baseline, which banks no carry (exit toggles are scenario-only edits). */
+export const baseGpCarryOf = (f) => f.baseAccruedCarry || 0;
+
 /** Firm-level rollup across all funds. Monetary totals and ratios sum across
  *  funds, so they're only meaningful in a single currency. When the funds with
  *  capital span more than one reporting currency we flag `mixedCurrency` and
@@ -241,6 +249,8 @@ export function firmRollup(fundStates) {
   const secondaryProceeds = sum("secondaryProceeds");
   const realizedLoss = sum("realizedLoss");
   const recycled = sum("recycled");
+  // firm LP-NAV move vs the Carta base marks
+  const lpNavDelta = fundStates.reduce((s, f) => s + (f.lpNav - (f.baseLpNav || 0)), 0);
   // currencies among funds that actually carry capital (ignore empty/GP shells)
   const currencies = [...new Set(
     fundStates.filter((f) => (f.committed || f.lpPaidIn || f.lpNav) && f.currency).map((f) => f.currency)
@@ -261,6 +271,8 @@ export function firmRollup(fundStates) {
     secondaryProceeds,
     realizedLoss,
     recycled,
+    gpCarry: fundStates.reduce((s, f) => s + gpCarryOf(f), 0),
+    lpNavDelta,
     currency: mixedCurrency ? null : (currencies[0] ?? null),
     mixedCurrency,
     dpi: lpPaidIn > 0 ? lpDistributed / lpPaidIn : 0,
@@ -273,19 +285,14 @@ export function firmRollup(fundStates) {
  *  deltas (e.g. the Companies sidebar's "Firm impact" panel). `lpPaidIn`
  *  doesn't change between scenarios (it's real historical cash-in, not
  *  reprice-driven), so it's shared with firmRollup() rather than re-summed.
- *  GP carry's baseline mirrors firmRollup()'s `accruedCarry + carryBanked +
- *  gpCapitalNavLive` definition at base: baseAccruedCarry, no banked carry
- *  (exit toggles are scenario-only edits — the base scenario never sets
- *  `exited: true`), and gpCapitalNav at its booked (repriceRatio = 1) value. */
+ *  GP carry sums baseGpCarryOf. */
 export function firmBaseRollup(fundStates) {
   const sum = (k) => fundStates.reduce((s, f) => s + (f[k] || 0), 0);
   const lpPaidIn = sum("lpPaidIn");
   const lpDistributed = sum("baseLpDistributed");
   const lpNav = sum("baseLpNav");
-  // GP carry = carried interest only (baseline accrued; baseline carry-banked is 0
-  // with no exits toggled). Mirrors the live firmGpCarry, which excludes the GP's
-  // own capital NAV — so the baseline scenario shows a zero carry delta.
-  const gpCarry = sum("baseAccruedCarry");
+  // baseline of firmRollup()'s gpCarry, so the baseline scenario shows a zero carry delta
+  const gpCarry = fundStates.reduce((s, f) => s + baseGpCarryOf(f), 0);
   return {
     lpPaidIn,
     lpDistributed,

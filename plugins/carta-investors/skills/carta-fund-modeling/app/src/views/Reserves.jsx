@@ -9,7 +9,7 @@ import { FS, sans, inkNum, NOTICE, MICRO } from "../ui/theme.js";
 import { fmt$, fmtM, fmtX, fmtPct } from "../ui/format.js";
 import { H1, H3, Eyebrow, MethodNote, SourceNote, Toggle, Slider, StatBar, Badge, SectionChips, fundLabel } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
-import { computeReserves, nearlyDeployed, optimalReserveAllocation, newDealCount } from "../model/reserves.js";
+import { computeReserves, nearlyDeployed, optimalReserveAllocation, newDealCount, hasCommittedCapital, reserveOptsOf } from "../model/reserves.js";
 import { deploymentRunway } from "../model/runway.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { trackClick } from "../analytics.js";
@@ -164,28 +164,23 @@ export default function Reserves({ snapshot, portfolio, setAssumption, readOnly 
   const { pacing, ownership } = useFirmData();
   // never sum across currencies: firm-level $ totals are invalid for a mixed-currency firm
   const mixed = !!snapshot.source?.mixedCurrency;
-  const feeLoads = portfolio.assumptions.feeLoads || {};
-  const followOnRatios = portfolio.assumptions.followOnRatios || {};
-  const recyclingRatios = portfolio.assumptions.recyclingRatios || {};
+  const reserveOpts = reserveOptsOf(portfolio.assumptions);
+  const { feeLoads, followOnRatios, recyclingRatios } = reserveOpts;
   const avgChecks = portfolio.assumptions.avgChecks || {};
 
   const { funds, totals } = useMemo(
-    () => computeReserves(snapshot, portfolio, { feeLoads, followOnRatios, recyclingRatios }),
-    [snapshot, portfolio, feeLoads, followOnRatios, recyclingRatios]
+    () => computeReserves(snapshot, portfolio, reserveOpts),
+    [snapshot, portfolio]
   );
   // core funds first (by vintage), SPVs after — the display order from the snapshot
-  // Hide funds with no committed capital — anything that renders as "$0.0M
-  // committed" (< $50k, incl. GP shells / uninitialized vehicles) has nothing to
-  // allocate and just clutters the reserves view. fmtM rounds to one $M decimal,
-  // so < 50_000 is exactly the set that shows "$0.0M".
   const ordered = useMemo(
-    () => funds.filter((f) => Math.abs(f.committed) >= 50_000)
+    () => funds.filter(hasCommittedCapital)
                .sort((a, b) => (a.isSpv - b.isSpv) || (a.vintage - b.vintage)),
     [funds]);
   const flags = useMemo(() => nearlyDeployed({ funds }), [funds]);
   const optimal = useMemo(
-    () => optimalReserveAllocation(snapshot, portfolio, { feeLoads, followOnRatios, recyclingRatios, ownership }),
-    [snapshot, portfolio, feeLoads, followOnRatios, recyclingRatios, ownership]
+    () => optimalReserveAllocation(snapshot, portfolio, { ...reserveOpts, ownership }),
+    [snapshot, portfolio, ownership]
   );
   // Holdings in a fully-deployed fund can never receive a suggested reserve (their
   // fund's follow-on pool is $0), so offer to hide them and rank only the actionable

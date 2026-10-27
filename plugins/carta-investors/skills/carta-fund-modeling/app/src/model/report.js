@@ -6,8 +6,8 @@
 // array is in memory. Reuses the same pure engines the tabs render from, so the
 // report ties out to the Overview MetricBar / Reserves header for that scenario.
 
-import { computeFundStates, firmRollup, firmBaseRollup } from "./funds.js";
-import { computeReserves, newDealCount } from "./reserves.js";
+import { computeFundStates, firmRollup, firmBaseRollup, gpCarryOf } from "./funds.js";
+import { computeReserves, newDealCount, reserveOptsOf } from "./reserves.js";
 import { secondarySales } from "./reprice.js";
 
 /**
@@ -20,16 +20,9 @@ export function scenarioSummary(snapshot, slice) {
   const fs = computeFundStates(snapshot, slice);
   const agg = firmRollup(fs);
   const base = firmBaseRollup(fs);
-  const gpCarry = agg.accruedCarry + agg.carryBanked;
   const a = slice.assumptions || {};
-  const res = computeReserves(snapshot, slice, {
-    feeLoads: a.feeLoads || {},
-    followOnRatios: a.followOnRatios || {},
-    recyclingRatios: a.recyclingRatios || {},
-  });
+  const res = computeReserves(snapshot, slice, reserveOptsOf(a));
   const newDeals = newDealCount(res, a.avgChecks || {});
-  // firm LP-NAV move vs Carta base marks (matches App.jsx firmLpDelta)
-  const lpNavDelta = fs.reduce((s, f) => s + (f.lpNav - f.baseLpNav), 0);
   return {
     id: slice.id,
     name: slice.name,
@@ -38,8 +31,8 @@ export function scenarioSummary(snapshot, slice) {
     currency: agg.currency,
     mixedCurrency: agg.mixedCurrency,
     // currency figures (+ deltas vs Baseline)
-    lpNav: agg.lpNav, lpNavDelta,
-    gpCarry, gpCarryDelta: gpCarry - base.gpCarry,
+    lpNav: agg.lpNav, lpNavDelta: agg.lpNavDelta,
+    gpCarry: agg.gpCarry, gpCarryDelta: agg.gpCarry - base.gpCarry,
     lpDistributed: agg.lpDistributed, lpDistributedDelta: agg.lpDistributed - base.lpDistributed,
     dryPowder: res.totals.reserves,
     newDealCapacity: res.totals.newDeal,
@@ -57,8 +50,7 @@ export function scenarioSummary(snapshot, slice) {
         lpNav: f.lpNav, tvpi: f.tvpi, dpi: f.dpi, rvpi: f.rvpi,
         grossMoic: f.grossMoic, netLpIrr: f.netLpIrr,
         committed: f.committed, lpDistributed: f.lpDistributed,
-        // per-fund GP carry mirrors the firm rollup: accrued + banked-from-exits
-        gpCarry: f.accruedCarry + f.carryBanked,
+        gpCarry: gpCarryOf(f),
       })),
   };
 }
