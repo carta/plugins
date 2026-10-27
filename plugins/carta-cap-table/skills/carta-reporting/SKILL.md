@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.101.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.101.3</carta-plugin>
 
 # Custom Reports
 
@@ -490,6 +490,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `user_report_pk` missing from response | Transient API error | "Something went wrong generating this report — it may be a temporary issue. Try again in a moment, or contact your Carta team if it keeps happening." |
 | `missing_columns` or `skipped_formulas` non-empty | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
 | `unknown_filter_columns` non-empty | A filter named a column this sheet does not have, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't filter on '[Column]' — it isn't in this report, so these rows are unfiltered. Here are the columns I can filter on: […]" Offer to re-run against a real column. |
+| `unsupported_filters` non-empty | A `>`, `<`, `>=` or `<=` filter named a text column, which has no order, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't apply '[Column] [op] [value]' — '[Column]' is text, so these rows are unfiltered on it." Offer `=`, `!=` or `contains` instead, or a numeric or date column. |
 | `structural_rows_dropped` > 0 | The sheet has section headings or total rows, and a filter, sort, column pick, formula or aggregation was applied, which cannot keep them in place. | "Section headings and totals were left out because of the filters/sort — say so if you want them back unsorted." |
 | `warnings.unknown_sheets` present | A name in `warnings.unknown_sheets.requested` is not in this report, so it was left out. | "This report has no sheet called '[Name]'. Its sheets are: […]" (list `warnings.unknown_sheets.available`) Offer to re-run with a real sheet. |
 | `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty | A sheet to merge was missing (`warnings.merge_sources_missing[].source`), or its columns differ (`schema_warnings`), so its rows are not in the merged tab. | Name the sheet that was left out and why; never present the merged tab as complete. |
@@ -542,7 +543,9 @@ report does not run.
 `filters` uses the column's **display name** exactly as it appears in the sheet's
 `columns`. A filter naming a column the sheet does not have is reported in
 `stats.unknown_filter_columns` and applies no restriction — check that field before
-presenting a filtered report, the same way you check `missing_columns`.
+presenting a filtered report, the same way you check `missing_columns`. An ordering op
+(`>` `<` `>=` `<=`) on a text column applies no restriction either; it is reported in
+`stats.unsupported_filters` as `{"column", "op"}`.
 
 `label_overrides` — optional dict mapping raw string cell values to display names. Applied to all string-typed columns across every sheet. Use to replace Carta's internal security type codes with the corporation's configured equity language names (e.g. `{"CBU": "Phantom Units"}`). Matching is exact and case-sensitive.
 
@@ -599,12 +602,15 @@ All fields except the file source are optional — omit or set to `null` to skip
                          "empty_rows_dropped": N, "kept_row_count": N,
                          "displayed_row_count": N,
                          "missing_columns": [], "unknown_filter_columns": [],
+                         "unsupported_filters": [],
                          "skipped_formulas": [], "structural_rows_dropped": N,
                          "merged_from": [...], "schema_warnings": [...]}},   // last two: merged tabs only
   "warnings": {"unknown_sheets": {"requested": [...], "available": [...]},
                "merge_sources_missing": [{"target": ..., "source": ...}]}   // keys present only when raised
 }
 ```
+
+A merged tab carries the `unknown_filter_columns` and `unsupported_filters` of the sources merged into it.
 
 With `--out <file>`, this JSON is written to the file and stdout carries `{"out": <file>, "stats": {...}}`, plus `"warnings"` when non-empty.
 

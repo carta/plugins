@@ -234,7 +234,10 @@ def download(url):
 # Filter
 # ---------------------------------------------------------------------------
 
-VALID_FILTER_OPS = (">", "<", ">=", "<=", "=", "!=", "contains")
+ORDERING_OPS = (">", "<", ">=", "<=")
+VALID_FILTER_OPS = ORDERING_OPS + ("=", "!=", "contains")
+NUMERIC_TYPES = ("money", "decimal", "percentage", "integer")
+ORDERED_TYPES = NUMERIC_TYPES + ("date",)
 
 
 def _make_filter_predicate(columns, filters):
@@ -280,7 +283,7 @@ def _make_filter_predicate(columns, filters):
             ctype = type_map.get(col_name, "string")
             keep  = True
             try:
-                if ctype in ("money", "decimal", "percentage", "integer"):
+                if ctype in NUMERIC_TYPES:
                     parse = _numeric_parser(ctype)
                     v, t = parse(val), parse(thr)
                     if v is None or t is None:
@@ -317,6 +320,17 @@ def _make_filter_predicate(columns, filters):
     return predicate, unknown_columns
 
 
+def unsupported_filters(columns, filters):
+    """Filters that cannot restrict anything: an ordering op on a text column.
+
+    The predicate keeps every row for these, so a report run with one is not
+    filtered on that column; the caller must say so."""
+    type_map = {col["name"]: col.get("type") for col in columns}
+    return [{"column": f["column"], "op": f["op"]} for f in filters or []
+            if f["column"] in type_map and f["op"] in ORDERING_OPS
+            and type_map[f["column"]] not in ORDERED_TYPES]
+
+
 def apply_filters(columns, rows, filters):
     if not filters:
         return rows
@@ -340,7 +354,7 @@ def drop_empty_rows(columns, rows):
     Rows where ALL value columns are None, 0, "0", or "" are dropped.
     If the report has no value columns at all, no rows are dropped.
     """
-    value_types = {"money", "decimal", "percentage", "integer"}
+    value_types = NUMERIC_TYPES
     value_indices = [i for i, col in enumerate(columns) if col.get("type") in value_types]
     if not value_indices:
         return rows
@@ -573,7 +587,7 @@ def sort_rows(columns, rows, sort_spec):
 
         def key_fn(row, idx=idx, ctype=ctype):
             val = row[idx] if idx < len(row) else None
-            if ctype in ("money", "decimal", "percentage", "integer"):
+            if ctype in NUMERIC_TYPES:
                 v = _numeric_parser(ctype)(val)
                 return (1, v) if v is not None else (0, 0.0)
             if ctype == "date":
@@ -606,7 +620,7 @@ def sort_rows_with_indices(columns, rows, orig_indices, sort_spec):
         def key_fn(pair, ci=ci, ctype=ctype):
             row = pair[1]
             val = row[ci] if ci < len(row) else None
-            if ctype in ("money", "decimal", "percentage", "integer"):
+            if ctype in NUMERIC_TYPES:
                 v = _numeric_parser(ctype)(val)
                 return (1, v) if v is not None else (0, 0.0)
             if ctype == "date":
@@ -757,8 +771,10 @@ def main():
 
         # Filter with index tracking
         unknown_filter_cols: list = []
+        unsupported_filter_list: list = []
         if filters:
             pred, unknown_filter_cols = _make_filter_predicate(cols, filters)
+            unsupported_filter_list = unsupported_filters(cols, filters)
             pairs = [(oi, r) for oi, r in zip(orig_indices, rows) if pred(r)]
             orig_indices = [p[0] for p in pairs]
             rows         = [p[1] for p in pairs]
@@ -859,6 +875,7 @@ def main():
             "displayed_row_count":   sum(1 for r in displayed if not is_structural(r, len(cols))),
             "missing_columns":       missing_cols,
             "unknown_filter_columns": unknown_filter_cols,
+            "unsupported_filters":   unsupported_filter_list,
             "skipped_formulas":      skipped_fmls,
             "structural_rows_dropped": structural_dropped,
         }
@@ -873,6 +890,8 @@ def main():
         merged_currency: dict | None = None
         merged_summary = None
         schema_warnings: list = []
+        merged_unsupported: list = []
+        merged_unknown_cols: set = set()
         counts = {"original_row_count": 0, "filtered_row_count": 0,
                   "empty_rows_dropped": 0, "kept_row_count": 0,
                   "structural_rows_dropped": 0}
@@ -896,6 +915,10 @@ def main():
                     continue  # skip rows — mismatched schema would corrupt column alignment
             for key in counts:
                 counts[key] += src_stats.get(key, 0)
+            for uf in src_stats.get("unsupported_filters", []):
+                if uf not in merged_unsupported:
+                    merged_unsupported.append(uf)
+            merged_unknown_cols.update(src_stats.get("unknown_filter_columns", []))
             merged_rows.extend(s["rows"])
             src_rcs = s.get("row_currencies") or [None] * len(s["rows"])
             src_currency = s.get("currency")
@@ -915,7 +938,9 @@ def main():
             # count is computed from the merged tab's own rows.
             stats[target_name] = {**counts,
                                   "displayed_row_count": sum(1 for r in merged_rows if not is_structural(r, len(merged_cols))),
-                                  "missing_columns": [], "unknown_filter_columns": [],
+                                  "missing_columns": [],
+                                  "unknown_filter_columns": sorted(merged_unknown_cols),
+                                  "unsupported_filters": merged_unsupported,
                                   "skipped_formulas": [],
                                   "merged_from": sources,
                                   **({"schema_warnings": schema_warnings} if schema_warnings else {})}
