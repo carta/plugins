@@ -91,6 +91,8 @@ in the first place. The exception is when **Current mapping** is
 empty — nothing to confirm, so go straight to **Needs your input** in
 this same turn (see below).
 
+### Render the table before you ask
+
 **Each table is chat text, not a summary folded into the question.**
 Render the markdown table as your own response text *before* the
 `AskUserQuestion` call it belongs to — never skip straight from reading
@@ -261,8 +263,9 @@ absent), `line` → `Budget line`, `proposed` → `Proposed GL account(s)` —
 plural, because a line can map to more than one Carta account — with
 `options` as what a change can be changed to. Then:
 
-When **Current mapping** has at least one row, print it, then ask with a
-single `AskUserQuestion`:
+When **Current mapping** has at least one row, print it — the actual
+markdown table, rows and all, as this turn's own chat text — then ask with
+a single `AskUserQuestion`:
 
 > **Confirm the `<N>` mappings above?**
 > Matched against your Carta chart of accounts — some read straight off an

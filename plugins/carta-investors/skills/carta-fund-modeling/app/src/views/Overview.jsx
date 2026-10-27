@@ -76,7 +76,8 @@ const FULL = 12, SUMMARY_SPAN = 4, CARRY_SPAN = 3, BENCH_SPAN = 3, DRY_SPAN = 3;
  *  sidebar.
  *  `onNavigate(tab, fundId?, section?)` opens another tab, landing a per-fund tab on `fundId`
  *  and scrolling to the element with id `section`. */
-export default function Overview({ fundStates, snapshot, portfolio, firm, onOpenFund, onNavigate }) {
+/** `welcome` is an optional full-row card that leads the dashboard (App passes the Welcome card). */
+export default function Overview({ fundStates, snapshot, portfolio, firm, onOpenFund, onNavigate, welcome }) {
   const firmRvpi = firm.lpPaidIn > 0 ? firm.lpNav / firm.lpPaidIn : 0;
 
   const { ownership } = useFirmData();
@@ -109,6 +110,7 @@ export default function Overview({ fundStates, snapshot, portfolio, firm, onOpen
       <H1>Firm Overview</H1>
 
       <div className="ov-bento" style={{ marginBottom: 32 }}>
+        {welcome}
         <PerformanceHero firm={firm} onNavigate={onNavigate} span={trend ? SUMMARY_SPAN : FULL} />
         {trend && <NavByFundCard snapshot={snapshot} fundStates={fundStates} firmLpNav={firm.lpNav} firmName={firmName} span={FULL - SUMMARY_SPAN} />}
 

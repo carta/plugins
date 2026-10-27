@@ -541,6 +541,37 @@ export const GLOBAL_CSS = `
   .bench-bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   @media (max-width: 860px) { .bench-bars { grid-template-columns: 1fr; gap: 18px; } }
 
+  /* Welcome card (WelcomeCard.jsx), after Carta Home's "What's new" feature card:
+     a warm paper surface in three columns — a "Get started" tag over the steps on
+     white, a serif headline + call to action, and Baseline's figures as a lifted preview. */
+  .welcome-card { --welcome-paper: light-dark(#FAF7F2, #1E1C19); position: relative;
+    display: grid; grid-template-columns: 300px minmax(0, 1.2fr) minmax(0, .85fr); grid-template-rows: minmax(240px, auto);
+    border: 1px solid var(--ink-color-global-surface-lightgray-hover); background: var(--welcome-paper); }
+  /* The steps follow Ink Labs' MVE Step: a 16px ornament (Ink Status, medium) beside
+     each headline. They aren't a progress tracker, so every ornament is the same: its
+     number on the primary button's fill (black, white in dark mode), matching Add scenario.
+     A 2px line joins each to the next in place of MVE's 8px rail. */
+  .welcome-index { display: flex; flex-direction: column; align-items: flex-start; gap: 20px; padding: 24px 20px;
+    background: var(--ink-color-global-surface-background-default); border-right: 1px solid var(--ink-color-global-surface-lightgray-hover); }
+  .welcome-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
+  .welcome-step { position: relative; display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 12px; }
+  .welcome-step-orn { width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-size: ${FS.micro}px; font-weight: 600; line-height: 1; color: var(--ink-button-font-color-primary-base); background: ${ACCENT}; }
+  .welcome-step:not(:last-child)::after { content: ""; position: absolute; left: 7px; top: 22px; bottom: -18px; width: 2px;
+    background: var(--ink-color-global-border-subtle); }
+  .welcome-step-title { font-size: ${FS.value}px; line-height: 20px; font-weight: 400; color: var(--ink-color-global-text-default); }
+  .welcome-pitch { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 14px; padding: 36px; }
+  .welcome-chip { padding: 3px 6px; background: var(--ink-color-global-surface-lightgray-hover); font-size: ${FS.micro}px; font-weight: 500;
+    letter-spacing: ${EYEBROW_TRACKING}; text-transform: uppercase; color: var(--ink-color-global-text-default); }
+  .welcome-preview { display: flex; align-items: center; margin-left: -24px; padding: 40px 24px 24px 0; }
+  /* Baseline's figures as a lifted card. It isn't clickable, so unlike other .cards it
+     doesn't react on hover. The lock and its gap fill the card's extra left padding,
+     --welcome-lock-hang wide, so "Baseline" lines up with the labels below. */
+  .welcome-baseline { --welcome-lock-hang: 20px; flex: 1; padding: 14px 18px 14px calc(18px + var(--welcome-lock-hang));
+    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .06)); }
+  .welcome-baseline-lock { display: inline-flex; width: var(--welcome-lock-hang); margin-left: calc(-1 * var(--welcome-lock-hang));
+    color: var(--ink-color-global-text-subtle); }
+  .welcome-baseline.card:hover { box-shadow: none; }
   /* ── Firm Overview dashboard: the hero, then rows of compact widgets, each a
      12-column grid. Below 1180px the hero's two cards stack and every other widget
      takes half or the whole row; below 760px each widget takes the whole row. */

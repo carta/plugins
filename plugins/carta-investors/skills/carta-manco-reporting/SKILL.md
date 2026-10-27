@@ -93,7 +93,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.121.17</carta-plugin>
+<carta-plugin>carta-investors:6.121.19</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -267,7 +267,12 @@ datadir build runs silently. Speak only at:
   Answer them, rebuild (Step 4), then emit the URL. Every answer is
   recorded with `record_mapping.py`, its `--source` saying whether the
   operator gave it or you made it on their behalf — never by writing
-  `budget-mapping.json` yourself
+  `budget-mapping.json` yourself.
+  **Each mapping table — Current mapping, then Needs your input — is
+  printed as chat text immediately before the `AskUserQuestion` call it
+  belongs to, every time; never skipped, never folded into the question's
+  text.** See "Render the table before you ask" in
+  [budget-unresolved.md](references/budget-unresolved.md) for the rule
 - Step 5 — the dashboard URL, its orientation line, and — only when the
   build reported gaps — one line counting where the report and the
   client's own workbook differ (5c)
@@ -324,14 +329,12 @@ so the 2.75a-i ask is next) instead of just asking
 Reaching a question is silent; asking it is the one visible act.
 
 **One exception: Step 4.7's mapping table is not narration, it is the
-question's own content, not a sentence leading up to it.**
-[budget-unresolved.md](references/budget-unresolved.md) requires printing
-**Current mapping** or **Needs your input** as chat text immediately
-before the `AskUserQuestion` call it belongs to — the question's wording
-("confirm the mappings above") refers to that table, so the table is part
-of asking the question, the same way the question's own prose is. Treating
-it as a step announcement and silencing it the way "Now Step 2" above gets
-silenced leaves the question pointing at a table the user never saw.
+question's own content, not a sentence leading up to it.** See "Render the
+table before you ask" in
+[budget-unresolved.md](references/budget-unresolved.md) for the rule.
+Treating it as a step announcement and silencing it the way "Now Step 2"
+above gets silenced leaves the question pointing at a table the user never
+saw.
 
 **A failed command is troubleshot exactly as silently as a working one runs —
 everywhere in this skill, not only in the step that happened to fail.**

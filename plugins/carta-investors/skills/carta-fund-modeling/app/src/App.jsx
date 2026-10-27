@@ -17,6 +17,7 @@ import Reserves from "./views/Reserves.jsx";
 import Report from "./views/Report.jsx";
 import { ActivityPage } from "./views/reports/Activity.jsx";
 import Reports from "./views/reports/Reports.jsx";
+import WelcomeCard from "./ui/WelcomeCard.jsx";
 import FundConstruction from "./views/construction/FundConstruction.jsx";
 import ScenarioDialog from "./ui/ScenarioDialog.jsx";
 import ConfirmDialog from "./ui/ConfirmDialog.jsx";
@@ -543,6 +544,8 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
               {tab === "overview" && (
                 <Overview fundStates={fundStates} snapshot={snapshot} portfolio={slice}
                   firm={firmAgg}
+                  welcome={!narrow && <WelcomeCard key={firm} firm={firm} slices={doc.slices} userId={userId} fundStates={fundStates} mixedCurrency={firmAgg.mixedCurrency}
+                    onNew={onNewSlice} onOpenCompanies={() => selectTab("companies")} />}
                   onOpenFund={openFund} onNavigate={openTab} />
               )}
               {tab === "reserves" && (

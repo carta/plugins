@@ -56,6 +56,11 @@ export function isShared(s) {
   return !!(s && s.shared && s.shared.uuid);
 }
 
+// A shared scenario the current user published themselves. Unknown until userId loads.
+export function isOwnShared(s, userId) {
+  return isShared(s) && s.shared.createdBy != null && s.shared.createdBy === userId;
+}
+
 // A shared scenario the user hid from their list — stays on disk so a pull keeps it hidden
 // instead of resurfacing it; "Show hidden" clears the flag. Filtered out of every list.
 export function isHidden(s) {
