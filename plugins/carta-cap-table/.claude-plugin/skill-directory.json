@@ -137,6 +137,15 @@
       "What was the price per share and total raised in our last priced round?"
     ]
   },
+  "carta-stakeholder-ledger-companion": {
+    "category": "reporting",
+    "name": "Stakeholder ledger",
+    "order": 40,
+    "prompts": [
+      "Show me the stakeholders at {{COMPANY}}",
+      "Show me [stakeholder name]'s holdings"
+    ]
+  },
   "carta-valuation-history": {
     "category": "governance",
     "name": "Valuation & FMV history",
