@@ -325,6 +325,7 @@ export default function DrilldownContent({
             monthlyActual={agg.monthly}
             budget={selection.budget}
             period={selection.period}
+            months={selection.months}
             // Same favorable-side rule as varianceColor() above: exceeding
             // budget is good for income, bad for expense.
             actualColor={(selection.polarity === "income"

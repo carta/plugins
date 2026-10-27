@@ -31,6 +31,9 @@ export const FREQUENCIES = [
   { key: "annually", label: "Annually" },
 ];
 
+/** Whether a saved or linked value names one of the Periods above. */
+export const isFrequency = (key) => FREQUENCIES.some((f) => f.key === key);
+
 // The three sub-columns the Filters menu can hide, in the order they render.
 export const COLUMN_TYPES = ["actual", "budget", "variance"];
 

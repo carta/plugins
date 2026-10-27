@@ -2,7 +2,7 @@ import { useState } from "react";
 import { restoreViewPrefs, toViewPrefs } from "./budgetPrefs.js";
 import usePersistedPrefs from "./usePersistedPrefs.js";
 
-/** The crosstab and line-item layouts' toolbar — the breakout, and on a crosstab every
+/** The crosstab and line-item layouts' toolbar — the breakout, the line-item Period, and on a crosstab every
  *  department column, the rows the author hid and actuals through today — kept across
  *  reloads under `prefsKey` and in the page's URL, as useAccountToolbar keeps the account
  *  layout's. `sharedView` is the toolbar a shared report's sharer sent (`budget.view`),
@@ -23,5 +23,6 @@ export default function useViewToolbar({ prefsKey, breakouts, sharedView = null 
     setShowAll: set("showAll"),
     setShowHidden: set("showHidden"),
     setThroughToday: set("throughToday"),
+    setFrequency: set("frequency"),
   };
 }

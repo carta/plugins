@@ -1,7 +1,7 @@
 // How a reader last set the Budget vs Actuals toolbar, kept across reloads.
 
 import {
-  COLUMN_TYPES, DEFAULT_FILTERS, FREQUENCIES, MAX_HIDDEN_COLUMNS, normalizeRange,
+  COLUMN_TYPES, DEFAULT_FILTERS, MAX_HIDDEN_COLUMNS, isFrequency, normalizeRange,
 } from "./budgetPeriods.js";
 
 const NAMESPACE = "manco:bva";
@@ -96,7 +96,7 @@ export function decodeViewParam(value) {
 export function restoreFilters(saved) {
   const f = saved?.filters;
   if (!f) return { ...DEFAULT_FILTERS };
-  const known = FREQUENCIES.some(x => x.key === f.frequency);
+  const known = isFrequency(f.frequency);
   return {
     frequency: known ? f.frequency : DEFAULT_FILTERS.frequency,
     hidden: (Array.isArray(f.hidden) ? f.hidden : [])
@@ -144,10 +144,13 @@ export function toPrefs(filters, range, preset, breakoutKey) {
   };
 }
 
-/** The crosstab and line-item layouts' own toolbar, as saved: the breakout, and (crosstab
- *  only) every department column, the rows the author hid, and actuals through today. */
-export function toViewPrefs({ breakoutKey = null, showAll = false, showHidden = false, throughToday = false } = {}) {
-  return { breakoutKey: breakoutKey ?? null, showAll: !!showAll, showHidden: !!showHidden, throughToday: !!throughToday };
+/** The crosstab and line-item layouts' own toolbar, as saved: the breakout, (line-item
+ *  only) the Period, and (crosstab only) every department column, the rows the author
+ *  hid, and actuals through today. */
+export function toViewPrefs({ breakoutKey = null, showAll = false, showHidden = false, throughToday = false,
+                              frequency = null } = {}) {
+  return { breakoutKey: breakoutKey ?? null, showAll: !!showAll, showHidden: !!showHidden, throughToday: !!throughToday,
+           frequency: frequency ?? null };
 }
 
 /** toViewPrefs' saved shape folded into the defaults, dropping what no longer applies. */
@@ -157,5 +160,7 @@ export function restoreViewPrefs(saved, breakouts) {
     showAll: saved?.showAll === true,
     showHidden: saved?.showHidden === true,
     throughToday: saved?.throughToday === true,
+    // Null is the workbook's own resolution; the layout decides which it can show.
+    frequency: isFrequency(saved?.frequency) ? saved.frequency : null,
   };
 }

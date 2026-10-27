@@ -42,8 +42,8 @@ export function selectionTitle(sel) {
     }
     return `${sel.account} — ${sel.tag_value}`;
   }
-  if (sel.kind === "outline-cell")   return sel.quarter && sel.quarter !== "Total"
-                                            ? `${sel.label} — ${sel.quarter}`
+  if (sel.kind === "outline-cell")   return sel.periodLabel
+                                            ? `${sel.label} — ${sel.periodLabel}`
                                             : sel.label;
   return "";
 }
@@ -103,7 +103,7 @@ export function filterFundFeeEntries(fundFeeEntries, sel) {
   // Word-boundary match so e.g. "Fund II" doesn't also catch "Fund III".
   if (sel?.kind === "outline-cell" && sel.fundMatch) {
     const rx = fundMatchRegex(sel.fundMatch);
-    const months = QUARTER_MONTHS[sel.quarter] || null;
+    const months = outlineMonths(sel);
     const yr = sel.periodYear ? Number(sel.periodYear) : null;
     // A fee and its offset are different accounts. Naming one reports one;
     // naming none is the fund's net — the same rule the row's figure uses.
@@ -168,14 +168,11 @@ export function quarterlyFeeSummary(scheduleTerms, committedCapital, year) {
   return rows;
 }
 
-// Month buckets per quarter, for outline-cell drills. "Total" maps to no
-// constraint (handled by callers as a null lookup).
-export const QUARTER_MONTHS = {
-  Q1: new Set([1, 2, 3]),
-  Q2: new Set([4, 5, 6]),
-  Q3: new Set([7, 8, 9]),
-  Q4: new Set([10, 11, 12]),
-};
+// The months an outline drill covers: the column it opened from. A Total
+// column carries none, which callers read as no month constraint.
+function outlineMonths(sel) {
+  return Array.isArray(sel?.months) ? new Set(sel.months) : null;
+}
 
 // Filter the entries[] fixture down to just the rows this selection covers.
 //
@@ -256,7 +253,7 @@ export function filterEntries(entries, sel, topCategoryNames = []) {
     if (sel.fundMatch) return [];
     const typeSet = new Set(sel.glCodes || []);
     if (typeSet.size === 0) return [];
-    const months = QUARTER_MONTHS[sel.quarter] || null;   // null = Total, all months
+    const months = outlineMonths(sel);   // null = Total, all months
     const tagSet = sel.cartaTags ? new Set(sel.cartaTags) : null;
     // The same precedence computeLineActuals uses: this line's own
     // reporting-tag scope first, else the shared dimension the selection

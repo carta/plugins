@@ -92,12 +92,13 @@ export default function useDrilldown() {
   }, []);
 
   // For the Budget-vs-Actuals outline view (client's own P&L, see
-  // BudgetActualsOutline). A cell is (row × quarter); the row carries
+  // BudgetActualsOutline). A cell is (row × period); the row carries
   // whichever join hint applies:
   //   glCodes + cartaTags → ManCo JEs at those GLs, scoped by Department tag
   //   glCodes alone       → ManCo JEs at those GLs, firm-wide
   //   fundMatch           → fund-side management-fee JEs for that fund
-  // `quarter` is "Q1".."Q4" or "Total" (no month constraint).
+  // `months` are the calendar months its column covers and `periodLabel`
+  // names them ("Q1", "Mar"); both null for a Total (no month constraint).
   // `comment` is the workbook's own Comments-column text for the row —
   // the budget rationale, surfaced in the drawer.
   const openOutlineCell = useCallback((opts) => {
@@ -107,7 +108,8 @@ export default function useDrilldown() {
       // one workbook names the same fund in two sections.
       cellKey:   opts.cellKey || null,
       label:     opts.label,
-      quarter:   opts.quarter || "Total",
+      periodLabel: opts.periodLabel || null,
+      months:    opts.months || null,
       glCodes:   opts.glCodes || [],
       cartaTags: opts.cartaTags || null,   // null = firm-wide, no tag filter
       // What else narrows the row — a sub-account, a vendor. Dropping it
@@ -141,7 +143,8 @@ export default function useDrilldown() {
       kind: "outline-total",
       cellKey:    opts.cellKey || null,
       label:      opts.label,
-      quarter:    opts.quarter || "Total",
+      periodLabel: opts.periodLabel || null,
+      months:     opts.months || null,
       members:    opts.members || [],
       dimension:  opts.dimension || null,
       periodYear: opts.periodYear || null,

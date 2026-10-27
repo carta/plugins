@@ -9,13 +9,15 @@ import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, rowPolarity, fmtVarianceWhole } from "../ui/variance.js";
 import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
-import { FiltersMenu, FilterRibbon } from "./BudgetPeriodControls.jsx";
+import { FiltersMenu, FilterRibbon, PeriodDropdown } from "./BudgetPeriodControls.jsx";
 import {
   rowBreakouts, defaultBreakout, breakoutBuckets, worthBreakingOut, opensAnything,
 } from "./accountBreakout.js";
 import { fundMatchRegex } from "./drilldown/util.js";
 import { trackClick } from "../analytics.js";
-import { trueAsOfMonth } from "./budgetPeriods.js";
+import {
+  trueAsOfMonth, FREQUENCIES, MONTH_ABBR, monthsInRange, periodColumns,
+} from "./budgetPeriods.js";
 import { prefsKeyFor } from "./budgetPrefs.js";
 import useViewToolbar from "./useViewToolbar.js";
 
@@ -26,8 +28,9 @@ import useViewToolbar from "./useViewToolbar.js";
 // budgets (shapes/pnl_outline.py), which are a hierarchical P&L rather
 // than a (dept × account) crosstab.
 //
-// Columns are the workbook's own quarters: Q1-Q4 + Total, each with
-// Actual · Budget · Var $.
+// Columns follow the workbook's own time axis: months when it states
+// months (with a Period control to roll them up into quarters or the
+// year), quarters otherwise — then a Total, each with Actual · Budget · Var $.
 //
 // Actuals resolution is per-row-type:
 //   fund_match  → fund-side management-fee JEs (accounts.json's
@@ -52,15 +55,41 @@ import useViewToolbar from "./useViewToolbar.js";
 // drifts from its own subtotals) — while their ACTUAL is summed from the
 // constituent line rows the adapter recorded.
 
-const QUARTERS = [
-  { key: "Q1",    label: "Q1",    months: [1, 2, 3] },
-  { key: "Q2",    label: "Q2",    months: [4, 5, 6] },
-  { key: "Q3",    label: "Q3",    months: [7, 8, 9] },
-  { key: "Q4",    label: "Q4",    months: [10, 11, 12] },
-  { key: "Total", label: "Total", months: [1,2,3,4,5,6,7,8,9,10,11,12] },
-];
+// Actuals are summed per calendar month once; every column then adds up
+// the months it covers, so changing the Period never re-reads the ledger.
+const MONTHS = monthsInRange({ first: 1, last: 12 });
+const BUCKET_KEYS = [...MONTHS, "Total"];
 
-const MONTH_TO_Q = { 1:"Q1",2:"Q1",3:"Q1",4:"Q2",5:"Q2",6:"Q2",7:"Q3",8:"Q3",9:"Q3",10:"Q4",11:"Q4",12:"Q4" };
+/** The column groups one frequency draws, each followed by the year's Total.
+ *
+ *  `short` names the period without its year, for the drawer's title.
+ */
+export function outlineColumns(frequency, year) {
+  const total = { key: "Total", label: `Total ${year || ""}`.trim(), short: null, months: MONTHS };
+  // The year's single column is the Total already.
+  if (frequency === "annually") return [total];
+  const periods = periodColumns(frequency, { first: 1, last: 12 }, year || "").map(c => {
+    const key = c.key.toUpperCase();
+    return { key, label: c.label.trim(), months: c.months,
+             short: c.months.length === 1 ? MONTH_ABBR[c.months[0] - 1] : key };
+  });
+  return [...periods, total];
+}
+
+/** Which periods a budget can be read in. Only a workbook that states each
+ *  month can be broken out by month: one stating quarters spreads each
+ *  evenly across its months, and showing that spread as months would
+ *  present our arithmetic as the firm's plan. */
+export function outlineFrequencies(budget) {
+  return budget?.period_granularity === "monthly" ? FREQUENCIES : null;
+}
+
+/** The workbook's own resolution, unless the reader picked another it supports. */
+export function outlineFrequency(budget, picked) {
+  const offered = outlineFrequencies(budget);
+  if (!offered) return "quarterly";
+  return offered.some(f => f.key === picked) ? picked : "monthly";
+}
 
 export default function BudgetActualsOutline({ budget, accountsData, periodYear, drilldown,
                                               dimension = null, asOf }) {
@@ -73,7 +102,7 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   const breakouts = useMemo(() => rowBreakouts(accountsData, budget),
                             [accountsData, budget]);
   // Kept across reloads and in the URL, as the other two layouts keep their toolbars.
-  const { breakoutKey, setBreakoutKey } = useViewToolbar({
+  const { breakoutKey, setBreakoutKey, frequency: pickedFrequency, setFrequency } = useViewToolbar({
     prefsKey: prefsKeyFor(accountsData, budget?.id), breakouts, sharedView: budget?.view,
   });
   const breakout = useMemo(() => {
@@ -113,7 +142,7 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   // exceptions into it opens and closes rows the reader never touched.
   useEffect(() => { setFlipped(new Set()); }, [breakout?.key]);
 
-  // Actuals per line-row key, bucketed by quarter. Computed once; aggregate
+  // Actuals per line-row key, bucketed by month. Computed once; aggregate
   // rows then sum their children (or constituents) out of this map.
   // Totals drill by naming the lines they sum, so they need to find them —
   // through another total's `total_key` too, when a formula tree nests.
@@ -256,12 +285,13 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
 
   const yr = periodYear || budget?.period_year || "";
 
-  // Groups (one per quarter) + sub-columns (Actual/Budget/Var $, each with a
+  const frequencies = outlineFrequencies(budget);
+  const frequency = outlineFrequency(budget, pickedFrequency);
+  const columns = useMemo(() => outlineColumns(frequency, yr), [frequency, yr]);
+
+  // Groups (one per period) + sub-columns (Actual/Budget/Var $, each with a
   // provenance mark) for the shared GroupedTableHead — see ui/table.jsx.
-  const groups = QUARTERS.map(q => ({
-    key: q.key,
-    label: q.key === "Total" ? `Total ${yr}` : `${q.label} ${yr}`,
-  }));
+  const groups = columns.map(c => ({ key: c.key, label: c.label }));
   const subCols = [
     { label: "Actual" },
     { label: "Budget" },
@@ -273,15 +303,17 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   const [theadEl, setTheadEl] = useState(null);
   const stickyState = useStickyHeader(theadEl);
 
-  // Anchor the initial scroll to the current quarter's column, once. Table
-  // layout can take a few ticks to settle, so poll until it holds steady.
+  // Anchor the scroll to the current period's column, once per Period
+  // choice. Table layout can take a few ticks to settle, so poll until it
+  // holds steady.
   const scrollRef = useRef(null);
-  const anchoredRef = useRef(false);
+  const anchoredRef = useRef(null);
   useEffect(() => {
-    if (anchoredRef.current) return;
+    if (anchoredRef.current === frequency) return;
     const container = scrollRef.current;
     if (!container) return;
-    const currentKey = MONTH_TO_Q[trueAsOfMonth(asOf)];
+    const asOfMonth = trueAsOfMonth(asOf);
+    const currentKey = columns.find(c => c.short && c.months.includes(asOfMonth))?.key || "Total";
     let timerId;
     let lastLeft = null;
     let stableTicks = 0;
@@ -295,19 +327,22 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
       stableTicks = (lastLeft !== null && Math.abs(left - lastLeft) < 0.5) ? stableTicks + 1 : 0;
       lastLeft = left;
       if (stableTicks < 2 && ticksLeft > 0) { timerId = setTimeout(measure, 16); return; }
-      anchoredRef.current = true;
+      anchoredRef.current = frequency;
       const contRect = container.getBoundingClientRect();
       const labelWidth = labelTh.getBoundingClientRect().width;
       container.scrollLeft = Math.max(0, container.scrollLeft + (left - contRect.left - labelWidth));
     };
     timerId = setTimeout(measure, 16);
     return () => clearTimeout(timerId);
-  }, [asOf]);
+  }, [asOf, frequency, columns]);
 
   return (
     <>
     <div data-export-exclude>
       <FilterRibbon>
+        {frequencies && (
+          <PeriodDropdown options={frequencies} value={frequency} onChange={setFrequency} />
+        )}
         <FiltersMenu breakouts={breakouts} breakoutKey={breakout ? breakout.key : "none"}
                      onBreakoutKey={setBreakoutKey} />
       </FilterRibbon>
@@ -346,6 +381,8 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
                 valueAliases={valueAliases}
                 tagValuesAvailable={tagValuesAvailable}
                 periodYear={yr}
+                columns={columns}
+                monthlyBudgets={!!frequencies}
                 onDrill={drilldown?.openOutlineCell}
                 onDrillTotal={drilldown?.openOutlineTotal}
                 hoverCell={hoverCell}
@@ -498,8 +535,9 @@ export function resolveHeaderRanges(displayRows, depthRanges) {
 // nothing) — split out of OutlineRow because it's a genuinely different
 // row shape (normal-width label column + real numeric cells) from both the
 // full-width label-only band (collapsed=false) and a plain data row.
-function CollapsedHeaderRow({ row, style, labelIndent, closingRow, aggregates, onToggleCollapse }) {
-  const closingActuals = aggregates[rowAggKey(closingRow)] || emptyQuarters();
+function CollapsedHeaderRow({ row, style, labelIndent, closingRow, aggregates, columns,
+                              onToggleCollapse }) {
+  const closingActuals = aggregates[rowAggKey(closingRow)] || emptyBuckets();
   return (
     <tr>
       {/* Not colSpan here — this is a normal-width label column like any
@@ -525,9 +563,9 @@ function CollapsedHeaderRow({ row, style, labelIndent, closingRow, aggregates, o
           {row.label}
         </button>
       </td>
-      {QUARTERS.map(q => {
-        const budgetV = quarterBudget(closingRow, q);
-        const actualV = closingActuals[q.key] || 0;
+      {columns.map(col => {
+        const budgetV = columnBudget(closingRow, col);
+        const actualV = columnActual(closingActuals, col);
         const variance = actualV - budgetV;
         // `style` here is the header's own td style (sectionHeader/
         // subsectionHeader/groupHeader) — same border-collapse:separate
@@ -536,7 +574,7 @@ function CollapsedHeaderRow({ row, style, labelIndent, closingRow, aggregates, o
         const numStyle = { ...styles.tdNum, ...style, ...styles.tdNumStrong };
         return (
           <Fragment3
-            key={q.key}
+            key={col.key}
             a={(actualV === 0 && budgetV === 0) ? "—" : fmtCurrencyWhole(actualV)}
             b={budgetV === 0 ? "—" : fmtCurrencyWhole(budgetV)}
             v={(actualV === 0 && budgetV === 0) ? "—" : fmtVarianceWhole(variance)}
@@ -550,7 +588,7 @@ function CollapsedHeaderRow({ row, style, labelIndent, closingRow, aggregates, o
 }
 
 function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvailable = true,
-                     periodYear, onDrill, asTotal, extraIndent, sectionFlat, collapsed, onToggleCollapse,
+                     periodYear, columns, monthlyBudgets = false, onDrill, asTotal, extraIndent, sectionFlat, collapsed, onToggleCollapse,
                      closingRow, alignIndent, glNames, subCodes,
                      breakout, entries, dimension, open, onToggleLine, elsewhere,
                      widened, onDrillTotal, rowByKey, sharedWithLabel,
@@ -579,7 +617,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
       return (
         <CollapsedHeaderRow
           row={row} style={style} labelIndent={labelIndent}
-          closingRow={closingRow} aggregates={aggregates}
+          closingRow={closingRow} aggregates={aggregates} columns={columns}
           onToggleCollapse={onToggleCollapse}
         />
       );
@@ -588,7 +626,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
     return (
       <tr>
         <td
-          colSpan={1 + QUARTERS.length * 3}
+          colSpan={1 + columns.length * 3}
           style={style}
         >
           {/* Pinned inside the spanning cell: the band stretches the full
@@ -623,8 +661,8 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
   // A leaf-like subtotal resolves from its own accounts, so look there
   // before the constituent-summed aggregates.
   const actuals = kind === "line"
-    ? (actualsByKey[row.key] || emptyQuarters())
-    : (actualsByKey[rowAggKey(row)] || aggregates[rowAggKey(row)] || emptyQuarters());
+    ? (actualsByKey[row.key] || emptyBuckets())
+    : (actualsByKey[rowAggKey(row)] || aggregates[rowAggKey(row)] || emptyBuckets());
 
   // "void" is a decision the client recorded: this line has no Carta
   // counterpart and they chose to leave it blank. "unmapped" is the
@@ -736,13 +774,14 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
   const children = (breakout && kind === "line" && !row.fund_match && !unmapped && !voided
                     && opensAnything(row, breakout))
     ? breakoutBuckets(entries, row, breakout, {
-        tagFilter, dimension: rowScope || dimension, bucketOf: mo => MONTH_TO_Q[mo],
-        bucketKeys: QUARTERS.map(q => q.key),
+        tagFilter, dimension: rowScope || dimension, bucketOf: monthBucket,
+        bucketKeys: MONTHS,
         excludeClaims: row.excluded_claims,
         excludeEntries: excludedEntries,
       })
     : [];
   const expandable = !!onToggleLine && worthBreakingOut(children);
+  const monthlyBudget = drillMonthlyBudget(row, monthlyBudgets);
   const isOpen = expandable && open;
 
   return (
@@ -802,9 +841,9 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
           )}
         </span>
       </td>
-      {QUARTERS.map(q => {
-        const budgetV = quarterBudget(row, q);
-        const actualV = actuals[q.key] || 0;
+      {columns.map(col => {
+        const budgetV = columnBudget(row, col);
+        const actualV = columnActual(actuals, col);
         const variance = actualV - budgetV;
 
         // A total has no accounts of its own, but it does have the lines it
@@ -819,22 +858,23 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
                          && (actualV !== 0 || !!row.comment);
         const onClickTotal = canDrillTotal
           ? () => onDrillTotal({
-              cellKey:    outlineCellKey(row, q.key),
+              cellKey:    outlineCellKey(row, col.key),
               label:      asTotal ? `Total ${row.label}` : row.label,
-              quarter:    q.key,
+              ...drillPeriod(col),
               members,
               dimension,
               periodYear,
               budget:     budgetV,
               actual:     actualV,
               polarity:   rowPolarity(row),
+              monthlyBudget,
             })
           : undefined;
         const onClick = canDrill
           ? () => onDrill({
-              cellKey:    outlineCellKey(row, q.key),
+              cellKey:    outlineCellKey(row, col.key),
               label:      row.label,
-              quarter:    q.key,
+              ...drillPeriod(col),
               glCodes:    row.gl_codes || [],
               scopes:     row.scopes || null,
               excludedClaims: row.excluded_claims || null,
@@ -855,6 +895,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
               budget:     budgetV,
               actual:     actualV,
               polarity:   rowPolarity(row),
+              monthlyBudget,
               unmapped,
             })
           : undefined;
@@ -865,10 +906,10 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
 
           ...(canDrill || canDrillTotal ? { cursor: "pointer" } : null),
         };
-        const cellKey = outlineCellKey(row, q.key);
+        const cellKey = outlineCellKey(row, col.key);
         return (
           <Fragment3
-            key={q.key}
+            key={col.key}
             onClick={onClick || onClickTotal}
             hovered={hoverCell === cellKey}
             held={heldCell === cellKey}
@@ -893,7 +934,8 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
     {isOpen && children.map(c => (
       <OutlineChildRow
         key={`${row.key}-${c.label}`} child={c} indent={indent + 26}
-        row={row} breakout={breakout} periodYear={periodYear} dimension={dimension}
+        row={row} breakout={breakout} periodYear={periodYear} columns={columns}
+        dimension={dimension}
         cartaTags={(row.tag_value && rowScope)
                    ? (valueAliases[row.tag_value] || [row.tag_value]) : null}
         onDrill={onDrill} hoverCell={hoverCell} heldCell={heldCell}
@@ -922,7 +964,7 @@ export function elsewhereNote(elsewhere, row, sharedWithLabel) {
 
 // A child carries actuals and no budget: the workbook budgets the line, not
 // the vendors or accounts inside it, and prorating would invent a variance.
-function OutlineChildRow({ child, indent, row, breakout, periodYear, dimension,
+function OutlineChildRow({ child, indent, row, breakout, periodYear, columns, dimension,
                           cartaTags, onDrill, hoverCell, heldCell, onHoverCell }) {
   // Every breakout row reads as a figure a reader can open, so they all
   // look alike. "Not specified" was greyed and inert, which read as a
@@ -947,16 +989,16 @@ function OutlineChildRow({ child, indent, row, breakout, periodYear, dimension,
             the firm typed — but in the same ink as every row beside it. */}
         <span style={child.unlabelled ? styles.childUnlabelled : null}>{label}</span>
       </td>
-      {QUARTERS.map(q => {
-        const actualV = child.buckets[q.key] || 0;
-        const cellKey = `${outlineCellKey(row, q.key)}|${child.label}`;
+      {columns.map(col => {
+        const actualV = columnActual(child.buckets, col);
+        const cellKey = `${outlineCellKey(row, col.key)}|${child.label}`;
         const onClick = (canDrill && actualV !== 0)
           ? () => onDrill({
               cellKey,
               // The line it belongs to, then the value it is: a reader who
               // opened "<line> · <value>" should see that, not one or other.
               label:      `${row.label} · ${label}`,
-              quarter:    q.key,
+              ...drillPeriod(col),
               glCodes:    row.gl_codes || [],
               scopes:     row.scopes || null,
               // The line's own scope still applies: this row is a slice of
@@ -982,7 +1024,7 @@ function OutlineChildRow({ child, indent, row, breakout, periodYear, dimension,
           : undefined;
         return (
           <Fragment3
-            key={q.key}
+            key={col.key}
             onClick={onClick}
             hovered={hoverCell === cellKey}
             held={heldCell === cellKey}
@@ -997,7 +1039,7 @@ function OutlineChildRow({ child, indent, row, breakout, periodYear, dimension,
   );
 }
 
-// Three <td>s per quarter. Named oddly because React fragments can't carry
+// Three <td>s per period. Named oddly because React fragments can't carry
 // keys through a .map into <tr> without a wrapper, and a wrapper element
 // would break table semantics.
 function Fragment3({ a, b, v, vColor, bColor, numStyle, onClick, hovered, held, onHover }) {
@@ -1011,7 +1053,7 @@ function Fragment3({ a, b, v, vColor, bColor, numStyle, onClick, hovered, held, 
     onMouseEnter: onHover ? () => onHover(true) : undefined,
     onMouseLeave: onHover ? () => onHover(false) : undefined,
   } : {};
-  // Continues the header's own quarter divider (table.jsx's thGroup).
+  // Continues the header's own period divider (table.jsx's thGroup).
   const firstStyle = { ...numStyle, borderLeft: `1px solid ${LINE}` };
   return (
     <>
@@ -1024,8 +1066,38 @@ function Fragment3({ a, b, v, vColor, bColor, numStyle, onClick, hovered, held, 
 
 // -----------------------------------------------------------------------
 
-function emptyQuarters() {
-  return { Q1: 0, Q2: 0, Q3: 0, Q4: 0, Total: 0 };
+function emptyBuckets() {
+  const b = {};
+  for (const k of BUCKET_KEYS) b[k] = 0;
+  return b;
+}
+
+/** The bucket an entry's month lands in, or null for a month outside the year. */
+function monthBucket(mo) {
+  const m = Number(mo);
+  return Number.isInteger(m) && m >= 1 && m <= 12 ? m : null;
+}
+
+/** A row's actual over one column: the sum of the months it covers. */
+export function columnActual(buckets, col) {
+  if (!buckets) return 0;
+  if (col.key === "Total") return buckets.Total || 0;
+  return col.months.reduce((sum, m) => sum + (buckets[m] || 0), 0);
+}
+
+/** The monthly plan a drill charts against, when the workbook states one.
+ *  Otherwise the drawer falls back to its even-spread pace line. */
+export function drillMonthlyBudget(row, monthlyBudgets) {
+  return monthlyBudgets && Array.isArray(row?.monthly) && row.monthly.length === 12
+    ? row.monthly : null;
+}
+
+/** What a drill carries about the column it opened from. A Total covers the
+ *  whole year and so names no period and constrains no month. */
+function drillPeriod(col) {
+  return col.key === "Total"
+    ? { periodLabel: null, months: null }
+    : { periodLabel: col.short, months: col.months };
 }
 
 /** Which cell group a click or a hover is about.
@@ -1033,8 +1105,8 @@ function emptyQuarters() {
  *  Keyed on the row's own identity, never its label: a workbook can name
  *  the same fund in two sections, and a label match lights the wrong money.
  */
-export function outlineCellKey(row, quarter) {
-  return `${row?.key || rowAggKey(row)}|${quarter}`;
+export function outlineCellKey(row, columnKey) {
+  return `${row?.key || rowAggKey(row)}|${columnKey}`;
 }
 
 export function rowAggKey(row) {
@@ -1075,8 +1147,8 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
     const leafLike = row.row_kind !== "line"
       && !(row.constituents || []).length && (row.gl_codes || []).length;
     if ((row.row_kind !== "line" && !leafLike) || (!row.key && !leafLike)) continue;
-    const bucket = emptyQuarters();
-    const elsewhere = emptyQuarters();
+    const bucket = emptyBuckets();
+    const elsewhere = emptyBuckets();
     const claimed = [];
 
     if (row.fund_match) {
@@ -1096,7 +1168,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
         if (yr && String(e.yr ?? "") !== yr) continue;
         if (!rx.test(e.fund || "")) continue;
         if (only.size && !only.has(e.acct_type)) continue;
-        if (!MONTH_TO_Q[e.mo]) continue;
+        if (!monthBucket(e.mo)) continue;
         mine.push(e);
       }
       // A line naming only the offset measures a reduction, which the
@@ -1105,7 +1177,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
       for (const e of mine) {
         const raw = Number(e.amount ?? e.amt ?? 0) || 0;
         const amt = contra ? -raw : raw;
-        bucket[MONTH_TO_Q[e.mo]] += amt;
+        bucket[monthBucket(e.mo)] += amt;
         bucket.Total += amt;
       }
     } else if ((row.gl_codes || []).length) {
@@ -1124,8 +1196,8 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
       const extra = (row.scopes || []).filter(sc => sc.source !== "reporting_tag");
       for (const e of entries) {
         if (!gls.has(e.acct_type)) continue;
-        const q = MONTH_TO_Q[e.mo];
-        if (!q) continue;
+        const mo = monthBucket(e.mo);
+        if (!mo) continue;
         const amt = Number(e.amount ?? 0) || 0;
         if (extra.length
             && !extra.every(sc => dimensionValue(e, sc) === sc.value)) continue;
@@ -1133,13 +1205,13 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
           const v = dimensionValue(e, scope);
           if (v == null || !tags.has(v)) continue;
         } else if (claims.length && claims.some(c => dimensionValue(e, c) === c.value)) {
-          elsewhere[q] += amt;
+          elsewhere[mo] += amt;
           elsewhere.Total += amt;
           continue;
         }
-        bucket[q] += amt;
+        bucket[mo] += amt;
         bucket.Total += amt;
-        claimed.push({ entry: e, q, amt });
+        claimed.push({ entry: e, mo, amt });
       }
     }
     const slot = row.key || rowAggKey(row);
@@ -1160,7 +1232,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
       claimsByEntry.get(c.entry).push({ row, ...c });
     }
   }
-  const lostBucketByRow = new Map();  // loser's row.key -> quarters lost
+  const lostBucketByRow = new Map();  // loser's row.key -> months lost
   const lostToWinner = new Map();     // loser's row.key -> Map(winner label -> amount)
   // Entries a row's own filter still matches but which a more specific row
   // claimed instead, keyed by the losing row's key. A drill panel re-running
@@ -1177,11 +1249,11 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
     });
     const [winner, ...losers] = ranked;
     for (const loser of losers) {
-      out[loser.row.key][loser.q] -= loser.amt;
+      out[loser.row.key][loser.mo] -= loser.amt;
       out[loser.row.key].Total -= loser.amt;
-      if (!lostBucketByRow.has(loser.row.key)) lostBucketByRow.set(loser.row.key, emptyQuarters());
+      if (!lostBucketByRow.has(loser.row.key)) lostBucketByRow.set(loser.row.key, emptyBuckets());
       const lost = lostBucketByRow.get(loser.row.key);
-      lost[loser.q] += loser.amt;
+      lost[loser.mo] += loser.amt;
       lost.Total += loser.amt;
       if (!lostToWinner.has(loser.row.key)) lostToWinner.set(loser.row.key, new Map());
       const byWinner = lostToWinner.get(loser.row.key);
@@ -1199,7 +1271,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
     if (Math.abs(out[loserKey]?.Total || 0) < 0.005) continue;
     const lost = lostBucketByRow.get(loserKey);
     const existing = elsewhereOut[loserKey];
-    if (existing) for (const q of QUARTERS) existing[q.key] += lost[q.key] || 0;
+    if (existing) for (const k of BUCKET_KEYS) existing[k] += lost[k] || 0;
     else elsewhereOut[loserKey] = lost;
   }
 
@@ -1330,7 +1402,7 @@ export function linesCoveredBy(rows, i) {
   return keys;
 }
 
-/** Actuals per aggregate row (keyed by rowAggKey), bucketed by quarter.
+/** Actuals per aggregate row (keyed by rowAggKey), bucketed by month.
  *
  *  A total with a usable formula tree (usableTree) reports the sum of its
  *  children's actuals, each with the sign its formula gives it, read down
@@ -1362,11 +1434,11 @@ export function computeAggregates(rows, actualsByKey, shortfalls) {
       ? row.covered_lines : linesCoveredBy(rows, i);
     const keys = summedLineKeys(row, covered);
     if (keys !== row.constituents && shortfalls) shortfalls.add(rowAggKey(row));
-    const bucket = emptyQuarters();
+    const bucket = emptyBuckets();
     for (const k of keys) {
       const src = actualsByKey[k];
       if (!src) continue;
-      for (const q of QUARTERS) bucket[q.key] += src[q.key] || 0;
+      for (const k of BUCKET_KEYS) bucket[k] += src[k] || 0;
     }
     out[rowAggKey(row)] = bucket;
   }
@@ -1376,10 +1448,10 @@ export function computeAggregates(rows, actualsByKey, shortfalls) {
   // its own accounts when it has them, else its constituent sum above.
   const treeActuals = (row, seen) => {
     const slot = rowAggKey(row);
-    if (seen.has(row)) return emptyQuarters();   // a cycle contributes nothing
+    if (seen.has(row)) return emptyBuckets();   // a cycle contributes nothing
     if (out[slot]) return out[slot];
     seen.add(row);
-    const bucket = emptyQuarters();
+    const bucket = emptyBuckets();
     for (const { child, sign } of usableTree(row, rowById)) {
       const src = child.row_kind === "line"
         ? actualsByKey[child.key]
@@ -1387,7 +1459,7 @@ export function computeAggregates(rows, actualsByKey, shortfalls) {
           ? treeActuals(child, seen)
           : (actualsByKey[rowAggKey(child)] || out[rowAggKey(child)]);
       if (!src) continue;
-      for (const q of QUARTERS) bucket[q.key] += sign * (src[q.key] || 0);
+      for (const k of BUCKET_KEYS) bucket[k] += sign * (src[k] || 0);
     }
     out[slot] = bucket;
     return bucket;
@@ -1408,24 +1480,26 @@ export function computeAggregates(rows, actualsByKey, shortfalls) {
 
   for (const row of rows) {
     if (row.derived !== "net_income" || usableTree(row, rowById)) continue;
-    const bucket = emptyQuarters();
+    const bucket = emptyBuckets();
     const inc  = incomeRow ? out[rowAggKey(incomeRow)] : null;
     const opex = opexRow   ? out[rowAggKey(opexRow)]   : null;
     const salt = saltRow   ? actualsByKey[saltRow.key] : null;
-    for (const q of QUARTERS) {
-      bucket[q.key] = (inc?.[q.key] || 0) - (opex?.[q.key] || 0) - (salt?.[q.key] || 0);
+    for (const k of BUCKET_KEYS) {
+      bucket[k] = (inc?.[k] || 0) - (opex?.[k] || 0) - (salt?.[k] || 0);
     }
     out[rowAggKey(row)] = bucket;
   }
   return out;
 }
 
-function quarterBudget(row, q) {
+/** A row's budget over one column. A row with no monthly figures states
+ *  only the year, so only the Total column carries it. */
+export function columnBudget(row, col) {
   if (!Array.isArray(row.monthly)) {
-    return q.key === "Total" ? (row.annual || 0) : 0;
+    return col.key === "Total" ? (row.annual || 0) : 0;
   }
   let sum = 0;
-  for (const m of q.months) {
+  for (const m of col.months) {
     const v = row.monthly[m - 1];
     if (typeof v === "number") sum += v;
   }

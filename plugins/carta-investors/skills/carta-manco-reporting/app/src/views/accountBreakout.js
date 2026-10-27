@@ -233,7 +233,7 @@ export function breakoutRows(entries, row, dimension, period) {
 }
 
 /** Child rows bucketed into a caller's own columns — the outline reports by
- *  quarter, so a flat total would leave its children unreadable beside it.
+ *  period, so a flat total would leave its children unreadable beside it.
  *
  *  `tagFilter` is the parent line's own scope: a line reported against one
  *  tag value must break out only the spend inside it, or the children

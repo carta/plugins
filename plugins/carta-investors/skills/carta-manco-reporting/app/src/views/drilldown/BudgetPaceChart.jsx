@@ -44,8 +44,11 @@ export function paceModeFor(monthlyBudget, quarterlyBudget) {
     : quarterlyBudget?.length === 4 ? "quarterly" : "pace";
 }
 
+// `months` (1-based) narrows the monthly chart to the months a drill covers —
+// a March cell's actuals are March's alone, so earlier months would chart
+// their budget against nothing. Null charts January to the last actual.
 export default function BudgetPaceChart({
-  quarterlyBudget, monthlyBudget, monthlyActual, budget, period, height = 150,
+  quarterlyBudget, monthlyBudget, monthlyActual, budget, period, months = null, height = 150,
   budgetColor = "var(--local-series-blue-tint)",
   actualColor = "var(--ink-color-global-data-viz-lime-2)",
 }) {
@@ -59,7 +62,8 @@ export default function BudgetPaceChart({
   if (mode === "monthly" || mode === "quarterly") {
     const isMonthly = mode === "monthly";
     const covered = isMonthly
-      ? Array.from({ length: 12 }, (_, m) => m).filter((m) => m < elapsed)
+      ? (Array.isArray(months) ? months.map((m) => m - 1)
+                               : Array.from({ length: 12 }, (_, m) => m).filter((m) => m < elapsed))
       : [0, 1, 2, 3].filter((q) => q * 3 < elapsed);
     const labels = covered.map((p) => (isMonthly ? MONTHS[p] : QUARTERS[p]));
     const actualPer = isMonthly

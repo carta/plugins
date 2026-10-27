@@ -123,7 +123,7 @@ Every row spells the full id, prefix included.
 | `MancoReporting.BudgetVsActuals.LayoutOutline` | render | The budget rendered as the workbook's own outline. |
 | `MancoReporting.BudgetVsActuals.LayoutCrosstab` | render | The budget rendered as the department (tag) crosstab. |
 | `MancoReporting.BudgetVsActuals.UnsupportedView` | render | The budget declares a view the app cannot render. |
-| `MancoReporting.BudgetVsActuals.PeriodChange` | click | The Period (frequency) dropdown changed. |
+| `MancoReporting.BudgetVsActuals.PeriodChange` | click | The Period (frequency) dropdown changed — on the by-account layout, or on the outline layout when the workbook states months. |
 | `MancoReporting.BudgetPeriodPanel.View` | render | A period popover opened: the month-range picker or the crosstab's period picker. |
 | `MancoReporting.BudgetVsActuals.PeriodPreset` | click | A date-range preset picked in the month-range picker. |
 | `MancoReporting.BudgetVsActuals.PeriodCustom` | click | The From or To month changed by hand. |

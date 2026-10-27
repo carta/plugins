@@ -31,11 +31,6 @@ export default function BudgetPeriodControls({
   const chips = filterChips(filters);
   const dirty = !isDefaultFilters(filters);
 
-  const setFrequency = (key) => {
-    trackClick("MancoReporting.BudgetVsActuals.PeriodChange");
-    onFilters({ ...filters, frequency: key });
-  };
-
   const dismissChip = (id) => {
     if (id === "hidden") onFilters({ ...filters, hidden: [] });
     if (id === "showYtd") onFilters({ ...filters, showYtd: false });
@@ -44,12 +39,8 @@ export default function BudgetPeriodControls({
   return (
     <FilterRibbon>
       {frequencyEnabled && (
-        <Dropdown
-          triggerLabel="Period"
-          options={FREQUENCIES.map((f) => ({ id: f.key, label: f.label }))}
-          value={filters.frequency}
-          onChange={setFrequency}
-        />
+        <PeriodDropdown value={filters.frequency}
+                        onChange={(key) => onFilters({ ...filters, frequency: key })} />
       )}
 
       <FiltersMenu filters={filters} onFilters={onFilters} ytdPane={frequencyEnabled}
@@ -78,6 +69,22 @@ export default function BudgetPeriodControls({
                      preset={preset} year={year} />
       )}
     </FilterRibbon>
+  );
+}
+
+/** How often to break the year up. Every Budget vs Actuals layout that can
+ *  break it up uses this one control, so they read and report alike. */
+export function PeriodDropdown({ value, onChange, options = FREQUENCIES }) {
+  return (
+    <Dropdown
+      triggerLabel="Period"
+      options={options.map((f) => ({ id: f.key, label: f.label }))}
+      value={value}
+      onChange={(key) => {
+        trackClick("MancoReporting.BudgetVsActuals.PeriodChange");
+        onChange(key);
+      }}
+    />
   );
 }
 
