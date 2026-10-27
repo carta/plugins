@@ -165,7 +165,7 @@ export default function App() {
   // New shared reports show up on their own on the hosted app; a run that changed nothing
   // shows nothing.
   useAutoPull({
-    enabled: hostedApp && !!snapshot && reportsApi.available && reportsApi.can(REPORT_ACTIONS.PULL),
+    enabled: !!hostedApp && !!snapshot && reportsApi.available && reportsApi.can(REPORT_ACTIONS.PULL),
     reportsApi,
     onPulled: showPulled,
   });

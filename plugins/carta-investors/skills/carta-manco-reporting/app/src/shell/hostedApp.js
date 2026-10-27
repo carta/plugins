@@ -6,8 +6,12 @@ import { useEffect, useState } from "react";
 // (serve.py has no such route). Unlike /api/budget-upload, this never depends on a
 // session having an active firm yet, so it answers the same on a session's first load as
 // on every later one.
+//
+// Starts `null` (not yet known) until the probe settles. A truthy check reads
+// `null` as not hosted; chatFeature.js's useChatFeatureFlag() compares against
+// `null` to tell "still probing" apart from "confirmed local".
 export function useHostedApp() {
-  const [hosted, setHosted] = useState(false);
+  const [hosted, setHosted] = useState(null);
   useEffect(() => {
     fetch("/api/app-config").then((r) => setHosted(r.ok)).catch(() => setHosted(false));
   }, []);
