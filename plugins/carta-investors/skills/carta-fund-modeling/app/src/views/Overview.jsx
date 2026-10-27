@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { FS, inkNum, sans, MICRO, PALETTE } from "../ui/theme.js";
 import { fmt$, fmtM, fmtX, fmtPct, fmtOwn, shortFund } from "../ui/format.js";
-import { Num, SourceNote, H1, H3, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
+import { Num, SourceNote, H1, H2, H3, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
 import { gpCarryOf, baseGpCarryOf } from "../model/funds.js";
 import { fundAvgOwnership } from "../model/ownership.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { trackClick } from "../analytics.js";
+import { UP, DOWN, widgetClass } from "./overview/WidgetCard.jsx";
+import PerformanceHero, { hasTrend } from "./overview/PerformanceHero.jsx";
 
 /** LP NAV over time, stacked by fund, with the firm TVPI as an overlaid line on
  *  a secondary axis. Columns come from snapshot.navSeries[].byFund (per-fund
@@ -14,7 +16,7 @@ import { trackClick } from "../analytics.js";
  *  each fund's segment shifts by its own reprice, and the TVPI endpoint by the
  *  firm TVPI delta. History stays booked. */
 const TW = 960, TH = 230, TPL = 48, TPR = 70, TPT = 18, TPB = 34;
-function TrendCard({ snapshot, fundStates, firmNow }) {
+function TrendCard({ snapshot, fundStates, firmNow, span }) {
   const [hoverI, setHoverI] = useState(null);
   const rawSeries = snapshot.navSeries || [];
   if (rawSeries.length < 2) return null;
@@ -85,7 +87,7 @@ function TrendCard({ snapshot, fundStates, firmNow }) {
   const tipLeft = hc ? Math.max(7, Math.min(93, (cx(hoverI) / TW) * 100)) : 0;
   const lab = { ...sans, fontSize: FS.micro, fill: MICRO };
   return (
-    <div className="card" style={{ padding: "18px 22px 12px", height: "100%", display: "flex", flexDirection: "column" }}>
+    <div className={widgetClass(span)} data-testid="ov-chart-card" style={{ padding: "18px 22px 12px", minWidth: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
         <H3>LP NAV by fund &amp; TVPI</H3>
         <span style={{ flex: 1 }} />
@@ -210,17 +212,25 @@ function DeltaTd({ cur, base, fmt, eps = 0, bold }) {
   return (
     <td style={{ ...RT, fontWeight: bold ? 700 : 400 }} title={tip}>
       <span style={{ display: "inline-flex", alignItems: "baseline", justifyContent: "flex-end", gap: 4,
-        color: changed ? (up ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)") : "var(--ink-color-global-text-default)" }}>
+        color: changed ? (up ? UP : DOWN) : "var(--ink-color-global-text-default)" }}>
         {changed && <span aria-hidden style={{ fontSize: FS.micro, lineHeight: 1 }}>{up ? "▲" : "▼"}</span>}
         <Num value={cur} fmt={fmt} />
       </span>
     </td>
   );
 }
+// The dashboard's 12-column grid. The hero's summary card takes a third of the row and
+// the trend the rest; with no trend to draw, the summary card takes the full row.
+const FULL = 12;
+const SUMMARY_SPAN = 4;
+
+/** Firm Overview — a dashboard: the performance hero (the firm's figures), the LP NAV
+ *  by fund & TVPI trend, then the fund-by-fund table. `firm` is App's live firm rollup,
+ *  shared with the Companies sidebar. */
 export default function Overview({ fundStates, snapshot, portfolio, firm, onOpenFund }) {
   const firmRvpi = firm.lpPaidIn > 0 ? firm.lpNav / firm.lpPaidIn : 0;
   // Authoritative "today" figures for the trend's last column, so its endpoint
-  // ties out EXACTLY to the header metric bar + the fund table (rather than the
+  // ties out EXACTLY to the hero's figures + the fund table (rather than the
   // navSeries quarter-end, which lags the nav-as-of month). Never cross
   // currencies — a mixed-currency firm gets no override (null).
   const firmBaseLpNav = fundStates.reduce((s, f) => s + (f.baseLpNav || 0), 0);
@@ -247,15 +257,19 @@ export default function Overview({ fundStates, snapshot, portfolio, firm, onOpen
   // fund-table sort — defaults to Fund name A-Z; a third click on any header clears
   // to the reported (unsorted) row order, same as every other useTableSort caller
   const { sorted: sortedFunds, sort: fundSort, onSort: onFundSort } = useTableSort(fundStates, fundCols, { i: 0, dir: "asc" });
+  // the trend sums LP NAV across funds, so a mixed-currency firm doesn't get one
+  const trend = hasTrend(snapshot) && !firm.mixedCurrency;
 
   return (
     <div>
       <H1>Firm Overview</H1>
 
-      {/* firm NAV/TVPI trend — the firm scorecard now lives in the persistent top metric bar */}
-      <div style={{ marginBottom: 16 }}>
-        <TrendCard snapshot={snapshot} fundStates={fundStates} firmNow={firmNow} />
+      <div className="ov-bento" style={{ marginBottom: 16 }}>
+        <PerformanceHero firm={firm} span={trend ? SUMMARY_SPAN : FULL} />
+        {trend && <TrendCard snapshot={snapshot} fundStates={fundStates} firmNow={firmNow} span={FULL - SUMMARY_SPAN} />}
       </div>
+
+      <H2>Funds</H2>
 
       {/* ── fund-by-fund detail: its own surface ──
           scrolls in place via .table-scroll (theme.js) instead of pushing the

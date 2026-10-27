@@ -4,7 +4,7 @@
 // Every input is a self-contained slice body ({assumptions, companies}), so this
 // computes ANY scenario without touching the active one — the whole doc.slices[]
 // array is in memory. Reuses the same pure engines the tabs render from, so the
-// report ties out to the Overview MetricBar / Reserves header for that scenario.
+// report ties out to the Overview firm scorecard / Reserves header for that scenario.
 
 import { computeFundStates, firmRollup, firmBaseRollup, gpCarryOf } from "./funds.js";
 import { computeReserves, newDealCount, reserveOptsOf } from "./reserves.js";

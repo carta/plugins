@@ -506,6 +506,8 @@ export const GLOBAL_CSS = `
      app's usual card-lifts-on-hover convention to match. A boxed empty state has nothing
      to act on, so it doesn't lift either. */
   .card.stat-bar:hover, .card.empty-card:hover { box-shadow: none; }
+  /* The Firm Overview dashboard's cards stay flat on hover too. */
+  .ov-bento > .card:hover { box-shadow: none; }
   .panel { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: 0; box-shadow: none; }
   .panel:hover { box-shadow: var(--shadow-hover); }
 
@@ -513,6 +515,22 @@ export const GLOBAL_CSS = `
      viewports (a shrink-to-fit would make the tick labels illegible) ── */
   .bench-bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   @media (max-width: 860px) { .bench-bars { grid-template-columns: 1fr; gap: 18px; } }
+
+  /* ── Firm Overview dashboard: the hero, then rows of compact widgets, each a
+     12-column grid. Below 1180px the hero's two cards stack and every other widget
+     takes half or the whole row; below 760px each widget takes the whole row. */
+  .ov-bento { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .ov-span-3 { grid-column: span 3; } .ov-span-4 { grid-column: span 4; } .ov-span-5 { grid-column: span 5; }
+  .ov-span-6 { grid-column: span 6; } .ov-span-7 { grid-column: span 7; } .ov-span-8 { grid-column: span 8; }
+  .ov-span-9 { grid-column: span 9; } .ov-span-12 { grid-column: span 12; }
+  .ov-row:hover { background: var(--row-hover); }
+  @media (max-width: 1180px) {
+    .ov-span-3, .ov-span-4, .ov-span-5 { grid-column: span 6; }
+    .ov-span-6, .ov-span-7, .ov-span-8, .ov-span-9, .ov-summary-card { grid-column: span 12; }
+  }
+  @media (max-width: 760px) {
+    .ov-bento > * { grid-column: span 12; }
+  }
 
   #print-report { display: none; }
   @media print {

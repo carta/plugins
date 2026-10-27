@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useRef, useSyncExternalStore } from "react";
 import usePortfolio from "./state/usePortfolio.js";
-import { computeFundStates, firmRollup, firmBaseRollup } from "./model/funds.js";
+import { computeFundStates, firmRollup } from "./model/funds.js";
 import { effectiveExitHorizons } from "./model/reprice.js";
-import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, MICRO, SMALL_1 } from "./ui/theme.js";
-import { Btn, LockIcon, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Num, StatBar, Eyebrow, Heading2, H3, DeltaCaret } from "./ui/components.jsx";
-import { fmtAsOf, fmtM, fmtX, setDisplayCurrency } from "./ui/format.js";
+import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, MICRO } from "./ui/theme.js";
+import { Btn, LockIcon, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Eyebrow, H3 } from "./ui/components.jsx";
+import { fmtAsOf, setDisplayCurrency } from "./ui/format.js";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import useShare from "./state/useShare.js";
 import { ShareControls, PullButton, SharePopover } from "./ui/ScenarioSharing.jsx";
@@ -98,54 +98,6 @@ function useNarrow() {
     return () => mq.removeEventListener("change", fn);
   }, []);
   return narrow;
-}
-
-/** Live firm key-metrics strip — recomputes from the firm rollup so any
- *  valuation/carry/exit edit updates these instantly. Shown only on Firm Overview.
- *  Titled "Firm metrics" inside the card via StatBar's `title` prop, matching
- *  the design spec's "Summary" tile (title + key values inside one bordered card). */
-function MetricBar({ firm, firmBase, narrow }) {
-  // Horizontal padding matches <main>'s own narrow/wide padding (App.jsx's maxWidth:1320
-  // block below) so this card's edges line up with the page content under it — both boxes
-  // share the same 1320 maxWidth and box-sizing:border-box, so padding parity is what aligns them.
-  const pad = narrow ? "6px 18px 16px" : "6px 40px 16px";
-  // Never sum across currencies: when the firm's funds span reporting currencies,
-  // a combined firm total is meaningless — don't show one.
-  if (firm.mixedCurrency) {
-    return (
-      <div style={{ maxWidth: 1320, padding: pad }}>
-        <div className="card stat-bar" style={{ padding: "18px 24px" }}>
-          <Heading2 style={{ margin: "2px 0 12px" }}>Firm metrics</Heading2>
-          <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>
-            Firm-level totals aren't shown — this firm's funds report in multiple currencies, which can't be summed. Open a fund on the Companies, LP Returns or GP Economics tabs for per-fund figures.
-          </div>
-        </div>
-      </div>
-    );
-  }
-  // each metric shows its move vs the baseline scenario (green/red) — the delta uses
-  // the metric's own formatter (× for TVPI, $ for the rest) and its own epsilon.
-  const tvpiDelta = firm.tvpi - firmBase.tvpi;
-  const items = [
-    { label: "LP NAV", value: firm.lpNav, fmt: fmtM, delta: firm.lpNavDelta, dfmt: (n) => fmtM(n), eps: 0.5 },
-    { label: "TVPI", value: firm.tvpi, fmt: (n) => fmtX(n), delta: tvpiDelta, dfmt: (n) => n.toFixed(2) + "×", eps: 0.005 },
-    { label: "GP carry", value: firm.gpCarry, fmt: fmtM, delta: firm.gpCarry - firmBase.gpCarry, dfmt: (n) => fmtM(n), eps: 0.5 },
-    { label: "LP distributions", value: firm.lpDistributed, fmt: fmtM, delta: firm.lpDistributed - firmBase.lpDistributed, dfmt: (n) => fmtM(n), eps: 0.5 },
-  ];
-  return (
-    <div style={{ maxWidth: 1320, padding: pad }}>
-    <StatBar title="Firm metrics" serif={false} itemStyle={{ padding: "0 16px" }} stats={items.map((it) => ({
-      key: it.label,
-      label: it.label,
-      value: <Num value={it.value} fmt={it.fmt} />,
-      sub: it.delta != null && Math.abs(it.delta) > it.eps
-        ? <span style={{ ...SMALL_1, display: "inline-flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums", color: it.delta >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>
-            <DeltaCaret up={it.delta >= 0} />{it.dfmt(Math.abs(it.delta))} vs Baseline
-          </span>
-        : <span style={{ display: "block", height: 15 }} />,
-    }))} />
-    </div>
-  );
 }
 
 // Full-bleed rows matching Ink's SideNav item (8px/20px padding, 24px line, 40px tall).
@@ -355,9 +307,8 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
     contentRef.current?.scrollTo({ top: 0 });
   };
 
-  // live firm rollup for the persistent metric bar — reflects this slice's marks
+  // live firm rollup for the Overview scorecard and Companies sidebar — reflects this slice's marks
   const firmAgg = firmRollup(fundStates);
-  const firmBase = firmBaseRollup(fundStates); // Carta baseline — for vs-Carta deltas
 
   // what the Returns-family views take: LP Returns, GP Economics, and the Power Law and LP reports on Reports
   const returnsProps = {
@@ -508,7 +459,6 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
         {themeToggle}
         {chatToggle}
       </div>
-      {tab === "overview" && <MetricBar firm={firmAgg} firmBase={firmBase} narrow={false} />}
     </div>
   );
 
@@ -583,7 +533,6 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
 
         <div ref={contentRef} style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto" }}>
           {narrow ? narrowHeader : topBar}
-          {narrow && tab === "overview" && <MetricBar firm={firmAgg} firmBase={firmBase} narrow={true} />}
 
           <main style={{ maxWidth: 1320, padding: narrow ? "22px 18px 48px" : "28px 40px 64px" }}>
             <div key={tab} className="pagein">

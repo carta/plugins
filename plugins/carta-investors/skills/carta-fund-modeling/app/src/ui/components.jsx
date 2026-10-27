@@ -153,10 +153,10 @@ export function Modal({ title, subtitle, onClose, width = "medium", maxWidth, ch
     </div>, document.body);
 }
 // Solid delta-direction triangle — the plain Unicode glyph, matching the
-// design spec's delta caret exactly, same as Overview.jsx's own fund
-// table/NAV-chart delta carets. Centralized so every vs-baseline/vs-prior
-// delta (sidebar, Firm metrics, Companies rows, Overview) shares one glyph
-// instead of drifting into separate one-off shapes.
+// design spec's delta caret exactly, same as Overview.jsx's fund-table delta
+// carets. Centralized so every vs-baseline/vs-prior delta (sidebar, company
+// map, Companies rows) shares one glyph instead of drifting into separate
+// one-off shapes.
 export const DeltaCaret = ({ up }) => (
   <span aria-hidden="true" style={{ fontSize: FS.micro, lineHeight: 1 }}>{up ? "▲" : "▼"}</span>
 );
@@ -870,9 +870,8 @@ export function Slider({ label, value, min, max, step, onChange, fmt, accent, va
 }
 
 /** Big-figure stat tile — a label, a large value, and an optional sub/delta line.
- *  The single source for the app's ~7 hand-rolled tiles (App's MetricBar,
- *  Overview's SupportStat, Reserves' Big, Glidepath's Tile, LpReturns' scorecard,
- *  GpEconomics' carry/waterfall figures, CohortStanding's StatStrip). Chrome-less
+ *  The single source for the app's stat tiles (Overview's widget stats, GpEconomics'
+ *  figures, CohortStanding's stat strip, and every StatBar). Chrome-less
  *  by design — the caller supplies the surrounding card/divider layout; this owns
  *  only the label+value+sub block so the type ramp lives in one place.
  *
@@ -910,10 +909,10 @@ export function StatTile({ label, value, sub, color = "var(--ink-color-global-te
   );
 }
 
-/** Bordered "Summary" stat row — the single source for the app's ~5 hand-rolled
- *  headline stat bars (App's MetricBar, Reserves' rv-summary, LpReturns'
- *  lp-scorecard, Glidepath's current-multiples row, GpEconomics' waterfall
- *  preset row), matching Ink's real Tile/Summary pattern (ink.carta.com/
+/** Bordered "Summary" stat row — the single source for the app's headline stat
+ *  bars (Reserves' rv-summary, LpReturns' lp-scorecard, Glidepath's
+ *  current-multiples row, GpEconomics' waterfall preset row, Fund Construction's
+ *  allocations and results steps), matching Ink's real Tile/Summary pattern (ink.carta.com/
  *  components/Tile): one bordered card, equal-width key-value pairs on a
  *  plain gap (no divider hairlines between them — the design spec has none),
  *  each a big value over its label.
