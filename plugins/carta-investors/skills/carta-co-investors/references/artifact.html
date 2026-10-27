@@ -872,7 +872,7 @@
       canonical_company AS (SELECT NORM_KEY, COALESCE(MIN(MATCHED_INV_NAME), MAX(SPA_NAME)) AS CANONICAL_NAME FROM spa_fuzzy WHERE RN = 1 GROUP BY NORM_KEY)`;
 
     // Query S — one row per purchaser, with the companies they appear alongside
-    // and the firm-wide SPA coverage counts embedded on every row.
+    // and the portfolio size embedded on every row.
     //
     // The ORDER BY names output columns only. The server pages by restating it
     // outside a `SELECT * FROM (...)` wrapper, where an aggregate or a table alias
@@ -882,8 +882,8 @@
       return `${SPA_CTE},
         doc_metadata AS (SELECT i.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM spa_issuer i JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN spa_deal s ON i.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN spa_purchaser p ON i.EXTRACTION_ID = p.EXTRACTION_ID WHERE i.FIRM_ID = '${FIRM_UUID}' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> '' GROUP BY i.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE),
         dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')),
-        coverage AS (SELECT (SELECT COUNT(*) FROM norm_investments_base ni WHERE EXISTS (SELECT 1 FROM spa_fuzzy sf WHERE sf.RN = 1 AND sf.MATCHED_INV_NAME = ni.INV_NAME)) AS SPA_COMPANIES, (SELECT COUNT(*) FROM norm_investments_base) AS TOTAL_COMPANIES)
-        SELECT p.PURCHASER_NAME, p.ENTITY_TYPE, ARRAY_AGG(DISTINCT cc.CANONICAL_NAME) WITHIN GROUP (ORDER BY cc.CANONICAL_NAME) AS COMPANIES, (SELECT SPA_COMPANIES FROM coverage) AS SPA_COMPANIES, (SELECT TOTAL_COMPANIES FROM coverage) AS TOTAL_COMPANIES
+        coverage AS (SELECT (SELECT COUNT(*) FROM norm_investments_base) AS TOTAL_COMPANIES)
+        SELECT p.PURCHASER_NAME, p.ENTITY_TYPE, ARRAY_AGG(DISTINCT cc.CANONICAL_NAME) WITHIN GROUP (ORDER BY cc.CANONICAL_NAME) AS COMPANIES, (SELECT TOTAL_COMPANIES FROM coverage) AS TOTAL_COMPANIES
         FROM dedup_docs dd
         JOIN spa_issuer i ON dd.EXTRACTION_ID = i.EXTRACTION_ID
         JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY
@@ -931,12 +931,19 @@
         ORDER BY FUND_NAME`;
     }
 
-    // Query T — live/exited status per company, behind the filter tabs.
+    // Query T — live/exited status per company, behind the filter tabs, and
+    // whether a matching SPA exists (HAS_SPA, the same match Mode B's QC counts).
+    // An SPA with no purchasers extracted leaves no trace in Queries S and R, so
+    // this is the only place it shows up as coverage.
     // GROUP BY returns one row per company, so ISSUER_NAME is a unique ORDER BY
     // key: offset paging returns each row once only when the sort key is unique.
     function buildStatusSql() {
-      return `SELECT ISSUER_NAME, MAX(CASE WHEN IS_ACTIVE_INVESTMENT = TRUE THEN 1 ELSE 0 END) AS IS_ACTIVE_INVESTMENT
+      return `${SPA_CTE},
+        spa_cov AS (SELECT DISTINCT MATCHED_INV_NAME AS INV_NAME FROM spa_fuzzy WHERE RN = 1 AND MATCHED_INV_NAME IS NOT NULL)
+        SELECT ISSUER_NAME, MAX(CASE WHEN IS_ACTIVE_INVESTMENT = TRUE THEN 1 ELSE 0 END) AS IS_ACTIVE_INVESTMENT,
+          MAX(CASE WHEN INV_NAME IS NOT NULL THEN 1 ELSE 0 END) AS HAS_SPA
         FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
+        LEFT JOIN spa_cov ON ISSUER_NAME = INV_NAME
         WHERE FIRM_ID = '${FIRM_UUID}'
           AND ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY')
           AND ISSUER_NAME IS NOT NULL
@@ -1431,6 +1438,17 @@
       return out;
     }
 
+    // Portfolio companies the SPA match resolved to, whether or not the SPA
+    // named any purchaser.
+    function buildSpaMatchedCompanies(statusRows) {
+      const out = new Set();
+      for (const row of statusRows) {
+        const name = (row.ISSUER_NAME || '').trim();
+        if (name && toBool(row.HAS_SPA)) out.add(name);
+      }
+      return out;
+    }
+
     // A company is live if ANY of its positions is active — a realised tranche
     // does not retire the company.
     function buildCompanyStatus(statusRows) {
@@ -1443,17 +1461,15 @@
       return out;
     }
 
-    // The coverage CTE emits identical counts on every row (scalar subqueries).
-    // Scan for the first non-null rather than trusting row[0], so a page whose
-    // values came back null can't zero out the headline coverage number.
-    function coverageFromSummary(summaryRows) {
-      let spa = 0, total = 0;
+    // The coverage CTE emits the same portfolio size on every row (a scalar
+    // subquery). Scan for the first non-null rather than trusting row[0], so a
+    // page whose values came back null can't zero out the coverage denominator.
+    function portfolioSizeFromSummary(summaryRows) {
       for (const row of summaryRows) {
-        if (!spa) spa = toInt(row.SPA_COMPANIES) || 0;
-        if (!total) total = toInt(row.TOTAL_COMPANIES) || 0;
-        if (spa && total) break;
+        const total = toInt(row.TOTAL_COMPANIES) || 0;
+        if (total) return total;
       }
-      return { spa, total };
+      return 0;
     }
 
     // ── Bootstrap ─────────────────────────────────────────────────────────────
@@ -1493,10 +1509,12 @@
         [summaryRows, roundsRows, statusRows, vehicleRows, capRows] = await Promise.all([
           fetchAllRows(buildSummarySql, 'Query S'),
           fetchAllRows(buildRoundsSql, 'Query R'),
-          // Status only narrows the Live/Exited tabs, so it must never fail the
-          // report. On error the tabs fall back to counts without status.
+          // Query T supplies Live/Exited status, HAS_SPA and every coverage figure,
+          // but not the co-investor table, so it must never fail the report. On
+          // error the table still renders; the Live/Exited tabs and the header's
+          // coverage sentence are left out and the tile reads "Coverage unavailable".
           fetchAllRows(buildStatusSql, 'Query T').catch(err => {
-            console.warn('status query failed; Live/Exited filter disabled', err);
+            console.warn('status query failed; Live/Exited filter and coverage disabled', err);
             return [];
           }),
           // Without vehicles the firm name is still excluded, so a failure here
@@ -1536,13 +1554,14 @@
 
       setFirmVehicles(vehicleRows);
       const { coInvestors, companyHolders, capCompanies } = buildCoInvestors(summaryRows, capRows);
-      const { spa, total: summaryTotal } = coverageFromSummary(summaryRows);
+      const summaryTotal = portfolioSizeFromSummary(summaryRows);
       const companyRounds = buildCompanyRounds(roundsRows);
       const companyStatus = statusRows.length ? buildCompanyStatus(statusRows) : null;
       // With no SPAs the summary carries no denominator; the portfolio list does.
       const total = summaryTotal || (companyStatus ? Object.keys(companyStatus).length : 0);
       const spaCompanies = new Set(Object.keys(companyRounds));
       coInvestors.forEach(inv => inv.companies.forEach(c => { if (inv.evidence[c].spa) spaCompanies.add(c); }));
+      buildSpaMatchedCompanies(statusRows).forEach(c => spaCompanies.add(c));
 
       const now = new Date();
       const generatedAt = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1551,7 +1570,6 @@
         meta: {
           firmName: FIRM_NAME,
           firmCartaId: FIRM_CARTA_ID,
-          spaCoverage: spa,
           totalCompanies: total,
           // Only multi-name merges are worth explaining in the tooltip.
           groupings: coInvestors.filter(inv => inv.rawNames.length > 1)
@@ -1696,28 +1714,29 @@
       return { all, total: all.length, shown: trimmable && !showSingles ? multi : all, trimmable };
     }
 
-    // Portfolio companies covered by each source for a filter.
+    // Portfolio companies covered by each source for a filter, as three disjoint
+    // groups: SPA only, cap table only, both. They sum to `covered` because all
+    // three are read off the same two name sets.
     //
-    // `companyRounds` is keyed by SPA issuer, and an SPA whose issuer matched no
-    // portfolio investment still gets a key (Query R canonicalises it to the raw
-    // SPA name). Counting keys therefore overshoots the portfolio denominator —
-    // it can read past 100%. `meta.spaCoverage` is the SQL-side count of
-    // *portfolio companies* holding at least one matching SPA, so the All tab
-    // reads that instead, and matches the header. Live/Exited are already safe:
-    // an unmatched issuer has no `companyStatus` entry, so `passesFilter` drops it.
-    // Cap table companies are portfolio companies by construction (Query C starts
-    // from the SOI), and carry the SOI's name, so overlap with the SPA side is an
-    // exact name match.
+    // `spaCompanies` can hold an SPA issuer that matched no portfolio investment
+    // (Query R canonicalises it to the raw SPA name), so both sets are cut to the
+    // portfolio -- the keys of `companyStatus`, which comes from the SOI. Cap
+    // table companies carry the SOI's name, so the overlap with the SPA side is an
+    // exact name match. With no status map there is no portfolio, so the function
+    // returns null: coverage is unknown, not zero, and callers must say so.
     function coverageForFilter(filter) {
-      const spaNames = DATA.spaCompanies.filter(n => passesFilter(n, filter));
-      const capNames = DATA.capCompanies.filter(n => passesFilter(n, filter));
-      const spa = filter === 'all' ? DATA.meta.spaCoverage : spaNames.length;
-      const both = capNames.filter(n => spaNames.includes(n)).length;
-      return { spa, cap: capNames.length, both, covered: spa + capNames.length - both, total: totalForFilter(filter) };
+      if (!DATA.companyStatus) return null;
+      const inScope = n => companyStatus(n) !== null && passesFilter(n, filter);
+      const spaSet = new Set(DATA.spaCompanies.filter(inScope));
+      const capSet = new Set(DATA.capCompanies.filter(inScope));
+      let spaOnly = 0, capOnly = 0, both = 0;
+      spaSet.forEach(n => { if (capSet.has(n)) both++; else spaOnly++; });
+      capSet.forEach(n => { if (!spaSet.has(n)) capOnly++; });
+      return { spaOnly, capOnly, both, covered: spaOnly + capOnly + both, total: totalForFilter(filter) };
     }
 
     function coverageSentence(c) {
-      return c.spa + ' companies from SPAs, ' + c.cap + ' from cap tables, ' + c.both +
+      return c.spaOnly + ' companies from SPAs only, ' + c.capOnly + ' from cap tables only, ' + c.both +
         ' from both, ' + c.covered + ' covered in total';
     }
 
@@ -1740,10 +1759,10 @@
     function renderHeader() {
       const m = DATA.meta;
       const c = coverageForFilter('all');
-      const coveredPct = c.total > 0 ? Math.round(c.covered / c.total * 100) : 0;
+      const coveredPct = c && c.total > 0 ? Math.round(c.covered / c.total * 100) : 0;
       document.getElementById('page-header').innerHTML =
         '<h1>' + esc(m.firmName) + ' — Co-Investor Analysis</h1>' +
-        '<p>' + c.covered + ' of your ' + c.total + ' portfolio companies have an SPA or detailed cap table on file (' + coveredPct + '%)</p>';
+        (c ? '<p>' + c.covered + ' of your ' + c.total + ' portfolio companies have an SPA or detailed cap table on file (' + coveredPct + '%)</p>' : '');
     }
 
     function renderFilterBar() {
@@ -1787,15 +1806,23 @@
 
       // Coverage tile
       const cov = coverageForFilter(filter);
-      const total = cov.total;
-      const coveredPct = total > 0 ? Math.round(cov.covered / total * 100) : 0;
       const coverageLabel = filter === 'live' ? 'Live Coverage' : filter === 'exited' ? 'Exited Coverage' : 'Portfolio Coverage';
-      const coverageValue = cov.covered + ' / ' + total + ' — ' + coveredPct + '%';
-      const missing = Math.max(total - cov.covered, 0);
-      const coverageTooltip =
-        'Co-investor analysis covers portfolio companies with a Stock Purchase Agreement (SPA) uploaded to Carta, or a detailed cap table shared with you. ' +
-        cov.covered + ' of ' + total + (filter === 'all' ? ' portfolio' : filter === 'live' ? ' live' : ' exited') + ' companies are covered' +
-        (missing > 0 ? ' — the remaining ' + missing + ' are not yet visible in this report.' : '.');
+      const coverageIntro = 'Co-investor analysis covers portfolio companies with a Stock Purchase Agreement (SPA) uploaded to Carta, or a detailed cap table shared with you.';
+      let coverageValue, coverageSub, coverageTooltip;
+      if (cov) {
+        const total = cov.total;
+        const coveredPct = total > 0 ? Math.round(cov.covered / total * 100) : 0;
+        const missing = Math.max(total - cov.covered, 0);
+        coverageValue = cov.covered + ' / ' + total + ' — ' + coveredPct + '%';
+        coverageSub = coverageSentence(cov);
+        coverageTooltip = coverageIntro + ' ' +
+          cov.covered + ' of ' + total + (filter === 'all' ? ' portfolio' : filter === 'live' ? ' live' : ' exited') + ' companies are covered' +
+          (missing > 0 ? ' — the remaining ' + missing + ' are not yet visible in this report.' : '.');
+      } else {
+        coverageValue = 'Coverage unavailable';
+        coverageSub = '';
+        coverageTooltip = coverageIntro + ' The portfolio list did not load, so coverage could not be computed.';
+      }
 
       // Top co-investor
       const top = ci[0];
@@ -1837,7 +1864,7 @@
         '<div class="metric-card has-tooltip" tabindex="0" aria-describedby="coverage-tooltip">' +
           '<div class="metric-label">' + esc(coverageLabel) + ' <span class="tooltip-icon" aria-hidden="true">i</span></div>' +
           '<div class="metric-value" style="font-size:20px;line-height:40px">' + esc(coverageValue) + '</div>' +
-          '<div class="metric-sub">' + esc(coverageSentence(cov)) + '</div>' +
+          '<div class="metric-sub">' + esc(coverageSub) + '</div>' +
           '<div class="tooltip" id="coverage-tooltip" role="tooltip">' + esc(coverageTooltip) + '</div>' +
         '</div>';
     }
@@ -1845,7 +1872,8 @@
     // "No rows" and "no co-investors" are different claims. Say which one it is.
     function emptyStateMessage(filter) {
       const scope = filter === 'all' ? 'portfolio' : filter;
-      if (coverageForFilter(filter).covered === 0) {
+      const cov = coverageForFilter(filter);
+      if (cov && cov.covered === 0) {
         return 'None of your ' + scope + ' companies have an SPA or detailed cap table on file, so there is' +
           ' nothing to compare here.';
       }

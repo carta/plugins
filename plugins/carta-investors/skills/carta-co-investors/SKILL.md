@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.117.0</carta-plugin>
+<carta-plugin>carta-investors:6.117.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -641,7 +641,7 @@ read_tool({"name": "dwh__execute__query", "arguments": {
 
 #### QC — Coverage
 
-Run once per Mode B answer, alongside the ranking query. It counts the priced-equity portfolio companies covered by SPAs, by detailed cap tables with investor holders, by both, and by either.
+Run once per Mode B answer, alongside the ranking query. It counts the priced-equity portfolio companies covered by SPAs, by detailed cap tables with investor holders, by both, and by either. The SPA and cap table counts each include the companies in both; Step B3 turns them into disjoint counts.
 
 ```
 read_tool({"name": "dwh__execute__query", "arguments": {
@@ -656,14 +656,20 @@ Tell the user: `SPA and cap table data loaded. Preparing results…`
 ### Step B3: Present results
 
 **Coverage line — always include** (numbers from QC):
-"**X** companies from SPAs, **Y** from cap tables, **Z** from both, **A** covered in total, of your **N** priced-equity portfolio companies."
+"**X** companies from SPAs only, **Y** from cap tables only, **Z** from both, **A** covered in total, of your **N** priced-equity portfolio companies."
+
+QC returns overlapping counts, so derive the three disjoint numbers from its columns:
+X = `SPA_COMPANIES` − `BOTH_COMPANIES`, Y = `CAP_COMPANIES` − `BOTH_COMPANIES`,
+Z = `BOTH_COMPANIES`, A = `COVERED_COMPANIES`. X + Y + Z = A always; check it before
+you print the line, and re-run QC rather than adjusting a number if it fails.
 
 > **What the numbers mean:** X is the portfolio companies (from your SOI) with at
-> least one matching SPA in Carta; Y is those with a shared detailed cap table
-> that lists investor holders; Z is those in both; A is those in either, so a
-> company in both counts once. Companies with several SPAs count once. SPAs whose
-> issuer name doesn't match a current portfolio company are excluded. N is the
-> priced-equity portfolio companies.
+> least one matching SPA in Carta and no shared cap table; Y is those with a shared
+> detailed cap table that lists investor holders and no SPA; Z is those with both;
+> A is those with either, so the three groups never overlap and a company in both
+> counts once. Companies with several SPAs count once. SPAs whose issuer name
+> doesn't match a current portfolio company are excluded. N is the priced-equity
+> portfolio companies.
 
 #### Q1 output
 
@@ -768,7 +774,7 @@ Do not repeat the full menu after every result. If the user asks "what else can 
 | 0 SPA rows returned | Continue with cap tables alone if any returned rows. If neither source has rows: "No SPA documents or detailed cap tables were found for your account. Contact your Carta representative if you believe this is an error." |
 | 0 cap table rows for a company, or for the whole firm | Normal, not an error: the company has not granted Detailed cap table access. Use SPAs only for it, say nothing about access unless asked, and do not retry. |
 | Company name not found (Q4) | "No SPA or cap table found for '[name]'. Did you mean: [suggestions from available issuers]?" |
-| Partial coverage | Show the coverage line (X companies from SPAs, Y from cap tables, Z from both, A covered in total). Offer to list missing companies. |
+| Partial coverage | Show the coverage line (X companies from SPAs only, Y from cap tables only, Z from both, A covered in total). Offer to list missing companies. |
 | MCP query error | "Could not reach Carta data. Try again in a moment." |
 | `render-artifact.py` exits non-zero | Surface the script's stderr and stop. Never hand-write the artifact HTML. |
 | No `Artifact` tool, even after Step A1 tried to load it | Go to Mode B, opening with Step A1's sentence on why the answer is text. |
