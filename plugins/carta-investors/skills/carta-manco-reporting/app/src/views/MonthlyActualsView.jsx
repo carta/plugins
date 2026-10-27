@@ -6,6 +6,7 @@ import { glNameMap, glTooltip, subCodeMap } from "../ui/glNames.js";
 import HoverTip from "../ui/HoverTip.jsx";
 import ExportButton from "../ui/ExportButton.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
+import AskClaudeButton from "../ui/AskClaudeButton.jsx";
 import { exportPropsFor } from "../ui/exportHtml.js";
 import {
   TableScroll, LEDGER_BASE, useStickyHeader, StickyClone, GroupedTableHead,
@@ -40,7 +41,7 @@ function sectionTotal(rows, col, actualsByMonth) {
 // axis a Carta-sourced budget has too, minus the budget and variance
 // columns that firm has none of. Stands in for Budget vs Actuals while this
 // firm has no budget loaded, in Carta or a workbook.
-export default function MonthlyActualsView({ snapshot, accountsData, drilldown, dark, onToggleTheme }) {
+export default function MonthlyActualsView({ snapshot, accountsData, drilldown, dark, onToggleTheme, chatOpen, onToggleChat }) {
   const asOf = snapshot?.asOf;
   const year = Number(String(asOf || "").slice(0, 4)) || new Date().getFullYear();
   const asOfMonth = trueAsOfMonth(cutoffDate(snapshot));
@@ -89,6 +90,7 @@ export default function MonthlyActualsView({ snapshot, accountsData, drilldown, 
         actions={
           <div data-export-exclude style={{ display: "flex", gap: 8 }}>
             {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
+            {onToggleChat && <AskClaudeButton open={chatOpen} onToggle={onToggleChat} />}
             <ExportButton {...exportProps} />
           </div>
         }

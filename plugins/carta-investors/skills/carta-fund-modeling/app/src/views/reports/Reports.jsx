@@ -9,6 +9,7 @@ import LpReport from "../returns/LpReport.jsx";
 import { POWER_LAW_TITLE, EXIT_IMPACT_TITLE, LP_SENSITIVITY_TITLE } from "../returns/chartTitles.js";
 import CohortStanding from "../CohortStanding.jsx";
 import FundTheme from "./FundTheme.jsx";
+import { reportsSectionId, reportChartId } from "./sections.js";
 import PacingCard, { hasPacingChart } from "./Pacing.jsx";
 import ConcentrationCard from "./Concentration.jsx";
 import RecentActivityCard from "./Activity.jsx";
@@ -59,8 +60,6 @@ const THEMES = [
   },
 ];
 
-const sectionId = (theme) => `reports-${theme.id}`;
-
 /** Reports tab — the less-used firm and fund charts on one long page, grouped into
  *  themes, with sticky jump links to each theme. `returnsProps` is what the
  *  Returns-family views take (the Power Law and LP charts read their fund scope and
@@ -76,19 +75,19 @@ export default function Reports({ returnsProps, snapshot, portfolio, fundStates,
     .map((t) => ({ ...t, reports: t.reports.filter((r) => r.available(props)) }))
     .filter((t) => t.reports.length);
   const allFunds = returnsProps.fundScope === ALL_FUNDS;
-  const jump = (id) => trackClick(`FundModeling.Reports.Jump.${themes.find((t) => sectionId(t) === id).viewName}`);
+  const jump = (id) => trackClick(`FundModeling.Reports.Jump.${themes.find((t) => reportsSectionId(t.id) === id).viewName}`);
   return (
     <div>
       <H1>Reports</H1>
-      <JumpLinks sections={themes.map((t) => [sectionId(t), t.label])} onJump={jump}
+      <JumpLinks sections={themes.map((t) => [reportsSectionId(t.id), t.label])} onJump={jump}
         actions={themes.some((t) => t.perFund) && snapshot.funds.length > 0 && (
           <FundPicker funds={snapshot.funds} value={returnsProps.fundScope}
             onChange={returnsProps.setFundScope} triggerLabel="Fund" />
         )} />
       {themes.map((t) => {
-        const charts = t.reports.map((r) => <div key={r.id} data-testid={`report-${r.id}`} style={{ marginBottom: 32 }}>{allFunds && r.allFunds ? r.allFunds(props, r.render) : r.render(props)}</div>);
+        const charts = t.reports.map((r) => <div key={r.id} id={reportChartId(r.id)} data-testid={reportChartId(r.id)} style={{ marginBottom: 32 }}>{allFunds && r.allFunds ? r.allFunds(props, r.render) : r.render(props)}</div>);
         return (
-          <section key={t.id} id={sectionId(t)} style={{ marginBottom: 24 }}>
+          <section key={t.id} id={reportsSectionId(t.id)} style={{ marginBottom: 24 }}>
             {t.perFund
               ? <FundTheme title={t.label} returnsProps={returnsProps} needsNav={t.needsNav}>{charts}</FundTheme>
               : <><H2>{t.label}</H2>{charts}</>}

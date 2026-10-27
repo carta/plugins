@@ -66,6 +66,23 @@ export const BANNER_TEXT = "var(--banner-text)"; // banner body copy — gray-90
 // thumb's own width.
 export const TAPE_THUMB = 14;
 
+// Icon-only 40x40 header button (ThemeToggleButton, AskClaudeButton) — a page's H1
+// actions row. One recipe so a restyle of one can't drift from the other.
+export const HEADER_ICON_BTN = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 40,
+  height: 40,
+  padding: 0,
+  background: PAPER,
+  border: `1px solid ${LINE}`,
+  borderRadius: 4,
+  color: FAINT,
+  cursor: "pointer",
+  lineHeight: 0,
+};
+
 // Aligned with the Ink theme contract's real-font approach. Inter is
 // loaded from the same rsms.me CDN that contract uses for one-shot artifacts (see the
 // <link> in index.html) — never name a face here without a matching loader; if that

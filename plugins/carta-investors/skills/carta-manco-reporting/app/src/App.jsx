@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { sans, GLOBAL_CSS, FS } from "./ui/theme.js";
+import { sans, GLOBAL_CSS, FS, EASE_OUT } from "./ui/theme.js";
 import AppShell from "./shell/AppShell.jsx";
-import ChatRail from "./ui/ChatRail.jsx";
+import ChatRail, { CHAT_RAIL_WIDTH_PX, CHAT_RAIL_TRANSITION_MS } from "./ui/ChatRail.jsx";
 import { useChatFeatureFlag } from "./shell/chatFeature.js";
 import { setInspectMode } from "./pinpoint/inspect.js";
 import { buildAnchor } from "./pinpoint/capture.js";
@@ -117,12 +117,39 @@ export default function App() {
   // Closing the rail also disarms Pinpoint: a chat-less user has no "Esc to
   // cancel" affordance on screen, so a stray click intercepted by inspect
   // mode's capture-phase listener would be pinned instead of doing what the
-  // user meant.
-  const closeChat = useCallback(() => {
-    trackClick("MancoReporting.Chat.Close");
+  // user meant. hideChat is the untracked close; closeChat records the
+  // user's click and then calls it, so the app can hide the rail (a
+  // drill-down opening) without recording a click nobody made.
+  const hideChat = useCallback(() => {
     setChatOpen(false);
     setPinMode(false);
   }, []);
+  const closeChat = useCallback(() => {
+    trackClick("MancoReporting.Chat.Close");
+    hideChat();
+  }, [hideChat]);
+
+  // A single header toggle, matching carta-fund-modeling: open fires its own
+  // event, close reuses closeChat (which also disarms Pinpoint). `null` when
+  // chat is unavailable, so views render nothing for it — see onToggleTheme's
+  // same pattern just below. Opening also closes any open drill-down: both
+  // are fixed, right-docked panels at the same z-index (see DrilldownDrawer),
+  // so showing both at once would stack one on top of the other.
+  const onToggleChat = askClaude ? () => {
+    if (chatOpen) { closeChat(); } else {
+      trackClick("MancoReporting.Chat.Open");
+      setChatOpen(true);
+      drilldown.close();
+    }
+  } : null;
+
+  // The drawer and the rail are the same two right-docked panels — opening
+  // one while the other is already up closes it first, for the same reason
+  // onToggleChat closes the drawer above. Untracked: the user clicked a
+  // drill-down trigger, not a chat close control.
+  useEffect(() => {
+    if (drilldown.selection && chatOpen) hideChat();
+  }, [drilldown.selection, chatOpen, hideChat]);
 
   // Pinpoint selection: scoped to appRootRef so a click on the chat rail
   // itself (outside that ref) is never intercepted.
@@ -141,6 +168,7 @@ export default function App() {
         setAnchor(a);
         setPinMode(false);
         setChatOpen(true);
+        drilldown.close();
       },
       onCancel: () => setPinMode(false),
     });
@@ -402,7 +430,15 @@ export default function App() {
   return (
     <>
       <style>{GLOBAL_CSS}</style>
-      <div ref={appRootRef}>
+      {/* Reflows the page left of the rail while chat is open, so the data a
+          question is about stays visible instead of sitting behind the panel
+          asking about it — matches ChatRail's own width and transition. Below
+          ~390px wide, ChatRail itself clamps to 92vw and this margin is a few
+          px wider than the rail, which only adds slack, never a gap. */}
+      <div ref={appRootRef} data-testid="app-root" style={{
+        marginRight: chatOpen ? CHAT_RAIL_WIDTH_PX : 0,
+        transition: `margin-right ${CHAT_RAIL_TRANSITION_MS}ms ${EASE_OUT}`,
+      }}>
       <AppShell sidebarProps={sidebarProps}>
         {notReady && (
           <LoadingScreen label={loadStatus || LOAD_FIRM_LABEL} step={loadFirmStepProgress(loadStatus)} />
@@ -420,6 +456,8 @@ export default function App() {
             drilldown={accountsData ? drilldown : null}
             dark={dark}
             onToggleTheme={toggleTheme}
+            chatOpen={chatOpen}
+            onToggleChat={onToggleChat}
           />
         )}
         {snapshot && activeParent === "budget-vs-actuals" && (
@@ -430,6 +468,8 @@ export default function App() {
             budgetId={activeBudgetId}
             dark={dark}
             onToggleTheme={toggleTheme}
+            chatOpen={chatOpen}
+            onToggleChat={onToggleChat}
             reportsApi={reportsApi}
             hosted={hostedApp}
             onOpenReport={(id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals")}
@@ -443,6 +483,8 @@ export default function App() {
             drilldown={accountsData ? drilldown : null}
             dark={dark}
             onToggleTheme={toggleTheme}
+            chatOpen={chatOpen}
+            onToggleChat={onToggleChat}
           />
         )}
       </AppShell>
@@ -470,21 +512,6 @@ export default function App() {
         onDrillAccountForMonth={drillAccountForMonthFor(snapshot, accountsData, drilldown)}
       />
 
-      {askClaude && !chatOpen && (
-        <button
-          type="button"
-          aria-label="Open chat"
-          onClick={() => { trackClick("MancoReporting.Chat.Open"); setChatOpen(true); }}
-          style={{
-            position: "fixed", right: 24, bottom: 24, zIndex: 999,
-            width: 48, height: 48, borderRadius: "50%", border: "none",
-            background: "var(--ink-button-background-color-primary-base-default)",
-            color: "var(--ink-button-font-color-primary-base)",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.18)", cursor: "pointer", fontSize: 20,
-          }}>
-          💬
-        </button>
-      )}
       {askClaude && (
         <ChatRail
           open={chatOpen}

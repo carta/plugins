@@ -20,6 +20,7 @@ import CashDetailCard from "./CashDetailCard.jsx";
 import { hasCashDetail } from "../ui/cashDetail.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
+import AskClaudeButton from "../ui/AskClaudeButton.jsx";
 import { exportPropsFor } from "../ui/exportHtml.js";
 import { trackClick, trackRender } from "../analytics.js";
 
@@ -201,7 +202,7 @@ export function vendorNote(v) {
   return `${fmtCurrencyShort(v.unattributed_amount, 0)} (${pct}% of expenses) has no vendor on the entry and is not shown.`;
 }
 
-export default function DashboardView({ snapshot, accountsData, drilldown, dark, onToggleTheme }) {
+export default function DashboardView({ snapshot, accountsData, drilldown, dark, onToggleTheme, chatOpen, onToggleChat }) {
   const { ops, cash, monthlyCashflow, budget, feeSchedule, spendByGL } = snapshot;
   const vendorSpend = snapshot.vendorSpend;
   const varianceByCategory = snapshot.varianceByCategory;
@@ -357,6 +358,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
         actions={
           <div data-export-exclude style={{ display: "flex", gap: 8 }}>
             {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
+            {onToggleChat && <AskClaudeButton open={chatOpen} onToggle={onToggleChat} />}
             <ExportButton {...exportPropsFor(snapshot, {
               targetId: DASHBOARD_EXPORT_ID, pageLabel: "Dashboard",
               slug: "dashboard", eventPage: "Dashboard",

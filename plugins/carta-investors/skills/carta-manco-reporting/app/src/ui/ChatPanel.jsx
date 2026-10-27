@@ -302,7 +302,7 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
       {onClose && (
         <div style={{ display: "flex", justifyContent: "flex-end", flex: "none", marginBottom: 2 }}>
           <button onClick={onClose} data-testid="chat-close"
-            title="Close chat panel" aria-label="Close chat panel"
+            title="Close chat" aria-label="Close chat"
             style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28,
               border: "none", borderRadius: 4, background: "transparent",
               color: "var(--ink-color-global-text-subtle)", cursor: "pointer", lineHeight: 0 }}>

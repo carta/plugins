@@ -21,6 +21,12 @@ const TICKS = [50, 75, 90, 95];
 const METRICS = [{ id: "tvpi", label: "TVPI" }, { id: "dpi", label: "DPI" }, { id: "moic", label: "Gross MOIC" }];
 
 const RAIL_H = 52;
+// A compact rail states the fund's standing on its header line rather than above the
+// marker, so its marker, track and ticks move up by COMPACT_DY and one line of values
+// sits under the ticks.
+const COMPACT_DY = -14, COMPACT_RAIL_H = 28;
+// The fund's standing and the cohort's percentile keys.
+const MARK_TYPE = { ...sans, fontSize: FS.micro, fontWeight: 700 };
 
 /** One metric's compact percentile bar — a flat meter, not a slider: quiet
  *  track, hairline cohort ticks, a filled bar to the fund's percentile, and a
@@ -29,8 +35,10 @@ const RAIL_H = 52;
  *  standing right above it. Each cohort mark's percentile key prints ABOVE
  *  its value, larger and darker, since the percentile is the point of the
  *  bar and the raw multiple is supporting detail. Fill and marker are green
- *  above the p50 median, red below it. */
-function Rail({ pctl, val, cohortMarks, estimated, below, belowP, noValueLabel }) {
+ *  above the p50 median, red below it. Overview's Peer benchmarks widget draws it
+ *  `compact`: a header line with the fund's `name` on the left and its standing on the
+ *  right in place of the label above the marker, and no percentile keys under the ticks. */
+export function Rail({ pctl, val, cohortMarks, estimated, below, belowP, noValueLabel, compact, name }) {
   // cohortMarks carries p5/p10/p25/p50/p75/p90/p95 (whatever Carta published),
   // so pctl is a real interpolated rank for almost every fund, plotted at its
   // actual position on the 0-100 scale below just like above. Only a fund
@@ -65,12 +73,15 @@ function Rail({ pctl, val, cohortMarks, estimated, below, belowP, noValueLabel }
   const fill = below || atZero
     ? "var(--ink-color-global-feedback-negative-strong)"
     : pctl >= 50 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)";
-  return (
-    <div style={{ position: "relative", height: RAIL_H }}>
-      {val != null ? (
+  const standing = val == null ? null
+    : `${val.toFixed(2)}× ${below ? `(below p${belowP})` : atZero ? `(≤p${Math.round(pctl)})` : `(p${Math.round(pctl)})`}`;
+  const dy = compact ? COMPACT_DY : 0;
+  const bar = (
+    <div style={{ position: "relative", height: compact ? COMPACT_RAIL_H : RAIL_H }}>
+      {compact ? null : standing != null ? (
         <div style={{ position: "absolute", top: 0, ...labelPos,
-          ...sans, fontSize: FS.micro, fontWeight: 700, color: fill, whiteSpace: "nowrap" }}>
-          {val.toFixed(2)}× {below ? `(below p${belowP})` : atZero ? `(≤p${Math.round(pctl)})` : `(p${Math.round(pctl)})`}
+          ...MARK_TYPE, color: fill, whiteSpace: "nowrap" }}>
+          {standing}
         </div>
       ) : noValueLabel ? (
         // The fund's own value isn't recorded, but Carta HAS published a real
@@ -82,17 +93,17 @@ function Rail({ pctl, val, cohortMarks, estimated, below, belowP, noValueLabel }
           {noValueLabel}
         </div>
       ) : null}
-      <div style={{ position: "absolute", top: 20, left: 0, right: 0, height: 3, borderRadius: 2, background: "var(--ink-color-global-border-subtle)" }} />
+      <div style={{ position: "absolute", top: 20 + dy, left: 0, right: 0, height: 3, borderRadius: 2, background: "var(--ink-color-global-border-subtle)" }} />
       {TICKS.map((t) => (
-        <div key={t} style={{ position: "absolute", top: 16, left: `${t}%`, width: 1, height: 8, background: MICRO }} />
+        <div key={t} style={{ position: "absolute", top: 16 + dy, left: `${t}%`, width: 1, height: 8, background: MICRO }} />
       ))}
       {val != null && (
         <>
-          <div data-testid="fill-bar" style={{ position: "absolute", top: 20, left: 0, width: `${x}%`, height: 3, borderRadius: 2, transition: "width .25s ease, background .15s ease",
+          <div data-testid="fill-bar" style={{ position: "absolute", top: 20 + dy, left: 0, width: `${x}%`, height: 3, borderRadius: 2, transition: "width .25s ease, background .15s ease",
             background: estimated
               ? `repeating-linear-gradient(90deg, ${fill} 0 7px, transparent 7px 12px)`
               : fill }} />
-          <div style={{ position: "absolute", top: 14.5, left: `${x}%`, transform: markerTransform, transition: "left .25s ease, background .15s ease",
+          <div style={{ position: "absolute", top: 14.5 + dy, left: `${x}%`, transform: markerTransform, transition: "left .25s ease, background .15s ease",
             width: 3, height: 13, borderRadius: 1, background: fill }} />
         </>
       )}
@@ -104,12 +115,22 @@ function Rail({ pctl, val, cohortMarks, estimated, below, belowP, noValueLabel }
         const v = cohortMarks?.[`p${t}`];
         if (v == null) return null;
         return (
-          <div key={t} style={{ position: "absolute", top: 28, left: `${t}%`, transform: "translateX(-50%)", textAlign: "center" }}>
-            <div style={{ ...sans, fontSize: FS.micro, fontWeight: 700, color: "var(--ink-color-global-text-default)", whiteSpace: "nowrap" }}>p{t}</div>
-            <div style={{ ...inkNum, fontSize: FS.micro, color: MICRO, whiteSpace: "nowrap" }}>{v.toFixed(2)}×</div>
+          <div key={t} style={{ position: "absolute", top: 28 + dy, left: `${t}%`, transform: "translateX(-50%)", textAlign: "center" }}>
+            {!compact && <div style={{ ...MARK_TYPE, color: "var(--ink-color-global-text-default)", whiteSpace: "nowrap" }}>p{t}</div>}
+            <div style={{ ...inkNum, fontSize: FS.micro, fontWeight: 400, color: compact ? "var(--ink-color-global-text-subtle)" : MICRO, whiteSpace: "nowrap" }}>{v.toFixed(2)}×</div>
           </div>
         );
       })}
+    </div>
+  );
+  if (!compact) return bar;
+  return (
+    <div>
+      <div data-testid="rail-header" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+        <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-default)", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+        {standing != null && <span style={{ ...MARK_TYPE, color: fill, whiteSpace: "nowrap" }}>{standing}</span>}
+      </div>
+      {bar}
     </div>
   );
 }

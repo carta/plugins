@@ -23,6 +23,7 @@ import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
 import { reportFor } from "../shell/reportNav.js";
 import ReportNotice from "../reports/ReportNotice.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
+import AskClaudeButton from "../ui/AskClaudeButton.jsx";
 import { exportPropsFor } from "../ui/exportHtml.js";
 import { displayFirmName } from "../ui/firmName.js";
 import { trackClick, trackRender } from "../analytics.js";
@@ -81,7 +82,7 @@ export function ownsPeriodControl(viewKind, budget) {
   return viewKind === "by-account" && hasMonthlyDetail(budget);
 }
 
-export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId, dark, onToggleTheme, reportsApi, hosted, onOpenReport, onShareDone }) {
+export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId, dark, onToggleTheme, chatOpen, onToggleChat, reportsApi, hosted, onOpenReport, onShareDone }) {
   // The build writes the dimension beside the entries it scopes, in
   // accounts.json. Snapshot is the fallback for a cache written earlier.
   const dimension = dimensionOf(accountsData) || dimensionOf(snapshot);
@@ -247,6 +248,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
         actions={
           <div data-export-exclude style={{ display: "flex", gap: 8 }}>
             {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
+            {onToggleChat && <AskClaudeButton open={chatOpen} onToggle={onToggleChat} />}
             {reportsApi?.available && report && (
               <ReportActions
                 report={report}

@@ -3,7 +3,7 @@ import usePortfolio from "./state/usePortfolio.js";
 import { computeFundStates, firmRollup } from "./model/funds.js";
 import { effectiveExitHorizons } from "./model/reprice.js";
 import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, MICRO } from "./ui/theme.js";
-import { Btn, LockIcon, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Eyebrow, H3 } from "./ui/components.jsx";
+import { Btn, LockIcon, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Eyebrow, H3, landBelowPinnedBars } from "./ui/components.jsx";
 import { fmtAsOf, setDisplayCurrency } from "./ui/format.js";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import useShare from "./state/useShare.js";
@@ -235,9 +235,16 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   const [confirm, setConfirm] = useState(null); // {title, message, confirmLabel, danger, onConfirm} or null
   const narrow = useNarrow();
   const contentRef = useRef(null); // the app's scrollable content div — window.scrollTo is a no-op here
-  // reset scroll to top on every tab switch, not just the drill-down callbacks below
+  const pendingSection = useRef(null); // id of the element a drill-down lands on once its tab has drawn
+  // reset scroll to top on every tab switch, not just the drill-down callbacks below —
+  // unless a drill-down named a section, which then scrolls in below the sticky top bar
+  // and the page's jump links
   useEffect(() => {
-    contentRef.current?.scrollTo({ top: 0 });
+    const el = pendingSection.current && document.getElementById(pendingSection.current);
+    pendingSection.current = null;
+    if (!el) { contentRef.current?.scrollTo({ top: 0 }); return; }
+    landBelowPinnedBars(el);
+    el.scrollIntoView({ block: "start" });
   }, [tab]);
 
   // dark mode — opt-in via the toggle and persisted; defaults to LIGHT (ignores
@@ -295,17 +302,14 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   }
 
   const locked = !!slice.locked;
+  // Drill-down to any tab, landing a per-fund tab on fund `id` and on element `section` when given (Overview widgets).
+  const openTab = (tabId, id, section) => { if (id) setFundScope(id); pendingSection.current = section ?? null; setTab(tabId); contentRef.current?.scrollTo({ top: 0 }); };
   // Row drill-down lands on LP Returns (the default returns view for a fund).
-  const openPage = (page) => { setTab(page); contentRef.current?.scrollTo({ top: 0 }); };
-  const openFund = (id) => { if (id) setFundScope(id); setTab("lp-returns"); contentRef.current?.scrollTo({ top: 0 }); };
+  const openFund = (id) => openTab("lp-returns", id);
   // Deep-link from the Performance sidebar: LP-returns label → LP Returns tab,
   // GP-returns (GP carry) label → GP Economics tab. Each section is now its own
   // tab, so selecting the tab lands the user directly on it (no in-page scroll).
-  const openFundSection = (id, sectionId) => {
-    if (id) setFundScope(id);
-    setTab(sectionId === "gp-returns" ? "gp-economics" : "lp-returns");
-    contentRef.current?.scrollTo({ top: 0 });
-  };
+  const openFundSection = (id, sectionId) => openTab(sectionId === "gp-returns" ? "gp-economics" : "lp-returns", id);
 
   // live firm rollup for the Overview scorecard and Companies sidebar — reflects this slice's marks
   const firmAgg = firmRollup(fundStates);
@@ -539,7 +543,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
               {tab === "overview" && (
                 <Overview fundStates={fundStates} snapshot={snapshot} portfolio={slice}
                   firm={firmAgg}
-                  onOpenFund={openFund} />
+                  onOpenFund={openFund} onNavigate={openTab} />
               )}
               {tab === "reserves" && (
                 <Reserves snapshot={snapshot} portfolio={slice}
@@ -558,10 +562,10 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
               {tab === "gp-economics" && <GpEconomics {...returnsProps} />}
               {tab === "reports" && (
                 <Reports returnsProps={returnsProps} snapshot={snapshot} portfolio={slice}
-                  fundStates={fundStates} mixedCurrency={firmAgg.mixedCurrency} onShowActivity={() => openPage("activity")} />
+                  fundStates={fundStates} mixedCurrency={firmAgg.mixedCurrency} onShowActivity={() => openTab("activity")} />
               )}
               {tab === "activity" && (
-                <ActivityPage snapshot={snapshot} portfolio={slice} mixed={firmAgg.mixedCurrency} onBack={() => openPage("reports")} />
+                <ActivityPage snapshot={snapshot} portfolio={slice} mixed={firmAgg.mixedCurrency} onBack={() => openTab("reports")} />
               )}
               {tab === "construction" && <FundConstruction snapshot={snapshot} firm={firm} companies={baseSlice?.companies} />}
               {tab === "export" && <Report doc={doc} snapshot={snapshot} baseSlice={baseSlice} />}

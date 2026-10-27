@@ -1,4 +1,4 @@
-import { FS, sans } from "../../ui/theme.js";
+import { FS, inkNum, sans } from "../../ui/theme.js";
 import { H3, Btn, StatTile, fundNameOnly } from "../../ui/components.jsx";
 import { trackClick } from "../../analytics.js";
 
@@ -46,6 +46,11 @@ export function WidgetStat({ label, value }) {
   return <StatTile label={label} value={value} labelTone="plain" serif={false} size="h2" weight={500} style={{ minWidth: 0 }} />;
 }
 
+/** A widget's closing line of context, held to the foot of the card so the lines in a row line up. */
+export function WidgetNote({ children, testId }) {
+  return <div data-testid={testId} style={{ ...SUBTLE, marginTop: "auto", paddingTop: 12 }}>{children}</div>;
+}
+
 // The dashboard's data colors: one blue accent, the per-fund series colors (CSS vars
 // in ui/theme.js, in Ink's series order) and the light gray "remaining" track. UP and
 // DOWN colour deltas.
@@ -61,6 +66,41 @@ export const TRACK = "var(--ov-track)";
 export function fundColors(funds) {
   const ordered = [...funds].sort(byVintage);
   return Object.fromEntries(ordered.map((f, i) => [f.id, SERIES[i % SERIES.length]]));
+}
+
+/** A thin horizontal bar of `parts` ({ value, color }) on the light gray track,
+ *  `max` wide; a 2px gap separates the parts. */
+export function ThinBar({ parts, max, height = 6, title }) {
+  const shown = parts.filter((p) => p.value > 0);
+  return (
+    <div title={title} style={{ flex: 1, minWidth: 0, height, display: "flex", gap: 2, background: TRACK, borderRadius: height / 2, overflow: "hidden" }}>
+      {shown.map((p, i) => (
+        <div key={i} style={{ width: `${max > 0 ? Math.min(100, (p.value / max) * 100) : 0}%`, background: p.color }} />
+      ))}
+    </div>
+  );
+}
+
+/** The bar-list style Concentration and Dry powder share: one row per item with its
+ *  name, an accent bar on the gray track and its value, in one three-column grid. */
+const BAR_HEIGHT = 8;
+const TEXT = "var(--ink-color-global-text-default)";
+
+/** The grid that holds BarRows; `style` adds spacing around it. */
+export function BarRows({ testId, style, ...rest }) {
+  return <div data-testid={testId} {...rest} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.2fr) auto", alignItems: "center", gap: "8px 10px", ...style }} />;
+}
+
+/** One BarRows row: `name` (cut short with an ellipsis, `nameTitle` on hover), a bar
+ *  `amount` long against `max`, then `value`. Other props, like data-datum-*, go on the row. */
+export function BarRow({ name, nameTitle, amount, max, barTitle, value, ...rest }) {
+  return (
+    <div {...rest} style={{ display: "contents" }}>
+      <span title={nameTitle} style={{ ...sans, fontSize: FS.small, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: TEXT }}>{name}</span>
+      <ThinBar parts={[{ value: amount, color: ACCENT }]} max={max} height={BAR_HEIGHT} title={barTitle} />
+      <span style={{ ...inkNum, fontSize: FS.small, fontWeight: 500, textAlign: "right", whiteSpace: "nowrap", color: TEXT }}>{value}</span>
+    </div>
+  );
 }
 
 /** A fund's readable name without the firm's own name in front ("Northwind Ventures

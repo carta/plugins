@@ -2,6 +2,13 @@ import { createPortal } from "react-dom";
 import { sans, INK, PAPER, LINE, EASE_OUT } from "./theme.js";
 import ChatPanel from "./ChatPanel.jsx";
 
+// Single source of truth for the rail's width and slide duration: App.jsx
+// reflows the page content by this same width, over this same duration,
+// while the rail is open, so the data a question is about is never hidden
+// behind the panel asking about it, and the two never fall out of step.
+export const CHAT_RAIL_WIDTH_PX = 360;
+export const CHAT_RAIL_TRANSITION_MS = 220;
+
 // Fixed right-docked chat panel, portaled to document.body (escapes any
 // overflow-x scroll container, matches DrilldownDrawer's own pattern). Slides
 // in from the right on open; closing never unmounts ChatPanel, which keeps
@@ -34,7 +41,7 @@ const S = {
   rail: {
     position: "fixed",
     top: 0, right: 0, bottom: 0,
-    width: "min(420px, 92vw)",
+    width: `min(${CHAT_RAIL_WIDTH_PX}px, 92vw)`,
     zIndex: 1000,
     background: PAPER,
     color: INK,
@@ -42,6 +49,6 @@ const S = {
     boxShadow: "-8px 0 24px rgba(0,0,0,0.08)",
     padding: "12px 10px",
     boxSizing: "border-box",
-    transition: `transform 220ms ${EASE_OUT}`,
+    transition: `transform ${CHAT_RAIL_TRANSITION_MS}ms ${EASE_OUT}`,
   },
 };

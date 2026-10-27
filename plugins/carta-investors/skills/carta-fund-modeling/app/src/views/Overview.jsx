@@ -5,10 +5,14 @@ import { Num, SourceNote, H1, H2, fundNameOnly } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
 import { gpCarryOf, baseGpCarryOf } from "../model/funds.js";
 import { fundAvgOwnership } from "../model/ownership.js";
+import { concentrationAcrossAll } from "../model/concentration.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { trackClick } from "../analytics.js";
 import { UP, DOWN } from "./overview/WidgetCard.jsx";
 import PerformanceHero, { NavByFundCard, hasTrend } from "./overview/PerformanceHero.jsx";
+import { DryPowderWidget } from "./overview/CapitalWidgets.jsx";
+import TopHoldings from "./overview/TopHoldings.jsx";
+import BenchmarksWidget from "./overview/BenchmarksWidget.jsx";
 
 const RT = { ...inkNum, textAlign: "right", fontSize: FS.value };
 
@@ -58,15 +62,21 @@ function DeltaTd({ cur, base, fmt, eps = 0, bold }) {
     </td>
   );
 }
-// The dashboard's 12-column grid. The hero's summary card takes a third of the row and
-// the chart card the rest; with no chart to draw, the summary card takes the full row.
-const FULL = 12;
-const SUMMARY_SPAN = 4;
+// Widths in the dashboard's 12-column grid; each row sums to FULL. The hero's summary
+// card takes a third of the row and the chart card the rest, or the full row with no
+// chart to draw. In the widget row the first widget takes what its partners leave, so
+// it widens when a partner has no data. The widget row is in thirds. Every card stays
+// wider than tall, and below 1180px, where spans 3-5 take half the row, the cards pair up.
+const FULL = 12, SUMMARY_SPAN = 4, BENCH_SPAN = 4, DRY_SPAN = 4;
 
 /** Firm Overview — a dashboard: the performance hero (firm figures and LP NAV by
- *  fund), then the fund-by-fund table. `firm` is App's live firm rollup, shared with
- *  the Companies sidebar. */
-export default function Overview({ fundStates, snapshot, portfolio, firm, onOpenFund }) {
+ *  fund), a row of compact widgets that each preview a tab (a headline
+ *  figure, one small chart and a "View →" link to the full analysis), then the
+ *  fund-by-fund table. `firm` is App's live firm rollup, shared with the Companies
+ *  sidebar.
+ *  `onNavigate(tab, fundId?, section?)` opens another tab, landing a per-fund tab on `fundId`
+ *  and scrolling to the element with id `section`. */
+export default function Overview({ fundStates, snapshot, portfolio, firm, onOpenFund, onNavigate }) {
   const firmRvpi = firm.lpPaidIn > 0 ? firm.lpNav / firm.lpPaidIn : 0;
 
   const { ownership } = useFirmData();
@@ -86,7 +96,11 @@ export default function Overview({ fundStates, snapshot, portfolio, firm, onOpen
   // fund-table sort — defaults to Fund name A-Z; a third click on any header clears
   // to the reported (unsorted) row order, same as every other useTableSort caller
   const { sorted: sortedFunds, sort: fundSort, onSort: onFundSort } = useTableSort(fundStates, fundCols, { i: 0, dir: "asc" });
+  const holdings = useMemo(() => concentrationAcrossAll(snapshot, portfolio), [snapshot, portfolio]);
+  const mixed = firm.mixedCurrency;
   const firmName = snapshot.branding?.firmName ?? snapshot.source?.firm;
+  // what the widget row leaves after its fixed-width widgets: Concentration takes it
+  const restSpan = FULL - BENCH_SPAN - DRY_SPAN;
   // the chart sums LP NAV across funds, so a mixed-currency firm doesn't get one
   const trend = hasTrend(snapshot) && !firm.mixedCurrency;
 
@@ -97,6 +111,11 @@ export default function Overview({ fundStates, snapshot, portfolio, firm, onOpen
       <div className="ov-bento" style={{ marginBottom: 32 }}>
         <PerformanceHero firm={firm} span={trend ? SUMMARY_SPAN : FULL} />
         {trend && <NavByFundCard snapshot={snapshot} fundStates={fundStates} firmLpNav={firm.lpNav} firmName={firmName} span={FULL - SUMMARY_SPAN} />}
+
+        <TopHoldings concentration={holdings} hasCompanies={portfolio.companies.length > 0} mixed={mixed} onNavigate={onNavigate} span={restSpan} />
+        <BenchmarksWidget fundStates={fundStates} firmName={firmName} onNavigate={onNavigate} span={BENCH_SPAN} />
+        <DryPowderWidget snapshot={snapshot} portfolio={portfolio} mixed={mixed} firmName={firmName} onNavigate={onNavigate}
+          span={DRY_SPAN} />
       </div>
 
       <H2>Funds</H2>
