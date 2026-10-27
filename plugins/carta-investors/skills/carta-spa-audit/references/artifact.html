@@ -1987,26 +1987,26 @@
                         '<div class="cta-card-title">Close the coverage gap</div>' +
                         '<div class="cta-card-text">Upload Stock Purchase Agreements for ' +
                             '<strong>' + missing + ' ' + companyWord + '</strong> ' +
-                            'missing an SPA — unlocks co-investor analysis and more downstream skills.</div>' +
+                            'missing an SPA: drop the files into this chat, or upload them in Carta. ' +
+                            'Unlocks co-investor analysis and more downstream skills.</div>' +
                     '</div>' +
                     '<button type="button" class="cta-card-action" onclick="openExternal(\'' + escAttr(docsUrl) + '\')">' +
-                        'Upload missing SPAs <span aria-hidden="true">↗</span>' +
+                        'Upload in Carta <span aria-hidden="true">↗</span>' +
                     '</button>' +
                 '</div>';
         }
 
         if (unexecuted > 0) {
             const spaWord = unexecuted === 1 ? 'SPA is' : 'SPAs are';
-            const btnLabel = missing > 0 ? 'Upload SPAs' : 'Upload signed copy';
             html +=
                 '<div class="cta-card cta-card--unexecuted">' +
                     '<div class="cta-card-body">' +
                         '<div class="cta-card-title">Get executed copies on file</div>' +
                         '<div class="cta-card-text"><strong>' + unexecuted + ' ' + spaWord + '</strong> ' +
-                            'marked unexecuted — if you already have a signed copy, upload it now. If not, follow up with the issuer to get it signed.</div>' +
+                            'marked unexecuted. If you already have a signed copy, drop it into this chat or upload it in Carta. If not, follow up with the issuer to get it signed.</div>' +
                     '</div>' +
                     '<button type="button" class="cta-card-action cta-card-action--secondary" onclick="openExternal(\'' + escAttr(docsUrl) + '\')">' +
-                        btnLabel + ' <span aria-hidden="true">↗</span>' +
+                        'Upload in Carta <span aria-hidden="true">↗</span>' +
                     '</button>' +
                 '</div>';
         }

@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.117.2</carta-plugin>
+<carta-plugin>carta-investors:6.117.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -207,6 +207,8 @@ Then proceed immediately to Step 1.
 **Pre-flight check:** confirm that `<firm_id>` is a non-empty UUID string (matches pattern `[a-f0-9-]{36}`). If not, stop with: "Could not determine your firm ID. Try reconnecting to the Carta MCP server. If you believe you're already connected, contact your Carta representative."
 
 Tell the user: `Firm context loaded: <firm_name>. Fetching investment records and SPA documents…`
+
+**Uploads offered in this skill.** Every "drop … into this chat" line in this skill (the artifact, the next-step text, the error-handling rows and the drill-down) follows two rules. Without a Bash tool (claude.ai chat), leave out the drop-in half and keep the Carta link: the upload can't reach the user's files there. Files the user drops or names during this conversation go to `carta-investors:carta-upload-firm-document` for `<firm_name>`, so it does not ask which firm.
 
 ---
 
@@ -547,7 +549,7 @@ AskUserQuestion(
 
 If the user picks "Drill into a company," continue with the **Drill-down** section below. If they pick "Show only gaps," re-render Step B2 with only buckets 1 and 2. If they pick "Run co-investor analysis," hand off to `carta-co-investors` (do not re-fetch — the SPA data is already cached at `$WORKSPACE`).
 
-**Suggested next step after presenting the audit.** Always append, in plain text after Step B2 and before the AskUserQuestion: *"To close any coverage gap, upload missing SPAs to your Carta portfolio documents page — uploaded SPAs unlock co-investor analysis and more downstream skills. [View or upload SPA documents in Carta](\<base_url>/investors/firm/\<org_pk>/portfolio/documents/)"*
+**Suggested next step after presenting the audit.** Always append, in plain text after Step B2 and before the AskUserQuestion: *"To close any coverage gap, drop missing or signed SPAs into this chat and I'll add them to your firm's Documents page, or [upload them in Carta](\<base_url>/investors/firm/\<org_pk>/portfolio/documents/). Uploaded SPAs unlock co-investor analysis and more downstream skills."*
 
 ---
 
@@ -634,7 +636,7 @@ AskUserQuestion(
 | 401 or 403 from any query | Carta session expired | "Your Carta session has expired. Reconnect to the Carta MCP server and try again." |
 | Query fails with table-not-found | DWH schema name changed or table not yet provisioned for this firm | Call `dwh:list:tables` to confirm available table names, then retry with the correct name. |
 | 0 rows from `AGGREGATE_INVESTMENTS` | DWH not yet populated for this firm | "No investment data found for your firm. Contact your Carta representative." |
-| 0 rows from the unified SPA source | No SPAs uploaded yet, or extractions still processing | All equity companies land in bucket 1 (missing SPA). Include in BLUF: "No SPA documents were found in Carta for your portfolio. Upload SPAs via your Carta portfolio documents page to populate this audit." |
+| 0 rows from the unified SPA source | No SPAs uploaded yet, or extractions still processing | All equity companies land in bucket 1 (missing SPA). Include in BLUF: "No SPA documents were found in Carta for your portfolio. Drop your SPAs into this chat, or upload them on your Carta portfolio documents page, to populate this audit." |
 | Drill-down returns 0 rows | Company name didn't match any SPA issuer name | "No SPA found matching '[name]'. Check the spelling or confirm the SPA is uploaded in Carta." |
 | Company shows as 'Missing SPA' despite having one on file | Company was renamed after investment — fuzzy match can't bridge historical name changes | "This may be a company rename. Try the drill-down with the old company name to locate the SPA manually." |
 | `render-artifact.py` exits non-zero | Bad UUID, non-numeric Carta ID, malformed base URL, unusable connector name, output outside CWD, or a missing template/placeholder | Surface the script's stderr and stop. Never hand-write the artifact HTML. |
