@@ -77,6 +77,17 @@ export const fmtM = (n) => {
   return sign + SYMBOL + millions.toFixed(1) + "M";
 };
 
+/** A chart gridline value at its own precision in the display currency: "$0", "$250K",
+ *  "$2.5M", "$1.25B". Up to two decimals, trailing zeros trimmed, so distinct ticks
+ *  never share a label. */
+export const fmtTick = (n) => {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const a = Math.abs(n);
+  const [div, unit] = a >= 1e9 ? [1e9, "B"] : a >= 1e6 ? [1e6, "M"] : [1e3, "K"];
+  const body = a === 0 ? "0" : +(a / div).toFixed(2) + unit;
+  return (n < 0 ? "−" : "") + SYMBOL + body;
+};
+
 /** Parse a typed amount into units. The unit comes from what was typed: a k/m/b suffix
  *  scales it, a bare number with a thousands comma is whole units ("$2,500,000"), and any
  *  other bare number is millions ("2.5" → 2.5M, like fmtM's display). Null when unreadable. */

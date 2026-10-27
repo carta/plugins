@@ -68,7 +68,7 @@ scenario; the booked history comes from dated LP flows and NAV marks (§5 `snaps
 | `portfolio…companies[].dealIrr` | §10 `TEMPORAL_DEAL_IRR` (latest quarter per company; sanitized) |
 | `portfolio…companies[].lastRound` | §11 `FINANCING_HISTORY` (latest priced round: name/post-money/date) |
 | `snapshot.fundMetrics` | §12 `AGGREGATE_FUND_METRICS` (mgmt fees, opex, dry powder → Reserves actuals) |
-| `snapshot.navSeries` | §5 `MONTHLY_NAV_CALCULATIONS` cashflows stem (firm NAV + TVPI at quarter-ends → Overview trend) |
+| `snapshot.navSeries` | §5 `MONTHLY_NAV_CALCULATIONS` cashflows stem (firm NAV + TVPI at quarter-ends, plus per-fund LP NAV in `byFund` → Overview LP NAV by fund chart) |
 | company financials (optional) | §14 base `COMPANY_FINANCIALS` (revenue/ARR/headcount — when the firm has them; the legacy `COMPANY_FINANCIALS_LATEST` view is deprecated/empty) |
 
 ## 0. Firm resolution + entity enumeration (firm-level)
@@ -115,7 +115,7 @@ distributions and would overstate LP DPI/distributions). `cumulative_gp_contribu
 `snapshot.funds[].gpCommit` (the GP paid-in co-investment) as a fallback when the `gp_partners` stem (§9) records no GP-partner commitment.
 SQL: the `nav_latest` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem nav_latest`).
 → `snapshot.funds[].{committed,lpPaidIn,lpDistributed,overviewLpNav,gpCapitalNav,lpDpi,lpRvpi,lpTvpi}` and
-`snapshot.baseLpNav`. The firm NAV/TVPI **trend** (`navSeries`) comes from the §5 cashflows stem, not here.
+`snapshot.baseLpNav`. The Overview's LP NAV by fund chart (`navSeries`) comes from the §5 cashflows stem, not here.
 
 ## 3. Per-deal baseline (scenario rows) → `AGGREGATE_INVESTMENTS`
 `fund_uuid` **must** be in the SELECT (the builder keys each holding to its fund; omit it and every company is
@@ -157,7 +157,7 @@ no cap-table record (e.g. unconverted SAFEs, or `PERCENTAGE = 0`) — the stat h
 
 ## 5. LP cash flows + firm NAV/TVPI trend → `MONTHLY_NAV_CALCULATIONS` (monthly series)
 This is the **single canonical `cashflows` query**. `build_datadir.py` reads ONE `cashflows` stem and derives
-BOTH the per-fund LP flows/IRR **and** the firm NAV & TVPI trend chart from it, so the SELECT must carry all
+BOTH the per-fund LP flows/IRR **and** `snapshot.navSeries` (the Overview's LP NAV by fund chart) from it, so the SELECT must carry all
 **seven** columns the builder reads (`build_datadir.py`, `build()` cashflows loop). A query missing `fund_uuid`
 drops every row (`if u not in funds: continue`); one missing `ending_lp_nav` / `cumulative_*` renders the
 Overview NAV chart at **$0**. Firm-level `JOURNAL_ENTRIES.amount` nets to zero when summed (double-entry), so
@@ -172,7 +172,7 @@ negative when contributing, positive when distributing). `paidInTotal` = cumulat
 `netLpIrr` = `xirr(flows + {date: navAsOf, amount: endingLpNav})`; suppress it for funds whose first flow is
 < ~1 year before navAsOf (annualizing a few months explodes). `snapshot.navSeries = [{date, nav, tvpi}]` is
 summed across funds at quarter-ends, `tvpi = (Σ ending_lp_nav + Σ cumulative_lp_distributions) / Σ
-cumulative_lp_contributions` → the Overview NAV & TVPI trend chart.
+cumulative_lp_contributions`; each point's `byFund` (per-fund ending LP NAV) feeds the Overview's LP NAV by fund chart.
 
 ## 6. Fund terms (carry / preferred return / GP catch-up) → `PROFIT_ALLOCATION_WATERFALL_CONFIG` → `waterfall`
 Per-fund profit-allocation waterfall config — the canonical **carry rate**, **preferred return** (hurdle) and
@@ -320,7 +320,7 @@ Surfaced in Reserves beside the per-fund
 fee-load slider to ground the assumption in fees/opex actually charged to date.
 
 ## 13. NAV / TVPI trend → merged into §5
-The firm NAV & TVPI trend (`snapshot.navSeries`) is derived from the **same single `cashflows` query in §5** —
+`snapshot.navSeries` (the Overview's LP NAV by fund chart) is derived from the **same single `cashflows` query in §5** —
 `build_datadir.py` reads one `cashflows` stem for both the LP flows/IRR and the NAV trend. There is **no
 separate `navSeries` stem** (the builder never reads one), so do **not** run a second query here: fetch §5
 once, with all seven columns, and the trend is built from it. Kept as §13 only to preserve section numbering.

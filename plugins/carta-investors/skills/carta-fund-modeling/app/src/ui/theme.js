@@ -181,25 +181,50 @@ export const GLOBAL_CSS = `
     --stripe-repriced: light-dark(var(--ink-color-global-brand-yellow-50), var(--ink-color-global-brand-yellow-70));
     /* Data-viz rungs Ink leaves untokenized (it tokenizes level 3 only): the
        Companies map's fund fills and its on-fill change colors, the Net TVPI
-       sensitivity chart's swing bars (level 2) and the Investment pacing chart's
-       fund fills (level 2). Brand aliases
-       where Ink has the color; turquoise, brown and lime levels 1-2 are hex. */
+       sensitivity chart's swing bars (level 2), the Investment pacing chart's
+       fund fills (level 2) and the Overview fund series. Brand aliases
+       where Ink has the color; turquoise, brown and lime are hex. */
     --local-data-viz-blue-1:      var(--ink-color-global-brand-blue-40);
     --local-data-viz-blue-2:      var(--ink-color-global-brand-blue-60);
+    --local-data-viz-blue-4:      var(--ink-color-global-brand-blue-90);
     --local-data-viz-yellow-1:    var(--ink-color-global-brand-yellow-40);
     --local-data-viz-yellow-2:    var(--ink-color-global-brand-yellow-50);
+    --local-data-viz-yellow-4:    var(--ink-color-global-brand-yellow-80);
     --local-data-viz-turquoise-1: #ABE8E8;
     --local-data-viz-turquoise-2: #68D7D9;
+    --local-data-viz-turquoise-4: #1A6B6E;
     --local-data-viz-brown-1:     #E0D6D2;
     --local-data-viz-brown-2:     #C9B8B1;
+    --local-data-viz-brown-4:     #7B6056;
     --local-data-viz-lime-1:      #DDFB74;
     --local-data-viz-lime-2:      #C9EC56;
+    --local-data-viz-lime-4:      #738C12;
     --local-data-viz-positive-1:  var(--ink-color-global-brand-green-40);
     --local-data-viz-positive-2:  var(--ink-color-global-brand-green-60);
     --local-data-viz-positive-4:  var(--ink-color-global-brand-green-90);
     --local-data-viz-negative-1:  var(--ink-color-global-brand-red-50);
     --local-data-viz-negative-2:  var(--ink-color-global-brand-red-60);
     --local-data-viz-negative-4:  var(--ink-color-global-brand-red-90);
+    /* Firm Overview fund colors: Level 2, then Level 4 past seven funds. On the dark
+       surface Blue L2 steps to Blue L1, and Level 4 to Level 3 (Blue L2 for blue). */
+    --ov-series-blue-2:      light-dark(var(--local-data-viz-blue-2), var(--local-data-viz-blue-1));
+    --ov-series-turquoise-2: var(--local-data-viz-turquoise-2);
+    --ov-series-brown-2:     var(--local-data-viz-brown-2);
+    --ov-series-yellow-2:    var(--local-data-viz-yellow-2);
+    --ov-series-lime-2:      var(--local-data-viz-lime-2);
+    --ov-series-positive-2:  var(--local-data-viz-positive-2);
+    --ov-series-negative-2:  var(--local-data-viz-negative-2);
+    --ov-series-blue-4:      light-dark(var(--local-data-viz-blue-4), var(--local-data-viz-blue-2));
+    --ov-series-turquoise-4: light-dark(var(--local-data-viz-turquoise-4), var(--ink-color-global-data-viz-turquoise-3));
+    --ov-series-brown-4:     light-dark(var(--local-data-viz-brown-4), var(--ink-color-global-data-viz-brown-3));
+    --ov-series-yellow-4:    light-dark(var(--local-data-viz-yellow-4), var(--ink-color-global-data-viz-yellow-3));
+    --ov-series-lime-4:      light-dark(var(--local-data-viz-lime-4), var(--ink-color-global-data-viz-lime-3));
+    --ov-series-positive-4:  light-dark(var(--local-data-viz-positive-4), var(--ink-color-global-data-viz-positive-3));
+    --ov-series-negative-4:  light-dark(var(--local-data-viz-negative-4), var(--ink-color-global-data-viz-negative-3));
+    /* Firm Overview's one accent for single-colour marks: Ink's data-viz Blue L3, which
+       disappears on the dark surface, so dark steps to Blue L1. */
+    --ov-accent:       light-dark(var(--ink-color-global-data-viz-blue-3), var(--local-data-viz-blue-1));
+    --ov-track:        light-dark(#ECEDED, #2A2D2D);
     --row-selected:    light-dark(rgba(40,93,163,.07), rgba(139,171,214,.12));
     --total-row-bg:    var(--ink-color-global-feedback-info-subtle);
     --hue-up:          light-dark(var(--ink-color-global-brand-green-70), rgba(91,192,179,.85));

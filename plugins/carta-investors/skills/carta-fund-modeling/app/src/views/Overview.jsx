@@ -1,175 +1,14 @@
-import { useMemo, useState } from "react";
-import { FS, inkNum, sans, MICRO, PALETTE } from "../ui/theme.js";
-import { fmt$, fmtM, fmtX, fmtPct, fmtOwn, shortFund } from "../ui/format.js";
-import { Num, SourceNote, H1, H2, H3, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
+import { useMemo } from "react";
+import { FS, inkNum, sans } from "../ui/theme.js";
+import { fmt$, fmtX, fmtPct, fmtOwn } from "../ui/format.js";
+import { Num, SourceNote, H1, H2, fundNameOnly } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
 import { gpCarryOf, baseGpCarryOf } from "../model/funds.js";
 import { fundAvgOwnership } from "../model/ownership.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { trackClick } from "../analytics.js";
-import { UP, DOWN, widgetClass } from "./overview/WidgetCard.jsx";
-import PerformanceHero, { hasTrend } from "./overview/PerformanceHero.jsx";
-
-/** LP NAV over time, stacked by fund, with the firm TVPI as an overlaid line on
- *  a secondary axis. Columns come from snapshot.navSeries[].byFund (per-fund
- *  ending LP NAV per quarter); the LATEST column reacts to the active scenario —
- *  each fund's segment shifts by its own reprice, and the TVPI endpoint by the
- *  firm TVPI delta. History stays booked. */
-const TW = 960, TH = 230, TPL = 48, TPR = 70, TPT = 18, TPB = 34;
-function TrendCard({ snapshot, fundStates, firmNow, span }) {
-  const [hoverI, setHoverI] = useState(null);
-  const rawSeries = snapshot.navSeries || [];
-  if (rawSeries.length < 2) return null;
-
-  // Stable fund order (snapshot.funds is sorted by committed desc → biggest at
-  // the base of each stack) + the shared pacing palette by index. Colors are keyed
-  // to the FULL list so a fund keeps its color as others are toggled on/off.
-  const fundList = snapshot.funds || [];
-  const colorOf = {}, nameOf = {};
-  fundList.forEach((f, i) => { colorOf[f.id] = PALETTE[i % PALETTE.length]; nameOf[f.id] = f.name; });
-  // Entity multi-select — default all shown. Which fund segments the chart stacks.
-  const [shownIds, setShownIds] = useState(() => new Set(fundList.map((f) => f.id)));
-  const shown = fundList.filter((f) => shownIds.has(f.id));
-  const allShown = shown.length === fundList.length;
-  const fsById = Object.fromEntries((fundStates || []).map((f) => [f.id, f]));
-  // "today" deltas vs Carta, for the endpoint ▲/▼ — from the firm rollup so they
-  // agree with the header + table (null when mixed-currency / no override).
-  const navDelta = firmNow ? firmNow.nav - firmNow.navBase : 0;
-  const tvpiDelta = firmNow ? firmNow.tvpi - firmNow.tvpiBase : 0;
-  const repriced = Math.abs(navDelta) > 0.5 || Math.abs(tvpiDelta) > 0.005;
-
-  const lastIdx = rawSeries.length - 1;
-  // One column per quarter. Negative fund NAVs can't stack → segments clamp at 0
-  // (rare, tiny). The LAST column is authoritative from the live scenario: its
-  // segments are per-fund scenario LP NAV and its firm NAV / TVPI come straight
-  // from the firm rollup, so the endpoint ties out to the header + fund table.
-  // The NAV shown (bar height + endpoint label) is the sum of the SELECTED funds'
-  // segments. When every fund is shown we keep the authoritative firm rollup
-  // (firmNow.nav / p.nav) so the endpoint still ties out to the header + fund
-  // table; a filtered view scales the label to the selected total instead. The
-  // TVPI overlay stays firm-wide (a firm metric — not re-derivable per subset).
-  const cols = rawSeries.map((p, idx) => {
-    const isLast = idx === lastIdx;
-    const per = (f) => (isLast && firmNow && fsById[f.id]) ? fsById[f.id].lpNav : (p.byFund?.[f.id] || 0);
-    const segs = shown.map((f) => ({ id: f.id, v: Math.max(0, per(f)) })).filter((s) => s.v > 0);
-    const total = segs.reduce((s, x) => s + x.v, 0);
-    const firmFull = isLast && firmNow ? firmNow.nav : p.nav;
-    return { date: p.date, segs, total, firmNav: allShown ? firmFull : total, tvpi: isLast && firmNow ? firmNow.tvpi : p.tvpi };
-  });
-
-  const maxNav = Math.max(1, ...cols.map((c) => Math.max(c.total, c.firmNav)));
-  const maxTvpi = Math.max(1, ...cols.map((c) => c.tvpi || 0));
-  const n = cols.length;
-  const slot = (TW - TPL - TPR) / n;
-  const bw = Math.min(20, slot * 0.64);
-  const cx = (i) => TPL + i * slot + slot / 2;
-  const yNav = (v) => TPT + (1 - v / maxNav) * (TH - TPT - TPB);
-  const yTvpi = (v) => TPT + (1 - v / maxTvpi) * (TH - TPT - TPB);
-  const y0 = yNav(0);
-  const tvpiLine = cols.map((c, i) => c.tvpi == null ? "" : `${i && cols[i - 1].tvpi != null ? "L" : "M"} ${cx(i)} ${yTvpi(c.tvpi)}`).join(" ");
-  const rawYearTicks = cols.map((c, i) => ({ i, yr: c.date.slice(0, 4) })).filter((t, idx, arr) => idx === 0 || t.yr !== arr[idx - 1].yr);
-  // Drop a partial leading year's label when it would collide with the next year's.
-  const yearTicks = rawYearTicks.length > 1 && cx(rawYearTicks[1].i) - cx(rawYearTicks[0].i) < 26 ? rawYearTicks.slice(1) : rawYearTicks;
-  const lastC = cols[n - 1];
-
-  // right-margin endpoint labels — stack them apart if they'd collide
-  const LBL_FS = 12, LBL_GAP = 16;
-  const bandTop = TPT + LBL_FS, bandBot = TH - TPB;
-  const clampY = (y) => Math.max(bandTop, Math.min(bandBot, y));
-  let navLblY = clampY(yNav(lastC.total));
-  let tvpiLblY = lastC.tvpi != null ? clampY(yTvpi(lastC.tvpi)) : null;
-  if (tvpiLblY != null && Math.abs(navLblY - tvpiLblY) < LBL_GAP) {
-    const top = Math.max(bandTop, Math.min(Math.min(navLblY, tvpiLblY), bandBot - LBL_GAP));
-    navLblY = top; tvpiLblY = top + LBL_GAP;
-  }
-
-  const hc = hoverI != null ? cols[hoverI] : null;
-  const tipLeft = hc ? Math.max(7, Math.min(93, (cx(hoverI) / TW) * 100)) : 0;
-  const lab = { ...sans, fontSize: FS.micro, fill: MICRO };
-  return (
-    <div className={widgetClass(span)} data-testid="ov-chart-card" style={{ padding: "18px 22px 12px", minWidth: 0, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
-        <H3>LP NAV by fund &amp; TVPI</H3>
-        <span style={{ flex: 1 }} />
-        <MultiFundPicker funds={fundList} selected={shownIds} onChange={setShownIds} colorOf={colorOf} />
-      </div>
-      <div style={{ position: "relative" }}>
-        <svg viewBox={`0 0 ${TW} ${TH}`} style={{ width: "100%", display: "block", overflow: "visible" }} role="img" aria-label="LP NAV by fund and TVPI over time">
-          <line x1={TPL} x2={TW - TPR} y1={y0} y2={y0} style={{ stroke: "var(--ink-color-global-border-subtle)" }} strokeWidth="1" />
-          {yearTicks.map((t) => (
-            <text key={t.yr + t.i} x={cx(t.i)} y={TH - TPB + 22} textAnchor="middle" style={lab}>{t.yr}</text>
-          ))}
-          {/* stacked columns */}
-          {cols.map((c, i) => {
-            let acc = 0;
-            const dim = hoverI != null && hoverI !== i;
-            return (
-              <g key={c.date} style={{ cursor: "pointer" }} onMouseEnter={() => setHoverI(i)} onMouseLeave={() => setHoverI(null)}>
-                <rect x={cx(i) - slot / 2} y={TPT} width={slot} height={TH - TPT - TPB} fill="transparent" />
-                {c.segs.map((s) => {
-                  const yTop = yNav(acc + s.v), h = Math.max(0.6, yNav(acc) - yNav(acc + s.v));
-                  acc += s.v;
-                  return (
-                    <rect key={s.id} x={cx(i) - bw / 2} y={yTop} width={bw} height={h} fill={colorOf[s.id]}
-                      opacity={dim ? 0.38 : (i === n - 1 ? 1 : 0.9)}>
-                      <title>{`${shortFund(nameOf[s.id])} · ${fmtM(s.v)} (${c.date})`}</title>
-                    </rect>
-                  );
-                })}
-              </g>
-            );
-          })}
-          {/* TVPI overlay (secondary axis) */}
-          <path d={tvpiLine} fill="none" style={{ stroke: "var(--ink-color-global-text-default)" }} strokeWidth="2" strokeDasharray="5 3" strokeLinejoin="round" opacity="0.9" />
-          {lastC.tvpi != null && <circle cx={cx(n - 1)} cy={yTvpi(lastC.tvpi)} r="3.5" style={{ fill: "var(--ink-color-global-text-default)" }} />}
-          {/* endpoint labels */}
-          <text x={TW - TPR + 8} y={navLblY + 4} style={{ ...inkNum, fontSize: LBL_FS, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>
-            {fmtM(lastC.firmNav)}{allShown && repriced && Math.abs(navDelta) > 0.5 && <tspan style={{ fill: navDelta >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}> {navDelta >= 0 ? "▲" : "▼"}</tspan>}
-          </text>
-          {lastC.tvpi != null && <text x={TW - TPR + 8} y={tvpiLblY + 4} style={{ ...inkNum, fontSize: LBL_FS, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>
-            {fmtX(lastC.tvpi)}{repriced && Math.abs(tvpiDelta) > 0.005 && <tspan style={{ fill: tvpiDelta >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}> {tvpiDelta >= 0 ? "▲" : "▼"}</tspan>}
-          </text>}
-        </svg>
-        {hc && (
-          <div style={{ position: "absolute", top: 0, left: `${tipLeft}%`, transform: "translateX(-50%)", pointerEvents: "none",
-            background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 8, padding: "8px 12px", boxShadow: "0 6px 18px rgba(16,24,40,.14)", whiteSpace: "nowrap" }}>
-            <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginBottom: 3 }}>{hc.date}</div>
-            <div style={{ ...inkNum, fontSize: FS.bodyLg, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{fmtM(hc.firmNav)} <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", fontWeight: 500 }}>LP NAV</span></div>
-            <div style={{ ...inkNum, fontSize: FS.bodyLg, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{hc.tvpi == null ? "—" : fmtX(hc.tvpi)} <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", fontWeight: 500 }}>TVPI</span></div>
-            {hc.segs.length > 0 && (
-              <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid var(--ink-color-global-border-subtle)`, display: "flex", flexDirection: "column", gap: 3 }}>
-                {[...hc.segs].sort((a, b) => b.v - a.v).map((s) => (
-                  <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
-                    <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 2, background: colorOf[s.id], display: "inline-block", flex: "none" }} />
-                      {shortFund(nameOf[s.id])}
-                    </span>
-                    <span style={{ ...inkNum, fontSize: FS.micro, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>{fmtM(s.v)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      {/* legend below the chart — fund colors + the TVPI overlay */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, flexWrap: "wrap", margin: "10px 0 2px" }}>
-        {shown.map((f) => (
-          <span key={f.id} style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: colorOf[f.id], display: "inline-block", flex: "none" }} />
-            {shortFund(f.name)}
-          </span>
-        ))}
-        <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 16, height: 2, background: "var(--ink-color-global-text-default)", borderRadius: 1, display: "inline-block" }} /> TVPI
-        </span>
-      </div>
-      <SourceNote>
-        Source: Carta Fund Admin (MONTHLY_NAV_CALCULATIONS), per-fund LP NAV at quarter-ends. TVPI = (LP NAV + distributions) ÷ contributions, firm-wide. The latest column reflects this scenario's marks (▲/▼ vs Baseline); earlier columns are booked history. Use the fund selector to choose which entities stack — NAV totals follow the selection; the TVPI line stays firm-wide.
-      </SourceNote>
-    </div>
-  );
-}
+import { UP, DOWN } from "./overview/WidgetCard.jsx";
+import PerformanceHero, { NavByFundCard, hasTrend } from "./overview/PerformanceHero.jsx";
 
 const RT = { ...inkNum, textAlign: "right", fontSize: FS.value };
 
@@ -220,25 +59,15 @@ function DeltaTd({ cur, base, fmt, eps = 0, bold }) {
   );
 }
 // The dashboard's 12-column grid. The hero's summary card takes a third of the row and
-// the trend the rest; with no trend to draw, the summary card takes the full row.
+// the chart card the rest; with no chart to draw, the summary card takes the full row.
 const FULL = 12;
 const SUMMARY_SPAN = 4;
 
-/** Firm Overview — a dashboard: the performance hero (the firm's figures), the LP NAV
- *  by fund & TVPI trend, then the fund-by-fund table. `firm` is App's live firm rollup,
- *  shared with the Companies sidebar. */
+/** Firm Overview — a dashboard: the performance hero (firm figures and LP NAV by
+ *  fund), then the fund-by-fund table. `firm` is App's live firm rollup, shared with
+ *  the Companies sidebar. */
 export default function Overview({ fundStates, snapshot, portfolio, firm, onOpenFund }) {
   const firmRvpi = firm.lpPaidIn > 0 ? firm.lpNav / firm.lpPaidIn : 0;
-  // Authoritative "today" figures for the trend's last column, so its endpoint
-  // ties out EXACTLY to the hero's figures + the fund table (rather than the
-  // navSeries quarter-end, which lags the nav-as-of month). Never cross
-  // currencies — a mixed-currency firm gets no override (null).
-  const firmBaseLpNav = fundStates.reduce((s, f) => s + (f.baseLpNav || 0), 0);
-  const firmBaseTvpi = firm.lpPaidIn > 0
-    ? fundStates.reduce((s, f) => s + (f.baseLpNav || 0) + (f.baseLpDistributed || 0), 0) / firm.lpPaidIn
-    : 0;
-  const firmNow = firm.mixedCurrency ? null
-    : { nav: firm.lpNav, navBase: firmBaseLpNav, tvpi: firm.tvpi, tvpiBase: firmBaseTvpi };
 
   const { ownership } = useFirmData();
 
@@ -257,20 +86,20 @@ export default function Overview({ fundStates, snapshot, portfolio, firm, onOpen
   // fund-table sort — defaults to Fund name A-Z; a third click on any header clears
   // to the reported (unsorted) row order, same as every other useTableSort caller
   const { sorted: sortedFunds, sort: fundSort, onSort: onFundSort } = useTableSort(fundStates, fundCols, { i: 0, dir: "asc" });
-  // the trend sums LP NAV across funds, so a mixed-currency firm doesn't get one
+  const firmName = snapshot.branding?.firmName ?? snapshot.source?.firm;
+  // the chart sums LP NAV across funds, so a mixed-currency firm doesn't get one
   const trend = hasTrend(snapshot) && !firm.mixedCurrency;
 
   return (
     <div>
       <H1>Firm Overview</H1>
 
-      <div className="ov-bento" style={{ marginBottom: 16 }}>
+      <div className="ov-bento" style={{ marginBottom: 32 }}>
         <PerformanceHero firm={firm} span={trend ? SUMMARY_SPAN : FULL} />
-        {trend && <TrendCard snapshot={snapshot} fundStates={fundStates} firmNow={firmNow} span={FULL - SUMMARY_SPAN} />}
+        {trend && <NavByFundCard snapshot={snapshot} fundStates={fundStates} firmLpNav={firm.lpNav} firmName={firmName} span={FULL - SUMMARY_SPAN} />}
       </div>
 
       <H2>Funds</H2>
-
       {/* ── fund-by-fund detail: its own surface ──
           scrolls in place via .table-scroll (theme.js) instead of pushing the
           whole page into horizontal scroll — see that rule's comment for why
