@@ -8,7 +8,7 @@ Third-party libraries are checked in as minified bundles so the dashboard runs w
 | `sucrase.esm.js` | JSX transpiler | 3.35.1 | [`sucrase`](https://www.npmjs.com/package/sucrase) on npm (MIT) | `sw.js` uses it to turn the JSX in `src/` into JavaScript inside the browser. |
 | `lucide-react.esm.js` | Icon components | 0.462.0 | [`lucide-react`](https://www.npmjs.com/package/lucide-react) on npm (ISC) | The sidebar and export icons. Only the icons the app imports are included. |
 | `package.json` | Carta's own, one setting | n/a | n/a | Marks this folder as ES modules for Node, so the unit tests can import the bundles. |
-| `mcp-ui-tracker.global.js` | Carta's UI event tracker | 0.2.57+ (the build with the `claude.use('mcp')` bridge), plus the local edit below | Carta's `@carta/mcp-ui-tracker` package, maintained in Carta's internal frontend platform repository | Sets `window.mcpUiTracker`, which `app/src/analytics.js` uses to report UI events. |
+| `mcp-ui-tracker.global.js` | Carta's UI event tracker | 0.4.0 (waits for a host bridge that appears after the page script), plus the local edit below | Carta's `@carta/mcp-ui-tracker` package, maintained in Carta's internal frontend platform repository | Sets `window.mcpUiTracker`, which `app/src/analytics.js` uses to report UI events. |
 
 `react.esm.js`, `sucrase.esm.js` and `lucide-react.esm.js` are unmodified upstream code, bundled and minified with esbuild 0.25.12 (`npm run build` in `app/`).
 

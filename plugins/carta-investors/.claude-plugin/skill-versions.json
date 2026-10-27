@@ -1,10 +1,10 @@
 {
   "carta-home-build": {
-    "version": "1.18.5",
+    "version": "1.18.6",
     "headline": "What's new on Carta Home describes each featured skill by what you get from it."
   },
   "carta-workhub-build": {
-    "version": "1.10.4",
+    "version": "1.10.5",
     "headline": "Workhub now groups your tasks the way the Firm Dash does, and files each request to Carta under what it is about."
   }
 }
