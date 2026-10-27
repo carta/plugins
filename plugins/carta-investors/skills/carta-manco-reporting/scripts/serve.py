@@ -44,6 +44,7 @@ Customizing for your microapp:
 """
 
 import argparse
+import atexit
 import http.server
 import json
 import os
@@ -59,6 +60,7 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+import chat_session
 import manco_paths
 import own_sync
 import preflight_claude
@@ -98,23 +100,52 @@ STATE_CHECKING = "checking"    # no probe has landed yet
 STATE_AVAILABLE = "available"
 STATE_UNAVAILABLE = "unavailable"
 _CLAUDE_STATUS = {"state": STATE_CHECKING, "reason": None}
-# A share op's own message for each reason preflight_claude can name, shown instead of
-# letting an op that actually needs Carta run and fail with share_bridge's generic
-# "unreachable" -- these two are known in advance, from the same probe /api/claude-status
-# reads, so there is nothing to gain by trying the real connection first. Any other reason
-# (just "ok", or the probe never having run) falls through to a real attempt. This never
-# gates a "users" lookup a fresh saved list can already answer -- see _run_share_op.
-_CLAUDE_FIX_MESSAGES = {
+# One message template per reason preflight_claude can name, shared by report
+# sharing and chat — the two features that need the `claude` CLI, both reading
+# this module's one _CLAUDE_STATUS probe — instead of letting a call that
+# actually needs Carta/claude run and fail with a generic "unreachable". These
+# two are known in advance, from the same probe /api/claude-status reads, so
+# there is nothing to gain by trying the real thing first. Any other reason
+# (just "ok", or the probe never having run) falls through to a real attempt.
+# This never gates a "users" lookup a fresh saved list can already answer --
+# see _run_share_op.
+_CLAUDE_FIX_MESSAGE_TEMPLATES = {
     preflight_claude.REASON_NOT_INSTALLED:
-        "Report sharing needs the Claude Code CLI installed on this computer.",
+        "{feature} needs the Claude Code CLI installed on this computer.",
     preflight_claude.REASON_NOT_LOGGED_IN:
-        "Report sharing needs you signed in to Claude Code.",
+        "{feature} needs you signed in to Claude Code.",
 }
+
+
+def _claude_fix_message(feature, reason):
+    """The operator-facing message for why `feature` ("Report sharing" / "Chat")
+    can't use claude right now, or None when `reason` isn't one of the two
+    known in advance (just "ok", or no probe has run yet)."""
+    template = _CLAUDE_FIX_MESSAGE_TEMPLATES.get(reason)
+    return template.format(feature=feature) if template else None
+
+
 IDLE_TIMEOUT_DEFAULT = 86400  # 24h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
 _last_heartbeat = time.time()
 _hb_lock = threading.Lock()
+# sessionId -> {"session": chat_session.ChatSession, "lock": threading.Lock(),
+# "last_used": float}. A chat turn is single-flight per session: its lock is
+# claimed inside the SAME _CHAT_SESSIONS_LOCK critical section that looks the
+# entry up or creates it, so an entry the registry shows unlocked under that
+# lock truly has no request about to claim it, and a request can never resume
+# a session that has been (or is about to be) evicted and closed out from
+# under it — see _chat and _evict_lru_chat_session_locked. Unlike _bridge (one
+# shared relay session), each browser tab gets its own interactive
+# conversation and its own subprocess, held to at most MAX_CHAT_SESSIONS live
+# at once (oldest idle one evicted first) — except while every slot has a turn
+# in flight, when a new one is let through anyway and the registry stays over
+# the cap until the next new session is created after a slot frees up (a
+# reused session never triggers eviction, only a brand new one does).
+_CHAT_SESSIONS = {}
+_CHAT_SESSIONS_LOCK = threading.Lock()
+MAX_CHAT_SESSIONS = 4
 
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -141,6 +172,38 @@ def _touch_heartbeat():
         _last_heartbeat = time.time()
 
 
+def _evict_lru_chat_session_locked():
+    """Caller must already hold _CHAT_SESSIONS_LOCK. Removes and returns ONE
+    least-recently-used chat session whose turn lock is free — call it in a
+    loop (see _chat) to work the registry back down to MAX_CHAT_SESSIONS when
+    it has grown past that. Returns None when every registered session has a
+    turn in flight right now (nothing safe to evict); the caller then stops
+    looping and lets the registry stay over the cap until the next brand new
+    session is created after a slot frees up (reusing an existing session
+    never calls this), so a request is never refused merely because every slot
+    happens to be busy."""
+    idle = [(sid, e) for sid, e in _CHAT_SESSIONS.items() if not e["lock"].locked()]
+    if not idle:
+        return None
+    sid, entry = min(idle, key=lambda kv: kv[1]["last_used"])
+    del _CHAT_SESSIONS[sid]
+    return entry["session"]
+
+
+def _close_all_chat_sessions():
+    """Reap every registered chat session so its claude subprocess is never
+    orphaned. Called on both shutdown paths (normal atexit and the watchdog's
+    os._exit)."""
+    with _CHAT_SESSIONS_LOCK:
+        sessions = [e["session"] for e in _CHAT_SESSIONS.values()]
+        _CHAT_SESSIONS.clear()
+    for s in sessions:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
 def _watchdog(httpd, timeout):
     last_tick = time.time()
     while True:
@@ -160,6 +223,7 @@ def _watchdog(httpd, timeout):
         if idle > timeout:
             print("[serve] idle %ds - shutting down" % int(idle), flush=True)
             httpd.shutdown()
+            _close_all_chat_sessions()   # os._exit below skips atexit — reap explicitly first
             os._exit(0)
 
 
@@ -431,7 +495,7 @@ def _run_share_op(op, params):
             _refresh_claude_status()
         with _claude_lock:
             reason = _CLAUDE_STATUS["reason"]
-        fix_message = _CLAUDE_FIX_MESSAGES.get(reason)
+        fix_message = _claude_fix_message("Report sharing", reason)
         if fix_message:
             raise share_bridge.ShareError(fix_message, reason)
         bridge = _get_bridge()
@@ -527,6 +591,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    def _sse_headers(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        self.close_connection = True   # ensure the client's read() terminates at stream end
+
     def _send_file(self, path):
         try:
             data = path.read_bytes()
@@ -597,6 +669,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/reports":
             listing, etag = _reports_listing()
             return self._send(200, listing, extra={"ETag": etag})
+        if path == "/api/models":
+            return self._send(200, {"models": chat_session.CLAUDE_MODELS,
+                                    "default": chat_session.DEFAULT_MODEL})
         if path == "/api/claude-status":
             # Re-probes when the last check left sharing unavailable, so a caller
             # that polls this before offering to share sees an install/sign-in
@@ -655,6 +730,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             result = _start_signin()
             status = 202 if "url" in result else (409 if result.get("error") == "signin_in_progress" else 400)
             return self._send(status, result)
+        if u.path == "/api/chat/interrupt":
+            return self._chat_interrupt(body)
+        if u.path == "/api/chat":
+            return self._chat(body)
         m = _REPORT_ACTION_RE.match(u.path)
         if not m:
             return self._send(404, {"error": "not_found"})
@@ -682,6 +761,144 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if job is None:
             return self._send(409, {"error": "share_in_progress"})
         return self._send(202, {"status": "started", "job": job})
+
+    def _chat_interrupt(self, body):
+        """Stop the turn in flight without tearing the session down.
+
+        Deliberately does NOT take the session's turn lock: that lock is held for
+        the entire in-flight turn, so waiting on it would block in exactly the
+        case this endpoint exists to serve. It only needs the registry, which is
+        guarded briefly.
+
+        An interrupt reaches the subprocess only while a turn actually holds the
+        turn lock. A session with no turn in flight is idle, not interruptible,
+        even though its subprocess is still alive: signalling an idle session
+        would write a `control_request` the CLI answers right away, and that
+        stray `control_response` would sit in the next turn's event queue ahead
+        of its real reply — the exact "late events bleed into the next turn"
+        risk `_chat`'s own eviction handling guards against below.
+        """
+        sid = body.get("sessionId") or "default"
+        with _CHAT_SESSIONS_LOCK:
+            entry = _CHAT_SESSIONS.get(sid)
+        # A 404 here means the session is gone: its turn failed (see _chat),
+        # it was evicted as the least-recently-used idle session, or this sid
+        # was never registered. A turn that ended normally and is still
+        # registered reaches the 409 below instead.
+        if entry is None:
+            return self._send(404, {"error": "no_session"})
+        if not entry["lock"].locked() or not entry["session"].interrupt():
+            return self._send(409, {"error": "not_interruptible"})
+        return self._send(200, {"ok": True})
+
+    def _chat(self, body):
+        # Chat is NOT gated on a running rebuild/share: it is a separate claude
+        # subprocess with no shared state with those.
+        prompt = body.get("prompt")
+        prompt = str(prompt).strip() if prompt is not None else ""
+        sid = body.get("sessionId") or "default"
+        if not prompt:
+            return self._send(400, {"error": "empty_prompt"})
+
+        model = body.get("model")
+        if model is not None and model not in chat_session.ALLOWED_MODEL_VALUES:
+            return self._send(400, {"error": "invalid_model"})
+
+        if _claude_unavailable():
+            # Checking afresh here (not just trusting the cached state) means an
+            # operator who just installed or signed in doesn't have to restart
+            # the server to get as far as actually trying chat — same as the
+            # share-op worker above.
+            _refresh_claude_status()
+        with _claude_lock:
+            reason = _CLAUDE_STATUS["reason"]
+        fix_message = _claude_fix_message("Chat", reason)
+        if fix_message:
+            return self._send(503, {"error": "claude_unavailable", "message": fix_message})
+
+        anchor = body.get("anchor")
+        if anchor:
+            preamble = chat_session.anchor_preamble(anchor)
+            if preamble:
+                prompt = preamble + "\n\n" + prompt
+
+        # Guarded get-or-create: registry access is synchronized, and a failed
+        # start() is reported as a clean JSON error, with the registry
+        # untouched, before any SSE headers go out (a 500 after headers would
+        # corrupt the SSE stream).
+        # A 200 promises the turn actually ran on the requested model, so a
+        # request naming a different model than the session it would reuse
+        # already started on is refused rather than silently answered on the
+        # wrong one — the client is expected to start a new sessionId instead.
+        #
+        # The turn lock is claimed in this same critical section, right after
+        # get-or-create, so any entry the registry shows unlocked under this
+        # lock has no request about to claim it, and an evicted entry can never
+        # be claimed.
+        evicted = []
+        with _CHAT_SESSIONS_LOCK:
+            entry = _CHAT_SESSIONS.get(sid)
+            if entry is not None and model is not None and model != entry["session"].model:
+                return self._send(409, {"error": "model_mismatch"})
+            if entry is None:
+                sess = chat_session.ChatSession(
+                    cwd=str(SRC_DIR), add_dirs=[str(SRC_DIR)],
+                    claude_bin=CLAUDE_BIN, model=model or chat_session.DEFAULT_MODEL)
+                try:
+                    sess.start()
+                except Exception:
+                    return self._send(500, {"error": "claude_unavailable"})
+                # Only once the new subprocess is actually running do we make
+                # room for it: evicting first and then failing to start would
+                # both leak the victim's subprocess (nothing left in the
+                # registry to close it) and lose a slot for nothing. Looping
+                # (not a single evict) catches the registry back up to the cap
+                # when it grew past it earlier because every slot was busy.
+                while len(_CHAT_SESSIONS) >= MAX_CHAT_SESSIONS:
+                    victim = _evict_lru_chat_session_locked()
+                    if victim is None:
+                        break
+                    evicted.append(victim)
+                entry = {"session": sess, "lock": threading.Lock(), "last_used": time.time()}
+                _CHAT_SESSIONS[sid] = entry
+            else:
+                entry["last_used"] = time.time()
+            # Single-flight per session: only one in-flight turn at a time.
+            if not entry["lock"].acquire(blocking=False):
+                return self._send(409, {"error": "turn_in_progress"})
+        for v in evicted:
+            v.close()
+
+        saw_result = False
+        try:
+            sess = entry["session"]
+            self._sse_headers()
+            try:
+                sess.send(prompt)
+                for ev in sess.events(timeout=120):
+                    self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode())
+                    self.wfile.flush()
+                    if chat_session.is_turn_end(ev):
+                        saw_result = True
+            except Exception:
+                # Poisoned session or a client that vanished mid-stream: evict so
+                # the next request for this sid starts fresh, don't bleed stale
+                # events into a future turn.
+                saw_result = False
+        finally:
+            # Evict (while still holding the turn lock) before releasing it, so no
+            # other request can acquire this entry's lock in the gap and start a
+            # turn on a session this thread is about to close out from under it.
+            if not saw_result:
+                # Timeout, EOF-without-result, or an exception above: the session
+                # is untrustworthy (late/buffered events could bleed into the next
+                # turn) — evict it so the next request for this sid starts fresh.
+                sess = entry["session"]
+                with _CHAT_SESSIONS_LOCK:
+                    if _CHAT_SESSIONS.get(sid) is entry:
+                        del _CHAT_SESSIONS[sid]
+                sess.close()
+            entry["lock"].release()
 
     def _report_action(self, report_id, action, body):
         """One change to a local report, then a rebuild so the app shows it."""
@@ -900,6 +1117,7 @@ def main():
     targets = share_bridge.candidate_servers(manco_paths.read_carta_environment(DATA_DIR), SHARE_MCP_SERVER)
     print("[serve] report sharing uses Carta connector(s): %s%s" % (
         ", ".join(targets), " (pinned)" if SHARE_MCP_SERVER else ""), flush=True)
+    atexit.register(_close_all_chat_sessions)
     threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()
     # Also after the fork, for the same reason as the watchdog above.
     threading.Thread(target=_startup_claude_probe, daemon=True).start()
