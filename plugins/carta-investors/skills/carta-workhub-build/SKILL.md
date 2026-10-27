@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.118.4</carta-plugin>
+<carta-plugin>carta-investors:6.118.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -359,6 +359,7 @@ rejects with `not_in_manifest`:
 
 - `list_contexts` / `set_context` — resolve and pin the firm
 - `fetch` — the list and thread reads
+- `read_tool` — `plugin:get:version` for the update banner, run without asking the viewer
 - `mutate` — sending a request, replying, uploading an attachment, and the review decision
 - `welcome` — re-initializes an expired MCP session
 - `discover` — asks whether this viewer may attach files at all
@@ -506,8 +507,8 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["list_contexts", "set_context", "fetch", "mutate", "welcome", "discover",
-                  "get_current_user", "track_ui_event"]
+          tools: ["list_contexts", "set_context", "fetch", "read_tool", "mutate", "welcome",
+                  "discover", "get_current_user", "track_ui_event"]
         }
       ]
     }

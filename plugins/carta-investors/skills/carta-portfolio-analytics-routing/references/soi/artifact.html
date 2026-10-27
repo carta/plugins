@@ -4726,13 +4726,13 @@
         // Silent on every failure: a banner the user cannot act on is worse than none.
         async function soiCheckForUpdate() {
             try {
-                const res = await callMcpWithWelcomeRetry("fetch", {
-                    command: "plugin:get:version",
-                    params: { plugin: "carta-investors", skill: "carta-soi" },
+                const res = await callMcpWithWelcomeRetry("read_tool", {
+                    name: "plugin__get__version",
+                    arguments: { plugin: "carta-investors", skill: "carta-soi" },
                 });
-                const payload = (res && typeof res === "object" && typeof res.version === "string")
-                    ? res
-                    : null;
+                if (!res || res.isError) return;
+                const parsed = JSON.parse(unwrapResponse(res));
+                const payload = (parsed && typeof parsed.version === "string") ? parsed : null;
                 const latest = payload && payload.version;
                 if (!latest || !soiUpdateAvailable(ARTIFACT_VERSION, latest)) return;
                 if (soiReadDismissed() === latest) return;

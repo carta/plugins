@@ -227,14 +227,14 @@ Artifact({
   capabilities: {
     mcp: {
       servers: [
-        { server: "<CARTA_MCP_SERVER>", tools: ["call_tool", "set_context", "welcome", "fetch", "track_ui_event"] }
+        { server: "<CARTA_MCP_SERVER>", tools: ["call_tool", "set_context", "welcome", "read_tool", "track_ui_event"] }
       ]
     }
   }
 })
 ```
 
-All five tools must be in the grant, or the page loads and the matching call rejects with `not_in_manifest`. `track_ui_event` carries the page's usage analytics. `fetch` carries the update check, which asks carta-mcp for the published version and raises a banner when this page is behind it. The artifact only calls `welcome` itself when the MCP reports a "session not initialized" error on the first dwh query or set_context call — see **Session re-initialization** under Caveats.
+All five tools must be in the grant, or the page loads and the matching call rejects with `not_in_manifest`. `track_ui_event` carries the page's usage analytics. `read_tool` carries the update check without asking the viewer; it asks carta-mcp for the published version and raises a banner when this page is behind it. The artifact only calls `welcome` itself when the MCP reports a "session not initialized" error on the first dwh query or set_context call — see **Session re-initialization** under Caveats.
 
 **No `title` here, and do not add one.** The tool reads the title out of the file's
 `<title>` tag and uses its `title` parameter only when the file has none, so a `title`

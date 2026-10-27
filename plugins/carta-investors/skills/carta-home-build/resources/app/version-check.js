@@ -143,9 +143,9 @@ function extractVersionPayload(res) {
 async function checkForUpdate() {
   if (isFreshBuild(BUILT_AT, Date.now())) return;
   try {
-    const res = await _mcp("fetch", {
-      command: "plugin:get:version",
-      params: { plugin: PLUGIN, skill: SKILL },
+    const res = await _mcp("read_tool", {
+      name: "plugin__get__version",
+      arguments: { plugin: PLUGIN, skill: SKILL },
     });
     // `version` is this skill's. The response also carries `plugin_version`; do not
     // compare against it — it moves for changes that never touch this artifact.

@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.118.4</carta-plugin>
+<carta-plugin>carta-investors:6.118.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -231,6 +231,8 @@ rejects with `not_in_manifest`:
 - `call_tool` — the gateway dispatcher, carrying the Capital Activity reminder sends
   (`fa__mutate__send-capital-call-reminder`), the Plugin news live-content cards, and the
   Data Collection settings read (`data_collection__get__firm_settings`)
+- `read_tool` — runs a read without asking the viewer; carries `plugin:get:version` for the
+  update banner and `plugin:list:skills` for the Skill Directory
 
 ## Source layout — the artifact is BUILT, not hand-edited
 
@@ -274,8 +276,7 @@ A deployed artifact is a **frozen copy**. Nothing updates it in place, and the s
 sets `connect-src 'none'` so it cannot fetch its own release metadata. The only way an
 existing user learns a newer build exists is the update banner, which compares the
 version baked in at build time against the one carta-mcp reads from the published
-`carta/plugins` tree (`plugin:get:version`, called through the `fetch` tool the artifact
-already has — no `capabilities.mcp` change needed).
+`carta/plugins` tree (`plugin:get:version`, called through `read_tool`).
 
 The version lives in the **plugin's** registry, keyed by this skill:
 
@@ -606,7 +607,7 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool", "list_accounts", "track_ui_event"]
+          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool", "read_tool", "list_accounts", "track_ui_event"]
         }
       ]
     }
