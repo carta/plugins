@@ -27,6 +27,11 @@ import re
 import sys
 from pathlib import Path
 
+_LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
+sys.path.insert(0, str(_LIB))
+
+from live_artifact_render import TRACKER_MARKER, inline_tracker  # noqa: E402
+
 EXIT_OK = 0          # success: HTML written; absolute path printed to stdout
 EXIT_INPUT = 1       # missing / bad input data or args
 EXIT_TEMPLATE = 4    # template path could not be read
@@ -118,6 +123,10 @@ def main(argv):
     if vendor_error:
         log(vendor_error)
         return EXIT_TEMPLATE
+    # A template with the tracker marker gets the shared UI tracker, stamped with its own skill
+    # (templates live at skills/<skill>/references/).
+    if TRACKER_MARKER in template:
+        template = inline_tracker(template, tpl.resolve().parent.parent.name)
     count = template.count(TOKEN)
     if count != 1:
         log("template must contain exactly one " + TOKEN + " token, found " + str(count) + " (schema drift)")

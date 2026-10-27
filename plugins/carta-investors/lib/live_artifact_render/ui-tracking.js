@@ -10,11 +10,26 @@ function initUiTracker(interfaceId, server) {
 }
 // trackUi never throws, so a page whose events all drop would otherwise look healthy.
 let uiTrackerDropWarned = false;
+function warnUiEventsDropped() {
+  if (uiTrackerDropWarned) return;
+  uiTrackerDropWarned = true;
+  console.warn("[carta-investors] no MCP transport for the UI tracker — UI events are being dropped");
+}
+function uiTransportReady() {
+  return !!(window.mcpUiTracker && window.mcpUiTracker.getTransport());
+}
 function trackUi(action, elementId, options) {
-  if (window.mcpUiTracker && window.mcpUiTracker.getTransport()) {
+  if (uiTransportReady()) {
     window.mcpUiTracker.trackUiEvent(action, elementId, options);
-  } else if (!uiTrackerDropWarned) {
-    uiTrackerDropWarned = true;
-    console.warn("[carta-investors] no MCP transport for the UI tracker — UI events are being dropped");
+  } else {
+    warnUiEventsDropped();
+  }
+}
+// A copied prompt: data is { prompt, source, ... } as the tracker's mcp_prompt entity takes it.
+function trackUiPrompt(elementId, data) {
+  if (uiTransportReady()) {
+    window.mcpUiTracker.trackPromptSelection(data, elementId);
+  } else {
+    warnUiEventsDropped();
   }
 }
