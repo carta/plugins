@@ -648,6 +648,15 @@ def apply_label_overrides(columns, rows, label_overrides):
     return result
 
 
+def _with_base_currency(row_currency, base):
+    """A row_currencies entry with every cell left on the sheet's base currency set to `base`."""
+    if row_currency is None:
+        return base
+    if isinstance(row_currency, list):
+        return [base if c is None else c for c in row_currency]
+    return row_currency
+
+
 def main():
     parser = argparse.ArgumentParser(description="Download, filter and transform a Carta report")
     parser.add_argument("--config", required=True, help="Path to the JSON config file")
@@ -886,6 +895,11 @@ def main():
                 counts[key] += src_stats.get(key, 0)
             merged_rows.extend(s["rows"])
             src_rcs = s.get("row_currencies") or [None] * len(s["rows"])
+            src_currency = s.get("currency")
+            if src_currency and src_currency != merged_currency:
+                # The merged tab takes the first source's base currency; a source in another
+                # currency pins it on every row, or its amounts show in the wrong currency.
+                src_rcs = [_with_base_currency(rc, src_currency) for rc in src_rcs]
             merged_row_currencies.extend(src_rcs)
             if s.get("summary_meta"):
                 merged_summary = s["summary_meta"]
