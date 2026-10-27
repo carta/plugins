@@ -32,11 +32,15 @@ Usage:
                    [--port N] [--no-open]
 
 Customizing for your microapp:
-  - Add fixed-name routes to _FILE_ROUTES (e.g. "/api/snapshot": "snapshot.json") for
-    files your app always expects.
+  - Add fixed-name routes to chat_session.DATA_FILE_ROUTES (e.g. "/api/snapshot":
+    "snapshot.json") for files your app always expects — _FILE_ROUTES below is built
+    from it, since those are also the only files the in-app chat session may read
+    outside its own view-source tree (see chat_session.scoped_allowed_tools).
   - For anything else, the generic `/api/report/<name>.json` route already serves any
     safe `<name>.json` your skill writes to the data dir — most microapps don't need
-    fixed routes at all beyond that.
+    fixed routes at all beyond that. A file served only through this route is NOT
+    readable by the in-app chat session (scoped_allowed_tools only grants
+    DATA_FILE_ROUTES) — give a file the chat must explain a fixed-name route instead.
   - If your app needs a writable document (e.g. a saved scenario/portfolio file with
     optimistic-concurrency PUT), see the `do_PUT`/`_get_portfolio`-style pattern in
     carta-investors' fund-modeling or investor-dashboard `scripts/serve.py` for a
@@ -158,12 +162,12 @@ _CONTENT_TYPES = {
     ".woff": "font/woff", ".woff2": "font/woff2", ".map": "application/json",
 }
 
-# Fixed-name GET endpoints -> file under the data dir. Add your app's known files
-# here; anything else falls through to the generic /api/report/<name>.json route.
-_FILE_ROUTES = {
-    "/api/snapshot": "snapshot.json",
-    "/api/accounts": "accounts.json",
-}
+# Fixed-name GET endpoints -> file under the data dir. Built from
+# chat_session.DATA_FILE_ROUTES, the single source of truth for which files
+# both this route table and the in-app chat session's scoped_allowed_tools
+# name — add your app's known files there, not here; anything else falls
+# through to the generic /api/report/<name>.json route.
+_FILE_ROUTES = dict(chat_session.DATA_FILE_ROUTES)
 
 
 def _touch_heartbeat():
@@ -856,7 +860,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if entry is None:
                 sess = chat_session.ChatSession(
                     cwd=str(SRC_DIR), add_dirs=[str(SRC_DIR)],
-                    claude_bin=CLAUDE_BIN, model=model or chat_session.DEFAULT_MODEL)
+                    claude_bin=CLAUDE_BIN, model=model or chat_session.DEFAULT_MODEL,
+                    allowed_tools=chat_session.scoped_allowed_tools(SRC_DIR, DATA_DIR),
+                    system_prompt=chat_session.manco_app_note_for(DATA_DIR))
                 try:
                     sess.start()
                 except Exception:
