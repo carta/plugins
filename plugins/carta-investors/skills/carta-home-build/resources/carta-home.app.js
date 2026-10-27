@@ -1745,7 +1745,9 @@ const APP_LAUNCH_NOTE = 'Launches in Claude Code — paste this prompt there.';
 
 function dirCopyPrompt(btn) {
   const text = btn.dataset.prompt || '';
-  trackPrompt("CartaHome.Directory.Copy", text, PROMPT_SOURCE.STATIC,
+  // The id names the section, e.g. ".portfolio".
+  const section = btn.dataset.section ? "." + btn.dataset.section : "";
+  trackPrompt("CartaHome.Directory.Copy" + section, text, PROMPT_SOURCE.STATIC,
     { skill: btn.dataset.skill, rank: Number(btn.dataset.rank) });
   const copiedLabel = btn.dataset.copiedLabel || 'Copied!';
   const feedback = () => {
@@ -1774,7 +1776,7 @@ function renderDirectorySkill(s, firm) {
     const copiedLabel = isApp ? 'Copied — open Claude Code' : 'Copied!';
     return `<div class="dir-skill-prompt">
               <span class="dir-skill-prompt-text">"${text}"</span>
-              <button class="dir-copy-btn" data-prompt="${text}" data-skill="${escHtml(s.skill)}" data-rank="${rank}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+              <button class="dir-copy-btn" data-prompt="${text}" data-skill="${escHtml(s.skill)}" data-section="${escHtml(s.category)}" data-rank="${rank}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
             </div>`;
   }).join('');
   const tipId = `dir-tip-${escHtml(s.skill)}`;
