@@ -3812,7 +3812,8 @@ def unresolved_budget_rows(rows, mapping_records=None, account_names=None,
         if needs == "gl_account":
             formula_accounts = _formula_gl_suggestions(row, account_names or {})
             entry["suggestions"] = _merge_formula_and_name_suggestions(formula_accounts, accounts)
-            # Feeds the "read the formulas" option in budget-unresolved.md.
+            # Feeds the "Read the formula to figure this out" option in
+            # budget-unresolved.md.
             if row.get("source_formula") and not formula_accounts:
                 entry["source_formula"] = row["source_formula"]
         else:

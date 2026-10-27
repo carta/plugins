@@ -157,20 +157,43 @@ pass doesn't evaluate); read that formula the same way you'd read any
 other close call, and recommend the account it names on that row's own
 question when tracing it settles the question.
 
+**`source_formula` is the raw formula the parse shapes read from the cell
+with `data_only=False`** (`pnl_outline.py` / `tag_crosstab.py`), carried on
+the `unresolvedBudgetRows` entry that shares this row's `addr` — look there,
+not on the `mappingTable` row itself, which doesn't carry `source_formula`
+at all. `resolve_formula_gl_evidence` already tried resolving it
+mechanically before this gate ever runs, reopening the workbook itself
+where that needed a referenced row's raw label; its `unresolvedBudgetRows`
+entry still carrying `source_formula` here is one even that pass couldn't
+settle on its own (the cases named just above, plus a `SUMIF`/`SUMIFS`
+criterion that is itself a cell reference). So the formula text names
+everything it *can* resolve to — when it still points at a cell whose
+value isn't captured anywhere in this data (a criterion cell, a lookup
+range, a row on a sheet nothing here parsed), there is nothing further in
+reach for you to resolve from the text either: recommend the account when
+the formula's own text, or a row/GL code already in the parsed budget,
+names one; when it names an unavailable cell or range instead, say what it
+references on that row's own question and let the operator answer — don't
+guess an account from a bare cell reference you can't read.
+
 **This is not optional and not a fallback you reach for only if the
 operator asks for it — do it before you print a single table.**
 `AskUserQuestion` is where a real judgment call goes, not where a
-question the workbook has already answered goes to be asked anyway. Open
-the workbook (with formulas intact) and trace every `source_formula` you
-haven't traced yet as part of this same read-through, before "Needs your
-input" is built. Skipping straight to the table with these rows still
-untraced, then only tracing one if the operator happens to ask, is the
-same violation as skipping `AskUserQuestion` itself elsewhere in this
-skill: a question the workbook already answered, asked anyway, because
-the answer was reached silently (by not looking) instead of checked. If
-you find yourself about to print **Needs your input** and a row in it
-still carries `source_formula`, stop and open the workbook for that row
-first — do not rely on the operator to ask you to.
+question the workbook has already answered goes to be asked anyway. Trace
+every `source_formula` you haven't traced yet as part of this same
+read-through, before "Needs your input" is built. Skipping straight to the
+table with these rows still untraced, then only tracing one if the
+operator happens to ask, is the same violation as skipping
+`AskUserQuestion` itself elsewhere in this skill: a question the workbook
+already answered, asked anyway, because the answer was reached silently
+(by not looking at the formula text on its `unresolvedBudgetRows` entry)
+instead of checked. If you find yourself about to print **Needs your
+input** and a row in it has an `unresolvedBudgetRows` entry (same `addr`)
+carrying `source_formula`, stop and re-read that entry's `source_formula`
+first — do not rely on the operator to ask you to. Recommend the account
+on that row's own question when the formula text already names one; only
+ask the operator to pick when it names a cell or range the data doesn't
+carry.
 
 Three things stay out of this, ruled out here and below:
 
@@ -299,28 +322,34 @@ the table is printed — never as chat prose you write and move past, and
 never by picking the nearest option yourself to avoid the round trip;
 that is exactly the call the automatic match already refused to make. One
 question per row, each carrying that row's own `options` (plus "void" and
-"leave it" alongside them, and "read the formulas" too whenever the row
-carries a `source_formula` the mechanical pass couldn't resolve); a
+"leave it" alongside them, and "read the formula to figure this out" too
+whenever the row's `unresolvedBudgetRows` entry (same `addr`) carries a
+`source_formula` the mechanical pass couldn't resolve); a
 single call carries up to four questions, so batch further when there
 are more than four rows.
 
 **A line that matches no Carta account has three answers, not two — four
-when it also carries a `source_formula`.** Say them, because most of these
-are easy to miss:
+when its `unresolvedBudgetRows` entry also carries a `source_formula`.**
+Say them, because most of these are easy to miss:
 
 - **It is one of these accounts** — the row's `options` carry the near
   names, and picking one records `gl_codes`.
-- **Read the formulas from the workbook to figure this out** — offered
-  whenever the row carries `source_formula`. By this point you should
-  already have tried tracing it (see "Read the unresolved rows yourself
-  before splitting the table" above) — a row still carrying
+- **Read the formula to figure this out** — offered whenever the row's
+  `unresolvedBudgetRows` entry carries `source_formula`. By this point you
+  should already have tried tracing it (see "Read the unresolved rows
+  yourself before splitting the table" above) — an entry still carrying
   `source_formula` here is one that attempt didn't settle, not one you
-  haven't looked at yet. Offer this option anyway, and never drop it from
-  the question just because your own first pass came up short: open the
-  workbook with formulas intact, read what that line's own formula sums,
-  filters, or references, and answer from that rather than from the
-  label. Judgment applied to one row, not a second automated pass —
-  record the result the same way any other answer to this row is
+  haven't looked at yet. Offer this
+  option anyway, and never drop it from the question just because your own
+  first pass came up short: re-read `source_formula`'s own text — what it
+  sums, filters, or references. When it names an account, or a row/GL code
+  already in the parsed budget, that's the answer; record it rather than
+  the label's own guess. When it instead points at a cell or range this
+  data never carried (a criterion cell, a lookup range, a row on a sheet
+  nothing here parsed), picking this option surfaces exactly that
+  reference on the question rather than resolving it — naming the gap is
+  the answer this option can give, not a guaranteed account. Record the
+  result the same way any other answer to this row is
   recorded, with `--note "read off the workbook's formula"` so a later
   table view still shows an honest reason.
 - **It is not in Carta** — the firm budgets for something their ledger has
