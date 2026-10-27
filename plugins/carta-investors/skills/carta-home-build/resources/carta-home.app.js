@@ -67,6 +67,9 @@ if (window.mcpUiTracker) {
   window.mcpUiTracker.initTracker({
     interface: { interfaceType: "artifact", interfaceId: "carta-home" },
     mcpServerId: CARTA_MCP_SERVER,
+    // The tracker picks its transport once, at init, often before the runtime installs
+    // window.claude; relaying through _mcp waits for it like the page's own calls do.
+    toolBridge: (name, args) => _mcp(name, args),
   });
 }
 // Never throws, so a missing transport would otherwise drop every event unnoticed.
