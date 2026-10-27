@@ -99,6 +99,26 @@ export const HelpCircleIcon = ({ size = 14, strokeWidth = 1.8, style }) => (
   </svg>
 );
 
+/** Chat panel's close button, ported verbatim from carta-fund-modeling's own
+ *  CloseIcon. */
+export const CloseIcon = ({ size = 14, strokeWidth = 1.8, style }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", display: "block", ...style }}>
+    <path d="M18 6L6 18" />
+    <path d="M6 6l12 12" />
+  </svg>
+);
+
+/** Stop affordance in the chat composer, ported verbatim from
+ *  carta-fund-modeling's own StopIcon. Filled rather than stroked like the
+ *  icon above — at 11px an outlined square reads as an empty checkbox. */
+export const StopIcon = ({ size = 11, style }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden
+    style={{ flex: "none", display: "block", ...style }}>
+    <rect x="1.5" y="1.5" width="9" height="9" rx="1.5" fill="currentColor" />
+  </svg>
+);
+
 /** Ink's real Bubble — "highlights one or two words for more visibility."
  *  Same tone recipe as Tag (TAG_TONES above — Ink's feedback-tone bg/fg/border
  *  is one shared palette, not two), but Bubble's own shape: 18px tall, 0 8px

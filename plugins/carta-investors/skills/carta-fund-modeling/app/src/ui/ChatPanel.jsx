@@ -3,6 +3,7 @@ import { renderMarkdown } from "./markdown.jsx";
 import { CloseIcon, StopIcon } from "./components.jsx";
 import { FS, SANS } from "./theme.js";
 import { trackClick } from "../analytics.js";
+import { capLabel } from "../pinpoint/capture.js";
 
 // Built-in fallback catalog, used when the outer shell's /api/models fetch
 // hasn't resolved (or failed) — keeps the model picker usable offline. This
@@ -119,7 +120,7 @@ export function pinLabel(anchor) {
   if (anchor.label) return anchor.label; // display label computed at capture time
   if (anchor.datum && anchor.datum.name) return anchor.datum.name; // precomputed clean label
   const t = (anchor.quotedText || "").trim();
-  if (t) return t.length > 40 ? t.slice(0, 40) + "…" : t;
+  if (t) return capLabel(t);
   if (anchor.datum && anchor.datum.id) return (anchor.datum.type || "item") + " " + anchor.datum.id;
   if (anchor.section) return anchor.section;
   const vf = anchor.source && anchor.source.viewFile;

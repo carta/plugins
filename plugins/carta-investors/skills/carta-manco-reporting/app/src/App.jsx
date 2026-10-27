@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { sans, GLOBAL_CSS, FS } from "./ui/theme.js";
 import AppShell from "./shell/AppShell.jsx";
+import ChatRail from "./ui/ChatRail.jsx";
+import { useChatFeatureFlag } from "./shell/chatFeature.js";
+import { setInspectMode } from "./pinpoint/inspect.js";
+import { buildAnchor } from "./pinpoint/capture.js";
+import { findAndMark } from "./pinpoint/findAndMark.js";
+import { mancoContext } from "./pinpoint/mancoContext.js";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
 import DashboardView from "./views/DashboardView.jsx";
 import BudgetActualsView from "./views/BudgetActualsView.jsx";
@@ -85,6 +91,66 @@ export default function App() {
   const drilldown = useDrilldown();
   const firmSlug = slugify(displayFirmName(snapshot?.firmName));
   const [route, navigate] = usePathRoute(firmSlug);
+
+  // Chat + Pinpoint — see app/src/ui/ChatRail.jsx and shell/chatFeature.js.
+  // askClaude (shell/chatFeature.js's FEATURES) gates everything below.
+  const askClaude = useChatFeatureFlag();
+  const [chatOpen, setChatOpen] = useState(false);
+  const [pinMode, setPinMode] = useState(false);
+  const [anchor, setAnchor] = useState(null);
+  const [chatModels, setChatModels] = useState(null);
+  const appRootRef = useRef(null);
+  const chatSessionIdRef = useRef(null);
+  if (!chatSessionIdRef.current) {
+    chatSessionIdRef.current = (typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
+  }
+
+  useEffect(() => {
+    if (!askClaude) return;
+    fetch("/api/models")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setChatModels(data); })
+      .catch(() => {});
+  }, [askClaude]);
+
+  // Closing the rail also disarms Pinpoint: a chat-less user has no "Esc to
+  // cancel" affordance on screen, so a stray click intercepted by inspect
+  // mode's capture-phase listener would be pinned instead of doing what the
+  // user meant.
+  const closeChat = useCallback(() => {
+    trackClick("MancoReporting.Chat.Close");
+    setChatOpen(false);
+    setPinMode(false);
+  }, []);
+
+  // Pinpoint selection: scoped to appRootRef so a click on the chat rail
+  // itself (outside that ref) is never intercepted.
+  useEffect(() => {
+    if (!pinMode) { setInspectMode(false, {}); return undefined; }
+    setInspectMode(true, {
+      root: appRootRef.current,
+      onPin: (el) => {
+        trackClick("MancoReporting.Chat.Pin");
+        const a = buildAnchor(el, {
+          context: mancoContext({
+            firm: displayFirmName(snapshot?.firmName), tab: route,
+            period: snapshot?.asOf, currency: snapshot?.currency,
+          }),
+        });
+        setAnchor(a);
+        setPinMode(false);
+        setChatOpen(true);
+      },
+      onCancel: () => setPinMode(false),
+    });
+    return () => setInspectMode(false, {});
+  }, [pinMode, snapshot, route]);
+
+  // The mark tracks `anchor` directly, not the pin action that set it: the
+  // anchor is cleared from two places in ChatPanel (Unpin, and right after a
+  // pinned message is sent), and the mark must disappear with it either way.
+  useEffect(() => { findAndMark(anchor); }, [anchor]);
 
   // Opt-in and persisted; defaults to light.
   const [dark, setDark] = useState(() => {
@@ -336,6 +402,7 @@ export default function App() {
   return (
     <>
       <style>{GLOBAL_CSS}</style>
+      <div ref={appRootRef}>
       <AppShell sidebarProps={sidebarProps}>
         {notReady && (
           <LoadingScreen label={loadStatus || LOAD_FIRM_LABEL} step={loadFirmStepProgress(loadStatus)} />
@@ -379,6 +446,7 @@ export default function App() {
           />
         )}
       </AppShell>
+      </div>
 
       <ShareStatus
         notice={shareNotice}
@@ -401,6 +469,38 @@ export default function App() {
         asOf={snapshot?.asOf}
         onDrillAccountForMonth={drillAccountForMonthFor(snapshot, accountsData, drilldown)}
       />
+
+      {askClaude && !chatOpen && (
+        <button
+          type="button"
+          aria-label="Open chat"
+          onClick={() => { trackClick("MancoReporting.Chat.Open"); setChatOpen(true); }}
+          style={{
+            position: "fixed", right: 24, bottom: 24, zIndex: 999,
+            width: 48, height: 48, borderRadius: "50%", border: "none",
+            background: "var(--ink-button-background-color-primary-base-default)",
+            color: "var(--ink-button-font-color-primary-base)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.18)", cursor: "pointer", fontSize: 20,
+          }}>
+          💬
+        </button>
+      )}
+      {askClaude && (
+        <ChatRail
+          open={chatOpen}
+          onClose={closeChat}
+          sessionId={chatSessionIdRef.current}
+          anchor={anchor}
+          onAnchorConsumed={() => setAnchor(null)}
+          pinMode={pinMode}
+          onTogglePinMode={() => {
+            trackClick("MancoReporting.Chat.TogglePinpoint");
+            setPinMode((v) => !v);
+          }}
+          models={chatModels?.models}
+          defaultModel={chatModels?.default}
+        />
+      )}
     </>
   );
 }

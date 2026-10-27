@@ -1,5 +1,5 @@
 // Turns a clicked/selected DOM element into a structured "anchor" describing
-// what part of the app it came from, so the outer chat can scope a request to it.
+// what part of the app it came from, so chat can scope a request to it.
 //
 // The owning view file is resolved via an ancestor walk for the nearest
 // [data-source] under app/src/views/ — NOT the leaf stamp, since shared ui/
@@ -19,7 +19,10 @@ function closestWithSource(el, predicate) {
   return null;
 }
 
-function cap(s) {
+// Truncates a display label to LABEL_CAP — the one place that cap lives, so a
+// consumer that builds its own fallback label (ChatPanel.jsx's pinLabel, for
+// a pin with no precomputed label) truncates the same way.
+export function capLabel(s) {
   s = (s || "").trim();
   return s.length > LABEL_CAP ? s.slice(0, LABEL_CAP) + "…" : s;
 }
@@ -27,21 +30,20 @@ function cap(s) {
 // Derives a short, display-only pin chip label. Precomputed datum names and
 // explicit text selections win outright; otherwise, for a section/container
 // element, prefer its nearest heading (the section/card title) over the
-// mashed-together textContent of every child.
+// mashed-together textContent of every child — querySelector naturally finds
+// nothing when targetEl is itself a heading, so the textContent fallback
+// below already covers that case too.
 export function deriveLabel(targetEl, datum, selectionText) {
   if (datum && datum.name) return datum.name;
   const sel = (selectionText || "").trim();
-  if (sel) return cap(sel);
+  if (sel) return capLabel(sel);
   let text = "";
-  const tag = targetEl && targetEl.tagName;
-  if (tag && /^H[1-6]$/.test(tag)) {
-    text = targetEl.textContent || "";
-  } else if (targetEl && targetEl.querySelector) {
+  if (targetEl && targetEl.querySelector) {
     const h = targetEl.querySelector("h1,h2,h3,h4,h5,h6");
     if (h) text = h.textContent || "";
   }
   if (!text && targetEl) text = targetEl.textContent || "";
-  return cap(text);
+  return capLabel(text);
 }
 
 export function buildAnchor(targetEl, opts = {}) {

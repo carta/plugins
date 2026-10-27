@@ -731,7 +731,8 @@ export default function PivotDashboard({ data, dashboard }) {
           + "Hover a value for its as-of date.", content: "Current" }] : []),
     { key: "__trend", frozen: false, width: TREND_W, align: "left",
       dataTip: "Sparkline of the reported values across the periods shown, oldest to newest. "
-        + "The % is the change from the oldest to the newest value; green is up, red is down. "
+        + "The % is the change from the oldest to the newest value; hover it for the periods compared. "
+        + "Green is up, red is down. "
         + "Qualitative KPIs (Yes/No, dates, text) show no trendline.",
       content: "Trend over time" },
     ...periods.map((p) => ({
@@ -984,7 +985,11 @@ export default function PivotDashboard({ data, dashboard }) {
                               endpoints agree with the % badge and the period columns. */}
                           <TrendSparkline points={periods.map((p) => ({ d: p, v: r.byPeriod[p] == null ? null : r.byPeriod[p] }))}
                             dir={ch ? ch.dir : undefined} />
-                          <span style={{ ...sans, fontSize: FS.body }}><DeltaText delta={ch} /></span>
+                          {/* The tip names both ends, so a seasonal dip at the end of the
+                              line is not misread as the direction of the whole move. */}
+                          <span style={{ ...sans, fontSize: FS.body }} data-tip={ch ? trendTip(ch, r, qOnly) : undefined}>
+                            <DeltaText delta={ch} />
+                          </span>
                         </span>
                       );
                     })()}
@@ -1776,7 +1781,8 @@ const csv = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
 /** Move from the first to the last reported value across the periods shown, oldest
  *  to newest — `periods` may be newest-first, so never trust array order. Returns
- *  `{dir, pct}` for DeltaText, or null when there's nothing meaningful to state. */
+ *  `{dir, pct, from, to, a, b}` (the end periods and their values) for DeltaText,
+ *  or null when there's nothing meaningful to state. */
 function trendChange(byPeriod, periods) {
   const pts = periods.map((p) => ({ d: p, v: byPeriod[p] }))
     .filter((x) => Number.isFinite(x.v))
@@ -1788,7 +1794,16 @@ function trendChange(byPeriod, periods) {
   // else in the app. `dir` compares the raw values, so a loss shrinking
   // (−100 → −50) correctly reads as "up". (The |a| below is belt-and-braces:
   // the outer Math.abs already makes the sign of the base irrelevant.)
-  return { dir: b > a ? "up" : "down", pct: Math.abs(((b - a) / Math.abs(a)) * 100) };
+  return { dir: b > a ? "up" : "down", pct: Math.abs(((b - a) / Math.abs(a)) * 100),
+    from: pts[0].d, to: pts[pts.length - 1].d, a, b };
+}
+
+/** Hover text for the trend %: "Up 39% since Q4 '24 ($13.7M → $19.1M in Q4 '25)".
+ *  Each end keeps the currency it was reported in. */
+function trendTip(ch, r, qOnly) {
+  const cur = (d) => r.partsByP && r.partsByP[d] ? r.partsByP[d].cur : undefined;
+  return `${ch.dir === "up" ? "Up" : "Down"} ${Math.round(ch.pct)}% since ${shortDate(ch.from, qOnly)} `
+    + `(${fmtVal(ch.a, r.unit, null, cur(ch.from))} → ${fmtVal(ch.b, r.unit, null, cur(ch.to))} in ${shortDate(ch.to, qOnly)})`;
 }
 
 const stickyHead = {

@@ -207,6 +207,19 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.Drilldown.FilterApplyOnClose` | click | The drawer filter committed by clicking away or pressing Escape. |
 | `MancoReporting.Drilldown.FilterChipRemove` | click | An applied drawer-filter chip dismissed. |
 
+### Chat
+
+| Id | Action | Fires when |
+|---|---|---|
+| `MancoReporting.Chat.Open` | click | The floating 💬 button opened the chat rail. |
+| `MancoReporting.Chat.Close` | click | The rail closed (×, or its own close control). |
+| `MancoReporting.Chat.SendMessage` | click | A message sent to Claude. |
+| `MancoReporting.Chat.StopTurn` | click | Stop pressed mid-turn. |
+| `MancoReporting.Chat.SelectModel` | click | The model `<select>` changed. |
+| `MancoReporting.Chat.TogglePinpoint` | click | Pinpoint mode toggled on or off from the rail. |
+| `MancoReporting.Chat.Pin` | click | An element picked while in Pinpoint mode. |
+| `MancoReporting.Chat.Unpin` | click | The pinned-chip ✕ cleared the anchor. |
+
 ### Composed ids
 
 Built from a map, so no single literal holds them. `App.jsx`'s `VIEW_NAMES` and
