@@ -48,6 +48,9 @@ defaults to `None`): collect these after all required inputs.
   mapping each ENUM `default` to its `choices[].label`, e.g. `"Use
   defaults — Time-based vesting: Accelerate vesting; Performance-based
   vesting: None"`; semicolon-separate when there are several.
+- **The user already asked for one** — their request names something an optional's `label` or
+  `description` covers (e.g. granting units from an authorized pool) → collect that optional
+  directly, without the "Use defaults" prompt, then walk the rest as above.
 
 ## Formatting by `input_type`
 
