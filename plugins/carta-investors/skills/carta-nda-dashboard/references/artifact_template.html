@@ -123,6 +123,9 @@
         <div class="card"><h2>Provision frequency</h2><div class="sub">Share of NDAs that carry each provision</div><div id="chart-provisions"></div></div>
         <div class="card"><h2>Governing law jurisdiction</h2><div class="sub">Share of NDAs by the law that governs them</div><div id="chart-jurisdictions"></div><div class="note" id="jurisdiction-note"></div></div>
       </div>
+      <div class="card"><h2>Counterparties</h2><div class="sub" id="counterparties-sub"></div>
+        <div id="table-counterparties"></div>
+      </div>
     </div>
 
     <div class="tab-pane" id="tab-expiring">
@@ -136,12 +139,6 @@
       <div class="card"><h2>Active restrictions — non-solicit, no-contact &amp; non-circumvention</h2><div class="sub" id="restrictions-sub"></div>
         <div id="table-restrictions"></div>
         <div class="note">"NDA expiry" is the expiration date of the NDA as a whole (executed date + the NDA's term), <b>not</b> the duration of the individual provision — a non-solicit and a no-contact in the same NDA can run for different lengths. "Unknown / perpetual" means no NDA expiry could be computed; the restriction may still apply.</div>
-      </div>
-    </div>
-
-    <div class="tab-pane" id="tab-counterparties">
-      <div class="card"><h2>Counterparties</h2><div class="sub" id="counterparties-sub"></div>
-        <div id="table-counterparties"></div>
       </div>
     </div>
   </div>
@@ -296,7 +293,7 @@
     const perpetual = v => v ? esc(v) : '<span class="muted">Unknown / perpetual</span>';
 
     // ---- Tabs ----
-    const TABS = [{id:'overview',label:'Overview'},{id:'expiring',label:'Expiring'},{id:'restrictions',label:'Restrictions'},{id:'counterparties',label:'Counterparties'}];
+    const TABS = [{id:'overview',label:'Overview'},{id:'expiring',label:'Expiring'},{id:'restrictions',label:'Restrictions'}];
     function switchTab(id) { TABS.forEach(t => { document.getElementById('tab-' + t.id).classList.toggle('active', t.id === id); document.getElementById('btn-' + t.id).classList.toggle('active', t.id === id); }); }
     document.getElementById('tab-bar').innerHTML = TABS.map(t => '<button class="tab-btn" id="btn-' + t.id + '">' + t.label + '</button>').join('');
     TABS.forEach(t => document.getElementById('btn-' + t.id).addEventListener('click', () => switchTab(t.id)));
@@ -310,7 +307,6 @@
       const tiles = [
         {l: 'Total NDAs', v: fmt(k.totalNdas)},
         {l: 'Counterparties', v: fmt(k.counterparties)},
-        {l: 'Active restrictions', v: fmt(k.restrictedCompanies), s: 'companies we cannot solicit/contact'},
         {l: 'Expiring in the next 2 years', v: fmt(k.expiringNext2Years)},
         {l: 'Top governing law jurisdiction', v: esc(k.topGovLaw), text: true},
       ];

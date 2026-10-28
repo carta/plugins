@@ -38,20 +38,19 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.0</carta-plugin>
+<carta-plugin>carta-investors:6.122.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 # NDA insights dashboard
 
-One self-contained page with four tabs, built from the NDAs Carta has read for the firm:
+One self-contained page with three tabs, built from the NDAs Carta has read for the firm:
 
-- **Overview** — KPI tiles, provision frequency, and governing law (top 8 + "Other").
+- **Overview** — KPI tiles, provision frequency, governing law (top 8 + "Other"), and every
+  counterparty with its NDA count and governing law, filterable by governing law and deal.
 - **Expiring** — NDAs whose term ends in the next two years.
 - **Restrictions** — counterparties under an active non-solicit, no-contact or
   non-circumvention provision, with a Restriction filter.
-- **Counterparties** — every counterparty with its NDA count and governing law, filterable by
-  governing law and deal.
 
 Deal columns appear only for firms that track NDAs as work items in Carta.
 
