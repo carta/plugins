@@ -16,8 +16,8 @@ const UNSHARED_TIP = "Changes not shared yet. Open Share to update.";
 export const hasSharePanel = (report) => !!(report?.editable || report?.read_only);
 
 // The Budget vs Actuals header's report controls: Share, which also holds Export, and a menu
-// for renaming, duplicating, hiding and deleting.
-export default function ReportActions({ report, reportsApi, firmName, entityName, exportProps, hosted, accountsData, onOpenReport, onShareDone }) {
+// for editing a custom report, renaming, duplicating, hiding and deleting.
+export default function ReportActions({ report, reportsApi, firmName, entityName, exportProps, hosted, accountsData, onOpenReport, onShareDone, onEditCustomReport }) {
   const [open, setOpen] = useState(null); // "share" | "rename" | "confirm-delete"
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState(null);
@@ -94,6 +94,9 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
           <div role="menu" style={S.menu}>
             {report.editable && reportsApi.can(REPORT_ACTIONS.RENAME) && (
               <MenuItem small onClick={() => { setMenu(false); setOpen("rename"); }}>Rename</MenuItem>
+            )}
+            {onEditCustomReport && reportsApi.can(REPORT_ACTIONS.EDIT) && (
+              <MenuItem small onClick={() => { setMenu(false); trackClick("MancoReporting.ReportMenu.EditCustomReport"); onEditCustomReport(); }}>Edit report</MenuItem>
             )}
             {reportsApi.can(REPORT_ACTIONS.DUPLICATE) && <MenuItem small onClick={duplicate}>Duplicate</MenuItem>}
             {reportsApi.can(REPORT_ACTIONS.HIDE) && <MenuItem small onClick={hide}>Hide</MenuItem>}

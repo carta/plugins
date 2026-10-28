@@ -164,6 +164,12 @@ export const microCaption = {
 // switch to an actual monospace font for numeric alignment.
 export const inkNum = { fontFamily: SANS, fontVariantNumeric: "tabular-nums", letterSpacing: "0" };
 
+// A page subhead with a small control beside it, in one row.
+export const subheadRow = { display: "inline-flex", alignItems: "center", gap: 8 };
+
+// HEADER_ICON_BTN sized down to sit in a subheadRow at the subhead's own line height.
+export const SUBHEAD_ICON_BTN = { ...HEADER_ICON_BTN, width: 22, height: 22, marginBottom: -2, lineHeight: "inherit" };
+
 export const GLOBAL_CSS = `
   /* Self-hosted — the woff2 lives at webapp/fonts/ and is served directly by
      serve.py at /fonts/, so this loads from a local file with no network

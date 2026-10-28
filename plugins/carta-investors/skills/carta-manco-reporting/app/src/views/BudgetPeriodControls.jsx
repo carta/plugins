@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { sans, INK, PAPER, LINE, BORDER_DEFAULT, MICRO, FS } from "../ui/theme.js";
 import { Btn, Tag, Bubble, Chevron, Dropdown, MenuItem, TOOLBAR_CONTROL_STYLE } from "../ui/components.jsx";
 import {
   FREQUENCIES, COLUMN_TYPES, MONTH_NAME, canHide, filterChips,
   isDefaultFilters, rangePresets, detectPreset, normalizeRange, DEFAULT_FILTERS,
 } from "./budgetPeriods.js";
+import { useOutsideClose } from "../ui/useOutsideClose.js";
 import { groupBreakouts } from "./accountBreakout.js";
 import { trackClick, trackRender } from "../analytics.js";
 
@@ -495,24 +496,6 @@ function MonthField({ label, value, onChange }) {
 
 function monthLabel(m) {
   return MONTH_NAME[m - 1]?.slice(0, 3) || "";
-}
-
-// Popovers close on an outside click or Escape, the same as the app's
-// other two. Returns the ref to hang on the wrapper.
-function useOutsideClose(open, close) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); };
-    const onKey = (e) => { if (e.key === "Escape") close(); };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  });
-  return ref;
 }
 
 function CalendarIcon() {

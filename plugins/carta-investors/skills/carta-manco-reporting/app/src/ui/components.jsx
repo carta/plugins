@@ -66,6 +66,8 @@ const TAG_TONES = {
   positive: { bg: "#EBF7F6", fg: "#2D9E90", border: "#2D9E90" },
   negative: { bg: "#FFEEEF", fg: "#E52431", border: "#E52431" },
   warning: { bg: "#FFFCED", fg: "#B58A00", border: "#B58A00" }, // Ink brand-yellow-80 (feedback-notice text/border); bg is brand-yellow-20
+  // Ink's category tag (.ink-tag--flex-default): no border, so it reads as a name, not a status.
+  flex: { bg: "#F1F1F1", fg: "#1A1A1A", border: "transparent" },
 };
 
 /** Status/category pill — the exact recipe from Ink's components.md
@@ -73,7 +75,7 @@ const TAG_TONES = {
  *  bold), radius-subtle (4px), border color MATCHES the semantic tone (not a
  *  neutral gray line), background is that tone's subtle tint, height fixed at
  *  28px per the real Ink spec. `tone` is one of neutral/info/positive/negative/
- *  warning (see TAG_TONES above); omit for the plain neutral default. Any call
+ *  warning, or flex for a borderless category tag (see TAG_TONES above); omit for the plain neutral default. Any call
  *  site that needs a more compact inline tag (e.g. a dense table cell) opts in
  *  via `style` — every current caller already does this, so the shared default
  *  stays at the real Ink size rather than assuming compactness for everyone. */
@@ -256,6 +258,13 @@ export function MenuItem({ children, onClick, selected, small, style }) {
  *  generic shadow. */
 export const POPOVER_SHADOW = "0 8px 24px rgba(20,24,24,.12), 0 2px 6px rgba(20,24,24,.08)";
 
+/** The surface of a popover menu: paper, subtle border, the shadow above. Position and
+ *  padding stay with the caller. */
+export const POPOVER_SURFACE = {
+  background: PAPER, border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 6,
+  boxShadow: POPOVER_SHADOW, zIndex: 50,
+};
+
 /** Every control in a filter toolbar shares this chrome, so a Dropdown, a
  *  Btn and a date trigger sitting in one row can't drift apart. Ink's own
  *  small button (32px, 0 7px, 12px) reads too cramped for a toolbar and is
@@ -300,9 +309,8 @@ export function Dropdown({ options, value, onChange, triggerLabel, minWidth, sty
       {open && (
         <div className="popin" role="listbox" aria-label={triggerLabel}
           style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: "100%",
-            maxHeight: 340, overflowY: "auto", background: PAPER,
-            border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 6,
-            boxShadow: POPOVER_SHADOW, zIndex: 50, padding: "4px 0", transformOrigin: "top left" }}>
+            maxHeight: 340, overflowY: "auto", ...POPOVER_SURFACE,
+            padding: "4px 0", transformOrigin: "top left" }}>
           {options.map((o) => (
             <MenuItem key={o.id} selected={o.id === value}
                       onClick={() => { onChange(o.id); setOpen(false); }}>

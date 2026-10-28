@@ -72,7 +72,7 @@ Every row spells the full id, prefix included.
 | `MancoReporting.App.AuthFailed` | render | The dashboard token was rejected and the auth-error page showed. |
 | `MancoReporting.App.DataNotReady` | render | `/api/snapshot` answered `not_ready`: the skill has not written the snapshot yet. |
 | `MancoReporting.App.SnapshotError` | render | The snapshot failed or returned any other error. |
-| `MancoReporting.App.AccountsUnavailable` | render | `/api/accounts` failed. Every drill-down is disabled for the session. |
+| `MancoReporting.App.AccountsUnavailable` | render | `/api/accounts` failed. Every drill-down is disabled for the session, and custom reports show a reload notice instead of figures. |
 | `MancoReporting.App.BudgetVsActualsHidden` | render | The firm has no budget loaded, so Budget vs Actuals is not offered — Monthly Actuals is offered in its place. |
 | `MancoReporting.App.ToggleTheme` | click | Light/dark toggle, on either page. |
 | `MancoReporting.App.ImportBudget` | click | "Import budget" in the sidebar (hosted app only): opens the file picker for an exported budget bundle. |
@@ -87,6 +87,7 @@ Every row spells the full id, prefix included.
 | `MancoReporting.Nav.BudgetVsActuals` | click | Sidebar → Budget vs Actuals. |
 | `MancoReporting.Nav.MonthlyActuals` | click | Sidebar → Monthly Actuals. Shown only while this firm has no budget. |
 | `MancoReporting.Nav.BudgetVsActualsBudget` | click | Sidebar → one budget under Budget vs Actuals. The budget id stays out of the event. |
+| `MancoReporting.Nav.NewCustomReport` | click | Sidebar → "New custom report" under Budget vs Actuals. Opens an unsaved draft; shown only when the server can derive custom reports and the ledger (`/api/accounts`) has loaded. |
 | `MancoReporting.Nav.SharedReport` | click | Sidebar → a report someone shared with you, under "Shared with you". The report id stays out of the event. |
 | `MancoReporting.Nav.LoadSharedReports` | click | Sidebar → "Load shared reports" (or "Check for new shared reports"). |
 | `MancoReporting.Nav.ShowHiddenReports` | click | Sidebar → "Show N hidden" under "Shared with you". |
@@ -186,6 +187,12 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.ShareStatus.CopyFixPrompt` | click | Copy on the Claude install/sign-in prompt for a failed shared-reports load whose error names the `claude` CLI itself as the problem. |
 | `MancoReporting.ShareStatus.SignIn` | click | "Sign in to Claude" shown for a failed shared-reports load coded `not_logged_in`. |
 
+### Custom report
+
+| Id | Action | Fires when |
+|---|---|---|
+| `MancoReporting.ReportMenu.EditCustomReport` | click | Report menu (⋯) → Edit report, on a custom report. |
+
 ### Drill-down drawer
 
 | Id | Action | Fires when |
@@ -258,6 +265,9 @@ or when a row here names a page nothing emits.
 | `MancoReporting.MonthlyActuals.ExportHtml` | click | Monthly Actuals: Export pressed. |
 | `MancoReporting.MonthlyActuals.ExportHtmlSucceeded` | click | Monthly Actuals: the export file was produced. |
 | `MancoReporting.MonthlyActuals.ExportHtmlFailed` | click | Monthly Actuals: the export threw, or its target was missing. |
+| `MancoReporting.CustomReport.ExportHtml` | click | Custom report: Export pressed. |
+| `MancoReporting.CustomReport.ExportHtmlSucceeded` | click | Custom report: the export file was produced. |
+| `MancoReporting.CustomReport.ExportHtmlFailed` | click | Custom report: the export threw, or its target was missing. |
 
 `Drilldown.Open.Account`, `.DepartmentAccount` and `.DateRangeCategory` without a suffix
 still fire for an entry point `DRILL_SOURCES` does not map. There is no separate click

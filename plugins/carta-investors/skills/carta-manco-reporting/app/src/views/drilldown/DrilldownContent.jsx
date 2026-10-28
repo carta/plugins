@@ -668,7 +668,7 @@ const GF_PANEL_HEIGHT = 416;
 const GF_PANEL_MIN_HEIGHT = 240;
 const GF_PANEL_MARGIN = 16;
 
-// Same contract as BudgetPeriodControls.jsx's useOutsideClose, generalized
+// Same contract as ui/useOutsideClose.js, generalized
 // to N refs (trigger + portaled panel).
 function useOutsideClose(open, close, refs) {
   useEffect(() => {

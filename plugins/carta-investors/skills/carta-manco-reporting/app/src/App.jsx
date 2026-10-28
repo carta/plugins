@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { sans, GLOBAL_CSS, FS, EASE_OUT } from "./ui/theme.js";
+import { sans, GLOBAL_CSS, FS, FAINT, EASE_OUT } from "./ui/theme.js";
 import AppShell from "./shell/AppShell.jsx";
 import ChatRail, { CHAT_RAIL_WIDTH_PX, CHAT_RAIL_TRANSITION_MS } from "./ui/ChatRail.jsx";
 import { useChatFeatureFlag } from "./shell/chatFeature.js";
@@ -12,6 +12,7 @@ import { reloadPage } from "./shell/reloadPage.js";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
 import DashboardView from "./views/DashboardView.jsx";
 import BudgetActualsView from "./views/BudgetActualsView.jsx";
+import CustomReportView from "./views/CustomReportView.jsx";
 import MonthlyActualsView from "./views/MonthlyActualsView.jsx";
 import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
@@ -60,6 +61,10 @@ function usePathRoute(firmSlug) {
 // workbook-derived budget id, so it never reaches an id.
 const VIEW_NAMES = { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals", "monthly-actuals": "MonthlyActuals" };
 
+// The unsaved custom report draft's slug; a draft seeded from a budget appends its id
+// after DRAFT_FROM.
+const NEW_CUSTOM_REPORT = "new-custom-report";
+const DRAFT_FROM = `${NEW_CUSTOM_REPORT}-from-`;
 
 function slugify(name) {
   return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -75,6 +80,9 @@ function reportSnapshotError(reason) {
 export default function App() {
   const [snapshot, setSnapshot] = useState(null);
   const [accountsData, setAccountsData] = useState(null);
+  // Set once /api/accounts fails, so a page that needs the ledger can say it did not
+  // load instead of waiting on it forever.
+  const [accountsUnavailable, setAccountsUnavailable] = useState(false);
   // Rebuilt inline, this handed the drawer a new array every render, which
   // recomputed its whole filter chain and reset the entry list as it grew.
   const topCategoryNames = useMemo(() => topCategoryNamesFor(accountsData), [accountsData]);
@@ -258,11 +266,12 @@ export default function App() {
       fetch(withFirmParam("/api/accounts"))
         .then(r => r.json())
         .then(data => {
-          if (data?.error) { trackRender("MancoReporting.App.AccountsUnavailable"); return; }
+          if (data?.error) { trackRender("MancoReporting.App.AccountsUnavailable"); setAccountsUnavailable(true); return; }
           if (data?.monthly_categories?.categories) assignExpenseCategoryColors(data.monthly_categories.categories);
           setAccountsData(data);
+          setAccountsUnavailable(false);
         })
-        .catch(() => trackRender("MancoReporting.App.AccountsUnavailable")),
+        .catch(() => { trackRender("MancoReporting.App.AccountsUnavailable"); setAccountsUnavailable(true); }),
     ]).then(() => snapshotNotReady);
   }, [failSnapshot]);
   const reportsApi = useReports({ onChanged: fetchData });
@@ -364,7 +373,15 @@ export default function App() {
   // has no budget at all.
   const budgetsList = renderableBudgets(snapshot);
   const firmHasBudget = hasBudget(snapshot);
-  const { own: budgetChildren, sharedWithYou: sharedChildren } = budgetNavChildren(budgetsList, reportsApi);
+  const { own: ownBudgetChildren, sharedWithYou: sharedChildren } = budgetNavChildren(budgetsList, reportsApi);
+  // `action: true` renders as a muted "+" row, not a page — see Sidebar.jsx. It follows
+  // the reports it makes more of. Saved custom reports are ordinary own budgets;
+  // NEW_CUSTOM_REPORT, or DRAFT_FROM plus a budget id, is the unsaved draft. A custom
+  // report shows figures only from the ledger, so it is offered only once that loaded.
+  const canDerive = !!accountsData && reportsApi.available && reportsApi.can(REPORT_ACTIONS.DERIVE);
+  const budgetChildren = canDerive
+    ? [...ownBudgetChildren, { slug: NEW_CUSTOM_REPORT, label: "New custom report", action: true, event: "MancoReporting.Nav.NewCustomReport" }]
+    : ownBudgetChildren;
   // `icon` is a lookup key into Sidebar.jsx's ICONS map (Lucide glyphs, per
   // Ink's brand.md's Ink-icon stand-in mapping).
   const navItems = [
@@ -386,8 +403,18 @@ export default function App() {
   const activeParent = validParents.has(routeParent) ? routeParent : "dashboard";
   // Default budget = the first available when BvA is active but no child specified.
   const activeBudgetId = routeChild
-                       || (activeParent === "budget-vs-actuals" && (budgetChildren[0] || sharedChildren[0])?.slug);
+                       || (activeParent === "budget-vs-actuals" && (ownBudgetChildren[0] || sharedChildren[0])?.slug);
   const activeRoute = activeBudgetId ? `${activeParent}/${activeBudgetId}` : activeParent;
+
+  // A draft has no budget yet, so it is recognized by its slug; a saved custom report is
+  // any budget whose view carries a pivot — yours, a duplicate, or one shared with you.
+  const seedBudgetId = String(activeBudgetId).startsWith(DRAFT_FROM) ? activeBudgetId.slice(DRAFT_FROM.length) : null;
+  const isDraftCustomReport = activeParent === "budget-vs-actuals"
+    && (activeBudgetId === NEW_CUSTOM_REPORT || seedBudgetId !== null);
+  const activeBudget = budgetsList.find(b => b.id === activeBudgetId) || null;
+  const isCustomReport = isDraftCustomReport || (activeParent === "budget-vs-actuals" && !!activeBudget?.view?.pivot);
+  const openReport = (id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals");
+  const shareDone = (message) => setShareNotice({ status: "done", op: REPORT_ACTIONS.SHARE, message });
 
   // Waits for the snapshot: until it lands, Budget vs Actuals is filtered out of
   // navItems and activeParent falls back to "dashboard" — a page nobody opened.
@@ -517,7 +544,7 @@ export default function App() {
             onToggleChat={onToggleChat}
           />
         )}
-        {snapshot && activeParent === "budget-vs-actuals" && (
+        {snapshot && activeParent === "budget-vs-actuals" && !isCustomReport && (
           <BudgetActualsView
             snapshot={snapshot}
             accountsData={accountsData}
@@ -529,8 +556,33 @@ export default function App() {
             onToggleChat={onToggleChat}
             reportsApi={reportsApi}
             hosted={hostedApp}
-            onOpenReport={(id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals")}
-            onShareDone={(message) => setShareNotice({ status: "done", op: REPORT_ACTIONS.SHARE, message })}
+            onOpenReport={openReport}
+            onShareDone={shareDone}
+            onCreateCustomReport={canDerive ? (id) => navigate(`budget-vs-actuals/${DRAFT_FROM}${id}`) : null}
+          />
+        )}
+        {snapshot && !accountsData && isCustomReport && (
+          <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>
+            {accountsUnavailable
+              ? "Custom reports need the ledger, which did not load. Reload the page."
+              : "Loading the ledger…"}
+          </p>
+        )}
+        {snapshot && accountsData && isCustomReport && (
+          <CustomReportView
+            key={activeBudgetId}
+            snapshot={snapshot}
+            accountsData={accountsData}
+            drilldown={drilldown}
+            budget={isDraftCustomReport ? null : activeBudget}
+            seedBudgetId={seedBudgetId}
+            reportsApi={reportsApi}
+            hosted={hostedApp}
+            onOpenReport={openReport}
+            onShareDone={shareDone}
+            onCancel={() => openReport(null)}
+            dark={dark}
+            onToggleTheme={toggleTheme}
           />
         )}
         {snapshot && activeParent === "monthly-actuals" && (

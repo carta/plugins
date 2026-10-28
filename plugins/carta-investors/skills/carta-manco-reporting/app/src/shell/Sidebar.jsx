@@ -69,11 +69,10 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
                 type="button"
                 onClick={() => {
                   trackNav(item.slug);
-                  onNavigate(
-                    // Clicking a parent with children jumps to its first child
-                    // so the user lands on real content, not an empty page.
-                    item.children?.length ? `${item.slug}/${item.children[0].slug}` : item.slug
-                  );
+                  // Clicking a parent with children jumps to its first page so the user lands
+                  // on real content, not an empty page or a builder (an action row is no page).
+                  const firstPage = item.children?.find(child => !child.action);
+                  onNavigate(firstPage ? `${item.slug}/${firstPage.slug}` : item.slug);
                 }}
                 className={isLeafActive ? "navitem active" : "navitem"}
                 style={{
@@ -88,6 +87,28 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
               {item.children && item.children.map(child => {
                 const childRoute = `${item.slug}/${child.slug}`;
                 const childActive = childRoute === route;
+                if (child.action) {
+                  return (
+                    <button
+                      key={child.slug}
+                      type="button"
+                      onClick={() => {
+                        trackClick(child.event);
+                        onNavigate(childRoute);
+                      }}
+                      className="navitem"
+                      style={{
+                        ...styles.navChild,
+                        ...styles.navChildAction,
+                        color: childActive ? INK : FAINT,
+                      }}
+                      title={child.label}
+                    >
+                      <span style={styles.navChildActionIcon}>+</span>
+                      {child.label}
+                    </button>
+                  );
+                }
                 return (
                   <button
                     key={child.slug}
@@ -319,6 +340,17 @@ const styles = {
   navChildActive: {
     color: INK, fontWeight: 600, borderLeft: 0,
     boxShadow: `inset 3px 0 0 0 ${SIDENAV_STRIPE}`, paddingLeft: 20,
+  },
+  // "New custom report" reads as a standing action, not a saved page: muted
+  // weight, a leading + chip, no connector line or active stripe.
+  navChildAction: {
+    display: "flex", alignItems: "center", gap: 8,
+    fontWeight: 400, borderLeft: "none", paddingLeft: 20,
+  },
+  navChildActionIcon: {
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+    border: `1px solid ${LINE}`, fontSize: 11, lineHeight: 1, color: "inherit",
   },
   // Ink SideNav's SectionLabel type (600 10px/16px, uppercase, .08em, subtle),
   // set on the group's connector line so the section stays inside the group.

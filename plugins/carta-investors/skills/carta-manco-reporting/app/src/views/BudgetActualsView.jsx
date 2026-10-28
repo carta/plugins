@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, microCaption, FS, RED } from "../ui/theme.js";
+import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, microCaption, FS, RED, subheadRow, SUBHEAD_ICON_BTN } from "../ui/theme.js";
 import { H1, NoteIcon } from "../ui/components.jsx";
 import BudgetActualsAccounts, { hasMonthlyDetail } from "./BudgetActualsAccounts.jsx";
 import { glNameMap, glTooltip } from "../ui/glNames.js";
@@ -82,7 +82,7 @@ export function ownsPeriodControl(viewKind, budget) {
   return viewKind === "by-account" && hasMonthlyDetail(budget);
 }
 
-export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId, dark, onToggleTheme, chatOpen, onToggleChat, reportsApi, hosted, onOpenReport, onShareDone }) {
+export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId, dark, onToggleTheme, chatOpen, onToggleChat, reportsApi, hosted, onOpenReport, onShareDone, onCreateCustomReport }) {
   // The build writes the dimension beside the entries it scopes, in
   // accounts.json. Snapshot is the fallback for a cache written earlier.
   const dimension = dimensionOf(accountsData) || dimensionOf(snapshot);
@@ -244,7 +244,23 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
           — see AppShell's Capped. The heading is uncapped with them, so
           Export right-aligns with the table rather than with the prose. */}
       <H1
-        subhead="Budget vs actuals"
+        subhead={
+          <span style={subheadRow}>
+            Budget vs actuals
+            {onCreateCustomReport && (
+              <button
+                type="button"
+                data-export-exclude
+                onClick={() => onCreateCustomReport(budgetId)}
+                title="Create a custom report"
+                aria-label="Create a custom report"
+                style={styles.addReportBtn}
+              >
+                +
+              </button>
+            )}
+          </span>
+        }
         actions={
           <div data-export-exclude style={{ display: "flex", gap: 8 }}>
             {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
@@ -1001,6 +1017,7 @@ export function breakoutChildren(row, columns, breakoutActuals) {
 }
 
 export const styles = {
+  addReportBtn: { ...SUBHEAD_ICON_BTN, fontSize: 16, lineHeight: 1, fontWeight: 500 },
   // Row under H1 holding the account-view period chip, when applicable.
   metaRow: {
     ...sans,
