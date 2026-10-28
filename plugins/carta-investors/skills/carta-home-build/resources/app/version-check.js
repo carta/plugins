@@ -1,5 +1,6 @@
 // ── Update banner: is this artifact behind the published build? ──
-// Depends on core.js (carta-home.app.js): _mcp(), escHtml(), showToast(), trackHome(), trackPrompt(), PROMPT_SOURCE.
+// Depends on core.js (carta-home.app.js): _mcp(), escHtml(), showToast(), trackHome(), trackPrompt(), PROMPT_SOURCE,
+// ARTIFACT_VERSION.
 //
 // A live artifact is a frozen copy of its source — once built into a user's workspace
 // nothing can update it in place, and the sandbox sets connect-src 'none' so it cannot
@@ -12,7 +13,6 @@ const PLUGIN = "carta-investors";
 // by plugin. The plugin's own version moves several times a day for reasons a Carta Home
 // user never sees, so keying the banner to it would raise one almost daily, forever.
 const SKILL = "carta-home-build";
-const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
 const BUILT_AT = "{{BUILT_AT}}";
 // A fresh build is already the newest the user can get. Matches carta-mcp's week-old
 // release pick, so after this window the banner names only a release a rebuild reaches.

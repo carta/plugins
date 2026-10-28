@@ -99,10 +99,12 @@ SKILLS_ROOT = SKILL_DIR.parent
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 # App-layer JS is assembled from multiple source files, concatenated in this
-# order into the single __CARTA_HOME_APP_JS__ slot below. Concatenation order
-# doesn't matter functionally today (function/let declarations, no cross-file
-# execution-order dependencies) — list shared/core logic first by convention.
-# Add new feature files here as carta-home.app.js gets split further.
+# order into the single __CARTA_HOME_APP_JS__ slot below. Parts run top to
+# bottom, so code that runs at load (the Init block in carta-home.app.js, and
+# every function it calls) may only touch `const`/`let` bindings declared in its
+# own part or an earlier one; later parts' bindings are still in the temporal
+# dead zone. A later part that needs work at load starts it itself (see
+# version-check.js). Add new feature files here as carta-home.app.js gets split further.
 APP_JS_PARTS = [
     "carta-home.app.js",
     "app/capital-activity.js",

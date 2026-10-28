@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.2.0</carta-plugin>
+<carta-plugin>carta-investors:7.2.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -244,7 +244,8 @@ need the full file in context. Edit the small source file for what you're changi
 App-layer JS is split across multiple files (see `APP_JS_PARTS` in
 `build_artifact.py`) but still assembles into a single classic (non-module)
 `<script>` tag — no bundler, no runtime `import`/`export`. New feature files
-just get appended to `APP_JS_PARTS` and concatenated in order; a file's header
+just get appended to `APP_JS_PARTS` and concatenated in order (parts run top to bottom;
+see the comment there for what code that runs at load may touch); a file's header
 comment documents which shared helpers it depends on from elsewhere in the
 bundle.
 
@@ -325,6 +326,12 @@ handler), IDs as `CartaHome.<Area>.<Specific>` (e.g. `CartaHome.Tour.Start`) —
 clicks, keystrokes, dropdown changes. IDs are literals: never put customer data (firm,
 fund or company names) in one. A detail that varies goes in `{ value }` — a tour step, a
 batch size — which only a click carries; a `render` keeps just its ID.
+
+Page-load events: `CartaHome.View` (render) fires on every load. `CartaHome.View.Version`
+(click, `value` = the skill version the page was built with) follows it, so analytics can
+tell who is on an old Home. `CartaHome.View.First` (render) fires only on a browser's
+first load (localStorage key `carta-home-viewed-v1`). `CartaHome.Tour.Start` fires only when
+the tour actually opens, not on every load.
 
 A button that copies a prompt calls `trackPrompt(elementId, prompt, source, { skill, rank })`
 instead. The tracker attaches the suggested text (never the viewer's edits) as the

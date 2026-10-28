@@ -83,6 +83,8 @@ function trackHome(action, elementId, options) {
     console.warn("[carta-home] no UI-event transport — analytics events are being dropped");
   }
 }
+// Stamped in at build time. Init reads it at load, so it lives in the first part (see APP_JS_PARTS).
+const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
 
 // The mcp_prompt schema's `source` enum: a value outside it fails validation and the event is lost.
 const PROMPT_SOURCE = Object.freeze({
@@ -1257,8 +1259,21 @@ function markEnrichmentDone() {
 }
 
 // ── Init ──
+const VIEWED_KEY = 'carta-home-viewed-v1';
+// A render carries only its ID, so the build's version rides on a companion event's `value` —
+// that is how analytics tells who is still on an old Home. Marks this browser's first view too.
+function trackView() {
+  trackHome("render", "CartaHome.View");
+  trackHome("click", "CartaHome.View.Version", { value: ARTIFACT_VERSION });
+  try {
+    if (!localStorage.getItem(VIEWED_KEY)) {
+      trackHome("render", "CartaHome.View.First");
+      localStorage.setItem(VIEWED_KEY, '1');
+    }
+  } catch (e) { /* storage blocked: first vs repeat is unknowable, so report neither */ }
+}
 console.log("[carta-home] build {{BUILD_ID}}");
-trackHome("render", "CartaHome.View");
+trackView();
 renderDashboardLaunchers();  // static — no firm context needed, so it paints before any fetch
 renderCapabilities([]);      // the static prompts paint first; get_current_user's recs replace them
 fetchLiveData();       // also triggers fetchBenchmarkData() once firmId is resolved
@@ -1425,8 +1440,8 @@ let _tourRestoreVal = '';
 let _tourReturnFocusEl = null;
 
 function tourStart() {
-  trackHome("click", "CartaHome.Tour.Start");
   if (localStorage.getItem(TOUR_KEY)) return;
+  trackHome("click", "CartaHome.Tour.Start");
   _tourReturnFocusEl = document.activeElement;
   _tourIdx = 0;
   _tourPaint();
