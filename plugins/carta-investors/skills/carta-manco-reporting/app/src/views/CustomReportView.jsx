@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { sans, INK, PAPER, LINE, FAINT, FS, subheadRow, SUBHEAD_ICON_BTN } from "../ui/theme.js";
+import { sans, INK, PAPER, LINE, FAINT, FS } from "../ui/theme.js";
 import { useOutsideClose } from "../ui/useOutsideClose.js";
 import { displayFirmName } from "../ui/firmName.js";
 import { H1, Btn, Tag, Chevron, Bubble, TOOLBAR_CONTROL_STYLE } from "../ui/components.jsx";
@@ -329,23 +329,6 @@ export default function CustomReportView({
   return (
     <div id={REPORT_EXPORT_ID}>
       <H1
-        subhead={
-          mode === "report" && canSave ? (
-            <span style={subheadRow}>
-              Budget vs actuals
-              <button
-                type="button"
-                data-export-exclude
-                onClick={() => setMode("configure")}
-                title="Edit this custom report"
-                aria-label="Edit this custom report"
-                style={styles.editReportBtn}
-              >
-                <EditIcon />
-              </button>
-            </span>
-          ) : "Budget vs actuals"
-        }
         actions={
           mode === "report" ? (
             <div data-export-exclude style={{ display: "flex", gap: 8 }}>
@@ -504,25 +487,12 @@ export default function CustomReportView({
   );
 }
 
-// Lucide's "pencil" glyph, inlined — not in this app's minimal lucide-react
-// vendor bundle.
-function EditIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-      <path d="m15 5 4 4" />
-    </svg>
-  );
-}
-
 const styles = {
   saveError: { ...sans, color: "var(--red)", fontSize: FS.body, margin: "0 0 12px" },
   nameInput: {
     ...sans, fontSize: FS.body, color: INK, background: PAPER,
     border: `1px solid ${LINE}`, borderRadius: 4, padding: "6px 8px", width: 180,
   },
-  editReportBtn: { ...SUBHEAD_ICON_BTN },
   filtersWrap: { position: "relative", display: "inline-flex", alignItems: "center" },
   panelPos: { position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 40 },
   filterChip: { gap: 4, paddingRight: 4, fontWeight: 500 },
