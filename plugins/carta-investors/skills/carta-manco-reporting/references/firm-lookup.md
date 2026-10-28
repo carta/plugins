@@ -45,7 +45,7 @@ answer or by default — use that prefix as `<SERVER>` for every tool call in th
 and after.
 
 **Meta-tools are never routed through `read_tool` or `call_tool`.** `list_contexts`, `set_context`,
-`search_tools`, `discover`, `get_current_user`, and `welcome` are each their own
+`search_tools`, `get_current_user`, and `welcome` are each their own
 top-level tool under `<SERVER>` — call them directly, e.g. `mcp__<SERVER>__list_contexts(...)`.
 Never pass one of their names into `read_tool(name="list_contexts", ...)` or
 `read_tool(name="search_tools", ...)` — the proxies' registry only holds Fund

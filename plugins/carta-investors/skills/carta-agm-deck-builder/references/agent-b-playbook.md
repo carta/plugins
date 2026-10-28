@@ -83,7 +83,7 @@ mcp__claude_ai_carta__call_tool({"name": "fa__create__brand_board", "arguments":
 mcp__claude_ai_carta__call_tool({"name": "fa__mutate__brand_board", "arguments": {"brand_board": <brand_data_json>}})
 ```
 
-**CLI fallback** (if CLI was the method that worked in Phase 1, or MCP mutate fails):
+**CLI fallback** (if CLI was the method that worked in Phase 1, or MCP `call_tool` fails):
 ```bash
 SESSION=$(carta scope set write --entity firm=<firm_uuid>)
 if [ -z "$SESSION" ]; then

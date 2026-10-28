@@ -1,9 +1,13 @@
 // Client side of /api/budget-upload. The Worker does the checking; these return its
 // message so the user sees why a file was refused.
+import { withFirmParam } from "../state/firmParam.js";
 
 const URL_PATH = "/api/budget-upload";
-// The stored bundle as a file download (the Worker sets Content-Disposition).
-export const BUDGET_DOWNLOAD_URL = `${URL_PATH}?download=1`;
+// The stored bundle as a file download (the Worker sets Content-Disposition). A function,
+// not a module-load-time constant: the page's ?firm= can change (a chooser pick, a new deep
+// link) after this module first loads, and the link must always name the firm the page is
+// showing, not whichever one was in the URL on first import.
+export const budgetDownloadUrl = () => withFirmParam(`${URL_PATH}?download=1`);
 
 async function outcome(res) {
   if (res.ok) return { ok: true };
@@ -23,7 +27,7 @@ export async function attempt(action) {
 }
 
 export async function uploadBudget(file) {
-  const res = await fetch(URL_PATH, {
+  const res = await fetch(withFirmParam(URL_PATH), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: await file.text(),
@@ -32,7 +36,7 @@ export async function uploadBudget(file) {
 }
 
 export async function removeBudget() {
-  return outcome(await fetch(URL_PATH, { method: "DELETE" }));
+  return outcome(await fetch(withFirmParam(URL_PATH), { method: "DELETE" }));
 }
 
 // One line for the sidebar. `upload` is snapshot.budgetUpload.

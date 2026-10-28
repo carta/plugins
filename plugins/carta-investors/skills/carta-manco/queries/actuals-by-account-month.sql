@@ -1,6 +1,6 @@
 -- Canonical actuals query — used by every Carta budgeting skill.
 -- Substitute <entity_name>, <period_start>, <period_end> before calling
--- the connected Carta MCP fetch tool with verb "dwh:execute:query".
+-- the connected Carta MCP `read_tool` with name "dwh__execute__query".
 --
 -- Schema notes (aligned with carta-consolidating-financial-reports):
 --   - EFFECTIVE_DATE is the books date — use this, not POSTED_DATE.

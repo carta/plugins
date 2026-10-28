@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -447,8 +447,7 @@ for every viewer.
 publish to.
 
 **Gate B — resolve the connector's display name.** claude.ai connectors appear as
-`mcp__claude_ai_<connector>__<tool>`. Find the one exposing `list_contexts` / `fetch` and
-store its **display name** as `CARTA_MCP_SERVER`. Do not substitute a UUID or a prefixed
+`mcp__claude_ai_<connector>__<tool>`. Find the one exposing `welcome`; if several do, ask which. Store its **display name** as `CARTA_MCP_SERVER`. Do not substitute a UUID or a prefixed
 tool name — the runtime addresses connectors by display name and rejects anything else.
 Display names legitimately contain spaces and parentheses, e.g. `Carta (Preproduction)`,
 so quote the value everywhere it is passed.

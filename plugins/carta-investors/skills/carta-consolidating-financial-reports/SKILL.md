@@ -10,7 +10,6 @@ allowed-tools:
   # Production
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
-  - mcp__claude_ai_Carta__fetch
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
@@ -18,7 +17,6 @@ allowed-tools:
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
-  - mcp__carta_production__fetch
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
@@ -26,7 +24,6 @@ allowed-tools:
   # Sandbox
   - mcp__carta_sandbox__call_tool
   - mcp__carta_sandbox__read_tool
-  - mcp__carta_sandbox__fetch
   - mcp__carta_sandbox__welcome
   - mcp__carta_sandbox__set_context
   - mcp__carta_sandbox__list_contexts
@@ -34,14 +31,12 @@ allowed-tools:
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
-  - mcp__carta__fetch
   - mcp__carta__welcome
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
@@ -59,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -184,8 +179,8 @@ re-implement or pre-run its logic here.
 
 **The Carta connector asks for its `welcome` tool as your first action on
 connecting; that directive starts at Gate 0.** It governs the order of Carta
-*tool calls* — `welcome` before `set_context`, `list_contexts`, `read_tool`, `call_tool`, or
-`fetch` — and the welcome screen is text, not a tool call. Emit the screen, then
+*tool calls* — `welcome` before `set_context`, `list_contexts`, `read_tool`, or
+`call_tool` — and the welcome screen is text, not a tool call. Emit the screen, then
 call `welcome` at Gate 0. If the handshake already fired, the screen is still
 owed: a connection banner is not the welcome screen, and no tool emits the
 screen — you write it.
@@ -356,15 +351,15 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`,
 
 ### The five Carta tools load lazily — a short tool list is not a missing tool
 
-Derive `<SERVER>` from the server name as shown above. After that, the seven
-suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch`, and
+Derive `<SERVER>` from the server name as shown above. After that, the six
+suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, and
 `search_tools` are exhaustive for every Carta MCP server regardless of environment. Call
 `mcp__<SERVER>__<suffix>` directly.
 
 **`list_contexts`, `read_tool` and `call_tool` load lazily. They will often NOT appear in
 your tool list, and that is expected — they still exist and still work.** Only
-`welcome`, `set_context`, and `fetch` are reliably visible up front; a server
-may also expose extras like `get_current_user` or `mutate` that this skill does
+`welcome` and `set_context` are reliably visible up front; a server
+may also expose extras like `get_current_user` that this skill does
 not use. Never treat a tool's absence from the visible list as evidence it is
 unavailable, and never tell the user a Carta tool "doesn't exist" or that the
 connector is missing a capability. Just call it.
@@ -386,7 +381,7 @@ the end of this skill — do not infer from a tool listing.
 ### Instrumentation — every Carta MCP call carries `_instrumentation_v2`
 
 Pass it on **every** `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`,
-`fetch`, and `search_tools` call, exactly as written in the examples below:
+and `search_tools` call, exactly as written in the examples below:
 
 ```
 _instrumentation_v2={...}

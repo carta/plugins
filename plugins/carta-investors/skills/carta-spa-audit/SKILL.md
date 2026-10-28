@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -123,7 +123,7 @@ Every time you respond in natural language to a human user using this skill, sho
 
 ## Prerequisites
 
-- **Carta MCP connection** — `list_contexts` and `fetch` tools available; user has an active session for at least one investment firm.
+- **Carta MCP connection** — `list_contexts` and `read_tool` tools available; user has an active session for at least one investment firm.
 - **SPA documents uploaded** — the firm has Stock Purchase Agreements in Carta's Document Intelligence; without them, all equity companies land in bucket 1 (missing SPA).
 - **Mode A needs Cowork.** Live Artifacts only render there. Claude Desktop and the Claude Code CLI get Mode B, which is a full text answer, not a degraded one.
 

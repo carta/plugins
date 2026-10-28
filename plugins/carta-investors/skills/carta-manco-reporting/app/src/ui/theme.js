@@ -100,6 +100,12 @@ export const HEADER_ICON_BTN = {
 // NOT what Ink does, even though it looks like standard practice from other design systems.
 const SANS = "Inter,'Open Sans','Helvetica Neue',Helvetica,Arial,sans-serif";
 export const sans = { fontFamily: SANS };
+
+// Covers the whole viewport instead of sitting inside the normal sidebar/content layout —
+// for a screen shown before there is a firm (or its data) to put a sidebar around, such as
+// LoadingScreen's own `fullPage` or FirmChooser. Spread this first, then add whatever layout
+// (display, placeItems, overflow) the screen needs on top.
+export const FULL_PAGE_COVER = { ...sans, minHeight: "100vh", position: "fixed", inset: 0, background: PAPER, color: INK };
 // Family-prominent chain (Ink's h1/display heading font) — reserved for H1 only, never
 // for body text or h2-h4. Georgia is a real, always-available system serif, kept as the
 // fallback for the rare case the self-hosted woff2 fails to load. Georgia only ships

@@ -71,7 +71,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -226,7 +226,7 @@ Branch on the result:
 
 > This workflow requires Fund Admin access, which your firm doesn't appear to have enabled. Reach out to your Carta account manager or [contact Carta Support](https://support.carta.com) to request access.
 
-**Important — this is a proxy, not a real entitlement check.** See Architecture Notes §"Fund Admin access preflight" for the full rationale — there is no Carta MCP command today that exposes real SKU/entitlement data (SOI's own Step 3 `discover` call is for MCP UUID-form tool disambiguation only, not an entitlement gate), so this substitutes a cheap reachability probe. It cannot distinguish specific FA sub-products, so false negatives/positives are possible.
+**Important — this is a proxy, not a real entitlement check.** See Architecture Notes §"Fund Admin access preflight" for the full rationale — there is no Carta MCP command today that exposes real SKU/entitlement data, so this substitutes a cheap reachability probe. It cannot distinguish specific FA sub-products, so false negatives/positives are possible.
 
 ---
 
@@ -346,11 +346,8 @@ gate — same change, same rationale, as `carta-compliance-routing` and
 access is a family of ~23 `ProductCode` values fed by fund-admin's own
 `products_fundproductaccess` table via an internal gRPC call, cached in
 carta-web's `EntityProductAccess` model. That model is **not exposed through
-the Carta MCP gateway** — there is no `search_tools`-style command this router can
-call the way `carta-valuations-routing` calls
-`search_tools({"query": "waterfall modeling"})`. (SOI's own tool-discovery in Step 3
-is unrelated — it disambiguates the MCP's UUID-form tool prefix, not an
-entitlement check.)
+any Carta MCP command** — this router has nothing to call the way `carta-valuations-routing` calls
+`search_tools({"query": "waterfall modeling"})`.
 
 Absent a real entitlement command, Step 2.5 substitutes a cheap proxy: one
 `fa__list__entities` call. This only proves `FUND_ADMIN.*` data is reachable —

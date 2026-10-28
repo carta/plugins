@@ -8,7 +8,6 @@ allowed-tools:
   # Production
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
-  - mcp__claude_ai_Carta__fetch
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
@@ -16,7 +15,6 @@ allowed-tools:
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
-  - mcp__carta_production__fetch
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
@@ -24,14 +22,12 @@ allowed-tools:
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
-  - mcp__carta__fetch
   - mcp__carta__welcome
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
@@ -48,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -333,7 +329,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 If no firm was named, defer to the capability's own parameter gate.
 
-**Never BM25-search for Carta MCP tools at any point in this skill, with one stated exception below.** Derive `<SERVER>` from the server name as shown in step 2. After that, the seven suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch`, and `search_tools` are exhaustive for every Carta MCP server regardless of environment. Call `mcp__<SERVER>__<suffix>` directly — these tools exist on every Carta server; you do not need to verify their existence before calling them. Do not run `tool_search_tool_bm25` under any circumstances to discover the prefix, to find `fetch`, or for anything else — the one sanctioned exception is calling `mcp__<SERVER>__search_tools("report a bug feedback")` once per session, exactly as [references/report-feedback.md](references/report-feedback.md)'s availability check requires before filing `fa:create:feedback`. That one call is the only reason this skill ever searches for a Carta tool.
+**Never BM25-search for Carta MCP tools at any point in this skill, with one stated exception below.** Derive `<SERVER>` from the server name as shown in step 2. After that, the six suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, and `search_tools` are exhaustive for every Carta MCP server regardless of environment. Call `mcp__<SERVER>__<suffix>` directly — these tools exist on every Carta server; you do not need to verify their existence before calling them. Do not run `tool_search_tool_bm25` under any circumstances to discover the prefix, to find `read_tool`, or for anything else — the one sanctioned exception is calling `mcp__<SERVER>__search_tools("report a bug feedback")` once per session, exactly as [references/report-feedback.md](references/report-feedback.md)'s availability check requires before filing `fa:create:feedback`. That one call is the only reason this skill ever searches for a Carta tool.
 
 ---
 
@@ -353,7 +349,7 @@ Set `<RUNTIME>`:
 Runs once per session after the firm is resolved (Gate 0). Call the eligibility pre-check:
 
 ```
-mcp__<SERVER>__fetch(command="fa:get:manco_eligibility", _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco"]})
+mcp__<SERVER>__read_tool(name="fa__get__manco_eligibility", arguments={}, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco"]})
 ```
 
 This returns `{available, has_active_manco, has_fund_admin, fa_product_codes}` — a fast, cached pre-check; it replaces listing entities and inferring a ManCo from an `entity_types` filter.

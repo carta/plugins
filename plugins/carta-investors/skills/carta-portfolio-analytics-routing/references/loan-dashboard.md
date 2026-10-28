@@ -19,7 +19,7 @@ Publishes (or redeploys) a persistent artifact showing the user's loan portfolio
 ## Steps
 
 ### 1. Identify the Carta MCP server
-Scan the tools available in the conversation (system-reminder blocks) for `mcp__*__fetch` that also has a matching `mcp__*__welcome`. Extract `<SERVER>` (the middle segment between the first and last `__`). None found → tell the user no Carta MCP server is connected and stop. Exactly one → use it. Multiple → ask the user which.
+Scan the tools available in the conversation (system-reminder blocks) for `mcp__*__welcome`. Extract `<SERVER>` (the middle segment between the first and last `__`). None found → tell the user no Carta MCP server is connected and stop. Exactly one → use it. Multiple → ask the user which. Call `mcp__<SERVER>__read_tool` directly; do not check that it is listed.
 
 ### 2. Ensure firm context (do NOT re-welcome)
 `welcome` is a once-per-connection handshake that the MCP fires on connect and caches (identity/firm/accounts). **Reuse that cached context.** Only call `mcp__<SERVER>__welcome` if no Carta context is established yet this session (e.g. a fresh connection that never welcomed); **never re-display the welcome screen** on a later invocation. Read the resolved firm context from what's already established. (If you do have to call `welcome` and it fails, report the error and stop.)
@@ -39,9 +39,9 @@ Confirmed schema (data-explorer / datashare layer exposed via the MCP, verified 
 - *Unknown column* (a layer names a money column differently): probe `SELECT * FROM <loan_table> LIMIT 1` (format markdown) and resolve — `<committed>` → first present of `TOTAL_COMMITMENT`, `TOTAL_COMMITTED_AMOUNT`; `<drawn>` → first present of `TOTAL_DRAWN_AMOUNT`, `TOTAL_DRAWN`; re-run. If a concept still has no matching column, drop its tile/column rather than erroring.
 
 ### 5. Run the two queries (markdown)
-Run each via `mcp__<SERVER>__fetch` with `{command: "dwh:execute:query", params: {sql: "<SQL>", format: "markdown"}}`. The result is a **markdown table**. No firm filter — RAP scopes rows.
+Run each via `mcp__<SERVER>__read_tool` with `{name: "dwh__execute__query", arguments: {sql: "<SQL>", format: "markdown"}}`. The result is a **markdown table**. No firm filter — RAP scopes rows.
 
-**Run them in parallel.** The KPIs query and the top-10 query are independent — both read `<loan_table>` and neither needs the other's result. Issue both `fetch` calls in the **same turn** (two tool calls in one assistant message) so they run concurrently, rather than awaiting one then the other. (This is well within the documented ≤3-concurrent rate-limit ceiling.) If the multi-currency guard in step 6 triggers a re-run scoped to one currency, fire that re-run's two queries the same way.
+**Run them in parallel.** The KPIs query and the top-10 query are independent — both read `<loan_table>` and neither needs the other's result. Issue both `read_tool` calls in the **same turn** (two tool calls in one assistant message) so they run concurrently, rather than awaiting one then the other. (This is well within the documented ≤3-concurrent rate-limit ceiling.) If the multi-currency guard in step 6 triggers a re-run scoped to one currency, fire that re-run's two queries the same way.
 
 KPIs (use the resolved column names from step 4):
 ```sql

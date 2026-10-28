@@ -18,8 +18,10 @@ import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
 import useAutoPull from "./state/useAutoPull.js";
 import { resurfaceDue } from "./state/resurface.js";
 import useLoadFirm, { LOAD_FIRM_LABEL } from "./state/useLoadFirm.js";
+import { withFirmParam } from "./state/firmParam.js";
 import { loadFirmStepProgress } from "./state/loadFirmSteps.js";
 import LoadingScreen from "./ui/LoadingScreen.jsx";
+import FirmChooser from "./shell/FirmChooser.jsx";
 import { useHostedApp } from "./shell/hostedApp.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
 import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
@@ -203,11 +205,15 @@ export default function App() {
     lastFetchRef.current = Date.now();
     let snapshotNotReady = false;
     return Promise.all([
-      fetch("/api/snapshot")
+      fetch(withFirmParam("/api/snapshot"))
         .then(r => r.json())
         .then(data => {
           if (data?.error) {
-            failSnapshot(data.error);
+            // A firm-scoped read ?firm= names can be refused (handleDataKey's own
+            // authorizedFirm check) as well as not-yet-built: show the server's reason for a
+            // refusal (data.message), not the bare "forbidden" error code — reportSnapshotError
+            // below buckets every non-not_ready case into one telemetry name either way.
+            failSnapshot(data.error === NOT_READY ? NOT_READY : (data.message || data.error));
             snapshotNotReady = data.error === NOT_READY;
             return;
           }
@@ -228,7 +234,7 @@ export default function App() {
           failSnapshot(reason);
         }),
 
-      fetch("/api/accounts")
+      fetch(withFirmParam("/api/accounts"))
         .then(r => r.json())
         .then(data => {
           if (data?.error) { trackRender("MancoReporting.App.AccountsUnavailable"); return; }
@@ -302,7 +308,7 @@ export default function App() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const loadRetriedRef = useRef(false);
   const loadTrigger = notReady ? loadAttempt + 1 : 0;
-  const { loadStatus, loadError } = useLoadFirm(loadTrigger, async () => {
+  const { loadStatus, loadError, chooser, choose } = useLoadFirm(loadTrigger, async () => {
     const stillNotReady = await fetchData();
     reportsApi.reload();
     if (!stillNotReady) {
@@ -415,6 +421,14 @@ export default function App() {
   // rather than a part-loaded shell. The local dev server has no such placeholder
   // problem (there's always exactly one firm, already known), so it keeps the sidebar.
   if (hostedApp && !error && (notReady || !snapshot)) {
+    if (chooser) {
+      return (
+        <>
+          <style>{GLOBAL_CSS}</style>
+          <FirmChooser isStaff={chooser.isStaff} firms={chooser.firms} onPick={choose} />
+        </>
+      );
+    }
     return (
       <>
         <style>{GLOBAL_CSS}</style>

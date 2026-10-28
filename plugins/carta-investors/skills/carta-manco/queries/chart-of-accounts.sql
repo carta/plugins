@@ -1,6 +1,6 @@
 -- Chart of accounts: every P&L GL code that posted activity in the lookback window.
 -- Substitute <entity_name>, <lookback_start>, <lookback_end> before calling
--- the connected Carta MCP fetch tool with verb "dwh:execute:query".
+-- the connected Carta MCP `read_tool` with name "dwh__execute__query".
 
 SELECT DISTINCT
     ACCOUNT_TYPE   AS gl_code,

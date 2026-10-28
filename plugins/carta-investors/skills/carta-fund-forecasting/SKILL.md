@@ -26,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -72,7 +72,7 @@ When a user asks for one of these, **say plainly that this skill is read-only an
 
 ## Step 0 — Identify the Carta MCP Server
 
-Scan the tools available in the conversation for any matching `mcp__*__call_tool`. Each match that also has a corresponding `mcp__*__discover` represents a connected Carta MCP server.
+Scan the tools available in the conversation for any matching `mcp__*__call_tool`. Each match that also has a corresponding `mcp__*__search_tools` represents a connected Carta MCP server.
 
 Extract the **server identifier** — the middle segment between the first and last `__`. Examples:
 - `mcp__carta-test__call_tool` → server = `carta-test`
@@ -85,13 +85,13 @@ Extract the **server identifier** — the middle segment between the first and l
 
 Build these tool name strings and use them throughout the rest of this skill:
 - `READ_TOOL` = `mcp__<SERVER>__read_tool`
-- `DISCOVER_TOOL` = `mcp__<SERVER>__discover`
+- `SEARCH_TOOL` = `mcp__<SERVER>__search_tools`
 
 ## Transport
 
-All data comes from the Carta MCP server's gateway tools:
+All data comes from the Carta MCP server's tools:
 - `<READ_TOOL>({"name": "d__v__n", "arguments": {...}})` — run a command.
-- `<DISCOVER_TOOL>()` — list commands with live parameter help.
+- `<SEARCH_TOOL>({"query": "<what you need>"})` — find commands with live parameter help.
 
 Command names in the table below use `:` as a separator (e.g. `fund_forecasting:list:funds`). When calling `<READ_TOOL>`, convert `:` to `__` and pass the result as the `name` field (e.g. `fund_forecasting__list__funds`). Do not rewrite or shorten the name.
 
@@ -107,7 +107,7 @@ Commands are gated behind a Fund Forecasting feature flag; if the `read_tool` ca
 | `fund_forecasting:list:investments` | `fund_id` | `investment_ids`, `period`, `includeIntegrationStatus`, `detail`, `rounds`, `qualitative`, `page`, `page_size` | per-investment KPIs, paginated — response includes `total`, `page`, `page_size`, `has_more`; compact projection by default; `detail=full` for all ~90 raw fields; `rounds=true` adds per-investment `rounds[]` ladder; `qualitative=true` adds qualitative fields; `investment_ids` returns only the requested rows plus `requested_count` and `not_found` |
 | `fund_forecasting:get:investment` | `fund_id`, `investment_id` | `period`, `includeIntegrationStatus`, `detail`, `rounds`, `qualitative` | single investment record (`investment` key); same field set as `list:investments` rows; `detail=full` never overflows for a single row |
 
-Enums: `view` ∈ {`period`, `cumulative`, `investment-level`}; `mode` ∈ {`current` (default), `construction`, `both`}; `accum` ∈ {`monthly`, `quarterly`, `annually` (default)}; `detail` ∈ {`summary` (default), `full`}; `rounds` ∈ {`false` (default), `true`}; `qualitative` ∈ {`false` (default), `true`}; `lpBreakdown` ∈ {`false` (default), `true`}. For any parameter or metric not covered below, call `<DISCOVER_TOOL>` and read the command's `help`.
+Enums: `view` ∈ {`period`, `cumulative`, `investment-level`}; `mode` ∈ {`current` (default), `construction`, `both`}; `accum` ∈ {`monthly`, `quarterly`, `annually` (default)}; `detail` ∈ {`summary` (default), `full`}; `rounds` ∈ {`false` (default), `true`}; `qualitative` ∈ {`false` (default), `true`}; `lpBreakdown` ∈ {`false` (default), `true`}. For any parameter or metric not covered below, call `<SEARCH_TOOL>` and read the command's parameter help.
 
 **Size-control params (default to the lighter shape — both exist because the raw responses overflow the MCP size limit on real funds):**
 - `list:funds` `search`: case-insensitive substring match on fund name — use this to resolve a fund name to its `id` in a single round trip. Search by the distinctive word(s) only; **omit fund numbers** (e.g. `search=la garita`, not `search=la garita 2`) and pick the correct entry from the returned candidates by number or context. `total` in the response reflects the filtered count.
@@ -225,7 +225,7 @@ The `fund_id` used by Fund Forecasting is **unique to this service** (a short ba
 | Per-company round-by-round ladder | `list:investments` (`rounds=true`) | row `rounds[]` — `{name, roundSize, valuation}` per round |
 | Per-company qualitative info (CEO / notes / commentary / board / co-investors / custom fields) | `list:investments` (`qualitative=true`) | row `ceo` / `notes` / `commentary` / `boardMembers` / `coInvestors` / `customFields` |
 
-Anything outside this table → `<DISCOVER_TOOL>`.
+Anything outside this table → `<SEARCH_TOOL>`.
 
 ### Field legend (response key → meaning)
 
@@ -376,7 +376,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" l
 # a. get a fresh, unique staging path (also clears any stale stage, so the Write target never pre-exists);
 #    it prints the path — use that literal path as <STAGE> in step b
 bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" stage-path <env> <command> <fund_id> '<params-json>'
-# b. Write the RAW fetch response to that exact <STAGE> path with the Write tool
+# b. Write the RAW `read_tool` response to that exact <STAGE> path with the Write tool
 # c. ingest it (this also removes the stage):
 bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" store-staged <env> <command> <fund_id> '<params-json>'
 ```

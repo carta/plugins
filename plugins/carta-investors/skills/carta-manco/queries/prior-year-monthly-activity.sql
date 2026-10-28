@@ -1,6 +1,6 @@
 -- Prior-year monthly P&L activity grouped by (account, month).
 -- Substitute <entity_name>, <prior_year> before calling the connected
--- Carta MCP fetch tool with verb "dwh:execute:query".
+-- Carta MCP `read_tool` with name "dwh__execute__query".
 --
 -- Sign convention (aligned with carta-consolidating-financial-reports):
 --   Revenue (4xxx) flipped to positive; Expenses (5xxx+) kept as-is.

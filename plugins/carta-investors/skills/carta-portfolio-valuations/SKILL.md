@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -495,9 +495,7 @@ volatility number:**
 **Every** read-only command in this skill (`read_only: true` in `search_tools`) is called via
 `read_tool({"name": "...", "arguments": {...}})`, and every command that changes data —
 including the `compute:*` commands, which carta-mcp marks as changing data — via `call_tool` with the same
-shape. There is no exception,
-and the raw `mutate(command=..., params={...})` gateway is not needed
-anywhere in this skill.
+shape. There is no exception.
 
 Some writes declare body fields as **required**, because the API rejects
 them as null and an omitted argument reaches it as an explicit null. A

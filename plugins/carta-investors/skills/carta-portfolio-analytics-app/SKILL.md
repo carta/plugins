@@ -24,28 +24,28 @@ allowed-tools:
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__carta__get_current_user
-  - mcp__carta__discover
+  - mcp__carta__search_tools
   - mcp__carta_production__welcome
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   - mcp__carta_production__get_current_user
-  - mcp__carta_production__discover
+  - mcp__carta_production__search_tools
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__get_current_user
-  - mcp__claude_ai_Carta__discover
+  - mcp__claude_ai_Carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__discover
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - Read
   - Write
   - AskUserQuestion
@@ -58,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.2</carta-plugin>
+<carta-plugin>carta-investors:6.122.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

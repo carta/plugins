@@ -125,7 +125,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 3. `read_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})` to enumerate **every** entity under
    the firm.
 
-Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `fetch`'s param-shape quirks:
+Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `read_tool`'s param-shape quirks:
 
 | Granular tool | Generic equivalent |
 |---|---|

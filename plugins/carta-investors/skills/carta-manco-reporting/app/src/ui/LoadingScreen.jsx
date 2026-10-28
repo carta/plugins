@@ -1,5 +1,5 @@
 import { CartaLogo } from "./components.jsx";
-import { sans, FAINT, FS, INK, PAPER } from "./theme.js";
+import { FAINT, FS, FULL_PAGE_COVER, sans } from "./theme.js";
 
 // Centered brand mark + status line, matching carta-fund-modeling's and
 // carta-portfolio-analytics-app's own hosted loading screens. `step` ({index, total} from
@@ -9,10 +9,9 @@ import { sans, FAINT, FS, INK, PAPER } from "./theme.js";
 export default function LoadingScreen({ label, step, fullPage }) {
   return (
     <div style={{
-      minHeight: fullPage ? "100vh" : "40vh",
+      ...(fullPage ? FULL_PAGE_COVER : { minHeight: "40vh" }),
       display: "grid",
       placeItems: "center",
-      ...(fullPage ? { ...sans, position: "fixed", inset: 0, background: PAPER, color: INK } : null),
     }}>
       <div style={{ textAlign: "center" }}>
         <CartaLogo size={40} style={{ margin: "0 auto", opacity: 0.9 }} />

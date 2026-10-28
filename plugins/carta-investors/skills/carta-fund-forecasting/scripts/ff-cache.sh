@@ -29,7 +29,7 @@ key_for() {
 path_for() { printf '%s/%s.json' "$CACHE_DIR" "$(key_for "$@")"; }
 
 # A unique, deterministic staging path per (env,command,fund,params) where the agent
-# Writes the raw `fetch` response before `store-staged` ingests it. Kept separate from
+# Writes the raw `read_tool` response before `store-staged` ingests it. Kept separate from
 # the cache file so a half-written stage never looks like a valid cache entry.
 stage_path_for() { printf '%s/staging/%s.staged.json' "$CACHE_DIR" "$(key_for "$@")"; }
 
@@ -63,7 +63,7 @@ cmd_stage_path() {  # args: env command fund_id [params_json] -> prints a fresh 
 cmd_store_staged() {  # args: env command fund_id params_json [now_epoch]; reads the staged file
   local sp; sp="$(stage_path_for "$1" "$2" "$3" "${4:-"{}"}")"
   if [ ! -f "$sp" ]; then
-    echo "ff-cache.sh: no staged response at $sp — run 'stage-path' then Write the fetch result there" >&2
+    echo "ff-cache.sh: no staged response at $sp — run 'stage-path' then Write the read_tool result there" >&2
     return 4
   fi
   local rc=0

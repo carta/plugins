@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { sans, FS, FAINT, RED, LINE, INK } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
-import { uploadBudget, removeBudget, describeUpload, attempt, BUDGET_DOWNLOAD_URL } from "./budgetUpload.js";
+import { uploadBudget, removeBudget, describeUpload, attempt, budgetDownloadUrl } from "./budgetUpload.js";
 
 // Sidebar control for the hosted app: import the budget file exported from the local flow.
 // `hosted` (App.jsx's useHostedApp()) hides it on the local server, which never implements
@@ -42,7 +42,7 @@ export default function BudgetImport({ hosted, budgetUpload, onChanged }) {
         <div style={{ color: note.warn ? RED : FAINT, wordBreak: "break-word" }}>
           {note.text}{" "}
           <a
-            href={BUDGET_DOWNLOAD_URL} download
+            href={budgetDownloadUrl()} download
             aria-label="Download the uploaded budget file" title="Download the uploaded budget file"
             style={{ color: FAINT, verticalAlign: "middle" }}
             onClick={() => trackClick("MancoReporting.App.DownloadBudget")}

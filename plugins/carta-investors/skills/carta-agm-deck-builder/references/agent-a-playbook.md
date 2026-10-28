@@ -4,16 +4,16 @@
 
 ## Rules (read first)
 
-- **Do NOT call `discover` or `list_accounts`.** Every command you need is named below.
+- **Do NOT call `search_tools` or `list_accounts`.** Every command you need is named below.
 - **Do NOT guess command names.**
 - **Call `welcome`, `list_contexts`, `set_context` exactly once each.** After `set_context` succeeds, do NOT re-call them.
-- **Total MCP tool calls: 4.** 3 connect calls + 1 fetch. Do NOT fall back to the old multi-call pattern (`fa:list:saved_queries` → `fa:get:saved_query` → `dwh:execute:queries`) unless explicitly told to.
+- **Total MCP tool calls: 4.** 3 connect calls + 1 `read_tool`. Do NOT fall back to the old multi-call pattern (`fa:list:saved_queries` → `fa:get:saved_query` → `dwh:execute:queries`) unless explicitly told to.
 
 ## Exact command names
 
-| Tool | Command string | Use |
+| Tool | Tool name | Use |
 |---|---|---|
-| `fetch` | `fa:get:agm_deck_data` | Fetch all AGM query results in one call — no parameters needed |
+| `read_tool` | `fa__get__agm_deck_data` | Fetch all AGM query results in one call — no parameters needed |
 
 ## Step-by-step sequence
 
@@ -30,7 +30,7 @@
 4. Call `fa:get:agm_deck_data` with no parameters — the firm context set above is sufficient:
 
 ```
-fetch(command="fa:get:agm_deck_data")
+read_tool(name="fa__get__agm_deck_data", arguments={})
 ```
 
 The MCP returns a two-block response:
@@ -158,8 +158,8 @@ If `welcome()` fails, show the user:
 
 If `fa:get:agm_deck_data` returns an error or `succeeded == 0`, fall back to the old multi-call pattern:
 
-1. `fetch(command="fa:list:saved_queries")` → get verified queries
-2. `fetch(command="fa:get:saved_query", params={"names": [<all 21 names above>]})` — one call with all names
+1. `read_tool(name="fa__list__saved_queries", arguments={})` → get verified queries
+2. `read_tool(name="fa__get__saved_query", arguments={"names": [<all 21 names above>]})` — one call with all names
 3. Execute all matched SQLs via `dwh:execute:queries` — batches of ≤10, all batches issued in one response turn simultaneously
 
 Accept fund data in any format (pasted tables, JSON, conversational) only if the above fallback also fails. **Do NOT generate fictional or sample data for real deck requests — only use data the user explicitly provides.** If the user explicitly says "demo mode" or "use sample data for testing", you may generate realistic fictional data, but prepend every slide's title with "[DEMO DATA — NOT REAL]" so it cannot be mistakenly shared with LPs.

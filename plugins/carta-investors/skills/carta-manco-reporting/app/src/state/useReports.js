@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { withFirmParam } from "./firmParam.js";
 
 // Budget vs Actuals reports: what the app server knows about them
 // (/api/reports), changes to them, and share operations with Carta.
@@ -89,7 +90,7 @@ export default function useReports({ onChanged } = {}) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/reports");
+      const res = await fetch(withFirmParam("/api/reports"));
       if (!res.ok) { setAvailable(false); return; }
       const data = await readJson(res);
       if (!data || !Array.isArray(data.reports)) { setAvailable(false); return; }
@@ -107,7 +108,7 @@ export default function useReports({ onChanged } = {}) {
   const act = useCallback(async (reportId, action, body = {}) => {
     const headers = { "Content-Type": "application/json" };
     if (etagRef.current) headers["If-Match"] = etagRef.current;
-    const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}/${action}`, {
+    const res = await fetch(withFirmParam(`/api/reports/${encodeURIComponent(reportId)}/${action}`), {
       method: "POST", headers, body: JSON.stringify(body),
     });
     const data = await readJson(res);
@@ -127,7 +128,7 @@ export default function useReports({ onChanged } = {}) {
   // `background`: a run the user didn't start (useAutoPull's) — it doesn't drive `shareJob`,
   // so the share panel and status show only what the user asked for.
   const runShareOp = useCallback(async (op, params = {}, { background = false } = {}) => {
-    const start = () => fetch("/api/reports/share-op", {
+    const start = () => fetch(withFirmParam("/api/reports/share-op"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ op, ...params }),
@@ -140,7 +141,7 @@ export default function useReports({ onChanged } = {}) {
       await new Promise(r => setTimeout(r, POLL_MS));
       let state = null;
       try {
-        state = await readJson(await fetch("/api/reports/share-status"));
+        state = await readJson(await fetch(withFirmParam("/api/reports/share-status")));
       } catch {
         state = null;
       }
@@ -160,7 +161,7 @@ export default function useReports({ onChanged } = {}) {
       let res = null;
       let state = null;
       try {
-        res = await fetch(`/api/reports/share-status?job=${encodeURIComponent(job)}`);
+        res = await fetch(withFirmParam(`/api/reports/share-status?job=${encodeURIComponent(job)}`));
         state = await readJson(res);
       } catch {
         state = null;

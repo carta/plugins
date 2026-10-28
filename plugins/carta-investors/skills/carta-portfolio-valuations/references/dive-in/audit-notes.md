@@ -46,7 +46,7 @@ ask the user to pick a valuation row from Step 3 first.
 ## Step 1: Gather the source material (silent)
 
 **Do this silently. Do not narrate the calls in chat.** Make these
-`fetch` calls in parallel where possible:
+`read_tool` calls in parallel where possible:
 
 | Call | Purpose |
 |---|---|
