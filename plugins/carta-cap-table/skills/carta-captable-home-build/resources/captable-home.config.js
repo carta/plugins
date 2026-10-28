@@ -106,6 +106,11 @@ const DIR_CATEGORIES = [
     name: 'Compensation',
     tagline: 'Compare pay against market and classify roles into the compensation taxonomy.',
   },
+  {
+    id: 'setup',
+    name: 'Company setup',
+    tagline: 'Add and edit stakeholders, equity plans, share classes, documents, and board approvals.',
+  },
 ];
 
 // ── What's new: the microapp Carta Home features ──

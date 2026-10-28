@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.103.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.0</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -314,10 +314,13 @@ prefix, and `detail: "full"` is required (`"summary"` returns blank names). Keep
 `corporation_pk:`. Do **not** filter on `type === "company"`: a corporation that can hold,
 or that sits under a parent org, is typed `fund` and still has a cap table.
 
-- **The user named a company** — re-call `list_accounts` with `search: "<name>"` and take
-  the match. `search` is matched server-side across every account they can reach; the
-  unsearched response is a single page capped at 200 accounts ordered by legal name, so a
-  company further down the alphabet is *only* reachable this way.
+- **The user named a company in this request** — re-call `list_accounts` with
+  `search: "<name>"` and take the match. `search` is matched server-side across every
+  account they can reach; the unsearched response is a single page capped at 200 accounts
+  ordered by legal name, so a company further down the alphabet is *only* reachable this way.
+- **carta-start chose the company in the run that loaded this skill** — re-call
+  `list_accounts` with `search: "<that name>"` and take the match. Ask nothing. A company
+  chosen in an earlier run does not count.
 - **Exactly one company** — build for it and say nothing.
 - **More than one** — ask with `AskUserQuestion`. Never guess: guessing publishes a page
   titled for the wrong company.

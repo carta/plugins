@@ -146,6 +146,7 @@
       "Show me [stakeholder name]'s holdings"
     ]
   },
+  "carta-start": null,
   "carta-valuation-history": {
     "category": "governance",
     "name": "Valuation & FMV history",
