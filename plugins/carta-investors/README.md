@@ -80,6 +80,42 @@ The Carta MCP server exposes these data warehouse tools:
 | `list_contexts` | See which firms you have access to |
 | `set_context` | Switch to a different firm |
 
+## SOI review companion (Claude Code)
+
+On Claude Code 2.1.308 or later, the plugin includes a small module (`mods/soi-review/`) that keeps a
+Schedule of Investments (SOI) review you opened in the Update Investments view in sight while you work.
+Other surfaces, such as Cowork, don't load it. It does nothing until Claude opens such a review.
+
+**When it runs.** At session start it adds a `/soi-review` command and starts a 5-second timer. The
+timer only checks whether there is a review to read.
+
+**What it reads.**
+- The result of each `view_remote` tool call. It looks for the Update Investments view and, if found,
+  takes the review's `firm_uuid` and `soi_report_id`. It passes every other tool's result through untouched.
+- Prompts: only the time each one was submitted, to pause polling after 30 minutes without a prompt.
+  It does not read or send your prompt text.
+- Which surface Claude is running on, only to tell whether the desktop app is in use.
+
+**What it calls, and when.** One tool: `read_tool` for `fa__get__soi-review-state`, on the same Carta MCP
+server the view came from, and only after Claude has opened an SOI review. It reads every 5 seconds while the
+review is waiting on you and every 15 seconds otherwise, stops once the review is approved or closed (opening
+it again reads it once more), and pauses after 30 minutes without a prompt. A new read starts only after the
+previous one finishes, or once it has run for 60 seconds.
+
+**What it sends, and where.** Only to that Carta MCP server, which you have already connected, and nothing
+anywhere else: `firm_uuid`, `soi_report_id`, `include_baseline` (true on the first read only), and
+`_instrumentation_v2: {"from_hook": true}`, which marks the read as the plugin's own rather than Claude's
+usage. The module runs no commands and starts no processes.
+
+**What it shows.** From each read, it keeps the report label, status, period, fair value, each position's
+company name and value, and the companion page link for the session. It uses them for a status line
+(`SOI Q<n> <yyyy> · <status>`), toasts when a company's value or the review's status changes, and, on the
+desktop app, a band above the prompt.
+
+**The one prompt it submits.** `/soi-review` shows the companion page link. On the desktop app only, it also
+submits the prompt `Open <companion page link> in your built-in browser beside the chat.`, which Claude acts
+on with its own browser tool. The prompt contains only that link, which comes from Carta's response.
+
 ## Data & Privacy
 
 This plugin collects telemetry to improve reliability and performance. Data collected includes session context, model configuration, and plugin activity. See [Carta's Privacy Policy](https://carta.com/legal/privacy/privacy-policy/) for details.

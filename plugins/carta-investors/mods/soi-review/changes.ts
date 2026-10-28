@@ -1,4 +1,4 @@
-import type { Position } from '../types'
+import type { Position } from './types'
 
 /** Companies with a position whose value moved, that appeared, or that is gone, between two reads. */
 export function changedCompanies(before: Position[], after: Position[]): string[] {

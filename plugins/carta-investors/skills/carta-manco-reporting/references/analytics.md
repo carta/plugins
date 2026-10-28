@@ -219,6 +219,7 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.Chat.TogglePinpoint` | click | Pinpoint mode toggled on or off from the rail. |
 | `MancoReporting.Chat.Pin` | click | An element picked while in Pinpoint mode. |
 | `MancoReporting.Chat.Unpin` | click | The pinned-chip ✕ cleared the anchor. |
+| `MancoReporting.Chat.NewConversation` | click | "New conversation" started an empty chat on a new session (and unlocked the model). |
 
 ### Composed ids
 

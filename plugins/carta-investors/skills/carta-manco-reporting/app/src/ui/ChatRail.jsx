@@ -13,8 +13,9 @@ export const CHAT_RAIL_TRANSITION_MS = 220;
 // overflow-x scroll container, matches DrilldownDrawer's own pattern). Slides
 // in from the right on open; closing never unmounts ChatPanel, which keeps
 // its transcript, its model lock and its in-flight stream reader alive
-// across a close/reopen — ChatPanel's state lives exactly as long as
-// `sessionId` does, matching the server session it's bound to. `inert`
+// across a close/reopen. ChatPanel is keyed by `sessionId`, so its state
+// lives exactly as long as that id does, matching the server session it's
+// bound to: a new id ("New conversation") remounts it empty. `inert`
 // additionally blocks keyboard/assistive-tech focus into the closed rail
 // (pointerEvents/aria-hidden alone don't).
 export default function ChatRail({ open, onClose, ...chatPanelProps }) {
@@ -31,7 +32,7 @@ export default function ChatRail({ open, onClose, ...chatPanelProps }) {
       aria-hidden={!open}
       inert={open ? undefined : ""}
     >
-      <ChatPanel {...chatPanelProps} onClose={onClose} />
+      <ChatPanel key={chatPanelProps.sessionId} {...chatPanelProps} onClose={onClose} />
     </aside>,
     document.body
   );

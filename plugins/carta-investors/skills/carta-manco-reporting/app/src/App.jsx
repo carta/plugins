@@ -7,6 +7,8 @@ import { setInspectMode } from "./pinpoint/inspect.js";
 import { buildAnchor } from "./pinpoint/capture.js";
 import { findAndMark } from "./pinpoint/findAndMark.js";
 import { mancoContext } from "./pinpoint/mancoContext.js";
+import { chatSessionId, newChatSessionId, clearTranscript, loadChatOpen, saveChatOpen } from "./ui/chatPersistence.js";
+import { reloadPage } from "./shell/reloadPage.js";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
 import DashboardView from "./views/DashboardView.jsx";
 import BudgetActualsView from "./views/BudgetActualsView.jsx";
@@ -98,16 +100,33 @@ export default function App() {
   // Chat + Pinpoint — see app/src/ui/ChatRail.jsx and shell/chatFeature.js.
   // askClaude (shell/chatFeature.js's FEATURES) gates everything below.
   const askClaude = useChatFeatureFlag();
-  const [chatOpen, setChatOpen] = useState(false);
+  // Restored after a reload (ui/chatPersistence.js), like the session id below.
+  const [chatOpen, setChatOpen] = useState(loadChatOpen);
   const [pinMode, setPinMode] = useState(false);
   const [anchor, setAnchor] = useState(null);
   const [chatModels, setChatModels] = useState(null);
   const appRootRef = useRef(null);
-  const chatSessionIdRef = useRef(null);
-  if (!chatSessionIdRef.current) {
-    chatSessionIdRef.current = (typeof crypto !== "undefined" && crypto.randomUUID)
-      ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
-  }
+  const [chatSession, setChatSession] = useState(chatSessionId);
+
+  useEffect(() => { saveChatOpen(chatOpen); }, [chatOpen]);
+
+  // The browser keeps the modules it already loaded, so a screen Claude just
+  // edited only shows its change after a reload. The transcript, session id
+  // and open state survive it (ui/chatPersistence.js), so the conversation
+  // carries on. The reload runs from an effect, not straight from
+  // onTurnEnd: the flag lands in the same commit as ChatPanel's end of turn,
+  // and ChatPanel's own effect (a child's runs first) saves the finished turn
+  // before this one reloads.
+  const [reloadDue, setReloadDue] = useState(false);
+  const onChatTurnEnd = ({ edited }) => { if (edited) setReloadDue(true); };
+  useEffect(() => { if (reloadDue) reloadPage(); }, [reloadDue]);
+
+  // Drops this session's saved transcript and moves the tab to a new id;
+  // ChatRail remounts ChatPanel under it, empty and with the model unlocked.
+  const startNewConversation = () => {
+    clearTranscript(chatSession);
+    setChatSession(newChatSessionId());
+  };
 
   useEffect(() => {
     if (!askClaude) return;
@@ -465,7 +484,7 @@ export default function App() {
           ~390px wide, ChatRail itself clamps to 92vw and this margin is a few
           px wider than the rail, which only adds slack, never a gap. */}
       <div ref={appRootRef} data-testid="app-root" style={{
-        marginRight: chatOpen ? CHAT_RAIL_WIDTH_PX : 0,
+        marginRight: askClaude && chatOpen ? CHAT_RAIL_WIDTH_PX : 0,
         transition: `margin-right ${CHAT_RAIL_TRANSITION_MS}ms ${EASE_OUT}`,
       }}>
       <AppShell sidebarProps={sidebarProps}>
@@ -545,7 +564,9 @@ export default function App() {
         <ChatRail
           open={chatOpen}
           onClose={closeChat}
-          sessionId={chatSessionIdRef.current}
+          sessionId={chatSession}
+          onNewConversation={startNewConversation}
+          onTurnEnd={onChatTurnEnd}
           anchor={anchor}
           onAnchorConsumed={() => setAnchor(null)}
           pinMode={pinMode}

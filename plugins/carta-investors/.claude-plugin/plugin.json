@@ -1,6 +1,6 @@
 {
   "name": "carta-investors",
-  "version": "6.122.5",
+  "version": "6.122.6",
   "description": "Carta Investors plugin — write-capable skills for querying and updating investors data, performance benchmarks, regulatory reporting, AGM deck generation, brand extraction, and more via the Carta MCP server",
   "author": {
     "name": "Carta",
@@ -8,7 +8,7 @@
   },
   "homepage": "https://github.com/carta/plugins",
   "repository": "https://github.com/carta/plugins",
-  "types": "./types/index.d.ts",
+  "hooks": "./mods/soi-review/hooks.json",
   "keywords": [
     "investors",
     "mcp",

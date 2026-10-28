@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register } from 'claude-code'
 
-import type { SoiReview, SoiReviewState } from '../types'
+import type { SoiReview, SoiReviewState } from './types'
 import { changedCompanies, companyValue } from './changes'
 
 const soiReview = atom({ plugin: 'carta-investors', key: 'soiReview' } as const, null)

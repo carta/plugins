@@ -4,6 +4,7 @@ import { CloseIcon, StopIcon } from "./components.jsx";
 import { FS, sans } from "./theme.js";
 import { trackClick } from "../analytics.js";
 import { capLabel } from "../pinpoint/capture.js";
+import { loadTranscript, saveTranscript, clearTranscript } from "./chatPersistence.js";
 
 // Built-in fallback catalog, used when App's /api/models fetch hasn't
 // resolved (or failed) — keeps the model picker usable offline. This mirrors
@@ -142,8 +143,30 @@ function parseSSE(buffer) {
   return [events, rest];
 }
 
-export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, onAnchorConsumed, pinMode, onTogglePinMode, models, defaultModel, onClose }) {
-  const [messages, setMessages] = useState([]);
+// The tools that change a file in the app's own source.
+const EDIT_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
+
+// Ids of the file-editing tool calls an `assistant` frame asks for.
+function editCallIds(ev) {
+  if (ev.type !== "assistant") return [];
+  return (ev.message?.content || [])
+    .filter((b) => b.type === "tool_use" && EDIT_TOOLS.includes(b.name))
+    .map((b) => b.id);
+}
+
+// Ids of the tool calls a `user` frame reports as done without error — a
+// denied or failed edit changed nothing, so it must not count as one.
+function succeededCallIds(ev) {
+  if (ev.type !== "user") return [];
+  return (ev.message?.content || [])
+    .filter((b) => b.type === "tool_result" && !b.is_error)
+    .map((b) => b.tool_use_id);
+}
+
+export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, onAnchorConsumed, pinMode, onTogglePinMode, models, defaultModel, onClose, onNewConversation }) {
+  // What this tab saved for the session before a reload, read once on mount.
+  const [saved] = useState(() => loadTranscript(sessionId));
+  const [messages, setMessages] = useState(() => saved?.messages || []);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -152,7 +175,7 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
   const modelList = (models && models.length) ? models : FALLBACK_MODELS;
   const initialModel = defaultModel
     || (modelList.find((m) => m.default) || modelList[0]).value;
-  const [model, setModel] = useState(initialModel);
+  const [model, setModel] = useState(() => saved?.model || initialModel);
   // initialModel can arrive after mount (models/defaultModel load async from
   // App's /api/models fetch) — only adopt a late-arriving default before the
   // first message; never override a user's pick or a locked session.
@@ -160,6 +183,17 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
     if (messages.length === 0) setModel(initialModel);
   }, [initialModel]);
   const locked = messages.length > 0;
+
+  // Saved only between turns, and dropped while one is in flight: serve.py
+  // closes a session whose page goes away mid-turn, so a transcript restored
+  // then would show a conversation the next message's fresh session has never
+  // seen — an empty, unlocked chat matches it instead. When an edited turn
+  // ends, App reloads from an effect of its own, which runs after this one in
+  // the same commit, so the finished turn is saved before the page goes.
+  useEffect(() => {
+    if (busy) clearTranscript(sessionId);
+    else saveTranscript(sessionId, { messages, model });
+  }, [sessionId, messages, model, busy]);
 
   // Keep the transcript pinned to the newest text. `messages` gets a new identity
   // on every streamed chunk, so this runs per frame while a reply arrives.
@@ -216,6 +250,10 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
     setMessages((m) => [...m, { role: "user", text: prompt, pin }, { role: "assistant", text: "" }]);
     setInput(""); setBusy(true);
     const decoder = new TextDecoder();
+    // Whether a file-editing tool call finished without error this turn —
+    // what onTurnEnd reports, so App knows a screen changed under it.
+    let edited = false;
+    const editCalls = new Set();
     try {
       onTurnStart?.(); // inside try: a throw here still hits finally, so busy resets
       const res = await fetch("/api/chat", {
@@ -247,6 +285,8 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
         let chunkText = "";
         let errorText = null;
         for (const ev of events) {
+          for (const id of editCallIds(ev)) editCalls.add(id);
+          if (succeededCallIds(ev).some((id) => editCalls.has(id))) edited = true;
           if (ev.type === "stream_event"
               && ev.event?.type === "content_block_delta"
               && ev.event.delta?.type === "text_delta") {
@@ -292,22 +332,35 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
     } finally {
       setBusy(false);
       setStopping(false);
-      onTurnEnd?.();
+      onTurnEnd?.({ edited });
     }
   }
 
   return (
     <div className="manco-chat" style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: sans.fontFamily }}>
       <style>{".manco-chat-input input:focus{box-shadow:0 0 0 3px var(--ink-color-global-border-focus-light);border-color:var(--ink-color-global-border-focus-default)}"}</style>
-      {onClose && (
-        <div style={{ display: "flex", justifyContent: "flex-end", flex: "none", marginBottom: 2 }}>
-          <button onClick={onClose} data-testid="chat-close"
+      {(onClose || onNewConversation) && (
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 4, flex: "none", marginBottom: 2 }}>
+          {/* The model locks with the first message and serve.py binds the
+              session to it, so a fresh session is the only way to switch
+              models or drop a thread. Not mid-turn: that stream would be
+              orphaned. */}
+          {onNewConversation && locked && (
+            <button onClick={() => { trackClick("MancoReporting.Chat.NewConversation"); onNewConversation(); }}
+              data-testid="chat-new" disabled={busy}
+              style={{ border: "none", borderRadius: 4, background: "transparent", padding: "4px 8px",
+                fontSize: FS.small, color: "var(--ink-color-global-text-subtle)",
+                cursor: busy ? "default" : "pointer" }}>
+              New conversation
+            </button>
+          )}
+          {onClose && <button onClick={onClose} data-testid="chat-close"
             title="Close chat" aria-label="Close chat"
             style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28,
               border: "none", borderRadius: 4, background: "transparent",
               color: "var(--ink-color-global-text-subtle)", cursor: "pointer", lineHeight: 0 }}>
             <CloseIcon size={14} />
-          </button>
+          </button>}
         </div>
       )}
       <div className="manco-chat-log" ref={logRef} onScroll={onLogScroll}
