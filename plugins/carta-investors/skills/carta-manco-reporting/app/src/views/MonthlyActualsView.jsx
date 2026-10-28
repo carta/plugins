@@ -17,7 +17,7 @@ import {
 } from "./budgetPeriods.js";
 import { prefsKeyFor } from "./budgetPrefs.js";
 import { accountSections, actualByGlByMonth, accountLabel, ACCOUNT_LABEL_MIN_WIDTH } from "./accountSections.js";
-import { rowBreakouts, breakoutByColumns, worthBreakingOut, opensAnything } from "./accountBreakout.js";
+import { rowBreakouts, breakoutByColumns, worthBreakingOut, opensAnything, childKey } from "./accountBreakout.js";
 import BudgetPeriodControls from "./BudgetPeriodControls.jsx";
 import {
   Chevron, ChildRow, pickBreakout, useOpenRows, S as ACCOUNT_S,
@@ -244,7 +244,7 @@ function SectionRows({ section, columns, names, subCodes, actualsByMonth, drilld
             ))}
           </tr>
           {isOpen && children.map((c) => (
-            <ChildRow key={`${r.account_type}-${c.label}`} child={c} parent={r}
+            <ChildRow key={`${r.account_type}-${childKey(c)}`} child={c} parent={r}
                       columns={columns} breakout={breakout} polarity={section.polarity}
                       drilldown={drilldown} from="monthly-actuals" label={label} />
           ))}

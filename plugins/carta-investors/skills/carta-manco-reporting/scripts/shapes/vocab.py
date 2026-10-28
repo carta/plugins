@@ -86,6 +86,19 @@ def normalize(s) -> str:
     return _WS_RX.sub(" ", _PUNCT_RX.sub(" ", s.strip().lower())).strip()
 
 
+_COMMENT_WORDS = {"comment", "comments", "note", "notes"}
+_HEADER_QUALIFIER_RX = re.compile(r"\s*[(:\u2014\u2013-].*$")
+
+
+def is_comment_header(label) -> bool:
+    """True when a header cell names the comments column. A firm often
+    qualifies it ("Comments (Sep-26 is the last full month)", "Notes:"), so
+    the word is read before any parenthetical, colon or dash."""
+    if not isinstance(label, str):
+        return False
+    return normalize(_HEADER_QUALIFIER_RX.sub("", label.strip())) in _COMMENT_WORDS
+
+
 def is_cross_cutting(section) -> bool:
     """True when a section names an accounting concept rather than a team."""
     return normalize(section) in _CROSS_CUTTING

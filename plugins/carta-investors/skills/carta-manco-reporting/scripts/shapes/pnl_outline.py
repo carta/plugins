@@ -82,7 +82,8 @@ needs is discovered from the file it is handed:
                 distinguishes budget columns from actual/forecast columns
                 that often sit alongside them, so a tab carrying both is
                 read correctly. `period_year` comes from those labels.
-  Comment col   The header cell reading "Comments" or "Notes", when present.
+  Comment col   The header cell reading "Comments" or "Notes", when present,
+                qualified or not ("Comments (Oct-26 partial)").
   Sections      A non-indented row with no value opens a section. Standard
                 P&L vocabulary (income/revenue, operating expenses) marks
                 the two top-level sections; any other such row inside the
@@ -109,7 +110,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from .quarter_label import match_quarter_label
-from .vocab import tag_value_for_section, match_section
+from .vocab import tag_value_for_section, match_section, is_comment_header
 from .vocab import SECTION_INCOME as _SECTION_INCOME
 from .vocab import SECTION_OPEX as _SECTION_OPEX
 
@@ -123,7 +124,6 @@ _EXPENSE_ALIASES = {
 
 _HEADER_SCAN_ROWS = 12          # how far down to look for the period header
 _TOTAL_PERIOD_RX = re.compile(r"^TOTAL\s+(20\d{2})$", re.IGNORECASE)
-_COMMENT_HEADERS = {"comments", "comment", "notes", "note"}
 
 # Monthly header labels, alternative to the quarterly ones above — same
 # qualifier-row convention, twelve columns instead of four. Year is optional.
@@ -1312,8 +1312,7 @@ def _detect_layout(ws, want_year=None, sheet_label="this sheet") -> dict:
                 label = v.strip()
             else:
                 continue
-            if isinstance(label, str) and label.lower() in _COMMENT_HEADERS \
-                    and comment_col is None:
+            if is_comment_header(label) and comment_col is None:
                 comment_col = c
                 continue
             mq = match_quarter_label(label) if isinstance(label, str) else None

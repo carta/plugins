@@ -25,7 +25,7 @@ export function selectionTitle(sel) {
   if (!sel) return "";
   if (sel.kind === "account") {
     const value = sel.childScope
-      ? (sel.childScope.value ?? noValueLabel(sel.childScope)) : null;
+      ? (sel.childScope.display ?? sel.childScope.value ?? noValueLabel(sel.childScope)) : null;
     const head = value ? `${sel.name} · ${value}` : sel.name;
     return sel.periodLabel ? `${head} — ${sel.periodLabel}` : head;
   }

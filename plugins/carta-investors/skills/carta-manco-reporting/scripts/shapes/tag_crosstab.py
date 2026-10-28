@@ -77,6 +77,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from .gl_column import find_gl_header_column
+from .vocab import is_comment_header
 
 
 # Row landmarks in the crosstab header block. Used only as a last resort —
@@ -633,7 +634,7 @@ def _find_dept_blocks(ws, dept_row: int = _DEPT_ROW,
                     budget_col = c
                 elif s == "actual" and actual_col is None:
                     actual_col = c
-                elif s == "comments" and comment_col is None:
+                elif is_comment_header(sub) and comment_col is None:
                     comment_col = c
         if budget_col is None:
             print(

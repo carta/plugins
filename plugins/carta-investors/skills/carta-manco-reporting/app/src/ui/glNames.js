@@ -1,5 +1,7 @@
 // Carta GL account names for the budget tables' GL chips.
 
+import { noValueLabel } from "./dimension.js";
+
 // Names come from the entries themselves, so a budgeted account with no
 // activity in the window has none.
 export function glNameMap(entries) {
@@ -51,6 +53,18 @@ export function subCodeMap(entries) {
 export function subOfChildLabel(label) {
   const i = String(label ?? "").indexOf(" · ");
   return i === -1 ? null : label.slice(i + 3);
+}
+
+/** The label a breakout child displays. A sub-account reads "<sub code> -
+ *  <name>" (just the name when it has no code) and the account's own spend
+ *  reads "<account code> - Not Categorized", as Carta's trial balance prints
+ *  them. Anything else keeps its full label so the account name is not lost.
+ */
+export function childDisplayLabel(child, breakout) {
+  if (child.unlabelled) return noValueLabel(breakout);
+  if (child.uncategorized) return `${child.acct} - Not Categorized`;
+  if (child.sub == null) return child.label;
+  return child.subCode ? `${child.subCode} - ${child.sub}` : child.sub;
 }
 
 export function glTooltip(codes, names, scopes, subCodes, subs) {

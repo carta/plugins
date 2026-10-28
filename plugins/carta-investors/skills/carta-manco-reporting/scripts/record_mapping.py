@@ -7,9 +7,11 @@
   query inferences   <dashboard-dir>   wording-derived matches awaiting confirm/reject
   query unaccounted  <dashboard-dir>   accounts with spend no budget line reports
   query entries      <dashboard-dir> [--account] [--sub-account] [--vendor] [--tag]
+  query tables       <dashboard-dir> --part current|input   Step 4.7's tables, as markdown:
+                     Current mapping; or Needs your input plus the wording inferences
 
 Every query reads fields `build_manco_datadir.py` already wrote to
-`accounts.json`; nothing here re-derives them. `query` never writes.
+`accounts.json`; `query tables` only formats them. `query` never writes.
 
 The write subcommands are the only way Step 4.7's answers reach
 `budget-mapping.json`. Each merges through `update_mapping()` under the
@@ -80,14 +82,90 @@ def query_inferences(accounts):
     alongside the other mapping asks by `build_manco_datadir.py`) rather than
     their own top-level key, so the filter is on `needs == "inference"`.
     """
-    return [row for row in (accounts.get("mappingTable") or [])
-            if row.get("needs") == "inference"]
+    return [row for row in (accounts.get("mappingTable") or []) if is_inference(row)]
 
 
 def query_unaccounted(accounts):
     """Accounts carrying activity that no budget line reports —
     `unaccounted_accounts()`'s own output."""
     return accounts.get("unaccountedAccounts") or []
+
+
+_DASH = "\u2014"
+
+
+def _cell(value):
+    """One markdown cell: a `|` in a firm's own wording would split the row."""
+    text = _DASH if value in (None, "") else str(value)
+    return text.replace("|", "\\|").replace("\n", " ")
+
+
+def _md_table(title, header, rows):
+    return "\n".join([title, "",
+                      "| " + " | ".join(header) + " |",
+                      "|" + "|".join("---" for _ in header) + "|"]
+                     + ["| " + " | ".join(_cell(c) for c in r) + " |" for r in rows])
+
+
+def _bulk_line(row):
+    """The under-floor row names every account it gathers, never a count —
+    the operator decides these are not expected only after seeing which."""
+    parts = []
+    for acct in row.get("accounts") or []:
+        amount = acct.get("unreported")
+        figure = f" {amount:,.0f}" if isinstance(amount, (int, float)) else ""
+        parts.append(f"{acct.get('account_type')} {acct.get('name')}{figure}")
+    return " \u00b7 ".join(parts) or row.get("line")
+
+
+def _line_cells(row):
+    """# | Budget tab | Section | Budget line. Only a budget-line row carries
+    a `tab` (the build writes it), and only a row with a tab has a section."""
+    tab = row.get("tab")
+    line = _bulk_line(row) if row.get("needs") == "account_line_bulk" else row.get("line")
+    return [row.get("n"), tab, row.get("budget_section") if tab else None, line]
+
+
+def is_inference(row):
+    """A value read off the client's wording rather than stated by the workbook."""
+    return row.get("needs") == "inference"
+
+
+def is_current_mapping(row):
+    """Current mapping is what the build matched on its own. An inference
+    carries `proposed` too, but is asked with its line count, never
+    confirmed in the batch."""
+    return bool(row.get("proposed")) and not is_inference(row)
+
+
+def query_tables(accounts, part):
+    """Step 4.7's tables, ready to print as the turn's own text.
+
+    Rendered here rather than composed in chat so the table above each
+    question always exists and always reads the same. `current` is Current
+    mapping; `input` is Needs your input, then the values read off the
+    client's wording with their line counts. Empty when the part has no rows.
+    """
+    rows = accounts.get("mappingTable") or []
+    if part == "current":
+        picked = [r for r in rows if is_current_mapping(r)]
+        return _md_table("**Current mapping**",
+                         ["#", "Budget tab", "Section", "Budget line", "Proposed GL account(s)"],
+                         [_line_cells(r) + [r.get("proposed")] for r in picked]) if picked else ""
+    asks = [r for r in rows if not is_current_mapping(r) and not is_inference(r)]
+    inferences = [r for r in rows if is_inference(r)]
+    out = []
+    if asks:
+        out.append(_md_table("**Needs your input**",
+                             ["#", "Budget tab", "Section", "Budget line"],
+                             [_line_cells(r) for r in asks]))
+    if inferences:
+        out.append(_md_table("**Read off your workbook's wording**",
+                             ["#", "Budget tab", "Budget line", "Proposed GL account(s)"],
+                             [[r.get("n"), None,
+                               f"{r.get('line')} \u2014 {r.get('line_count')} lines",
+                               r.get("proposed")] for r in inferences]))
+    return "\n\n".join(out)
 
 
 def _contains(haystack, needle):
@@ -415,6 +493,12 @@ def build_parser():
     entries.add_argument("--vendor", help="substring of the vendor name")
     entries.add_argument("--tag", help="a tag value, or 'category=value'")
 
+    tables = query_kinds.add_parser(
+        "tables", help="Step 4.7's Current mapping / Needs your input table, as markdown")
+    _add_dashboard_dir_arg(tables)
+    tables.add_argument("--part", required=True, choices=["current", "input"],
+                        help="'current' for Current mapping, 'input' for Needs your input")
+
     return parser
 
 
@@ -439,6 +523,9 @@ def main(argv=None):
 
     if args.command == "query":
         accounts = load_accounts(args.dashboard_dir)
+        if args.query_kind == "tables":
+            print(query_tables(accounts, args.part))
+            return 0
         if args.query_kind == "unresolved":
             result = query_unresolved(accounts)
         elif args.query_kind == "inferences":

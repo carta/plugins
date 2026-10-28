@@ -2,8 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { sans, inkNum, INK, PAPER, LINE, BORDER_DEFAULT, FAINT, MICRO, SHADE, BLUE, FS } from "../ui/theme.js";
 import { Bubble, CollapseCaret, NoteIcon } from "../ui/components.jsx";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead, drillCellProps } from "../ui/table.jsx";
-import { glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
-import { dimensionValue, dimensionValuesAvailable, noValueLabel, rowTagScope } from "../ui/dimension.js";
+import { childDisplayLabel, glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
+import { dimensionValue, dimensionValuesAvailable, rowTagScope } from "../ui/dimension.js";
+import { NEST_STEP } from "../ui/nesting.js";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SUMMARY } from "../ui/ledger.js";
 import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, rowPolarity, fmtVarianceWhole } from "../ui/variance.js";
@@ -11,7 +12,7 @@ import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
 import { FiltersMenu, FilterRibbon, PeriodDropdown } from "./BudgetPeriodControls.jsx";
 import {
-  rowBreakouts, defaultBreakout, breakoutBuckets, worthBreakingOut, opensAnything,
+  rowBreakouts, defaultBreakout, breakoutBuckets, worthBreakingOut, opensAnything, childKey, childScope,
 } from "./accountBreakout.js";
 import { fundMatchRegex } from "./drilldown/util.js";
 import { trackClick } from "../analytics.js";
@@ -216,6 +217,8 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
     return keys;
   }, [rows]);
 
+  const feeBreakdown = useMemo(() => feeBreakdownRows(rows), [rows]);
+
   // Collapse — keyed on each header's own index within displayRows (stable
   // across re-renders of the same budget; recomputed, and any stale index
   // implicitly dropped, whenever displayRows itself changes). A header's
@@ -392,6 +395,7 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
                 asTotal={row.row_kind === "subtotal"}
                 extraIndent={row.key ? constituentKeys.has(row.key) : false}
                 sectionFlat={row.section ? flatSections.has(row.section) : false}
+                breakdownChild={feeBreakdown.has(row)}
                 collapsed={isHeader ? collapsed.has(i) : undefined}
                 onToggleCollapse={isHeader ? () => toggleCollapsed(i) : undefined}
                 closingRow={isHeader ? closingRowByHeaderIdx.get(i) : undefined}
@@ -446,6 +450,35 @@ export function withGroupHeaders(rows) {
       });
     }
     out.push(row);
+  }
+  return out;
+}
+
+// The rows that break a management-fee income line down by fund, as a Set
+// of row objects: the fund lines (fund_match, set by the build's roster
+// match) directly under it in the same section, plus the aggregate row
+// right after them that is not a "Total ..." closer — the remainder
+// (fee income less the fund rows), which reads as the residual child.
+const MGMT_FEE_LABEL_RX = /management\s+fee/i;
+export function feeBreakdownRows(rows) {
+  const out = new Set();
+  let parent = null;
+  let fundsSeen = 0;
+  for (const row of rows) {
+    const kind = row.row_kind;
+    if (kind === "line" && !row.fund_match && MGMT_FEE_LABEL_RX.test(row.label || "")) {
+      parent = row;
+      fundsSeen = 0;
+    } else if (parent && kind === "line" && row.fund_match && row.section === parent.section) {
+      out.add(row);
+      fundsSeen++;
+    } else {
+      if (parent && fundsSeen && (kind === "subtotal" || kind === "total")
+          && row.section === parent.section && !/^total\b/i.test(row.label || "")) {
+        out.add(row);
+      }
+      parent = null;
+    }
   }
   return out;
 }
@@ -588,7 +621,7 @@ function CollapsedHeaderRow({ row, style, labelIndent, closingRow, aggregates, c
 }
 
 function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvailable = true,
-                     periodYear, columns, monthlyBudgets = false, onDrill, asTotal, extraIndent, sectionFlat, collapsed, onToggleCollapse,
+                     periodYear, columns, monthlyBudgets = false, onDrill, asTotal, extraIndent, sectionFlat, breakdownChild, collapsed, onToggleCollapse,
                      closingRow, alignIndent, glNames, subCodes,
                      breakout, entries, dimension, open, onToggleLine, elsewhere,
                      widened, onDrillTotal, rowByKey, sharedWithLabel,
@@ -758,9 +791,11 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
   // Operating Expenses" are both depth 1 despite needing different
   // indents (40 vs 26) — only label-matching against the real header
   // (closingRowByHeaderIdx) tells them apart.
-  const indent = alignIndent != null
+  const baseIndent = alignIndent != null
     ? alignIndent
     : 12 + (row.depth || 0) * 14 + (extraIndent ? 28 : 0) + (sectionFlat ? 14 : 0);
+  // One step under the management-fee line it breaks down.
+  const indent = baseIndent + (breakdownChild ? NEST_STEP : 0);
 
   // Only real lines open: an aggregate has no single set of entries behind
   // it, and a fund-matched fee line resolves from fund-side JEs, which this
@@ -933,7 +968,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
     </tr>
     {isOpen && children.map(c => (
       <OutlineChildRow
-        key={`${row.key}-${c.label}`} child={c} indent={indent + 26}
+        key={`${row.key}-${childKey(c)}`} child={c} indent={indent + 26 + (c.nested ? NEST_STEP : 0)}
         row={row} breakout={breakout} periodYear={periodYear} columns={columns}
         dimension={dimension}
         cartaTags={(row.tag_value && rowScope)
@@ -964,7 +999,7 @@ export function elsewhereNote(elsewhere, row, sharedWithLabel) {
 
 // A child carries actuals and no budget: the workbook budgets the line, not
 // the vendors or accounts inside it, and prorating would invent a variance.
-function OutlineChildRow({ child, indent, row, breakout, periodYear, columns, dimension,
+export function OutlineChildRow({ child, indent, row, breakout, periodYear, columns, dimension,
                           cartaTags, onDrill, hoverCell, heldCell, onHoverCell }) {
   // Every breakout row reads as a figure a reader can open, so they all
   // look alike. "Not specified" was greyed and inert, which read as a
@@ -975,13 +1010,11 @@ function OutlineChildRow({ child, indent, row, breakout, periodYear, columns, di
   // under every breakout and told a reader nothing about which one.
   // The account breakout labels a child "<account> · <sub>" so two
   // accounts' sub-accounts stay apart in the data. On screen the row above
-  // already says which account this is, so the prefix repeats it on every
-  // child — the reader wants the half they do not have. The label keeps its
-  // full form everywhere it identifies rather than displays: the drill
-  // scope, the cell key, and the drawer title below.
-  const label = child.unlabelled
-    ? noValueLabel(breakout)
-    : (subOfChildLabel(child.label) ?? child.label);
+  // already says which account this is when the child nests under it, so
+  // the prefix repeats it — the reader wants the half they do not have. The
+  // label keeps its full form everywhere it identifies rather than displays:
+  // the drill scope, the cell key, and the drawer title below.
+  const label = childDisplayLabel(child, breakout);
   return (
     <tr>
       <td style={{ ...styles.tdLabel_, ...styles.trLine, paddingLeft: indent }}>
@@ -991,7 +1024,7 @@ function OutlineChildRow({ child, indent, row, breakout, periodYear, columns, di
       </td>
       {columns.map(col => {
         const actualV = columnActual(child.buckets, col);
-        const cellKey = `${outlineCellKey(row, col.key)}|${child.label}`;
+        const cellKey = `${outlineCellKey(row, col.key)}|${childKey(child)}`;
         const onClick = (canDrill && actualV !== 0)
           ? () => onDrill({
               cellKey,
@@ -1013,7 +1046,7 @@ function OutlineChildRow({ child, indent, row, breakout, periodYear, columns, di
               // this dimension says nothing about. Carried as null rather
               // than the words on the row, which are a label, not a value
               // any entry holds.
-              childScope: { ...breakout, value: child.unlabelled ? null : child.label },
+              childScope: childScope(child, breakout),
               dimension,
               periodYear,
               // Breakout rows are actuals only — prorating the line's budget

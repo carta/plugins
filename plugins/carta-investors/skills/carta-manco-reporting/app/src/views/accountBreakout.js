@@ -1,5 +1,5 @@
 import { dimensionValue } from "../ui/dimension.js";
-import { glNameMap } from "../ui/glNames.js";
+import { childDisplayLabel, glNameMap } from "../ui/glNames.js";
 
 // Spend carrying no value for the chosen breakout. Named once: both tables
 // show it, and a reader comparing them should see the same words.
@@ -232,6 +232,101 @@ export function breakoutRows(entries, row, dimension, period) {
   return withUnlabelled(out, c => c.actual);
 }
 
+// Whether the breakout names sub-accounts under their GL account.
+const nestsSubs = b => b?.source === "account" && !!b.withSub;
+
+const byText = (a, b) => String(a ?? "").localeCompare(String(b ?? ""), undefined, { numeric: true });
+
+/** The ledger-order key of an entry's account and sub-account. */
+const ledgerMeta = e => ({
+  acct: e.acct_type, account: e.account || null,
+  sub: e.sub || null, subCode: e.sub_code || null,
+});
+
+/** A child's stable identity, apart from what it displays: two rows of one
+ *  account (its total and its Not Categorized) share a display name. */
+export const childKey = c => c.key ?? c.label;
+
+/** Order account breakout children as a ledger reads: accounts by GL code,
+ *  each account's sub-accounts directly beneath it by sub-account code,
+ *  then by name. The unlabelled bucket stays last.
+ *
+ *  An account with sub-accounts becomes a total row carrying the whole
+ *  account, as Carta's trial balance does, with its own no-sub-account spend
+ *  as a "Not Categorized" row first (only when there is any) and its
+ *  sub-accounts after, all nested under the total. An account without
+ *  sub-accounts stays one plain row. When the row the breakout sits under
+ *  covers one GL account (`manyAccounts` false) the total row would only
+ *  repeat that row, so it is left out: Not Categorized and the sub-accounts
+ *  are the children, not nested. This follows the row's GL accounts, never
+ *  which of them hold spend in the window, so the layout does not change
+ *  with the period or filters.
+ *
+ *  `metaOf(child)` gives { acct, account, sub, subCode } for a child;
+ *  `totalOf(members)` the figures (buckets or cells) summing those children;
+ *  `hasAmount(child)` whether any of its figures is non-zero.
+ */
+function ledgerOrder(children, metaOf, totalOf, hasAmount, manyAccounts) {
+  const tagged = children.map(c => ({ c, m: c.unlabelled ? null : metaOf(c) }));
+  tagged.sort((x, y) => {
+    if (!x.m || !y.m) return (x.m ? 0 : 1) - (y.m ? 0 : 1);
+    return byText(x.m.acct, y.m.acct)
+      || (x.m.sub ? 1 : 0) - (y.m.sub ? 1 : 0)
+      // A sub-account with no code sorts after the numbered ones.
+      || (x.m.subCode ? 0 : 1) - (y.m.subCode ? 0 : 1)
+      || byText(x.m.subCode, y.m.subCode)
+      || byText(x.m.sub, y.m.sub);
+  });
+  const out = [];
+  for (let i = 0; i < tagged.length;) {
+    const { m } = tagged[i];
+    let j = i + 1;
+    while (m && j < tagged.length && tagged[j].m
+           && String(tagged[j].m.acct) === String(m.acct)) j++;
+    const group = tagged.slice(i, j);
+    i = j;
+    if (!m || !group.some(t => t.m.sub)) {
+      out.push(...group.map(t => t.c));
+      continue;
+    }
+    const members = group.map(t => t.c);
+    if (manyAccounts) {
+      out.push({
+        label: m.account, key: `${m.acct}::total`, accountTotal: true,
+        acct: m.acct, account: m.account, unlabelled: false, ...totalOf(members),
+      });
+    }
+    for (const { c, m: cm } of group) {
+      if (!cm.sub) {
+        if (hasAmount(c)) {
+          out.push({ ...c, key: `${cm.acct}::uncategorized`, uncategorized: true,
+                     acct: cm.acct, account: cm.account,
+                     ...(manyAccounts && { nested: true }) });
+        }
+        continue;
+      }
+      out.push({ ...c, ...(manyAccounts && { nested: true }),
+                 sub: cm.sub, subCode: cm.subCode });
+    }
+  }
+  return out;
+}
+
+/** The drill filter for a breakout child: which entries the row stands for.
+ *  An account's total row is every entry of that account, sub-account or
+ *  not, so it filters on the account alone. */
+export function childScope(child, breakout) {
+  if (child.unlabelled) return { ...breakout, value: null };
+  if (child.accountTotal) {
+    return { ...breakout, withSub: false, value: child.account };
+  }
+  if (child.uncategorized) {
+    // With sub-accounts nested, an entry with none is read as the bare account.
+    return { ...breakout, value: child.account, display: childDisplayLabel(child, breakout) };
+  }
+  return { ...breakout, value: child.label };
+}
+
 /** Child rows bucketed into a caller's own columns — the outline reports by
  *  period, so a flat total would leave its children unreadable beside it.
  *
@@ -261,6 +356,7 @@ export function breakoutBuckets(entries, row, breakout, opts = {}) {
     return o;
   };
   const byValue = new Map();
+  const meta = new Map();
   for (const e of entries || []) {
     if (!codes.has(e.acct_type)) continue;
     if (excludedSet?.has(e)) continue;
@@ -278,17 +374,22 @@ export function breakoutBuckets(entries, row, breakout, opts = {}) {
     if (!bucket) continue;
     const label = dimensionValue(e, breakout) || UNLABELLED;
     if (!byValue.has(label)) byValue.set(label, empty());
+    if (!meta.has(label)) meta.set(label, ledgerMeta(e));
     const b = byValue.get(label);
     const amt = Number(e.amount ?? 0) || 0;
     b[bucket] += amt;
     if (bucket !== "Total") b.Total += amt;
   }
 
-  const out = [...byValue.entries()]
+  let out = [...byValue.entries()]
     .map(([label, buckets]) => ({ label, buckets, unlabelled: label === UNLABELLED }))
     // Unlabelled last: it is a gap in the data, not a peer of the values.
     .sort((a, b) => (a.unlabelled ? 1 : 0) - (b.unlabelled ? 1 : 0)
                  || Math.abs(b.buckets.Total) - Math.abs(a.buckets.Total));
+  if (nestsSubs(breakout)) {
+    out = ledgerOrder(out, c => meta.get(c.label), addBuckets,
+      c => Object.values(c.buckets).some(v => Math.abs(v) > 0.005), codes.size > 1);
+  }
 
   const kept = withUnlabelled(out, c => c.buckets.Total);
   if (!kept.length) return [];
@@ -303,6 +404,22 @@ export function breakoutBuckets(entries, row, breakout, opts = {}) {
   if (kept.length === 1 && sameLabel(kept[0].label, row?.label)) return [];
   return kept;
 }
+
+const addBuckets = members => {
+  const buckets = {};
+  for (const c of members) {
+    for (const [k, v] of Object.entries(c.buckets)) buckets[k] = (buckets[k] || 0) + v;
+  }
+  return { buckets };
+};
+
+const addCells = members => {
+  const cells = new Map();
+  for (const c of members) {
+    for (const [k, v] of c.cells) cells.set(k, (cells.get(k) || 0) + v);
+  }
+  return { cells };
+};
 
 function sameLabel(a, b) {
   const norm = v => String(v ?? "").trim().toLowerCase();
@@ -346,12 +463,14 @@ export function breakoutByColumns(entries, row, breakout, columns) {
   const narrow = row?.scopes || [];
 
   const byValue = new Map();
+  const meta = new Map();
   for (const e of entries || []) {
     if (!codes.has(e.acct_type)) continue;
     if (typeof e.mo !== "number") continue;
     if (narrow.length && !narrow.every(sc => dimensionValue(e, sc) === sc.value)) continue;
     const label = dimensionValue(e, breakout) || UNLABELLED;
     if (!byValue.has(label)) byValue.set(label, new Map());
+    if (!meta.has(label)) meta.set(label, ledgerMeta(e));
     const cells = byValue.get(label);
     const amount = Number(e.amount ?? 0) || 0;
     for (const col of columns) {
@@ -361,13 +480,17 @@ export function breakoutByColumns(entries, row, breakout, columns) {
   }
 
   const total = (cells) => [...cells.values()].reduce((s, v) => s + Math.abs(v), 0);
-  const out = [...byValue.entries()]
+  let out = [...byValue.entries()]
     .map(([label, cells]) => ({ label, cells, unlabelled: label === UNLABELLED }))
     // A value with nothing inside the window is not a child of this row.
     .filter(c => c.cells.size)
     // Unlabelled last: it is a gap in the data, not a peer of the values.
     .sort((a, b) => (a.unlabelled ? 1 : 0) - (b.unlabelled ? 1 : 0)
                  || total(b.cells) - total(a.cells));
+  if (nestsSubs(breakout)) {
+    out = ledgerOrder(out, c => meta.get(c.label), addCells,
+      c => [...c.cells.values()].some(v => Math.abs(v) > 0.005), codes.size > 1);
+  }
   return withUnlabelled(out, c => total(c.cells));
 }
 

@@ -4115,7 +4115,7 @@ def mapping_table(rows, asks, proposals=None, tab_name=None):
                 "n": len(out) + 1,
                 "addr": row.get("addr"),
                 "line": row.get("label"),
-                "section": tab_name,
+                "tab": tab_name,
                 "budget_section": _budget_section_label(row),
                 "needs": ask.get("needs"),
                 "wants": ("which fund, or which account"

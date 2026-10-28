@@ -96,7 +96,21 @@ this same turn (see below).
 **Each table is chat text, not a summary folded into the question.**
 Render the markdown table as your own response text *before* the
 `AskUserQuestion` call it belongs to — never skip straight from reading
-`mappingTable` to asking the question. The question's wording says
+`mappingTable` to asking the question. Don't compose it by hand — the
+script renders both, split and columned as below:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" query tables "<dashboard_dir>" --part current
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" query tables "<dashboard_dir>" --part input
+```
+
+Paste its output, unchanged, as the text of the same message that carries
+the `AskUserQuestion` call. Empty output means that table has no rows.
+`--part input` also prints the inference table (see "Values read off the
+client's own wording" below) after Needs your input, each value with its
+line count.
+Rerun `--part input` after the confirm-all answer and every rebuild, so the
+rows match what is still open. The question's wording says
 "confirm the mappings above": that phrase is a lie unless a table
 actually sits above it on screen. Cramming the row list into an option's
 `description` field (a comma-separated string of category names, say)
@@ -257,8 +271,8 @@ genuinely ambiguous row in prose (see "three answers, not two" below).
 **`Budget tab` is the workbook's own sheet name — `workbook_meta.sheet` —
 never a reworded `--label`.** A firm's own section headings repeat across
 every tab in the workbook, so a heading can never tell two tabs apart the
-way the tab's own name does; `mapping_table()` prints `sheet` for every
-budget-line row for exactly that reason. For an inference row or an
+way the tab's own name does; `mapping_table()` writes it as `tab` on every
+budget-line row, and only there, for exactly that reason. For an inference row or an
 account row, there's no tab to name at all — an inference is a match
 method, an account is a Carta ledger entry with no tab of its own — so
 those print an em dash instead of leaving the column blank or guessing at
@@ -280,15 +294,15 @@ from the line's label or tab name.
 
 Numbers run continuously across both tables — row 3 is still "3" wherever
 it lands, so "3 is the fee account" still resolves to the right entry.
-Read the columns straight off each entry: `n` → `#`, `section` → `Budget
-tab` (row type permitting), `budget_section` → `Section` (em dash when
-absent), `line` → `Budget line`, `proposed` → `Proposed GL account(s)` —
+Read the columns straight off each entry: `n` → `#`, `tab` → `Budget
+tab` (em dash when absent), `budget_section` → `Section` (em dash when the
+row has no `tab`), `line` → `Budget line`, `proposed` → `Proposed GL account(s)` —
 plural, because a line can map to more than one Carta account — with
 `options` as what a change can be changed to. Then:
 
-When **Current mapping** has at least one row, print it — the actual
-markdown table, rows and all, as this turn's own chat text — then ask with
-a single `AskUserQuestion`:
+When **Current mapping** has at least one row, print it — `query tables
+--part current`'s output, rows and all, as this turn's own chat text — then
+ask with a single `AskUserQuestion`:
 
 > **Confirm the `<N>` mappings above?**
 > Matched against your Carta chart of accounts — some read straight off an
@@ -363,6 +377,15 @@ Never resolve one of these by picking the nearest name yourself. The
 options exist because the match was close enough to show and not close
 enough to trust — "LP portal expenses" against a firm's "LP meeting
 expenses" is one word apart and a different account.
+
+**An option covering several accounts names each one as a GL account, by
+number — never as "sub-accounts".** In Carta a sub-account is a breakdown
+inside one GL account (the `sub` on an entry, e.g. "Salaries & wages" under
+7130 Payroll); separately numbered accounts are GL accounts in their own
+right, however their names read. "Travel - airfare (7121)" is a GL account
+beside "Travel (7110)", not under it. Label the option by its codes
+("7110, 7121, 7124, 7126, 7127, 7128") and name each account in its
+description.
 
 An entry the build gave a `proposed` answer carries the decision it stands
 for in `answer`, so "Yes, confirm all" records each of them by the keys
@@ -540,7 +563,7 @@ a tab — so it prints the same em dash under `Budget tab`:
 
 | # | Budget tab | Budget line | Proposed GL account(s) |
 |---|---|---|---|
-| 7 | — | `<line>`, `<line>` +4 more | `<value>` |
+| 7 | — | `<line>`, `<line>` +4 more — 23 lines | `<value>` |
 
 A near match is an inference too, but one that is not always applied:
 wording that shortens or misspells a value ("Atlas Prog" for "Atlas

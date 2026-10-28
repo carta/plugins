@@ -127,7 +127,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.5</carta-plugin>
+<carta-plugin>carta-investors:7.5.6</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -306,7 +306,8 @@ datadir build runs silently. Speak only at:
   **Each mapping table — Current mapping, then Needs your input — is
   printed as chat text immediately before the `AskUserQuestion` call it
   belongs to, every time; never skipped, never folded into the question's
-  text.** See "Render the table before you ask" in
+  text.** `record_mapping.py query tables --part current|input` renders
+  it; paste its output verbatim. See "Render the table before you ask" in
   [budget-unresolved.md](references/budget-unresolved.md) for the rule
 - Step 5 — the dashboard URL, its orientation line, and — only when the
   build reported gaps — one line counting where the report and the

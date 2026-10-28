@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { sans, FAINT, MICRO, FS, LINE } from "../ui/theme.js";
 import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, fmtVarianceWhole } from "../ui/variance.js";
-import { glNameMap, glTooltip, subCodeMap } from "../ui/glNames.js";
+import { childDisplayLabel, glNameMap, glTooltip, subCodeMap } from "../ui/glNames.js";
 import HoverTip from "../ui/HoverTip.jsx";
 import { CollapseCaret } from "../ui/components.jsx";
 import {
@@ -11,8 +11,8 @@ import {
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SECTION } from "../ui/ledger.js";
 import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import BudgetPeriodControls from "./BudgetPeriodControls.jsx";
-import { noValueLabel } from "../ui/dimension.js";
-import { rowBreakouts, defaultBreakout, breakoutByColumns, worthBreakingOut, opensAnything } from "./accountBreakout.js";
+import { NEST_STEP } from "../ui/nesting.js";
+import { rowBreakouts, defaultBreakout, breakoutByColumns, worthBreakingOut, opensAnything, childKey, childScope } from "./accountBreakout.js";
 import { accountSections, actualByGlByMonth, accountLabel, ACCOUNT_LABEL_MIN_WIDTH } from "./accountSections.js";
 import {
   cellFor, monthsInRange, normalizeRange,
@@ -351,7 +351,7 @@ function SectionRows({ section, drilldown, names, subCodes, columns, subCols, ce
           </tr>
           {isOpen && children.map(c => (
             <ChildRow
-              key={`${key}-${c.label}`} child={c} parent={r} columns={columns}
+              key={`${key}-${childKey(c)}`} child={c} parent={r} columns={columns}
               subCols={subCols} breakout={breakout} polarity={section.polarity}
               drilldown={drilldown} from="budget-vs-actuals"
               label={{ cols: columns.filter((c) => !c.ytd), months: windowMonths }}
@@ -411,7 +411,7 @@ export function ChildRow({ child, parent, columns, subCols, breakout, polarity, 
   // along as `breakout`, which nothing downstream read — so every child of
   // an account opened the same panel, totalling the whole account rather
   // than the row that was clicked.
-  const scope = { ...breakout, value: child.unlabelled ? null : child.label };
+  const scope = childScope(child, breakout);
   // `label` is `{ cols, months }`: the columns the label cell's figure sums
   // and the months its drill lists. The page decides it, so a child's label
   // drill covers the same months as its parent row's on that page.
@@ -438,10 +438,11 @@ export function ChildRow({ child, parent, columns, subCols, breakout, polarity, 
     ? fmtCurrencyWhole(child.cells.get(col.key)) : "—");
   return (
     <tr>
-      <td style={{ ...S.tdLabel, ...S.trLine, ...S.childLabel, ...(onClick ? S.clickable : null) }}
+      <td style={{ ...S.tdLabel, ...S.trLine, ...S.childLabel,
+                   ...(child.nested ? S.childNested : null), ...(onClick ? S.clickable : null) }}
           onClick={onClick ? () => onClick(null) : undefined}>
         <span style={{ ...S.labelText, ...(child.unlabelled ? S.childMuted : null) }}>
-          {child.unlabelled ? noValueLabel(breakout) : child.label}
+          {childDisplayLabel(child, breakout)}
         </span>
       </td>
       {subCols ? columns.map(col => subCols.map((sc, i) => (
@@ -522,6 +523,7 @@ export const S = {
   // Indent carries the hierarchy; the sticky label column has no room for
   // a second device, and a bolder parent would fight the section header.
   childLabel: { paddingLeft: 48 },
+  childNested: { paddingLeft: 48 + NEST_STEP },
   childNum: { color: FAINT },
   childMuted: { fontStyle: "italic", color: MICRO },
 };

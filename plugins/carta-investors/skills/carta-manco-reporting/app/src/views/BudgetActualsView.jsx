@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, microCaption, FS, RED, subheadRow, SUBHEAD_ICON_BTN } from "../ui/theme.js";
 import { H1, NoteIcon } from "../ui/components.jsx";
 import BudgetActualsAccounts, { hasMonthlyDetail } from "./BudgetActualsAccounts.jsx";
-import { glNameMap, glTooltip } from "../ui/glNames.js";
+import { glNameMap, glTooltip, childDisplayLabel } from "../ui/glNames.js";
+import { NEST_STEP } from "../ui/nesting.js";
 import { dimensionOf, dimensionValue, dimensionValuesAvailable,
-         dimensionLabel, dimensionLabelPlural, noValueLabel, rowTagScope } from "../ui/dimension.js";
+         dimensionLabel, dimensionLabelPlural, rowTagScope } from "../ui/dimension.js";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SECTION } from "../ui/ledger.js";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, GroupedTableHead, useStickyHeader, StickyClone, drillCellProps } from "../ui/table.jsx";
 import { Capped } from "../shell/AppShell.jsx";
@@ -650,9 +651,9 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
     </tr>
     {isOpen && children.map(child => (
       <tr key={`${rowKey}::${child.label}`}>
-        <td style={{ ...styles.tdLabel, ...LEDGER_ROW, paddingLeft: indent + 16 }}>
+        <td style={{ ...styles.tdLabel, ...LEDGER_ROW, paddingLeft: indent + 16 + (child.nested ? NEST_STEP : 0) }}>
           <span style={child.unlabelled ? styles.childMuted : null}>
-            {child.unlabelled ? noValueLabel(breakout) : child.label}
+            {childDisplayLabel(child, breakout)}
           </span>
         </td>
         {columns.map(col => (
