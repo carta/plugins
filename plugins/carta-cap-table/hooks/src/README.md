@@ -86,7 +86,7 @@ internal error returns the same shape a successful run would return.
 | `sh build.sh` | cross-compile all platform binaries |
 | `sh build.sh --check` | confirm the build is reproducible |
 | `sh verify-checksums.sh` | confirm `bin/` matches `bin/SHA256SUMS` |
-| `sh test.sh` | smoke test plus cold-start latency |
-| `sh detect-native.sh` | print the binary path for the current host |
+
+In the monorepo checkout only (not shipped in plugins): `sh test.sh` runs the smoke test plus cold-start latency, and `sh detect-native.sh` prints the binary path for the current host.
 
 The build uses the Go version pinned in `.go-version`.
