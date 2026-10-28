@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.2.2</carta-plugin>
+<carta-plugin>carta-investors:7.2.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -322,7 +322,7 @@ The Mode A artifact has **not yet been formally audited for WCAG 2.1 AA complian
 - Tables use proper `<thead>` / `<tbody>` semantics
 - The loading shimmer respects `prefers-reduced-motion`
 
-Users who need a WCAG-compliant text view should request Mode B explicitly ("just tell me", "no file", "quick summary").
+Users who need a WCAG-compliant text view can ask for text ("just tell me", "no file", "quick summary"), which Step 2 routes to Mode B.
 
 ---
 
@@ -365,7 +365,11 @@ Then proceed immediately to Step 1.
 
 **The default output is the interactive artifact. Proceed to Step A1.**
 
-Route to **text analysis (Mode B)** when the user explicitly signals text, or asks a question a table answers better than a report:
+> **ALWAYS build the interactive artifact (Mode A) for a general co-investor request.** It is the required output, not a preference. Do not read a question as a request for a quick table: "Who are my co-investors?", "Who co-invested with me most often?" and "Who else invested alongside us?" are all answered by the report's ranked co-investor table.
+
+A large portfolio, many entities or many SPAs is not a reason for text. The page pages its own queries and never routes rows through your context.
+
+Route to **text analysis (Mode B)** only for these explicit signals:
 
 - "text only", "no file", "just tell me", "quick summary" → Q1
 - A specific company by name → Q4 and Q4b
@@ -384,7 +388,7 @@ The artifact shows the firm's most frequent co-investors, drawn from SPAs and de
 >
 > Consequences worth holding onto:
 > - There is no NDJSON blob to resolve, no `process.py`, and no data file to assemble.
-> - Do **not** hand-write or edit the artifact HTML. Every render goes through `render-artifact.py`.
+> - Do **not** hand-write or edit the artifact HTML, including its paging, even to fix a problem the viewer reports. Every render goes through `render-artifact.py`.
 > - Do **not** pre-fetch co-investor data "to check it worked". The artifact reports its own errors to the viewer.
 
 ### Step A1: Checks before building
@@ -778,4 +782,4 @@ Do not repeat the full menu after every result. If the user asks "what else can 
 | MCP query error | "Could not reach Carta data. Try again in a moment." |
 | `render-artifact.py` exits non-zero | Surface the script's stderr and stop. Never hand-write the artifact HTML. |
 | No `Artifact` tool, even after Step A1 tried to load it | Go to Mode B, opening with Step A1's sentence on why the answer is text. |
-| Artifact publishes but renders an error | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. |
+| Artifact publishes but renders an error | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. A "too large" error is not a reason to change the page: it already sizes its own requests and retries smaller ones. Re-run Step A2 and A3 with the script's template unchanged. If the error returns, say the report couldn't load and stop. |

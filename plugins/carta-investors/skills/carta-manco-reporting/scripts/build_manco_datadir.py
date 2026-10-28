@@ -4962,9 +4962,11 @@ def read_excel_budget(dashboard_dir, as_of_month, budget_file=None):
         return None
     resolved = _resolve_excel_budget(dashboard_dir, as_of_month, p, data)
     # A shared report carries the sharer's Budget vs Actuals filters; the app
-    # opens it with them when the reader has saved none of their own.
-    if resolved is not None and "view" in data:
-        resolved["view"] = data["view"]
+    # opens it with them when the reader has saved none of their own. A custom
+    # report's view carries its pivot, and `custom` the accounts it keeps.
+    for key in ("view", "custom"):
+        if resolved is not None and key in data:
+            resolved[key] = data[key]
     return resolved
 
 
@@ -5735,14 +5737,36 @@ def build(args):
             print(f"note: matched {n_fund_matched} outline income line(s) to a real "
                   f"fund by name.", file=sys.stderr)
 
-    if excel_budgets:
-        budgets = excel_budgets[0]  # primary drives the top-line KPIs
+    # A custom report is a cut of another budget, never the one the dashboard leads with:
+    # a firm whose only budget is Carta's keeps it as primary beside its custom reports.
+    _leading = [_b for _b in excel_budgets if not _b.get("custom")]
+    if _leading:
+        budgets = _leading[0]  # primary drives the top-line KPIs
     elif carta_budget_opted_in(dashboard):
         budgets = read_budgets(raw, args.as_of_year, as_of_month)
     else:
         # "Skip for now" means actuals-only — a budget explicitly declined,
         # not a Carta fallback.
         budgets = empty_budgets()
+
+    # When no workbook budget leads, Carta's own budget does, listed first and the variance
+    # default, with any custom reports made from it after it. It is also recorded under its
+    # own snapshot key, so a custom report can still be made from it.
+    carta_entry = None
+    if not _leading and (budgets.get("rows") or []):
+        carta_entry = {
+            **budgets,
+            "id":         report_store.CARTA_BUDGET_ID,
+            "label":      "Carta budget",
+            "view_kinds": ["by-account"],
+            # The app dates its period columns from this.
+            "period_year": args.as_of_year,
+            "period": {
+                "first_month": 1,
+                "last_month":  as_of_month,
+                "label": f"Jan\u2013{_MONTH_ABBR[as_of_month - 1]} {args.as_of_year}",
+            },
+        }
     total_income   = sum(m_income)
     total_expense  = sum(m_expense)
     spend_by_gl = [{"name": a["name"],
@@ -6069,14 +6093,15 @@ def build(args):
             sets.append(built)
         if sets:
             variance_categories = {"budgets": sets, "default_id": sets[0].get("id")}
-    elif budgets.get("rows"):
+    if carta_entry:
         built = build_variance_categories(carta_variance_payload(budgets),
                                           accounts, "Firm Total",
                                           as_of_month, entries=all_rows)
         if built:
-            built["id"] = "carta"
+            built["id"] = report_store.CARTA_BUDGET_ID
             built["label"] = "Carta budget"
-            variance_categories = {"budgets": [built], "default_id": "carta"}
+            others = (variance_categories or {}).get("budgets") or []
+            variance_categories = {"budgets": [built, *others], "default_id": report_store.CARTA_BUDGET_ID}
 
     vendor_spend = build_vendor_spend(all_rows, _vendor_map, _vendor_agg)
 
@@ -6120,21 +6145,7 @@ def build(args):
     # only axis it can offer — but a per-account Budget vs Actuals is still
     # the page the operator came for, and it was previously not rendered at
     # all.
-    selectable_budgets = excel_budgets
-    if not selectable_budgets and (budgets.get("rows") or []):
-        selectable_budgets = [{
-            **budgets,
-            "id":         "carta",
-            "label":      "Carta budget",
-            "view_kinds": ["by-account"],
-            # The app dates its period columns from this.
-            "period_year": args.as_of_year,
-            "period": {
-                "first_month": 1,
-                "last_month":  as_of_month,
-                "label": f"Jan\u2013{_MONTH_ABBR[as_of_month - 1]} {args.as_of_year}",
-            },
-        }]
+    selectable_budgets = ([carta_entry] if carta_entry else []) + excel_budgets
 
     snapshot = {
         "firmName":    args.firm_name,
@@ -6189,6 +6200,7 @@ def build(args):
             # for backwards compat with Dashboard-page charts that read
             # scalar income/expenses/net without knowing about multi-budget.
             "budgets":       [snapshot_budget_entry(b, as_of_month) for b in selectable_budgets],
+            report_store.CARTA_BUDGET_ID: snapshot_budget_entry(carta_entry, as_of_month) if carta_entry else None,
         },
     }
 

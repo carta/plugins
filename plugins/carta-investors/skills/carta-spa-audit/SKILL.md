@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.2.2</carta-plugin>
+<carta-plugin>carta-investors:7.2.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -139,7 +139,7 @@ The Mode A interactive HTML artifact has **not yet been formally audited for WCA
 - Tables use proper `<thead>` / `<tbody>` semantics; sort headers expose `aria-sort` state.
 - Search input has an `aria-label`.
 
-Users who need a WCAG-compliant text view should request Mode B explicitly ("text only", "no file", "quick summary").
+Users who need a WCAG-compliant text view can ask for text ("text only", "no file", "quick summary"), which Step 2 routes to Mode B.
 
 ---
 
@@ -216,13 +216,22 @@ Tell the user: `Firm context loaded: <firm_name>. Fetching investment records an
 
 **The default output of this skill is the interactive artifact (Mode A). Proceed directly to Mode A Step A1.**
 
-Only route to **text-only (Mode B)** when the user explicitly signals it:
-- Says "text only", "no file", "quick summary", "just tell me", or "list missing only" → Mode B
-- Asks to drill into a specific named company (any phrasing) → run Mode B Step B0 cache check + drill-down only
+> **ALWAYS build the interactive artifact (Mode A). This is not a preference or a default — it is the required output of this skill.** Text is for a session with no `Artifact` tool, a user who asks for it outright, or a drill-down into one named company — never a choice you make from how a general request was phrased.
 
-Everything else — including any general "audit my SPAs" or "show coverage" request — goes to Mode A.
+**A question about the gaps is a request for the audit.** "Which of our investments are missing an executed SPA?", "Which companies are missing SPAs?" and "What's our SPA status?" are all answered by the artifact: its missing and unexecuted tiles are that list, ranked by cost basis. Do not read them as "just list the gaps".
 
-Route to Mode B when Step A1's gate finds no `Artifact` tool — that means this session is not Cowork.
+**Do NOT route to Mode B because of the question's wording or the portfolio's size:**
+
+| User signal | What must happen |
+|---|---|
+| "Which … are missing / unexecuted?", "list the gaps" | Still build Mode A. The artifact's missing and unexecuted buckets are the list. |
+| Large portfolio, many entities, many SPAs | Still build Mode A. The page pages its own queries and never routes rows through your context, so size is not a reason for text. |
+| Speed / cost concern | Still build Mode A. It costs nothing extra in your context. |
+
+Route to **text-only (Mode B)** only when:
+- The user explicitly asks for text: "text only", "no file", "quick summary" or "just tell me".
+- The user asks to drill into one specific named company (any phrasing) → run Mode B Step B0 cache check + drill-down only.
+- Step A1's gate finds no `Artifact` tool — this session is not Cowork. Tell the user plainly *"I'll give you the audit as text."*
 
 ---
 
@@ -234,7 +243,7 @@ The artifact shows the firm's four-bucket SPA audit — missing, unexecuted, exe
 >
 > Consequences worth holding onto:
 > - There is no NDJSON blob to resolve, no `process.py`, and no data file to assemble.
-> - Do **not** hand-write or edit the artifact HTML. Every render goes through `render-artifact.py`.
+> - Do **not** hand-write or edit the artifact HTML, including its paging, even to fix a problem the viewer reports. Every render goes through `render-artifact.py`.
 > - Do **not** pre-fetch SPA data "to check it worked". The artifact reports its own errors to the viewer.
 
 ### Step A1: Checks before building
@@ -641,7 +650,7 @@ AskUserQuestion(
 | Company shows as 'Missing SPA' despite having one on file | Company was renamed after investment — fuzzy match can't bridge historical name changes | "This may be a company rename. Try the drill-down with the old company name to locate the SPA manually." |
 | `render-artifact.py` exits non-zero | Bad UUID, non-numeric Carta ID, malformed base URL, unusable connector name, output outside CWD, or a missing template/placeholder | Surface the script's stderr and stop. Never hand-write the artifact HTML. |
 | No `Artifact` tool (Step A1 gate) | This session is not Cowork | Go to Mode B. Tell the user "I'll give you the audit as text" — nothing about Cowork, artifacts, or sandboxes. |
-| Artifact publishes but renders an error | The page's own bootstrap() hit a required-query failure or found 0 audit rows | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. |
+| Artifact publishes but renders an error | The page's own bootstrap() hit a required-query failure or found 0 audit rows | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. A "too large" error is not a reason to change the page: it already sizes its own requests and retries smaller ones. Re-run Step A2 and A3 with the script's template unchanged. If the error returns, say the audit couldn't load and stop. |
 
 ---
 

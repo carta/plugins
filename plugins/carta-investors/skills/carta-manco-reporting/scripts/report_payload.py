@@ -76,6 +76,11 @@ def _is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def is_gl_code(value: Any) -> bool:
+    """A GL account code: a positive integer."""
+    return _is_int(value) and value > 0
+
+
 def _is_one_of(value: Any, allowed: frozenset) -> bool:
     """Membership the way Carta checks it: a non-string hashable (an int, a list
     wrapped in a tuple) must not pass just because it happens to equal a member by value —
@@ -188,7 +193,7 @@ def _check_node(node: Any, path: str, scoped: bool) -> None:
     if not _is_int(node["order"]) or node["order"] < 0:
         raise PayloadError("%s.order must be a non-negative integer" % path)
     gl = node["gl_codes"]
-    if not isinstance(gl, list) or not all(_is_int(c) and c > 0 for c in gl):
+    if not isinstance(gl, list) or not all(is_gl_code(c) for c in gl):
         raise PayloadError("%s.gl_codes must be a list of positive integers" % path)
     if "section" in node:
         _text(node["section"], path + ".section", MAX_LABEL_LENGTH, nullable=True)

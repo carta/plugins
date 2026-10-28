@@ -49,6 +49,7 @@ Customizing for your microapp:
 
 import argparse
 import atexit
+import functools
 import http.server
 import json
 import os
@@ -272,6 +273,15 @@ def _rebuild():
     import build_manco_datadir  # only needed for writes; keeps a read-only launch light
     with _rebuild_lock:
         return build_manco_datadir.rebuild(DATA_DIR, timeout=REBUILD_TIMEOUT)
+
+
+def _carta_budget_entry():
+    """Carta's own budget as the last build recorded it in the snapshot, or None."""
+    try:
+        snapshot = json.loads((DATA_DIR / "snapshot.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return (snapshot.get("budget") or {}).get(report_store.CARTA_BUDGET_ID)
 
 
 def _reports_listing():
@@ -581,7 +591,7 @@ def _start_share_op(op, params):
     return job
 
 
-_REPORT_ACTION_RE = re.compile(r"^/api/reports/([A-Za-z0-9_.-]{1,160})/(rename|duplicate|hide|unlink|remove)$")
+_REPORT_ACTION_RE = re.compile(r"^/api/reports/([A-Za-z0-9_.-]{1,160})/(rename|duplicate|derive|edit|hide|unlink|remove)$")
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -924,15 +934,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         import build_manco_datadir  # only needed for writes; keeps a read-only launch light
         store = report_store.ReportStore(DATA_DIR)
         expected = self.headers.get("If-Match")
+        copy_mapping = functools.partial(build_manco_datadir.copy_budget_mapping, DATA_DIR)
         try:
             if action == "rename":
                 result = store.rename(report_id, body.get("name"), expected_etag=expected)
             elif action == "duplicate":
-                result = store.duplicate(
-                    report_id,
-                    copy_mapping=lambda rows, src, dst: build_manco_datadir.copy_budget_mapping(
-                        DATA_DIR, rows, src, dst),
-                    expected_etag=expected)
+                result = store.duplicate(report_id, copy_mapping=copy_mapping, expected_etag=expected)
+            elif action in ("derive", "edit"):
+                custom = dict(carta_budget=_carta_budget_entry, copy_mapping=copy_mapping, expected_etag=expected)
+                fields = (body.get("name"), body.get("pivot"), body.get("gl_codes"))
+                if action == "derive":
+                    result = store.derive(report_id, *fields, **custom)
+                else:
+                    result = store.edit_custom(report_id, *fields, source_id=body.get("from"), **custom)
             elif action == "hide":
                 result = store.set_hidden(report_id, bool(body.get("hidden", True)), expected_etag=expected)
             elif action == "unlink":

@@ -40,6 +40,7 @@ export const REBUILD_FAILED = "rebuild";
 export const REPORT_ACTIONS = Object.freeze({
   RENAME: "rename", DUPLICATE: "duplicate", HIDE: "hide", REMOVE: "remove", UNLINK: "unlink",
   SHARE: "share", PUBLISH_AS_NEW: "publish-as-new", DELETE: "delete", PULL: "pull", USERS: "users",
+  DERIVE: "derive", EDIT: "edit",
 });
 
 // Runs a report change. One that was saved but whose page didn't refresh counts as done:

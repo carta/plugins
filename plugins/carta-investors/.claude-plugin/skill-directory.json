@@ -50,7 +50,7 @@
     "name": "Co-investor lookup",
     "order": 30,
     "prompts": [
-      "Who are other investors who have co-invested in my portfolio companies?"
+      "Build a co-investor report showing who has co-invested in my portfolio companies"
     ],
     "whatsNewCopy": {
       "headline": "See who invests alongside you across your portfolio",
@@ -196,7 +196,7 @@
     "name": "SPA coverage audit",
     "order": 60,
     "prompts": [
-      "Which of our investments are missing an executed SPA?"
+      "Build an SPA coverage audit report showing which of our investments are missing an executed SPA"
     ],
     "whatsNewCopy": {
       "headline": "Find investments missing a signed stock purchase agreement",

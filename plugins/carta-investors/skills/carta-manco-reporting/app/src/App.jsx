@@ -24,6 +24,7 @@ import { withFirmParam } from "./state/firmParam.js";
 import { loadFirmStepProgress } from "./state/loadFirmSteps.js";
 import LoadingScreen from "./ui/LoadingScreen.jsx";
 import FirmChooser from "./shell/FirmChooser.jsx";
+import MancoEntityChooser from "./shell/MancoEntityChooser.jsx";
 import NoMancoEntity from "./shell/NoMancoEntity.jsx";
 import { useHostedApp } from "./shell/hostedApp.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
@@ -328,7 +329,7 @@ export default function App() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const loadRetriedRef = useRef(false);
   const loadTrigger = notReady ? loadAttempt + 1 : 0;
-  const { loadStatus, loadError, errorCode, chooser, choose, reopenChooser } = useLoadFirm(loadTrigger, async () => {
+  const { loadStatus, loadError, errorCode, chooser, choose, reopenChooser, mancoChoice, chooseMancoEntity } = useLoadFirm(loadTrigger, async () => {
     const stillNotReady = await fetchData();
     reportsApi.reload();
     if (!stillNotReady) {
@@ -460,6 +461,14 @@ export default function App() {
         <>
           <style>{GLOBAL_CSS}</style>
           <FirmChooser isStaff={chooser.isStaff} firms={chooser.firms} onPick={choose} />
+        </>
+      );
+    }
+    if (mancoChoice) {
+      return (
+        <>
+          <style>{GLOBAL_CSS}</style>
+          <MancoEntityChooser entities={mancoChoice.entities} onPick={chooseMancoEntity} />
         </>
       );
     }

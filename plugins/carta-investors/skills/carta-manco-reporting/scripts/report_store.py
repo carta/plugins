@@ -26,12 +26,15 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 import manco_paths
-from report_payload import MAX_NAME_LENGTH, PayloadError, check_name
+from report_payload import MAX_NAME_LENGTH, PayloadError, check_name, is_gl_code
 
 REPORTS_FILE = "reports.json"
 INPUTS_DIR = ".reports"
 _INPUT_NAME = "budget-%s.json"
 STORE_VERSION = 1
+
+# The snapshot's id for the budget Carta itself keeps, when no workbook leads.
+CARTA_BUDGET_ID = "carta"
 
 TRACKING = "tracking"
 EDITED = "edited"  # holds its own copy of the budget, apart from any workbook
@@ -55,6 +58,27 @@ def _now() -> str:
 
 def _is_workbook(report: dict) -> bool:
     return (report.get("origin") or {}).get("kind") == "workbook"
+
+
+def carta_budget_input(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Carta's own budget, from its snapshot entry, as a budget the build reads like a
+    monthly by-account workbook (shapes/monthly_crosstab.py): one line per GL account."""
+    rows = []
+    for r in entry.get("rows") or []:
+        codes = [c for c in r.get("gl_codes") or [] if is_gl_code(c)]
+        if not codes:
+            continue
+        rows.append({
+            "row_kind": "line", "label": r.get("label"), "account_type": r.get("account_type"),
+            "gl_codes": codes, "annual": r.get("annual") or 0, "budget_ytd": r.get("budget_ytd") or 0,
+            "monthly": list(r.get("monthly") or [0] * 12),
+        })
+    label = entry.get("label") or "Carta budget"
+    return {
+        "label": label, "period_year": entry.get("period_year"), "dimensions": [],
+        "view_kinds": ["by-account"], "workbook_meta": {"shape_adapter": "monthly-crosstab", "sheet": label},
+        "rows": rows,
+    }
 
 
 def payload_fingerprint(payload: Dict[str, Any]) -> str:
@@ -224,7 +248,8 @@ class ReportStore:
 
     @staticmethod
     def _unique_id(doc: Dict[str, Any], base: str) -> str:
-        taken = {r["id"] for r in doc["reports"]}
+        # "carta" names Carta's own budget in the snapshot, so no report may take it.
+        taken = {r["id"] for r in doc["reports"]} | {CARTA_BUDGET_ID}
         candidate, n = base, 2
         while candidate in taken:
             candidate, n = "%s-%d" % (base, n), n + 1
@@ -336,8 +361,15 @@ class ReportStore:
             "editable": not read_only,
             "shared": shared,
             "own_sync": report.get("own_sync") or None,
+            "custom": ReportStore.custom_of(report),
             "updated_at": report.get("updated_at"),
         }
+
+    @staticmethod
+    def custom_of(report: dict) -> Optional[Dict[str, Any]]:
+        """A custom report's link to its source ({from}), or None for any other report."""
+        custom = (report.get("budget") or {}).get("custom")
+        return {"from": custom["from"]} if isinstance(custom, dict) and custom.get("from") else None
 
     def _own(self, doc: Dict[str, Any], report_id: str) -> dict:
         report = self.find(doc, report_id)
@@ -349,24 +381,39 @@ class ReportStore:
     def _apply_name(report: dict, name: str) -> None:
         """What giving a report a new name does to its row, whoever decided the name
         should change: stamp it, bump `updated_at`, and mark a deliberate share link
-        dirty so Update resends it. The one home for that, shared by rename() and
-        apply_synced_name() — the two ever call it with a name report_payload.check_name
+        dirty so Update resends it. The one home for that, shared by rename(),
+        edit_custom() and apply_synced_name() — each calls it with a name report_payload.check_name
         has already passed."""
         report["name"] = name
         report["updated_at"] = _now()
         if report.get("shared"):
             report["shared"]["dirty"] = True
 
-    def rename(self, report_id: str, name: str, *, expected_etag: Optional[str] = None) -> Dict[str, Any]:
+    @staticmethod
+    def _checked_name(name: Any) -> str:
+        """`name` stripped, or a ReportEditError when Carta wouldn't take it."""
         name = str(name or "").strip()
         try:
             check_name(name)
         except PayloadError as e:
             raise ReportEditError(str(e))
+        return name
+
+    def rename(self, report_id: str, name: str, *, expected_etag: Optional[str] = None) -> Dict[str, Any]:
+        name = self._checked_name(name)
         with self.transaction(expected_etag) as doc:
             report = self._own(doc, report_id)
             self._apply_name(report, name)
             return self.metadata(report)
+
+    def _copy_budget(self, source: dict) -> Tuple[Dict[str, Any], Optional[str]]:
+        """(a copy of the budget `source` shows, the report id whose mapping answers the
+        copy carries — None when `source` was shared with you and has none of its own)."""
+        data = self._source_budget(source)
+        for row in data.get("rows") or []:
+            row.pop("addr", None)
+            row.pop("bare_addr", None)
+        return data, None if self.metadata(source)["read_only"] else source["id"]
 
     def duplicate(
         self,
@@ -379,13 +426,10 @@ class ReportStore:
         re-recorded under the copy's own id (see build_manco_datadir.copy_budget_mapping)."""
         with self.transaction(expected_etag) as doc:
             source = self.find(doc, report_id)
-            data = self._source_budget(source)
+            data, mapping_from = self._copy_budget(source)
             new_id = self._unique_id(doc, _slug(source["name"]) + "-copy")
-            if not self.metadata(source)["read_only"]:
-                copy_mapping(data.get("rows") or [], source["id"], new_id)
-            for row in data.get("rows") or []:
-                row.pop("addr", None)
-                row.pop("bare_addr", None)
+            if mapping_from:
+                copy_mapping(data.get("rows") or [], mapping_from, new_id)
             report = {
                 "id": new_id,
                 "name": _copy_name(source["name"]),
@@ -397,6 +441,84 @@ class ReportStore:
                 "updated_at": _now(),
             }
             doc["reports"].append(report)
+            return self.metadata(report)
+
+    # A custom report is a copy of its source's whole budget plus `view` ({pivot}: how its
+    # owner laid it out) and `custom` ({from, gl_codes}: the source it links to and the
+    # accounts it keeps). The owner's edit re-copies the source.
+
+    def _custom_source(self, doc: Dict[str, Any], source_id: str,
+                       carta_budget: Callable[[], Optional[Dict[str, Any]]]) -> Tuple[Dict[str, Any], str, Optional[str]]:
+        """(budget to copy, the source the report links to, whose mapping answers to carry)."""
+        if source_id == CARTA_BUDGET_ID:
+            entry = carta_budget()
+            if not entry:
+                raise ReportEditError("Carta's budget isn't loaded on this dashboard", "not_found")
+            return carta_budget_input(entry), CARTA_BUDGET_ID, None
+        source = self.find(doc, source_id)
+        data, mapping_from = self._copy_budget(source)
+        custom = data.pop("custom", None)
+        data.pop("view", None)
+        return data, (custom or {}).get("from") or source["id"], mapping_from
+
+    def _custom_fields(self, name: Any, pivot: Any, gl_codes: Any) -> Tuple[str, Dict[str, Any], List[int]]:
+        name = self._checked_name(name)
+        if not isinstance(pivot, dict) or not isinstance(pivot.get("zones"), dict):
+            raise ReportEditError("a custom report needs its fields")
+        codes = sorted({c for c in gl_codes or [] if is_gl_code(c)})
+        if not codes:
+            raise ReportEditError("this report has no budgeted accounts left to save")
+        return name, pivot, codes
+
+    def derive(self, source_id: str, name: Any, pivot: Any, gl_codes: Any, *,
+               carta_budget: Callable[[], Optional[Dict[str, Any]]],
+               copy_mapping: Callable[[List[dict], str, str], Any],
+               expected_etag: Optional[str] = None) -> Dict[str, Any]:
+        """A new custom report, made from `source_id` (any report, or Carta's budget)."""
+        name, pivot, codes = self._custom_fields(name, pivot, gl_codes)
+        with self.transaction(expected_etag) as doc:
+            data, link, mapping_from = self._custom_source(doc, source_id, carta_budget)
+            new_id = self._unique_id(doc, _slug(name))
+            if mapping_from:
+                copy_mapping(data.get("rows") or [], mapping_from, new_id)
+            data["view"] = {"pivot": pivot}
+            data["custom"] = {"from": link, "gl_codes": codes}
+            report = {
+                "id": new_id, "name": name, "origin": {"kind": "copy", "from": source_id},
+                "state": EDITED, "budget": data, "shared": None, "hidden": False, "updated_at": _now(),
+            }
+            doc["reports"].append(report)
+            return self.metadata(report)
+
+    def edit_custom(self, report_id: str, name: Any, pivot: Any, gl_codes: Any, *,
+                    source_id: Optional[str] = None,
+                    carta_budget: Callable[[], Optional[Dict[str, Any]]],
+                    copy_mapping: Callable[[List[dict], str, str], Any],
+                    expected_etag: Optional[str] = None) -> Dict[str, Any]:
+        """Its owner's edit: re-copied from `source_id` (else the source it links to), or
+        kept on its own budget when that source is the report itself. When the stored link
+        is gone the report keeps its own budget; a `source_id` that is gone is refused."""
+        name, pivot, codes = self._custom_fields(name, pivot, gl_codes)
+        with self.transaction(expected_etag) as doc:
+            report = self._own(doc, report_id)
+            linked = self.custom_of(report)
+            if linked is None:
+                raise ReportEditError("only a custom report can be edited", "invalid")
+            source = source_id or linked["from"]
+            data, link = report["budget"], linked["from"]
+            if source != report_id:
+                try:
+                    data, link, mapping_from = self._custom_source(doc, source, carta_budget)
+                except ReportEditError as e:
+                    if e.code != "not_found" or (source_id and source_id != linked["from"]):
+                        raise
+                else:
+                    if mapping_from:
+                        copy_mapping(data.get("rows") or [], mapping_from, report_id)
+            data["view"] = {"pivot": pivot}
+            data["custom"] = {"from": link, "gl_codes": codes}
+            report["budget"] = data
+            self._apply_name(report, name)
             return self.metadata(report)
 
     def set_hidden(self, report_id: str, hidden: bool, *, expected_etag: Optional[str] = None) -> Dict[str, Any]:

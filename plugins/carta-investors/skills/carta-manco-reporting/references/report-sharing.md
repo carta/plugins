@@ -39,7 +39,8 @@ change and share operation with one of these strings, and shows the control for 
 when the server says it's available:
 
 - Per-report actions, sent as `POST /api/reports/<id>/<action>`: `rename`, `duplicate`,
-  `hide`, `remove`, `unlink`.
+  `hide`, `remove`, `unlink`, `derive` (a custom report made from this one) and, for
+  custom reports, `edit` (its owner re-cutting it from its source).
 - Share operations, sent as `op` to `POST /api/reports/share-op`: `share`,
   `publish-as-new`, `delete`, `pull`, `users`.
 

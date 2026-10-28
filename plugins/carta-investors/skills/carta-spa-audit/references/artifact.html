@@ -758,6 +758,11 @@
       margin: 0 0 6px;
       line-height: 1.5;
     }
+    #error-details summary {
+      font-size: 11px;
+      color: var(--text-subtle);
+      cursor: pointer;
+    }
     #error-detail {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 11px;
@@ -782,7 +787,10 @@
     <div id="error-state">
       <h2 id="error-title">Couldn't load your SPA coverage data</h2>
       <p id="error-message"></p>
-      <p id="error-detail"></p>
+      <details id="error-details">
+        <summary>Technical details</summary>
+        <p id="error-detail"></p>
+      </details>
     </div>
 
     <div id="content-area" style="display: none">
@@ -893,9 +901,9 @@
       document.getElementById('content-area').style.display = 'block';
     }
 
-    // `detail` carries the underlying error text. It is shown in a de-emphasized
-    // monospace line rather than hidden in the console: when a viewer reports "it
-    // won't load", the message they can copy is the whole diagnosis.
+    // `detail` carries the underlying error text. It sits in a collapsed "Technical
+    // details" fold rather than in the console: the viewer sees plain language first,
+    // and when they report "it won't load" the text they can copy is the whole diagnosis.
     function showError(message, detail) {
       document.getElementById('loading-state').style.display = 'none';
       document.getElementById('content-area').style.display = 'none';
@@ -903,6 +911,7 @@
       el.style.display = 'block';
       document.getElementById('error-message').textContent = message;
       document.getElementById('error-detail').textContent = detail || '';
+      document.getElementById('error-details').style.display = detail ? '' : 'none';
     }
 
     // ── Carta MCP plumbing ────────────────────────────────────────────────────
@@ -1552,7 +1561,7 @@
       } catch (error) {
         showError(
           "Couldn't load your SPA coverage data just now. Try reloading in a moment. " +
-          'If it keeps happening, contact your Carta representative.',
+          'If it keeps happening, ask Claude to re-publish this audit as it is, or contact your Carta representative.',
           error.message
         );
         return;

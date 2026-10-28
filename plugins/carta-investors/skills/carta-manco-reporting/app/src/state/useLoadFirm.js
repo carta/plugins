@@ -9,6 +9,11 @@ export const LOAD_FIRM_LABEL = "Loading firm data…";
 // ManCo entity. App.jsx renders NoMancoEntity for it instead of the generic error line.
 export const NO_MANCO_ENTITY = "no_manco_entity";
 
+// handleLoadFirm's code for its one typed SSE pause (not an error — see the `msg.code` branch
+// below): the firm lists more than one ManCo entity and resolveMancoEntity couldn't pick one
+// on its own. App.jsx renders MancoEntityChooser for it via `mancoChoice`.
+export const MULTIPLE_MANCO_ENTITIES = "multiple_manco_entities";
+
 // The one firm a resolved, non-staff user may open with no extra click. `isStaff` must be
 // the literal false Carta returned, not merely falsy: null (unknown or the lookup failed)
 // must never auto-open a firm, same as carta-fund-modeling's FirmAccess.pinnedFirm.
@@ -44,6 +49,11 @@ export default function useLoadFirm(trigger, onDone) {
   // App.jsx renders as the generic error line.
   const [errorCode, setErrorCode] = useState(null);
   const [chooser, setChooser] = useState(null);
+  // handleLoadFirm's "multiple_manco_entities" frame: { slug, entities }, read by App.jsx to
+  // show MancoEntityChooser instead of either the generic error or the firm chooser. Unlike
+  // `chooser` (which firm to load), this is a mid-load fork of the one load already running,
+  // so it carries the slug the pick needs to resume — see chooseMancoEntity below.
+  const [mancoChoice, setMancoChoice] = useState(null);
   // onDone is re-created every render in App.jsx (it closes over fetchData/reportsApi);
   // a ref lets the effect read the latest one without re-running on every render.
   const onDoneRef = useRef(onDone);
@@ -60,14 +70,15 @@ export default function useLoadFirm(trigger, onDone) {
   const controllerRef = useRef(null);
   const liveRef = useRef(false);
 
-  const runLoad = useCallback(async (slug, controller) => {
+  const runLoad = useCallback(async (slug, controller, entityId) => {
     setLoadStatus(LOAD_FIRM_LABEL);
     setErrorCode(null);
+    setMancoChoice(null);
     try {
       const resp = await fetch("/api/load-firm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug }),
+        body: JSON.stringify(entityId ? { slug, entityId } : { slug }),
         signal: controller.signal,
       });
       if (!resp.ok) {
@@ -112,6 +123,14 @@ export default function useLoadFirm(trigger, onDone) {
               setErrorCode(msg.code || null);
               return;
             }
+            if (msg.code === MULTIPLE_MANCO_ENTITIES) {
+              // Not an error and not done: the load is paused mid-stream on a real choice.
+              // chooseMancoEntity resumes it with the pick; nothing else in this hook does.
+              finished = true;
+              setLoadStatus(null);
+              setMancoChoice({ slug, entities: msg.entities || [] });
+              return;
+            }
           } catch { /* skip */ }
         }
       }
@@ -138,6 +157,7 @@ export default function useLoadFirm(trigger, onDone) {
     setLoadError(null);
     setErrorCode(null);
     setChooser(null);
+    setMancoChoice(null);
 
     (async () => {
       try {
@@ -203,5 +223,19 @@ export default function useLoadFirm(trigger, onDone) {
     }
   }, []);
 
-  return { loadStatus, loadError, errorCode, chooser, choose, reopenChooser };
+  // MancoEntityChooser's onPick: resumes the load mancoChoice paused, on the same slug, now
+  // naming which ManCo entity to use. Same controller-replacement rule as choose() — the
+  // resolution effect's cleanup may already have aborted controllerRef by the time the user
+  // clicks, since the paused load itself already finished the stream (see the `msg.entities`
+  // branch in runLoad) well before this pick happens.
+  const chooseMancoEntity = useCallback((entityId) => {
+    if (!mancoChoice) return;
+    const { slug } = mancoChoice;
+    setMancoChoice(null);
+    liveRef.current = true;
+    if (!controllerRef.current || controllerRef.current.signal.aborted) controllerRef.current = new AbortController();
+    runLoad(slug, controllerRef.current, entityId);
+  }, [runLoad, mancoChoice]);
+
+  return { loadStatus, loadError, errorCode, chooser, choose, reopenChooser, mancoChoice, chooseMancoEntity };
 }
