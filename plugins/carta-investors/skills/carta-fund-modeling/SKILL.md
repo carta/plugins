@@ -69,9 +69,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.6</carta-plugin>
+<carta-plugin>carta-investors:7.5.7</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, take its sandboxed branch instead of stopping — the hosted app needs no plugin files.
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -113,7 +113,8 @@ Step 4 launches `serve.py`, which binds `127.0.0.1` and opens the user's default
 Claude Code runs on the user's own machine (a local terminal, or Claude Desktop set to run locally). In a
 **sandboxed** session — **Cowork**, or a Claude Code **cloud** session (Claude Desktop can run sessions in the
 cloud, which is the default) — the server runs in a remote container the user can't reach and there is no local
-browser to open, so the dashboard URL goes nowhere. The skill must not run there.
+browser to open, so the dashboard URL goes nowhere. claude.ai chat can't run the local build at all. The skill
+must not build in any of these; it welcomes the user to the hosted app instead.
 
 **Before Step 0 — before any cache scan, MCP call, or greeting — run this once and route on it:**
 ```bash
@@ -122,18 +123,29 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" de
 - Output contains **`surface=sandboxed`** → **stop immediately.** Do **not** scan caches, resolve a firm, touch
   the Carta MCP, or launch `serve.py`. **Open the hosted app** with the bare link, then reply with this message
   (substance verbatim), then end the turn:
-  > Fund Modeling is hosted by Carta at **https://fund-modeling.carta.cloud** — open it in your browser, sign in
-  > with Carta, and pick your firm. Building the app locally needs a Claude Code session running on your own
-  > machine; it can't run in a sandboxed session: Cowork, or a Claude Code cloud session (in Claude Desktop,
-  > running in the cloud is the default — switch it to run locally). To build locally instead, re-run from a
-  > local session, e.g. "fund modeling for \<firm\>".
+  > ### Welcome to Carta Fund Modeling
+  > **Model what happens next across your entire portfolio.** Reprice companies, play out exits, and watch LP
+  > and GP returns move in real time.
+  >
+  > - **Scenarios:** change any company's valuation and see the firm-wide impact
+  > - **Returns:** LP IRR, GP carry, and DPI/TVPI glidepaths
+  > - **Reserves:** plan how to deploy your dry powder
+  >
+  > **→ Open it now: https://fund-modeling.carta.cloud** — sign in with Carta and pick your firm. There's
+  > nothing to install, and your scenarios are saved for your firm automatically.
+  >
+  > **Want to customize what data is shown, or integrate your own data?** Open Claude Code and ask, "Use Carta
+  > to run the locally hosted fund modeling app".
 
-  If the invocation named a firm, add one line to that reply: "You asked about **\<firm\>** — the app
+  If the invocation named a firm, add one line to that reply, after the "Open it now" line: "You asked about **\<firm\>** — the app
   reopens the last firm used in your browser, so use **Switch firm** if it opens a different one." (No
   deep link here: a sandboxed session does not reliably have the MCP.)
 
   This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to launch anyway, and do **not**
   fall back to another surface or tool — a sandboxed verdict will not change on retry. (Opening the hosted link in the in-app browser is not a fallback; it is part of this reply.)
+- The command **can't run** — there is no Bash tool, or it fails because the script isn't found (an
+  unreplaced `${…}` path, "No such file") → you are in claude.ai chat or another sandboxed surface. Take the
+  **`surface=sandboxed`** branch above. Do not retry the command.
 - Otherwise (**`surface=local`**, the normal case) → continue to **Gate 1** silently. Say nothing about this
   check — it stays quiet, like the rest of Step 0.
 
@@ -152,7 +164,8 @@ shows only the firms their Carta login can open, so the hosted path needs no loc
 >   to share it with the firm.
 
 Skip the question when the invocation already chose: "hosted", "online" or fund-modeling.carta.cloud → hosted;
-"local", "build", "refresh", or reopening a local dashboard → local. A pasted Carta firm URL chooses neither,
+"local", "locally hosted", "build", "refresh", or reopening a local dashboard → local ("locally hosted" is the
+phrase Gate 0's welcome tells users to ask with, so it means local despite containing "hosted"). A pasted Carta firm URL chooses neither,
 so ask as usual.
 
 - **Hosted, no firm named** → **Open the hosted app** with the bare link, then reply with it and end the turn: "Open **https://fund-modeling.carta.cloud**
@@ -180,7 +193,7 @@ always given, so a failed or missing browser costs the user nothing.
 Read `${CLAUDE_PLUGIN_ROOT}/references/gate-in-app-browser.md` (the plugin's own `references/`, not this skill's; do
 not search for it) and follow it to set `browser_family`.
 
-- `browser_family` is `none` → skip opening and give the link only.
+- `browser_family` is `none`, or the gate file can't be read (claude.ai chat) → skip opening and give the link only.
 - Otherwise open the link in a **new tab**: the family's tabs-context tool, then its tabs-create tool, then `navigate`
   to the link in that tab. Make one attempt. If it fails, say nothing about the failure and give the link only. Do not
   retry or try another family. The user signs in with Carta on the opened page; never sign in for them.
@@ -734,7 +747,7 @@ picked up without a relaunch.
 
 | Situation | What to do |
 |---|---|
-| Running in a sandboxed session (`detect-surface` → `surface=sandboxed`) | Gate 0 stops before any work: point the user at **https://fund-modeling.carta.cloud**, or a **local** Claude Code session to build it locally (a terminal, or Claude Desktop set to run locally — not Cowork or a cloud session). Do not retry or launch. |
+| Running in a sandboxed session — Cowork, claude.ai chat, or a Claude Code cloud session (`detect-surface` → `surface=sandboxed`, or it can't run) | Gate 0 stops before any work and gives the welcome with **https://fund-modeling.carta.cloud**, pointing custom builds with outside data at Claude Code on the user's computer. Do not retry or launch. |
 | No Carta MCP connected | Exit: "No Carta MCP is connected — please connect one and try again." Do not proceed. |
 | Firm name given but unresolvable | Prompt with `AskUserQuestion`: show any cache suggestions or "Build fresh from Carta" option. |
 | No firm given and no local cache | Exit: ask the user to name a firm before doing anything else. |
