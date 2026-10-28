@@ -17,11 +17,12 @@ import useDrilldown from "./state/useDrilldown.js";
 import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
 import useAutoPull from "./state/useAutoPull.js";
 import { resurfaceDue } from "./state/resurface.js";
-import useLoadFirm, { LOAD_FIRM_LABEL } from "./state/useLoadFirm.js";
+import useLoadFirm, { LOAD_FIRM_LABEL, NO_MANCO_ENTITY } from "./state/useLoadFirm.js";
 import { withFirmParam } from "./state/firmParam.js";
 import { loadFirmStepProgress } from "./state/loadFirmSteps.js";
 import LoadingScreen from "./ui/LoadingScreen.jsx";
 import FirmChooser from "./shell/FirmChooser.jsx";
+import NoMancoEntity from "./shell/NoMancoEntity.jsx";
 import { useHostedApp } from "./shell/hostedApp.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
 import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
@@ -308,7 +309,7 @@ export default function App() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const loadRetriedRef = useRef(false);
   const loadTrigger = notReady ? loadAttempt + 1 : 0;
-  const { loadStatus, loadError, chooser, choose } = useLoadFirm(loadTrigger, async () => {
+  const { loadStatus, loadError, errorCode, chooser, choose, reopenChooser } = useLoadFirm(loadTrigger, async () => {
     const stillNotReady = await fetchData();
     reportsApi.reload();
     if (!stillNotReady) {
@@ -415,6 +416,20 @@ export default function App() {
     })(),
   };
 
+  if (hostedApp && errorCode === NO_MANCO_ENTITY) {
+    // Clears this screen's own `error` (reopenChooser only clears the hook's loadError/
+    // errorCode) so a brief gap before the chooser's /api/me + /api/firms resolve shows the
+    // loading screen below instead of flashing the stale error back in. Clearing `error`
+    // also satisfies the next guard's own `!error` check, which is how its `chooser` branch
+    // shows once reopenChooser resolves.
+    const onChooseAnother = () => { setSnapshotError(null); reopenChooser(); };
+    return (
+      <>
+        <style>{GLOBAL_CSS}</style>
+        <NoMancoEntity message={error} onChooseAnother={onChooseAnother} />
+      </>
+    );
+  }
   // On the hosted app, nothing in the sidebar (firm name, nav items) is real until the
   // snapshot lands — it's all the "Loading…" placeholder plus items that may not even
   // apply to this firm. Covering the whole page instead reads as one loading state
