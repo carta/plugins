@@ -255,5 +255,6 @@
       "headline": "Fetch any LPA, side letter or notice from Carta",
       "body": "Searches your firm's Carta Documents page by title, type or fund, then saves the file to your Downloads folder or hands you a link."
     }
-  }
+  },
+  "financial-package-companion": null
 }
