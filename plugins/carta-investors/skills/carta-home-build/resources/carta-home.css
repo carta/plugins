@@ -10,18 +10,8 @@
       --ink-color-global-text-default:               light-dark(#1A1A1A, #EDEDED);
       --ink-color-global-text-subtle:                light-dark(#656B6B, #A7AAAA);
       --ink-color-global-surface-background-default: light-dark(#FFFFFF, rgb(18 18 18));
-      /* Local, intentionally non-Ink: the elevated card surface used in dark mode.
-         #2C3030 is not the value of any Ink surface token, so it carries a --carta-*
-         name rather than shadowing an Ink token name with an invented value.
-         Rendered pixels are unchanged. */
+      /* Local, non-Ink: the elevated card surface in dark mode (no Ink token has this value). */
       --carta-surface-card-elevated:                 #2C3030;
-      /* One step further up the elevation stack: a card nested INSIDE a card
-         (e.g. .tearsheet-preview). Light arg is Ink's light surface-background-
-         underlay, so light mode is unchanged; dark arg is Ink's dark
-         surface-darkgray-default, the nearest Ink step to #444 — the next one
-         up, surface-lightgray-active (#656B6B), overshoots badly. Keeps the
-         nested card readable as elevated against the #2C3030 card. */
-      --carta-surface-card-nested:                   light-dark(#F1F1F1, #394040);
       /* Local, non-Ink: the darker card border a hovered dashboard card takes (Carta
          Home v2 design). No Ink border step sits between subtle and default. */
       --carta-border-card-hover:                     light-dark(#858686, #A7AAAA);
@@ -50,21 +40,8 @@
       --ink-button-font-color-primary-base:               light-dark(#FFFFFF, #1A1A1A);
       /* Info feedback (for What's New banner) */
       --ink-color-global-feedback-info-subtle:       light-dark(#EAF0F8, #122948);
-      /* Feedback semantics — both deliberately depart from Ink's own values.
-         Ink ships feedback-positive-strong single-valued at green-70 (#2D9E90)
-         and negative-strong at red-70/red-40. As SMALL TEXT those miss WCAG AA
-         on the surfaces this artifact actually puts them on, so each arg is
-         moved along the same Ink brand ramp until it clears 4.5:1 on every one.
-         Signed values render on: light #FFFFFF (card), #F1F1F1 (SOI asset rows,
-         nested card) and #DEDFDF (row hover); dark #121212 (page, .ts-kpi),
-         #2C3030 (card) and #2D2D2D (SOI rows, row hover).
-           positive light green-90 #105242 -> 9.10 / 8.06 / 6.82
-                    dark  green-50 #5BC0B3 -> 8.60 / 6.13 / 6.32
-           negative light red-80   #A82020 -> 7.26 / 6.43 / 5.44
-                    dark  red-60   #EF7171 -> 6.49 / 4.62 / 4.77
-         Ink's own steps scored 3.28 / 2.90 / 2.46 and 4.54 / 4.02 / 3.40.
-         Nothing signed renders on --carta-surface-card-nested (#394040), where
-         red-60 would be 3.67:1 — keep it that way. */
+      /* Strong feedback colors depart from Ink's: each arg is moved along the Ink brand ramp
+         to reach 4.5:1 as small text on the card, row and page surfaces. */
       --ink-color-global-feedback-positive-strong:   light-dark(#105242, #5BC0B3);
       --ink-color-global-feedback-positive-subtle:   light-dark(#EBF7F6, #063A32);
       --ink-color-global-feedback-negative-strong:   light-dark(#A82020, #EF7171);
@@ -484,56 +461,6 @@
        peer-benchmark series (the card falls back to AGGREGATE_FUND_METRICS). */
     .bench-chart-note { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 12px; font-size: 11px; font-style: italic; color: var(--ink-color-global-text-subtle); }
 
-    /* ── Tear sheet preview ── */
-    .tearsheet-preview {
-      background: var(--carta-surface-card-nested);
-      border: 1px solid var(--ink-color-global-border-subtle);
-      border-radius: var(--ink-size-global-radius-subtle);
-      padding: 12px 16px;
-      font-size: 12px;
-    }
-    .ts-company-label {
-      font-size: 13px; font-weight: 600; color: var(--ink-color-global-text-default);
-      margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .ts-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 8px; }
-    .ts-kpi { background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-subtle); border-radius: var(--ink-size-global-radius-subtle); padding: 7px 9px; }
-    .ts-kpi-label { font-size: 9px; color: var(--ink-color-global-text-subtle); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-    .ts-kpi-val { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ts-kpi-val.pos { color: var(--ink-color-global-feedback-positive-strong); }
-    .ts-kpi-val.neg { color: var(--ink-color-global-feedback-negative-strong); }
-    .ts-409a { background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-subtle); border-radius: var(--ink-size-global-radius-subtle); padding: 7px 9px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-    .ts-409a-label { font-size: 9px; color: var(--ink-color-global-text-subtle); text-transform: uppercase; letter-spacing: 0.06em; }
-    .ts-409a-date { font-size: 9px; color: var(--ink-color-global-text-subtle); margin-top: 1px; }
-    .ts-409a-val { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
-
-    /* ── P&L / BS preview ── */
-    .fin-tbl { width: 100%; font-size: 11px; border-collapse: collapse; }
-    .fin-tbl thead th { 
-      text-align: right; 
-      font-size: 10px; 
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      color: var(--ink-color-global-text-subtle); 
-      padding: 0 0 6px;
-      border-bottom: 1px solid var(--ink-color-global-border-subtle);
-    }
-    .fin-tbl thead th:first-child { text-align: left; }
-    .fin-tbl tbody td { 
-      padding: 5px 0; 
-      text-align: right; 
-      font-variant-numeric: tabular-nums;
-      border-bottom: 1px solid var(--ink-color-global-border-subtle);
-    }
-    .fin-tbl tbody td:first-child { text-align: left; color: var(--ink-color-global-text-subtle); }
-    .fin-tbl tfoot td {
-      padding: 6px 0 0;
-      text-align: right;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-    .fin-tbl tfoot td:first-child { text-align: left; }
-
     /* ── Toast ── */
     #toast {
       position: fixed;
@@ -624,21 +551,6 @@
     }
     .cust-copy-btn:hover { border-color: var(--ink-color-global-border-default); color: var(--ink-color-global-text-default); }
     .cust-copy-btn.copied { border-color: var(--ink-color-global-feedback-positive-strong); color: var(--ink-color-global-feedback-positive-strong); }
-    .perf-chart-grid .chart-full { grid-column: 1 / -1; }
-    .perf-chart-wrap.tall { height: 240px; }
-    /* Narrow-screen overrides */
-    @media (max-width: 600px) {
-      .perf-chart-wrap.tall { height: 200px; }
-    }
-    /* Very narrow: both strips stack to 1 tile per row */
-    @media (max-width: 480px) {
-    }
-    #perf-tip.visible { opacity: 1; }
-    .perf-fund-dropdown-item:hover,
-    .perf-fund-dropdown-item.active {
-      background: var(--ink-color-global-surface-background-underlay);
-    }
-
     /* ── Tab switcher ── */
     .tab-bar {
       display: flex;

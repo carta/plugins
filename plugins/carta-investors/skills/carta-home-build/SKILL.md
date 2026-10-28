@@ -3,7 +3,7 @@ name: carta-home-build
 description: >
   Builds or rebuilds the Carta Home live artifact — a Cowork dashboard home page that
   works for any Carta firm. Summary cards for Schedule of Investments, Fund Performance,
-  P&L, Balance Sheet, LP Reporting, Portfolio Valuations, ManCo actuals and Form ADV, plus
+  LP summary and Capital Activity, plus
   a Skill Directory of copyable prompts. Auto-detects the active firm from the Carta MCP
   context. Use whenever the user asks to "build the carta home artifact", "rebuild carta
   home", "update my Carta Home", "create my Carta Home", "set up Carta Home", "set up the carta home page", or
@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.1.0</carta-plugin>
+<carta-plugin>carta-investors:7.1.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -81,19 +81,6 @@ own sidebar tile.
   fund's Total Value (per-fund currency) with a "no benchmark trend" note, instead of
   rendering blank. IRR/TVPI/DPI are near-always null for those firms, so Total Value is
   what the card shows. The card footer launches the standalone Fund Performance dashboard.
-- **P&L Card** — Unrealized gain/loss and total expenses from `FUND_ADMIN.STATEMENT_OF_OPS`
-  (pre-aggregated, fast — no journal entry scan).
-- **Balance Sheet Card** — Portfolio value, LP NAV, GP NAV, Total NAV from
-  `FUND_ADMIN.MONTHLY_NAV_CALCULATIONS` with `IS_FIRM_ROLLUP = TRUE` (latest month).
-- **LP Reporting & Relations** — links to tear sheet downloads, LP documents, and LP dashboard.
-- **Valuations** — top 5 holdings by MOIC from `FUND_ADMIN.AGGREGATE_INVESTMENTS`. Shows
-  company name, FMV, and MOIC with color coding (green ≥ 2x, blue ≥ 1x, red < 1x).
-- **ManCo & Budgeting** — YTD expense actuals by category from `FUND_ADMIN.STATEMENT_OF_OPS`.
-  Shows the top 5 categories by spend (management fees, legal, fund admin, audit, tax prep,
-  payroll, software, other) with a total footer. Run button triggers the budget vs actuals skill.
-- **Compliance (Form ADV)** — Discretionary AUM, Non-discretionary AUM, and Total Regulatory
-  AUM. Tries `FUND_ADMIN.FORM_ADV_FUND_DETAIL` first; falls back to `FUND_ADMIN.MONTHLY_NAV_CALCULATIONS`
-  total NAV as a proxy if that table is unavailable (adds a footnote when using the fallback).
 - **Skill Directory** — categorized index of carta-investors skills with copyable prompts.
   Prompts auto-substitute the active firm name. Every category shows to every role.
   The skills come from the plugin's `.claude-plugin/skill-directory.json`, not the page:
@@ -215,7 +202,7 @@ rejects with `not_in_manifest`:
 - `welcome` — re-initializes an expired MCP session
 - `list_contexts` — auto-detects the active firm
 - `set_context` — activates the firm's DWH session
-- `fetch` — all DWH queries (SOI, P&L, BS, benchmarks, tear sheets)
+- `fetch` — the cards' reads: warehouse queries (`dwh:execute:query`) and the Fund Admin reads behind Capital Activity and the firm logo (`fa:list:*`, `fa:get:*`)
 - `get_current_user` — signed-in user's profile; `has_tactyc` and `has_active_manco` gate
   their Skill Directory categories (see `fetchUserEnrichment`), and the product flags lock
   What's new's microapps
@@ -596,7 +583,7 @@ the only difference between a first publish and a redeploy.
 Artifact({
   file_path: "<outputs-directory>/carta-home-<slug>.html",
   url: "<Carta Home url from Step 2 — omit entirely on a first publish>",
-  description: "Dashboard home for <Firm> — SOI, Fund Performance, P&L, Balance Sheet, LP Reporting, Valuations, ManCo Actuals, Form ADV, and Skill Directory.",
+  description: "Dashboard home for <Firm> — SOI, Fund Performance, LP Summary, Capital Activity, and Skill Directory.",
   favicon: "🏠",
   label: "Redeployed from skill bundle",
   capabilities: {
@@ -728,7 +715,7 @@ arrive is the one outcome to avoid.
 ### Step 7: Validate
 
 Open the published URL and check that it displays fund data for the active firm without
-errors — SOI rows, Fund Performance charts, and the P&L/Balance Sheet cards should all
+errors — SOI rows and Fund Performance charts should both
 populate. The first open asks the viewer to consent to the Carta connector; until they
 accept, every card shows its no-connector state.
 
@@ -822,7 +809,7 @@ change, update the sketch and the text together and bump the date.
 
 ## Related skills
 
-The artifact's SOI, P&L, and Fund Performance cards surface the same underlying data as
+The artifact's SOI and Fund Performance cards surface the same underlying data as
 `carta-explore-data` (ad-hoc DWH queries) and `carta-soi` (dedicated SOI artifact). Routing
 stays clean because this skill only triggers on build/deploy/redeploy/open requests for the
 Carta Home dashboard as a whole, not on requests for one of those cards in isolation.
@@ -833,14 +820,7 @@ Carta Home dashboard as a whole, not on requests for one of those cards in isola
 |------|-----------|-------|
 | SOI | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.FUNDS` | Joined on FUND_UUID |
 | Fund Performance | `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` (chart + metrics); `FUND_ADMIN.AGGREGATE_FUND_METRICS` (Total Value fallback when benchmarks empty) | All funds for the firm, ≥ 2021-06-01 |
-| P&L | `FUND_ADMIN.STATEMENT_OF_OPS` | Pre-aggregated per-firm; no journal scan |
-| Balance Sheet | `FUND_ADMIN.MONTHLY_NAV_CALCULATIONS` | IS_FIRM_ROLLUP = TRUE, latest month |
-| Tear Sheets | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.CORPORATION_BASIC_INFO_V2` | Company list |
-| 409A | `FUND_ADMIN.IRC409A_VALUE` + `FUND_ADMIN.CORPORATION_BASIC_INFO_V2` | Latest valuation per company |
-| Deal IRR | `FUND_ADMIN.TEMPORAL_DEAL_IRR` | Latest per ISSUER_NAME |
-| Valuations | `FUND_ADMIN.AGGREGATE_INVESTMENTS` | Top 5 by MOIC; HAVING COST > 0 to exclude zero-cost rows |
-| ManCo Actuals | `FUND_ADMIN.STATEMENT_OF_OPS` | Per-category expense breakdown; top 5 by spend |
-| Form ADV AUM | `FUND_ADMIN.FORM_ADV_FUND_DETAIL` (primary) / `FUND_ADMIN.MONTHLY_NAV_CALCULATIONS` (fallback) | Discretionary + non-discretionary + total; falls back to total NAV if form ADV table unavailable |
+| LP Summary | `FUND_ADMIN.PARTNER_DATA` + `FUND_ADMIN.FUNDS` + `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` | Largest LP families by commitment per fund currency, net TVPI from each partner's latest month; Fund Admin firms only (`resources/app/segment-dashboards.js`) |
 | Capital Activity | none — `fa:list:active-capital-activity` + `fa:list:capital-activity-partner` | Active capital calls/distributions + per-partner detail; the row `id`/`fund_uuid` feed the reminder `mutate` call |
 
 ## Notes

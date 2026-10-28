@@ -191,7 +191,6 @@ document.querySelectorAll(".run-btn[data-prompt]").forEach(btn => {
 // ── Benchmark chart ──
 let _benchmarkFirmId = null;
 let _benchmarkChartInst = null;
-let _soiFundRows = [];          // hoisted so starred card can read it
 let _benchLabels = null;        // hoisted so starred perf card can draw
 let _benchDatasets = null;
 let _fundColorMap  = {};        // { fundName → CSS colour } — populated in fetchBenchmarkFallback
@@ -384,33 +383,6 @@ function _renderBenchLegend(fundDatasets, hasPeerMedian) {
   metricsEl.innerHTML = `<div class="bench-legend">${items.join("")}</div>`;
 }
 
-// Card's per-fund returns table (AGGREGATE_FUND_METRICS fallback). items: [{ name, color,
-// irr, tvpi, dpi }] — irr in percent, tvpi/dpi as multiples (raw or null).
-function _renderBenchMetricsTable(items, asOf) {
-  const metricsEl = document.getElementById("benchmark-metrics");
-  if (!metricsEl || !items.length) return;
-  metricsEl.innerHTML = `
-    <div style="margin-top:10px;border-top:1px solid var(--ink-color-global-border-subtle);padding-top:8px;">
-      <div style="display:flex;gap:4px;justify-content:space-between;margin-bottom:4px;">
-        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-transform:uppercase;letter-spacing:.04em;flex:2;">Fund · ${asOf}</span>
-        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">Net IRR</span>
-        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">TVPI</span>
-        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">DPI</span>
-      </div>
-      ${items.map(it => {
-        const shortName = String(it.name).replace(/, L\.P\.$/, "").replace(/, LP$/, "").split(" ").slice(-2).join(" ");
-        return `<div style="display:flex;gap:4px;justify-content:space-between;padding:2px 0;">
-          <span style="font-size:10px;color:var(--ink-color-global-text-default);flex:2;display:flex;align-items:center;gap:5px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${it.color};flex-shrink:0;"></span>${shortName}
-          </span>
-          <span style="font-size:10px;color:var(--ink-color-global-text-default);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${it.irr != null ? parseFloat(it.irr).toFixed(1)+"%" : "—"}</span>
-          <span style="font-size:10px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${it.tvpi != null ? parseFloat(it.tvpi).toFixed(2)+"x" : "—"}</span>
-          <span style="font-size:10px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${it.dpi != null ? parseFloat(it.dpi).toFixed(2)+"x" : "—"}</span>
-        </div>`;
-      }).join("")}
-    </div>`;
-}
-
 // Replace the trend chart with a short note (used when there's no peer-benchmark
 // series to plot but the card still has fund metrics to show below it).
 function _benchShowChartNote(msg) {
@@ -458,8 +430,8 @@ async function fetchBenchmarkFallback() {
   return true;
 }
 
-// Fallback card table: fund + Total Value (currency-correct per fund). Mirrors the
-// benchmark table's dot + short-name layout but with one value column.
+// Fallback card table: fund + Total Value (currency-correct per fund). One row per
+// fund: colour dot, short name, and a single right-aligned value column.
 function _renderBenchValueTable(items, asOf) {
   const metricsEl = document.getElementById("benchmark-metrics");
   if (!metricsEl || !items.length) return;
@@ -491,9 +463,6 @@ function populateFallback(reason) {
   if (benchMetrics && !benchMetrics.textContent.trim()) {
     benchMetrics.innerHTML = `<div style="font-size:11px;color:var(--ink-color-global-feedback-negative-strong);padding-top:8px;">${benchMsg}</div>`;
   }
-
-  const tsLbl = document.getElementById("ts-company-label");
-  if (tsLbl) { tsLbl.textContent = "— no data —"; }
 }
 
 // Render fund-level summary rows in the home card (value + gain/loss only, no shares)
@@ -526,12 +495,6 @@ function fmtShort(v) {
   if (v >= 1e3) return "$" + (v/1e3).toFixed(0) + "K";
   return "$" + Math.round(v);
 }
-
-// ── Tearsheet card state ──
-let _tsFirmId = null;
-let _tsCompanies = {};  // { issuerName: { heldSince, itdValue, gainLoss, issuerId } }
-let _tsIrrMap   = {};   // { issuerName: dealIrr (decimal) }
-let _ts409aMap  = {};   // { corpName: { price, currency, date } }
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -581,82 +544,6 @@ function parseDWH(res) {
     Object.keys(r).forEach(k => { out[k.toUpperCase()] = r[k]; });
     return out;
   });
-}
-
-// Tearsheet DWH queries are now run inside fetchLiveData (see below).
-
-function selectTSCompany(name) {
-  // Update the run-btn prompt
-  const runBtn = document.getElementById("ts-run-btn");
-  if (runBtn && name) runBtn.dataset.prompt = `Download tear sheets for my investments`;
-
-  if (!name) {
-    const heldEl = document.getElementById("ts-held");
-    const itdEl  = document.getElementById("ts-itd");
-    const glEl2  = document.getElementById("ts-gl");
-    const irrEl2 = document.getElementById("ts-irr");
-    if (heldEl) heldEl.textContent = "—";
-    if (itdEl)  itdEl.textContent  = "—";
-    if (glEl2)  glEl2.textContent  = "—";
-    if (irrEl2) irrEl2.textContent = "—";
-    const r409 = document.getElementById("ts-409a-row");
-    if (r409) r409.style.display = "none";
-    return;
-  }
-
-  const co = _tsCompanies[name];
-
-  // Held since
-  const heldEl = document.getElementById("ts-held");
-  if (heldEl) heldEl.textContent = co ? fmtDate(co.heldSince) : "—";
-
-  // ITD value
-  const itdEl = document.getElementById("ts-itd");
-  if (itdEl) itdEl.textContent = co ? fmtCurrency(co.itdValue, "USD") : "—";
-
-  // Gain / loss
-  const glEl = document.getElementById("ts-gl");
-  if (glEl) {
-    if (co) {
-      const gl = co.gainLoss;
-      glEl.textContent = fmtCurrency(gl, "USD");
-      glEl.className = "ts-kpi-val" + (gl > 0 ? " pos" : gl < 0 ? " neg" : "");
-    } else {
-      glEl.textContent = "—";
-      glEl.className = "ts-kpi-val";
-    }
-  }
-
-  // Deal IRR (stored as decimal, e.g. 0.111 = 11.1%)
-  const irrRaw = _tsIrrMap[name];
-  const irrEl  = document.getElementById("ts-irr");
-  if (irrEl) {
-    if (irrRaw != null) {
-      const irrPct = (parseFloat(irrRaw) * 100).toFixed(1) + "%";
-      irrEl.textContent = irrPct;
-      irrEl.className = "ts-kpi-val" + (irrRaw > 0 ? " pos" : irrRaw < 0 ? " neg" : "");
-    } else {
-      irrEl.textContent = "—";
-      irrEl.className = "ts-kpi-val";
-    }
-  }
-
-  // 409A — match issuerName to corporationName (fuzzy: try exact, then includes)
-  const match409a = _ts409aMap[name]
-    ?? Object.entries(_ts409aMap).find(([k]) => k.toLowerCase().includes(name.toLowerCase().split(/[,\s]/)[0]))?.[1];
-  const row409a = document.getElementById("ts-409a-row");
-  if (row409a) {
-    if (match409a) {
-      const sym = match409a.currency === "USD" || !match409a.currency ? "$" : (match409a.currency + " ");
-      const valEl  = document.getElementById("ts-409a-val");
-      const dateEl = document.getElementById("ts-409a-date");
-      if (valEl)  valEl.textContent  = sym + parseFloat(match409a.price).toFixed(2) + " / sh";
-      if (dateEl) dateEl.textContent = fmtDate(match409a.date);
-      row409a.style.display = "flex";
-    } else {
-      row409a.style.display = "none";
-    }
-  }
 }
 
 // ── Live data fetch from Carta MCP ──
@@ -754,11 +641,6 @@ async function fetchLiveData() {
       });
       if (!dwhRes.isError) {
         dwhFundRows = parseDWH(dwhRes);
-        _soiFundRows = dwhFundRows.map(r => ({
-          name:  r.FUND_NAME ?? "Fund",
-          value: parseFloat(r.TOTAL_VALUE ?? 0),
-          gl:    parseFloat(r.TOTAL_GL ?? 0),
-        }));
       }
     } catch (e) { console.error('[DWH error]', e); }
 
@@ -769,294 +651,10 @@ async function fetchLiveData() {
         value: parseFloat(r.TOTAL_VALUE ?? 0),
         gl:    parseFloat(r.TOTAL_GL ?? 0),
       })));
-
-      // Update section headers from DWH fund names
-      const f1 = shortName(dwhFundRows[0]?.FUND_NAME ?? "Fund I");
-      const f2 = shortName(dwhFundRows[1]?.FUND_NAME ?? "Fund II");
-      const _p1 = document.getElementById("pnl-h1");   if (_p1) _p1.textContent = f1;
-      const _p2 = document.getElementById("pnl-h2");   if (_p2) _p2.textContent = f2;
-      const _b1 = document.getElementById("bs-h1");    if (_b1) _b1.textContent = f1;
-      const _b2 = document.getElementById("bs-h2");    if (_b2) _b2.textContent = f2;
-      const _pl = document.getElementById("pnl-label"); if (_pl) _pl.textContent = "CONSOLIDATING P&L · " + (dwhFundRows[0]?.FUND_NAME ?? "");
-      const _bl = document.getElementById("bs-label");  if (_bl) _bl.textContent = "BALANCE SHEET · " + (dwhFundRows[0]?.FUND_NAME ?? "");
     } else {
       trackHome("render", "CartaHome.SOI.Empty");
       renderSOIError("No fund data");
     }
-
-    // ── P&L from pre-aggregated STATEMENT_OF_OPS (fast — no journal entry scan) ──
-    try {
-      const opsRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
-          sql: `SELECT
-  SUM(UNREALIZED_GAIN_LOSS) AS unrealized_gl,
-  SUM(COALESCE(COST_MANAGEMENT_FEES,0)+COALESCE(COST_ALL_OTHER_EXPENSES,0)+COALESCE(COST_LEGAL_FEES,0)+COALESCE(COST_FA_FEES,0)+COALESCE(COST_AUDIT,0)+COALESCE(COST_TAX_PREP_FEES,0)+COALESCE(COST_FILING_FEES,0)+COALESCE(COST_OTHER_PROFESSIONAL_FEES,0)+COALESCE(COST_ORGANIZATION_COSTS,0)+COALESCE(COST_INSURANCE_EXPENSE,0)+COALESCE(COST_TRAVEL,0)+COALESCE(COST_SYNDICATION_COSTS,0)+COALESCE(COST_SOFTWARE_AND_TECHNOLOGY,0)+COALESCE(COST_DUES_AND_SUBSCRIPTIONS,0)+COALESCE(COST_MEAL,0)+COALESCE(COST_ACCOUNTING_EXPENSE,0)+COALESCE(COST_PAYROLL_SALARY,0)+COALESCE(COST_EVENTS,0)) AS total_expenses
-FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`,
-          format: 'ndjson',
-          }
-      });
-      if (!opsRes.isError) {
-        const r = parseDWH(opsRes)[0] ?? {};
-        const gl  = parseFloat(r.UNREALIZED_GL ?? 0);
-        const exp = parseFloat(r.TOTAL_EXPENSES ?? 0);
-        const net = gl - exp;
-        const netFmt   = net < 0 ? '(' + fmtShort(Math.abs(net)) + ')' : fmtShort(net);
-        const netColor = net >= 0 ? 'var(--ink-color-global-feedback-positive-strong)' : 'var(--ink-color-global-feedback-negative-strong)';
-        const glFmt    = gl < 0  ? '(' + fmtShort(Math.abs(gl))  + ')' : fmtShort(gl);
-        const pnlRows = document.getElementById('pnl-rows');
-        const pnlFoot = document.getElementById('pnl-foot');
-        if (pnlRows) pnlRows.innerHTML = `
-          <tr><td>Unrealized Gain/Loss</td><td>${glFmt}</td></tr>
-          <tr><td>Total Expenses</td><td>(${fmtShort(exp)})</td></tr>`;
-        if (pnlFoot) pnlFoot.innerHTML = `
-          <tr><td>Net</td><td style="color:${netColor}">${netFmt}</td></tr>`;
-        const _pl = document.getElementById("pnl-label"); if (_pl) _pl.style.display = 'block';
-      }
-    } catch(e) { console.error('[P&L DWH error]', e); }
-
-    // ── Balance Sheet from pre-aggregated MONTHLY_NAV_CALCULATIONS (fast — single row) ──
-    try {
-      const navRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
-          sql: `SELECT ENDING_TOTAL_NAV, ENDING_LP_NAV, ENDING_GP_NAV, TOTAL_VALUE
-FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
-WHERE FIRM_ID = '${firmId}' AND IS_FIRM_ROLLUP = TRUE
-ORDER BY MONTH_END_DATE DESC LIMIT 1`,
-          format: 'ndjson',
-          }
-      });
-      if (!navRes.isError) {
-        const r = parseDWH(navRes)[0] ?? {};
-        const portVal  = parseFloat(r.TOTAL_VALUE       ?? 0);
-        const lpNav    = parseFloat(r.ENDING_LP_NAV     ?? 0);
-        const gpNav    = parseFloat(r.ENDING_GP_NAV     ?? 0);
-        const totalNav = parseFloat(r.ENDING_TOTAL_NAV  ?? 0);
-        const bsRows = document.getElementById('bs-rows');
-        const bsFoot = document.getElementById('bs-foot');
-        if (bsRows) bsRows.innerHTML = `
-          <tr><td>Portfolio Value</td><td>${fmtShort(portVal)}</td></tr>
-          <tr><td>LP NAV</td><td>${fmtShort(lpNav)}</td></tr>
-          <tr><td>GP NAV</td><td>${fmtShort(gpNav)}</td></tr>`;
-        if (bsFoot) bsFoot.innerHTML = `
-          <tr><td>Total NAV</td><td>${fmtShort(totalNav)}</td></tr>`;
-        const _bl = document.getElementById("bs-label"); if (_bl) _bl.style.display = 'block';
-      }
-    } catch(e) { console.error('[BS DWH error]', e); }
-
-    // Tear sheet: run company / IRR / 409A queries sequentially in this same try block
-    // (avoids Electron IPC bridge validation errors that occur from a nested async function)
-    _tsFirmId = firmId;
-    const tsLabelEl = document.getElementById("ts-company-label");
-    try {
-      // Top company by portfolio value
-      const tsCompRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
-          sql: `SELECT ISSUER_NAME, MIN(INVESTMENT_DATE) AS HELD_SINCE, SUM(REMAINING_VALUE) AS ITD_VALUE, SUM(TOTAL_UNREALIZED_GAIN_LOSS) AS GAIN_LOSS FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${firmId}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY SUM(REMAINING_VALUE) DESC`,
-          format: 'ndjson',
-          }
-      });
-      let topName = null;
-      if (!tsCompRes.isError) {
-        const compRows = parseDWH(tsCompRes).slice(0, 1); // top-1 only
-        _tsCompanies = {};
-        compRows.forEach(r => {
-          _tsCompanies[r.ISSUER_NAME] = {
-            heldSince: r.HELD_SINCE,
-            itdValue:  parseFloat(r.ITD_VALUE ?? 0),
-            gainLoss:  parseFloat(r.GAIN_LOSS ?? 0)
-          };
-        });
-        topName = compRows[0]?.ISSUER_NAME ?? null;
-        if (tsLabelEl) tsLabelEl.textContent = topName ?? "—";
-        if (topName) selectTSCompany(topName);
-      }
-
-      // Deal IRR — latest per company
-      const tsIrrRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
-          sql: `SELECT ISSUER_NAME, DEAL_IRR FROM (SELECT ISSUER_NAME, DEAL_IRR, ROW_NUMBER() OVER (PARTITION BY ISSUER_NAME ORDER BY PERFORMANCE_QUARTER_END_DATE DESC) AS rn FROM FUND_ADMIN.TEMPORAL_DEAL_IRR WHERE FIRM_ID = '${firmId}') WHERE rn = 1`,
-          format: 'ndjson',
-          }
-      });
-      if (!tsIrrRes.isError) {
-        parseDWH(tsIrrRes).forEach(r => { _tsIrrMap[r.ISSUER_NAME] = r.DEAL_IRR; });
-      }
-
-      // 409A values — latest per company
-      const ts409aRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
-          sql: `SELECT b.CORPORATION_NAME, a.PRICE, a.CURRENCY_CODE, a.EFFECTIVE_DATE FROM (SELECT CORPORATION_UUID, PRICE, CURRENCY_CODE, EFFECTIVE_DATE, ROW_NUMBER() OVER (PARTITION BY CORPORATION_UUID ORDER BY EFFECTIVE_DATE DESC) AS rn FROM FUND_ADMIN.IRC409A_VALUE WHERE IS_COMMON = TRUE) a JOIN FUND_ADMIN.CORPORATION_BASIC_INFO_V2 b ON b.CORPORATION_UUID = a.CORPORATION_UUID WHERE b.FIRM_ID = '${firmId}' AND a.rn = 1`,
-          format: 'ndjson',
-          }
-      });
-      if (!ts409aRes.isError) {
-        parseDWH(ts409aRes).forEach(r => {
-          _ts409aMap[r.CORPORATION_NAME] = { price: r.PRICE, currency: r.CURRENCY_CODE, date: r.EFFECTIVE_DATE };
-        });
-      }
-
-      // Re-render with IRR/409A now populated
-      if (topName) selectTSCompany(topName);
-
-    } catch(e) {
-      if (tsLabelEl) tsLabelEl.textContent = "— unavailable —";
-      console.error("Tearsheet fetch error:", e);
-    }
-
-    // ── Valuations: top holdings by MOIC ──
-    try {
-      const valRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
-          sql: `SELECT ISSUER_NAME, SUM(REMAINING_VALUE) AS FMV, SUM(TOTAL_COST) AS COST
-FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
-WHERE IS_ACTIVE_INVESTMENT = TRUE AND FIRM_ID = '${firmId}'
-GROUP BY ISSUER_NAME
-HAVING SUM(TOTAL_COST) > 0
-ORDER BY SUM(REMAINING_VALUE) / NULLIF(SUM(TOTAL_COST), 0) DESC NULLS LAST
-LIMIT 5`,
-          format: 'ndjson',
-          }
-      });
-      if (!valRes.isError) {
-        const valRows = parseDWH(valRes);
-        const valTbl = document.getElementById('val-rows');
-        if (valTbl && valRows.length) {
-          valTbl.innerHTML = valRows.map(r => {
-            const fmv  = parseFloat(r.FMV  ?? 0);
-            const cost = parseFloat(r.COST ?? 1);
-            const moic = cost > 0 ? fmv / cost : 0;
-            const mColor = moic >= 2 ? 'var(--ink-color-global-feedback-positive-strong)' : moic >= 1 ? 'var(--ink-color-global-link-default)' : 'var(--ink-color-global-feedback-negative-strong)';
-            const label = (r.ISSUER_NAME ?? '').length > 20
-              ? (r.ISSUER_NAME ?? '').slice(0, 20) + '…'
-              : (r.ISSUER_NAME ?? '—');
-            return `<tr>
-              <td title="${r.ISSUER_NAME ?? ''}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px;">${label}</td>
-              <td style="text-align:right">${fmtShort(fmv)}</td>
-              <td style="text-align:right;font-weight:600;color:${mColor}">${moic.toFixed(2)}x</td>
-            </tr>`;
-          }).join('');
-        } else if (valTbl) {
-          valTbl.innerHTML = '<tr><td colspan="3" style="color:var(--ink-color-global-text-subtle);font-style:italic">No portfolio data</td></tr>';
-        }
-      }
-    } catch(e) { console.error('[Valuations error]', e); }
-
-    // ── ManCo & budgeting: expense actuals by category from STATEMENT_OF_OPS ──
-    try {
-      const mancoRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
-          sql: `SELECT
-  SUM(COALESCE(COST_MANAGEMENT_FEES,0))           AS mgmt_fees,
-  SUM(COALESCE(COST_LEGAL_FEES,0))                AS legal,
-  SUM(COALESCE(COST_FA_FEES,0))                   AS fa_fees,
-  SUM(COALESCE(COST_AUDIT,0))                     AS audit,
-  SUM(COALESCE(COST_TAX_PREP_FEES,0))             AS tax_prep,
-  SUM(COALESCE(COST_PAYROLL_SALARY,0))            AS payroll,
-  SUM(COALESCE(COST_SOFTWARE_AND_TECHNOLOGY,0))   AS software,
-  SUM(COALESCE(COST_ALL_OTHER_EXPENSES,0))        AS other_exp
-FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`,
-          format: 'ndjson',
-          }
-      });
-      if (!mancoRes.isError) {
-        const mr = parseDWH(mancoRes)[0] ?? {};
-        const cats = [
-          { label: 'Management fees', val: parseFloat(mr.MGMT_FEES  ?? 0) },
-          { label: 'Legal',           val: parseFloat(mr.LEGAL      ?? 0) },
-          { label: 'Fund admin fees', val: parseFloat(mr.FA_FEES    ?? 0) },
-          { label: 'Audit',           val: parseFloat(mr.AUDIT      ?? 0) },
-          { label: 'Tax prep',        val: parseFloat(mr.TAX_PREP   ?? 0) },
-          { label: 'Payroll/salary',  val: parseFloat(mr.PAYROLL    ?? 0) },
-          { label: 'Software/tech',   val: parseFloat(mr.SOFTWARE   ?? 0) },
-          { label: 'Other',           val: parseFloat(mr.OTHER_EXP  ?? 0) },
-        ].filter(c => c.val > 0).sort((a, b) => b.val - a.val).slice(0, 5);
-        const total = cats.reduce((s, c) => s + c.val, 0);
-        const mancoRowsEl = document.getElementById('manco-rows');
-        const mancoFootEl = document.getElementById('manco-foot');
-        if (mancoRowsEl) {
-          if (cats.length) {
-            mancoRowsEl.innerHTML = cats.map(c =>
-              `<tr><td>${c.label}</td><td>${fmtShort(c.val)}</td></tr>`
-            ).join('');
-            if (mancoFootEl) mancoFootEl.innerHTML = `<tr><td><strong>Total actuals</strong></td><td><strong>${fmtShort(total)}</strong></td></tr>`;
-          } else {
-            mancoRowsEl.innerHTML = '<tr><td colspan="2" style="color:var(--ink-color-global-text-subtle);font-style:italic">No expense data</td></tr>';
-          }
-        }
-      }
-    } catch(e) { console.error('[ManCo error]', e); }
-
-    // ── Compliance: Form ADV regulatory AUM ──
-    // Tries FORM_ADV_FUND_DETAIL first; falls back to MONTHLY_NAV_CALCULATIONS total NAV as proxy
-    try {
-      let disc = 0, nonDisc = 0, total = 0, source = 'nav';
-
-      // NOTE (2026-08-27): FUND_ADMIN.FORM_ADV_FUND_DETAIL does not exist in the warehouse.
-      // Disabled, not removed — this always falls through to the NAV fallback below.
-      // // Attempt 1: dedicated Form ADV table
-      // try {
-      //   const advRes = await _mcp("fetch", {
-      //     command: "dwh:execute:query",
-      //     params: {
-      //       sql: `SELECT
-      //   SUM(DISCRETIONARY_AUM)     AS disc,
-      //   SUM(NON_DISCRETIONARY_AUM) AS non_disc
-      // FROM FUND_ADMIN.FORM_ADV_FUND_DETAIL WHERE FIRM_ID = '${firmId}'`
-      //     }
-      //   });
-      //   if (!advRes.isError) {
-      //     const ar = parseDWH(advRes)[0] ?? {};
-      //     const d = parseFloat(ar.DISC ?? 0), nd = parseFloat(ar.NON_DISC ?? 0);
-      //     if (d > 0 || nd > 0) { disc = d; nonDisc = nd; total = d + nd; source = 'formadv'; }
-      //   }
-      // } catch (_) { /* table may not exist — fall through */ }
-
-      // Fallback: total NAV from MONTHLY_NAV_CALCULATIONS (VC funds = effectively all discretionary)
-      if (source === 'nav') {
-        const navFallRes = await _mcp("fetch", {
-          command: "dwh:execute:query",
-          params: {
-            sql: `SELECT ENDING_TOTAL_NAV
-FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
-WHERE FIRM_ID = '${firmId}' AND IS_FIRM_ROLLUP = TRUE
-ORDER BY MONTH_END_DATE DESC LIMIT 1`,
-            format: 'ndjson',
-              }
-        });
-        if (!navFallRes.isError) {
-          const nr = parseDWH(navFallRes)[0] ?? {};
-          total = parseFloat(nr.ENDING_TOTAL_NAV ?? 0);
-          disc = total; nonDisc = 0; // typical VC: all discretionary
-        }
-      }
-
-      const advRowsEl = document.getElementById('formadv-rows');
-      const advFootEl = document.getElementById('formadv-foot');
-      if (advRowsEl && total > 0) {
-        advRowsEl.innerHTML = `
-          <tr><td>Discretionary AUM</td><td>${fmtShort(disc)}</td></tr>
-          <tr><td>Non-discretionary AUM</td><td>${fmtShort(nonDisc)}</td></tr>`;
-        if (advFootEl) advFootEl.innerHTML = `<tr><td><strong>Total Regulatory AUM</strong></td><td><strong>${fmtShort(total)}</strong></td></tr>`;
-        if (source === 'nav') {
-          const preview = document.getElementById('formadv-preview');
-          if (preview) {
-            const note = document.createElement('div');
-            note.style.cssText = 'font-size:9px;color:var(--ink-color-global-text-subtle);margin-top:6px;';
-            note.textContent = 'Derived from fund NAV · run Form ADV skill for official filing figures';
-            preview.appendChild(note);
-          }
-        }
-      } else if (advRowsEl) {
-        advRowsEl.innerHTML = '<tr><td colspan="2" style="color:var(--ink-color-global-text-subtle);font-style:italic">No regulatory AUM data</td></tr>';
-      }
-    } catch(e) { console.error('[FormADV error]', e); }
 
   } catch (err) {
     console.error("Carta MCP fetch error:", err);
@@ -1080,28 +678,6 @@ const SOI_ERROR_BY_CODE = {
 
 // ── Helpers ──
 function tryParse(str) { try { return JSON.parse(str); } catch { return null; } }
-function fmtMark(val) {
-  if (val == null) return "—";
-  const n = parseFloat(val);
-  if (isNaN(n)) return String(val);
-  if (n >= 1e9) return "$" + (n/1e9).toFixed(1) + "B";
-  if (n >= 1e6) return "$" + (n/1e6).toFixed(1) + "M";
-  if (n >= 1e3) return "$" + (n/1e3).toFixed(0) + "K";
-  return "$" + n.toFixed(0);
-}
-function fmtMoic(val) {
-  if (val == null) return "—";
-  const n = parseFloat(val);
-  return isNaN(n) ? "—" : n.toFixed(1) + "x";
-}
-function shortName(name) {
-  if (!name) return "Fund";
-  // e.g. "your firm" → "Fund III"
-  const m = name.match(/(Fund\s+(?:I{1,3}|IV|V{1,3}|\d+))/i);
-  return m ? m[1] : name.split(" ").slice(-2).join(" ");
-}
-
-// ── Helpers ──
 function parseNdjson(text) {
   const rows = [];
   let nextOffset = null;
@@ -1128,15 +704,6 @@ function parseNdjson(text) {
   }
   return { rows, nextOffset };
 }
-function fmtSharesShort(v) {
-  if (v == null || v === '' || v === 'NULL') return "—";
-  const n = parseFloat(v);
-  if (isNaN(n)) return "—";
-  if (n >= 1e6) return (n/1e6).toFixed(1) + "M";
-  if (n >= 1e3) return Math.round(n/1e3) + "K";
-  return new Intl.NumberFormat('en-US').format(Math.round(n));
-}
-
 
 function escHtml(str) {
   if (str == null) return '';
