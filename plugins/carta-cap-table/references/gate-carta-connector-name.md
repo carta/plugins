@@ -62,7 +62,7 @@ through your own prefixed tool name:
 mcp__<the connector's session prefix>__<a read the connector exposes>
 ```
 
-Which call depends on the connector: the Carta gateway takes `welcome`; the CRM surface has
+Which call depends on the connector: the Carta server takes `welcome`; the CRM surface has
 none and reads `crm_call_tool({"name": "crm:get_current_user"})` instead. Don't hard-code
 `welcome` for a connector that doesn't expose it.
 

@@ -189,8 +189,7 @@ file. The real prefix is environment-dependent (`mcp__claude_ai_Carta__call_tool
 UUID-suffixed connector forms all occur). Resolve it from the session's tool list and substitute
 it everywhere; only the prefix varies — tool and command names never do. The one exception:
 SKILL.md's frontmatter `allowed-tools` entries are literal grant patterns — never substitute
-there. `read_tool` and `call_tool` are the only surface: the `fetch`/`mutate` gateway pair sits behind a flag
-that defaults off, so `mcp__carta__fetch` comes back *"No such tool available"*
+there. `read_tool` and `call_tool` are the only surface
 ([incidents.md § Round-trips](incidents.md#round-trips-that-bought-nothing)). And **never call
 `set_context`** — every command takes `corporation_id` as a direct param.
 
@@ -238,7 +237,7 @@ is not a fresh attempt — it is the third try at the same write, and a traced r
 500s that way. A second failure means waiting: re-running the same call against a 502 cannot
 succeed, and repeated attempts are the inner-loop thrash this skill's budgets exist to prevent.
 Do not vary the call to make a retry look novel, do not fall back to a different tool or a
-`discover`/`search_tools` probe, and do not treat an HTML error body as a data payload to parse
+`search_tools` probe, and do not treat an HTML error body as a data payload to parse
 — an HTML response to a JSON call is an outage signal, never content.
 
 ### Step 3 — Resolve the corporation by name

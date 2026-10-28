@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.1</carta-plugin>
 
 # Benchmark Query
 
@@ -667,9 +667,9 @@ If the dimension is one of the three known values, continue to Step 4 above.
 
 ### Step 4 — bulk-fetch nuances
 
-**Single-job bulk:** omit `level` to get every level for one job in one call (one row per level in that job's `levels`, fits well under the gateway response budget).
+**Single-job bulk:** omit `level` to get every level for one job in one call (one row per level in that job's `levels`, fits well under the server response budget).
 
-**Multi-job bulk (CSV across all functions):** issue **one fetch per job area** (each `params.job[].value` from Step 2b) in parallel — do **not** omit both `job` and `level`. The unfiltered query returns every job at every level in a single payload that exceeds the 40K-char gateway budget and will be rejected with `"response too large"`. Iterating per-job stays inside the budget and parallelizes cleanly.
+**Multi-job bulk (CSV across all functions):** issue **one read per job area** (each `params.job[].value` from Step 2b) in parallel — do **not** omit both `job` and `level`. The unfiltered query returns every job at every level in a single payload that exceeds the 40K-char server budget and will be rejected with `"response too large"`. Iterating per-job stays inside the budget and parallelizes cleanly.
 
 ### Step 5 — Present results
 
@@ -787,7 +787,7 @@ A `compensation:*` read can fail for two unrelated reasons that must NOT be conf
 - **No subscription** — the corporation doesn't have Carta Total Compensation. Remediation: a sales/demo conversation.
 - **No access** — the corporation HAS CTC, but the **current user** doesn't hold a CTC role on it (Company Viewer, Compensation Manager, Company Editor, Company Admin). A user can be a stakeholder, board member, or cap-table admin without any CTC role. Remediation: an internal role grant — NOT a sales conversation.
 
-> **You distinguish these — the MCP layer does not compose the message.** The authoritative signal is the subscription gate (Step 2), whose outcomes already separate no-subscription from no-access. When a compensation command hits a 403 the gateway surfaces the raw error and does not compose a friendly message. Step 2 already calls `subscription_status` up front — use its result to classify, per the table below.
+> **You distinguish these — the MCP layer does not compose the message.** The authoritative signal is the subscription gate (Step 2), whose outcomes already separate no-subscription from no-access. When a compensation command hits a 403 the server surfaces the raw error and does not compose a friendly message. Step 2 already calls `subscription_status` up front — use its result to classify, per the table below.
 
 **How to classify a failure:**
 
@@ -808,7 +808,7 @@ A `compensation:*` read can fail for two unrelated reasons that must NOT be conf
 ### Anti-patterns to avoid
 
 - ❌ Treating the failure as a transient auth issue and asking the user to re-login. Re-authentication issues a fresh token for the **same user** — it does not grant a role they don't have.
-- ❌ Expecting the gateway to hand you a finished, user-ready message. YOU classify the outcome using the `subscription_status` result and compose the message.
+- ❌ Expecting the server to hand you a finished, user-ready message. YOU classify the outcome using the `subscription_status` result and compose the message.
 - ❌ Showing a CTC product demo link for the access-denied case. The user needs an internal role grant, not a sales conversation — and with `has_ctc_access: false` you don't even know the corp lacks CTC, so a demo link would be a guess.
 - ❌ Treating `has_ctc_access: false` (with `is_subscribed: null`) as "subscription unknown, try the benchmark anyway". It means no-access — stop and send the gate's no-access message.
 

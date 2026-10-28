@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -54,7 +54,7 @@ You need:
 
 ## Data Retrieval
 
-> The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
+> The server defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
 
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})` — SAFEs + convertible notes
 - `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` — current fully diluted count

@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.1</carta-plugin>
 
 # CTC Scorecard
 
@@ -64,7 +64,7 @@ This skill calls compensation-service's scorecard endpoints (the same endpoints 
 >
 > **⚠️ Every compensation command goes through `read_tool` — copy the tool names exactly.**
 >
-> Examples below use the shorthand `read_tool({...})` — read it as `mcp__carta__read_tool({"name": ..., "arguments": {...}})`. Do **not** use `fetch` or `discover`: both are deprecated and usually not registered, so they fail with *"No such tool available"*.
+> Examples below use the shorthand `read_tool({...})` — read it as `mcp__carta__read_tool({"name": ..., "arguments": {...}})`.
 >
 > The tool name is the command name with **colons turned into `__`. Hyphens and underscores inside a segment stay as they are.** The names are irregular, so never guess one:
 >
@@ -577,7 +577,7 @@ Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do
 | `unknown_param` (*"does not accept …"*) or `invalid_argument` on `employee-scorecard` | You sent a param outside **Accepted params** (Step 4b). Drop it, or rename it to a param the error's `allowed_params` / `did_you_mean` lists, resend once, and do what **Accepted params** says for that param instead. Never resend the same call, and do not guess other variants of the param. |
 | HTTP 400 on a `job_filters`, `score` or `sort_field` value | Compare the values you sent with Step 2b's `params`, resend the listed `value` once, then stop and report. Do not guess a variation. |
 | `compensation:get:filter_options` fails | Stop (Step 2b, rule 4): 403 → no-access message, 404 → no active CTC plan, `Unknown tool` → the connected Carta MCP is too old. Do not fall back to typed values. |
-| *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `read_tool`, and retry once. Do not switch to `fetch` / `discover`, and do not guess name variations. |
+| *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `read_tool`, and retry once. Do not guess name variations. |
 | Network/transport error | One retry. If it fails again, surface: *"Couldn't reach compensation-service. Try again in a moment — if this keeps happening, contact Carta support."* |
 | Response too large (*"response too large (limit 40000 chars)"*) | Drop `page_size` to ~10 and page through. Never estimate a distribution from a partial sweep — complete it or tell the user it couldn't be completed. |
 

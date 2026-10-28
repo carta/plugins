@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -75,7 +75,7 @@ You need:
 
 ## Data Retrieval
 
-> The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "minimal"` is passed explicitly.
+> The server defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "minimal"` is passed explicitly.
 
 Two endpoints exist for vesting detail and they are **not interchangeable**:
 

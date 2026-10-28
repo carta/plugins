@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -62,11 +62,11 @@ For each company, these are the relevant checks:
 - `read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": corporation_id}})` -- SAFE exposure check
 - `read_tool({"name": "cap_table__list__83b_elections", "arguments": {"company": corporation_id, "status": "not_filed"}})` -- 83(b) deadline check
 
-The gateway defaults to `detail=summary` for list commands. The first four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes. The 83(b) list always returns its `summary` with the rows: `not_filed_open` and `next_deadline` count only deadlines today or later.
+The server defaults to `detail=summary` for list commands. The first four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes. The 83(b) list always returns its `summary` with the rows: `not_filed_open` and `next_deadline` count only deadlines today or later.
 
-If the user asks about a specific check only (e.g. "any expiring 409As?"), fetch only the relevant command per company.
+If the user asks about a specific check only (e.g. "any expiring 409As?"), read only the relevant command per company.
 
-> **Parallel execution**: The `fetch` tool has `readOnlyHint=true`, so Claude Code executes parallel fetch calls concurrently. Issue ALL fetch calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
+> **Parallel execution**: The `read_tool` tool has `readOnlyHint=true`, so Claude Code executes parallel `read_tool` calls concurrently. Issue ALL `read_tool` calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
 
 ## Key Fields
 
@@ -83,9 +83,9 @@ Call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 nume
 
 ### Step 2 — Fetch Data for All Companies (parallel)
 
-Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. Each fetch call is independent and will execute concurrently.
+Issue ALL `read_tool` calls for ALL companies **in a single response** — do NOT loop company-by-company. Each `read_tool` call is independent and will execute concurrently.
 
-For example, with 5 companies and all 5 checks, issue all 25 fetch calls at once:
+For example, with 5 companies and all 5 checks, issue all 25 `read_tool` calls at once:
 
 ```
 read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 1}})

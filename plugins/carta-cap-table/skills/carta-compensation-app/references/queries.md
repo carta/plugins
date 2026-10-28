@@ -267,7 +267,7 @@ renders as `—`.
 ## Future stems (not yet fetched)
 
 The Scorecard / Reports / Plan Modeling tabs will need `compensation:get:employee-scorecard`
-(note: invoked via `read_tool` as `compensation__get__employee-scorecard`, **not** via `fetch`) and, where commands don't exist
+(note: invoked via `read_tool` as `compensation__get__employee-scorecard`) and, where commands don't exist
 yet, new `compensation:get:*` endpoints for paybands and report data.
 
 **Prefer `compensation:export:scorecard`** for the whole employee list: one columnar response
