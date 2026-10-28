@@ -110,7 +110,7 @@
   },
   "carta-modify-issuables": {
     "category": "issuance",
-    "name": "Fix a grant or certificate",
+    "name": "Fix a grant, certificate or note",
     "order": 20,
     "prompts": [
       "Update the vesting start date on [employee name]'s option grant",

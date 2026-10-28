@@ -46,7 +46,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-compensation-benchmarks` | Carta Total Comp market benchmarks (salary, equity, total cash) for a role |
 | `carta-compensation-rolematcher` | Classify a job title into the CTC compensation taxonomy |
 | `carta-issuance` | Issue certificates, option grants and profits interest units; draft shares, grants or units, or resume from a draft set |
-| `carta-modify-issuables` | Amend issued certificates and option grants — dates, legend, notes, quantity, exercise price |
+| `carta-modify-issuables` | Amend issued certificates, convertible notes and option grants — dates, legend, notes, quantity, exercise price |
 | `carta-start` | Get started: shows your company, what your role can do and three prompts to try, then sets up Carta Home |
 | `carta-captable-home-build` | Build or redeploy the `Carta Home - <company>` live artifact — ownership, fully diluted summary, option pool, stakeholders, drafts, and a skill directory for one company |
 
