@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { sans, GLOBAL_CSS, FS, FAINT, EASE_OUT } from "./ui/theme.js";
 import AppShell from "./shell/AppShell.jsx";
 import ChatRail, { CHAT_RAIL_WIDTH_PX, CHAT_RAIL_TRANSITION_MS } from "./ui/ChatRail.jsx";
@@ -38,19 +38,27 @@ import { trackClick, trackRender } from "./analytics.js";
 
 // This server only ever hosts one firm — the URL's firm segment is cosmetic,
 // corrected to the real slug once the snapshot resolves it, never looked up.
+// The sidebar is clickable before the snapshot names the slug, and a URL can't
+// carry a tab without one, so a tab picked then is held until the slug lands.
 function usePathRoute(firmSlug) {
   const rawTab = useSyncExternalStore(subscribeNav, () => parseRoute().tab, () => null);
-  const route = rawTab || "dashboard";
+  const [pendingTab, setPendingTab] = useState(null);
+  const route = pendingTab || rawTab || "dashboard";
 
-  useEffect(() => {
+  // A layout effect, so the URL names the page before that page's own effects read
+  // its `view` parameter: a passive one would run after the child's, which would
+  // read the previous page's toolbar state.
+  useLayoutEffect(() => {
     if (!firmSlug) return;
     const current = parseRoute();
-    if (current.firm !== firmSlug) {
-      navigateRoute({ firm: firmSlug, tab: current.tab || route }, { replace: true });
+    if (current.firm !== firmSlug || (pendingTab && pendingTab !== current.tab)) {
+      navigateRoute({ firm: firmSlug, tab: route }, { replace: true });
     }
-  }, [firmSlug, route]);
+    setPendingTab(null);
+  }, [firmSlug, route, pendingTab]);
 
   const setRoute = (next) => {
+    if (!firmSlug) { setPendingTab(next); return; }
     if (parseRoute().tab === next) return;
     navigateRoute({ firm: firmSlug, tab: next });
   };
