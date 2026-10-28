@@ -60,6 +60,17 @@ def _is_workbook(report: dict) -> bool:
     return (report.get("origin") or {}).get("kind") == "workbook"
 
 
+def custom_link(budget: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """A custom report's link to its source ({from}) from its budget, or None for any other."""
+    custom = (budget or {}).get("custom")
+    return {"from": custom["from"]} if isinstance(custom, dict) and custom.get("from") else None
+
+
+def custom_gl_codes(budget: Dict[str, Any]) -> Optional[List[int]]:
+    """The accounts a custom report's budget keeps, or None for any other budget."""
+    return custom_link(budget) and list(budget["custom"].get("gl_codes") or [])
+
+
 def carta_budget_input(entry: Dict[str, Any]) -> Dict[str, Any]:
     """Carta's own budget, from its snapshot entry, as a budget the build reads like a
     monthly by-account workbook (shapes/monthly_crosstab.py): one line per GL account."""
@@ -368,8 +379,7 @@ class ReportStore:
     @staticmethod
     def custom_of(report: dict) -> Optional[Dict[str, Any]]:
         """A custom report's link to its source ({from}), or None for any other report."""
-        custom = (report.get("budget") or {}).get("custom")
-        return {"from": custom["from"]} if isinstance(custom, dict) and custom.get("from") else None
+        return custom_link(report.get("budget") or {})
 
     def _own(self, doc: Dict[str, Any], report_id: str) -> dict:
         report = self.find(doc, report_id)
@@ -445,7 +455,9 @@ class ReportStore:
 
     # A custom report is a copy of its source's whole budget plus `view` ({pivot}: how its
     # owner laid it out) and `custom` ({from, gl_codes}: the source it links to and the
-    # accounts it keeps). The owner's edit re-copies the source.
+    # accounts it keeps). The build cuts its rows to those accounts and works its figures out
+    # again from them, so its snapshot entry and the payload own_sync pushes hold only what was
+    # kept; the owner's edit re-copies the source, so an account cut away earlier can come back.
 
     def _custom_source(self, doc: Dict[str, Any], source_id: str,
                        carta_budget: Callable[[], Optional[Dict[str, Any]]]) -> Tuple[Dict[str, Any], str, Optional[str]]:

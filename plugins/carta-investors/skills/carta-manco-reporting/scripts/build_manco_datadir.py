@@ -2143,15 +2143,9 @@ def empty_budgets():
 _NET_INCOME_LABEL_RX = re.compile(r"^Net\s+(?:Operating\s+|Ordinary\s+)?(Income|Loss)\b", re.IGNORECASE)
 
 
-def _read_monthly_crosstab_budget(data, path, as_of_month):
-    """Normalize a monthly-crosstab budget (shapes/monthly_crosstab.py) into
-    the read_budgets()-shaped envelope BudgetActualsAccounts.jsx renders.
-
-    No department axis exists in this shape, so income/expense scalars are
-    a straight sum of the flat rows by leading GL digit — no section
-    hierarchy to walk, unlike the outline shape.
-    """
-    rows = data.get("rows") or []
+def _monthly_crosstab_figures(rows, as_of_month):
+    """The income and expense scalars and per-account budgets of a monthly-crosstab budget's
+    rows: a straight sum of the flat rows by leading GL digit."""
     mo = max(1, min(12, as_of_month))
 
     def is_income(t):
@@ -2170,11 +2164,27 @@ def _read_monthly_crosstab_budget(data, path, as_of_month):
             expenses_ytd += ytd
         r.setdefault("gl_codes", r.get("account_type_all") or
                      ([r["account_type"]] if r.get("account_type") is not None else []))
-
     return {
         "income_ytd": round(income_ytd), "expenses_ytd": round(expenses_ytd),
         "income_annual": round(income_ann), "expenses_annual": round(expenses_ann),
         "per_account": {r["label"]: r.get("budget_ytd", 0) for r in rows},
+    }
+
+
+def _read_monthly_crosstab_budget(data, path, as_of_month):
+    """Normalize a monthly-crosstab budget (shapes/monthly_crosstab.py) into
+    the read_budgets()-shaped envelope BudgetActualsAccounts.jsx renders.
+
+    No department axis exists in this shape, so income/expense scalars are
+    a straight sum of the flat rows by leading GL digit — no section
+    hierarchy to walk, unlike the outline shape.
+    """
+    rows = data.get("rows") or []
+    mo = max(1, min(12, as_of_month))
+    figures = _monthly_crosstab_figures(rows, as_of_month)
+
+    return {
+        **figures,
         "source": "excel-workbook",
         "by_tag_value": None,
         "workbook_meta": data.get("workbook_meta"),
@@ -2191,20 +2201,11 @@ def _read_monthly_crosstab_budget(data, path, as_of_month):
     }
 
 
-def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases=None):
-    """Normalize an outline-shaped budget (shapes/pnl_outline.py) into the
-    same envelope read_excel_budget() returns for crosstab budgets, so the
-    multi-budget emitter downstream can treat both uniformly.
-
-    Income / expense scalars are read from the outline's own aggregate
-    rows ("Total Income", "Total Operating Expenses") rather than being
-    recomputed — those cells are the client's authoritative plan numbers
-    and can legitimately differ from the sum of their constituents.
-    by_tag_value is None: an outline budget has no dept crosstab, and
-    the UI keys off view_kinds to pick the outline renderer instead.
-    """
-    rows = data.get("rows") or []
-
+def _outline_figures(rows, period_kind, as_of_month):
+    """An outline budget's income and expense scalars, read from its own aggregate rows
+    ("Total Income", "Total Operating Expenses") rather than recomputed: those cells are the
+    client's authoritative plan numbers and can legitimately differ from the sum of their
+    constituents."""
     def _section_total(section):
         """The section's grand total, from the outline's own structure.
 
@@ -2294,7 +2295,6 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
     else:
         income_ytd_total = income_total
         expenses_ytd_total = opex_total
-
     return {
         "income_ytd":       round(income_ytd_total),
         "expenses_ytd":     round(expenses_ytd_total),
@@ -2305,6 +2305,24 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
         # primary in practice (it sorts after budget.json). Empty map keeps
         # the contract intact if it ever is.
         "per_account":      {},
+    }
+
+
+def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases=None):
+    """Normalize an outline-shaped budget (shapes/pnl_outline.py) into the
+    same envelope read_excel_budget() returns for crosstab budgets, so the
+    multi-budget emitter downstream can treat both uniformly.
+
+    Income / expense scalars are read from the outline's own aggregate
+    rows ("Total Income", "Total Operating Expenses") rather than being
+    recomputed — those cells are the client's authoritative plan numbers
+    and can legitimately differ from the sum of their constituents.
+    by_tag_value is None: an outline budget has no dept crosstab, and
+    the UI keys off view_kinds to pick the outline renderer instead.
+    """
+    rows = data.get("rows") or []
+    return {
+        **_outline_figures(rows, period_kind, as_of_month),
         "source":           "excel-workbook",
         "by_tag_value":    None,
         "workbook_meta":    data.get("workbook_meta"),
@@ -4963,78 +4981,171 @@ def read_excel_budget(dashboard_dir, as_of_month, budget_file=None):
     resolved = _resolve_excel_budget(dashboard_dir, as_of_month, p, data)
     # A shared report carries the sharer's Budget vs Actuals filters; the app
     # opens it with them when the reader has saved none of their own. A custom
-    # report's view carries its pivot, and `custom` the accounts it keeps.
+    # report's view carries its pivot, and `custom` the accounts the build cuts it to.
     for key in ("view", "custom"):
         if resolved is not None and key in data:
             resolved[key] = data[key]
+    if resolved is not None and report_store.custom_gl_codes(data) is not None:
+        resolved["_figure_inputs"] = {k: data[k] for k in _FIGURE_INPUTS if k in data}
     return resolved
 
 
-def _resolve_excel_budget(dashboard_dir, as_of_month, p, data):
-    """read_excel_budget()'s aggregation, over the already-loaded `data` read from `p`."""
-    rows = data.get("rows") or []
-    if not rows:
-        return None
-    rows = [_carry_forward_names(r) for r in rows]
+_HEADER_KINDS = {"section_header", "subsection_header", "group_header"}
 
-    period_kind = data.get("period_kind", "annual")
+# What a budget row states as an amount: `monthly` and `annual` and `budget_ytd` are
+# numbers, `by_column` maps each column (department, tag) to {budget, ...}.
+_ROW_AMOUNTS = ("monthly", "annual", "budget_ytd", "by_column")
+
+
+def _is_leaf_row(row):
+    """A row that books accounts itself: a line, or a non-header row with no constituents
+    but accounts of its own."""
+    kind = canonical_budget.row_kind(row)
+    return kind == "line" or (
+        kind not in _HEADER_KINDS and not canonical_budget.row_constituents(row)
+        and bool(canonical_budget.row_gl_codes(row, mapped_gl_first=True)))
+
+
+def _sum_amounts(parts, like):
+    """The amounts of `like`, re-summed from `parts` = [(row, sign)], over every amount
+    field `like` or a part states. A part that was cut away is simply not in `parts`."""
+    def column_budget(row, col):
+        entry = (row.get("by_column") or {}).get(col)
+        return (entry.get("budget") if isinstance(entry, dict) else None) or 0
+
+    out = {}
+    for field in _ROW_AMOUNTS:
+        if not (like.get(field) or any(r.get(field) for r, _ in parts)):
+            continue
+        if field == "monthly":
+            width = max([len(like.get(field) or [])] + [len(r.get(field) or []) for r, _ in parts])
+            month = lambda r, i: ((r.get(field) or [])[i:i + 1] or [0])[0] or 0
+            out[field] = [round(sum(sign * month(r, i) for r, sign in parts), 2) for i in range(width)]
+        elif field == "by_column":
+            cols = []
+            for r, _ in parts:
+                cols += [c for c in (r.get(field) or {}) if c not in cols]
+            out[field] = {}
+            for c in cols:
+                kept = (like.get(field) or {}).get(c)
+                out[field][c] = {**(kept if isinstance(kept, dict) else {}),
+                                 "budget": round(sum(sign * column_budget(r, c) for r, sign in parts), 2)}
+        else:
+            out[field] = round(sum(sign * (r.get(field) or 0) for r, sign in parts), 2)
+    return out
+
+
+def cut_to_accounts(rows, gl_codes):
+    """`rows` with only what `gl_codes` books, and no amount from anything cut away — a
+    custom report's cut, the same rules as the hosted Worker's derivedPayload
+    (server/reportShare.js).
+
+    - A leaf (a line, or a non-header row with no constituents but accounts of its own)
+      stays when one of its accounts is wanted.
+    - A total with constituents keeps the ones that survive and goes with its last one. An
+      expression goes as soon as any term is cut or changes: it depends on every term.
+    - A total whose cover shrank has its amounts re-summed from what it covers now.
+    - A total or summary with neither constituents nor accounts records no cover, so a cut
+      can't rebuild it: it stays, as stated, only when nothing is cut. A total summing one
+      (at any depth, a cycle counting as one) goes with it.
+    - Net income is rebuilt as total income less total operating expenses less a state and
+      local tax line, from the rows kept. It goes when either total went for want of a cover,
+      or when either has no row; a total that went because nothing under it was left reads as
+      zero.
+    - A header stays while anything under it does."""
+    wanted = set(gl_codes)
+    keys = [canonical_budget.row_key(r, i) for i, r in enumerate(rows)]
+    by_key = dict(zip(keys, rows))
+    leaves = [r for r in rows if _is_leaf_row(r)]
+    leaf_kept = lambda r: bool(wanted & set(canonical_budget.row_gl_codes(r, mapped_gl_first=True)))
+    any_cut = any(not leaf_kept(r) for r in leaves)
+
+    # Per row key: kept, shrunk (its cover lost something), amounts (the row whose figures
+    # it reads), parts (surviving constituents), lost (went because it can't be rebuilt, not
+    # because nothing under it was left).
+    cycle = {"kept": False, "shrunk": True, "amounts": {}, "lost": True}
+    settled = {}
+
+    def settle(key):
+        if key in settled:
+            return settled[key]
+        settled[key] = cycle
+        row = by_key[key]
+        own = canonical_budget.row_constituents(row)
+        if _is_leaf_row(row):
+            out = {"kept": leaf_kept(row), "shrunk": False, "amounts": row, "lost": False}
+        elif own:
+            left = [k for k in own if k in by_key and settle(k)["kept"]]
+            shrunk = len(left) < len(own) or any(settled[k]["shrunk"] for k in left)
+            lost_part = any(k in by_key and settled[k]["lost"] for k in own)
+            kept = not lost_part and (not shrunk if canonical_budget.row_derived(row) == "expression" else bool(left))
+            amounts = _sum_amounts([(settled[k]["amounts"], 1) for k in left], row) if shrunk else row
+            out = {"kept": kept, "shrunk": shrunk, "amounts": amounts, "parts": left,
+                   "lost": lost_part or (not kept and bool(left))}
+        else:
+            out = {"kept": not any_cut, "shrunk": False, "amounts": row, "lost": any_cut}
+        settled[key] = out
+        return out
+
+    for key, row in zip(keys, rows):
+        if canonical_budget.row_kind(row) not in _HEADER_KINDS:
+            settle(key)
+
+    if any_cut:
+        def read(pick):
+            for key, row in zip(keys, rows):
+                if canonical_budget.row_kind(row) not in _HEADER_KINDS and pick(row):
+                    return settled[key]
+            return {"kept": False, "amounts": {}, "missing": True}
+
+        labelled = lambda prefix: lambda r: str(r.get("label") or "").strip().lower().startswith(prefix)
+        income = read(labelled("total income"))
+        opex = read(labelled("total operating expenses"))
+        salt = read(lambda r: canonical_budget.row_kind(r) == "line" and re.search("state and local tax", r.get("label") or "", re.I))
+        if income.get("lost") or opex.get("lost") or income.get("missing") or opex.get("missing"):
+            net = {"kept": False, "amounts": {}}
+        else:
+            net = {"kept": True, "_signed": [(income, 1), (opex, -1), (salt, -1)]}
+        for key, row in zip(keys, rows):
+            if canonical_budget.row_derived(row) == "net_income" and not _is_leaf_row(row) and not canonical_budget.row_constituents(row):
+                if net["kept"]:
+                    parts = [(s["amounts"], sign) for s, sign in net["_signed"] if s["kept"]]
+                    settled[key] = dict(settled[key], kept=True, amounts=_sum_amounts(parts, row), rebuilt=True)
+                else:
+                    settled[key] = dict(settled[key], kept=False, amounts={})
+
+    kept = lambda i: canonical_budget.row_kind(rows[i]) not in _HEADER_KINDS and settled[keys[i]]["kept"]
+
+    def header_kept(i):
+        depth = rows[i].get("depth") or 0
+        for j in range(i + 1, len(rows)):
+            if (rows[j].get("depth") or 0) <= depth:
+                break
+            if kept(j):
+                return True
+        return False
+
+    out = []
+    for i, row in enumerate(rows):
+        if canonical_budget.row_kind(row) in _HEADER_KINDS:
+            if header_kept(i):
+                out.append(row)
+        elif kept(i):
+            state = settled[keys[i]]
+            if state.get("shrunk") or state.get("rebuilt"):
+                row = dict(row, **state["amounts"])
+                if state.get("shrunk"):
+                    row["constituents"] = state["parts"]
+                    if (row.get("calculated") or {}).get("constituents"):
+                        row["calculated"] = dict(row["calculated"], constituents=state["parts"])
+            out.append(row)
+    return out
+
+
+def _crosstab_figures(rows, data, as_of_month, period_kind, coa_value_aliases):
+    """A department crosstab budget's figures from its rows: the firm-level scalars, the
+    per-account budgets and the per-department by_tag_value entries."""
     is_ytd_only = period_kind == "ytd_through_as_of"
-
-    # Optional Chart-of-Accounts mapping — supplies value_aliases so the UI
-    # can join Carta actuals to the correct workbook dept even when the
-    # workbook's super-header dept names don't match Carta's raw
-    # REPORTING_TAGS_JSON.Department values (e.g. workbook "Founder
-    # Services" ↔ Carta tag "CS"). Falls back to identity mapping
-    # (workbook_dept → [workbook_dept]) when absent.
-    coa_map_path = Path(dashboard_dir) / "coa-mapping.json"
-    coa_value_aliases: dict[str, list[str]] = {}
-    coa_records: list = []
-    if coa_map_path.exists():
-        try:
-            coa_data = json.loads(coa_map_path.read_text())
-            coa_value_aliases = coa_data.get("value_aliases") or {}
-            coa_records = coa_data.get("records") or []
-        except Exception as e:
-            print(f"warn: coa-mapping.json present but failed to parse: {e}", file=sys.stderr)
-
-    # dimensions == [] means no department axis — two shapes share that,
-    # told apart by shape_adapter. monthly-crosstab is a flat GL-line-item
-    # list (see shapes/monthly_crosstab.py); pnl-outline mirrors the
-    # workbook's own hierarchical P&L. Neither goes through the
-    # tag-crosstab aggregation below.
-    if not (data.get("dimensions") or []):
-        shape_adapter = (data.get("workbook_meta") or {}).get("shape_adapter")
-        if shape_adapter == "monthly-crosstab":
-            return _read_monthly_crosstab_budget(data, p, as_of_month)
-        # A shared report carries the tag aliases it was built with.
-        return _read_outline_budget(data, p, period_kind, as_of_month,
-                                    data.get("value_aliases") or coa_value_aliases)
-
-    # Backfill GL codes the workbook's own Budget-vs-Actuals tab left off a
-    # rollup line but its COA mapping tab states for that line by name (see
-    # backfill_account_type_from_coa's docstring). Crosstab only — the
-    # outline branch above already returned.
-    if coa_records:
-        n = backfill_account_type_from_coa(rows, coa_records)
-        if n:
-            print(f"note: backfilled {n} GL code(s) from coa-mapping.json's "
-                  f"category names onto {p.name} lines missing one.",
-                  file=sys.stderr)
-
-    # A crosstab row carries its GL identity as account_type /
-    # account_type_all (see shapes/tag_crosstab.py); apply_budget_mapping,
-    # drop_foreign_gl_codes, autolink_exact_accounts and
-    # unresolved_budget_rows all key on gl_codes instead — the field an
-    # outline row carries. Seeding it here, once, lets a crosstab row take
-    # every one of those passes exactly as an outline row would, including
-    # a client's own recorded decision. sync_crosstab_account_types (called
-    # from main after those passes run) writes the result back the other
-    # way, into account_type/account_type_all and the by_tag_value maps the
-    # UI actually reads.
-    for r in rows:
-        if r.get("row_kind") == "line":
-            r.setdefault("gl_codes", r.get("account_type_all") or
-                         ([r["account_type"]] if r.get("account_type") is not None else []))
 
     # Which department column is the sheet's roll-up. It is the column
     # the workbook totals into, so it drives the firm-level scalars and
@@ -5222,7 +5333,6 @@ def _resolve_excel_budget(dashboard_dir, as_of_month, p, data):
     other_depts = [e for e in by_tag_value if e["tag_value"] != FIRM_TOTAL]
     other_depts.sort(key=lambda x: -x["expenses_ytd"])
     by_tag_value = other_depts + ([firm_total_entry] if firm_total_entry else [])
-
     return {
         "income_ytd":       round(income_ytd),
         "expenses_ytd":     round(expenses_ytd),
@@ -5232,8 +5342,115 @@ def _resolve_excel_budget(dashboard_dir, as_of_month, p, data):
         "income_annual":    round(income_ytd if is_ytd_only else income_ytd),
         "expenses_annual":  round(expenses_ytd if is_ytd_only else expenses_ytd),
         "per_account":      {n: round(v) for n, v in per_account.items()},
+        "by_tag_value":     by_tag_value,
+    }
+
+
+def _budget_shape(data):
+    """Which reader a budget file takes: a department crosstab, a flat monthly crosstab, or
+    an outline."""
+    if data.get("dimensions"):
+        return "crosstab"
+    if (data.get("workbook_meta") or {}).get("shape_adapter") == "monthly-crosstab":
+        return "monthly-crosstab"
+    return "outline"
+
+
+# What _refigure needs of a budget file besides its rows.
+_FIGURE_INPUTS = ("dimensions", "tag_values", "period_kind", "workbook_meta")
+
+
+def _refigure(entry, as_of_month):
+    """`entry`'s income, expense, per-account and per-department figures, recomputed from
+    its current rows, so a custom report's figures come from the rows it was cut to rather
+    than the budget it was cut from. `entry["_figure_inputs"]` is what read_excel_budget
+    kept of the file."""
+    data = entry.pop("_figure_inputs", None) or {}
+    rows = entry.get("rows") or []
+    # Each department's carta_tags came from the workbook's alias map; keep them.
+    coa_value_aliases = {e["tag_value"]: e["carta_tags"]
+                         for e in entry.get("by_tag_value") or [] if e.get("carta_tags")}
+    period_kind = data.get("period_kind", "annual")
+    shape = _budget_shape(data)
+    if shape == "crosstab":
+        figures = _crosstab_figures(rows, data, as_of_month, period_kind, coa_value_aliases)
+    elif shape == "monthly-crosstab":
+        figures = _monthly_crosstab_figures(rows, as_of_month)
+    else:
+        figures = _outline_figures(rows, period_kind, as_of_month)
+    entry.update(figures)
+    sync_crosstab_account_types(entry)
+
+
+def _resolve_excel_budget(dashboard_dir, as_of_month, p, data):
+    """read_excel_budget()'s aggregation, over the already-loaded `data` read from `p`."""
+    rows = data.get("rows") or []
+    if not rows:
+        return None
+    rows = [_carry_forward_names(r) for r in rows]
+
+    period_kind = data.get("period_kind", "annual")
+    is_ytd_only = period_kind == "ytd_through_as_of"
+
+    # Optional Chart-of-Accounts mapping — supplies value_aliases so the UI
+    # can join Carta actuals to the correct workbook dept even when the
+    # workbook's super-header dept names don't match Carta's raw
+    # REPORTING_TAGS_JSON.Department values (e.g. workbook "Founder
+    # Services" ↔ Carta tag "CS"). Falls back to identity mapping
+    # (workbook_dept → [workbook_dept]) when absent.
+    coa_map_path = Path(dashboard_dir) / "coa-mapping.json"
+    coa_value_aliases: dict[str, list[str]] = {}
+    coa_records: list = []
+    if coa_map_path.exists():
+        try:
+            coa_data = json.loads(coa_map_path.read_text())
+            coa_value_aliases = coa_data.get("value_aliases") or {}
+            coa_records = coa_data.get("records") or []
+        except Exception as e:
+            print(f"warn: coa-mapping.json present but failed to parse: {e}", file=sys.stderr)
+
+    # dimensions == [] means no department axis — two shapes share that,
+    # told apart by shape_adapter. monthly-crosstab is a flat GL-line-item
+    # list (see shapes/monthly_crosstab.py); pnl-outline mirrors the
+    # workbook's own hierarchical P&L. Neither goes through the
+    # tag-crosstab aggregation below.
+    shape = _budget_shape(data)
+    if shape != "crosstab":
+        if shape == "monthly-crosstab":
+            return _read_monthly_crosstab_budget(data, p, as_of_month)
+        # A shared report carries the tag aliases it was built with.
+        return _read_outline_budget(data, p, period_kind, as_of_month,
+                                    data.get("value_aliases") or coa_value_aliases)
+
+    # Backfill GL codes the workbook's own Budget-vs-Actuals tab left off a
+    # rollup line but its COA mapping tab states for that line by name (see
+    # backfill_account_type_from_coa's docstring). Crosstab only — the
+    # outline branch above already returned.
+    if coa_records:
+        n = backfill_account_type_from_coa(rows, coa_records)
+        if n:
+            print(f"note: backfilled {n} GL code(s) from coa-mapping.json's "
+                  f"category names onto {p.name} lines missing one.",
+                  file=sys.stderr)
+
+    # A crosstab row carries its GL identity as account_type /
+    # account_type_all (see shapes/tag_crosstab.py); apply_budget_mapping,
+    # drop_foreign_gl_codes, autolink_exact_accounts and
+    # unresolved_budget_rows all key on gl_codes instead — the field an
+    # outline row carries. Seeding it here, once, lets a crosstab row take
+    # every one of those passes exactly as an outline row would, including
+    # a client's own recorded decision. sync_crosstab_account_types (called
+    # from main after those passes run) writes the result back the other
+    # way, into account_type/account_type_all and the by_tag_value maps the
+    # UI actually reads.
+    for r in rows:
+        if r.get("row_kind") == "line":
+            r.setdefault("gl_codes", r.get("account_type_all") or
+                         ([r["account_type"]] if r.get("account_type") is not None else []))
+
+    return {
+        **_crosstab_figures(rows, data, as_of_month, period_kind, coa_value_aliases),
         "source":           "excel-workbook",
-        "by_tag_value":    by_tag_value,
         "workbook_meta":    data.get("workbook_meta"),
         # view_kinds ("by-tag-crosstab", "by-quarter") declared by the shape
         # adapter, propagated so the UI can decide which chip-toggle
@@ -5739,7 +5956,7 @@ def build(args):
 
     # A custom report is a cut of another budget, never the one the dashboard leads with:
     # a firm whose only budget is Carta's keeps it as primary beside its custom reports.
-    _leading = [_b for _b in excel_budgets if not _b.get("custom")]
+    _leading = [_b for _b in excel_budgets if report_store.custom_gl_codes(_b) is None]
     if _leading:
         budgets = _leading[0]  # primary drives the top-line KPIs
     elif carta_budget_opted_in(dashboard):
@@ -6046,6 +6263,16 @@ def build(args):
         except Exception:
             pass
 
+    # A custom report holds only the accounts its owner kept. Its rows are cut here and every
+    # figure it carries is worked out again from them, before the snapshot entry and the
+    # payload own_sync pushes read it. The variance chart reads the file's rows, so it is
+    # cut separately below.
+    for _b in excel_budgets:
+        _kept = report_store.custom_gl_codes(_b)
+        if _kept is not None:
+            _b["rows"] = cut_to_accounts(_b.get("rows") or [], _kept)
+            _refigure(_b, as_of_month)
+
     variance_categories = None
     if excel_budgets:
         # Read the mapping here rather than borrowing read_excel_budget's
@@ -6080,6 +6307,9 @@ def build(args):
                 backfill_account_type_from_coa(raw_budget.get("rows") or [],
                                                variance_coa_records)
             raw_budget = variance_payload(raw_budget, parsed)
+            _kept = report_store.custom_gl_codes(parsed)
+            if _kept is not None:
+                raw_budget = {**raw_budget, "rows": cut_to_accounts(raw_budget.get("rows") or [], _kept)}
             built = build_variance_categories(raw_budget, accounts, ft, as_of_month,
                                              entries=all_rows,
                                              value_aliases=(parsed.get("value_aliases") or {})
@@ -6133,6 +6363,11 @@ def build(args):
         _reports.discard_share_payload(_b["id"])
         try:
             _payload = canonical_budget.share_payload(_b, _report_currency, fallback_year=args.as_of_year)
+            # A custom report's pivot travels in its view, so the hosted app shows the
+            # same report once own_sync pushes it.
+            if (_payload is not None and report_store.custom_gl_codes(_b) is not None
+                    and isinstance(_b.get("view"), dict)):
+                _payload = dict(_payload, view=_b["view"])
             if _payload is not None:
                 _reports.write_share_payload(_b["id"], _payload)
                 _b["report"] = _reports.mark_if_payload_moved(_b["id"], _payload) or _b.get("report")

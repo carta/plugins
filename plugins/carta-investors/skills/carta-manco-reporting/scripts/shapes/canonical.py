@@ -58,6 +58,43 @@ def _node_facts_from_row(row, period_year):
     return [], {}
 
 
+# How a budget row reads as a node. The one home for these rules: to_canonical builds
+# nodes with them, and the build's custom-report cut reads rows the same way.
+
+
+def row_kind(row):
+    return row.get("row_kind") or "line"
+
+
+def row_key(row, index):
+    """A row the adapter didn't number (headers, some summaries) gets "~<index>": adapter
+    keys never start with "~", so the two can't collide."""
+    return row.get("key") or f"~{index}"
+
+
+def row_gl_codes(row, mapped_gl_first=False):
+    """The accounts a row books. `mapped_gl_first` takes its gl_codes (the mapping's answer,
+    which can name several accounts) over the accounts its adapter stated."""
+    gl = row.get("account_type_all") or (
+        [row["account_type"]] if row.get("account_type") is not None else []
+    )
+    if mapped_gl_first:
+        gl = list(row.get("gl_codes") or []) or gl
+    return gl
+
+
+def row_constituents(row):
+    return list(row.get("constituents") or (row.get("calculated") or {}).get("constituents") or [])
+
+
+def row_derived(row):
+    """How a derived row is recomputed after an edit: net income is income minus expense,
+    and a formula row can't be rebuilt by summing."""
+    if row.get("derived"):
+        return row["derived"]
+    return "expression" if (row.get("calculated") or {}).get("kind") == "expression" else None
+
+
 def to_canonical(resolved_budget, period_year=None, *, mapped_gl_first=False):
     """Lift a resolved budget dict (must carry `rows`) into the canonical model.
 
@@ -80,16 +117,10 @@ def to_canonical(resolved_budget, period_year=None, *, mapped_gl_first=False):
     nodes = []
     for i, row in enumerate(rows):
         facts, comments = _node_facts_from_row(row, period_year)
-        gl = row.get("account_type_all") or (
-            [row["account_type"]] if row.get("account_type") is not None else []
-        )
-        if mapped_gl_first:
-            gl = list(row.get("gl_codes") or []) or gl
+        gl = row_gl_codes(row, mapped_gl_first)
         node = {
-            # A row the adapter didn't number (headers, some summaries) gets "~<index>":
-            # adapter keys never start with "~", so the two can't collide.
-            "key": row.get("key") or f"~{i}",
-            "kind": row.get("row_kind") or "line",
+            "key": row_key(row, i),
+            "kind": row_kind(row),
             "label": row.get("label"),
             "depth": row.get("depth") or 0,
             "order": i,
@@ -106,16 +137,12 @@ def to_canonical(resolved_budget, period_year=None, *, mapped_gl_first=False):
         section = row.get("section")
         if section:
             node["section"] = section
-        calculated = row.get("calculated") or {}
-        constituents = row.get("constituents") or calculated.get("constituents")
+        constituents = row_constituents(row)
         if constituents:
-            node["constituents"] = list(constituents)
-        # How a derived row is recomputed after an edit: net income is income
-        # minus expense, and a formula row can't be rebuilt by summing.
-        if row.get("derived"):
-            node["derived"] = row["derived"]
-        elif calculated.get("kind") == "expression":
-            node["derived"] = "expression"
+            node["constituents"] = constituents
+        derived = row_derived(row)
+        if derived:
+            node["derived"] = derived
         nodes.append(node)
 
     return {"schema_version": SCHEMA_VERSION, "dimensions": dims, "nodes": nodes}
