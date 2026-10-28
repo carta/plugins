@@ -43,7 +43,6 @@ function farStorageOk() {
   return _farStorageOk;
 }
 
-const FAR_PAGE_SIZE = 50;
 // Under carta-mcp's cap of 40 so a page of its widest rows, each carrying its
 // task_display_group, stays inside the 40k-character reply budget (~1,100 a row).
 const FAR_LIST_PAGE_SIZE = 35;

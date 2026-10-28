@@ -8,7 +8,7 @@
     "headline": "SOI now has an Investment Cash Flows tab: every dated investment, proceed and terminal value behind Deal IRR, grouped by company and fund, following the same fund, as-of and exited filters."
   },
   "carta-workhub-build": {
-    "version": "1.10.6",
+    "version": "1.10.7",
     "headline": "Workhub now groups your tasks the way the Firm Dash does, and files each request to Carta under what it is about."
   }
 }

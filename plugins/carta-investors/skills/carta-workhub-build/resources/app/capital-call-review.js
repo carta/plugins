@@ -397,25 +397,14 @@ function ccrBlockers(s) {
 }
 
 // The run, read the way the web app's approve gate reads it: a failing
-// blocking check refuses release; a failing advisory one is shown and passed.
-// A state that never requested a run (no health key at all) has nothing to
-// say and holds nothing; only a run that is pending or failed does.
+// blocking check refuses release; a failing advisory one is passed. A state
+// that never requested a run (no health key at all) has nothing to say and
+// holds nothing; only a run that is pending, errored or blocking does.
 function ccrHealth() {
   const h = _ccr.health;
-  if (!h) {
-    return { loading: false, error: null, checks: [], failing: [], blocking: [], advisory: [],
-             passing: 0, verdict: "none" };
-  }
-  const checks = h.checks || [];
-  const failing = checks.filter((c) => c.is_success === false);
-  const blocking = failing.filter((c) => c.is_blocking);
-  const advisory = failing.filter((c) => !c.is_blocking);
-  return {
-    loading: h.loading, error: h.error, checks: checks, failing: failing, blocking: blocking, advisory: advisory,
-    passing: checks.length - failing.length,
-    verdict: h.loading ? "running" : h.error ? "unknown"
-      : blocking.length ? "blocking" : advisory.length ? "warnings" : "passing",
-  };
+  if (!h) return { verdict: "none" };
+  const blocking = (h.checks || []).some((c) => c.is_success === false && c.is_blocking);
+  return { verdict: h.loading ? "running" : h.error ? "unknown" : blocking ? "blocking" : "clear" };
 }
 
 // ── Reads ─────────────────────────────────────────────────────────────────
