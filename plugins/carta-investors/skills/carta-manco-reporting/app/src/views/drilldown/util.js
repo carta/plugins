@@ -1,4 +1,5 @@
 // Helpers for filtering the entries[] fixture by the current drill-down selection.
+import { quarterLabel } from "../budgetPeriods.js";
 import { dimensionValue, noValueLabel, rowTagScope } from "../../ui/dimension.js";
 
 
@@ -45,6 +46,7 @@ export function selectionTitle(sel) {
   if (sel.kind === "outline-cell")   return sel.periodLabel
                                             ? `${sel.label} — ${sel.periodLabel}`
                                             : sel.label;
+  if (sel.kind === "custom-report")  return sel.label || "";
   return "";
 }
 
@@ -156,7 +158,7 @@ export function quarterlyFeeSummary(scheduleTerms, committedCapital, year) {
       t.start_date <= qStart && (!t.end_date || t.end_date >= qStart));
     if (!period || period.fee_rate == null) continue;
     rows.push({
-      quarterLabel: `Q${q + 1} ${year}`,
+      quarterLabel: quarterLabel(q + 1, year),
       periodName: period.period_name,
       startDate: qStart,
       endDate: qEnd,
@@ -222,6 +224,11 @@ export function filterEntries(entries, sel, topCategoryNames = []) {
     return entries.filter(e =>
       e.kind === "expense" && inRange(e.date) && e.account === sel.category
     );
+  }
+  if (sel.kind === "custom-report") {
+    // The custom report hands over the exact entries it already computed
+    // the clicked figure from, rather than restating a filter here.
+    return sel.entries || [];
   }
   if (sel.kind === "outline-total") {
     // A subtotal has no accounts of its own — it means the lines beneath

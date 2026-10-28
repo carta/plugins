@@ -12,6 +12,12 @@ export function isIncomeAccountType(accountType) {
   return String(accountType ?? "")[0] === "4";
 }
 
+// The two sections of an income statement, and the side of it an account is on.
+export const INCOME_SECTION = { title: "Income", polarity: "income" };
+export const EXPENSE_SECTION = { title: "Operating Expenses", polarity: "expense" };
+export const accountPolarity = (accountType) =>
+  (isIncomeAccountType(accountType) ? INCOME_SECTION.polarity : EXPENSE_SECTION.polarity);
+
 // GL code ascending, the order an income statement is read in.
 export function byAccountCode(a, b) {
   return (a.account_type ?? 0) - (b.account_type ?? 0) || a.label.localeCompare(b.label);
@@ -23,8 +29,8 @@ export function accountSections(rows) {
   const income = rows.filter((r) => isIncomeAccountType(r.account_type));
   const expense = rows.filter((r) => !isIncomeAccountType(r.account_type));
   return [
-    { title: "Income", polarity: "income", rows: income.sort(byAccountCode) },
-    { title: "Operating Expenses", polarity: "expense", rows: expense.sort(byAccountCode) },
+    { ...INCOME_SECTION, rows: income.sort(byAccountCode) },
+    { ...EXPENSE_SECTION, rows: expense.sort(byAccountCode) },
   ].filter((s) => s.rows.length);
 }
 

@@ -247,6 +247,7 @@ or when a row here names a page nothing emits.
 | `MancoReporting.Drilldown.Open.FundYear` | render | Fee-income bar drill. |
 | `MancoReporting.Drilldown.Open.OutlineCell` | render | Outline-layout cell drill. |
 | `MancoReporting.Drilldown.Open.OutlineTotal` | render | Outline-layout total drill. |
+| `MancoReporting.Drilldown.Open.CustomReport` | render | Custom report cell drill. |
 | `MancoReporting.Drilldown.Open.Other` | render | A drill kind missing from `DRILL_NAMES`, which is a bug to fix. |
 | `MancoReporting.Dashboard.ExportHtml` | click | Dashboard: Export pressed. |
 | `MancoReporting.Dashboard.ExportHtmlSucceeded` | click | Dashboard: the export file was produced. |

@@ -133,6 +133,19 @@ export default function useDrilldown() {
     });
   }, []);
 
+  // A custom report cell. `entries` is the exact set the table already
+  // filtered for this cell; `scopes` is its row-field breadcrumb.
+  const openCustomReport = useCallback((cellEntries, opts = {}) => {
+    setSelection({
+      kind: "custom-report",
+      cellKey: opts.cellKey || null,
+      label: opts.label || "",
+      entries: cellEntries || [],
+      scopes: opts.scopes || null,
+      ...budgetSide(opts),
+    });
+  }, []);
+
   const close = useCallback(() => setSelection(null), []);
 
   // A subtotal or total: the lines it sums, each carrying the same fields a
@@ -153,7 +166,7 @@ export default function useDrilldown() {
     });
   }, []);
 
-  return { selection, openOutlineTotal, openAccount, openVendor, openDateRangeCategory, openMonthSide, openFundYear, openTagValueAccount, openOutlineCell, close };
+  return { selection, openOutlineTotal, openAccount, openVendor, openDateRangeCategory, openMonthSide, openFundYear, openTagValueAccount, openOutlineCell, openCustomReport, close };
 }
 
 // The budget half of a budget-vs-actuals cell, normalized onto the

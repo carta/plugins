@@ -25,6 +25,13 @@ export function formatPeriodLabel(budget, asOfIso) {
 export const MONTH_NAME = ["January", "February", "March", "April", "May", "June",
                            "July", "August", "September", "October", "November", "December"];
 
+export const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
+
+/** A period's heading, as Budget vs Actuals words it: "January 2026", "Q1 2026". `m` is the
+ *  month 1-12, `q` the quarter 1-4. */
+export const monthLabel = (m, year) => `${MONTH_NAME[m - 1]} ${year}`;
+export const quarterLabel = (q, year) => `${QUARTERS[q - 1]} ${year}`;
+
 export const FREQUENCIES = [
   { key: "monthly", label: "Monthly" },
   { key: "quarterly", label: "Quarterly" },
@@ -86,7 +93,7 @@ export function rangeOfPeriod(period) {
 
 function rangeLabel(range, year) {
   const { first, last } = range;
-  if (first === last) return `${MONTH_NAME[first - 1]} ${year}`;
+  if (first === last) return monthLabel(first, year);
   if (first === 1 && last === 12) return String(year);
   return `${MONTH_ABBR[first - 1]} – ${MONTH_ABBR[last - 1]} ${year}`;
 }
@@ -112,13 +119,13 @@ export function periodColumns(frequency, range, year, asOfMonth) {
     for (let q = 0; q < 4; q += 1) {
       const months = monthsBetween(q * 3 + 1, q * 3 + 3)
         .filter((m) => m >= win.first && m <= win.last);
-      if (months.length) out.push(mark({ key: `q${q + 1}`, label: `Q${q + 1} ${year}`, months }));
+      if (months.length) out.push(mark({ key: `q${q + 1}`, label: quarterLabel(q + 1, year), months }));
     }
     return out;
   }
 
   return monthsBetween(win.first, win.last).map((m) =>
-    mark({ key: `m${m}`, label: `${MONTH_NAME[m - 1]} ${year}`, months: [m] }));
+    mark({ key: `m${m}`, label: monthLabel(m, year), months: [m] }));
 }
 
 /** January through the end of the window, never past the last month with

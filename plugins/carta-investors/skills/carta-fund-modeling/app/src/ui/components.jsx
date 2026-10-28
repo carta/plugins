@@ -86,6 +86,34 @@ export const SwitchIcon = icon(["M16 3l4 4-4 4", "M20 7H8a4 4 0 00-4 4v1", "M8 2
 // Chat rail toggle — a single-stroke speech bubble with a tail, matching the
 // stroked-outline weight of the other topbar glyphs (no fill, no emoji).
 export const ChatIcon = icon(["M21 11.5a8.5 8.5 0 01-8.5 8.5H8l-4 3v-4.6A8.5 8.5 0 1121 11.5z"]);
+
+/** An icon that turns while `spin` is on (a refresh in flight). */
+export function SpinningIcon({ icon: Icon, spin, size = 16, strokeWidth }) {
+  return (
+    <span style={spin ? { animation: "fm-spin 1s linear infinite", lineHeight: 0 } : { lineHeight: 0 }}>
+      <Icon size={size} strokeWidth={strokeWidth} />
+    </span>
+  );
+}
+
+// Full-bleed rows matching Ink's SideNav item (8px/20px padding, 24px line, 40px tall).
+// Weight and the active background/stripe come from .navitem in theme.js.
+const navItemStyle = { ...sans, display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+  fontSize: FS.value, lineHeight: "24px", padding: "8px 20px", border: "none",
+  cursor: "pointer", color: "var(--ink-color-global-text-default)" };
+
+/** A sidebar row: a tab when `active` marks the open one, or an action. The icon sits
+ *  in a 22px tile; `color` tints it and `spin` turns it. */
+export function SideNavButton({ icon, label, active, color, spin, ...props }) {
+  return (
+    <button className={`navitem${active ? " active" : ""}`} style={navItemStyle} {...props}>
+      <span className="navitem-icon" style={{ color }}>
+        <SpinningIcon icon={icon} spin={spin} strokeWidth={1.6} />
+      </span>
+      {label}
+    </button>
+  );
+}
 export const CloseIcon = icon(["M18 6L6 18", "M6 6l12 12"]);
 // Stop affordance in the chat composer. Filled rather than stroked like the
 // icons above — at 11px an outlined square reads as an empty checkbox.

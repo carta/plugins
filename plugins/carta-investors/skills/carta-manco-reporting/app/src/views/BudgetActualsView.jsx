@@ -6,7 +6,7 @@ import { glNameMap, glTooltip } from "../ui/glNames.js";
 import { dimensionOf, dimensionValue, dimensionValuesAvailable,
          dimensionLabel, dimensionLabelPlural, noValueLabel, rowTagScope } from "../ui/dimension.js";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SECTION } from "../ui/ledger.js";
-import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, GroupedTableHead, useStickyHeader, StickyClone } from "../ui/table.jsx";
+import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, GroupedTableHead, useStickyHeader, StickyClone, drillCellProps } from "../ui/table.jsx";
 import { Capped } from "../shell/AppShell.jsx";
 import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, fmtVarianceWhole } from "../ui/variance.js";
@@ -704,15 +704,7 @@ function BudgetCell({ actual, budget, unmapped, polarity, onClick, rowStyle,
   const cellStyle = { ...styles.tdNum, ...rowStyle };
   if (onClick) cellStyle.cursor = "pointer";
   const firstCellStyle = { ...cellStyle, ...styles.tdNumFirst };
-  // Same hover wash as the other budget tables (theme.js .cellopen).
-  // The four cells of one column are one figure, and the panel reports all
-  // four, so they light together. A CSS :hover cannot reach siblings.
-  const handler = onClick ? {
-    onClick,
-    className: `cellopen${held ? " held" : hovered ? " washed" : ""}`,
-    onMouseEnter: onHover ? () => onHover(true) : undefined,
-    onMouseLeave: onHover ? () => onHover(false) : undefined,
-  } : {};
+  const handler = drillCellProps({ onClick, hovered, held, onHover });
   if (unmapped) {
     return (
       <>

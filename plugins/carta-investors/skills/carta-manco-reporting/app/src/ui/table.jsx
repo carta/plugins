@@ -47,6 +47,21 @@ export function TableScroll({ children, style, scrollRef }) {
   );
 }
 
+// The props that make a figure's cells one clickable drill target. One figure is several
+// <td>s (actual, budget, variance) and the drawer reports all of them, so they light together:
+// `cellopen` carries the affordance, and `washed` / `held` are driven from the table, because a
+// CSS :hover on a <td> cannot reach its siblings. Same wash across the budget tables
+// (theme.js .cellopen). Nothing without `onClick`.
+export function drillCellProps({ onClick, hovered, held, onHover }) {
+  if (!onClick) return {};
+  return {
+    onClick,
+    className: `cellopen${held ? " held" : hovered ? " washed" : ""}`,
+    onMouseEnter: onHover ? () => onHover(true) : undefined,
+    onMouseLeave: onHover ? () => onHover(false) : undefined,
+  };
+}
+
 const sameWidths = (a, b) => !!a && !!b && a.length === b.length && a.every((w, i) => Math.abs(w - b[i]) < 0.5);
 
 /** Sticky-header mechanism ported from carta-fund-modeling's ui/table.jsx —

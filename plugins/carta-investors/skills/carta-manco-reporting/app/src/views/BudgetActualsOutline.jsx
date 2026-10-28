@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { sans, inkNum, INK, PAPER, LINE, BORDER_DEFAULT, FAINT, MICRO, SHADE, BLUE, FS } from "../ui/theme.js";
 import { Bubble, CollapseCaret, NoteIcon } from "../ui/components.jsx";
-import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead } from "../ui/table.jsx";
+import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead, drillCellProps } from "../ui/table.jsx";
 import { glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
 import { dimensionValue, dimensionValuesAvailable, noValueLabel, rowTagScope } from "../ui/dimension.js";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SUMMARY } from "../ui/ledger.js";
@@ -1043,16 +1043,7 @@ function OutlineChildRow({ child, indent, row, breakout, periodYear, columns, di
 // keys through a .map into <tr> without a wrapper, and a wrapper element
 // would break table semantics.
 function Fragment3({ a, b, v, vColor, bColor, numStyle, onClick, hovered, held, onHover }) {
-  // One figure is three cells — actual, budget, variance — and the panel
-  // reports all three, so all three light together. `cellopen` carries the
-  // affordance; `washed` and `held` are driven from the table, because a
-  // CSS :hover on a <td> cannot reach its siblings.
-  const h = onClick ? {
-    onClick,
-    className: `cellopen${held ? " held" : hovered ? " washed" : ""}`,
-    onMouseEnter: onHover ? () => onHover(true) : undefined,
-    onMouseLeave: onHover ? () => onHover(false) : undefined,
-  } : {};
+  const h = drillCellProps({ onClick, hovered, held, onHover });
   // Continues the header's own period divider (table.jsx's thGroup).
   const firstStyle = { ...numStyle, borderLeft: `1px solid ${LINE}` };
   return (

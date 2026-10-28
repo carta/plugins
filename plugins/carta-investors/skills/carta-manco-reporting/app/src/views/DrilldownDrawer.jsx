@@ -21,7 +21,7 @@ const DRILL_NAMES = {
   "account": "Account", "vendor": "Vendor", "date-range-category": "DateRangeCategory",
   "month-side": "MonthSide", "fund-year": "FundYear",
   "department-account": "DepartmentAccount", "outline-cell": "OutlineCell",
-  "outline-total": "OutlineTotal",
+  "outline-total": "OutlineTotal", "custom-report": "CustomReport",
 };
 
 // Where a kind with several entry points was opened from -> the suffix its id

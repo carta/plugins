@@ -3,7 +3,7 @@ import usePortfolio from "./state/usePortfolio.js";
 import { computeFundStates, firmRollup } from "./model/funds.js";
 import { effectiveExitHorizons } from "./model/reprice.js";
 import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, MICRO } from "./ui/theme.js";
-import { Btn, LockIcon, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Eyebrow, H3, landBelowPinnedBars } from "./ui/components.jsx";
+import { Btn, LockIcon, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Eyebrow, H3, landBelowPinnedBars, SideNavButton, icon } from "./ui/components.jsx";
 import { fmtAsOf, setDisplayCurrency } from "./ui/format.js";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import useShare from "./state/useShare.js";
@@ -27,11 +27,6 @@ import { fmContext } from "./pinpoint/fmContext.js";
 import { postToOuter, onFromOuter } from "./bridge-client.js";
 import { trackClick, trackRender } from "./analytics.js";
 
-const I = ({ paths, color, size = 16, strokeWidth = 1.8 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", color }}>
-    {paths.map((d) => <path key={d} d={d} />)}
-  </svg>
-);
 // Ink icons, drawn with the Lucide glyph Ink's kit maps each one to (Ink name → Lucide name
 // in the comment). Each entry is [id, label, paths].
 const TABS = [
@@ -52,6 +47,7 @@ const TABS = [
   // plant → sprout
   ["construction", "Plan New Fund", ["M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3", "M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4", "M5 21h14"]],
 ];
+const TAB_ICONS = Object.fromEntries(TABS.map(([id, , paths]) => [id, icon(paths)]));
 // Pages with no nav item of their own, each mapped to the tab whose nav item stays lit
 // on it: the full activity feed opens from the Reports activity card.
 const SUB_PAGES = { activity: "reports" };
@@ -101,22 +97,11 @@ function useNarrow() {
   return narrow;
 }
 
-// Full-bleed rows matching Ink's SideNav item (8px/20px padding, 24px line, 40px tall).
-// Weight and the active background/stripe come from .navitem in theme.js.
-const navItemStyle = { ...sans, display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-  fontSize: FS.value, lineHeight: "24px", padding: "8px 20px", border: "none",
-  cursor: "pointer", color: "var(--ink-color-global-text-default)" };
-
+// The active row's orange icon tile lives in CSS (.navitem.active .navitem-icon).
 function NavItem({ id, label, icon, active, onClick }) {
   return (
-    <button onClick={onClick} data-testid={`tab-${id}`} className={`navitem${active ? " active" : ""}`} style={navItemStyle}>
-      {/* The active row's orange icon tile lives in CSS (.navitem.active .navitem-icon);
-          the glyph colour goes through I's color prop, since I sets it inline. */}
-      <span className="navitem-icon">
-        <I paths={icon} size={16} strokeWidth={1.6} color={active ? "var(--ink-color-global-brand-black)" : "var(--ink-color-global-text-default)"} />
-      </span>
-      {label}
-    </button>
+    <SideNavButton onClick={onClick} data-testid={`tab-${id}`} active={active} icon={icon} label={label}
+      color={active ? "var(--ink-color-global-brand-black)" : undefined} />
   );
 }
 
@@ -147,7 +132,7 @@ function ScenarioItem({ slice, active, onClick }) {
  *  not the app, so this surfaces the instruction). No save chrome — scenario
  *  edits persist silently. */
 /** Bottom-of-rail data provenance — a single quiet line (the app wordmark sits
- *  just above it, and the Update-data control is now a top-bar icon). */
+ *  just above it, and the Update data, theme and chat rows above that). */
 function DataStatus({ asOf }) {
   return (
     <div style={{ padding: "6px 9px 2px" }}>
@@ -352,10 +337,12 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   // Returns) — not the global chrome — since selection is page context, not
   // app-wide. `fundScope` stays shared state so the selection carries between
   // them and the Overview drill-down (openFund) still works.
+  // Header icons for the narrow layout, which has no sidebar; the wide layout's
+  // sidebar draws the same controls as rows.
+  const themeLabel = dark ? "Switch to light mode" : "Switch to dark mode";
   const themeToggle = (
     <button onClick={toggleTheme} data-testid="theme-toggle"
-      title={dark ? "Switch to light mode" : "Switch to dark mode"}
-      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      title={themeLabel} aria-label={themeLabel}
       style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40,
         border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 4, background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", cursor: "pointer", lineHeight: 0 }}>
       {dark ? <SunIcon size={16} /> : <MoonIcon size={16} />}
@@ -411,8 +398,8 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
         </div>
       </div>
       <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
-        {TABS.map(([id, label, icon]) => (
-          <NavItem key={id} id={id} label={label} icon={icon} active={navTab === id} onClick={() => selectTab(id)} />
+        {TABS.map(([id, label]) => (
+          <NavItem key={id} id={id} label={label} icon={TAB_ICONS[id]} active={navTab === id} onClick={() => selectTab(id)} />
         ))}
       </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px" }} />
@@ -443,6 +430,15 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
           : <div style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", padding: "2px 12px 4px" }}>None yet — load to check.</div>}
       </>}
       <span style={{ flex: 1, minHeight: 10 }} />
+      <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
+        {features.updateData && <UpdateDataButton features={features} firm={firm} inSidebar />}
+        <SideNavButton onClick={toggleTheme} data-testid="theme-toggle" icon={dark ? SunIcon : MoonIcon}
+          label={dark ? "Light mode" : "Dark mode"} aria-label={themeLabel} />
+        {features.askClaude && (
+          <SideNavButton onClick={() => postToOuter("toggle-chat")} data-testid="chat-toggle" icon={ChatIcon}
+            label={chatOpen ? "Close chat" : "Ask Claude"} aria-label={chatToggleLabel} aria-expanded={chatOpen} />
+        )}
+      </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px 0" }} />
       <div style={{ padding: "9px 9px 0" }}>
         <span style={{ ...tightSans, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.01em" }}>Carta Fund Modeling</span>
@@ -451,18 +447,12 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
     </aside>
   );
 
-  // ── top context bar + live metrics (wide layout) ──
+  // ── top context bar + live metrics (wide layout); none on New fund, which has no scenario ──
   const topBar = (
     <div data-testid="app-topbar" data-pinned-bar style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--ink-color-global-surface-background-default)", borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 24px", flexWrap: "wrap" }}>
-        {!scenariosOff && <>
-          <span style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>Scenario: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 700 }}>{slice.name}</strong></span>
-          {sliceTools}
-        </>}
-        <span style={{ flex: 1 }} />
-        {features.updateData && <UpdateDataButton features={features} firm={firm} />}
-        {themeToggle}
-        {chatToggle}
+        <span style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>Scenario: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 700 }}>{slice.name}</strong></span>
+        {sliceTools}
       </div>
     </div>
   );
@@ -537,7 +527,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
         {!narrow && sidebar}
 
         <div ref={contentRef} style={{ flex: 1, minWidth: 0, height: "100vh", overflowY: "auto" }}>
-          {narrow ? narrowHeader : topBar}
+          {narrow ? narrowHeader : !scenariosOff && topBar}
 
           <main style={{ maxWidth: 1320, padding: narrow ? "22px 18px 48px" : "28px 40px 64px" }}>
             <div key={tab} className="pagein">

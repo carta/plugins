@@ -1,6 +1,7 @@
 import { fmtCurrencyShort } from "../../charts/chartTheme.js";
 import { InkBarChart, InkLineChart } from "../../ui/components.jsx";
 import { MICRO } from "../../ui/theme.js";
+import { QUARTERS, MONTH_ABBR as MONTHS } from "../budgetPeriods.js";
 
 // Budget against actuals over time, at whatever resolution the workbook
 // actually states — never finer.
@@ -25,9 +26,6 @@ import { MICRO } from "../../ui/theme.js";
 // interpolating quarters into months would be our arithmetic wearing the
 // firm's name.
 
-const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
-                "Sep", "Oct", "Nov", "Dec"];
 
 // Shared with DrilldownContent.jsx, which renders this as a (?) tooltip next
 // to the "Budget vs actual over time" header instead of a paragraph here.

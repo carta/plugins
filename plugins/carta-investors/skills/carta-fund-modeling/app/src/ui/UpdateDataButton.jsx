@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import { RefreshIcon, CheckCircleIcon, AlertCircleIcon, useDismissable } from "./components.jsx";
+import { createPortal } from "react-dom";
+import { RefreshIcon, CheckCircleIcon, AlertCircleIcon, SideNavButton, SpinningIcon, useDismissable } from "./components.jsx";
 import { FS, sans } from "./theme.js";
 import useRefresh from "../state/useRefresh.js";
 import useFirmReload from "../state/useFirmReload.js";
@@ -44,25 +45,50 @@ const REFRESH_VISUAL = {
   error:    { Icon: AlertCircleIcon, spin: false, color: "var(--ink-color-global-feedback-negative-strong)", title: "Update didn’t finish" },
 };
 
-/** The topbar button and popover frame both Update-data flows share. */
-function UpdateDataShell({ status, visual, children }) {
+/** The button and popover frame both Update-data flows share. In the sidebar the
+ *  button is a nav row and the popover opens beside it, portaled to the body so the
+ *  sidebar's scroll box doesn't clip it and the content pane doesn't paint over it. */
+function UpdateDataShell({ status, visual, inSidebar, children }) {
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState(null);
   const ref = useRef(null);
-  useDismissable(open, setOpen, ref);
+  const panelRef = useRef(null);
+  useDismissable(open, setOpen, [ref, panelRef]);
+  const toggle = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setAnchor({ left: r.right + 8, bottom: window.innerHeight - r.bottom });
+    setOpen((o) => !o);
+  };
+  const buttonProps = { onClick: toggle, "data-testid": "update-data", "aria-expanded": open,
+    "data-state": status, title: visual.title, "aria-label": visual.title };
+  const panelStyle = { width: 300, lineHeight: 1.5,
+    background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 8, padding: "14px 15px",
+    boxShadow: "var(--shadow-hover)" };
+  if (inSidebar) {
+    return (
+      <span ref={ref} style={{ display: "block" }}>
+        {/* idle takes the nav rows' icon colour; the other states keep theirs as the signal */}
+        <SideNavButton {...buttonProps} icon={visual.Icon} label="Update data"
+          color={visual === REFRESH_VISUAL.idle ? undefined : visual.color} spin={visual.spin} />
+        {open && anchor && createPortal(
+          <div ref={panelRef} className="popin" data-testid="update-popover"
+            style={{ ...sans, ...panelStyle, position: "fixed", left: anchor.left, bottom: anchor.bottom, zIndex: 150 }}>
+            {children}
+          </div>,
+          document.body,
+        )}
+      </span>
+    );
+  }
   return (
     <span ref={ref} style={{ position: "relative", lineHeight: 0 }}>
-      <button onClick={() => setOpen((o) => !o)} data-testid="update-data" aria-expanded={open}
-        data-state={status} title={visual.title} aria-label={visual.title}
+      <button {...buttonProps}
         style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40,
           border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 4, background: "var(--ink-color-global-surface-background-default)", color: visual.color, cursor: "pointer", lineHeight: 0 }}>
-        <span style={visual.spin ? { animation: "fm-spin 1s linear infinite", lineHeight: 0 } : { lineHeight: 0 }}>
-          <visual.Icon size={16} strokeWidth={2} />
-        </span>
+        <SpinningIcon icon={visual.Icon} spin={visual.spin} strokeWidth={2} />
       </button>
       {open && (
-        <div className="popin" data-testid="update-popover" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 300, lineHeight: 1.5,
-          background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 8, padding: "14px 15px",
-          boxShadow: "var(--shadow-hover)", zIndex: 40 }}>
+        <div className="popin" data-testid="update-popover" style={{ ...panelStyle, position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 40 }}>
           {children}
         </div>
       )}
@@ -86,10 +112,10 @@ const waitText = (seconds) => {
 };
 
 // Hosted: one forced firm load that reloads the page when it is done.
-function ReloadFirmButton({ firm }) {
+function ReloadFirmButton({ firm, inSidebar }) {
   const st = useFirmReload(firm);
   return (
-    <UpdateDataShell status={st.status} visual={RELOAD_VISUAL[st.status]}>
+    <UpdateDataShell status={st.status} visual={RELOAD_VISUAL[st.status]} inSidebar={inSidebar}>
       {st.status === "running" ? (
         <div data-testid="update-progress">
           <div style={headingStyle}>Reloading from Carta…</div>
@@ -122,14 +148,14 @@ function ReloadFirmButton({ firm }) {
 
 /** Local: the icon reflects the refresh state and clicking it opens a popover with the live
  *  checklist, the "Load new data" action, or the error. The refresh lifecycle lives in useRefresh(). */
-function RefreshButton() {
+function RefreshButton({ inSidebar }) {
   const st = useRefresh();
   const { elapsed, runRefresh, loadNewData } = st;
   const running = st.status === "running";
   const activeIdx = phaseStepIndex(st.phase);
   const visual = REFRESH_VISUAL[st.status] || REFRESH_VISUAL.idle;
   return (
-    <UpdateDataShell status={st.status} visual={visual}>
+    <UpdateDataShell status={st.status} visual={visual} inSidebar={inSidebar}>
       {running ? (
         <div data-testid="update-progress">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -198,8 +224,8 @@ function RefreshButton() {
   );
 }
 
-/** Topbar Update-data button: hosted reloads the firm in one step; local runs useRefresh()'s
- *  fetch-then-load flow. */
-export default function UpdateDataButton({ features, firm }) {
-  return features.reloadFirm ? <ReloadFirmButton firm={firm} /> : <RefreshButton />;
+/** Update-data button — a sidebar row with `inSidebar`, else a header icon: hosted reloads
+ *  the firm in one step; local runs useRefresh()'s fetch-then-load flow. */
+export default function UpdateDataButton({ features, firm, inSidebar }) {
+  return features.reloadFirm ? <ReloadFirmButton firm={firm} inSidebar={inSidebar} /> : <RefreshButton inSidebar={inSidebar} />;
 }
