@@ -23,10 +23,8 @@ sys.path.insert(0, str(_LIB))
 from live_artifact_render import js_safe_json, check_path_under_cwd, UUID_RE  # noqa: E402
 ```
 
-The walk-up works from any depth, so `carta-spa-audit/scripts/render-artifact.py`
-(two levels under `plugins/carta-investors/`) and
-`carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py`
-(three levels under it) use the same two lines. It anchors on `__file__`, not
+The walk-up works from any depth, so every script, such as
+`carta-spa-audit/scripts/render-artifact.py`, uses the same two lines. It anchors on `__file__`, not
 `$CLAUDE_PLUGIN_ROOT`, so it also works when a SKILL.md invokes the script by a
 relative path.
 

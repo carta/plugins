@@ -37,7 +37,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 |-------|-------------|
 | `carta-explore-data` | Query and explore investors data — NAV, partners, investments, accounting |
 | `carta-form-adv` | Form ADV Schedule D regulatory data and firm rollup |
-| `carta-performance-benchmarks` | Compare fund performance against peer benchmark cohorts |
+| `carta-fund-performance` | Fund performance page, and chat answers comparing a fund against peer benchmark cohorts |
 | `carta-download-tearsheet` | Generate tearsheet PDFs for one or more portcos — single PDF preview or bulk ZIP download |
 | `carta-fund-forecasting` | Read-only Carta Fund Forecasting (formerly Tactyc) — list funds, fund-wide KPIs (TVPI, DPI, IRR, MOIC, NAV, reserves), performance tables, and per-investment analytics. |
 | `carta-loan-dashboard` | Loan portfolio dashboard as a live Cowork artifact — KPI tiles (commitments, drawn, outstanding, scheduled payments) and every active loan, with a side panel per loan for terms, key dates, payments and draws. Refreshes from Carta each time it is opened. Invoke with "show my loans" or "loan dashboard". |

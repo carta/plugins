@@ -1,4 +1,3 @@
-
 <!-- Part of the official Carta AI Agent Plugin -->
 
 # Performance Benchmarks

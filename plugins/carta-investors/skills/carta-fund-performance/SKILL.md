@@ -1,23 +1,38 @@
 ---
 name: carta-fund-performance
 description: >
-  Publishes a standalone Fund Performance live artifact for the user's Carta firm — a
-  page that opens directly on the fund performance table and fetches its data live from
-  Carta each time it is opened. Use when the user asks for a fund performance dashboard,
-  page, or artifact they can keep open and re-share.
-  Trigger phrases: "fund performance dashboard", "fund performance artifact",
-  "build me a fund performance page", "publish a fund performance dashboard",
-  "standalone fund performance view".
-  Do NOT use to answer a performance question in chat ("what percentile is our TVPI?",
-  "how does Fund II compare to peers?") — that is carta-portfolio-analytics-routing.
-  Do NOT use for NAV or general fund financial queries — use carta-explore-data.
-  Do NOT use for the full Carta Home surface (capital activity, schedule of investments,
-  news) — use carta-home-build; this skill is the fund-performance page alone.
-version: 1.0.0
+  Fund performance for a Carta firm. Publishes a standalone Fund Performance live
+  artifact that fetches its data live from Carta each time it is opened, and answers
+  peer-benchmark questions in chat: a fund's Net IRR, TVPI, MOIC or DPI against peer
+  cohorts, with its percentile standing.
+  Page triggers: "fund performance dashboard", "fund performance artifact",
+  "build me a fund performance page", "standalone fund performance view".
+  Chat triggers: "performance benchmark", "peer comparison", "fund percentile",
+  "IRR vs peers", "how does my fund stack up", "what percentile is our TVPI?".
+  A request for benchmarks specifically follows references/benchmarks.md.
+  Do NOT use for cap table market benchmarks (option pool sizes, SAFE terms) — use
+  carta-market-benchmarks in carta-cap-table. Do NOT use for NAV or general fund
+  financial queries — use carta-explore-data. Do NOT use for the full Carta Home
+  surface — use carta-home-build.
+version: 1.1.0
 model: inherit
 allowed-tools:
   - Read
   - Artifact
+  # Peer-benchmark answers in chat (references/benchmarks.md) query the warehouse through
+  # whichever Carta connector prefix the host registers.
+  - mcp__carta__call_tool
+  - mcp__carta__read_tool
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
+  - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   # Step 1: render the page (stamps the Carta Home link in).
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/scripts/render-artifact.py" *)
   # Step 2, before republishing over an existing page: find the user's changes and carry
@@ -31,11 +46,23 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.6</carta-plugin>
+<carta-plugin>carta-investors:7.0.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
-# Fund Performance Dashboard
+# Fund Performance
+
+Two modes. Pick one from the request:
+
+| The user wants | Mode |
+|---|---|
+| A fund performance dashboard, page or artifact to keep open and re-share | **Page** — Steps 1–3 below |
+| An answer in chat on how a fund compares to its peers: benchmarks, percentile, "IRR vs peers", "how does Fund II stack up" | **Peer benchmarks in chat** — read `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/references/benchmarks.md` (this skill's own `references/`) and follow it from its own entry point, with the user's message as context. Do not render or publish the page for these |
+
+When a message could be either ("show me fund performance vs peers"), answer the benchmark
+question in chat first and offer the page.
+
+## Page
 
 Publishes a self-contained live artifact showing one firm's fund performance. The
 artifact resolves the firm context at runtime through `window.claude.use("mcp")`, so no
@@ -150,6 +177,7 @@ carta-fund-performance/
   SKILL.md
   references/
     artifact.html     ← self-contained page: inline Chart.js, CSS and JS
+    benchmarks.md     ← peer-benchmark answers in chat: query, percentile bands, presentation
   scripts/
     customizations.py  ← finds what a user changed on their published page
     render-artifact.py ← stamps the Carta Home link into the page

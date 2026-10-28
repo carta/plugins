@@ -196,8 +196,7 @@ Reached in the same cases as Step 1 (a MISS, or `<FORCE_REFRESH>`) — never
 on a WARM HIT or a soft hit, both of which already know the entity.
 
 Call `mcp__<SERVER>__read_tool(name="fa__list__entities", arguments={"entity_types": "management_co,fund"}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})`.
-`entity_types` takes a comma-separated string, not a list — see `carta-soi`'s and
-`carta-portfolio-analytics-routing`'s `fa__list__entities` calls for the same convention.
+`entity_types` takes a comma-separated string, not a list — see `carta-soi`'s `fa__list__entities` call for the same convention.
 
 **Always pass `entity_types` — never fetch this unfiltered.** A firm with many
 `GP Entity`/`SPV`/`Elimination Entity`/`Holding` records (none of which this skill

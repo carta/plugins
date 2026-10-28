@@ -1,7 +1,11 @@
 {
   "carta-home-build": {
-    "version": "1.18.7",
+    "version": "1.18.8",
     "headline": "What's new on Carta Home describes each featured skill by what you get from it."
+  },
+  "carta-soi": {
+    "version": "1.4.9",
+    "headline": "SOI now has an Investment Cash Flows tab: every dated investment, proceed and terminal value behind Deal IRR, grouped by company and fund, following the same fund, as-of and exited filters."
   },
   "carta-workhub-build": {
     "version": "1.10.6",

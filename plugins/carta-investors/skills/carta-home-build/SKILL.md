@@ -35,7 +35,6 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   # The dashboard fan-out (Step 5). A skill that isn't installed is skipped.
   - Skill(carta-investors:carta-soi)
-  - Skill(carta-investors:carta-portfolio-analytics-routing)
   - Skill(carta-investors:carta-fund-performance)
   - Skill(carta-investors:carta-lp-summary)
   - AskUserQuestion
@@ -53,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.6</carta-plugin>
+<carta-plugin>carta-investors:7.0.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -188,10 +187,8 @@ Every firm gets the first two; a Fund Admin firm adds LP summary
 | `requires` | build-time only: the `get_current_user` flag that must be `true` for Step 5 to build it. Optional. |
 
 **`prompt` is the contract, and `buildSkill` follows it.** The same sentence routes to
-whichever skill owns that dashboard in the current install — `carta-soi` here, and
-`carta-portfolio-analytics-routing` in the published `carta/plugins` tree, where `carta-soi`
-does not exist. `buildSkill` lists both so the build-time fan-out reaches the same owner the
-prompt would: Step 5 takes the first candidate that resolves. Home never needs to know which.
+whichever skill owns that dashboard, and `buildSkill` names it so the build-time fan-out
+reaches the same owner the prompt would. Home never needs to know which.
 
 **Home publishes before its dashboards exist.** It goes out with each launcher marked as
 building, the fan-out runs, then home redeploys over itself with the real links — a
@@ -669,8 +666,7 @@ once is the actual fix for a slow fan-out — not a longer wait.
 before a slow-but-successful build finishes is worse than the build simply taking a while,
 because it leaves that dashboard's URL uncaptured and Step 6 redeploys without it.
 
-A router candidate serves several dashboards, so it needs the entry's `prompt` to know
-which one to build. Lead with that sentence, then the same context every candidate gets.
+Lead each request with the entry's `prompt` sentence, then the same context every candidate gets.
 
 Tell each one the firm is already settled, hand it its existing URL from Step 2, and hand
 it the home URL — the one Step 4 returned, or Step 2's when Step 4 was skipped. The
@@ -698,8 +694,8 @@ changes over."
 `carta-fund-performance` resolves its own firm at runtime and needs no context passed —
 it still takes the existing URL so its link stays stable, and the home URL for its
 `--home-url`. It is the `perf` entry's only
-candidate: the router's benchmarks route answers in chat rather than publishing an
-artifact, so an install without it leaves that card on its prompt.
+candidate: no other skill publishes the fund performance page, so an install without it
+leaves that card on its prompt.
 
 **If every candidate is missing, or the one that ran errors or returns no URL: skip the
 entry, say nothing, and move on.** Do not retry it, do not reach for a skill outside the

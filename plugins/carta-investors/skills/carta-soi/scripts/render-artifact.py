@@ -75,15 +75,9 @@ from live_artifact_render import (  # noqa: E402
 )
 from live_artifact_render.customizations import stamp_baseline  # noqa: E402
 
-# Two ship locations with different template offsets; probing both keeps the
-# carta-soi and carta-portfolio-analytics-routing copies byte-identical.
-TEMPLATE_CANDIDATES = (
-    Path(__file__).resolve().parent.parent / "references" / "artifact.html",
-    Path(__file__).resolve().parent.parent / "artifact.html",
-)
+TEMPLATE = Path(__file__).resolve().parent.parent / "references" / "artifact.html"
 
-# The two ship locations sit at different depths under the plugin, so walk up to the
-# .claude-plugin directory rather than counting parents.
+# Walk up to the .claude-plugin directory rather than counting parents.
 def _plugin_root():
     for parent in Path(__file__).resolve().parents:
         if (parent / ".claude-plugin" / "skill-versions.json").exists():
@@ -269,16 +263,11 @@ def main() -> int:
         )
         return 1
 
-    src = next((c for c in TEMPLATE_CANDIDATES if c.is_file()), None)
-    if src is None:
-        print(
-            "error: template artifact.html not found at any of: "
-            + ", ".join(str(c) for c in TEMPLATE_CANDIDATES),
-            file=sys.stderr,
-        )
+    if not TEMPLATE.is_file():
+        print(f"error: template artifact.html not found at {TEMPLATE}", file=sys.stderr)
         return 1
 
-    content = inline_tracker(src.read_text(encoding="utf-8"), "carta-soi")
+    content = inline_tracker(TEMPLATE.read_text(encoding="utf-8"), "carta-soi")
     missing = [p for p in PLACEHOLDERS if p not in content]
     if missing:
         print(

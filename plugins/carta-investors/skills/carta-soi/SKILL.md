@@ -1,3 +1,51 @@
+---
+name: carta-soi
+description: >-
+  Display a fund's Schedule of Investments (SOI) as a Live Artifact in Cowork. The artifact is firm-scoped — it loads every fund the user has access to in the firm and presents them in a header dropdown for one-click switching. Use when asked for the SOI, fund holdings, what a fund is invested in, or a portfolio breakdown. Do NOT use for general fund metrics (NAV, IRR, TVPI, DPI) or ad-hoc warehouse queries — use carta-explore-data instead.
+version: 1.4.1
+model: inherit
+allowed-tools:
+  # The only source for a connector's name
+  - list_connectors
+  # The connector check's observed call.
+  - mcp__carta__welcome
+  - mcp__claude_ai_Carta__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
+  - mcp__carta__call_tool
+  - mcp__carta__read_tool
+  - mcp__carta__set_context
+  - mcp__carta__list_contexts
+  - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__read_tool
+  - mcp__claude_ai_carta__set_context
+  - mcp__claude_ai_carta__list_contexts
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
+  - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  # Cowork
+  - Artifact
+  # Local execution
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" *)
+  - Bash(pwd)
+  - Write
+  # Finds and carries the user's own changes into a rebuilt page (references/keep-customizations.md)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/customizations.py" *)
+  - Edit
+  # Interaction
+  - AskUserQuestion
+  - ToolSearch
+---
+
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:7.0.0</carta-plugin>
+
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -86,11 +134,15 @@ two — so for a one-fund firm, use that fund's uuid regardless of the table abo
 
 The rendered artifact **always** carries fund-of-funds look-through support — drill-down into `UNDERLYING_INVESTMENTS`/`_HISTORY`, bulk prefetch, tranche merging, cross-fund search, and the as-of quarter selector are baked into `artifact.html`/`render-artifact.py` and self-gate on the data: a company row only gets an expand affordance when its own `ASSET_CLASS_TYPE = 'FUND_INVESTMENT'` positions exist for that fund. There is nothing to check and nothing to load before Step 4 — the template is identical for every firm.
 
-The only thing this step affects is **narration**. If you already know (from the user's request, or from having looked at this firm before) that it holds LP interests in other funds, you may mention look-through in the Step 6 bullet summary (e.g. "drill into each fund-of-funds position to see the underlying portfolio"). Otherwise say nothing about it — don't run a probe query just to decide whether to mention it. See `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/lookthrough.md` for the query patterns and data-quality notes behind this feature, useful for debugging or explaining behavior, not for deciding whether to render it.
+The only thing this step affects is **narration**. If you already know (from the user's request, or from having looked at this firm before) that it holds LP interests in other funds, you may mention look-through in the Step 6 bullet summary (e.g. "drill into each fund-of-funds position to see the underlying portfolio"). Otherwise say nothing about it — don't run a probe query just to decide whether to mention it. See `${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/references/lookthrough.md` for the query patterns and data-quality notes behind this feature, useful for debugging or explaining behavior, not for deciding whether to render it.
 
 ### Step 2c — Vintage dates and duplicate-fund cleanup
 
-Run one dwh query, scoped to every fund UUID from Step 2:
+Run one dwh query, scoped to every fund UUID from Step 2, via the Carta MCP connector —
+`read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})` — not a `snow`
+CLI or any other Snowflake client. `FUND_ADMIN.FUNDS` is reachable through this tool the
+same way `carta-explore-data`'s semantic-layer queries reach other `FUND_ADMIN.*` tables;
+no separate Snowflake connection or CLI install is needed or expected.
 
 ```sql
 SELECT FUND_UUID, FUND_NAME, VINTAGE_DATE, FUND_SIZE, IS_ADMINISTERED_BY_CARTA
@@ -102,7 +154,6 @@ Use the result for two things:
 
 1. **Vintage dates.** Merge `VINTAGE_DATE` onto the matching fund by `FUND_UUID` — this is where `vintage_date` for Step 4a actually comes from; `fa__list__entities` doesn't return it. Omit the key for a fund whose `VINTAGE_DATE` is null rather than fabricating one.
 2. **Duplicate fund records.** `FUND_ADMIN.FUNDS` can have multiple UUIDs sharing the exact same `FUND_NAME` — usually one real, Carta-administered fund plus dead placeholders. When a name collides across ≥2 rows and **exactly one** of them is a clear "real" record (`IS_ADMINISTERED_BY_CARTA = TRUE` and at least one of `VINTAGE_DATE`/`FUND_SIZE` non-null) while every other colliding row is a clear dead placeholder (`IS_ADMINISTERED_BY_CARTA = FALSE` and both `VINTAGE_DATE` and `FUND_SIZE` null), drop the placeholders from the Step 4a funds list — don't render them as separate dropdown entries. If a name collision doesn't fit that clean pattern (e.g. two rows both look administered, or the signal is ambiguous), leave every colliding row in — don't guess which one to drop.
-
 This step needs the firm's `FUND_UUID`s from Step 2, so it runs after Step 2, not in parallel with it.
 
 ### Step 3 — Checks before building
@@ -149,19 +200,20 @@ The dropdown (and each family's members) sorts by `vintage_date` descending — 
 
 **4b.** Locate the script:
 
-The script is `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py`. Bash reaches that path on every surface, Cowork included, so do not search for it.
+The script is `${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py`. Bash reaches that path on every surface, Cowork included, so do not search for it.
 
 **4c.** Render. Run it on one line, exactly as written below. `allowed-tools` matches the command text, so a shell variable, a different path, or a line break fails the allowlist and the call has to be approved by hand each time:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py" "<CWD>/<firm-slug>-fund-soi-collection.html" "<firm-slug>-fund-soi-collection" "<CARTA_MCP_SERVER>" "<FIRM_UUID>" "<FIRM_NAME>" "<CWD>/<firm-slug>-funds.json" "<INITIAL_FUND_UUID>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" "<CWD>/<firm-slug>-fund-soi-collection.html" "<firm-slug>-fund-soi-collection" "<CARTA_MCP_SERVER>" "<FIRM_UUID>" "<FIRM_NAME>" "<CWD>/<firm-slug>-funds.json" "<INITIAL_FUND_UUID>"
 ```
 
-**The copy fallback.** Use it when `uv run` fails because the script file does not exist (not
-on a validation error). Bash could not reach the plugin mount, but `Read` can: copy both files
-into `<CWD>/soi-render/` as `scripts/render-artifact.py` and `references/artifact.html`, run
-that copy, and report that the fallback fired so the mount path gets fixed. One attempt — if
-it fails too, stop rather than hand-writing the HTML.
+If `uv run` fails because the script file does not exist (not on a validation
+error), bash could not reach the plugin mount but `Read` can. Copy both files into
+`<CWD>/soi-render/` as `scripts/render-artifact.py` and
+`references/artifact.html`, run that copy, and report that the fallback fired so
+the mount path gets fixed. One attempt — if it fails too, stop rather than
+hand-writing the HTML.
 
 Positional arguments:
 
@@ -300,6 +352,6 @@ A tab strip above the table switches between **Holdings** (the default) and **In
 
 ## Caveats
 
-- **The connector display name must match what the viewer has.** A published page runs for whoever opens it, and the grant names the connector by display name. If a viewer's Carta connector carries a different display name (a test connector, say), every call rejects with `server_not_connected`. Re-invoke this skill to republish against the right name.
+- **The connector display name must match what the viewer has.** A published page runs for whoever opens it. If a viewer's Carta connector carries a different display name, every call rejects with `server_not_connected`; the page shows that plainly. Re-invoke this skill to republish against the right name. In Cowork, `list_connectors` returns empty — see `gate-carta-connector-name.md`, Step 1a.
 - **Session re-initialization.** When a `set_context` or dwh call returns an error that mentions `welcome`, the artifact briefly shows "Reconnecting to Carta…" above the shimmer, calls `welcome` itself, and retries the original call once.
 - **Cowork-only.** Live Artifacts only render in Cowork. If the user is in Claude Code or Claude Desktop, explain that the artifact view requires Cowork. For inline data answers, point them at the `carta-explore-data` skill.

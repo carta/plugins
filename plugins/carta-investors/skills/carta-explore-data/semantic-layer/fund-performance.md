@@ -251,7 +251,7 @@ Caveats:
   `deal_irr` and `net_lp_irr` mean the same thing as on `AGGREGATE_FUND_METRICS`.
 - For peer/percentile benchmark comparisons (not just the fund's own historical values), this
   table also has percentile columns (`dpi_5`...`dpi_95`, `net_lp_irr_5th`...`net_lp_irr_95th`,
-  etc.) — for that use case prefer `carta-investors:carta-performance-benchmarks`.
+  etc.) — for that use case prefer `carta-investors:carta-fund-performance`.
 
 ## Query 3 — Fund Performance Trend Over Time
 

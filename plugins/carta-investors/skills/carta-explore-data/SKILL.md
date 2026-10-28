@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.6</carta-plugin>
+<carta-plugin>carta-investors:7.0.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -174,7 +174,7 @@ Use this table to pick the right context file before running any query:
 | Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss                                                                                                                                | `investments.md`                                  | `AGGREGATE_INVESTMENTS`, `AGGREGATE_INVESTMENTS_HISTORY` (point-in-time)  |
 | Per-LP/GP data — commitments, contributions, capital accounts, partner rollforward, LP count                                                                                                               | `partner-data.md`                                 | `PARTNER_DATA`, `PARTNER_MONTHLY_NAV_CALCULATIONS`                        |
 | Portfolio company financials — revenue, ARR, headcount, KPIs                                                                                                                                               | `company-financials.md`                           | `COMPANY_FINANCIALS`                                                      |
-| Benchmark percentile rankings vs peers                                                                                                                                                                     | Use `carta-investors:carta-performance-benchmarks` | `TEMPORAL_FUND_COHORT_BENCHMARKS`                                         |
+| Benchmark percentile rankings vs peers                                                                                                                                                                     | Use `carta-investors:carta-fund-performance` | `TEMPORAL_FUND_COHORT_BENCHMARKS`                                         |
 | **The firm's own entities** — list of funds, SPVs, syndicate SPVs, GP entities, management companies (names, entity type, links)                                                                         | —                                                 | `fa__list__entities` — see "Listing the firm's entities" under Step 0 (set `entity_types` to the types asked about) |
 | Fund list with metrics, or entity type as a column of a DWH result                                                                                                                                                                       | Query `ALLOCATIONS` directly                      | `ALLOCATIONS`                                                             |
 | Loans, Loan Ops (loans, lender positions)                                                                                                                                                                  | Query `LOAN_OPS.LOAN` / `LOAN_OPS.LENDER_POSITION` directly — **firm-scoping rule below is MANDATORY** | `LOAN_OPS.LOAN`, `LOAN_OPS.LENDER_POSITION`                               |

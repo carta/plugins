@@ -3,12 +3,41 @@ name: carta-manco-reporting
 description: >-
   Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under ANY verb (spin up, open, launch, build, create, run) — P&L drill-down, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. DISAMBIGUATION: "build" means render this dashboard, not draft a budget, so a microapp/dashboard ask ALWAYS routes here, firm named or not; a generic ManCo ask naming a firm routes here; firm-absent with no visual surface → carta-manco. NOT FOR: budgets/actuals (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch (a developer tool, not this dashboard).
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
-version: 0.5.0
+version: 0.6.0
 # `version` gates delivery of app/src: each user runs their own copy, and a change
 # reaches it only when this number goes up. Bump it in every PR that changes a file
 # under app/src outside __tests__ — patch merges silently, minor/major asks the user
 # which `whats-new` entries to take. Rules: app/README.md → "Shipping an app/src change".
 whats-new:
+  - summary: "Ask Claude about this report, or pin a chart/figure and ask about just that (Chat + Pinpoint), with the conversation kept across the reload after an edit; plus a firm chooser and a screen for a firm with no ManCo entity"
+    files:
+      - shell/chatFeature.js
+      - shell/hostedApp.js
+      - ui/ChatPanel.jsx
+      - ui/ChatRail.jsx
+      - ui/AskClaudeButton.jsx
+      - ui/ThemeToggleButton.jsx
+      - ui/theme.js
+      - ui/markdown.jsx
+      - ui/components.jsx
+      - pinpoint/capture.js
+      - pinpoint/findAndMark.js
+      - pinpoint/inspect.js
+      - pinpoint/mancoContext.js
+      - App.jsx
+      - views/DashboardView.jsx
+      - views/BudgetActualsView.jsx
+      - views/MonthlyActualsView.jsx
+      - ui/chatPersistence.js
+      - ui/LoadingScreen.jsx
+      - shell/reloadPage.js
+      - shell/FirmChooser.jsx
+      - shell/NoMancoEntity.jsx
+      - shell/BudgetImport.jsx
+      - shell/budgetUpload.js
+      - state/firmParam.js
+      - state/useLoadFirm.js
+      - state/useReports.js
   - summary: "Budget vs Actuals by month for workbooks that state months, with a Period control"
     files:
       - state/useDrilldown.js
@@ -98,7 +127,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.122.6</carta-plugin>
+<carta-plugin>carta-investors:7.0.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

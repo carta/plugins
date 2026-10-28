@@ -127,6 +127,7 @@
     ]
   },
   "carta-fund-performance": null,
+
   "carta-gp-cash-reconciliation": {
     "category": "fund-admin",
     "name": "Answer cash reconciliation questions",
@@ -176,20 +177,6 @@
       "Spin up the portfolio analytics app for {{FIRM}}"
     ]
   },
-  "carta-portfolio-analytics-routing": {
-    "category": "portfolio",
-    "name": "Schedule of investments & performance",
-    "order": 10,
-    "prompts": [
-      "Show me the schedule of investments for my firm",
-      "Show me the TVPI, DPI, MOIC and IRR for my funds",
-      "How do our funds compare to peer benchmarks?"
-    ],
-    "whatsNewCopy": {
-      "headline": "View each fund's holdings and its peer ranking",
-      "body": "Opens a refreshable Schedule of Investments from Carta data in your sidebar, and ranks fund IRR, TVPI and DPI against peers of the same vintage."
-    }
-  },
   "carta-portfolio-valuations": {
     "category": "portfolio",
     "name": "Portfolio valuations",
@@ -203,6 +190,7 @@
       "body": "Opens your Carta portfolio valuations dashboard, shows which companies need a new valuation, and creates drafts for one company or many in a single pass."
     }
   },
+  "carta-soi": null,
   "carta-spa-audit": {
     "category": "portfolio",
     "name": "SPA coverage audit",
