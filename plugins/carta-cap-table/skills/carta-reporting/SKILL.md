@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.2</carta-plugin>
 
 # Custom Reports
 
@@ -78,6 +78,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - "Generate a report of employees with unvested RSUs with a final vesting date past 2027, and include their current fully diluted ownership"
 - "Help me build a cap table report — I'm not sure what's available"
 - "What can I export from the cap table?"
+- "Compare my option grant spreadsheet with Carta" (see Reconciliation below)
 - NOT: "What's [Alice]'s vesting schedule?" (use carta-grant-vesting instead)
 - NOT: "What was our Series B round?" (use carta-round-history instead)
 
@@ -95,6 +96,8 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 > - **Carta isn't connected:** The skill will prompt you to connect — just reply "ready" when done.
 > - **Reporting isn't enabled:** The skill will let you know and stop — reach out to your Carta admin.
 > - **Preview takes too long:** The skill automatically switches to the full report once it's ready.
+
+**Reconciliation:** when the user wants their own file (a spreadsheet, an HR export, a register) compared with Carta, do not build a report. Call `read_tool` with `cap_table__compute__reconciliation` once per security type, with `type` and the file's rows in `rows` (`holder`, plus `label` and the values to compare). When the file has more than 500 rows and a shell is available (Claude Code), upload it as a JSON list of the same objects with `cap_table__mutate__upload_url` (editors only) and send its key as `file_key`. Never split one file across calls: each call compares its rows with every Carta security of the type, so a split file reports false missing rows and partial totals. Show the counts, the totals and each issue; when `issues_complete` is false, say that only the first issues are shown.
 
 **Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.

@@ -27,7 +27,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.104.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -68,6 +68,9 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
   then call the command it returns with the arguments its input schema names. Do not
   guess command names or arguments.
 - For every row of a list, a table, a report or a file, load carta-reporting.
+- To compare the user's spreadsheet, HR export or register with Carta, call `read_tool`
+  with `cap_table__compute__reconciliation` once per security type with the rows. Do not
+  page through holders to compare them yourself.
 - Vesting of one grant, valuations (409A, FMV), round history, issuance and changes to
   securities have their own skills. Load the matching skill.
 
