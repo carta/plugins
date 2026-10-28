@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.1.2</carta-plugin>
+<carta-plugin>carta-investors:7.2.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -73,7 +73,7 @@ firm UUID or MCP server name is substituted at build time.
 | Section | Notes |
 |---|---|
 | Overview graph | Net IRR, TVPI or DPI per fund, quarter by quarter, each with a dashed peer-median (P50) line when the cohort has one — modelled on Carta Home's Fund Performance tile, reading the same measures as the table (LP net IRR, LP DPI, LP TVPI). A "Compare funds" legend shows or hides each fund with an eye toggle (up to five), starting on the 3 largest funds by NAV; filters pick the metric, the period (1Y / 3Y / All) and whether the peer median shows. Hidden when no fund has quarterly history |
-| All-funds table | Fund name, Net IRR, TVPI, DPI and RVPI (LP only, as Carta's Fund Performance tab labels them), MOIC, Total value, NAV, Contributions, Distributions — top 50 funds by NAV, sortable by any column; a click anywhere on a row opens the fund |
+| All-funds table | Fund name, Net IRR, TVPI, DPI and RVPI (LP only, as Carta's Fund Performance tab labels them), MOIC, Total value, NAV, Contributions, Distributions, then the app's own fund-list columns: Vintage year, Partners (limited partners plus the general partner) and Total size (compact, one decimal: $88.2M) — top 50 funds by NAV, sortable by any column; a click anywhere on a row opens the fund. Net IRR shows two decimals, as the app does |
 | Per-fund detail view | KPI strip with a Net IRR callout (net to LPs against the fund's gross IRR, and the gap in percentage points), then one chart of the fund against its vintage cohort — P25–P75 shaded, P50 dashed, a Net IRR / TVPI / DPI / MOIC switch — with a line naming the fund's quartile; below, a table of the LP-only figures against the total fund, its TVPI, DPI and RVPI worked out from the dollar rows so each column reconciles; MOIC is Carta's |
 | Fund family view | Opens on **Fund family**: funds sharing a `FUND_FAMILY_ID` (`FUND_ADMIN.FUNDS`) are one row labelled with the family name; funds with no family stay as themselves. A "View" toggle (shown only when the firm has a family) switches to **Underlying funds**. The graph, fund switcher and detail page all work on the family. See "Fund families" below |
 | Fund switcher | The Schedule of Investments' "Fund" picker, listing the firm's funds: picking one opens its detail. On a fund, "← All funds" in place of the firm name returns to the list |
@@ -87,14 +87,15 @@ currency renders bare numbers — the artifact never assumes a currency.
 
 ## Fund families
 
-A family row is built from its funds' latest month-end rows in `AGGREGATE_FUND_METRICS`:
+A family row is built from its funds' latest month-end rows in `AGGREGATE_FUND_METRICS` (that table keeps only the latest refresh, so history comes from the quarterly benchmark table, below):
 
-- **Summed:** Committed capital, Total value, NAV, Contributions, Distributions, Invested (cost basis) and the LP-only dollar columns. Uncalled capital is committed minus contributions, so it is the sum too. A column any fund lacks is blank for the family, never a short total.
+- **Summed:** Committed capital (the list's Total size), Total value, NAV, Contributions, Distributions, Invested (cost basis), Partners and the LP-only dollar columns. Uncalled capital is committed minus contributions, so it is the sum too. A column any fund lacks is blank for the family, never a short total. A family's Vintage year is blank, as in the app: its funds have different ones.
 - **Recomputed, never averaged:** LP TVPI, DPI and RVPI are the summed LP dollars over summed LP paid-in; MOIC is the funds' summed value (MOIC × cost of investments) over summed cost.
-- **Net IRR:** IRRs can't be added or averaged, so the family shows Carta's own family Net IRR, the figure the app's fund list shows on the family row. The page makes one `fa:get:fund-irr` read with `family: true` on one member fund, as of the funds' latest month-end (today while that month is still running). If it fails, the family reads N/A with a note. The family has no quarterly Net IRR line on either chart.
+- **Net IRR:** IRRs can't be added or averaged, so the family shows Carta's own family Net IRR, the figure the app's fund list shows on the family row. The page makes one `fa:get:fund-irr` read with `family: true` on one member fund, as of the funds' latest month-end (today while that month is still running). If it fails, the family reads N/A with a note. The family's Net IRR by quarter is read the same way, one `fa:get:fund-irr` read per quarter-end by the family's Carta id (four at a time, newest 40 quarters), and drawn on the family's own page once it arrives; the overview graph has no Net IRR line for a family.
 - **Gross IRR:** not shown for a family; gross IRRs can't be added or averaged either.
 - **LP MOIC:** blank for a family; it has no published formula to rebuild from the summed columns.
-- **Quarterly series:** built from the funds' month-end rows. At each finished quarter every fund that has started contributes its latest row in or before the quarter, and the ratios are recomputed from the sums.
+- **Quarterly series (TVPI and DPI):** each fund's own quarterly LP TVPI and DPI (`TEMPORAL_FUND_COHORT_BENCHMARKS`), combined at each finished quarter weighted by that fund's LP paid-in capital at the quarter-end (`PARTNER_MONTHLY_NAV_CALCULATIONS`, LP rows, `CUMULATIVE_TOTAL_CONTRIBUTIONS`): the pooled value over the pooled paid-in. A fund with no paid-in yet adds nothing; a fund with paid-in but no ratio or weight leaves that quarter empty, so a fund is never silently left out. Rows are dated by quarter-end, as the warehouse dates its own, so a family shares the overview graph's axis with the funds.
+- **MOIC by quarter:** none for a family; it needs each fund's cost by quarter, which the warehouse does not keep. Its current MOIC is in the table.
 - **Peer benchmark:** percentiles can't be merged across cohorts, so the family uses one fund's cohort: the earliest vintage (larger fund on a tie). The chart names it.
 - **Currency:** a family is combined only when every fund reports the same, non-empty `FUND_REPORTING_CURRENCY`. Different currencies, or any fund (even all of them) with none, leave the family as its funds, listed separately with a note.
 

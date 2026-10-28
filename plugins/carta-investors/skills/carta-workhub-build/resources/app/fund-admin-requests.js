@@ -425,15 +425,15 @@ function farTaskTitle(w) {
 
 // An open task carries pending_actor; a finished workflow carries status. The
 // request-only sources carry no template, so a row without one is a request.
-// `reviews` is whether this viewer may open the capital call review panel; `appViews`
-// are the MCP App views they may open.
-function farNormalizeWorkflow(w, reviews = true, appViews = new Set()) {
+// `reviews` is whether this viewer may open the capital call review panel; `apps` are
+// carta-mcp's Workhub task apps, how each kind of task opens in a chat for this viewer.
+function farNormalizeWorkflow(w, reviews = true, apps = []) {
   const closed = FAR_FINISHED_STATUSES.includes(w.status);
   const isRequest = (w.workflow_template ?? FAR_REQUEST_TEMPLATE) === FAR_REQUEST_TEMPLATE;
-  // A review task opens the MCP App when this viewer has it, else the capital call
-  // panel, else Carta. Either way it is the GP's turn: the active-task list holds
+  // A review task opens in a chat when this viewer has an opening for it, else the
+  // capital call panel, else Carta. Either way it is the GP's turn: the active-task list holds
   // only decisions the GP owes.
-  const reviewApp = ccrIsReviewTask(w) ? farTaskAppFor(w, appViews) : null;
+  const reviewApp = ccrIsReviewTask(w) ? farTaskAppFor(w, apps) : null;
   const ccr = !reviewApp && reviews && ccrIsReviewTask(w) ? ccrTargetFor(w) : null;
   const pending = ccr || reviewApp ? 'pending-customer' : farPendingState(w);
   return {
@@ -456,28 +456,19 @@ function farNormalizeWorkflow(w, reviews = true, appViews = new Set()) {
     ccr,
     // A package task always opens the tracker for its period, never Carta.
     frt: frtTargetFor(w),
-    // A task waiting on the GP that has an MCP App opens it in a new chat.
-    app: pending === 'pending-customer' && !closed ? (reviewApp ?? farTaskAppFor(w, appViews)) : null,
+    // A task waiting on the GP that has a companion page or MCP App opens it in a new chat.
+    app: pending === 'pending-customer' && !closed ? (reviewApp ?? farTaskAppFor(w, apps)) : null,
   };
 }
 
-// The MCP App a task opens, with the params its row fills, or null when its template (and
-// task step, for an app limited to some) has no app, this viewer may not open the view, or the row lacks a field a param needs.
-function farTaskAppFor(w, appViews) {
-  const app = TASK_APPS.find(a => a.template === w.workflow_template && appViews.has(a.view)
-    && (!a.tasks || a.tasks.includes(w.task_template)));
-  if (!app) return null;
-  const params = appParamsFrom(app.params, w);
-  if (!params) return null;
-  return { view: app.view, params, label: app.label, entity: w.entity_name };
-}
-
-// The task list is not gated by an app's flag, so ask which views this viewer may open,
-// and for an app that names one, whether it may also call the command its reads need.
-async function farTaskAppViews() {
-  const open = await Promise.all(TASK_APPS.map(async a =>
-    (await mcpViewAvailable(a.view)) && (!a.requires || (await mcpCommandAvailable(a.requires)))));
-  return new Set(TASK_APPS.filter((_, i) => open[i]).map(a => a.view));
+// How a task opens in a chat, with the params its row fills, or null when no entry covers
+// its template (and task step, for an entry limited to some) or the row fills none of the
+// entry's openings. A task row names no firm, so the firm the Workhub shows fills firm_uuid.
+function farTaskAppFor(w, apps) {
+  const entry = apps.find(a => a.template === w.workflow_template
+    && (!a.tasks?.length || a.tasks.includes(w.task_template)));
+  const opening = entry ? taskOpeningFor(entry, Object.assign({ firm_uuid: _benchmarkFirmId }, w)) : null;
+  return opening ? Object.assign(opening, { label: entry.label, entity: w.entity_name }) : null;
 }
 
 let _farFirmName = null;   // names the firm in a prompt that opens an MCP App chat
@@ -784,9 +775,9 @@ async function farFetchQueue(onPart, failures = {}) {
 }
 
 // The first load paints each tab as its reads land, until the whole queue replaces it.
-function farPaintParts(parts, reviews, appViews) {
+function farPaintParts(parts, reviews, apps) {
   if (_farRows !== null) return;
-  const rows = ccrQueueRows(farComposeQueue(parts).map(w => farNormalizeWorkflow(w, reviews, appViews)))
+  const rows = ccrQueueRows(farComposeQueue(parts).map(w => farNormalizeWorkflow(w, reviews, apps)))
     .filter(r => farTabRead(parts, r.tab));
   _farEarly = { parts, rows };
   farPickFirstTab();
@@ -805,20 +796,20 @@ async function farFetchRequests({ keepOnFailure = false } = {}) {
   // Local, so a read still out from an earlier load cannot report into this one.
   const failures = {};
   try {
-    const flags = Promise.all([ccrReviewAvailable(), farTaskAppViews()]);
+    const flags = Promise.all([ccrReviewAvailable(), workhubTaskApps()]);
     const onPart = _farRows === null
-      ? (parts) => flags.then(([reviews, appViews]) => farPaintParts(parts, reviews, appViews))
+      ? (parts) => flags.then(([reviews, apps]) => farPaintParts(parts, reviews, apps))
         .catch(e => console.error('[far] early paint —', e))
       : null;
     let rows = null;
     let reviews = true;
-    let appViews = new Set();
+    let apps = [];
 
-    if (_benchmarkFirmId) [rows, [reviews, appViews]] = await Promise.all([farFetchQueue(onPart, failures), flags]);
+    if (_benchmarkFirmId) [rows, [reviews, apps]] = await Promise.all([farFetchQueue(onPart, failures), flags]);
 
     if (rows) {
       _farPartial = false;
-      _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, appViews)).filter(r => r.id != null);
+      _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, apps)).filter(r => r.id != null);
       // With the whole task list failed, the requests filed from here still show.
       if (failures.todo && failures.progress) {
         const shown = new Set(_farRows.map(r => String(r.id)));
@@ -1070,7 +1061,7 @@ function farDisplayGroupIcon(id, size) {
     + ` aria-hidden="true">${icon}</svg>`;
 }
 
-// The app itself cannot run in the page, so the GP sends a prefilled prompt in a new chat.
+// Neither the page nor the app can run in the Workhub, so the GP sends a prefilled prompt in a new chat.
 function farOpenTaskApp(app) {
   trackWorkhub('click', 'CartaWorkhub.Queue.OpenAppInChat');
   openClaudeChat(frtAppPrompt(app, _farFirmName));

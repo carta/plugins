@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.1.2</carta-plugin>
+<carta-plugin>carta-investors:7.2.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -270,48 +270,41 @@ not inside a fund-data dashboard.
   multi-package entities hits it sooner, since every package adds its own share of the reply.
   That is accepted for now.
 
-  **Task MCP Apps open in a new chat.** A needs-action tracker button whose task has a Carta MCP
-  App (today, cash reconciliation, on the entity's own fund) opens a **new Claude Desktop chat**
-  instead of Carta, prefilled with a prompt that names the app, the entity, the firm and the
-  exact `view_remote` call; the GP sends it and Claude renders the app there. An artifact cannot
-  post into a chat or render an app itself, so the app never runs inside the Workhub.
-  `openClaudeChat` in `carta-workhub.app.js` opens `claude://claude.ai/new?q=<prompt>` and also
-  tries to put the prompt on the clipboard, for when the link handler does not fire; the toast
-  says whether the copy worked. A small ↗ beside
-  the button keeps the cell's Carta link.
+  **Tasks open their companion page or MCP App in a new chat.** A needs-action tracker button
+  or queue card whose task has a companion page or a Carta MCP App opens a **new Claude Desktop
+  chat** instead of Carta, prefilled with a prompt that names the page or app, the entity, the
+  firm and the exact call; the GP sends it. A companion opening has Claude call the read with
+  `fetch` and open the `companion_url` it returns in the browser pane beside the chat, as the
+  read's `next_step` says; an app opening has Claude call `view_remote`. A companion page with
+  a skill of its own in `COMPANION_SKILLS` (`carta-workhub.config.js`, by column or template)
+  has the prompt name that skill too, so Claude drives the page with its commands and rules: the
+  Financial Report column's package pages name `carta-investors:financial-package-companion`,
+  cash reconciliation `carta-investors:carta-gp-cash-reconciliation`, and an SOI review card
+  `carta-investors:open-soi-review`. A queue row names no firm, so the firm the Workhub shows
+  fills `firm_uuid` (the SOI review read takes it). An artifact cannot post
+  into a chat or render an app itself, so neither runs inside the Workhub. `openClaudeChat` in
+  `carta-workhub.app.js` opens `claude://claude.ai/new?q=<prompt>` and also tries to put the
+  prompt on the clipboard, for when the link handler does not fire; the toast says whether the
+  copy worked. On a tracker cell, a small ↗ beside the button keeps the cell's Carta link; a
+  queue card with an opening has no Carta link of its own, and is marked **Claude ↗**.
 
-  carta-mcp decides which cells: the tracker asks `discover` about `fa:list:workhub-task-app`
-  once, and only when that answers reads, through `fetch`, the tracker columns with an app, each
-  with its view and the entity field that fills each view param. A row that is one package
-  (under an entity or a family, or a family's one combined package) fills them from the entry's `package_params` instead, so the
-  Financial Report button of a package opens that package even when its fund has several
-  waiting; an entry without them gives package rows no app. The read is gated server-side,
-  and each entry by its view's own gate, so a viewer it refuses keeps every Carta link. A new app
-  is one entry in carta-mcp's registry, not a change here, and needs nothing new in the publish
-  grant: `view_remote` is called by Claude in the chat, never by the artifact.
-
-  **Queue cards open apps the same way.** A needs-action management fee review
-  (`review-management-fees`, `fa:view:gp_management_fee_review` by `fund_uuid` and the task's
-  `object_id`) or expense approval (`prepare-and-pay-expense`, `fa:view:expense_payment_review`
-  by `object_id`) opens a new chat instead of Carta. So does a cash reconciliation task
-  (`cash-reconciliation`, `fa:view:gp_cash_reconciliation`), which passes only the task's
-  `fund_uuid`: the view lists a fund's transactions, so the app opens filtered to the fund
-  that was clicked rather than on every fund. An SOI review (`review-soi-v2`,
-  `fa:view:update_investments`) passes only `fund_uuid` too: the view opens the fund's open
-  review, its period and task from that. Its boot data and commands sit behind a flag the
-  view's own does not cover, so its `TASK_APPS` entry names `requires:
-  'fa:list:firm-asset-group'`, which `farTaskAppViews` checks with `mcpCommandAvailable`; a
-  viewer without it keeps the Carta link rather than opening a chat that answers "not
-  enabled". A capital activity review (`request-capital-activity`, only its `review-capital-activity`
-  and `review-capital-activity-changes` steps, `fa:view:capital_activity_review`) passes `fund_uuid`
-  and the task's `object_id` as `capital_activity_id`, and needs `fa:get:capital-activity-review-summary`
-  too. Where the viewer has the app it replaces the in-page review panel, which stays as the fallback
-  for a viewer without it. `TASK_APPS` in
-  `resources/carta-workhub.config.js` lists them, each with the task row field that fills each view
-  param, and `farTaskAppFor` builds the prompt target with the tracker's `frtAppPrompt`. The task
-  list is not gated by the views' flags, so `mcpViewAvailable` asks
-  `discover(scope="view")` per view, and a viewer it refuses keeps the card's Carta link. A card
-  with the app has no Carta link of its own, and is marked **Claude ↗**.
+  carta-mcp decides how each task opens: `workhubTaskApps` in the tracker file asks `discover`
+  about `fa:list:workhub-task-app` once, and only when that answers reads it through `fetch`.
+  Each entry names a tracker `column` or a queue card's workflow `template` (`tasks` limits it
+  to those steps), and its `openings`, most preferred first: the companion page, then the app.
+  Each opening maps every param to the row field that fills it, and `taskOpeningFor` takes the
+  first one the clicked row fills. A tracker row that is one package (under an entity or a
+  family, or a family's one combined package) fills `package_params` instead, and an opening
+  without them is not for it. An entity or member row over a single package of its own fills an
+  opening from the entity first, then from that package. So the package review companion opens
+  on a package row and on a single-package entity, while an entity with several packages opens
+  it only on its package rows. carta-mcp lists only the openings
+  this viewer may use (each companion page per firm, each app by its view's gates and the reads
+  it needs), so a viewer it refuses keeps every Carta link. A capital activity review with no
+  opening keeps the in-page review panel. A new page or app is one entry in carta-mcp's
+  registry, not a change here, and needs nothing new in the publish grant: the read or
+  `view_remote` is called by Claude in the chat, never by the artifact. The early paint waits
+  for this read too, since it decides what each card does.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
 

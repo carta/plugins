@@ -183,32 +183,38 @@ function frtLeafColumns(financialReport, packages, rowId) {
   return { fr: cols.cell, action: cols.action, trailing: cols.trailingNote, tag: null, packageChildren: [] };
 }
 
-// ── Task MCP Apps ──────────────────────────────────────────────────────────
+// ── Task openings ──────────────────────────────────────────────────────────
 //
-// carta-mcp names the tracker columns whose tasks open in an MCP App for this viewer, and
-// which entity field fills each of the app's params. The read is gated server-side, so a
-// viewer it refuses gets none, and every cell keeps its Carta link.
+// carta-mcp names how each kind of task opens in a new chat for this viewer: a tracker
+// column or a queue card's template, with its openings, most preferred first (the companion
+// page, then the MCP App), and which row field fills each param. The read is gated
+// server-side, so a viewer it refuses gets none, and every task keeps its Carta link.
 
 const FRT_TASK_APPS_COMMAND = "fa:list:workhub-task-app";
 // Row cell -> the tracker column it shows.
 const FRT_CELL_COLUMNS = { cash: "cash_reconciliation", soi: "soi_review", fr: "financial_report" };
 
-function frtTaskAppsByColumn(res) {
-  if (!res || res.isError) return {};
+function workhubTaskAppsFrom(res) {
+  if (!res || res.isError) return [];
   for (const c of _mcpResultCandidates(res)) {
     if (c && Array.isArray(c.apps)) {
-      return Object.fromEntries(c.apps.filter(a => a && a.column && a.view).map(a => [a.column, a]));
+      return c.apps.filter(a => a && Array.isArray(a.openings) && a.openings.length);
     }
   }
-  return {};
+  return [];
 }
 
-let _frtTaskApps = null;   // read once per page: the viewer's flags do not change while it is open
-function frtTaskApps() {
-  return _frtTaskApps ??= mcpCommandAvailable(FRT_TASK_APPS_COMMAND)
+let _workhubTaskApps = null;   // read once per page: the viewer's flags do not change while it is open
+function workhubTaskApps() {
+  return _workhubTaskApps ??= mcpCommandAvailable(FRT_TASK_APPS_COMMAND)
     .then(ok => (ok ? _mcp("fetch", { command: FRT_TASK_APPS_COMMAND, params: {} }) : null))
-    .then(frtTaskAppsByColumn)
-    .catch(() => ({}));
+    .then(workhubTaskAppsFrom)
+    .catch(() => []);
+}
+
+function frtTaskApps() {
+  return workhubTaskApps()
+    .then(apps => Object.fromEntries(apps.filter(a => a.column).map(a => [a.column, a])));
 }
 
 function frtColumnLabel(column) {
@@ -226,19 +232,34 @@ function appParamsFrom(paramMap, source) {
   return params;
 }
 
-// Only a needs-action button opens an app, and only when the entity carries every field
-// the app's params come from; anything else stays as it is. A package row names its own
-// package through the app's package_params, so it opens that package even when its fund
-// has several; an app without them gives package rows none. A row carries `pkg` when it
-// stands for exactly one package: a package row, or a family row over its one own package.
+// The first of the entry's openings whose params the row fills: its companion page before
+// its app. A row that stands for one package (`pkg`) fills package_params, and an opening
+// without them is not for it. An entity row over a single package (`onePackage`) fills an
+// opening from the entity first and falls back to that package, so a page that takes a
+// package still opens there. A companion opening carries the skill that guides its page.
+function taskOpeningFor(entry, source, pkg, onePackage) {
+  const byPackage = (opening, p) =>
+    Object.keys(opening.package_params || {}).length > 0 && appParamsFrom(opening.package_params, p);
+  for (const opening of entry.openings) {
+    const params = pkg
+      ? byPackage(opening, pkg)
+      : appParamsFrom(opening.params, source) || (onePackage && byPackage(opening, onePackage));
+    if (!params) continue;
+    const skill = opening.kind === "companion" ? COMPANION_SKILLS[entry.column ?? entry.template] : null;
+    return Object.assign({ kind: opening.kind, target: opening.target, params }, skill ? { skill } : {});
+  }
+  return null;
+}
+
+// Only a needs-action button opens a chat, and only when the row fills one of the entry's
+// openings; anything else stays as it is. A row carries `pkg` when it stands for exactly
+// one package: a package row, or a family row over its one own package. An entity or member
+// row over a single package of its own carries it as `onePackage`.
 function frtWithApp(cell, column, app, row, source) {
   if (!app || !cell || cell.kind !== "action") return cell;
-  const hasPackageParams = Object.keys(app.package_params || {}).length > 0;
-  const params = row.pkg
-    ? hasPackageParams && appParamsFrom(app.package_params, row.pkg)
-    : appParamsFrom(app.params, source);
-  if (!params) return cell;
-  return Object.assign({}, cell, { app: { view: app.view, params, label: frtColumnLabel(column), entity: row.name } });
+  const opening = taskOpeningFor(app, source, row.pkg, row.onePackage);
+  if (!opening) return cell;
+  return Object.assign({}, cell, { app: Object.assign(opening, { label: frtColumnLabel(column), entity: row.name }) });
 }
 
 // Gives each cell its column's app, reading params off the row's own entity. A family row
@@ -258,12 +279,18 @@ function frtAttachApps(rows, payload, apps) {
   return rows;
 }
 
-// What the new chat is prefilled with. It names the tool, view and params verbatim so
-// Claude opens the app rather than answering in prose; the firm lets Claude switch to it
-// if the chat's Carta context differs.
+// What the new chat is prefilled with. It names the call and params verbatim so Claude
+// opens the page or app rather than answering in prose; the firm lets Claude switch to it
+// if the chat's Carta context differs. A companion read returns its page's companion_url,
+// and the step that opens it beside the chat.
 function frtAppPrompt(app, firm) {
   const where = firm ? ` (${firm})` : "";
-  return `Open the Carta ${app.label} app for ${app.entity}${where}: call view_remote with name "${app.view}" and params ${JSON.stringify(app.params)}.`;
+  const params = JSON.stringify(app.params);
+  if (app.kind === "companion") {
+    const using = app.skill ? ` with the ${app.skill} skill` : "";
+    return `Open the Carta ${app.label} companion page for ${app.entity}${where}${using}: call fetch with command "${app.target}" and params ${params}, then open its companion_url beside this chat as its next_step says.`;
+  }
+  return `Open the Carta ${app.label} app for ${app.entity}${where}: call view_remote with name "${app.target}" and params ${params}.`;
 }
 
 function frtIsExpandable(row) {
@@ -288,6 +315,11 @@ function frtSearchLabels(packages) {
   return (packages || []).map(p => p.display_label);
 }
 
+// A row's only package, which its Financial Report cell stands for; null for none or several.
+function frtOnePackage(packages) {
+  return (packages || []).length === 1 ? packages[0] : null;
+}
+
 function frtEntityRow(e, period) {
   const lc = frtLeafColumns(e.financial_report, e.packages, String(e.entity_id));
   return {
@@ -298,6 +330,7 @@ function frtEntityRow(e, period) {
     soi: frtMapSoiReview(e.soi_review || {}),
     fr: lc.fr, action: lc.action, trailing: lc.trailing, tag: lc.tag,
     packages: lc.packageChildren, children: [], isFamily: false,
+    onePackage: frtOnePackage(e.packages),
     searchLabels: frtSearchLabels(e.packages),
   };
 }
@@ -313,6 +346,7 @@ function frtMemberRow(m, period) {
     soi: frtMapSoiReview(m.soi_review || {}),
     fr: lc.fr, action: lc.action, trailing: lc.trailing, tag: lc.tag,
     packages: lc.packageChildren, children: [],
+    onePackage: frtOnePackage(m.packages),
     searchLabels: frtSearchLabels(m.packages),
   };
 }

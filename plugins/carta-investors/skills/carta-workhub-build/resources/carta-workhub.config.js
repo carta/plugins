@@ -119,8 +119,8 @@ const TASK_CAPITAL_ACTIVITY_REVIEW = 'review-capital-activity';
 const TASK_CAPITAL_ACTIVITY_CHANGES = 'review-capital-activity-changes';
 // Every tab, Completed included, shows only these workflows: the ones a Workhub
 // panel opens (request thread, capital call review, reporting tracker), plus expense
-// payments, management fee reviews, cash reconciliation and SOI reviews, which open an
-// MCP App or link out to Carta. One list for all
+// payments, management fee reviews, cash reconciliation and SOI reviews, which open a
+// companion page or MCP App in a new chat, or link out to Carta. One list for all
 // tabs, so finished work never shows a kind of task the open tabs leave out. Any
 // other template stays out until a panel opens it.
 const TASK_TEMPLATES_WITH_TILES = [
@@ -129,31 +129,15 @@ const TASK_TEMPLATES_WITH_TILES = [
   TASK_TEMPLATE_SOI_REVIEW,
 ];
 
-// Needs-action tasks that open an MCP App in a new chat instead of Carta. `params` maps
-// each view param to the task row field that fills it: a management fee review's
-// object_id is the review, an expense workflow's is the expense. `tasks` limits an entry to
-// the workflow's named task steps, for a template whose other steps are Carta's own work.
-// `requires` names a command the app's own reads need, for a view whose flag does not
-// cover them.
-const TASK_APPS = [
-  // The GP's review of a drafted capital call or distribution. object_id is the activity.
-  { template: TASK_TEMPLATE_CAPITAL_ACTIVITY, view: 'fa:view:capital_activity_review',
-    label: 'capital activity review', params: { fund_uuid: 'fund_uuid', capital_activity_id: 'object_id' },
-    tasks: [TASK_CAPITAL_ACTIVITY_REVIEW, TASK_CAPITAL_ACTIVITY_CHANGES],
-    requires: 'fa:get:capital-activity-review-summary' },
-  { template: TASK_TEMPLATE_MANAGEMENT_FEES, view: 'fa:view:gp_management_fee_review',
-    label: 'management fee review', params: { fund_uuid: 'fund_uuid', review_id: 'object_id' } },
-  { template: TASK_TEMPLATE_EXPENSE, view: 'fa:view:expense_payment_review',
-    label: 'expense payment review', params: { expense_id: 'object_id' } },
-  // One workflow per bank transaction. The view takes the fund alone, so the app opens on
-  // the clicked task's fund rather than on every fund's transactions.
-  { template: TASK_TEMPLATE_CASH_RECONCILIATION, view: 'fa:view:gp_cash_reconciliation',
-    label: 'cash reconciliation', params: { fund_uuid: 'fund_uuid' } },
-  // Update Investments opens a fund's open SOI review from the fund alone. Its boot data and
-  // commands sit behind a second flag, which fa:list:firm-asset-group shares.
-  { template: TASK_TEMPLATE_SOI_REVIEW, view: 'fa:view:update_investments',
-    label: 'SOI review', params: { fund_uuid: 'fund_uuid' }, requires: 'fa:list:firm-asset-group' },
-];
+// The skill that guides Claude on a task's companion page, by the task app's tracker column or
+// queue template. The prompt names it so Claude drives the page with its commands and rules;
+// the read alone still opens the page in a chat without the skill.
+const COMPANION_SKILLS = {
+  financial_report: 'carta-investors:financial-package-companion',
+  cash_reconciliation: 'carta-investors:carta-gp-cash-reconciliation',
+  [TASK_TEMPLATE_CASH_RECONCILIATION]: 'carta-investors:carta-gp-cash-reconciliation',
+  [TASK_TEMPLATE_SOI_REVIEW]: 'carta-investors:open-soi-review',
+};
 
 // fund-admin decides each task's group and sends it as task_display_group {id, name,
 // order}; the queue shows that group's name, in that order. Only the icons live
