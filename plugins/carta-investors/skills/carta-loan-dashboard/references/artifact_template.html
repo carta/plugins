@@ -1100,6 +1100,7 @@
         style: 'currency',
         currency: currencyCode,
         notation: compact ? 'compact' : 'standard',
+        minimumFractionDigits: 0,
         maximumFractionDigits: compact ? 2 : 0,
       }).format(n);
     }

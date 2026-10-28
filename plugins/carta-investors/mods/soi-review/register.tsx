@@ -81,7 +81,7 @@ function toastChanges($: EngineInterface, before: SoiReviewState, after: SoiRevi
 function fairValue({ current, prior, currency }: SoiReviewState['fair_value']): string {
   if (currency === null) return 'Multi-currency'
   const money = (n: number, signDisplay: 'auto' | 'exceptZero' = 'auto') =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1, signDisplay }).format(n)
+    new Intl.NumberFormat('en-US', { style: 'currency', currency, notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: 1, signDisplay }).format(n)
   if (prior == null) return money(Number(current))
   const change = Number(current) - Number(prior)
   const percent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1, signDisplay: 'exceptZero' })

@@ -683,7 +683,7 @@ function fmtFull(c, ccy) {
 }
 // Chart.js axis callback; the axis takes values in whole units, not cents.
 function tickFmt(ccy) {
-  return v => money(v, ccy, { notation: 'compact', maximumFractionDigits: Math.abs(v) >= 1e6 ? 1 : 0 });
+  return v => money(v, ccy, { notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: Math.abs(v) >= 1e6 ? 1 : 0 });
 }
 // The capital-activity toggle names the currency it shows, the way its amounts do:
 // € alone, EUR beside other currencies, or Value when none is known.
