@@ -6,7 +6,15 @@
 const SKILL_DIRECTORY_PLUGIN = "carta-cap-table";
 
 // Published entries arrive over the network, so each is held to the baked shape. An entry
-// that omits `tag` or `whatsNew` keeps the baked value for that skill.
+// that omits `tag`, `whatsNew` or `whatsNewCopy` keeps the baked value for that skill.
+// `whatsNewCopy` counts only with both a headline and a body.
+function whatsNewCopyOf(c) {
+  if (!c || typeof c !== "object") return null;
+  const headline = typeof c.headline === "string" ? c.headline.trim() : "";
+  const body = typeof c.body === "string" ? c.body.trim() : "";
+  return headline && body ? { headline, body } : null;
+}
+
 function normalizeDirectoryEntries(raw, baked) {
   if (!Array.isArray(raw)) return null;
   const known = new Set(DIR_CATEGORIES.map(cat => cat.id));
@@ -32,6 +40,8 @@ function normalizeDirectoryEntries(raw, baked) {
     if (tag) entry.tag = tag;
     const whatsNew = typeof e.whatsNew === "boolean" ? e.whatsNew : fallback.whatsNew;
     if (typeof whatsNew === "boolean") entry.whatsNew = whatsNew;
+    const copy = whatsNewCopyOf(e.whatsNewCopy) || fallback.whatsNewCopy;
+    if (copy) entry.whatsNewCopy = copy;
     entries.push(entry);
   }
   // An empty list reads as "every skill is gone", which is never the right thing to

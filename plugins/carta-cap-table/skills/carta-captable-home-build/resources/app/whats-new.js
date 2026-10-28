@@ -118,6 +118,15 @@ function showcaseMicroapps(profile) {
   return [...items.filter(m => !m.locked), ...items.filter(m => m.locked)];
 }
 
+// The panel text for a featured skill, on every path that features one: its directory
+// entry's `whatsNewCopy` when it has one, else its prompt, quoted, over `stockBody`. The
+// prompt is what is copied either way.
+function skillPanelCopy(known, prompt, stockBody) {
+  const copy = known && known.whatsNewCopy;
+  return copy ? { headline: copy.headline, description: copy.body }
+              : { headline: "“" + prompt + "”", description: stockBody };
+}
+
 // A skill unknown to the Skill Directory is named by its prompt's category.
 // `rank` is the entry's place among the skills picked; it keys an entry with no skill, and
 // a second prompt for one skill, so a tracking id never carries prompt text or repeats.
@@ -130,8 +139,7 @@ function showcaseSkill(entry, rank) {
     skillId: id,
     slug: id ? "skill-" + id : "skill-rank-" + rank,
     title: known ? known.name : PROMPT_TAGS[promptTag(entry.text)].label + " skill",
-    headline: entry.text,
-    description: "A new skill for Claude. Copy the prompt, paste it into chat, and Claude runs it on your Carta data.",
+    ...skillPanelCopy(known, entry.text, "A new skill for Claude. Copy the prompt, paste it into chat, and Claude runs it on your Carta data."),
     prompt: entry.text,
     copyText: entry.text, copyLabel: "the prompt", copiedTip: PROMPT_COPIED_TIP,
     output: whatsNewOutput(entry),
@@ -153,8 +161,7 @@ function fallbackItems() {
       kindLabel: card.tag,
       slug: "card-" + i,
       title: card.title,
-      headline: prompt,
-      description: card.body,
+      ...skillPanelCopy(directoryEntry(card.skill), prompt, card.body),
       prompt,
       copyText: prompt, copyLabel: "the prompt", copiedTip: PROMPT_COPIED_TIP,
       output: card.output || "rows",
@@ -276,7 +283,7 @@ function _wnPanelHtml(it) {
       </span>` : "";
   return `
     <span class="wn-chip">${escHtml(it.title)}</span>
-    <p class="wn-headline">${it.kind === "skill" ? "“" + escHtml(it.headline) + "”" : escHtml(it.headline)}</p>
+    <p class="wn-headline">${escHtml(it.headline)}</p>
     <p class="wn-desc">${escHtml(it.description)}</p>
     <div class="wn-ctas">${cta}${help}
       <span class="wn-copied-tip" role="status">${escHtml(it.copiedTip)}</span>

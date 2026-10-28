@@ -151,7 +151,7 @@ def read_version():
 
 def read_skill_directory():
     """Return the baked Skill Directory: a list of {skill, category, name, order, prompts},
-    plus `tag` and `whatsNew` where an entry sets them.
+    plus `tag`, `whatsNew` and `whatsNewCopy` where an entry sets them.
 
     Opt-outs (null) are dropped, and so is any skill this install does not carry: the
     file is plugin-level and always published, but a skill without `publish: true` never
@@ -177,7 +177,7 @@ def read_skill_directory():
             "order": entry.get("order", 0),
             "prompts": entry["prompts"],
         }
-        baked.update({k: entry[k] for k in ("tag", "whatsNew") if k in entry})
+        baked.update({k: entry[k] for k in ("tag", "whatsNew", "whatsNewCopy") if k in entry})
         entries.append(baked)
     return entries
 

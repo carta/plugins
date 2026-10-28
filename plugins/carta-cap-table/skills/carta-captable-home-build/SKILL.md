@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.104.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.105.0</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -128,10 +128,13 @@ which claims its own artifact and its own URL.
   in the last 60 days, shown only when `has_cap_table` is true, and skipped when the skill
   is not listed in the Skill Directory, when the Skill Directory file opts it out (`null`
   or `"whatsNew": false`), when it is the microapp's own skill, or when its prompt is
-  already in Suggested for you. The `WHATS_NEW` cards in the config paint at load and stay
+  already in Suggested for you. A skill whose directory entry has `whatsNewCopy` shows that
+  outcome headline and body; otherwise its prompt is the headline over a stock line. The
+  copy button always copies the prompt. The `WHATS_NEW` cards in the config paint at load and stay
   whenever no profile arrives (no connector, a failed or unanswered `get_current_user`),
   when no product flag is known, or when Carta supplies nothing; they pass the same Skill
-  Directory checks. Each item's preview is a static picture; `WHATS_NEW_SKILL_OUTPUTS` says
+  Directory checks and follow the same copy rule (a card's `body` shows only when its skill
+  has no `whatsNewCopy`). Each item's preview is a static picture; `WHATS_NEW_SKILL_OUTPUTS` says
   which kind (document, register, spreadsheet, chart, or an answer in chat) a skill gets.
 - **Plugin news** — Carta events, customer stories, and guides. The template ships static
   fallback cards; `live-content.js` replaces them with live Contentful entries tagged
@@ -204,8 +207,8 @@ the full file in context. Edit the small source file for what you're changing:
 | `resources/app/dashboards.js` | the Cap table and Round history tiles, `openDashboardPage`/`closeDashboardPage` and every `open*Page()` entry point, plus the one `financing_history` fetch that feeds both the round history and the FD summary's currency | change the cap-table or round-history dashboards, or how any drill-down page opens |
 | `resources/app/capabilities.js` | Suggested for you — editable prompt cards, category chips, typing-in blanks, copy; and the page's one `get_current_user` call (`fetchUserEnrichment`) that feeds this row and What's new | change how prompt cards are chosen or rendered |
 | `resources/app/whats-new.js` | What's new — carousel engine, item selection, microapp and skill previews | change how the carousel picks, orders or renders items (edit the microapp and fallback cards in the config) |
-| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"` shows the Microapp pill) and `whatsNew` (`false` keeps the skill out of What's new); `null` opts a skill out of both | change which skills show or their example prompts — no rebuild needed once published |
-| `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`), validates it, keeps each skill's baked `tag` / `whatsNew` when the server omits them, and re-renders over the baked list | change how the published list is merged or when it loads |
+| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"` shows the Microapp pill), `whatsNew` (`false` keeps the skill out of What's new) and `whatsNewCopy` (the headline and body What's new shows for the skill); `null` opts a skill out of both | change which skills show or their example prompts — no rebuild needed once published |
+| `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`), validates it, keeps each skill's baked `tag` / `whatsNew` / `whatsNewCopy` when the server omits them, and re-renders over the baked list | change how the published list is merged or when it loads |
 | `resources/app/version-check.js` | update banner: stays quiet for a week after the build (`BUILT_AT`), then reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news — live Contentful fetch, adapters, asset resolution; and `_listWhatsNewPrompts`, the Contentful fetch behind What's new's skills | change which content types render or how news cards look |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |

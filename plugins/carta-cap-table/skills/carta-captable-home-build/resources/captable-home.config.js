@@ -48,6 +48,7 @@ const CAP_PROMPTS = [
 // actually shipped recently — check the skill's own history first. `output` names what the
 // skill hands back, for its preview (see WHATS_NEW_SKILL_OUTPUTS below for the kinds).
 // `skill` is the card's skill: the card shows only while the Skill Directory lists it.
+// `body` shows only when that skill has no `whatsNewCopy`; otherwise its copy leads.
 const WHATS_NEW = [
   {
     tag: 'New',
