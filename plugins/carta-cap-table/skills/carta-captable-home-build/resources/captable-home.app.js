@@ -226,7 +226,7 @@ function fmtShort(v, currencyCode) {
   if (v == null || isNaN(v)) return "—";
   if (currencyCode) {
     try {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, notation: 'compact', maximumFractionDigits: 1 }).format(v);
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(v);
     } catch (e) { /* unknown/invalid code from caller — fall back to a unitless number */ }
   }
   if (v >= 1e9) return (v/1e9).toFixed(1) + "B";
