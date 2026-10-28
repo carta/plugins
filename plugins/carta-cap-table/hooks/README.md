@@ -15,7 +15,7 @@ Every hook dispatches to the shared Go hooks binary in `tools/hooks/` via
 | PreToolUse | Skill | `dispatch.sh capture-active-skill` | Record which carta skills have been loaded this session |
 | PreToolUse | Carta MCP | `dispatch.sh inject-instrumentation` | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise) |
 | UserPromptSubmit | — | `dispatch.sh capture-slash-skill` | Record explicitly-invoked skills (bare `/skill` slash commands) |
-| PostToolUse | Carta MCP | `skills/pe-bulk-issuance/scripts/save_read.py` | While a pe-bulk-issuance run has capture on, save its Carta reads to CLAUDE_PLUGIN_DATA/pe-bulk-issuance so `build_ref.py` builds the run's reference file. The shell test skips Python whenever no run is capturing. `capture.py stop` deletes the saved reads; a run nothing has touched for 7 days is deleted by the next `capture.py start` |
+| PostToolUse | Carta MCP | `skills/pe-bulk-issuance/scripts/save_read.py` | While a pe-bulk-issuance run has capture on, save its Carta reads, and the answers of its save and issue calls, to CLAUDE_PLUGIN_DATA/pe-bulk-issuance so `build_ref.py` builds the run's reference file and `record.py` its run log. The shell test skips Python whenever no run is capturing. `capture.py stop` deletes the saved reads; a run nothing has touched for 7 days is deleted by the next `capture.py start` |
 
 ## Carta MCP matcher
 
