@@ -1,12 +1,29 @@
 # Gate — Carta Total Compensation subscription
 
-Run this once a `corporation_pk` is resolved and before any other `compensation:*` call. It
-decides whether the corp has Carta Total Compensation (CTC) and whether the caller may read it.
+Run this before any other `compensation:*` call. It decides whether the corp has Carta Total
+Compensation (CTC) and whether the caller may read it.
 
 ```
 read_tool({"name": "compensation__get__subscription_status",
-           "arguments": {"corporation_id": <corporation_pk>}})
+           "arguments": {"corporation_id": <corporation_pk>}})   # corporation_id is optional, see below
 ```
+
+## Resolve the company on this call
+
+A skill whose Step 1 points here resolves the company with this call, not with `list_accounts`.
+Other skills send the `<corporation_pk>` their Step 1 resolved.
+
+Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, else no `corporation_id` (Carta uses the user's only company). For errors, resolve the company as
+`${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` *Company errors* says, on this call (read it by
+that path, do not search for it). If the user dismisses the company
+question, stop and send the skill's dismissal message. One case differs: on `Missing required
+params` on `corporation_id` (no company), or `not_found` with an empty `did_you_mean`, do not
+call `list_accounts`. Call `context_tools__get__profile`. Empty `corporations[]`: send the
+"your firm" variant of *The subscription message* below and stop. Non-empty: ask for the exact
+company name or numeric id.
+
+Take `corporation_id` from the response: it is the `<corporation_pk>` of every later call. Name
+the company by the `label` of the pick, else by the name the user gave.
 
 ## Call it once per corp per conversation
 

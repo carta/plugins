@@ -30,10 +30,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
+  - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.103.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.103.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -68,7 +69,7 @@ Use this skill for vesting questions scoped to a **single grant or holder**:
 ## Prerequisites
 
 You need:
-1. `corporation_id` — get from `list_accounts` if you don't have it
+1. The company — do not call `list_accounts` before the first read (Step 0)
 2. `grant_id` — identify via the list command for the relevant grant type (see below)
 3. **Grant type** — required to pick the right list and detail commands. If unstated, infer from the user's wording ("options", "ISO", "NSO" → options; "RSU"; "SAR"; "CBU"). If still unclear, ask via `AskUserQuestion` before searching.
 
@@ -117,22 +118,9 @@ The vesting detail commands return slightly different shapes:
 
 ## Workflow
 
-### Step 0 — Resolve the Corporation First
+### Step 0 — The company (no lookup call)
 
-`cap_table:list:grants` (and the other list commands) require a real `corporation_id`. **Never pass a company name** (e.g. `"meetly"`) as `corporation_id` — it is not an ID and the call will fail.
-
-If you only have a company name, resolve it to a `corporation_id` before any list/data call:
-
-```
-list_accounts({"search": "<company name>"})   # narrow to the matching account(s)
-# Each account's `id` is shaped `corporation_pk:<numeric id>`. Extract that numeric
-# id — it is the `corporation_id` every cap_table tool needs.
-# If several accounts share a similar name, call AskUserQuestion to disambiguate
-# before continuing — never guess which one the user meant.
-set_context({...})     # set the active corporation context, if applicable
-```
-
-Calling `list_accounts` with no `search` returns the full account list; on a multi-company instance that risks matching the wrong account, so always pass the name. Carry the resolved `corporation_id` into every subsequent `cap_table__*` call. Only once it is resolved do you proceed to Step 1.
+Do not call `list_accounts` or ask which company before the first read: Carta finds the company. Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, else no `corporation_id` (Carta uses the user's only company). On an error, and for later calls, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it). Its reads are cap table reads: reuse `meta.company.id` on later calls. Never guess which company the user meant.
 
 ### Step 1 — Identify the Grant
 
@@ -172,8 +160,7 @@ Lead with a one-sentence plain-English summary before showing the table (see Pre
 
 ## Gates
 
-**Required inputs**: `corporation_id`, `grant_id`, and grant type (options, RSU, SAR, or CBU).
-If you only have a company name, resolve it to a `corporation_id` first (Step 0) — never pass a name string as `corporation_id`.
+**Required inputs**: `grant_id` and grant type (options, RSU, SAR, or CBU). The company is not an input to ask for: it comes from Step 0 (omitted, a name, or `meta.company.id`).
 If grant type is missing or ambiguous, call `AskUserQuestion` before proceeding.
 If `grant_id` is unknown, use Step 1 of the Workflow to search by holder name.
 

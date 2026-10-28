@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.103.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.103.2</carta-plugin>
 
 # CTC Scorecard
 
@@ -112,58 +112,25 @@ If the question is just *"show me our scorecard"* with no further qualifier, **d
 
 ## Prerequisites
 
-1. A corporation — resolved automatically from your accounts (see Step 1).
+1. A corporation — Carta finds it on the Step 2 subscription call. Never call `list_accounts` for it (see Step 1).
 2. An active CTC subscription with HRIS-synced employees. If the corp has no subscription, the skill stops with a plain-English message (see Subscription gating).
 
 ## Workflow
 
-### Step 1 — Resolve corporation (REQUIRED before anything else)
+### Step 1 — The company (no lookup call)
 
-> **Do this ONCE, upfront, before calling any compensation endpoint.** Do not start fetching subscription status or plan data until you have a confirmed `corporation_id`.
+> **Do not call `list_accounts`.** The Step 2 subscription check resolves the company: follow *Resolve the company on this call* in `${CLAUDE_PLUGIN_ROOT}/references/gate-ctc-subscription.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it). Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, else no `corporation_id` (Carta uses the user's only company). Make no other compensation call until you have a confirmed `corporation_id`.
 
-Resolve in this priority order — stop as soon as one path succeeds:
-
-**Path 1 — Explicit numeric ID in the prompt (highest priority, no API call needed)**
-
-If the user mentioned a numeric corporation ID anywhere (e.g. *"corp 7"*, *"corp id 7"*, *"corporation_id=7"*, *"for company 728"*), use that exact integer. Do not call `list_accounts`. Do not search for it. Do not substitute a similar-looking ID.
-
-> Anti-patterns:
-> - ❌ User says "corp 7" → agent calls `list_accounts(search="7")` — `list_accounts` searches by name substring, not ID.
-> - ❌ User says "corp 7" → agent picks a corp from a previous turn. Each prompt's corp ID overrides any prior context.
-
-**Path 2 — Company name in prompt**
-
-If the user named a company (e.g. *"scorecard for Acme"*), call `list_accounts(search="Acme")`. Filter results to entries where `id` starts with `corporation_pk:`. If exactly one match, use it. If multiple, proceed to Path 4.
-
-**Path 3 — Single account (auto-select, no question needed)**
-
-If the user gave no corp hint at all, call `list_accounts()` with no search. Filter to `corporation_pk:` entries. If exactly **one** corporation is returned, use it automatically — do not ask the user to confirm something they have no choice about.
-
-**Path 4 — Multiple accounts (ask once, cleanly)**
-
-If multiple corporations are found, use `AskUserQuestion` immediately:
-- Question: *"Which company's scorecard should I show?"*
-- Options: corporation names from the list (cap at 10; offer "Other" if more)
-
-Do **not** show the user a raw JSON dump of accounts. Do **not** attempt any compensation call before they answer.
+This skill's parts:
+- Question when several companies match: *"Which company's scorecard should I show?"* Do **not** show the user a raw JSON dump.
+- For `[Company Name]` in the output, use the `label` of the pick, else the name the user gave, else "your company".
+- No company at all: send the "your firm" message in *Subscription gating* below (the one for an empty `corporations[]`).
 
 > **HARD STOP — user dismissed the question:**
 >
 > If the user closed the prompt, said "cancel", "never mind", or otherwise did not select an option — **STOP**. Do not guess a corp. Do not call any compensation endpoint. Reply:
 >
 > > *"No problem — let me know which corporation's scorecard to look up (name or numeric ID) when you're ready. If there's something else I can help with in the meantime, just ask."*
-
-**Path 5 — No corporations at all (Fund-Admin-only user — STOP, do not ask)**
-
-If Paths 2/3/4 returned **zero** `corporation_pk:` entries, the user may have no cap table access at all — a Fund Admin user whose access is fund accounting only. Confirm before doing anything else:
-
-1. `read_tool({"name": "context_tools__get__profile", "arguments": {}})` — returns `corporations[]`, the corporations the user holds a cap-table role on (it excludes `NO_ACCESS` roles, and returns `[]` for a user with no corporation roles).
-2. If `corporations[]` is **empty** → the user has no cap table. Send the **no-cap-table CTC message** from *Subscription gating* below (the "your firm" variant) and **STOP**. Do **not** ask them to name a corporation — they don't have one. Do **not** call any compensation endpoint.
-3. If `corporations[]` is **non-empty** → the user does have cap tables; the name search just missed. Do **not** send an upsell. Ask them to confirm the exact company name or numeric corp ID and re-resolve.
-
-> Why `profile` and not `list_accounts` for this check: `list_accounts` groups corporations *and funds* under the same `corporation_pk:` prefix, so a Fund Admin user's funds can read as cap table access. `context_tools:get:profile` returns corporations only.
-
-Extract the numeric `corporation_pk` (the integer after `corporation_pk:`) for all subsequent calls.
 
 ### Step 2 — Verify CTC subscription (REQUIRED)
 
@@ -172,7 +139,7 @@ read_tool({"name": "compensation__get__subscription_status",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-It returns `{corporation_id, has_ctc_access, is_subscribed}`:
+`corporation_id` is the id, the name or left out, as Step 1 says. It returns `{corporation_id, has_ctc_access, is_subscribed}`:
 - `has_ctc_access: false` → the caller holds no CTC role on this corp. Stop and send the no-access message (see **Subscription gating** below). `is_subscribed` is `null` here, so don't infer the corp's subscription state.
 - `has_ctc_access: true`, `is_subscribed: false` → stop and surface the subscription message (see **Subscription gating** below). Do not call any scorecard endpoint — they will return empty data and waste a round-trip.
 - `has_ctc_access: true`, `is_subscribed: true` → continue.
@@ -593,7 +560,7 @@ If `corporations[]` is **non-empty**:
 >
 > *I can pull cap table data — grants, vesting, round history — in the meantime."*
 
-If `corporations[]` is **empty** — a Fund-Admin-only user, or the corp came from a hand-typed numeric ID (Path 1) that they hold no cap-table role on:
+If `corporations[]` is **empty** — a Fund-Admin-only user, or the corp came from a hand-typed numeric ID that they hold no cap-table role on:
 
 > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your firm yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it."*
 

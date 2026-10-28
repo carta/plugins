@@ -28,10 +28,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
+  - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.103.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.103.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -68,11 +69,11 @@ These three awards can carry signature requests: **option grants**, **RSAS (rest
 
 ## Prerequisites
 
-- **One company or one award** → you need the company. Get it from `list_accounts` (companies appear as `corporation_pk:` entries).
+- **One company or one award** → you need the company. Do not call `list_accounts` or ask which company before the first read: Carta finds the company. Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, else no `corporation_id` (Carta uses the user's only company). On an error, and for later calls, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it). Its reads are cap table reads: reuse `meta.company.id` on later calls.
 - **A single award** → you also need its type (`OPTION_GRANT`, `RSA`, or `PIU`) and the award itself. The company-wide list (below) returns these, so start there if you don't already know which award you mean.
 - **A portfolio** → you need the portfolio. Get it from `list_accounts` (portfolios appear as `organization_pk:` entries) — this is the investor or firm view across the companies they hold or manage.
 
-If a required input is missing, ask for it with `AskUserQuestion` before fetching.
+If another required input is missing (the award type, or the portfolio), ask for it with `AskUserQuestion` before fetching. Do not ask for the company before the first read.
 
 ## Data Retrieval
 
@@ -121,7 +122,7 @@ Each request carries:
 
 ## Gates
 
-**Required inputs**: a company (`corporation_id`) for the company and award commands; a portfolio (`portfolio_id`) for the portfolio command; plus `security_type` and the award for the single-award command. If missing, call `AskUserQuestion` before proceeding.
+**Required inputs**: a portfolio (`portfolio_id`) for the portfolio command; `security_type` and the award for the single-award command. If missing, call `AskUserQuestion` before proceeding. The company for the company and award commands is not an input to ask for: it comes from Prerequisites (omitted, a name, or `meta.company.id`).
 
 ## Presentation
 

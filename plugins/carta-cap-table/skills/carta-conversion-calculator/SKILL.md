@@ -27,10 +27,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
+  - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.103.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.103.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -48,7 +49,7 @@ Calculate how SAFEs and convertible notes convert into equity at a given round p
 ## Prerequisites
 
 You need:
-1. `corporation_id` — get from `list_accounts`
+1. The company. Do not call `list_accounts` or ask which company before the first read: Carta finds the company. Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, else no `corporation_id` (Carta uses the user's only company). On an error, and for later calls, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it). Its reads are cap table reads: reuse `meta.company.id` on later calls.
 2. Round terms — user must provide at least a **pre-money valuation** or **price per share**
 
 ## Data Retrieval
@@ -127,15 +128,14 @@ Same as SAFE but:
 
 ## Gates
 
-**Required inputs**: `corporation_id`, pre-money valuation or price per share.
-If missing, call `AskUserQuestion` before proceeding.
+**Required inputs**: pre-money valuation or price per share. If missing, call `AskUserQuestion` before proceeding. The company is not an input to ask for: it comes from Prerequisites (omitted, a name, or `meta.company.id`).
 
 AskUserQuestion("What pre-money valuation or price per share should I use for the conversion calculation?")
 
 **AI computation**: Yes — converts SAFE and note investment amounts into equity shares using cap/discount math.
 Before you fetch data or compute, call `AskUserQuestion` (never plain text) with: "No saved Carta model matches these terms. I can compute SAFE and note conversion shares using AI — this would be Claude's analysis, not Carta data. Would you like me to proceed?" If the user says no, stop: no output, no fallback. If the user says yes, label the output as **Output label** below says.
 
-**Subagent prohibition**: Do NOT delegate this skill to a background agent if required inputs are missing. A subagent cannot call `AskUserQuestion`. If inputs are absent, stop and ask the user directly first.
+**Subagent prohibition**: Do NOT delegate this skill to a background agent if the round terms are missing, or before the company is resolved. A subagent cannot call `AskUserQuestion`. If the round terms are absent, stop and ask the user directly first.
 
 ## Presentation
 

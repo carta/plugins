@@ -27,10 +27,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
+  - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.103.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.103.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -54,7 +55,7 @@ that it has none.
 
 ## Prerequisites
 
-You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
+Do not call `list_accounts` or ask which company before the first read: Carta finds the company. Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, else no `corporation_id` (Carta uses the user's only company). On an error, and for later calls, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it). Its reads are cap table reads: reuse `meta.company.id` on later calls.
 
 ## Data Retrieval
 
@@ -152,8 +153,7 @@ Show the history table and trend summary (see Presentation section).
 
 ## Gates
 
-**Required inputs**: `corporation_id`.
-If missing, call `AskUserQuestion` before proceeding.
+**Required inputs**: none before the first read. The company comes from Prerequisites (omitted, a name, or `meta.company.id`).
 
 **AI computation**: No — this skill presents Carta data directly.
 
