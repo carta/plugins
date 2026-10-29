@@ -324,14 +324,13 @@
     /* ── Fund performance by quarter ── */
     .movers-title { font-size: 15px; font-weight: 600; }
     .movers-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-    /* The same chevron and right padding on every dropdown: native selects and the fund picker. */
-    .quarter-picker, .portfolio-picker {
+    /* The same chevron and right padding on every dropdown: the quarter select and the two pickers. */
+    .quarter-picker {
       font-family: inherit; font-size: 12px; color: var(--black);
       background: var(--white) var(--chevron) no-repeat right 10px center; border: 1px solid var(--gray-20);
       border-radius: 4px; padding: 8px 32px 8px 10px; cursor: pointer;
       min-width: 140px; appearance: none; -webkit-appearance: none;
     }
-    .portfolio-picker { margin-top: 8px; max-width: 320px; height: 32px; font-size: 13px; font-weight: 500; }
     .chev { width: 12px; height: 12px; margin-left: 4px; flex-shrink: 0; background: var(--chevron) no-repeat center; }
 
     /* ── Fund picker: the Schedule of Investments picker's look, multi-select ── */
@@ -365,7 +364,16 @@
     .combo-clear-all { border: 0; background: none; padding: 0; font-family: inherit; font-size: 13px; color: var(--link-blue); cursor: pointer; }
     .combo-apply { height: 32px; padding: 0 14px; border: 0; border-radius: 4px; background: var(--black); color: var(--white);
       font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
-    .quarter-picker:disabled, .portfolio-picker:disabled, .combo-trigger:disabled, .combo-apply:disabled { background: var(--gray-10); color: var(--gray-40); cursor: not-allowed; }
+    /* Portfolio menu: the fund picker's panel and rows, single-select and without search. */
+    .portfolio-combo { margin-right: 8px; }
+    .portfolio-panel { min-width: 260px; max-width: min(360px, calc(100vw - 32px)); }
+    .portfolio-title { padding: 12px 12px 4px; font-size: 14px; font-weight: 700; }
+    /* The open portfolio: a tint apart from the hover shade, the bold name and Ink's check. */
+    .portfolio-option.is-current { background: var(--link-blue-tint); }
+    .portfolio-option.is-current .combo-option-label { font-weight: 600; }
+    .portfolio-check { display: inline-flex; flex: 0 0 auto; color: var(--link-blue); }
+    .portfolio-option:focus-visible { outline: 2px solid var(--link-blue); outline-offset: -2px; }
+    .quarter-picker:disabled, .combo-trigger:disabled, .combo-apply:disabled { background: var(--gray-10); color: var(--gray-40); cursor: not-allowed; }
     .movers-loading {
       padding: 24px 0; text-align: center; font-size: 12px; color: var(--gray-40);
     }
@@ -454,7 +462,15 @@
         <div class="header-identity">
           <div class="header-welcome">Welcome back,</div>
           <div class="header-name" id="lp-name">—</div>
-          <select class="portfolio-picker" id="portfolio-picker" aria-label="Portfolio" style="display:none" onchange="onPortfolioPickerChange()"></select>
+          <div class="combo portfolio-combo" id="portfolio-combo" style="display:none" onkeydown="onPortfolioMenuEscape(event)">
+            <button class="combo-trigger" id="portfolio-picker" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="portfolio-title portfolio-label" onclick="togglePortfolioMenu()">
+              <span class="combo-trigger-value" id="portfolio-label"></span><span class="chev" aria-hidden="true"></span>
+            </button>
+            <div class="combo-panel portfolio-panel" id="portfolio-panel" style="display:none">
+              <div class="portfolio-title" id="portfolio-title">Portfolios</div>
+              <ul class="combo-list" id="portfolio-list" role="listbox" aria-labelledby="portfolio-title" onclick="onPortfolioMenuClick(event)" onkeydown="onPortfolioMenuKey(event)"></ul>
+            </div>
+          </div>
           <div class="combo" id="fund-combo" style="display:none" onkeydown="onFundComboEscape(event)">
             <button class="combo-trigger" id="fund-combo-trigger" aria-haspopup="listbox" aria-expanded="false" onclick="toggleFundCombo()">
               <span class="combo-trigger-value" id="fund-combo-label"></span><span id="fund-combo-count"></span><span class="chev" aria-hidden="true"></span>
@@ -598,7 +614,6 @@
           <span class="switch-wrap"><span id="nav-toggle-label">Show NAV</span><button class="switch" id="nav-toggle" role="switch" aria-checked="false" aria-labelledby="nav-toggle-label" onclick="toggleNav()"></button></span>
           <span class="pill pill-green">Contributions</span>
           <span class="pill pill-red">Distributions</span>
-          <span class="pill pill-blue" id="nav-pill" style="display:none">NAV</span>
         </div>
       </div>
       <div class="section-msg" id="cd-msg" style="display:none"></div>
@@ -824,7 +839,8 @@ function startLpDocs() {
 // ── Fund picker ── The Schedule of Investments picker, multi-select: firms are groups of
 // their funds, ticks are staged in the panel, and only Apply hands them on.
 const ALL_ENTITIES = 'All Entities';
-const CHECK_SVG = '<svg class="ink-chk-check" width="14" height="14" viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
+const CHECK_ICON = '<svg class="ink-chk-check" width="14" height="14" viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+const CHECK_SVG = CHECK_ICON
   + '<svg class="ink-chk-dash" width="14" height="14" viewBox="0 0 14 14"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8"/></svg>';
 // funds: summary.fund_breakdown rows; applied: picked uuids, empty for every fund; staged: ticks in the open panel.
 const fundCombo = { funds: [], applied: new Set(), staged: new Set(), onApply: null };
@@ -952,6 +968,7 @@ function renderFundComboTrigger() {
 document.addEventListener('click', e => {
   const path = e.composedPath ? e.composedPath() : [e.target];
   if (!path.includes(document.getElementById('fund-combo'))) closeFundCombo();
+  if (!path.includes(document.getElementById('portfolio-combo'))) closePortfolioMenu();
 });
 
 // Every control that refetches shares this flag, so no handler re-enables a control
@@ -961,7 +978,7 @@ function setDataBusy(busy) {
   dataBusy = busy;
   document.getElementById('quarter-picker').disabled = busy;
   ['portfolio-picker', 'fund-combo-trigger'].forEach(id => { document.getElementById(id).disabled = busy; });
-  if (busy) closeFundCombo();
+  if (busy) { closeFundCombo(); closePortfolioMenu(); }
   Array.from(document.getElementById('ccy-select').children).forEach(b => { b.disabled = busy; });
 }
 // Dates and plain numbers follow the viewer's own locale (`undefined`), never a fixed one.
@@ -991,7 +1008,6 @@ let showNav = false;
 function toggleNav() {
   showNav = !showNav;
   document.getElementById('nav-toggle').setAttribute('aria-checked', String(showNav));
-  document.getElementById('nav-pill').style.display = showNav ? '' : 'none';
   // Redraw only from a series that has loaded: while a refetch is in flight, or after it
   // failed, there is none, and a load that lands later draws NAV as the toggle now says.
   if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries });
@@ -1914,8 +1930,10 @@ async function largestPortfolioId(){
   return largest ? largest.portfolio_id : null;
 }
 
+// The portfolios this login holds, as the menu lists them. The Funds tile already shows the
+// fund count, so a label carries it only where two portfolios share a name.
+let portfolioChoices = [];
 async function initPortfolioPicker(){
-  const picker = document.getElementById('portfolio-picker');
   let candidates = [];
   try {
     candidates = await listPortfolios();
@@ -1923,27 +1941,75 @@ async function initPortfolioPicker(){
     debugLog('portfolio lookup failed', err);
   }
   if (!candidates.some(c => c.portfolio_id === portfolioId) || candidates.length < 2) {
-    picker.style.display = 'none';
+    document.getElementById('portfolio-combo').style.display = 'none';
     return;
   }
-  // The Funds tile already shows the count; it is kept here only where two portfolios share a name.
   const nameCount = {};
   candidates.forEach(c => { const n = c.partner_name || '—'; nameCount[n] = (nameCount[n] || 0) + 1; });
-  picker.innerHTML = candidates.map(c => {
+  portfolioChoices = candidates.map(c => {
     const name = c.partner_name || '—';
-    return '<option value="' + esc(c.portfolio_id) + '">' + esc(name) + (nameCount[name] > 1 ? ' (' + fundCountLabel(c.fund_count || 0) + ')' : '') + '</option>';
-  }).join('');
-  picker.value = portfolioId;
-  picker.style.display = '';
+    return { portfolio_id: c.portfolio_id, label: name + (nameCount[name] > 1 ? ' (' + fundCountLabel(c.fund_count || 0) + ')' : '') };
+  });
+  renderPortfolioMenu();
+  document.getElementById('portfolio-combo').style.display = '';
 }
 
-async function onPortfolioPickerChange(){
-  const picked = document.getElementById('portfolio-picker').value;
+function renderPortfolioMenu() {
+  const current = portfolioChoices.find(c => c.portfolio_id === portfolioId);
+  document.getElementById('portfolio-label').textContent = current ? current.label : '';
+  document.getElementById('portfolio-list').innerHTML = portfolioChoices.map(c => {
+    const isCurrent = c.portfolio_id === portfolioId;
+    return '<li class="combo-option portfolio-option' + (isCurrent ? ' is-current' : '') + '" role="option" tabindex="0" data-portfolio="'
+      + esc(c.portfolio_id) + '" aria-selected="' + isCurrent + '"><span class="combo-option-label">' + esc(c.label) + '</span>'
+      + (isCurrent ? '<span class="portfolio-check" aria-hidden="true">' + CHECK_ICON + '</span>' : '') + '</li>';
+  }).join('');
+}
+
+function togglePortfolioMenu() {
+  if (document.getElementById('portfolio-panel').style.display === 'none') openPortfolioMenu(); else closePortfolioMenu();
+}
+function openPortfolioMenu() {
+  closeFundCombo();
+  renderPortfolioMenu();
+  document.getElementById('portfolio-panel').style.display = '';
+  document.getElementById('portfolio-picker').setAttribute('aria-expanded', 'true');
+  const current = document.getElementById('portfolio-list').querySelector('.is-current');
+  if (current) current.focus();
+}
+function closePortfolioMenu() {
+  document.getElementById('portfolio-panel').style.display = 'none';
+  document.getElementById('portfolio-picker').setAttribute('aria-expanded', 'false');
+}
+function onPortfolioMenuClick(e) {
+  const row = e.target.closest('.portfolio-option');
+  if (row) pickPortfolio(row.dataset.portfolio);
+}
+// Enter or Space picks the focused row; the arrow keys move between rows.
+function onPortfolioMenuKey(e) {
+  const row = e.target.closest('.portfolio-option');
+  if (!row) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickPortfolio(row.dataset.portfolio); return; }
+  const next = e.key === 'ArrowDown' ? row.nextElementSibling : e.key === 'ArrowUp' ? row.previousElementSibling : null;
+  if (next) { e.preventDefault(); next.focus(); }
+}
+// Every close from inside the menu (Esc or a pick) hands focus back to the trigger; a click elsewhere closes without moving it.
+function closePortfolioMenuToTrigger() {
+  closePortfolioMenu();
+  document.getElementById('portfolio-picker').focus();
+}
+function onPortfolioMenuEscape(e) {
+  if (e.key === 'Escape') closePortfolioMenuToTrigger();
+}
+
+async function pickPortfolio(picked){
+  closePortfolioMenuToTrigger();
   if (dataBusy || !picked || picked === portfolioId) return;
   const previous = { portfolioId, funds: [...fundCombo.applied] };
   portfolioId = picked;
   setFundComboPicked([]);
-  await reloadOrRevert(() => { portfolioId = previous.portfolioId; setFundComboPicked(previous.funds); });
+  renderPortfolioMenu();
+  await reloadOrRevert(() => { portfolioId = previous.portfolioId; setFundComboPicked(previous.funds); renderPortfolioMenu(); });
+  document.getElementById('portfolio-picker').focus();
 }
 
 // The open portfolio's name, as its unfiltered summary gives it.
