@@ -10,7 +10,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.105.8</carta-plugin>
+<carta-plugin>carta-cap-table:6.106.0</carta-plugin>
 
 # Retired
 
