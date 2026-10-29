@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.7.9</carta-plugin>
+<carta-plugin>carta-investors:7.7.10</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -330,7 +330,8 @@ Page-load events: `CartaHome.View` (render) fires on every load. `CartaHome.View
 (click, `value` = the skill version the page was built with) follows it, so analytics can
 tell who is on an old Home. `CartaHome.View.First` (render) fires only on a browser's
 first load (localStorage key `carta-home-viewed-v1`). `CartaHome.Tour.Start` fires only when
-the tour actually opens, not on every load.
+the tour actually opens, not on every load. `CartaHome.Tour.Next` and `.Skip` carry the step
+number the viewer saw (a skipped What's new step isn't counted).
 
 A button that copies a prompt calls `trackPrompt(elementId, prompt, source, { skill, rank })`
 instead. The tracker attaches the suggested text (never the viewer's edits) as the

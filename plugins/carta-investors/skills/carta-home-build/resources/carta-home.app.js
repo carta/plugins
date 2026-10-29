@@ -1256,6 +1256,9 @@ function markEnrichmentDone() {
   if (_enrichmentDone) return;
   _enrichmentDone = true;
   if (_dirTabOpened) renderDirectory();
+  // The tour opens once get_current_user has answered (or failed), or the 5s backstop has
+  // fired, so What's new has usually settled. tourStart fixes the tour's steps either way.
+  tourStart();
 }
 
 // ── Init ──
@@ -1412,38 +1415,65 @@ const TOUR_STEPS = [
   {
     id:    'tab-btn-recommended',
     title: 'Welcome to Carta Home',
-    desc:  'Carta home is the place to customize Carta data into any way you would like to see it. We have pre-populated it with a few stubs to get you started.',
+    desc:  "Your firm's Carta data in one place. We've set up a few views to get you started, and you can change any of them.",
   },
   {
     id:        'ca-section-v2',
     title:     'Capital activity',
-    desc:      'See active capital activity right here without having to open Carta.com',
+    desc:      "Track open capital calls and distributions, and remind investors who haven't paid, without opening Carta.",
     forceShow: true,
   },
   {
     id:    'dashboards-section',
-    title: 'Pre-built dashboards',
-    desc:  'Live views of Schedule of investments and Fund performance data from your firm.',
+    title: 'Your dashboards',
+    desc:  "Live views of your firm's data, like your schedule of investments and fund performance. Open one to see the full dashboard.",
+  },
+  {
+    id:    'prompts-section',
+    title: 'Suggested for you',
+    desc:  'Start with prompts curated for how you use Carta. Edit the details, then copy one into a chat.',
+  },
+  {
+    // Shown only once get_current_user says which microapps the firm has, so the tour
+    // leaves it out while the section is hidden.
+    id:           'whats-new-section',
+    title:        "What's new",
+    desc:         'The latest skills and microapps in the Carta plugin, picked for your firm.',
+    skipIfHidden: true,
   },
   {
     id:    'tab-btn-directory',
     title: 'Skill directory',
-    desc:  'Skill directory contains all the skills available in the Carta plugin so you can keep up to date with the latest functionality.',
+    desc:  'Browse the skills and microapps in the Carta plugin.',
   },
 ];
 
 let _tourIdx = 0;
+// The steps this tour walks and counts, fixed when it opens: a section that appears later
+// (What's new after a slow get_current_user) is not part of it, so the counter never changes.
+let _tourSteps = [];
 let _tourRestoreEl = null;
 let _tourRestoreVal = '';
 // Element that had focus when the tour opened, so focus can be handed back on
 // exit. The tour currently auto-starts, so this is usually <body>.
 let _tourReturnFocusEl = null;
 
+// A browser that can't read the key can't save it either, so it is treated as seen rather
+// than shown the tour on every visit.
+function _tourSeen() {
+  try { return !!localStorage.getItem(TOUR_KEY); } catch (e) { return true; }
+}
+
 function tourStart() {
-  if (localStorage.getItem(TOUR_KEY)) return;
+  if (_tourSeen()) return;
+  // Not over the Skill directory tab, where every Home step would point at a hidden pane, and
+  // not while the viewer is typing, since the tour takes focus. A later visit opens it instead.
+  if (!document.getElementById('tab-recommended')?.classList.contains('active')) return;
+  if (document.activeElement?.closest?.('input, textarea, [contenteditable="true"]')) return;
   trackHome("click", "CartaHome.Tour.Start");
   _tourReturnFocusEl = document.activeElement;
   _tourIdx = 0;
+  _tourSteps = _tourShownSteps();
   _tourPaint();
 }
 
@@ -1452,6 +1482,16 @@ function _tourIsOpen() {
   // whereas the tooltip only appears after the 80ms layout-settle timeout.
   const overlay = document.getElementById('tour-overlay');
   return !!overlay && overlay.style.display === 'block';
+}
+
+// The steps on screen now, so the counter and dots match what the viewer will see.
+// Where the current step sits among the steps this tour shows (-1 when it is skipped).
+function _tourPos() {
+  return _tourSteps.indexOf(TOUR_STEPS[_tourIdx]);
+}
+
+function _tourShownSteps() {
+  return TOUR_STEPS.filter(step => !step.skipIfHidden || !_tourGetEl(step)?.hidden);
 }
 
 function _tourGetEl(step) {
@@ -1470,6 +1510,9 @@ function _tourRestore() {
 
 function _tourPaint() {
   const step      = TOUR_STEPS[_tourIdx];
+  const shown     = _tourSteps;
+  const pos       = _tourPos();
+  if (pos < 0) return _tourAdvance();
   const overlay   = document.getElementById('tour-overlay');
   const spotlight = document.getElementById('tour-spotlight');
   const tooltip   = document.getElementById('tour-tooltip');
@@ -1514,14 +1557,14 @@ function _tourPaint() {
     // Tooltip content
     document.getElementById('tour-title').textContent   = step.title;
     document.getElementById('tour-desc').textContent    = step.desc;
-    document.getElementById('tour-counter').textContent = `${_tourIdx + 1} of ${TOUR_STEPS.length}`;
+    document.getElementById('tour-counter').textContent = `${pos + 1} of ${shown.length}`;
     document.getElementById('tour-next-btn').textContent =
-      _tourIdx < TOUR_STEPS.length - 1 ? 'Next →' : 'Get started';
+      pos < shown.length - 1 ? 'Next →' : 'Get started';
 
     // Progress dots — the container is role="group" aria-label="Tour progress"
     // in the template, so the active dot marks itself as the current step.
-    document.getElementById('tour-dots').innerHTML = TOUR_STEPS
-      .map((_, i) => `<div class="tour-dot${i === _tourIdx ? ' active' : ''}"${i === _tourIdx ? ' aria-current="step"' : ''}></div>`).join('');
+    document.getElementById('tour-dots').innerHTML = shown
+      .map((_, i) => `<div class="tour-dot${i === pos ? ' active' : ''}"${i === pos ? ' aria-current="step"' : ''}></div>`).join('');
 
     // Position tooltip relative to spotlight
     tooltip.style.display = 'block';
@@ -1559,18 +1602,24 @@ function _tourPaint() {
   }, 80);
 }
 
-function tourNext() {
-  trackHome("click", "CartaHome.Tour.Next", { value: _tourIdx + 1 });
+// The only way past a step once the tour is open: the next one, or the end after the last.
+function _tourAdvance() {
   _tourIdx++;
   if (_tourIdx >= TOUR_STEPS.length) tourEnd();
   else _tourPaint();
 }
 
-function tourSkip() { trackHome("click", "CartaHome.Tour.Skip", { value: _tourIdx + 1 }); tourEnd(); }
+function tourNext() {
+  trackHome("click", "CartaHome.Tour.Next", { value: _tourPos() + 1 });
+  _tourAdvance();
+}
+
+function tourSkip() { trackHome("click", "CartaHome.Tour.Skip", { value: _tourPos() + 1 }); tourEnd(); }
 
 function tourEnd() {
   _tourRestore();
-  localStorage.setItem(TOUR_KEY, '1');
+  // A failed save must not leave the viewer stuck behind the overlay.
+  try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
   ['tour-overlay','tour-spotlight','tour-tooltip'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
@@ -1592,6 +1641,3 @@ document.addEventListener('keydown', function(e) {
   e.preventDefault();
   tourEnd();
 });
-
-// Launch on first load after data fetch begins
-setTimeout(tourStart, 800);
