@@ -129,8 +129,14 @@ Run the build script:
   --manco-name "<MANCO_NAME>" --manco-uuid "<MANCO_UUID>" --manco-carta-id <MANCO_CARTA_ID> \
   --manco-entity-id <MANCO_ENTITY_ID> \
   --raw-dir "<raw_dir>" --dashboard-dir "<dashboard_dir>" \
-  --as-of "<AS_OF>" --carta-environment "<CARTA_ENVIRONMENT>"
+  --as-of "<AS_OF>" --carta-environment "<CARTA_ENVIRONMENT>" --user-id <USER_PK>
 ```
+
+`<USER_PK>` is `pk` from `get_current_user`, fetched per
+`${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Build path; the plugin's `references/`,
+not this skill's). The script saves it as `<dashboard_dir>/.user-id` before the post-build sync
+to the hosted app reads it. Leave the flag out only when this run has no Carta MCP; never pass a
+placeholder.
 
 `<CARTA_ENVIRONMENT>` is `"production"` or `"nonprod"`, classified in Step 1
 (from `<SERVER>`'s name) or carried from Step 0.2's cache probe on a WARM

@@ -9,6 +9,8 @@ own reports to Carta right after every build, under whoever `.user-id` names at 
 must hold the *current* run's operator by the time the build script runs, not just by the time `serve.py`
 next launches — a stale id from a previous operator's run would push this run's reports under their name
 instead.
+`carta-manco-reporting`'s build script also takes `--user-id <pk>` and writes the file itself, so pass
+it there as well (its `references/serve-and-update.md`, Step 4).
 
 - **Build path** (any run that has already made a Carta MCP call, a build or a refresh): if `pk` is not
   in the session, call `mcp__<SERVER>__get_current_user` once, right after the run's first MCP call, and

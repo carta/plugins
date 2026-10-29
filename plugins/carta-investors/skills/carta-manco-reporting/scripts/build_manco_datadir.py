@@ -5525,6 +5525,9 @@ def build(args):
     dashboard = Path(args.dashboard_dir)
     dashboard.mkdir(parents=True, exist_ok=True)
     record_build_args(dashboard, build_argv(args))
+    # Before the post-build own-sync sweep reads it. Never in build_argv: a rebuild must not
+    # put back whoever ran the last build over the operator a later launch recorded.
+    manco_paths.write_user_id(dashboard, getattr(args, "user_id", None))
 
     check_fetch_completeness(raw)
     expense_rows = read_expense_pages(raw)
@@ -6537,6 +6540,10 @@ def main():
     p.add_argument("--carta-environment", default="production", choices=["production", "nonprod"],
                    help="from Step 1's <SERVER>-name classification (firm-lookup.md) — "
                         "served to the browser's Snowplow tracker; defaults to production")
+    # Not type=int: a malformed id must degrade to "no user", not fail the build.
+    p.add_argument("--user-id", default=None,
+                   help="the operator's Carta user pk (get_current_user), saved as <dashboard-dir>/.user-id "
+                        "so the post-build sync to the hosted app knows whose reports these are")
     args = p.parse_args()
     if not args.as_of_year:
         args.as_of_year = int(args.as_of.split("-")[0])
