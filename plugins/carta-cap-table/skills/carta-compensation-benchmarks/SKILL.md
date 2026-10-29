@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.105.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.105.4</carta-plugin>
 
 # Benchmark Query
 
@@ -220,7 +220,7 @@ Serialize the fetched benchmark results into this shape:
 
 > **`filter_options` is REQUIRED in the payload** — Step 2b's response with `coverage` left out (the panel does not read it). The panel builds its job list, each job's levels, the level order and Manager/Executive split, the job names and the four-year-grant `equity_quantity` from it, so its dropdowns and re-fetches send the same values this skill does. Pass the response for the same `benchmark_version_id` as the rows.
 
-> **The panel's location picker lists every supported location.** At runtime it calls `compensation:get:plan` and `compensation:get:benchmark_locations` for the selected company through its `fetch` grant, and fetches international markets in local currency by default (a Local currency / USD toggle appears once a row is international). Pre-seed international rows with the same `convert_to_local_currency: true` fetch, so the seed matches the toggle.
+> **The panel's location picker lists every supported location.** At runtime it reads `compensation__get__plan` and `compensation__get__benchmark_locations` for the selected company through its `read_tool` grant, and fetches international markets in local currency by default (a Local currency / USD toggle appears once a row is international). Pre-seed international rows with the same `convert_to_local_currency: true` fetch, so the seed matches the toggle.
 
 > **`benchmark_version_id` is REQUIRED in the payload** (the numeric `benchmark_version.id` from `compensation:get:plan` / the benchmark response — NOT the `"v21.0"` display string). The artifact's interactive controls (changing level, location, adding a row) re-fetch via `compensation:get:benchmark` and must pin the same benchmark version the pre-seed used; omitting it causes those re-fetches to fail. The top-level `version` string is display-only.
 
@@ -291,7 +291,7 @@ Artifact({
   description: "Compensation benchmarks for <Company Name>",
   favicon: "💰",
   capabilities: {
-    mcp: { servers: [{ server: "<CARTA_MCP_SERVER>", tools: ["list_accounts", "fetch"] }] }
+    mcp: { servers: [{ server: "<CARTA_MCP_SERVER>", tools: ["list_accounts", "read_tool"] }] }
   }
 })
 ```

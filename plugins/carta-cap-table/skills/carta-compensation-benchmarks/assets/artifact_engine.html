@@ -848,6 +848,10 @@ async function callMcp(tool, args) {
   }
 }
 
+function readMcp(command, params) {
+  return callMcp('read_tool', {name: command.replace(/:/g, '__'), arguments: params});
+}
+
 /* ── Boot: load accessible companies ─────────────────────────────────────── */
 mcpNamespace().then(mcp => {
   if (!mcp) return;
@@ -864,7 +868,7 @@ async function loadFilterOptions(company) {
   try {
     const params = {corporation_id: company.id};
     if (_benchmarkVersionId != null) params.benchmark_version_id = _benchmarkVersionId;
-    const options = unwrap(await callMcp('fetch', {command: 'compensation:get:filter_options', params}));
+    const options = unwrap(await readMcp('compensation:get:filter_options', params));
     if (selectedCompany?.id !== company.id || !applyFilterOptions(options)) return;
     renderTable();
   } catch (_) { /* keep the fallback lists */ }
@@ -878,12 +882,11 @@ async function loadLocations(company) {
   if (!company || _locationsLoadedFor === company.id || !(await mcpAvailable())) return;
   _locationsLoadedFor = company.id;
   try {
-    const plan = unwrap(await callMcp('fetch', {command: 'compensation:get:plan',
-                                               params: {corporation_id: company.id}}));
+    const plan = unwrap(await readMcp('compensation:get:plan', {corporation_id: company.id}));
     const geoVersionId = plan?.benchmark_version?.geo_adjustment_version?.id;
     if (geoVersionId == null) return;
-    const list = unwrap(await callMcp('fetch', {command: 'compensation:get:benchmark_locations',
-                                               params: {geo_adjustment_version_id: geoVersionId}}));
+    const list = unwrap(await readMcp('compensation:get:benchmark_locations',
+                                               {geo_adjustment_version_id: geoVersionId}));
     const options = catalogOptions(list?.locations);
     if (!options.length || selectedCompany?.id !== company.id) return;
     _geoOptions = options;
@@ -1049,7 +1052,7 @@ async function fetchRowData(row) {
   if (_localCurrency && isIntlLocation(row.location)) params.convert_to_local_currency = true;
   if (isLeader) params.is_leader = true;
   try {
-    const res     = await callMcp('fetch', {command:'compensation:get:benchmark', params});
+    const res     = await readMcp('compensation:get:benchmark', params);
     const parsed  = parseResults([{job: row.job, level: row.level, data: res, error: null}]);
     const r       = parsed[0];
     if (!r) {
