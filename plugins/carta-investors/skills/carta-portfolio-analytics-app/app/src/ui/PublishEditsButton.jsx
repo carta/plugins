@@ -65,8 +65,8 @@ export default function PublishEditsButton({ firm, data, dashboard, variant }) {
 
   // Fold a finished run in exactly once. "error" moves its publishing edits to failed
   // (publishable again) but does NOT reset — the error block must stay visible. The status is
-  // the firm's last run, read on every load, so only a tab holding that run's stamped edits
-  // folds, tracks or shows it; anyone else's run is cleared unseen.
+  // the user's last run for the firm, read on every load, so only a tab holding that run's
+  // stamped edits folds, tracks or shows it; a run from another tab is cleared unseen.
   useEffect(() => {
     if (!st.runId || appliedRun.current === st.runId || !dashboard?.doc || !dashboard.update) return;
     if (st.status !== "done" && st.status !== "error") return;

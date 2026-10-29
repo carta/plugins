@@ -6,9 +6,10 @@ import useCapabilities from "./useCapabilities.js";
 
 const PUBLISH_POLL_MS = 2000;
 const SIGNED_OUT = "Your Carta session ended, so this tab can't see how the publish finished. Sign in again to see its results.";
-// The firm's publish status. A 401 is a final answer for this tab: it can read nothing until
-// the user signs in again. The run's status is kept per firm, not per session, so it reads as
-// "signed_out" — never as the run's outcome — and the stamped edits wait for a signed-in read.
+// The user's publish status for the firm. A 401 is a final answer for this tab: it can read
+// nothing until the user signs in again. The run's status is kept per user and firm, not per
+// session, so it reads as "signed_out" — never as the run's outcome — and the stamped edits wait
+// for a signed-in read.
 // Null for any other error answer; rejects when no answer came. Callers ask again only on null
 // or a rejection.
 const readPublishStatus = (firm) => fetch(`/api/publish/status${firmQuery(firm)}`)
