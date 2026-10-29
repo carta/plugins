@@ -1,12 +1,14 @@
-import { Zap, BarChart3, Table } from "lucide-react";
+import { Zap, BarChart3, Table, LayoutGrid } from "lucide-react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, FS, SIDENAV_STRIPE } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
-import { DownloadIcon, EyeIcon, UnsharedDot, UsersIcon } from "../reports/icons.jsx";
+import { DownloadIcon, EyeIcon, PlusIcon, UnsharedDot, UsersIcon } from "../reports/icons.jsx";
+import { BVA, CUSTOM_REPORTING } from "./reportNav.js";
 
 // A child slug is a workbook-derived budget id, so it can never become an event id.
 const NAV_EVENTS = {
   "dashboard": "MancoReporting.Nav.Dashboard",
-  "budget-vs-actuals": "MancoReporting.Nav.BudgetVsActuals",
+  [BVA]: "MancoReporting.Nav.BudgetVsActuals",
+  [CUSTOM_REPORTING]: "MancoReporting.Nav.CustomReporting",
   "monthly-actuals": "MancoReporting.Nav.MonthlyActuals",
 };
 
@@ -20,6 +22,7 @@ function trackNav(slug) {
 const ICONS = {
   quickaction: Zap,       // Dashboard
   company: BarChart3,     // Budget vs Actuals
+  customreport: LayoutGrid, // Custom Reporting
   ledger: Table,          // Monthly Actuals
 };
 
@@ -39,6 +42,9 @@ function NavIcon({ name, active }) {
 // item), then an as-of line pinned to the bottom via a flex spacer — same
 // layout carta-fund-modeling uses for its own DataStatus.
 export default function Sidebar({ initials, firmName, route, items, onNavigate, asOf, lastPostedDate, footerAction, shared }) {
+  // A shared report's route starts with `parentSlug`, but its row is drawn under the item
+  // `afterSlug` names — that item is the one that reads as active.
+  const sharedActive = !!shared?.items.some(i => sharedItemRoute(shared.parentSlug, i) === route);
   return (
     <aside style={styles.wrap}>
       <div style={styles.brand}>
@@ -58,8 +64,8 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
         {items.map(item => {
           // Parent is "active" when the current route starts with its slug.
           // Sub-nav always renders below it (Sidenav's always-open Group pattern).
-          const active = item.slug === route
-                       || (item.children && route?.startsWith(item.slug + "/"));
+          const active = sharedActive ? item.slug === shared.afterSlug
+            : item.slug === route || (item.children && route?.startsWith(item.slug + "/"));
           // Only a childless leaf gets the stripe (.navitem.active);
           // a parent with children just bolds its label instead.
           const isLeafActive = active && !item.children;
@@ -88,33 +94,18 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
                 const childRoute = `${item.slug}/${child.slug}`;
                 const childActive = childRoute === route;
                 if (child.action) {
-                  return (
-                    <button
-                      key={child.slug}
-                      type="button"
-                      onClick={() => {
-                        trackClick(child.event);
-                        onNavigate(childRoute);
-                      }}
-                      className="navitem"
-                      style={{
-                        ...styles.navChild,
-                        ...styles.navChildAction,
-                        color: childActive ? INK : FAINT,
-                      }}
-                      title={child.label}
-                    >
-                      <span style={styles.navChildActionIcon}>+</span>
-                      {child.label}
-                    </button>
-                  );
+                  // Open, the draft takes the group's active stripe like any page.
+                  return actionRow({
+                    key: child.slug, icon: PlusIcon, label: child.label, active: childActive, title: child.label,
+                    onClick: () => { trackClick(child.event); onNavigate(childRoute); },
+                  });
                 }
                 return (
                   <button
                     key={child.slug}
                     type="button"
                     onClick={() => {
-                      trackClick("MancoReporting.Nav.BudgetVsActualsBudget");
+                      trackClick(child.event);
                       onNavigate(childRoute);
                     }}
                     className="navitem"
@@ -136,15 +127,15 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
                   </button>
                 );
               })}
-              {shared && shared.parentSlug === item.slug && (
+              {shared && shared.afterSlug === item.slug && (
                 <SharedGroup {...shared} route={route} onNavigate={onNavigate} />
               )}
             </div>
           );
         })}
-        {/* Its parent item is gone when no budget is visible; the group still has to
+        {/* The item it follows is gone when no budget is visible; the group still has to
             offer loading and unhiding, or nothing could bring a budget back. */}
-        {shared && !items.some(i => i.slug === shared.parentSlug) && (
+        {shared && !items.some(i => i.slug === shared.afterSlug) && (
           <SharedGroup {...shared} route={route} onNavigate={onNavigate} />
         )}
       </nav>
@@ -167,10 +158,14 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
   );
 }
 
-// Reports teammates shared, inside the Budget vs Actuals group they belong
-// to: an Ink SideNav SectionLabel, the reports as ordinary group items, then
-// the load action as a row of its own so it reads as navigation, not a stray
-// icon.
+// Where a shared report's row goes: the one rule for its route, its stripe and the
+// group that reads as active while it is open.
+const sharedItemRoute = (parentSlug, item) => `${parentSlug}/${item.slug}`;
+
+// Reports teammates shared, closing the report groups (under the item
+// `afterSlug` names; their routes start with `parentSlug`): an Ink SideNav
+// SectionLabel, the reports as ordinary group items, then the load action as a
+// row of its own so it reads as navigation, not a stray icon.
 function SharedGroup({ items, parentSlug, busy, onPull, hiddenCount, unhiding, onShowHidden, route, onNavigate }) {
   const loadLabel = busy ? "Loading…"
                   : items.length ? "Check for new shared reports" : "Load shared reports";
@@ -178,7 +173,7 @@ function SharedGroup({ items, parentSlug, busy, onPull, hiddenCount, unhiding, o
     <div role="group" aria-labelledby="nav-shared-label">
       <div id="nav-shared-label" style={styles.sharedLabel}>Shared with you</div>
       {items.map(item => {
-        const itemRoute = `${parentSlug}/${item.slug}`;
+        const itemRoute = sharedItemRoute(parentSlug, item);
         const active = itemRoute === route;
         return (
           <button
@@ -191,25 +186,30 @@ function SharedGroup({ items, parentSlug, busy, onPull, hiddenCount, unhiding, o
           </button>
         );
       })}
-      {onPull && (
-        <button
-          type="button" onClick={onPull} disabled={busy} aria-label={loadLabel}
-          className="navitem" style={{ ...styles.navChild, ...styles.navChildRest, ...styles.actionRow }}
-        >
-          <DownloadIcon size={14} />
-          <span style={styles.actionText}>{loadLabel}</span>
-        </button>
-      )}
-      {onShowHidden && (
-        <button
-          type="button" onClick={onShowHidden} disabled={unhiding}
-          className="navitem" style={{ ...styles.navChild, ...styles.navChildRest, ...styles.actionRow }}
-        >
-          <EyeIcon size={14} />
-          <span style={styles.actionText}>{unhiding ? "Showing…" : `Show ${hiddenCount} hidden`}</span>
-        </button>
-      )}
+      {onPull && actionRow({
+        icon: DownloadIcon, label: loadLabel, onClick: onPull, disabled: busy, "aria-label": loadLabel,
+      })}
+      {onShowHidden && actionRow({
+        icon: EyeIcon, label: unhiding ? "Showing…" : `Show ${hiddenCount} hidden`, onClick: onShowHidden, disabled: unhiding,
+      })}
     </div>
+  );
+}
+
+// A standing action inside a group ("New custom report", "Load shared reports"): the one
+// home for its look. Called as a plain function, so the button is part of the tree.
+function actionRow({ key, icon: Icon, label, active = false, ...button }) {
+  return (
+    <button
+      key={key} type="button" className="navitem" {...button}
+      style={{
+        ...styles.navChild,
+        ...(active ? { ...styles.actionRow, ...styles.navChildActive } : { ...styles.navChildRest, ...styles.actionRow }),
+      }}
+    >
+      <Icon size={14} />
+      <span style={styles.actionText}>{label}</span>
+    </button>
   );
 }
 
@@ -341,17 +341,6 @@ const styles = {
     color: INK, fontWeight: 600, borderLeft: 0,
     boxShadow: `inset 3px 0 0 0 ${SIDENAV_STRIPE}`, paddingLeft: 20,
   },
-  // "New custom report" reads as a standing action, not a saved page: muted
-  // weight, a leading + chip, no connector line or active stripe.
-  navChildAction: {
-    display: "flex", alignItems: "center", gap: 8,
-    fontWeight: 400, borderLeft: "none", paddingLeft: 20,
-  },
-  navChildActionIcon: {
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-    border: `1px solid ${LINE}`, fontSize: 11, lineHeight: 1, color: "inherit",
-  },
   // Ink SideNav's SectionLabel type (600 10px/16px, uppercase, .08em, subtle),
   // set on the group's connector line so the section stays inside the group.
   sharedLabel: {
@@ -362,6 +351,8 @@ const styles = {
   childRow: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 },
   childLabel: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" },
   childIcon: { color: FAINT, marginLeft: "auto" },
+  // A standing action inside a group ("New custom report", "Load shared reports"):
+  // the group's connector line, muted and a step smaller than the pages it sits under.
   actionRow: { display: "flex", alignItems: "center", gap: 8, color: FAINT, fontSize: FS.body },
   actionText: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" },
   // Bottom-of-rail data provenance — a single quiet caption line, same

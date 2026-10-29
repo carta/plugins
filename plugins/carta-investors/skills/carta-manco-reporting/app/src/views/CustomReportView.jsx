@@ -9,7 +9,7 @@ import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
 import OwnSyncNotice from "../reports/OwnSyncNotice.jsx";
 import ReportNotice from "../reports/ReportNotice.jsx";
 import { REPORT_ACTIONS, actSaved } from "../state/useReports.js";
-import { reportFor } from "../shell/reportNav.js";
+import { isCustomReportBudget, reportFor } from "../shell/reportNav.js";
 import { exportPropsFor } from "../ui/exportHtml.js";
 import { FilterRibbon } from "./BudgetPeriodControls.jsx";
 import { ReportGrid } from "./customReport/ReportGrid.jsx";
@@ -46,7 +46,7 @@ export default function CustomReportView({
   dark, onToggleTheme,
 }) {
   const savedReport = useMemo(
-    () => (budget?.view?.pivot ? { ...budget.view.pivot, label: budget.label, id: budget.id, budgetId: budget.id } : null),
+    () => (isCustomReportBudget(budget) ? { ...budget.view.pivot, label: budget.label, id: budget.id, budgetId: budget.id } : null),
     [budget]);
   const report = budget ? reportFor(budget, reportsApi) : null;
   // Saving sends derive (a new report) or edit (a saved one), so it needs a server that serves
@@ -60,7 +60,7 @@ export default function CustomReportView({
   // report cuts down further. A saved report is never its own source here: it has
   // "This report's data only" for that.
   const allBudgets = snapshot?.budget?.budgets || [];
-  const availableBudgets = [...allBudgets.filter(b => !b.view?.pivot), ...allBudgets.filter(b => b.view?.pivot)]
+  const availableBudgets = [...allBudgets.filter(b => !isCustomReportBudget(b)), ...allBudgets.filter(isCustomReportBudget)]
     .filter(b => b.id !== budget?.id);
   // What an edit cuts the report from: the source it is linked to while this user can still
   // see it, else the report's own data (a copy of one shared with them starts there).

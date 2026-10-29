@@ -87,7 +87,9 @@ Every row spells the full id, prefix included.
 | `MancoReporting.Nav.BudgetVsActuals` | click | Sidebar → Budget vs Actuals. |
 | `MancoReporting.Nav.MonthlyActuals` | click | Sidebar → Monthly Actuals. Shown only while this firm has no budget. |
 | `MancoReporting.Nav.BudgetVsActualsBudget` | click | Sidebar → one budget under Budget vs Actuals. The budget id stays out of the event. |
-| `MancoReporting.Nav.NewCustomReport` | click | Sidebar → "New custom report" under Budget vs Actuals. Opens an unsaved draft; shown only when the server can derive custom reports and the ledger (`/api/accounts`) has loaded. |
+| `MancoReporting.Nav.CustomReporting` | click | Sidebar → Custom Reporting. Opens your first custom report, or a new draft when you have none. |
+| `MancoReporting.Nav.CustomReport` | click | Sidebar → one of your custom reports under Custom Reporting. The report id stays out of the event. |
+| `MancoReporting.Nav.NewCustomReport` | click | Sidebar → "New custom report", the last row under Custom Reporting. Opens an unsaved draft; shown only when the server can derive custom reports and the ledger (`/api/accounts`) has loaded. |
 | `MancoReporting.Nav.SharedReport` | click | Sidebar → a report someone shared with you, under "Shared with you". The report id stays out of the event. |
 | `MancoReporting.Nav.LoadSharedReports` | click | Sidebar → "Load shared reports" (or "Check for new shared reports"). |
 | `MancoReporting.Nav.ShowHiddenReports` | click | Sidebar → "Show N hidden" under "Shared with you". |
@@ -243,6 +245,7 @@ or when a row here names a page nothing emits.
 |---|---|---|
 | `MancoReporting.Dashboard.View` | render | Dashboard route became active. |
 | `MancoReporting.BudgetVsActuals.View` | render | Budget vs Actuals route became active. |
+| `MancoReporting.CustomReporting.View` | render | Custom Reporting route became active. |
 | `MancoReporting.MonthlyActuals.View` | render | Monthly Actuals route became active. |
 | `MancoReporting.Drilldown.Open.Account.Dashboard` | render | Account drill from the Dashboard's spend-by-GL chart. |
 | `MancoReporting.Drilldown.Open.Account.BudgetVsActuals` | render | Account drill from a Budget vs Actuals by-account row or cell. |

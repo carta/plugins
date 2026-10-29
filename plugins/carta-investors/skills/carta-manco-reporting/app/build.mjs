@@ -100,7 +100,7 @@ async function buildVendors() {
   // `external: react` keeps this on the app's one React instance via the importmap.
   // Add every icon actually imported from "lucide-react" in src/ — nothing else ships.
   const iconsEntryPath = resolve(APP, "_lucide-entry-tmp.mjs");
-  await writeFile(iconsEntryPath, 'export { Zap, BarChart3, Table, Download, Check, TriangleAlert, Sun, Moon } from "lucide-react";\n');
+  await writeFile(iconsEntryPath, 'export { Zap, BarChart3, Table, LayoutGrid, Download, Check, TriangleAlert, Sun, Moon } from "lucide-react";\n');
   try {
     console.log("  bundling lucide-react (sidebar + export icons)…");
     await esbuild({

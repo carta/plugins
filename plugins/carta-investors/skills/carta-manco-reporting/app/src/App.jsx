@@ -28,7 +28,7 @@ import FirmChooser from "./shell/FirmChooser.jsx";
 import MancoEntityChooser from "./shell/MancoEntityChooser.jsx";
 import NoMancoEntity from "./shell/NoMancoEntity.jsx";
 import { useHostedApp } from "./shell/hostedApp.js";
-import { budgetNavChildren } from "./shell/reportNav.js";
+import { BVA, CUSTOM_REPORTING, budgetNavChildren, isCustomReportBudget } from "./shell/reportNav.js";
 import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
 import ShareStatus, { pulledMessage } from "./reports/ShareStatus.jsx";
 import { setDisplayCurrency } from "./charts/chartTheme.js";
@@ -67,7 +67,10 @@ function usePathRoute(firmSlug) {
 
 // Slug -> the name its events carry. A Budget-vs-Actuals child slug is a
 // workbook-derived budget id, so it never reaches an id.
-const VIEW_NAMES = { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals", "monthly-actuals": "MonthlyActuals" };
+const VIEW_NAMES = {
+  "dashboard": "Dashboard", [BVA]: "BudgetVsActuals",
+  [CUSTOM_REPORTING]: "CustomReporting", "monthly-actuals": "MonthlyActuals",
+};
 
 // The unsaved custom report draft's slug; a draft seeded from a budget appends its id
 // after DRAFT_FROM.
@@ -387,22 +390,31 @@ export default function App() {
   // has no budget at all.
   const budgetsList = renderableBudgets(snapshot);
   const firmHasBudget = hasBudget(snapshot);
-  const { own: ownBudgetChildren, sharedWithYou: sharedChildren } = budgetNavChildren(budgetsList, reportsApi);
-  // `action: true` renders as a muted "+" row, not a page — see Sidebar.jsx. It follows
-  // the reports it makes more of. Saved custom reports are ordinary own budgets;
+  const {
+    own: ownBudgetChildren, customReports: ownCustomReports, sharedWithYou: sharedChildren,
+  } = budgetNavChildren(budgetsList, reportsApi);
+  // `action: true` renders as a muted "+" row, not a page — see Sidebar.jsx. It always
+  // closes the Custom Reporting section, below the reports it makes more of.
   // NEW_CUSTOM_REPORT, or DRAFT_FROM plus a budget id, is the unsaved draft. A custom
   // report shows figures only from the ledger, so it is offered only once that loaded.
   const canDerive = !!accountsData && reportsApi.available && reportsApi.can(REPORT_ACTIONS.DERIVE);
-  const budgetChildren = canDerive
-    ? [...ownBudgetChildren, { slug: NEW_CUSTOM_REPORT, label: "New custom report", action: true, event: "MancoReporting.Nav.NewCustomReport" }]
-    : ownBudgetChildren;
+  const budgetChildren = ownBudgetChildren.map(c => ({ ...c, event: "MancoReporting.Nav.BudgetVsActualsBudget" }));
+  const customReportChildren = [
+    ...ownCustomReports.map(c => ({ ...c, event: "MancoReporting.Nav.CustomReport" })),
+    ...(canDerive ? [{ slug: NEW_CUSTOM_REPORT, label: "New custom report", action: true, event: "MancoReporting.Nav.NewCustomReport" }] : []),
+  ];
   // `icon` is a lookup key into Sidebar.jsx's ICONS map (Lucide glyphs, per
   // Ink's brand.md's Ink-icon stand-in mapping).
   const navItems = [
     { slug: "dashboard",         label: "Dashboard",         icon: "quickaction" },
-    { slug: "budget-vs-actuals", label: "Budget vs Actuals", icon: "company",
+    { slug: BVA,                 label: "Budget vs Actuals", icon: "company",
       hidden:   () => !firmHasBudget,
       children: budgetChildren },
+    // Your own saved custom reports, then the action that makes another. A report is
+    // cut from a budget, so the section goes wherever Budget vs Actuals does.
+    { slug: CUSTOM_REPORTING,    label: "Custom Reporting",  icon: "customreport",
+      hidden:   () => !firmHasBudget || customReportChildren.length === 0,
+      children: customReportChildren },
     // Actuals by GL account, no budget columns — stands in for Budget vs
     // Actuals only while this firm has nothing budgeted, in Carta or a
     // workbook. The two never show together.
@@ -410,24 +422,44 @@ export default function App() {
       hidden:   () => firmHasBudget },
   ].filter(item => !item.hidden || !item.hidden(snapshot));
 
-  // The tab segment reads "budget-vs-actuals" or "budget-vs-actuals/<id>" —
-  // peel off the parent slug and budget id so the switch below renders either.
+  // The tab segment reads "<parent>" or "<parent>/<id>" — peel off the parent slug and
+  // budget id so the switch below renders either.
   const [routeParent, routeChild] = String(route || "").split("/", 2);
   const validParents = new Set(navItems.map(i => i.slug));
-  const activeParent = validParents.has(routeParent) ? routeParent : "dashboard";
-  // Default budget = the first available when BvA is active but no child specified.
-  const activeBudgetId = routeChild
-                       || (activeParent === "budget-vs-actuals" && (ownBudgetChildren[0] || sharedChildren[0])?.slug);
+  // A draft has no budget yet, so it is recognized by its slug.
+  const isDraftSlug = (slug) => slug === NEW_CUSTOM_REPORT || String(slug).startsWith(DRAFT_FROM);
+  // A budget-vs-actuals/<id> link to one of your custom reports, or to a draft, opens it
+  // under Custom Reporting, where the sidebar lists it.
+  const ownCustomUnderBva = routeParent === BVA && !!routeChild
+    && (isDraftSlug(routeChild) || ownCustomReports.some(c => c.slug === routeChild));
+  // A custom-reporting/<id> child opens only as a draft or a custom report; any other id
+  // (a deleted report, a plain budget) counts as no child at all. One that opens does so
+  // whenever the firm has a budget, even before the section shows: with no saved report
+  // it waits on the ledger, and that page says so.
+  const customChildOpens = !!routeChild && (isDraftSlug(routeChild)
+    || isCustomReportBudget(budgetsList.find(b => b.id === routeChild)));
+  const customPageOpens = routeParent === CUSTOM_REPORTING && customChildOpens && firmHasBudget;
+  const activeParent = ownCustomUnderBva && validParents.has(CUSTOM_REPORTING) ? CUSTOM_REPORTING
+    : validParents.has(routeParent) || customPageOpens ? routeParent : "dashboard";
+  // A section opened with no child specified lands on its first page.
+  const routeBudgetId = routeParent === CUSTOM_REPORTING && !customChildOpens ? null : routeChild;
+  const activeBudgetId = routeBudgetId
+    || (activeParent === BVA && (ownBudgetChildren[0] || sharedChildren[0])?.slug)
+    || (activeParent === CUSTOM_REPORTING && customReportChildren[0]?.slug);
   const activeRoute = activeBudgetId ? `${activeParent}/${activeBudgetId}` : activeParent;
 
-  // A draft has no budget yet, so it is recognized by its slug; a saved custom report is
-  // any budget whose view carries a pivot — yours, a duplicate, or one shared with you.
+  // A saved custom report is any budget whose view carries a pivot — yours, a duplicate,
+  // or one shared with you, whose route stays under Budget vs Actuals while its row sits in
+  // "Shared with you", the group that closes the report sections.
+  const onReportPage = activeParent === BVA || activeParent === CUSTOM_REPORTING;
   const seedBudgetId = String(activeBudgetId).startsWith(DRAFT_FROM) ? activeBudgetId.slice(DRAFT_FROM.length) : null;
-  const isDraftCustomReport = activeParent === "budget-vs-actuals"
-    && (activeBudgetId === NEW_CUSTOM_REPORT || seedBudgetId !== null);
+  const isDraftCustomReport = onReportPage && isDraftSlug(activeBudgetId);
   const activeBudget = budgetsList.find(b => b.id === activeBudgetId) || null;
-  const isCustomReport = isDraftCustomReport || (activeParent === "budget-vs-actuals" && !!activeBudget?.view?.pivot);
-  const openReport = (id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals");
+  const isCustomReport = isDraftCustomReport || (onReportPage && isCustomReportBudget(activeBudget));
+  const openReport = (id) => navigate(id ? `${BVA}/${id}` : BVA);
+  // Everything the custom report view opens (a saved draft, a duplicate) is your own
+  // custom report.
+  const openCustomReport = (id) => (id ? navigate(`${CUSTOM_REPORTING}/${id}`) : openReport(null));
   const shareDone = (message) => setShareNotice({ status: "done", op: REPORT_ACTIONS.SHARE, message });
 
   // Waits for the snapshot: until it lands, Budget vs Actuals is filtered out of
@@ -467,7 +499,9 @@ export default function App() {
       if (!(snapshot && reportsApi.available && (sharedChildren.length || onPull || onShowHidden))) return null;
       return {
         items: sharedChildren,
-        parentSlug: "budget-vs-actuals",
+        parentSlug: BVA,
+        // Below the last report group shown, so it closes the report sections.
+        afterSlug: validParents.has(CUSTOM_REPORTING) ? CUSTOM_REPORTING : BVA,
         busy: shareNotice?.status === "running",
         onPull,
         hiddenCount: hiddenReports.length,
@@ -558,7 +592,7 @@ export default function App() {
             onToggleChat={onToggleChat}
           />
         )}
-        {snapshot && activeParent === "budget-vs-actuals" && !isCustomReport && (
+        {snapshot && activeParent === BVA && !isCustomReport && (
           <BudgetActualsView
             snapshot={snapshot}
             accountsData={accountsData}
@@ -572,7 +606,7 @@ export default function App() {
             hosted={hostedApp}
             onOpenReport={openReport}
             onShareDone={shareDone}
-            onCreateCustomReport={canDerive ? (id) => navigate(`budget-vs-actuals/${DRAFT_FROM}${id}`) : null}
+            onCreateCustomReport={canDerive ? (id) => navigate(`${CUSTOM_REPORTING}/${DRAFT_FROM}${id}`) : null}
           />
         )}
         {snapshot && !accountsData && isCustomReport && (
@@ -592,7 +626,7 @@ export default function App() {
             seedBudgetId={seedBudgetId}
             reportsApi={reportsApi}
             hosted={hostedApp}
-            onOpenReport={openReport}
+            onOpenReport={openCustomReport}
             onShareDone={shareDone}
             onCancel={() => openReport(null)}
             dark={dark}
