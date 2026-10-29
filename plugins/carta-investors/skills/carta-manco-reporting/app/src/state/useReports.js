@@ -209,6 +209,8 @@ export default function useReports({ onChanged } = {}) {
     available,
     reports: listing.reports,
     shareTarget: listing.share_target,
+    // Why the last own-sync sweep couldn't reach Carta (a local serve.py only).
+    ownSync: listing.own_sync || null,
     shareJob,
     can,
     byId,

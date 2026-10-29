@@ -292,6 +292,7 @@ def _reports_listing():
                     for r in doc["reports"]],
         "share_target": share_bridge.describe_target(manco_paths.read_carta_environment(DATA_DIR),
                                                        manco_paths.read_share_mcp_server(DATA_DIR)),
+        "own_sync": manco_paths.read_own_sync_status(DATA_DIR),
     }, store.etag()
 
 
@@ -551,7 +552,7 @@ def _run_share_op(op, params):
                 result["rebuild_error"] = message
         _finish_share_state(status="done", result=result, error=None)
     except share_bridge.ShareError as e:
-        if e.code == "unreachable":
+        if e.code == share_bridge.UNREACHABLE:
             # Covers both "claude isn't installed" and "signed out" — refresh now so
             # /api/claude-status (and the next share attempt) reflect it without
             # waiting for the next time something happens to trigger a recheck.

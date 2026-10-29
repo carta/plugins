@@ -76,6 +76,11 @@ _INSTRUMENTATION_JSON = json.dumps(INSTRUMENTATION, separators=(",", ":"))
 _TOOLNAME_RE = re.compile(r"^mcp__(.+)__[a-z_]+$")
 
 
+# The ShareError code for "no Carta connector answered": the `claude` CLI didn't start, or
+# none of the candidate servers' welcome resolved.
+UNREACHABLE = "unreachable"
+
+
 class ShareError(Exception):
     """A sharing failure the app shows. `code` is its typed state; `raw` keeps the
     original tool error for the server log only."""
@@ -377,7 +382,7 @@ class Bridge(object):
         try:
             session.start()
         except OSError:
-            raise ShareError("Couldn't start a Claude session for sharing — is Claude Code installed?", "unreachable")
+            raise ShareError("Couldn't start a Claude session for sharing — is Claude Code installed?", UNREACHABLE)
         names = ", ".join("mcp__%s__welcome" % s for s in self._servers)
         session.send(
             "Call whichever ONE of these Carta welcome tools resolves — try them in order and call "
@@ -406,7 +411,7 @@ class Bridge(object):
             session.close()
             raise ShareError(
                 "Couldn't reach Carta — sharing needs your Carta connector connected in Claude.",
-                "unreachable")
+                UNREACHABLE)
         self._session, self._call_tool = session, "mcp__%s__call_tool" % server
         return session, self._call_tool
 

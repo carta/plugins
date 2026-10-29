@@ -325,12 +325,18 @@ export default function App() {
 
   // Refetch when the tab becomes visible again, so a long-open tab picks up actuals
   // the server has refreshed since; resurfaceDue throttles it. A network failure leaves
-  // the page as it was.
+  // the page as it was. A local build also re-reads the report list every time, unthrottled:
+  // it carries the own-sync sweep's last result, which lands after the build that opened
+  // this page, and is a cheap local read.
+  const reloadReports = reportsApi.reload;
   useEffect(() => {
-    const onVisible = () => { if (resurfaceDue(lastFetchRef.current)) fetchData({ background: true }); };
+    const onVisible = () => {
+      if (resurfaceDue(lastFetchRef.current)) fetchData({ background: true });
+      if (hostedApp === false && document.visibilityState === "visible") reloadReports();
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [fetchData]);
+  }, [fetchData, hostedApp, reloadReports]);
 
   // Auto-load: when the snapshot comes back not_ready, drive /api/load-firm's SSE
   // progress stream. /api/reports can depend on the firm just loaded, and the read on

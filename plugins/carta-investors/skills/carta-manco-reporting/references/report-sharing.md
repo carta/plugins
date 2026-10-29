@@ -80,6 +80,17 @@ is sent (`scripts/report_payload.py`) and again by Carta.
   `checking` (no probe has landed yet, `reason` is `null`), `available`, or
   `unavailable`; once a probe has run, `reason` is `ok`, `not_installed`, or
   `not_logged_in`.
+- After every build, `own_sync.py`'s sweep mirrors the owner's own reports to Carta for the
+  hosted app. Until the operator's user id file, a working `claude` CLI and a Carta connector
+  that CLI can reach are all in place, it pushes nothing and writes why to
+  `<dashboard_dir>/own_sync.log` and `own_sync_status.json` (`blocked_by`: `no_user_id`,
+  `not_installed`, `not_logged_in` or `unreachable`; `null` once a sweep reached Carta).
+  `GET /api/reports` returns it as `own_sync`. The local app re-reads that list whenever its
+  tab becomes visible again, and shows the reason on the owner's report with what to do
+  (`app/src/reports/OwnSyncNotice.jsx`): "Not on the hosted app" for a report no sweep has
+  pushed yet, "Changes won't reach the hosted app" for one an earlier sweep did.
+  `unreachable` is the usual case for a dashboard built in the Claude desktop app: its
+  Carta connector isn't available to the `claude` CLI.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.

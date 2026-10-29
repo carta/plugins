@@ -83,6 +83,19 @@ from share_bridge import ShareError
 
 Emit = Callable[[str], None]
 
+# Why a sweep couldn't reach Carta, recorded for serve.py (manco_paths.write_own_sync_status)
+# so the local app can tell the owner their reports aren't on the hosted app. preflight_claude's
+# own reasons are recorded as they are.
+BLOCKED_NO_USER_ID = "no_user_id"
+BLOCKED_NOT_INSTALLED = preflight_claude.REASON_NOT_INSTALLED
+BLOCKED_NOT_LOGGED_IN = preflight_claude.REASON_NOT_LOGGED_IN
+BLOCKED_UNREACHABLE = share_bridge.UNREACHABLE
+
+
+def _is_unreachable(e: BaseException) -> bool:
+    """No Carta connector answered: every later call would fail the same way."""
+    return isinstance(e, ShareError) and e.code == BLOCKED_UNREACHABLE
+
 _VARIANCE_CATEGORY_FIELDS = ("name", "budget", "actual", "variance")
 
 
@@ -298,13 +311,16 @@ def reconcile_names(store: report_store.ReportStore, data_dir: Path, bridge: Any
 
     Best-effort and silent, like sweep() itself: a dashboard predating report sharing, a
     listing Carta refuses, or any other error here never stops the push side sweep() runs
-    right after.
+    right after. The one exception is a Carta connector the `claude` CLI can't reach at
+    all: that ShareError (code BLOCKED_UNREACHABLE) is raised, since no push can succeed either.
     """
     doc = store.load()
     try:
         ctx = share_ops.context(data_dir)
         reports = share_ops.list_reports(bridge, ctx, emit)
     except ShareError as e:
+        if _is_unreachable(e):
+            raise
         print("[own_sync] name reconcile skipped: %r" % e, file=sys.stderr)
         return
     if reports is None:
@@ -333,14 +349,32 @@ def sweep(data_dir: Path, user_id: int, bridge: Any) -> None:
 
     main()'s production caller (build_manco_datadir.py's _spawn_sync_sweep)
     redirects this stderr to manco_paths.own_sync_log_file, so a skipped push
-    still leaves a record a maintainer can read."""
+    still leaves a record a maintainer can read.
+
+    A Carta connector the `claude` CLI can't reach stops the sweep: every push
+    would fail the same way. That is recorded as the sweep's status, which a sweep
+    that did reach Carta clears."""
     store = report_store.ReportStore(data_dir)
-    reconcile_names(store, data_dir, bridge)
-    for report in store.load()["reports"]:
-        try:
-            push_if_changed(bridge, store, data_dir, report["id"], user_id, lambda message: None)
-        except Exception as e:
-            print("[own_sync] push %r skipped: %r" % (report["id"], e), file=sys.stderr)
+    try:
+        reconcile_names(store, data_dir, bridge)
+        for report in store.load()["reports"]:
+            try:
+                push_if_changed(bridge, store, data_dir, report["id"], user_id, lambda message: None)
+            except Exception as e:
+                if _is_unreachable(e):
+                    raise
+                print("[own_sync] push %r skipped: %r" % (report["id"], e), file=sys.stderr)
+    except ShareError as e:
+        _record_blocked(data_dir, BLOCKED_UNREACHABLE,
+                        "the claude CLI can't reach a Carta connector (%s): %s"
+                        % (", ".join(bridge.servers), e))
+        return
+    manco_paths.write_own_sync_status(data_dir, None)
+
+
+def _record_blocked(data_dir: Path, reason: str, detail: str) -> None:
+    print("[own_sync] not synced to the hosted app: %s" % detail, file=sys.stderr)
+    manco_paths.write_own_sync_status(data_dir, reason)
 
 
 # A sweep's lock counts as stale only once the *process* holding it has
@@ -373,10 +407,11 @@ def main(argv: Optional[list] = None) -> int:
     every build: push every report whose payload differs from its last push,
     or that has never been pushed, without making the build itself wait on it.
 
-    Exits 0 and does nothing when there's no operator id to sync as yet (the
+    Exits 0 having pushed nothing when there's no operator id to sync as yet (the
     plugin-level ${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md hasn't run
     for this dashboard), or no working `claude` CLI to reach Carta through —
-    both are "try again next build", not failures.
+    both are "try again next build", not failures — and records why in the log
+    and the sweep's status.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", required=True)
@@ -385,9 +420,13 @@ def main(argv: Optional[list] = None) -> int:
 
     user_id = manco_paths.read_user_id(data_dir)
     if user_id is None:
+        _record_blocked(data_dir, BLOCKED_NO_USER_ID,
+                        "no %s yet, so there's no Carta user to sync as"
+                        % manco_paths.user_id_file(data_dir).name)
         return 0
     probed = preflight_claude.probe()
     if probed["reason"] != preflight_claude.REASON_OK:
+        _record_blocked(data_dir, probed["reason"], "the claude CLI is %s" % probed["reason"].replace("_", " "))
         return 0
 
     # An abandoned lock frees itself once it goes stale, so there's nothing a

@@ -3,6 +3,12 @@ import { INK, FAINT, RED, SHADE, LINE, FS } from "../ui/theme.js";
 import { Btn } from "../ui/components.jsx";
 import { trackClick } from "../analytics.js";
 
+// The fix for each `claude` CLI status scripts/preflight_claude.py reports, worded to start a prompt.
+export const CLAUDE_FIX_STEP = {
+  not_installed: "Install the Claude Code CLI (the `claude` command)",
+  not_logged_in: "Sign in to Claude Code (`claude auth login`)",
+};
+
 // What to ask Claude to do when a ShareError's `code` names the `claude` CLI itself
 // as the reason report sharing couldn't run (scripts/preflight_claude.py's two
 // recoverable statuses, which scripts/serve.py's _CLAUDE_FIX_MESSAGES short-circuits
@@ -12,10 +18,8 @@ import { trackClick } from "../analytics.js";
 // directly), so every caller passes `hosted`, and this is the one place that rule
 // lives rather than being repeated at each call site.
 const PROMPTS = {
-  not_installed: "Install the Claude Code CLI (the `claude` command) so I can share " +
-    "reports from the ManCo reporting dashboard.",
-  not_logged_in: "Sign in to Claude Code (`claude auth login`) so I can share reports " +
-    "from the ManCo reporting dashboard.",
+  not_installed: `${CLAUDE_FIX_STEP.not_installed} so I can share reports from the ManCo reporting dashboard.`,
+  not_logged_in: `${CLAUDE_FIX_STEP.not_logged_in} so I can share reports from the ManCo reporting dashboard.`,
 };
 
 export function claudeFixPrompt(code, hosted) {

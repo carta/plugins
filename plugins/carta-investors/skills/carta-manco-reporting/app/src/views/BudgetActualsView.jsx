@@ -23,6 +23,7 @@ import ExportButton from "../ui/ExportButton.jsx";
 import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
 import { reportFor } from "../shell/reportNav.js";
 import ReportNotice from "../reports/ReportNotice.jsx";
+import OwnSyncNotice from "../reports/OwnSyncNotice.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import AskClaudeButton from "../ui/AskClaudeButton.jsx";
 import { exportPropsFor } from "../ui/exportHtml.js";
@@ -286,6 +287,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
       <Capped>
       <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi}
         accountsData={accountsData} onOpenReport={onOpenReport} onShareDone={onShareDone} />
+      <OwnSyncNotice report={report} reportsApi={reportsApi} hosted={hosted} />
       <div style={styles.metaRow}>
         {!isTagCrosstab && !isOutline && !ownsPeriodControl(viewKind, budget) && (
           <span style={styles.metaChip}>

@@ -173,6 +173,28 @@ def own_sync_log_file(dashboard_dir):
     return pathlib.Path(dashboard_dir) / "own_sync.log"
 
 
+def own_sync_status_file(dashboard_dir):
+    return pathlib.Path(dashboard_dir) / "own_sync_status.json"
+
+
+def write_own_sync_status(dashboard_dir, blocked_by):
+    """Record why the last own-sync sweep couldn't reach Carta (one of own_sync's
+    BLOCKED_* reasons), or None once one did, for serve.py to show the owner."""
+    try:
+        own_sync_status_file(dashboard_dir).write_text(json.dumps({"blocked_by": blocked_by}))
+    except OSError:
+        pass
+
+
+def read_own_sync_status(dashboard_dir):
+    """{"blocked_by": <reason or None>}, or None before any sweep recorded one."""
+    try:
+        status = json.loads(own_sync_status_file(dashboard_dir).read_text())
+    except (OSError, ValueError):
+        return None
+    return status if isinstance(status, dict) else None
+
+
 def read_carta_environment(dashboard_dir):
     """This firm's cached snapshot.cartaEnvironment ("production" or
     "nonprod"), served to the tracker and deciding which Carta connectors
