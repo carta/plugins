@@ -293,29 +293,28 @@ function exitQLabel(navAsOf, q) {
 // exit horizon (the "Exit: +N years" master strategy), not today — `defaultExitQ`
 // carries that (computed at the call site from `exitHorizonFor`).
 function ExitTimingSection({ company, navAsOf, locked, updateCompany, defaultExitQ = 0, onDragStart, onDragEnd }) {
-  if (!navAsOf) {
-    return (
-      <div style={{ marginBottom: 14 }}>
-        <PlainLabel>Exit timing</PlainLabel>
-        <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
-          Unavailable — this fund has no NAV-as-of date in the data pull, so exit timing can't be computed.
-        </div>
-      </div>
-    );
-  }
   const selectedQ = Math.round(company.exitTimingQ ?? defaultExitQ);
   // A dropdown of all 25 quarters (Q0-Q24) instead of a drag slider — the exit
   // quarter is a discrete pick, not a continuous value, so a list reads more
   // directly than dragging to the right tick.
-  const options = Array.from({ length: EXIT_Q_MAX + 1 }, (_, q) => ({ id: q, label: exitQLabel(navAsOf, q) }));
+  const options = navAsOf ? Array.from({ length: EXIT_Q_MAX + 1 }, (_, q) => ({ id: q, label: exitQLabel(navAsOf, q) })) : [];
   return (
-    <Dropdown options={options} value={selectedQ} triggerLabel="Exit timing" locked={locked} minWidth={0} maxWidth={220}
-      onChange={(q) => {
-        onDragStart?.();
-        trackClick("FundModeling.Companies.SetExitQuarter");
-        updateCompany(company.id, { exitTimingQ: q });
-        onDragEnd?.();
-      }} />
+    <div>
+      <PlainLabel>Exit timing</PlainLabel>
+      {navAsOf ? (
+        <Dropdown options={options} value={selectedQ} ariaLabel="Exit timing" locked={locked} minWidth={0} maxWidth={220}
+          onChange={(q) => {
+            onDragStart?.();
+            trackClick("FundModeling.Companies.SetExitQuarter");
+            updateCompany(company.id, { exitTimingQ: q });
+            onDragEnd?.();
+          }} />
+      ) : (
+        <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
+          Unavailable — this fund has no NAV-as-of date in the data pull, so exit timing can't be computed.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1127,46 +1126,7 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
           {!openModal && cfg && (
             <div>
               <div>
-                {/* Realize + its Exit-timing dropdown float top-right, OUT of normal
-                    flow (position: absolute) — a flex sibling column would shrink the
-                    slider's own width to "remaining space" (it no longer reaches the
-                    full content width, unlike the Dilution slider below), and would
-                    still grow the shared row's height when the dropdown appears,
-                    pushing the value down. Absolute positioning avoids both: the label
-                    + RepriceControl block below renders at full width, undisturbed. */}
-                <div style={{ position: "relative", marginBottom: 24 }}>
-                  <div style={{ position: "absolute", top: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Toggle small checked={!!company.exited}
-                        onChange={(val) => {
-                          trackClick("FundModeling.Companies.ToggleRealize");
-                          updateCompany(company.id, { exited: val, includeInNav: true });
-                        }}
-                        labels={Array(2).fill(`Realize at ${cfg.fmtVal(cfg.value)} ${companyIsWaterfall(company) || hasBasis ? "valuation" : "MOIC"}`)}
-                        locked={readOnly} textColor="var(--ink-color-global-text-default)"
-                        title="Crystallize this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount." />
-                      <InfoTip label="What does Realize mean?" width={320}>
-                        <div>Realize crystallizes this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount.</div>
-                        {companyHasCapTable(company) && !company.realized && !company.defunct && (
-                          <div style={{ marginTop: 6 }}>Independent of <strong>Waterfall</strong>, which values the stake through the preference stack at the slider valuation instead of the flat mark.</div>
-                        )}
-                      </InfoTip>
-                    </div>
-                    {/* Realize is a toggle, not a checkbox — reads as "flip this on to
-                        crystallize" like the other mark-adjacent switches (e.g. Waterfall).
-                        Its label names the actual lever being pulled (MOIC vs. dollar
-                        valuation) rather than the generic "this mark" — GPs/CFOs talk
-                        about an exit in terms of company valuation, not MOIC (a per-fund
-                        derived return, not the deal itself), so waterfall/hasBasis's $
-                        slider reads "valuation" and the plain multiple slider reads "MOIC". */}
-                    {company.exited && !company.realized && (
-                      <ExitTimingSection company={company}
-                        navAsOf={snapshot?.source?.navAsOf} locked={readOnly} updateCompany={updateCompany}
-                        defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
-                          quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
-                        onDragStart={onDragStart} onDragEnd={onDragEnd} />
-                    )}
-                  </div>
+                <div style={{ marginBottom: 24 }}>
                   {/* MOIC and Company valuation (liquidation waterfall) share one label
                       row — a caret dropdown swaps between them instead of a separate
                       toggle switch below. hasBasis companies (a $-basis mark on file)
@@ -1280,39 +1240,77 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
                   </div>
                 </div>
               )}
-              {/* Partial sales live on their own tab: the cluster above is
-                  already full, and a plan is a list, not one more knob. The
-                  chips keep the plan visible without it. */}
-              {!company.realized && !company.defunct && (() => {
-                const sales = secondarySales(company);
-                const open = () => {
-                  trackClick("FundModeling.Companies.ExitPlanOpen");
-                  setOpenModal("partialsales");
-                };
-                if (!sales.length) {
-                  return (
-                    <div style={{ marginTop: 4 }}>
-                      <Btn kind="link" onClick={open}
-                        title="Model selling part of this stake before the exit">
-                        Plan partial sales
-                      </Btn>
-                    </div>
-                  );
-                }
-                return (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-                    <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
-                      Partial sales
-                    </span>
-                    {planChips(company, snapshot?.source?.navAsOf,
-                      (id) => {
-                        trackClick("FundModeling.Companies.ExitPlanRemoveSale");
-                        updateCompany(company.id, { secondaries: sales.filter((s) => s.id !== id) });
-                      }, readOnly)}
-                    <Btn kind="link" onClick={open}>Edit plan</Btn>
+              {/* ── Exit assumptions: everything that shapes how and when this
+                  holding exits — realize, its quarter, and any partial sales.
+                  The heading is a PlainLabel, like "MOIC" and "Expected future
+                  dilution", so the section reads as one more block of the same stack. */}
+              <div style={{ borderTop: "1px solid var(--ink-color-global-border-subtle)", paddingTop: 14 }}>
+                <PlainLabel style={{ marginBottom: 12 }}>Exit assumptions</PlainLabel>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Toggle checked={!!company.exited}
+                      onChange={(val) => {
+                        trackClick("FundModeling.Companies.ToggleRealize");
+                        updateCompany(company.id, { exited: val, includeInNav: true });
+                      }}
+                      labels={Array(2).fill(`Realize at ${cfg.fmtVal(cfg.value)} ${companyIsWaterfall(company) || hasBasis ? "valuation" : "MOIC"}`)}
+                      locked={readOnly} textColor="var(--ink-color-global-text-default)"
+                      title="Crystallize this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount." />
+                    <InfoTip label="What does Realize mean?" width={320}>
+                      <div>Realize crystallizes this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount.</div>
+                      {companyHasCapTable(company) && !company.realized && !company.defunct && (
+                        <div style={{ marginTop: 6 }}>Independent of <strong>Waterfall</strong>, which values the stake through the preference stack at the slider valuation instead of the flat mark.</div>
+                      )}
+                    </InfoTip>
                   </div>
-                );
-              })()}
+                  {/* Realize is a toggle, not a checkbox — reads as "flip this on to
+                      crystallize" like the other mark-adjacent switches (e.g. Waterfall).
+                      Its label names the actual lever being pulled (MOIC vs. dollar
+                      valuation) rather than the generic "this mark" — GPs/CFOs talk
+                      about an exit in terms of company valuation, not MOIC (a per-fund
+                      derived return, not the deal itself), so waterfall/hasBasis's $
+                      slider reads "valuation" and the plain multiple slider reads "MOIC". */}
+                  {company.exited && !company.realized && (
+                    <ExitTimingSection company={company}
+                      navAsOf={snapshot?.source?.navAsOf} locked={readOnly} updateCompany={updateCompany}
+                      defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
+                        quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
+                      onDragStart={onDragStart} onDragEnd={onDragEnd} />
+                  )}
+                  {/* Partial sales live on their own tab: a plan is a list, not one
+                      more knob. The chips keep the plan visible without it. */}
+                  {!company.realized && !company.defunct && (() => {
+                    const sales = secondarySales(company);
+                    const open = () => {
+                      trackClick("FundModeling.Companies.ExitPlanOpen");
+                      setOpenModal("partialsales");
+                    };
+                    if (!sales.length) {
+                      return (
+                        <div>
+                          <Btn kind="link" onClick={open}
+                            title="Model selling part of this stake before the exit">
+                            Plan partial sales
+                          </Btn>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>
+                          Partial sales
+                        </span>
+                        {planChips(company, snapshot?.source?.navAsOf,
+                          (id) => {
+                            trackClick("FundModeling.Companies.ExitPlanRemoveSale");
+                            updateCompany(company.id, { secondaries: sales.filter((s) => s.id !== id) });
+                          }, readOnly)}
+                        <Btn kind="link" onClick={open}>Edit plan</Btn>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
           )}
 

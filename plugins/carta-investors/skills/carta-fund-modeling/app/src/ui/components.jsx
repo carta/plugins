@@ -687,14 +687,17 @@ export const POPOVER_SHADOW = "0 8px 24px rgba(20,24,24,.12), 0 2px 6px rgba(20,
  *  `triggerLabel` prefixes the trigger text as "{triggerLabel}: {value}" (a
  *  self-labeling trigger, per Carta's dropdown convention, instead of a
  *  separate uppercase label row above the control) — the popover's own
- *  option rows are unaffected. `nullLabel` renders in place of an option
- *  label when `value` is `null`/doesn't match any option (a "Mixed" state
- *  across a scope with no single current value) instead of silently
+ *  option rows are unaffected. When a visible label row sits above the
+ *  control instead, pass `ariaLabel` so the trigger's accessible name is
+ *  still "{ariaLabel}: {value}" without changing its visible text.
+ *  `nullLabel` renders in place of an option label when `value` is
+ *  `null`/doesn't match any option (a "Mixed" state across a
+ *  scope with no single current value) instead of silently
  *  falling back to the first option. `locked` matches the app's other
  *  controls (Segmented, Btn): clickable-but-dimmed with a "duplicate into a
  *  scenario to edit" tooltip — it's a visual cue only, since the actual
  *  write-guard lives in the `onChange` callback's own `updateSlice`. */
-export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 460, testId, triggerLabel, nullLabel, locked }) {
+export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 460, testId, triggerLabel, ariaLabel, nullLabel, locked }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const listRef = useRef(null);
@@ -721,6 +724,7 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block", opacity: locked ? 0.45 : 1 }}>
       <button onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} data-testid={testId}
+        aria-label={ariaLabel ? `${ariaLabel}: ${label}` : undefined}
         className={`dd-trigger${open ? " is-open" : ""}`}
         title={locked ? "Locked — duplicate into a scenario to edit" : undefined}
         style={{ ...ddTriggerStyle({ minWidth, maxWidth }), cursor: locked ? "not-allowed" : "pointer" }}>
