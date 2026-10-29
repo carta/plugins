@@ -5486,9 +5486,9 @@ def _spawn_sync_sweep(dashboard_dir):
     """Best-effort, fire-and-forget: push any new or changed own-sync reports to
     Carta after this build, without this process waiting on it. own_sync.main()
     never fails the build — no known user id yet, no usable Claude CLI, no
-    Carta connector that CLI can reach, or nothing changed all exit 0. Every
-    reason but the last is written to <dashboard_dir>/own_sync.log and
-    own_sync_status.json, which the local app shows the owner. A report that fails to push is
+    Carta connector that CLI can reach, or nothing changed all exit 0. Why is
+    written to <dashboard_dir>/own_sync.log, and to own_sync_status.json under
+    own_sync._record_blocked's rule; the local app shows it to the owner. A report that fails to push is
     skipped and noted in <dashboard_dir>/own_sync.log rather than raised, so a
     maintainer can see why one report never shows up on the hosted microapp
     without that detail vanishing into a detached process nobody reads. This

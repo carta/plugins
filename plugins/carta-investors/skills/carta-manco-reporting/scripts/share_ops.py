@@ -20,6 +20,8 @@ from share_bridge import ShareError
 from shapes import canonical
 
 SOURCE_CLIENT = "carta-manco-reporting"
+CREATE_COMMAND = "fa__create__budget_report"
+MUTATE_COMMAND = "fa__mutate__budget_report"
 # Who can see the entity, kept beside the dashboard: the lookup takes seconds through
 # Claude, and Carta still checks every recipient when a share is sent.
 USERS_CACHE_FILE = ".shareable-users.json"
@@ -272,7 +274,7 @@ def _share(
             args["expected_updated_at"] = link["updated_at"]
         emit("Updating the shared report…")
         try:
-            response = envelope(bridge.call("fa__mutate__budget_report", args, emit))
+            response = envelope(bridge.call(MUTATE_COMMAND, args, emit))
         except ShareError as e:
             if e.code == "conflict":
                 return {"status": "stale"}
@@ -285,7 +287,7 @@ def _share(
         if shared_with:
             args["shared_with"] = shared_with
         emit("Sharing your report…")
-        response = envelope(bridge.call("fa__create__budget_report", args, emit))
+        response = envelope(bridge.call(CREATE_COMMAND, args, emit))
     shared = _shared_meta(response["report"])
     shared["people"] = _recipient_people(shared.get("shared_with"), shared.get("people"), people, link.get("people"))
     shared["view_fingerprint"] = view_fingerprint if sends_payload else link.get("view_fingerprint")

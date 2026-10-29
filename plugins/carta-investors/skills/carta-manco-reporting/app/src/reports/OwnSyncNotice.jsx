@@ -28,10 +28,14 @@ const BLOCKED = {
 const UNKNOWN = { why: "the last sync couldn't reach Carta.", prompt: null };
 
 // Shown on your own report in a local build only: the hosted Worker serves no own-sync status.
-// A report an earlier sync already pushed has a hosted copy; its later changes can't reach it.
+// `due`, when present, names the reports with a push waiting; one not in it is already on the
+// hosted app as it is. A report an earlier sync already pushed has a hosted copy; its later
+// changes can't reach it.
 export default function OwnSyncNotice({ report, reportsApi, hosted }) {
   const reason = reportsApi?.ownSync?.blocked_by;
   if (hosted || !reason || !report || report.read_only) return null;
+  const due = reportsApi.ownSync.due;
+  if (Array.isArray(due) && !due.includes(report.id)) return null;
   const { why, prompt } = BLOCKED[reason] || UNKNOWN;
   const lead = report.own_sync?.uuid ? "Changes won't reach the hosted app" : "Not on the hosted app";
   return (

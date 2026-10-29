@@ -83,14 +83,32 @@ is sent (`scripts/report_payload.py`) and again by Carta.
 - After every build, `own_sync.py`'s sweep mirrors the owner's own reports to Carta for the
   hosted app. Until the operator's user id file, a working `claude` CLI and a Carta connector
   that CLI can reach are all in place, it pushes nothing and writes why to
-  `<dashboard_dir>/own_sync.log` and `own_sync_status.json` (`blocked_by`: `no_user_id`,
-  `not_installed`, `not_logged_in` or `unreachable`; `null` once a sweep reached Carta).
-  `GET /api/reports` returns it as `own_sync`. The local app re-reads that list whenever its
-  tab becomes visible again, and shows the reason on the owner's report with what to do
-  (`app/src/reports/OwnSyncNotice.jsx`): "Not on the hosted app" for a report no sweep has
-  pushed yet, "Changes won't reach the hosted app" for one an earlier sweep did.
+  `<dashboard_dir>/own_sync.log`. `own_sync_status.json` holds
+  `{"blocked_by": <reason or null>[, "due": [report ids]]}` under one rule
+  (`own_sync._record_blocked`): `no_user_id` whenever no user id is saved, for every report;
+  `not_installed`, `not_logged_in` or `unreachable` only while some of the owner's reports have
+  a push due, with `due` naming them; otherwise `null`, including after any push, a sweep's or
+  a session's `--record`. `GET /api/reports` returns it as `own_sync`. The local app re-reads
+  that list whenever its tab becomes visible again, and shows the reason, with what to do, on
+  each of the owner's reports it applies to (`app/src/reports/OwnSyncNotice.jsx`): "Not on the
+  hosted app" for a report no sync has pushed yet, "Changes won't reach the hosted app" for one
+  an earlier sync did.
   `unreachable` is the usual case for a dashboard built in the Claude desktop app: its
   Carta connector isn't available to the `claude` CLI.
+- A Claude session with its own Carta connector makes those pushes itself through
+  `own_sync.py`. The same `plan_push` builds what the sweep sends, so the two never differ.
+  - `--plan` takes the sweep's lock, so it waits out a sweep already holding it (one not yet
+    started isn't waited for). It writes, per push due,
+    `<dashboard_dir>/.own-sync-plan/<report_id>.arguments.json` (the call's exact `arguments`)
+    and `<report_id>.plan.json` (what `--record` stamps), and prints
+    `{"pushes": [{"report_id", "name", "command", "arguments_file"}]}`. Each run drops earlier
+    plans first. Without a user id it exits 3 and prints `{"error": "no_user_id"}`.
+  - `--plan --recreate <report_id>` plans one report as a create, after Carta answered its
+    update with `not_found` or `not_owner`.
+  - `--record <report_id> --uuid <uuid>` reads the `.plan.json` the latest `--plan` wrote,
+    stamps the push, drops that plan, clears `blocked_by`, and prints
+    `{"recorded": <bool>, "delete_uuid": <uuid or null>}`. `delete_uuid` names a mirror the
+    session must delete, when the report was removed while its push was in flight.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.

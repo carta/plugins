@@ -66,11 +66,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import export_budget_bundle
 import manco_paths
@@ -127,31 +128,26 @@ def _variance_by_category_for(data_dir: Path, report_id: str) -> Optional[Dict[s
     return {"budgets": [trimmed], "default_id": variance["default_id"]}
 
 
-def push_if_changed(
-    bridge: Any,
+def plan_push(
     store: report_store.ReportStore,
     data_dir: Path,
     report_id: str,
     user_id: int,
-    emit: Emit,
+    *,
+    create: bool = False,
 ) -> Optional[Dict[str, Any]]:
-    """Push `report_id`'s current payload and name to Carta as a report visible to
-    nobody but `user_id`, when either has moved since the last successful push for
-    this report. A report renamed while its payload fingerprint is unchanged sends
-    just the name — no payload, no snapshot_basis — so renaming here never resends
-    a budget nothing changed.
+    """What syncing `report_id` would send right now: {"command", "arguments", "payload",
+    "name"}, with `payload` the canonical payload whose fingerprint a successful push
+    records. None when nothing needs sending: the report is read-only (shared with you,
+    not yours to mirror), hasn't been built yet, or neither its payload nor its name moved
+    since the last push.
 
-    Returns the report's metadata (report_store.ReportStore.metadata shape,
-    including the new `own_sync` field) after a push, or None when nothing
-    needed sending: the report is read-only (shared with you, not yours to
-    mirror), hasn't been built yet, or neither its payload nor its name moved.
+    A report already synced is updated in place; a rename alone sends just the name,
+    never the payload or snapshot_basis. `create` plans a fresh create instead, for
+    when that update finds the link gone or no longer ours.
 
-    `report_id` can also be removed locally (by another thread's own_sync.forget,
-    or a plain report_store.ReportStore.remove on a report nothing had synced yet)
-    while the bridge call above is in flight. When that happens this still
-    returns None, but the uuid Carta just created or updated is deleted upstream
-    first — it is never left live with nothing local claiming it.
-    """
+    push_if_changed sends this through the `claude` CLI's bridge; a Claude session with its
+    own Carta connector sends the same arguments itself (main()'s --plan and --record)."""
     doc = store.load()
     report = report_store.ReportStore.find(doc, report_id)
     if report_store.ReportStore.metadata(report)["read_only"]:
@@ -168,38 +164,82 @@ def push_if_changed(
             payload = with_variance
         except report_payload.PayloadError:
             pass  # the payload with variance attached is over a limit; push it without
-    fingerprint = report_store.payload_fingerprint(payload)
     name = report["name"]
     sync = report.get("own_sync") or {}
-    payload_changed = sync.get("payload_fingerprint") != fingerprint
-    name_changed = sync.get("pushed_name") != name
-    if not payload_changed and not name_changed:
+    payload_changed = sync.get("payload_fingerprint") != report_store.payload_fingerprint(payload)
+    if not create and not payload_changed and sync.get("pushed_name") == name:
         return None
 
     ctx = share_ops.context(data_dir)
-    uuid = sync.get("uuid")
+    uuid = None if create else sync.get("uuid")
     if uuid:
-        emit("Syncing your report to the hosted app…" if payload_changed else "Renaming your report in the hosted app…")
         args = {"fund_uuid": ctx["fund_uuid"], "report_uuid": uuid, "shared_with": [user_id]}
         args.update(share_ops.report_args(ctx, name, payload, check_basis=payload_changed))
+        return {"command": share_ops.MUTATE_COMMAND, "arguments": args, "payload": payload, "name": name}
+    return _create_plan(ctx, name, payload, user_id)
+
+
+def _create_plan(ctx: Dict[str, Any], name: str, payload: Dict[str, Any], user_id: int) -> Dict[str, Any]:
+    args = {"fund_uuid": ctx["fund_uuid"], "shared_with": [user_id]}
+    args.update(share_ops.report_args(ctx, name, payload, check_basis=True, source=share_ops.source()))
+    return {"command": share_ops.CREATE_COMMAND, "arguments": args, "payload": payload, "name": name}
+
+
+def push_if_changed(
+    bridge: Any,
+    store: report_store.ReportStore,
+    data_dir: Path,
+    report_id: str,
+    user_id: int,
+    emit: Emit,
+) -> Optional[Dict[str, Any]]:
+    """Push `report_id`'s current payload and name to Carta as a report visible to
+    nobody but `user_id`, when either has moved since the last successful push for
+    this report (plan_push decides what, if anything, to send).
+
+    Returns the report's metadata (report_store.ReportStore.metadata shape,
+    including its `own_sync` field) after a push, or None when nothing
+    needed sending.
+
+    `report_id` can also be removed locally (by another thread's own_sync.forget,
+    or a plain report_store.ReportStore.remove on a report nothing had synced yet)
+    while the bridge call is in flight. When that happens this still
+    returns None, but the uuid Carta just created or updated is deleted upstream
+    first — it is never left live with nothing local claiming it.
+    """
+    plan = plan_push(store, data_dir, report_id, user_id)
+    if plan is None:
+        return None
+    response = None
+    if plan["command"] == share_ops.MUTATE_COMMAND:
+        emit("Syncing your report to the hosted app…" if "payload_compact" in plan["arguments"]
+             else "Renaming your report in the hosted app…")
         try:
-            response = share_ops.envelope(bridge.call("fa__mutate__budget_report", args, emit))
+            response = share_ops.envelope(bridge.call(share_ops.MUTATE_COMMAND, plan["arguments"], emit))
         except ShareError as e:
             if e.code not in ("not_found", "not_owner"):
                 raise
-            uuid = None  # the link is gone or no longer ours to update; create a fresh one
-    if not uuid:
+            # The link is gone or no longer ours to update; create a fresh one from the same
+            # payload, even if the report was removed meanwhile (_record_push retires it).
+            plan = _create_plan(share_ops.context(data_dir), plan["name"], plan["payload"], user_id)
+    if response is None:
         emit("Saving your report for the hosted app…")
-        args = {"fund_uuid": ctx["fund_uuid"], "shared_with": [user_id]}
-        args.update(share_ops.report_args(ctx, name, payload, check_basis=True, source=share_ops.source()))
-        response = share_ops.envelope(bridge.call("fa__create__budget_report", args, emit))
-    pushed_uuid = response["report"].get("uuid")
-    result = store.record_own_sync(report_id, pushed_uuid, payload, name)
+        response = share_ops.envelope(bridge.call(share_ops.CREATE_COMMAND, plan["arguments"], emit))
+    return _record_push(store, data_dir, report_id, plan, response["report"].get("uuid"),
+                        lambda uuid: share_ops.delete_upstream(bridge, share_ops.context(data_dir), uuid, emit))
+
+
+def _record_push(store: report_store.ReportStore, data_dir: Path, report_id: str, plan: Dict[str, Any],
+                 pushed_uuid: Optional[str], delete_upstream: Callable[[str], None]) -> Optional[Dict[str, Any]]:
+    """Stamp a push of `plan` that Carta answered with `pushed_uuid`, and clear the sweep's
+    blocked reason: Carta was reached."""
+    result = store.record_own_sync(report_id, pushed_uuid, plan["payload"], plan["name"])
+    manco_paths.write_own_sync_status(data_dir, None)
     if result is None and pushed_uuid:
-        # report_id was removed locally while the bridge call above was in flight:
-        # record_own_sync already dismissed pushed_uuid so a pull won't re-import it,
-        # but the mirror itself is still live in Carta until deleted here.
-        share_ops.delete_upstream(bridge, ctx, pushed_uuid, emit)
+        # report_id was removed locally while the push was in flight: record_own_sync
+        # already dismissed pushed_uuid so a pull won't re-import it, but the mirror
+        # itself is still live in Carta until deleted here.
+        delete_upstream(pushed_uuid)
     return result
 
 
@@ -352,8 +392,8 @@ def sweep(data_dir: Path, user_id: int, bridge: Any) -> None:
     still leaves a record a maintainer can read.
 
     A Carta connector the `claude` CLI can't reach stops the sweep: every push
-    would fail the same way. That is recorded as the sweep's status, which a sweep
-    that did reach Carta clears."""
+    would fail the same way. That is recorded as the sweep's status while a push is
+    still due (_record_blocked), and a sweep that did reach Carta clears it."""
     store = report_store.ReportStore(data_dir)
     try:
         reconcile_names(store, data_dir, bridge)
@@ -367,14 +407,41 @@ def sweep(data_dir: Path, user_id: int, bridge: Any) -> None:
     except ShareError as e:
         _record_blocked(data_dir, BLOCKED_UNREACHABLE,
                         "the claude CLI can't reach a Carta connector (%s): %s"
-                        % (", ".join(bridge.servers), e))
+                        % (", ".join(bridge.servers), e), user_id)
         return
     manco_paths.write_own_sync_status(data_dir, None)
 
 
-def _record_blocked(data_dir: Path, reason: str, detail: str) -> None:
+def _due_plans(store: report_store.ReportStore, data_dir: Path, report_ids: List[str], user_id: int,
+               create: bool = False) -> Iterator[Tuple[str, Dict[str, Any]]]:
+    """(report_id, plan) for each of `report_ids` with a push due. Makes no Carta call; a
+    report that can't be planned is logged and skipped."""
+    for report_id in report_ids:
+        try:
+            plan = plan_push(store, data_dir, report_id, user_id, create=create)
+        except (ShareError, report_store.ReportEditError) as e:
+            print("[own_sync] plan %r skipped: %r" % (report_id, e), file=sys.stderr)
+            continue
+        if plan is not None:
+            yield report_id, plan
+
+
+def _record_blocked(data_dir: Path, reason: str, detail: str, user_id: Optional[int] = None) -> None:
+    """Log why a sweep couldn't reach Carta, and record it for the local app: the one rule
+    for own_sync_status.json.
+
+    - `no_user_id` (no `user_id` here) is recorded for every report.
+    - Any other reason is recorded with `due`, the reports that still have a push due, so the
+      app shows it only on those; with none due, `blocked_by` is None.
+    - _record_push writes None after any push, a sweep's or a session's --record."""
     print("[own_sync] not synced to the hosted app: %s" % detail, file=sys.stderr)
-    manco_paths.write_own_sync_status(data_dir, reason)
+    if user_id is None:
+        manco_paths.write_own_sync_status(data_dir, reason)
+        return
+    store = report_store.ReportStore(data_dir)
+    due = [report_id for report_id, _ in
+           _due_plans(store, data_dir, [r["id"] for r in store.load()["reports"]], user_id)]
+    manco_paths.write_own_sync_status(data_dir, reason if due else None, due if due else None)
 
 
 # A sweep's lock counts as stale only once the *process* holding it has
@@ -402,6 +469,54 @@ def _heartbeat(lock_path: Path, interval: float, stop: threading.Event) -> None:
             pass
 
 
+def _sweep_lock(data_dir: Path) -> "report_store._FileLock":
+    """The one lock that serializes a dashboard's sweeps and --plan. An abandoned lock
+    frees itself once it goes stale, so there's nothing a finite wait would gain over the
+    lock's own staleness check: wait as long as it takes for the holder to either finish
+    or stop refreshing it."""
+    return report_store._FileLock(manco_paths.own_sync_lock_file(data_dir), timeout=float("inf"),
+                                  stale_after=_SWEEP_LOCK_STALE_AFTER, observe_stale=True)
+
+
+def write_plans(data_dir: Path, user_id: int, recreate: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Write a plan for every report that needs pushing (or, with `recreate`, a fresh
+    create for that one report, after Carta answered its update with not_found or
+    not_owner) to manco_paths.own_sync_plan_dir, and return what a session needs to
+    make each call: report_id, name, command, arguments_file. Any plan from an earlier
+    run is dropped first, so the directory only ever holds what is due now."""
+    store = report_store.ReportStore(data_dir)
+    plan_dir = manco_paths.own_sync_plan_dir(data_dir)
+    if recreate is None:
+        shutil.rmtree(plan_dir, ignore_errors=True)
+        ids = [r["id"] for r in store.load()["reports"]]
+    else:
+        ids = [recreate]
+    plan_dir.mkdir(parents=True, exist_ok=True)
+    pushes = []
+    for report_id, plan in _due_plans(store, data_dir, ids, user_id, create=recreate is not None):
+        plan_file, arguments_file = manco_paths.own_sync_plan_files(data_dir, report_id)
+        arguments_file.write_text(json.dumps(plan["arguments"], separators=(",", ":")))
+        plan_file.write_text(json.dumps(plan))
+        pushes.append({"report_id": report_id, "name": plan["name"], "command": plan["command"],
+                       "arguments_file": str(arguments_file)})
+    return pushes
+
+
+def record_session_push(data_dir: Path, report_id: str, pushed_uuid: str) -> Dict[str, Any]:
+    """Stamp a push a Claude session made from `report_id`'s plan, exactly as
+    push_if_changed stamps its own, and drop that plan. `delete_uuid` names a mirror the
+    session must delete itself (the report was removed while the push was in flight);
+    this process has no Carta connection to do it."""
+    plan_file, arguments_file = manco_paths.own_sync_plan_files(data_dir, report_id)
+    plan = json.loads(plan_file.read_text())
+    orphaned: List[str] = []
+    result = _record_push(report_store.ReportStore(data_dir), data_dir, report_id, plan, pushed_uuid,
+                          orphaned.append)
+    plan_file.unlink()
+    arguments_file.unlink(missing_ok=True)
+    return {"recorded": result is not None, "delete_uuid": orphaned[0] if orphaned else None}
+
+
 def main(argv: Optional[list] = None) -> int:
     """Entry point for the detached sweep build_manco_datadir.py spawns after
     every build: push every report whose payload differs from its last push,
@@ -410,15 +525,41 @@ def main(argv: Optional[list] = None) -> int:
     Exits 0 having pushed nothing when there's no operator id to sync as yet (the
     plugin-level ${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md hasn't run
     for this dashboard), or no working `claude` CLI to reach Carta through —
-    both are "try again next build", not failures — and records why in the log
-    and the sweep's status.
+    both are "try again next build", not failures. Why goes to the log, and to the
+    status file under own_sync._record_blocked's rule.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--plan", action="store_true",
+                        help="write the pushes still due for a Claude session to make itself, once "
+                             "any running sweep has finished; prints them as JSON")
+    parser.add_argument("--recreate", metavar="REPORT_ID",
+                        help="with --plan: plan a fresh create for this report, after Carta answered "
+                             "its update with not_found or not_owner")
+    parser.add_argument("--record", metavar="REPORT_ID",
+                        help="stamp a push a Claude session made from this report's plan")
+    parser.add_argument("--uuid", help="with --record: the report uuid Carta answered with")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).expanduser()
 
+    if args.record:
+        if not args.uuid:
+            parser.error("--record needs --uuid")
+        print(json.dumps(record_session_push(data_dir, args.record, args.uuid)))
+        return 0
+
     user_id = manco_paths.read_user_id(data_dir)
+    if args.plan:
+        if user_id is None:
+            print(json.dumps({"error": BLOCKED_NO_USER_ID}))
+            return 3
+        # Waits out a sweep already holding the lock, so nothing it pushed is planned again.
+        # A sweep that takes the lock later finds those pushes recorded and makes none.
+        with _sweep_lock(data_dir):
+            pushes = write_plans(data_dir, user_id, args.recreate)
+        print(json.dumps({"pushes": pushes}))
+        return 0
+
     if user_id is None:
         _record_blocked(data_dir, BLOCKED_NO_USER_ID,
                         "no %s yet, so there's no Carta user to sync as"
@@ -426,17 +567,12 @@ def main(argv: Optional[list] = None) -> int:
         return 0
     probed = preflight_claude.probe()
     if probed["reason"] != preflight_claude.REASON_OK:
-        _record_blocked(data_dir, probed["reason"], "the claude CLI is %s" % probed["reason"].replace("_", " "))
+        _record_blocked(data_dir, probed["reason"], "the claude CLI is %s" % probed["reason"].replace("_", " "),
+                        user_id)
         return 0
 
-    # An abandoned lock frees itself once it goes stale, so there's nothing a
-    # finite wait would gain over the lock's own staleness check — wait as
-    # long as it takes for the dashboard's previous sweep to either finish or
-    # stop refreshing it.
     lock_path = manco_paths.own_sync_lock_file(data_dir)
-    lock = report_store._FileLock(lock_path, timeout=float("inf"), stale_after=_SWEEP_LOCK_STALE_AFTER,
-                                   observe_stale=True)
-    with lock:
+    with _sweep_lock(data_dir):
         stop_heartbeat = threading.Event()
         heartbeat = threading.Thread(target=_heartbeat, args=(lock_path, _SWEEP_LOCK_HEARTBEAT_INTERVAL, stop_heartbeat),
                                      daemon=True)

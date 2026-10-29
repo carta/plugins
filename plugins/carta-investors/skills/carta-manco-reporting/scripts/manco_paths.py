@@ -173,21 +173,39 @@ def own_sync_log_file(dashboard_dir):
     return pathlib.Path(dashboard_dir) / "own_sync.log"
 
 
+def own_sync_plan_dir(dashboard_dir):
+    """Where own_sync.py --plan writes the pushes a Claude session makes through its own
+    Carta connector, one pair per report (own_sync_plan_files)."""
+    return pathlib.Path(dashboard_dir) / ".own-sync-plan"
+
+
+def own_sync_plan_files(dashboard_dir, report_id):
+    """(plan file, arguments file) for one report's planned push: what --record stamps
+    once Carta answers, and the call's exact `arguments`."""
+    plan_dir = own_sync_plan_dir(dashboard_dir)
+    return plan_dir / ("%s.plan.json" % report_id), plan_dir / ("%s.arguments.json" % report_id)
+
+
 def own_sync_status_file(dashboard_dir):
     return pathlib.Path(dashboard_dir) / "own_sync_status.json"
 
 
-def write_own_sync_status(dashboard_dir, blocked_by):
-    """Record why the last own-sync sweep couldn't reach Carta (one of own_sync's
-    BLOCKED_* reasons), or None once one did, for serve.py to show the owner."""
+def write_own_sync_status(dashboard_dir, blocked_by, due=None):
+    """Write own_sync_status.json for serve.py to show the owner: `blocked_by` (one of
+    own_sync's BLOCKED_* reasons, or None) and, when given, `due`, the report ids it
+    applies to. own_sync._record_blocked holds the rule for what is written when."""
+    status = {"blocked_by": blocked_by}
+    if due is not None:
+        status["due"] = list(due)
     try:
-        own_sync_status_file(dashboard_dir).write_text(json.dumps({"blocked_by": blocked_by}))
+        own_sync_status_file(dashboard_dir).write_text(json.dumps(status))
     except OSError:
         pass
 
 
 def read_own_sync_status(dashboard_dir):
-    """{"blocked_by": <reason or None>}, or None before any sweep recorded one."""
+    """{"blocked_by": <reason or None>[, "due": [report ids]]}, or None before any was
+    recorded. No `due` means the reason applies to every report."""
     try:
         status = json.loads(own_sync_status_file(dashboard_dir).read_text())
     except (OSError, ValueError):
