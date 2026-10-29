@@ -2,8 +2,9 @@
 
 ## Hook entries
 
-Every hook except `warn-empty-query.js` dispatches to the shared Go hooks
-binary in `tools/hooks/` via `dispatch.sh`.
+Every hook except `warn-empty-query.js` and `guard-own-sync-push.js`, which run
+under node, dispatches to the shared Go hooks binary in `tools/hooks/` via
+`dispatch.sh`.
 
 ## Binary source
 
@@ -21,6 +22,7 @@ and how to rebuild them from source and compare (`sh hooks/src/build.sh --check`
 | SessionStart | — | `dispatch.sh capture-model` | Capture the active Claude model for later PreToolUse instrumentation |
 | PreToolUse | Skill | `dispatch.sh capture-active-skill` | Record which carta skills have been loaded this session |
 | PreToolUse | Carta MCP | `dispatch.sh inject-instrumentation` | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise) |
+| PreToolUse | Carta MCP `call_tool` | guard-own-sync-push.js | Deny a budget-report create/update that belongs to a carta-manco-reporting own-sync plan but differs from it |
 | UserPromptSubmit | — | `dispatch.sh capture-slash-skill` | Record explicitly-invoked skills (bare `/skill` slash commands) |
 | PostToolUse | Carta MCP `execute_query` | warn-empty-query.js | Warn Claude when a query returns no results |
 

@@ -44,7 +44,7 @@ the same dashboard's previous sweep is still running would otherwise spawn a
 second one, and two sweeps racing the same report would each call
 fa__create__budget_report for it, with record_own_sync's last write winning
 and the other's uuid orphaned in Carta with nothing local pointing at it any
-more. For as long as main() holds the lock, a background heartbeat thread
+more. For as long as a sweep holds the lock, a background heartbeat thread
 refreshes its mtime on a fixed interval, independent of how long any single
 Carta call inside the sweep takes — a bridge turn can run well past any one
 timeout (a relay turn, a retry, a reset), so staleness must track whether
@@ -91,6 +91,8 @@ BLOCKED_NO_USER_ID = "no_user_id"
 BLOCKED_NOT_INSTALLED = preflight_claude.REASON_NOT_INSTALLED
 BLOCKED_NOT_LOGGED_IN = preflight_claude.REASON_NOT_LOGGED_IN
 BLOCKED_UNREACHABLE = share_bridge.UNREACHABLE
+# The reasons a session can push past: its own Carta connector doesn't need the CLI's.
+CLI_BLOCKED = (BLOCKED_NOT_INSTALLED, BLOCKED_NOT_LOGGED_IN, BLOCKED_UNREACHABLE)
 
 
 def _is_unreachable(e: BaseException) -> bool:
@@ -450,17 +452,17 @@ def _record_blocked(data_dir: Path, reason: str, detail: str, user_id: Optional[
 # (a relay turn, a retry, a reset to a fresh session), so nothing about how
 # long a call or a sweep takes can bound how long the lock may need to stay
 # held. main()'s heartbeat thread refreshes it every
-# _SWEEP_LOCK_HEARTBEAT_INTERVAL for as long as the process is alive; only a
-# crash stops that, and _SWEEP_LOCK_STALE_AFTER is a fixed multiple of the
+# _SWEEP_LOCK_HEARTBEAT_INTERVAL for as long as a sweep holds it (a --plan holds it only
+# for write_plans, with no heartbeat); only a crash stops that before the release, and _SWEEP_LOCK_STALE_AFTER is a fixed multiple of the
 # interval so a waiter reclaims a lock a crashed holder left behind.
 _SWEEP_LOCK_HEARTBEAT_INTERVAL = 30.0
 _SWEEP_LOCK_STALE_AFTER = 4 * _SWEEP_LOCK_HEARTBEAT_INTERVAL
 
 
 def _heartbeat(lock_path: Path, interval: float, stop: threading.Event) -> None:
-    """Keep `lock_path`'s mtime fresh on its own thread for as long as the
-    calling process holds it, so main()'s lock never looks abandoned while
-    the process holding it is still alive — independent of how long any
+    """Keep `lock_path`'s mtime fresh on its own thread for as long as a sweep
+    holds it, so a sweep's lock never looks abandoned while the process holding
+    it is still alive — independent of how long any
     single Carta call inside the sweep it's guarding takes."""
     while not stop.wait(interval):
         try:
@@ -470,7 +472,8 @@ def _heartbeat(lock_path: Path, interval: float, stop: threading.Event) -> None:
 
 
 def _sweep_lock(data_dir: Path) -> "report_store._FileLock":
-    """The one lock that serializes a dashboard's sweeps and --plan. An abandoned lock
+    """The one lock that serializes a dashboard's sweeps and --plan. A sweep holds it for its
+    whole run, the `claude` CLI probe included, so --plan reads the status that sweep wrote. An abandoned lock
     frees itself once it goes stale, so there's nothing a finite wait would gain over the
     lock's own staleness check: wait as long as it takes for the holder to either finish
     or stop refreshing it."""
@@ -482,15 +485,10 @@ def write_plans(data_dir: Path, user_id: int, recreate: Optional[str] = None) ->
     """Write a plan for every report that needs pushing (or, with `recreate`, a fresh
     create for that one report, after Carta answered its update with not_found or
     not_owner) to manco_paths.own_sync_plan_dir, and return what a session needs to
-    make each call: report_id, name, command, arguments_file. Any plan from an earlier
-    run is dropped first, so the directory only ever holds what is due now."""
+    make each call: report_id, name, command, arguments_file. _plan drops earlier plans."""
     store = report_store.ReportStore(data_dir)
     plan_dir = manco_paths.own_sync_plan_dir(data_dir)
-    if recreate is None:
-        shutil.rmtree(plan_dir, ignore_errors=True)
-        ids = [r["id"] for r in store.load()["reports"]]
-    else:
-        ids = [recreate]
+    ids = [r["id"] for r in store.load()["reports"]] if recreate is None else [recreate]
     plan_dir.mkdir(parents=True, exist_ok=True)
     pushes = []
     for report_id, plan in _due_plans(store, data_dir, ids, user_id, create=recreate is not None):
@@ -553,42 +551,66 @@ def main(argv: Optional[list] = None) -> int:
         if user_id is None:
             print(json.dumps({"error": BLOCKED_NO_USER_ID}))
             return 3
-        # Waits out a sweep already holding the lock, so nothing it pushed is planned again.
-        # A sweep that takes the lock later finds those pushes recorded and makes none.
-        with _sweep_lock(data_dir):
-            pushes = write_plans(data_dir, user_id, args.recreate)
-        print(json.dumps({"pushes": pushes}))
-        return 0
-
-    if user_id is None:
-        _record_blocked(data_dir, BLOCKED_NO_USER_ID,
-                        "no %s yet, so there's no Carta user to sync as"
-                        % manco_paths.user_id_file(data_dir).name)
-        return 0
-    probed = preflight_claude.probe()
-    if probed["reason"] != preflight_claude.REASON_OK:
-        _record_blocked(data_dir, probed["reason"], "the claude CLI is %s" % probed["reason"].replace("_", " "),
-                        user_id)
-        return 0
+        return _plan(data_dir, user_id, args.recreate)
 
     lock_path = manco_paths.own_sync_lock_file(data_dir)
     with _sweep_lock(data_dir):
+        # The heartbeat runs for exactly as long as this process holds the lock.
         stop_heartbeat = threading.Event()
         heartbeat = threading.Thread(target=_heartbeat, args=(lock_path, _SWEEP_LOCK_HEARTBEAT_INTERVAL, stop_heartbeat),
                                      daemon=True)
         heartbeat.start()
-        bridge = share_bridge.Bridge(str(data_dir), manco_paths.read_carta_environment(data_dir),
-                                     override=manco_paths.read_share_mcp_server(data_dir),
-                                     claude_bin=probed["bin"])
         try:
-            sweep(data_dir, user_id, bridge)
+            _sweep_under_lock(data_dir, user_id)
         finally:
-            bridge.close()
-            # Stop (and wait for) the heartbeat before releasing the lock:
-            # it must never refresh a lock this process no longer holds.
+            # Stop (and wait for) the heartbeat before the lock is released: it must never
+            # refresh a lock this process no longer holds.
             stop_heartbeat.set()
             heartbeat.join()
     return 0
+
+
+def _plan(data_dir: Path, user_id: int, recreate: Optional[str]) -> int:
+    """--plan: print the pushes a session should make, under the sweep lock so the status it
+    reads is the one the build's sweep wrote, not an earlier sweep's."""
+    with _sweep_lock(data_dir):
+        # A plain --plan starts a session push run only once the sweep has tried Carta through
+        # the CLI and failed: a sweep that can reach Carta pushes these reports itself, and two
+        # creates leave a second mirror live with nothing local claiming it. A --recreate follows
+        # this session's own refused update, so it always plans its one create.
+        # After any plain --plan, the only plans on disk are the ones it printed: a plan left
+        # behind keeps the push guard checking calls against it.
+        status = manco_paths.read_own_sync_status(data_dir) or {}
+        pushes: List[Dict[str, Any]] = []
+        if recreate is None:
+            shutil.rmtree(manco_paths.own_sync_plan_dir(data_dir), ignore_errors=True)
+        if recreate is not None or status.get("blocked_by") in CLI_BLOCKED:
+            pushes = write_plans(data_dir, user_id, recreate)
+    print(json.dumps({"pushes": pushes}))
+    return 0
+
+
+def _sweep_under_lock(data_dir: Path, user_id: Optional[int]) -> None:
+    """The sweep proper, with the sweep lock held from before the CLI probe on, so every
+    status it writes lands before a waiting --plan reads it."""
+    if user_id is None:
+        _record_blocked(data_dir, BLOCKED_NO_USER_ID,
+                        "no %s yet, so there's no Carta user to sync as"
+                        % manco_paths.user_id_file(data_dir).name)
+        return
+    probed = preflight_claude.probe()
+    if probed["reason"] != preflight_claude.REASON_OK:
+        _record_blocked(data_dir, probed["reason"], "the claude CLI is %s" % probed["reason"].replace("_", " "),
+                        user_id)
+        return
+
+    bridge = share_bridge.Bridge(str(data_dir), manco_paths.read_carta_environment(data_dir),
+                                 override=manco_paths.read_share_mcp_server(data_dir),
+                                 claude_bin=probed["bin"])
+    try:
+        sweep(data_dir, user_id, bridge)
+    finally:
+        bridge.close()
 
 
 if __name__ == "__main__":

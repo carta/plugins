@@ -97,14 +97,24 @@ is sent (`scripts/report_payload.py`) and again by Carta.
   Carta connector isn't available to the `claude` CLI.
 - A Claude session with its own Carta connector makes those pushes itself through
   `own_sync.py`. The same `plan_push` builds what the sweep sends, so the two never differ.
-  - `--plan` takes the sweep's lock, so it waits out a sweep already holding it (one not yet
-    started isn't waited for). It writes, per push due,
+  - `--plan` waits for any running sweep (a sweep holds the lock for its whole run, the
+    `claude` CLI check included), then reads the status it wrote. Where the CLI reaches
+    Carta, that can mean waiting out a whole sweep's pushes. Unless that is a `claude`
+    CLI reason (`unreachable`, `not_installed`, `not_logged_in`), it drops any earlier plans
+    and prints `{"pushes": []}`: a sweep that reached Carta pushed the reports itself, and a
+    second create would leave a stray mirror. Otherwise it drops earlier plans and writes,
+    per push due,
     `<dashboard_dir>/.own-sync-plan/<report_id>.arguments.json` (the call's exact `arguments`)
     and `<report_id>.plan.json` (what `--record` stamps), and prints
-    `{"pushes": [{"report_id", "name", "command", "arguments_file"}]}`. Each run drops earlier
-    plans first. Without a user id it exits 3 and prints `{"error": "no_user_id"}`.
+    `{"pushes": [{"report_id", "name", "command", "arguments_file"}]}`. Without a user id it
+    exits 3 and prints `{"error": "no_user_id"}`.
   - `--plan --recreate <report_id>` plans one report as a create, after Carta answered its
-    update with `not_found` or `not_owner`.
+    update with `not_found` or `not_owner`. The CLI gate doesn't apply, and it replaces only
+    that report's plan.
+  - While a plan exists, carta-investors' `scripts/hooks/guard-own-sync-push.js` (a
+    PreToolUse hook on the Carta connector's `call_tool`) refuses a budget-report create or
+    update that belongs to it but differs from its arguments file. The bridge's own relay
+    session is exempt (`share_bridge.BRIDGE_ENV`): it checks its calls itself.
   - `--record <report_id> --uuid <uuid>` reads the `.plan.json` the latest `--plan` wrote,
     stamps the push, drops that plan, clears `blocked_by`, and prints
     `{"recorded": <bool>, "delete_uuid": <uuid or null>}`. `delete_uuid` names a mirror the

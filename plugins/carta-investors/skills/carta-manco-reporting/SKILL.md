@@ -3,7 +3,7 @@ name: carta-manco-reporting
 description: >-
   Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under ANY verb (spin up, open, launch, build, create, run) — P&L drill-down, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. DISAMBIGUATION: "build" means render this dashboard, not draft a budget, so a microapp/dashboard ask ALWAYS routes here, firm named or not; a generic ManCo ask naming a firm routes here; firm-absent with no visual surface → carta-manco. NOT FOR: budgets/actuals (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch (a developer tool, not this dashboard).
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
-version: 0.6.1
+version: 0.6.2
 # `version` gates delivery of app/src: each user runs their own copy, and a change
 # reaches it only when this number goes up. Bump it in every PR that changes a file
 # under app/src outside __tests__ — patch merges silently, minor/major asks the user
@@ -62,8 +62,9 @@ allowed-tools:
   # MCP tool (e.g. Claude Desktop's per-org connector, namespaced under an
   # opaque generated ID instead of one of the names below) is still callable
   # here, just with one extra permission prompt the first time. All Step 3
-  # DWH/budget fetching runs directly in this skill's own context — never
-  # dispatch a subagent for MCP work; see data-fetch.md for why.
+  # DWH/budget fetching runs directly in this skill's own context, not in a
+  # subagent; see data-fetch.md for why. Step 5.2's push sub-agent is
+  # general-purpose, which inherits this session's whole tool surface.
   - mcp__carta__call_tool
   - mcp__carta__read_tool
   - mcp__carta__set_context
@@ -93,6 +94,7 @@ allowed-tools:
   - Write
   - AskUserQuestion
   - ToolSearch
+  - Agent
   # Optional — only present in some Claude Code surfaces; Step 2.5 feature-detects
   # it via ToolSearch and skips the rename when it's absent.
   - mcp__ccd_session_mgmt__set_session_title
@@ -116,6 +118,8 @@ allowed-tools:
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py *)
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" *)'
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/import_shared_reports.py *)
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/import_shared_reports.py" *)'
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
@@ -127,7 +131,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.16</carta-plugin>
+<carta-plugin>carta-investors:7.5.17</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -210,6 +214,7 @@ every invocation regardless.
 | 4 | always | Rebuild the datadir | [serve-and-update.md](references/serve-and-update.md) |
 | 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
+| 5.2 | when this run has a Carta MCP and the build's own sweep recorded that the `claude` CLI couldn't reach Carta | Push the owner's reports to the hosted app from this session | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
 | 7 | only when the operator asks for their budget in the hosted app | Export the workbook budget as a bundle to upload | [serve-and-update.md](references/serve-and-update.md) |
 

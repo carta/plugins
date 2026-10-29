@@ -1,12 +1,13 @@
 # Fetching journal entries from the warehouse
 
 Step 3 in full: fetching journal-entry and budget data directly in this skill's own
-context via `<SERVER>` (Step 1) — no subagent dispatch. `carta-investors:carta-fund-modeling`,
-another live-MCP microapp fetching a comparable volume of DWH data, uses the same
-direct-call pattern; a dispatched subagent's `tools:` list is a closed set with no
-cross-server wildcard, so it can never reach an MCP connector namespaced under an
-opaque ID (e.g. Claude Desktop's per-org connector) the way this skill's own,
-unrestricted tool surface can.
+context via `<SERVER>` (Step 1) — no subagent dispatch for this fetching.
+`carta-investors:carta-fund-modeling`, another live-MCP microapp fetching a comparable
+volume of DWH data, uses the same direct-call pattern; a subagent type with its own
+`tools:` list has a closed set with no cross-server wildcard, so it can never reach an MCP
+connector namespaced under an opaque ID (e.g. Claude Desktop's per-org connector) the way
+this skill's own, unrestricted tool surface can. (Step 5.2's push sub-agent is
+`general-purpose`, which inherits that surface.)
 
 > Steps referenced here that are documented elsewhere: **Step 2.5** → [budget-ingest.md](budget-ingest.md); **Step 2.75** → [budget-ingest.md](budget-ingest.md).
 

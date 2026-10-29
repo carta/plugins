@@ -378,6 +378,59 @@ disclose says nothing. Never list which lines; the counts orient, and
 Step 6 is where the unresolved ones get resolved.
 
 
+## Step 5.2 — Push to the hosted app from this session
+
+**SILENT.** Run it only when this run has a Carta MCP (`<SERVER>`); skip it on a
+cache-only reopen. It runs after the URL is out. `--plan` first waits for the build's own
+sweep (it holds a lock for its whole run), then reads the status that sweep wrote, and
+plans nothing unless the `claude` CLI couldn't reach Carta (`unreachable`, `not_installed`
+or `not_logged_in`): a sweep that could has pushed the reports itself. That gate covers a
+plain `--plan` only; the `--recreate` in the brief always plans its one create.
+
+The build's own sweep pushes the owner's reports to the hosted app through the `claude`
+CLI. Where that CLI can't reach Carta (a dashboard built in the Claude desktop app, whose
+Carta connector isn't available to it), this session pushes them itself. Run this with the
+Bash tool's `timeout: 600000`: where the CLI does reach Carta, it waits out that whole sweep.
+
+```bash
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --plan
+```
+
+- Exit 3 (`{"error": "no_user_id"}`) or `{"pushes": []}`: nothing to do. Go on.
+- The command times out: the build's sweep is still pushing through the CLI, so there is
+  nothing to do either. Go on, without retrying it or saying anything.
+- Otherwise dispatch **one** fresh-context sub-agent (Agent tool, `subagent_type:
+  general-purpose`, which inherits this session's tools, its Carta connector included) with
+  the brief below,
+  filling in `<SERVER>`, `<UV_BIN>`, `<dashboard_dir>` and the `pushes` list verbatim. A
+  payload is up to 256 KB, so it stays out of this conversation. Don't wait to tell the
+  user anything: the dashboard's own-sync notice clears the next time its tab is shown.
+
+Sub-agent brief:
+
+> Push each report below to Carta exactly as planned. For each `{report_id, command, arguments_file}`:
+> 1. Read `arguments_file`. Call `mcp__<SERVER>__call_tool` with `name` = `command` and
+>    `arguments` = that file's JSON object, unchanged: no field added, dropped or retyped,
+>    and never as a quoted string. A hook compares the call to the file and refuses any
+>    difference.
+> 2. On success, run `<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --record <report_id> --uuid <the response's report.uuid>`.
+>    If it prints a `delete_uuid`, call `mcp__<SERVER>__call_tool` with `name` =
+>    `fa__delete__budget_report` and `arguments` = `{"fund_uuid": <the plan's fund_uuid>, "report_uuid": <delete_uuid>}`.
+> 3. If a `fa__mutate__budget_report` call answers not found or not the owner, run the
+>    same script with `--plan --recreate <report_id>` and push the one create it prints,
+>    once.
+>
+> You get at most **2** push calls (create or update) per report, the recreate included. A
+> refused or failed push does not earn a third: not with the arguments rewritten, not
+> through another tool, not by splitting the payload. Then skip that report and go on. The
+> `fa__delete__budget_report` call for a `delete_uuid` is not a push: always make it, once,
+> whatever the push count. Never call Carta for anything but the commands above. Finish with one line per report, `pushed` or
+> `needs_human: <report_id>: <the error's first line>`.
+
+If the sub-agent returns any `needs_human:` line, tell the user in one sentence which
+report isn't on the hosted app yet and the reason, and go on. Never retry it in this run.
+
+
 ## Step 5.5 — Offer to open the account rows up
 
 **The workbook is the anchor.** A budget already broken out one way is
