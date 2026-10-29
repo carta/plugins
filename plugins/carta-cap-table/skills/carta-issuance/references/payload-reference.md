@@ -270,7 +270,7 @@ Yes/No, and **`No` is a real answer** — only "unanswered" fails. Ask plainly: 
 
 `EMI` and `CSOP` are **not** affected — they are reported on their own HMRC returns and the field stays optional there. Omit it entirely for every `so_type` other than `Unapproved`.
 
-Server-side the field is gated per-issuer (UK incorporation + the `SIB_1160_EMPLOYMENT_RELATED_SECURITIES` flag), so a non-UK issuer never sees the rule. Sending it is harmless when the gate is off, so key the question off `so_type = Unapproved` rather than trying to detect the flag.
+Server-side the field is gated per-issuer (UK incorporation), so a non-UK issuer never sees the rule. Sending it is harmless for a non-UK issuer, so key the question off `so_type = Unapproved` rather than trying to detect the issuer's country.
 
 ## Recovering a fund-structure block
 
@@ -384,4 +384,4 @@ never came back.
 | A PIU plan the issuer doesn't own is silently blanked | `save_drafts` clears an `option_plan` belonging to another corporation instead of erroring (`SaveDraftTaskRunnerV2._validate_option_plan_ownership`). An empty plan on a reloaded draft after a save that set one means the plan wasn't theirs — say so; don't re-send it. |
 | PIU document requirements are corp-property-gated | The grant agreement is required only when the issuer's properties demand it, and the equity incentive plan document only on a plan-issued row. Neither property is readable from any MCP command, so the server is authoritative — the [account-setup gate](engine.md#account-setup-gate-option-grant-and-piu) is deliberately soft here. |
 | A PIU's `threshold_value` is a `CharField` on the draft, a `DecimalField(default=0)` on the issued security | An empty draft threshold becomes `0` at issue rather than erroring, so a missing threshold issues a unit that shares in **all** value. That is why it is an `always` field for the pre-save assertion (engine rule 4), not merely a validated one. |
-| `law_firm_price = 0` is LLC-only | A `0` price per share validates only for LLC corporations; non-LLC corps are rejected at the validate/issue step with *"Value must be greater than 0"*. Don't pre-block `0` for LLC issuers (alongside ZEPO option grants). Server-gated by the `LLCCW_SUPPORT_ZERO_LAW_FIRM_PRICE_LLC` flag, so treat the server as the source of truth — surface its message verbatim if a non-LLC `0` is rejected. |
+| `law_firm_price = 0` is LLC-only | A `0` price per share validates only for LLC corporations; non-LLC corps are rejected at the validate/issue step with *"Value must be greater than 0"*. Don't pre-block `0` for LLC issuers (alongside ZEPO option grants). Treat the server as the source of truth — surface its message verbatim if a non-LLC `0` is rejected. |
