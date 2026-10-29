@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
-import { fmtM, fmtX, fmtPct, fmtAsOf } from "../../ui/format.js";
+import { fmtM, fmtX, fmtPct, fmtAsOf, DELTA_MULTIPLE } from "../../ui/format.js";
 import { H1, H3, Eyebrow, Segmented, SourceNote, StatBar, fundLabel, SectionChips } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { useFirmData } from "../../state/FirmData.jsx";
@@ -178,9 +178,9 @@ export default function LpReturns(props) {
   };
   const scoreStats = [
     { label: "Net TVPI", value: <span style={{ color: "var(--ink-color-global-text-default)" }}>{fmtX(m.implied)}</span>,
-      sub: cmpSub(m.implied, m.baseNet, (n) => fmtX(n), 0.005) },
+      sub: cmpSub(m.implied, m.baseNet, (n) => fmtX(n), DELTA_MULTIPLE.eps) },
     { label: "Gross MOIC · before carry", value: <span style={{ color: "var(--ink-color-global-text-default)" }}>{fs.grossMoic == null ? "—" : fmtX(fs.grossMoic)}</span>,
-      sub: cmpSub(fs.grossMoic, fs.baseGrossMoic, (n) => fmtX(n), 0.005) },
+      sub: cmpSub(fs.grossMoic, fs.baseGrossMoic, (n) => fmtX(n), DELTA_MULTIPLE.eps) },
     { label: `Net LP IRR · exit ${exitYr}`, value: <span style={{ color: "var(--ink-color-global-text-default)" }}>{m.todayIrr == null ? "—" : fmtPct(m.todayIrr)}</span>,
       sub: cmpSub(m.todayIrr, m.baseIrr, (n) => fmtPct(n), 0.0005) },
     {

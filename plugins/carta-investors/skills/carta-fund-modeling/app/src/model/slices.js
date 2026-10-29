@@ -56,6 +56,14 @@ export function isShared(s) {
   return !!(s && s.shared && s.shared.uuid);
 }
 
+/** Scenarios in tile order: the locked Baseline first, then the user's own as
+ *  listed, then shared ones. Shared scenarios the user hid are left out. */
+export function scenariosInTileOrder(slices) {
+  const own = slices.filter((s) => !isShared(s));
+  const shared = slices.filter((s) => isShared(s) && !isHidden(s));
+  return [...own.filter((s) => s.locked), ...own.filter((s) => !s.locked), ...shared];
+}
+
 // A shared scenario the current user published themselves. Unknown until userId loads.
 export function isOwnShared(s, userId) {
   return isShared(s) && s.shared.createdBy != null && s.shared.createdBy === userId;

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { FS, inkNum, sans } from "../ui/theme.js";
-import { fmt$, fmtX, fmtPct, fmtOwn } from "../ui/format.js";
+import { fmt$, fmtX, fmtPct, fmtOwn, DELTA_MONEY, DELTA_MULTIPLE } from "../ui/format.js";
 import { Num, SourceNote, H1, H2, fundNameOnly } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
 import { gpCarryOf, baseGpCarryOf } from "../model/funds.js";
@@ -72,8 +72,7 @@ const FULL = 12, SUMMARY_SPAN = 4, CARRY_SPAN = 3, BENCH_SPAN = 3, DRY_SPAN = 3;
 /** Firm Overview — a dashboard: the performance hero (firm figures and LP NAV by
  *  fund), a row of compact widgets that each preview a tab (a headline
  *  figure, one small chart and a "View →" link to the full analysis), then the
- *  fund-by-fund table. `firm` is App's live firm rollup, shared with the Companies
- *  sidebar.
+ *  fund-by-fund table. `firm` is App's live firm rollup.
  *  `onNavigate(tab, fundId?, section?)` opens another tab, landing a per-fund tab on `fundId`
  *  and scrolling to the element with id `section`. */
 /** `welcome` is an optional full-row card that leads the dashboard (App passes the Welcome card). */
@@ -147,19 +146,19 @@ export default function Overview({ fundStates, snapshot, portfolio, firm, onOpen
                   <td style={{ color: "var(--ink-color-global-text-default)", textAlign: "right" }}>{f.vintage ?? "—"}</td>
                   <td style={RT}>{fmt$(f.committed)}</td>
                   <td style={RT}>{fmt$(f.lpPaidIn)}</td>
-                  {dash ?? <DeltaTd cur={f.lpDistributed} base={f.baseLpDistributed} fmt={fmt$} eps={0.5} />}
-                  {dash ?? <DeltaTd cur={f.lpNav} base={f.baseLpNav} fmt={fmt$} eps={0.5} />}
-                  {dash ?? <DeltaTd cur={f.dpi} base={f.lpPaidIn > 0 ? f.baseLpDistributed / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={0.005} />}
-                  {dash ?? <DeltaTd cur={f.rvpi} base={f.lpPaidIn > 0 ? f.baseLpNav / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={0.005} />}
-                  {dash ?? <DeltaTd cur={f.tvpi} base={f.baseTvpi} fmt={(n) => fmtX(n)} eps={0.005} />}
-                  <DeltaTd cur={f.grossMoic} base={f.baseGrossMoic} fmt={(n) => fmtX(n)} eps={0.005} />
+                  {dash ?? <DeltaTd cur={f.lpDistributed} base={f.baseLpDistributed} fmt={fmt$} eps={DELTA_MONEY.eps} />}
+                  {dash ?? <DeltaTd cur={f.lpNav} base={f.baseLpNav} fmt={fmt$} eps={DELTA_MONEY.eps} />}
+                  {dash ?? <DeltaTd cur={f.dpi} base={f.lpPaidIn > 0 ? f.baseLpDistributed / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={DELTA_MULTIPLE.eps} />}
+                  {dash ?? <DeltaTd cur={f.rvpi} base={f.lpPaidIn > 0 ? f.baseLpNav / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={DELTA_MULTIPLE.eps} />}
+                  {dash ?? <DeltaTd cur={f.tvpi} base={f.baseTvpi} fmt={(n) => fmtX(n)} eps={DELTA_MULTIPLE.eps} />}
+                  <DeltaTd cur={f.grossMoic} base={f.baseGrossMoic} fmt={(n) => fmtX(n)} eps={DELTA_MULTIPLE.eps} />
                   {/* Avg Own % — capital-weighted fund ownership; the delta is the dilution
                       guard (scenario dilution vs the undiluted baseline) */}
                   <DeltaTd cur={avgNow[f.id]} base={avgBase[f.id]} fmt={fmtOwn} eps={0.0001} />
                   {/* Net LP IRR — Carta booked; reprices never restate it, so no scenario delta */}
                   <td style={RT}>{f.netLpIrr == null ? "—" : fmtPct(f.netLpIrr)}</td>
-                  <DeltaTd cur={gpCarryOf(f)} base={baseGpCarryOf(f)} fmt={fmt$} eps={0.5} />
-                  {dash ?? <DeltaTd cur={f.gpCapitalNavLive} base={f.gpCapitalNav} fmt={fmt$} eps={0.5} />}
+                  <DeltaTd cur={gpCarryOf(f)} base={baseGpCarryOf(f)} fmt={fmt$} eps={DELTA_MONEY.eps} />
+                  {dash ?? <DeltaTd cur={f.gpCapitalNavLive} base={f.gpCapitalNav} fmt={fmt$} eps={DELTA_MONEY.eps} />}
                 </tr>
               );})}
               <tr className="totrow">

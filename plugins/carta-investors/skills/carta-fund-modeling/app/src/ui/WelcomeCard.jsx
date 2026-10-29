@@ -3,9 +3,9 @@
 // the user closes it or adds a scenario of their own.
 
 import { useEffect, useState } from "react";
-import { FS, sans, serif, inkNum } from "./theme.js";
-import { Btn, CloseIcon, LockIcon } from "./components.jsx";
-import { fmtM, fmtX } from "./format.js";
+import { FS, sans, serif } from "./theme.js";
+import { Btn, CloseIcon } from "./components.jsx";
+import { SCENARIO_TILE_STYLE, TileContent } from "./ScenarioMenu.jsx";
 import { isShared, isOwnShared } from "../model/slices.js";
 import { firmBaseRollup } from "../model/funds.js";
 import { trackClick } from "../analytics.js";
@@ -31,26 +31,13 @@ function Step({ n, children }) {
   );
 }
 
-const ROW_LABEL = { ...sans, padding: "2px 0", fontSize: FS.value, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)" };
-const ROW_VALUE = { ...inkNum, padding: "2px 0 2px 12px", fontSize: FS.value, lineHeight: "20px", textAlign: "right" };
-
-/** Baseline (Carta's marks) at a glance: firm LP NAV, TVPI and GP carry. Never sums
- *  across currencies — a mixed-currency firm gets dashes. */
-function BaselineSummary({ fundStates, mixedCurrency }) {
-  const base = firmBaseRollup(fundStates);
-  const rows = [["LP NAV", fmtM(base.lpNav)], ["TVPI", fmtX(base.tvpi)], ["GP carry", fmtM(base.gpCarry)]];
+/** Baseline (Carta's marks) at a glance, drawn as the scenario switcher's Baseline tile.
+ *  It only previews, so it has no radio and doesn't react to the pointer. */
+function BaselineSummary({ baseline, fundStates, mixedCurrency }) {
+  const firm = { ...firmBaseRollup(fundStates), mixedCurrency };
   return (
-    <div className="card welcome-baseline" data-testid="welcome-baseline">
-      <div style={{ ...sans, display: "flex", alignItems: "center", marginBottom: 6, fontSize: FS.body, fontWeight: 600 }}>
-        <span aria-hidden className="welcome-baseline-lock"><LockIcon size={12} /></span>Baseline
-      </div>
-      <table style={{ borderCollapse: "collapse", width: "100%" }}>
-        <tbody>
-          {rows.map(([label, value]) => (
-            <tr key={label}><td style={ROW_LABEL}>{label}</td><td style={ROW_VALUE}>{mixedCurrency ? "—" : value}</td></tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="card welcome-baseline" data-testid="welcome-baseline" style={{ ...SCENARIO_TILE_STYLE, cursor: "default" }}>
+      <TileContent slice={baseline} firm={firm} />
     </div>
   );
 }
@@ -97,7 +84,7 @@ export default function WelcomeCard({ firm, slices, userId, fundStates, mixedCur
         <Btn kind="primary" onClick={addScenario} style={{ marginTop: 4 }}>Add scenario</Btn>
       </div>
       <div className="welcome-preview">
-        <BaselineSummary fundStates={fundStates} mixedCurrency={mixedCurrency} />
+        <BaselineSummary baseline={slices.find((s) => s.locked)} fundStates={fundStates} mixedCurrency={mixedCurrency} />
       </div>
     </section>
   );

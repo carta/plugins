@@ -150,6 +150,23 @@ export const EYEBROW_TRACKING = "0.07em";
 export const SMALL_1 = { ...sans, fontSize: FS.body, lineHeight: "20px", fontWeight: 500 };
 export const SMALL_2 = { ...sans, fontSize: FS.body, lineHeight: "20px", fontWeight: 400 };
 
+// Columns of the scenario tile grid (.scenario-tiles) on the Scenarios page.
+export const TILE_COLUMNS = 3;
+
+// Size of a scenario tile's ⋯ button (.tile-kebab); the tile's title row is this tall.
+export const TILE_CONTROL = 24;
+
+// Ink's NewCheckbox box (.ink-chk .box), a square this many px on a side.
+export const CHECKBOX_SIZE = 20;
+
+// A radio (.radio-item, Carta's shadcn RadioGroupItem) is this many px across; a
+// scenario tile lays out its corner radio from it too.
+export const RADIO_SIZE = 16;
+
+// Stacking of the pinned table header's clone (.sticky-clone-slot), portalled to the
+// body; layers that must cover it (the scenario menu's sidebar) stack from it.
+export const PINNED_Z = 30;
+
 export const GLOBAL_CSS = `
   /* Self-hosted — the woff2 lives at public/fonts/ (copied verbatim into dist/fonts/ by
      Vite's public-dir passthrough, unhashed), so this loads from a local file with no
@@ -382,7 +399,6 @@ export const GLOBAL_CSS = `
      tile). Corners stay square, unlike Ink's 2px radius. */
   .navitem-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; }
   .navitem.active .navitem-icon { background: ${STRIPE}; }
-  .addslice:hover { background: ${SHADE} !important; }
   /* Jump-link chips (JumpLinks) — flat grey pills; the section in view turns solid. */
   .jumpchip { display: inline-flex; align-items: center; gap: 6px; border: none; border-radius: 999px; padding: 6px 13px 6px 10px; cursor: pointer;
     background: ${SHADE}; color: var(--ink-color-global-text-default); transition: background-color 120ms ease-out, color 120ms ease-out; }
@@ -440,7 +456,7 @@ export const GLOBAL_CSS = `
      to the table's .table-scroll wrapper (or the table itself, when there's no
      such wrapper) so a horizontally-scrolled clone doesn't render past the real
      table's visible width; see useStickyHeader's hEl tracking in ui/table.jsx. */
-  .sticky-clone-slot { position: fixed; z-index: 30; overflow: hidden; }
+  .sticky-clone-slot { position: fixed; z-index: ${PINNED_Z}; overflow: hidden; }
   table.ledger.sticky-clone { table-layout: fixed; }
   table.ledger.sticky-clone th { background: ${PAPER}; box-shadow: inset 0 -1px ${BORDER_DEFAULT}; }
   table.ledger td { font-weight: 400; line-height: 24px; padding: 10px 12px; }
@@ -505,14 +521,22 @@ export const GLOBAL_CSS = `
      sibling ".box" span, rather than a manually-toggled "is-*" class — no JS
      needed to keep the states in sync. */
   .ink-chk { display: inline-flex; align-items: center; gap: 8px; font: 400 ${FS.value}px/20px ${SANS}; color: ${INK}; cursor: pointer; user-select: none; position: relative; }
-  .ink-chk input { position: absolute; opacity: 0; pointer-events: none; width: 20px; height: 20px; }
-  .ink-chk .box { flex: 0 0 auto; width: 20px; height: 20px; border: 1px solid var(--ink-color-global-border-default); border-radius: 4px; background: var(--ink-color-global-brand-white); display: inline-flex; align-items: center; justify-content: center; transition: border-color .12s ease, box-shadow .12s ease; }
+  .ink-chk input { position: absolute; opacity: 0; pointer-events: none; width: ${CHECKBOX_SIZE}px; height: ${CHECKBOX_SIZE}px; }
+  .ink-chk .box { flex: 0 0 auto; width: ${CHECKBOX_SIZE}px; height: ${CHECKBOX_SIZE}px; border: 1px solid var(--ink-color-global-border-default); border-radius: 4px; background: var(--ink-color-global-brand-white); display: inline-flex; align-items: center; justify-content: center; transition: border-color .12s ease, box-shadow .12s ease; }
   .ink-chk .box svg { display: block; width: 14px; height: 14px; opacity: 0; color: #394040; }
   .ink-chk:hover .box { border-color: var(--ink-color-global-border-hover); }
   .ink-chk input:checked ~ .box svg { opacity: 1; }
   .ink-chk input:focus-visible ~ .box { border-color: var(--ink-color-global-border-focus-default); box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
   .ink-chk input:disabled ~ .box { background: var(--ink-color-global-surface-disabled); border-color: var(--ink-color-global-border-disabled); }
   .ink-chk input:disabled ~ .box svg { color: var(--ink-color-global-text-disabled); }
+  /* Radio — Carta's shadcn RadioGroupItem: a 16px ring in the input border, clear (a
+     faint fill in dark mode); checked, it fills with the primary colour around a dot in
+     the primary foreground. */
+  .radio-item { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+    width: ${RADIO_SIZE}px; height: ${RADIO_SIZE}px; border-radius: 50%; border: 1px solid ${BORDER_DEFAULT};
+    background: light-dark(transparent, rgb(255 255 255 / 0.045)); transition: border-color .12s ease; }
+  .radio-item.is-checked { background: var(--ink-button-background-color-primary-base-default); border-color: var(--ink-button-background-color-primary-base-default); }
+  .radio-item.is-checked::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-button-font-color-primary-base); }
   .ink-chk:has(input:disabled) { cursor: not-allowed; color: var(--ink-color-global-text-disabled); }
 
   /* Ink Tag variants — "mini" size for dense tables: 20px height, 11px text, 4px radius.
@@ -541,6 +565,34 @@ export const GLOBAL_CSS = `
   .bench-bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   @media (max-width: 860px) { .bench-bars { grid-template-columns: 1fr; gap: 18px; } }
 
+  /* ── Scenario tiles: rows of TILE_COLUMNS on the Scenarios page, one column in the sidebar menu's panel ── */
+  /* Every row as tall as the tallest, so a short add tile matches the scenario tiles. */
+  .scenario-tiles { display: grid; grid-template-columns: repeat(${TILE_COLUMNS}, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 16px; }
+  .scenario-tiles.is-stacked { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  /* Tiles are choice cards: a radio in the top right corner marks the choice (one of
+     a set); hovering the tile hovers it, as hovering a radio's label does. The active
+     tile takes a faint tint. Keyboard focus gets Ink's ring. */
+  .scenario-tile { transition: border-color 120ms ease-out, background-color 120ms ease-out; }
+  .scenario-tile.is-add { background: transparent; border: 1px dashed var(--ink-color-global-border-default); }
+  /* A tile with an actions menu sits in a .scenario-tile-wrap beside its kebab (a
+     button can't nest in the tile's button); hovering the kebab keeps the tile lit. */
+  .scenario-tile:hover, .scenario-tile-wrap:hover > .scenario-tile { border-color: var(--ink-color-global-border-hover); box-shadow: none; }
+  /* The active tile takes Carta's shadcn choice-card checked state (FieldLabel's
+     has-data-checked): a faint primary tint and border, primary at 5% / 30% (10% / 20%
+     in dark mode); its filled radio carries the choice. */
+  .scenario-tile.is-active, .scenario-tile.is-active:hover, .scenario-tile-wrap:hover > .scenario-tile.is-active {
+    --tile-checked: ${ACCENT};
+    --tile-tint: 5%; --tile-edge: 30%;
+    background: color-mix(in srgb, var(--tile-checked) var(--tile-tint), var(--ink-color-global-surface-background-default));
+    border-color: color-mix(in srgb, var(--tile-checked) var(--tile-edge), transparent); }
+  html.dark .scenario-tile.is-active, html.dark .scenario-tile.is-active:hover, html.dark .scenario-tile-wrap:hover > .scenario-tile.is-active { --tile-tint: 10%; --tile-edge: 20%; }
+  .scenario-tile:focus-visible { outline: none; border-color: var(--ink-color-global-border-focus-default); box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
+  .scenario-tile:hover .radio-item:not(.is-checked), .scenario-tile-wrap:hover .radio-item:not(.is-checked) { border-color: var(--ink-color-global-border-hover); }
+  /* Tile actions "⋯" trigger — a quiet square icon button. */
+  .tile-kebab { display: inline-flex; align-items: center; justify-content: center; width: ${TILE_CONTROL}px; height: ${TILE_CONTROL}px;
+    padding: 0; border: none; border-radius: 0; background: transparent; color: var(--ink-color-global-text-subtle); cursor: pointer; }
+  .tile-kebab:hover, .tile-kebab[aria-expanded="true"] { background: var(--ink-color-global-surface-lightgray-hover); color: var(--ink-color-global-text-default); }
+  .tile-kebab:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ink-color-global-border-focus-default); }
   /* Welcome card (WelcomeCard.jsx), after Carta Home's "What's new" feature card:
      a warm paper surface in three columns — a "Get started" tag over the steps on
      white, a serif headline + call to action, and Baseline's figures as a lifted preview. */
@@ -564,13 +616,9 @@ export const GLOBAL_CSS = `
   .welcome-chip { padding: 3px 6px; background: var(--ink-color-global-surface-lightgray-hover); font-size: ${FS.micro}px; font-weight: 500;
     letter-spacing: ${EYEBROW_TRACKING}; text-transform: uppercase; color: var(--ink-color-global-text-default); }
   .welcome-preview { display: flex; align-items: center; margin-left: -24px; padding: 40px 24px 24px 0; }
-  /* Baseline's figures as a lifted card. It isn't clickable, so unlike other .cards it
-     doesn't react on hover. The lock and its gap fill the card's extra left padding,
-     --welcome-lock-hang wide, so "Baseline" lines up with the labels below. */
-  .welcome-baseline { --welcome-lock-hang: 20px; flex: 1; padding: 14px 18px 14px calc(18px + var(--welcome-lock-hang));
-    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .06)); }
-  .welcome-baseline-lock { display: inline-flex; width: var(--welcome-lock-hang); margin-left: calc(-1 * var(--welcome-lock-hang));
-    color: var(--ink-color-global-text-subtle); }
+  /* Baseline's figures as a lifted card, laid out as the scenario switcher's Baseline
+     tile. It isn't clickable, so unlike other .cards it doesn't react on hover. */
+  .welcome-baseline { flex: 1; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .06)); }
   .welcome-baseline.card:hover { box-shadow: none; }
   /* ── Firm Overview dashboard: the hero, then rows of compact widgets, each a
      12-column grid. Below 1180px the hero's two cards stack and every other widget

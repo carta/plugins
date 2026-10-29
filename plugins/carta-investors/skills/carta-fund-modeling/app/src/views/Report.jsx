@@ -7,8 +7,8 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { tightSans, sans, inkNum, FS, MICRO } from "../ui/theme.js";
-import { fmtM, fmtX, fmtPct, fmtAsOf, displayCurrency } from "../ui/format.js";
-import { H1, H3, Btn, Eyebrow, MethodNote, SourceNote, LockIcon, fundLabel, MultiFundPicker } from "../ui/components.jsx";
+import { fmtM, fmtX, fmtPct, fmtAsOf, displayCurrency, DELTA_MONEY, DELTA_MULTIPLE } from "../ui/format.js";
+import { H1, H3, Btn, Eyebrow, MethodNote, SourceNote, ScenarioMarker, fundLabel, MultiFundPicker } from "../ui/components.jsx";
 import { buildReport } from "../model/report.js";
 import { BASELINE_ID } from "../model/slices.js";
 import { trackClick } from "../analytics.js";
@@ -49,19 +49,14 @@ const fmtVal = (v, kind, mixed) => {
   if (kind === "pct") return fmtPct(v);
   return fmtM(v);
 };
-const fmtDelta = (d, kind) => {
-  const sign = d >= 0 ? "+" : "−";
-  const mag = Math.abs(d);
-  return kind === "x" ? `${sign}${mag.toFixed(2)}×` : `${sign}${fmtM(mag)}`;
-};
-// epsilon below which a delta is treated as no-change (per metric kind)
-const EPS = { money: 0.5, x: 0.005 };
+// Each delta kind's formatter and no-change threshold.
+const DELTA_BY_KIND = { money: DELTA_MONEY, x: DELTA_MULTIPLE };
+const fmtDelta = (d, kind) => `${d >= 0 ? "+" : "−"}${DELTA_BY_KIND[kind].fmt(Math.abs(d))}`;
 
 function ScenarioHead({ s }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-      {s.locked ? <LockIcon size={11} strokeWidth={2} />
-        : s.color && <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flex: "none" }} />}
+      <ScenarioMarker slice={s} />
       {s.name}
     </span>
   );
@@ -97,7 +92,7 @@ function ReportBody({ report, funds, metrics }) {
               <td style={{ whiteSpace: "nowrap" }}>{m.label}</td>
               {summaries.map((s) => {
                 const d = m.delta ? s[`${m.key}Delta`] : null;
-                const showD = m.delta && !s.locked && d != null && Math.abs(d) > (EPS[m.kind] ?? 0) && !(mixed && m.kind === "money");
+                const showD = m.delta && !s.locked && d != null && Math.abs(d) > (DELTA_BY_KIND[m.kind]?.eps ?? 0) && !(mixed && m.kind === "money");
                 return (
                   <td key={s.id} style={numTd}>
                     <div style={{ fontWeight: 600 }}>{fmtVal(s[m.key], m.kind, mixed)}</div>
@@ -189,8 +184,7 @@ function ScenarioChip({ s, on, onClick }) {
         border: `1px solid ${on ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-border-subtle)"}`, cursor: "pointer", whiteSpace: "nowrap",
         background: on ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-surface-background-default)", color: on ? "var(--ink-color-global-surface-background-default)" : "var(--ink-color-global-text-subtle)",
         display: "inline-flex", alignItems: "center", gap: 6 }}>
-      {s.locked ? <LockIcon size={11} strokeWidth={2} />
-        : s.color && <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flex: "none" }} />}
+      <ScenarioMarker slice={s} />
       {s.name}
     </button>
   );

@@ -11,6 +11,27 @@ import { computeReserves, newDealCount, reserveOptsOf } from "./reserves.js";
 import { secondarySales } from "./reprice.js";
 
 /**
+ * A scenario's firm-level figures, each with its move vs Baseline, from its fund
+ * states. The one place these figures and their moves are assembled: the scenario
+ * tiles, the Companies sidebar's Firm impact and the scenario summary all read them from here.
+ */
+export function scenarioFirmFigures(fs) {
+  const agg = firmRollup(fs);
+  const base = firmBaseRollup(fs);
+  return {
+    currency: agg.currency,
+    mixedCurrency: agg.mixedCurrency,
+    invested: agg.invested,
+    fv: agg.fv, fvDelta: agg.fv - base.fv,
+    lpNav: agg.lpNav, lpNavDelta: agg.lpNavDelta,
+    gpCarry: agg.gpCarry, gpCarryDelta: agg.gpCarry - base.gpCarry,
+    lpDistributed: agg.lpDistributed, lpDistributedDelta: agg.lpDistributed - base.lpDistributed,
+    tvpi: agg.tvpi, tvpiDelta: agg.tvpi - base.tvpi,
+    dpi: agg.dpi, dpiDelta: agg.dpi - base.dpi,
+  };
+}
+
+/**
  * Top-line output metrics for one scenario, each with its vs-Baseline delta. The
  * `$` figures (lpNav, gpCarry, lpDistributed, dryPowder, newDealCapacity) are only
  * meaningful in a single currency — `mixedCurrency` tells the caller to blank them.
@@ -18,8 +39,6 @@ import { secondarySales } from "./reprice.js";
  */
 export function scenarioSummary(snapshot, slice) {
   const fs = computeFundStates(snapshot, slice);
-  const agg = firmRollup(fs);
-  const base = firmBaseRollup(fs);
   const a = slice.assumptions || {};
   const res = computeReserves(snapshot, slice, reserveOptsOf(a));
   const newDeals = newDealCount(res, a.avgChecks || {});
@@ -28,17 +47,10 @@ export function scenarioSummary(snapshot, slice) {
     name: slice.name,
     color: slice.color ?? null,
     locked: !!slice.locked,
-    currency: agg.currency,
-    mixedCurrency: agg.mixedCurrency,
-    // currency figures (+ deltas vs Baseline)
-    lpNav: agg.lpNav, lpNavDelta: agg.lpNavDelta,
-    gpCarry: agg.gpCarry, gpCarryDelta: agg.gpCarry - base.gpCarry,
-    lpDistributed: agg.lpDistributed, lpDistributedDelta: agg.lpDistributed - base.lpDistributed,
+    // firm figures, each with its delta vs Baseline (currency, mixedCurrency, lpNav, tvpi, …)
+    ...scenarioFirmFigures(fs),
     dryPowder: res.totals.reserves,
     newDealCapacity: res.totals.newDeal,
-    // currency-neutral
-    tvpi: agg.tvpi, tvpiDelta: agg.tvpi - base.tvpi,
-    dpi: agg.dpi, dpiDelta: agg.dpi - base.dpi,
     newDeals,
     // per-fund breakdown (funds that carry capital). Carries every metric the
     // report's by-entity picker can surface — LP NAV, MOIC, TVPI, DPI, Net IRR,

@@ -10,10 +10,15 @@ user who asks to share needs to do nothing: a colleague who opens the same firm 
 
 ## In the app
 
-- **SHARED sidebar section** — always shown in the local app, below your local SCENARIOS. Its **Load shared
-  scenarios** (⤓) control pulls the firm's shared scenarios; they render under SHARED.
-- **Per-scenario actions** (top bar, for the active scenario):
-  - **Publish** — a local scenario → shared with the firm.
+- **Shared with you** — a section of the Scenarios page (the **Scenario** switcher at the top of the sidebar → **View all**).
+  Its header's **Update data** link pulls the firm's shared scenarios (until any are loaded, the section reads
+  "Update data to check for any new shared scenarios", the same link); they render there and, with a **Shared** tag, in the
+  sidebar menu when recently viewed. Hidden ones come back from its "N hidden · Show" link.
+- **Publish** — a local scenario → shared with the firm. In the **Scenario** switcher at the top of the sidebar, open the
+  scenario tile's **⋯** menu and choose Publish (in a narrow window, the row of buttons under the scenario
+  chips has it for the active scenario).
+- **Shared-scenario actions** (top bar, for the active shared scenario):
+  - **Rename** — rename it; Update then pushes the new name to the firm.
   - **Update** — push your local edits to the shared scenario (any firm admin;
     last-write-wins, with a prompt if a teammate changed it since you loaded it). Shown
     disabled until you edit the scenario, so the edit→publish path is visible up front. If the
@@ -21,7 +26,7 @@ user who asks to share needs to do nothing: a colleague who opens the same firm 
     (re-share your edits) or **Keep private** (drop the link, keep a local copy).
   - **Duplicate** — an independent private copy that drops the share link.
   - **Hide** — take the scenario off your list; the firm's copy stays and a later pull keeps
-    it hidden. "N hidden · Show" in the SHARED header brings hidden scenarios back.
+    it hidden. "N hidden · Show" in the Scenarios page's Shared with you header brings hidden scenarios back.
   - **Delete** — owner only; removes the scenario for the whole firm.
 - A shared scenario shows "updated {when} · by you / another admin" and, when it was built
   against a different data vintage than yours, an informational drift banner.

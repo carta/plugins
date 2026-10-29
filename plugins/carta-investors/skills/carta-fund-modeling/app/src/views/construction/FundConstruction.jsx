@@ -1,6 +1,6 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState } from "react";
 import { FS, sans, MICRO } from "../../ui/theme.js";
-import { H1, Eyebrow, Btn, Badge, EmptyState, CheckCircleIcon, POPOVER_SHADOW, useDismissable } from "../../ui/components.jsx";
+import { H1, Eyebrow, Btn, Badge, EmptyState, CheckCircleIcon, ActionMenu } from "../../ui/components.jsx";
 import ConfirmDialog from "../../ui/ConfirmDialog.jsx";
 import useConstruction from "../../state/useConstruction.js";
 import { stepsFor, suggestedPlan, stepFlow, stepLabel, modeLabel, copyPlan } from "../../model/construction/plan.js";
@@ -125,24 +125,14 @@ function ConvertedNote({ plan, result, update }) {
 
 /** Less-used plan actions, in a menu so the toolbar stays one row. */
 function PlanMenu({ plan, onNew, onConvert, onDelete }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useDismissable(open, setOpen, ref);
-  const pick = (fn) => () => { setOpen(false); fn(); };
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <Btn onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Plan actions" data-testid="plan-menu">⋯</Btn>
-      {open && (
-        <div role="menu" className="popin" style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50, minWidth: 220, padding: "4px 0",
-          background: "var(--ink-color-global-surface-background-default)", border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 6, boxShadow: POPOVER_SHADOW }}>
-          {[["new-plan", "+ New plan", onNew, false], ...(plan.mode === "light" ? [["convert-plan", "Convert to Advanced", onConvert, false]] : []), ["delete-plan", "Delete plan", onDelete, true]].map(([id, label, fn, danger]) => (
-            <button key={id} type="button" role="menuitem" className="menu-item" data-testid={id} onClick={pick(fn)}
-              style={{ ...sans, display: "block", width: "100%", textAlign: "left", border: "none", borderRadius: 4, cursor: "pointer", background: "transparent", padding: "8px 12px", fontSize: 14, minHeight: 36,
-                color: danger ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-color-global-text-default)" }}>{label}</button>
-          ))}
-        </div>
-      )}
-    </div>
+    <ActionMenu minWidth={220}
+      trigger={(p) => <Btn aria-label="Plan actions" data-testid="plan-menu" {...p}>⋯</Btn>}
+      items={[
+        { testId: "new-plan", label: "+ New plan", onSelect: onNew },
+        ...(plan.mode === "light" ? [{ testId: "convert-plan", label: "Convert to Advanced", onSelect: onConvert }] : []),
+        { testId: "delete-plan", label: "Delete plan", danger: true, onSelect: onDelete },
+      ]} />
   );
 }
 

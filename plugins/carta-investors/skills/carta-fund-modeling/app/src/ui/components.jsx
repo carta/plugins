@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, forwardRef } from "react";
 import { createPortal } from "react-dom";
-import { FS, SANS, serif, tightSans, sans, inkNum, MICRO, NOTICE, NOTICE_TINT, EASE, GRAD_DARK, EYEBROW_TRACKING } from "./theme.js";
+import { FS, SANS, serif, tightSans, sans, inkNum, MICRO, NOTICE, NOTICE_TINT, EASE, GRAD_DARK, EYEBROW_TRACKING, SMALL_1 } from "./theme.js";
 
 // SVG/text fontFamily attributes need a plain string (not a style object) —
 // reuse theme.js's own SANS constant rather than hand-duplicating it.
@@ -69,6 +69,14 @@ export function CartaLogo({ size = 30, style }) {
   );
 }
 export const LockIcon = icon(["M5.5 11h13a1 1 0 011 1v8a1 1 0 01-1 1h-13a1 1 0 01-1-1v-8a1 1 0 011-1z", "M8 11V7.5a4 4 0 018 0V11"]);
+/** A scenario's marker: Baseline's lock, or the scenario's colour dot (a small dot in
+ *  the text colour when it has none). Callers wrap it for width, margin and colour. */
+export function ScenarioMarker({ slice }) {
+  return slice.locked
+    ? <LockIcon size={12} strokeWidth={2} />
+    : <span style={{ width: slice.color ? 8 : 5, height: slice.color ? 8 : 5, borderRadius: "50%",
+        background: slice.color || "currentColor", alignSelf: "center", flex: "none" }} />;
+}
 export const ChevronIcon = icon(["M9 6l6 6-6 6"]);
 // Ink's Dropdown.Trigger caret — a real chevron-down (not the right-chevron
 // rotated 90°), static since this app's popovers always open downward. Ink
@@ -188,6 +196,19 @@ export function Modal({ title, subtitle, onClose, width = "medium", maxWidth, ch
 export const DeltaCaret = ({ up }) => (
   <span aria-hidden="true" style={{ fontSize: FS.micro, lineHeight: 1 }}>{up ? "▲" : "▼"}</span>
 );
+/** A firm metric's move vs Baseline — caret + amount, green up / red down.
+ *  Renders nothing when the move is within `eps`. `{fmt, eps}` comes from
+ *  DELTA_MONEY / DELTA_MULTIPLE (format.js). */
+export function VsBaseline({ delta, fmt, eps, suffix, style }) {
+  if (delta == null || !(Math.abs(delta) > eps)) return null;
+  const up = delta >= 0;
+  return (
+    <span style={{ ...SMALL_1, display: "inline-flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums",
+      color: up ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)", ...style }}>
+      <DeltaCaret up={up} />{fmt(Math.abs(delta))}{suffix}
+    </span>
+  );
+}
 // Info/help glyph — needs a circle + dot the shared `icon()` factory (paths-only)
 // can't express, so it's hand-rolled like `Mark` above rather than forced through it.
 export const HelpCircleIcon = ({ size = 14, strokeWidth = 1.8, style }) => (
@@ -445,6 +466,10 @@ export const Num = ({ value, fmt, style }) => {
   return <span style={{ fontVariantNumeric: "tabular-nums", ...style }}>{fmt(v)}</span>;
 };
 
+const CHECKBOX_MARK = (
+  <svg viewBox="0 0 12 12" fill="none"><path d="M2 6.2l2.6 2.6L10 3.4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+
 /** Ink's real NewCheckbox (see the `.ink-chk` rules in theme.js's GLOBAL_CSS for
  *  the exact recipe: 20px/4px-radius box, white in both themes, Gray-90 check
  *  glyph, 8px gap to the label). `locked` mirrors Toggle's convention — the
@@ -458,12 +483,17 @@ export function Checkbox({ checked, onChange, label, disabled, locked, title }) 
       onClick={(e) => e.stopPropagation()}>
       <input type="checkbox" checked={checked} disabled={disabled}
         onChange={() => { if (!disabled) onChange(!checked); }} />
-      <span className="box">
-        <svg viewBox="0 0 12 12" fill="none"><path d="M2 6.2l2.6 2.6L10 3.4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </span>
+      <span className="box">{CHECKBOX_MARK}</span>
       {label}
     </label>
   );
+}
+
+/** A radio drawn as Carta's shadcn RadioGroupItem (see `.radio-item` in theme.js's
+ *  GLOBAL_CSS), for one choice of a set whose whole row or card is the button: no
+ *  input of its own, so `checked` drives the fill and dot. */
+export function RadioGlyph({ checked, style }) {
+  return <span className={`radio-item${checked ? " is-checked" : ""}`} aria-hidden style={style} />;
 }
 
 /** iOS-style switch. `disabled` is truly inert; `locked` keeps the control
@@ -635,14 +665,16 @@ export { fundLabel, fundNameOnly };
  *  the real Ink primitives — Ink's raw Text-type Dropdown.Item has no
  *  built-in "this is the selected one" state of its own).
  *  `leading` renders before the label (a checkbox/color swatch). */
-export function MenuItem({ children, onClick, selected, tint = selected, checkmark, dense, leading, style, role = "option" }) {
+export function MenuItem({ children, onClick, selected, tint = selected, checkmark, dense, leading, style, role = "option", disabled, testId }) {
   return (
-    <button role={role} aria-selected={role === "option" ? selected : undefined} onClick={onClick} className="menu-item"
+    <button type="button" role={role} aria-selected={role === "option" ? selected : undefined} onClick={onClick} className="menu-item"
+      disabled={disabled} data-testid={testId}
       style={{ ...sans, display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", whiteSpace: "nowrap",
         padding: dense ? "6px 12px" : "8px 12px", minHeight: dense ? undefined : 36, border: "none", borderRadius: 4, cursor: "pointer",
         boxSizing: "border-box", fontSize: 14, lineHeight: dense ? "24px" : "20px", fontWeight: 400,
-        color: "var(--ink-color-global-text-default)",
+        color: disabled ? "var(--ink-color-global-text-disabled)" : "var(--ink-color-global-text-default)",
         background: tint ? "var(--ink-color-global-surface-lightgray-hover)" : "transparent",
+        ...(disabled ? { cursor: "default" } : null),
         ...style }}>
       {leading}
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{children}</span>
@@ -655,6 +687,36 @@ export function MenuItem({ children, onClick, selected, tint = selected, checkma
   );
 }
 
+/** A trigger that opens a small menu of actions — the one home for every
+ *  "click, pick an action" menu's popover chrome and behaviour. `trigger`
+ *  renders the opener from the props it is handed (spread them onto a button).
+ *  `items` are `{ label, onSelect, danger, disabled, testId }`: choosing one
+ *  closes the menu, then runs `onSelect`; a disabled one does nothing. `style`
+ *  places the wrapper (it anchors the popover, which opens below it, aligned right). */
+export function ActionMenu({ trigger, items, minWidth = 190, style }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useDismissable(open, setOpen, ref);
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-block", ...style }}>
+      {trigger({ onClick: () => setOpen((o) => !o), "aria-haspopup": "menu", "aria-expanded": open })}
+      {open && (
+        <div role="menu" className="popin" style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50, minWidth, padding: "4px 0",
+          background: "var(--ink-color-global-surface-background-default)", border: "1px solid var(--ink-color-global-border-subtle)",
+          borderRadius: 6, boxShadow: POPOVER_SHADOW, transformOrigin: "top right" }}>
+          {items.map((it) => (
+            <MenuItem key={it.label} role="menuitem" tint={false} testId={it.testId} disabled={it.disabled}
+              onClick={() => { setOpen(false); it.onSelect(); }}
+              style={it.danger ? { color: "var(--ink-color-global-feedback-negative-strong)" } : undefined}>
+              {it.label}
+            </MenuItem>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 /** Shared Ink Dropdown.Trigger chrome (36px, border-default, hover/open-focus
  *  glow via the `.dd-trigger` class) — single source for both the generic
  *  single-select `Dropdown` and `MultiFundPicker` below, so the two triggers
@@ -663,7 +725,7 @@ export function MenuItem({ children, onClick, selected, tint = selected, checkma
  *  to Btn) for height/padding/font — the same object Btn's `size="toolbar"`
  *  reads, so a Dropdown and a Btn sitting in the same ribbon can't drift.
  *  `extra` merges in per-caller sizing (e.g. Dropdown's minWidth/maxWidth). */
-const ddTriggerStyle = (extra) => ({
+export const ddTriggerStyle = (extra) => ({
   ...sans, display: "inline-flex", alignItems: "center", justifyContent: "space-between", gap: 8,
   ...TOOLBAR_CONTROL_STYLE, boxSizing: "border-box", border: `1px solid var(--ink-color-global-border-default)`,
   borderRadius: 4, background: "var(--ink-color-global-surface-background-default)",

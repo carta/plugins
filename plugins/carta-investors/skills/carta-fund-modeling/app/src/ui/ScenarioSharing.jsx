@@ -12,9 +12,10 @@ function fmtWhen(iso) {
   return isNaN(d) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** Contextual share actions for the active (non-baseline) scenario, styled like the
- *  Rename/Delete tools they sit beside. */
-export function ShareControls({ slice, snapshot, userId, busy, onPublish, onFork, onRemove, onDelete }) {
+/** Contextual actions for the active (non-baseline) scenario. `onRename`, when given,
+ *  leads with a Rename button — for a scenario whose tile has no ⋯ menu (a shared one)
+ *  and in the narrow layout, which has no tiles. */
+export function ShareControls({ slice, snapshot, userId, busy, onPublish, onFork, onRemove, onDelete, onRename }) {
   if (!slice || slice.locked) return null;
   const shared = isShared(slice);
   const owner = isOwnShared(slice, userId);
@@ -23,6 +24,7 @@ export function ShareControls({ slice, snapshot, userId, busy, onPublish, onFork
 
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      {onRename && <Btn onClick={onRename} style={btn}>Rename</Btn>}
       {!shared && <Btn onClick={onPublish} disabled={busy} style={btn}>Publish</Btn>}
       {shared && (
         <>

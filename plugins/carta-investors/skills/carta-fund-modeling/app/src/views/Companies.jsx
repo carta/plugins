@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { tightSans, sans, inkNum, FS, MICRO, NOTICE, SMALL_1, SMALL_2 } from "../ui/theme.js";
-import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn, parseAmount, fmtAmountInput, roundLabel } from "../ui/format.js";
-import { H1, Btn, Toggle, Num, ChevronDownIcon, InfoTip, FundPicker, Dropdown, Badge, Eyebrow, MenuItem, useDismissable, ALL_FUNDS, MethodNote, SourceNote, fundLabel, POPOVER_SHADOW, GlobalFilter, SearchInput, DeltaCaret, Modal, EmptyState, Slider } from "../ui/components.jsx";
+import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn, parseAmount, fmtAmountInput, roundLabel, DELTA_MONEY } from "../ui/format.js";
+import { H1, Btn, Toggle, Num, ChevronDownIcon, InfoTip, FundPicker, Dropdown, Badge, Eyebrow, MenuItem, ActionMenu, useDismissable, ALL_FUNDS, MethodNote, SourceNote, fundLabel, POPOVER_SHADOW, GlobalFilter, SearchInput, DeltaCaret, Modal, EmptyState, Slider } from "../ui/components.jsx";
 import { useTableSort, SortIcon, useStickyHeader, TableScroll, TableHead } from "../ui/table.jsx";
 import RepriceControl from "../ui/RepriceControl.jsx";
 import ConfirmDialog from "../ui/ConfirmDialog.jsx";
@@ -762,7 +762,7 @@ function companyFvState(company, { canReprice }) {
 function companyFundValues(company, updateCompany) {
   if (company.realized) return { stakes: [], curFv: 0 };
   const { stakes, curFv } = companyFvState(company, companyRepriceState(company, updateCompany));
-  return { stakes: stakes.map((st) => ({ ...st, delta: Math.abs(st.delta) > 0.5 ? st.delta : null })), curFv };
+  return { stakes: stakes.map((st) => ({ ...st, delta: Math.abs(st.delta) > DELTA_MONEY.eps ? st.delta : null })), curFv };
 }
 
 // A company's scenario Deal IRR — Carta's reported IRR shifted by the reprice's
@@ -801,7 +801,7 @@ function CompanyRow({ company, updateCompany, assumptions, snapshot, onToggle, o
   // ownership on file (unconverted SAFEs / PERCENTAGE=0).
   const ownInfo = companyOwnership(company, ownership);
   const ownDiluted = ownInfo.pct != null && (company.futureDilution ?? 0) > 0;
-  const repriced = canReprice && !company.archived && Math.abs(uplift) > 0.5;
+  const repriced = canReprice && !company.archived && Math.abs(uplift) > DELTA_MONEY.eps;
   const markDate = company.positions.reduce((m, p) => { const d = positionMarkDate(p); return d > m ? d : m; }, "");
 
   const soldPct = 1 - retainedFraction(company);
@@ -943,7 +943,7 @@ export function ReserveInput({ amount, max, onCommit, locked }) {
   );
 }
 
-function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, ownership, onDragStart, onDragEnd, fundStates, firmAgg, sliceName, fundScope, onOpenFundSection }) {
+function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, ownership, onDragStart, onDragEnd, fundStates, firmFigs, sliceName, fundScope, onOpenFundSection }) {
   // which detail sub-modal is open — 'positions' | 'captable' | 'financials' |
   // 'partialsales' | null (null = the Scenario-inputs tab, the default)
   const [openModal, setOpenModal] = useState(null);
@@ -1027,11 +1027,11 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
     ? companyDealIrr - company.dealIrr : null;
   const companyImpactRows = [
     { key: "fv", label: "Fair value", value: company.realized ? null : curFv, fmt: fmtM,
-      delta: company.realized ? null : uplift, eps: 0.5 },
+      delta: company.realized ? null : uplift, eps: DELTA_MONEY.eps },
     { key: "lpnav", label: "LP NAV", value: company.realized ? null : curLp, fmt: fmtM,
-      delta: company.realized ? null : lpSplit, eps: 0.5 },
+      delta: company.realized ? null : lpSplit, eps: DELTA_MONEY.eps },
     { key: "carry", label: "Carry", value: company.realized ? null : curCarry, fmt: fmtM,
-      delta: company.realized ? null : carrySplit, eps: 0.5 },
+      delta: company.realized ? null : carrySplit, eps: DELTA_MONEY.eps },
     { key: "dealIrr", label: `Deal IRR · exit ${companyExitDate ? companyExitDate.slice(0, 4) : "—"}`,
       value: companyDealIrr, fmt: fmtPct, delta: companyDealIrrDelta, eps: 0.001 },
     // The delta is computed from pct/postDilution rounded to fmtOwn's OWN display
@@ -1045,7 +1045,7 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
       delta: ownInfo.pct == null ? null : -(roundToOwnDisplay(ownInfo.pct) - roundToOwnDisplay(ownInfo.postDilution)), eps: 0.0001 },
     { key: "reserve", label: "Reserves earmarked",
       value: company.realized || company.defunct || company.archived ? null : companyReserve, fmt: fmtM,
-      delta: company.realized || company.defunct || company.archived ? null : companyReserve - companyReserveBase, eps: 0.5 },
+      delta: company.realized || company.defunct || company.archived ? null : companyReserve - companyReserveBase, eps: DELTA_MONEY.eps },
   ].filter(Boolean);
   // gates the Financials button — same "usable reported-metric series" check the
   // trend chart itself applies inside the modal
@@ -1316,9 +1316,9 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
 
           {!openModal && company.notes && <p style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", lineHeight: 1.6, marginTop: 4 }}>{company.notes}</p>}
       </div>
-      {fundStates && firmAgg && (
+      {fundStates && firmFigs && (
         <div style={{ flex: "0 0 300px" }}>
-          <ReturnsPreviewContent fundStates={fundStates} firmAgg={firmAgg}
+          <ReturnsPreviewContent fundStates={fundStates} firmFigs={firmFigs}
             fundScope={fundScope} snapshot={snapshot} portfolio={portfolio}
             onOpenFundSection={onOpenFundSection} activeFundIds={companyFundIds(company)}
             companyImpact={companyImpactRows} draggingSlider={draggingSlider}
@@ -1384,24 +1384,16 @@ function ValuationModeChange({ company, updateCompany, locked, label, infoTip })
 /** Combined write-off / reset control — one "Reset" menu instead of
  *  two separate buttons, so the same actions work on "All Funds" too. */
 function ResetMenu({ onZeroOut, onReset }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useDismissable(open, setOpen, ref);
   return (
-    <span ref={ref} style={{ position: "relative" }}>
-      {/* size="toolbar" matches the filter ribbon's other triggers (Dropdown, SearchInput, Filters) */}
-      <Btn data-testid="reset-menu" size="toolbar" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}>
-        Reset<ChevronDownIcon size={16} strokeWidth={1.5} />
-      </Btn>
-      {open && (
-        <div role="menu" className="popin" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--ink-color-global-surface-background-default)",
-          border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 6, minWidth: 190, zIndex: 50,
-          boxShadow: POPOVER_SHADOW }}>
-          <MenuItem role="menuitem" tint={false} onClick={() => { setOpen(false); trackClick("FundModeling.Companies.ZeroOutClick"); onZeroOut(); }}>Zero out companies</MenuItem>
-          <MenuItem role="menuitem" tint={false} onClick={() => { setOpen(false); trackClick("FundModeling.Companies.ResetToCartaClick"); onReset(); }}>Reset to Carta marks</MenuItem>
-        </div>
+    <ActionMenu
+      trigger={(p) => (
+        // size="toolbar" matches the filter ribbon's other triggers (Dropdown, SearchInput, Filters)
+        <Btn data-testid="reset-menu" size="toolbar" {...p}>Reset<ChevronDownIcon size={16} strokeWidth={1.5} /></Btn>
       )}
-    </span>
+      items={[
+        { label: "Zero out companies", onSelect: () => { trackClick("FundModeling.Companies.ZeroOutClick"); onZeroOut(); } },
+        { label: "Reset to Carta marks", onSelect: () => { trackClick("FundModeling.Companies.ResetToCartaClick"); onReset(); } },
+      ]} />
   );
 }
 
@@ -1476,7 +1468,7 @@ function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden, locked
   );
 }
 
-export default function Companies({ portfolio, snapshot, exitHorizonOverrides, updateCompany, updateSlice, setAssumption, readOnly, onOpenCompany, reload, flush, holdingsPulled, fundScope, setFundScope, fundStates, firmAgg, sliceName, onOpenFundSection }) {
+export default function Companies({ portfolio, snapshot, exitHorizonOverrides, updateCompany, updateSlice, setAssumption, readOnly, onOpenCompany, reload, flush, holdingsPulled, fundScope, setFundScope, fundStates, firmFigs, sliceName, onOpenFundSection }) {
   // fund filter is the GLOBAL scope (driven by the header picker): "all" ⇔ ALL_FUNDS
   const fundFilter = fundScope === ALL_FUNDS ? "all" : fundScope;
   const [confirm, setConfirm] = useState(null); // {title, message, confirmLabel, danger, onConfirm} or null
@@ -1826,7 +1818,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
           updateCompany={updateCompany} refDate={refDate} staleDays={staleDays}
           assumptions={portfolio.assumptions} portfolio={portfolio} snapshot={snapshot} readOnly={readOnly} onOpenCompany={onOpenCompany}
           onDragStart={onSliderDragStart} onDragEnd={onSliderDragEnd}
-          fundStates={fundStates} firmAgg={firmAgg}
+          fundStates={fundStates} firmFigs={firmFigs}
           sliceName={sliceName} fundScope={fundScope} onOpenFundSection={onOpenFundSection} />
       )}
 

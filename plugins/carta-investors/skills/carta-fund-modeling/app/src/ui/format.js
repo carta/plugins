@@ -114,6 +114,19 @@ export const fmtB = (n) => {
 
 export const fmtX = (n, d = 2) => (n == null || !Number.isFinite(n) ? "—" : n.toFixed(d) + "×");
 
+// A metric's move vs Baseline: its formatter and the smallest move worth
+// showing (rounding noise below it reads as unchanged).
+export const DELTA_MONEY = { fmt: fmtM, eps: 0.5 };
+export const DELTA_MULTIPLE = { fmt: fmtX, eps: 0.005 };
+
+// The firm figures a scenario tile shows, in order, each read from a
+// scenarioFirmFigures result as `key` / `${key}Delta`. Its `d` formats both the
+// figure and its move.
+export const FIRM_METRICS = [
+  { label: "LP NAV", key: "lpNav", d: DELTA_MONEY },
+  { label: "TVPI", key: "tvpi", d: DELTA_MULTIPLE },
+];
+
 export const fmtPct = (n, d = 1) => (n == null || !Number.isFinite(n) ? "n/m" : (n * 100).toFixed(d) + "%");
 
 // Fully-diluted ownership fraction → "4.5%", with an extra digit for sub-1%
