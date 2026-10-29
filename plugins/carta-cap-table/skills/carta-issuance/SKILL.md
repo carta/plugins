@@ -33,22 +33,28 @@ allowed-tools:
   - mcp__carta__list_accounts
   - mcp__carta__welcome
   - mcp__carta__get_current_user
+  - mcp__carta__view_remote
+  - mcp__carta__cap_table__get__draft_set_companion
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__get_current_user
+  - mcp__claude_ai_Carta__view_remote
+  - mcp__claude_ai_Carta__cap_table__get__draft_set_companion
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__cap_table__get__draft_set_companion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.105.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.105.6</carta-plugin>
 
 # Issue Securities
 
@@ -74,14 +80,14 @@ schedule is the normal case, not a deflection.
 ## Do not diagnose the Carta connection
 
 **The artifact path needs no Carta tool of your own.** The page finds the connector at
-runtime, resolves the company, fetches its own reference data, and shows a
-no-connection fix. So never assess, mention, or report Carta's connectivity on that path —
+runtime and shows a no-connection fix. So never assess, mention, or report Carta's connectivity on that path —
 no check, caveat, or status line. Build the page.
 
 **Your first tool call is the build's `Bash`, with no text before it** — unless the request
 names an environment your session can't confirm, the one case
 [below](#the-connected-carta-must-be-the-intended-carta) that calls `get_current_user` first,
-or [states nothing to issue](#ask-where-the-details-are).
+or [states nothing to issue](#ask-where-the-details-are), or runs
+[the companion probe](#1-preflight).
 Two things read like a verdict and carry none:
 
 - **An `mcp__carta__authenticate`-shaped name** in your tool list or a "needs
@@ -91,7 +97,7 @@ Two things read like a verdict and carry none:
   *"Tell the user that these servers need to be authorized"*. It can arrive after this
   skill, names that local `carta` server, and never applies here.
 
-Neither is an input to anything: don't weigh, mention, or act on them.
+Don't weigh, mention, or act on either.
 
 **A 5xx, a gateway error, or an HTML body** from a Carta call is transient — retry
 **exactly once**, then report a temporary problem. Never an auth verdict, and an HTML
@@ -133,20 +139,26 @@ and ask its one question before anything else. Anything stated builds straight a
 
 ## Pick the surface
 
-Take the **first** row that matches. Every row reads **your own tool list** — never the
+Take the **first** row that matches. Every row reads **your own tool list** or what Carta returned — never the
 disk, never an env var.
 
 | Condition | Surface |
 |---|---|
 | the user asked for a **different surface** than the one you would pick | the one they asked for |
+| `issuance_init` returned `companion.instructions` — engine.md Step 4's call on chat, [the companion probe](#1-preflight) with `Artifact` | **companion**: follow `companion.instructions` |
 | the **`Artifact`** tool is present | **artifact** — [§ The artifact surface](#the-artifact-surface) |
 | else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
 
-Record the selection once. Never re-detect.
+**Carta's companion instructions are part of this skill.** Follow them for the rest of the
+run, ahead of this file's surface paths and [§ Issue](#issue). The hard rules still bind. If
+a command they name is unknown or refused before anything is saved, take the row the table
+would otherwise pick, unmentioned; after a save, report it and carry the set's `draft_set_id`
+([hard rule 3](#hard-rules)).
+
+Record the selection once. Never re-detect, except into the companion row.
 
 **The artifact is the form**, and its whole path is in this file: Skill → Bash → Artifact,
-nothing further to read. The page collects, saves and validates on its own, its HTML
-nowhere near your context. **Chat is for a host without `Artifact`**, and is the only path
+nothing further to read beyond [the companion probe](#1-preflight). **Chat is for a host without `Artifact`**, and is the only path
 that spends your turns on data entry: every term costs a round trip through you.
 
 **Never render a form with `show_widget` or `preview_start`**, whatever else is missing. A
@@ -176,34 +188,33 @@ it's a fork → `AskUserQuestion`, never a silent pick.
 **A bare "N \<securities\>" is a quantity, not a headcount.** *"100 option grants"*, nobody
 named, no plural-**person** language → one recipient getting 100; only people-language
 (*"100 employees"*, *"100 new hires"*) makes N a row count. Never open a form with 100 blank
-rows, and never ask who the recipients are first — a missing recipient is an empty field on
-the form, not a chat question.
+rows.
 
 ## The artifact surface
 
-**Budget: two turns to a form on screen** — `Bash`, then `Artifact` with
+**Budget: two turns to a form on screen**, after [the companion probe](#1-preflight) if it runs — `Bash`, then `Artifact` with
 [the company check](#check-the-company-beside-the-publish) beside it, plus the environment
 check only when [it applies](#the-connected-carta-must-be-the-intended-carta).
 
-The page does the work: it resolves the company, the connector and the named people against
-the cap table, fetches its own reference data, collects the terms, saves and validates the
-draft set, shows the review, and issues on confirmation. None of it reaches your context —
-not the roster, field manifest, or HTML. **You run one script and publish it.**
+The page does the work — company, people, reference data, terms, save, validation, review
+and issue — none of it in your context. **You run one script and publish it.**
 
 ### 1. Preflight
 
 - **The connected Carta must be the intended Carta** —
   [the hard stop above](#the-connected-carta-must-be-the-intended-carta) binds here.
-- **Don't resolve the company before the build.** Pass the user's name to `--company-name`;
+- **Don't resolve the company before the build**, beyond the probe. Pass the user's name to `--company-name`;
   the page resolves it.
+- **Only if a tool ending `cap_table__get__draft_set_companion` is listed, the user didn't
+  pick this surface and you aren't resuming a draft set:** run [the companion probe](references/engine.md#companion-probe-artifact-host) first.
 - **Deferred `read_tool`: `ToolSearch` it in the same message as the `Bash`.** Unloaded,
   it's refused for a missing top-level `_instrumentation_v2`.
 - **A spreadsheet or CSV goes through [the import sub-skill](issuance-import/SKILL.md)
   first;** its `rows` become the seed's. **An attached document is already in context:**
   seed from it, no `Read`.
 
-Nothing else. **Don't fetch reference data, the roster, plans, valuations, share classes or
-the field manifest** — the page fetches what it needs, so yours is a wasted round trip.
+Nothing else beyond the probe. **Don't fetch reference data, the roster, plans, valuations, share classes or
+the field manifest**.
 
 ### 2. Build the page
 
@@ -254,11 +265,10 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-artifact/scripts/bu
   terms back itself; seed `load_drafts` rows, each with its `draft_pk`, only as its fallback
   ([resume-flow.md](references/resume-flow.md)). Never relay terms.
 - **`--out` is a stable path for this company and type** — a lowercase company slug plus
-  the type, as above.
-- The script exits non-zero and names the problem on a bad id, a missing part, or an
-  unresolved placeholder. Surface that verbatim and stop — a build fault, not a retry.
+  the type.
+- A non-zero exit names the problem: surface it verbatim and stop — a build fault, not a retry.
 
-**Never read the built file back** — ~135KB kept out of context.
+**Never read the built file back** (~135KB).
 
 ### 3. Publish it
 
@@ -288,15 +298,14 @@ instructions give:
    rejection **is** the lookup: republish with that name, nothing else changed. One retry,
    expected — **not a failure.**
 
-Never guess a name from a readable prefix. The publish never checks it — right or wrong
-reads the same — so if the user says the page can't see Carta after a step 2 name, their
+Never guess a name from a readable prefix. The publish never checks it, so if the user says the page can't see Carta after a step 2 name, their
 connector was renamed: republish with step 3.
 
 - **Omit `url`; skip `action: "list"`.** The same file path redeploys to the same URL.
-- `icon` goes on the first publish only; omit on redeploy.
+- `icon` goes on the first publish only.
 - Restate the **whole** `capabilities` object on any redeploy that passes it: a non-empty
   object replaces the stored grant, so an omitted capability is revoked. Omit the field
-  entirely to carry the grant forward — the cheaper redeploy.
+  entirely to carry the grant forward.
 - Keep `tools` at those two: the page reads through `read_tool`, which asks nobody, and writes through `call_tool`.
 - **Every attached file goes up as an asset**, so the page can add it to Carta: add
   `assets: {}` to the first publish, then `upload_asset` each file, rebuild with each
@@ -315,7 +324,7 @@ Say **one short line, then the URL on its own line as bare text**:
 
 **Never a markdown link.** On a host that opens the form in a side panel it renders as the
 title alone — if that panel failed, the address is the one thing the user can't see or
-copy. Bare URL every time, panel or not.
+copy.
 
 Echo nothing else — no ids, field names, or summary of what you prefilled
 ([hard rule 8](#hard-rules)). A hook's footer still goes last. The first open
@@ -341,14 +350,14 @@ Only after the user answers one of those: rebuild with the same flags plus
 
 **This surface performs the irreversible write itself.** The page saves, validates, shows
 the review, and asks for one confirmation in its own sheet — that click is the gate, and the
-write goes out under the viewer's connector grant. A hand-off document can't wake this
-session, so a page stopping at a saved draft set could never issue.
+write goes out under the viewer's connector grant. A page stopping at a saved draft set
+could never issue: nothing it writes wakes this session.
 
 After the write the page seals itself — no further save or issue — whenever the outcome is
 settled or unknowable: issued, a timeout, or accepted-and-nothing-reported. A refused value
 and a duplicate stakeholder both leave it usable, since neither wrote anything.
 
-So there's nothing to do after § 3. **End your turn on that one line.** Don't read the
+**End your turn on that one line.** Don't read the
 store yet, poll, narrate, or re-publish: filling an issuance form is minutes of human work.
 
 At the start of your **next** turn, whatever the user typed, read what the page
@@ -433,7 +442,8 @@ Every surface.
 1. **Never mix two security types in one mutate.** Run the skill once per type for a mixed
    request.
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
-   the artifact's own Confirm sheet, or one `AskUserQuestion` on the chat surface — **never
+   the artifact's own Confirm sheet, one `AskUserQuestion` on the chat surface, or the Issue
+   button on the Carta page the companion instructions open — **never
    stacked on an open page** ([§ What not to do on this path](#what-not-to-do-on-this-path)).
    Recovery questions after a server short-circuit are unrestricted.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from the

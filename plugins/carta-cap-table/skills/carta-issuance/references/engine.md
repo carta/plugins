@@ -110,14 +110,14 @@ ask it before Step 1.
 
 Four steps, in order, **all before any user interaction and before gathering any input.** The
 surface is already selected ([SKILL.md](../SKILL.md#pick-the-surface)), and that selection is
-free. These steps are the only round trips this preflight may spend: one `ToolSearch`, one
+free; only Step 4's companion check changes it. These steps are the only round trips this preflight may spend: one `ToolSearch`, one
 `list_accounts` (plus at most three disambiguation probes), and one `issuance_init` that
 doubles as the account-level hard stop and as Phase 0.5's reference-data fetch.
 
 ### Step 1 — Load every tool in ONE ToolSearch call
 
 ```
-ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user"
+ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user,mcp__carta__cap_table__get__draft_set_companion,mcp__carta__view_remote"
 ```
 
 `mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
@@ -131,8 +131,10 @@ no tool ending in `read_tool` / `call_tool` / `list_accounts` / `welcome` exists
 genuinely gone: say so and stop. Everything else that looks like an answer is not one
 ([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
-One call, six tools, the complete set for the run. **`read_tool` and `call_tool` are loaded here, up front**, so
-Phase 2 never has to load them after the user confirms — that would be serial latency at the worst
+One call, the complete set for the run. `view_remote` is there for Carta's companion
+instructions; `cap_table__get__draft_set_companion` matches only when Carta offers the
+companion, so no match is the normal case, never a connection signal.
+**`read_tool` and `call_tool` are loaded here, up front**, so Phase 2 never has to load them after the user confirms — that would be serial latency at the worst
 possible moment.
 
 **Don't call `search_tools` in the hot path.** Every command name is hardcoded in
@@ -278,6 +280,22 @@ Ordering is the whole point. A traced run resolved a company, swept 24 candidate
 162-row roster before reading the plan list that stopped the run — 36 of its 63 calls spent
 ahead of a check that invalidated all of them. The stop costs one call and it is knowable
 first, so take it first. Everything the gate reads, Phase 0.5 reuses; it is not an extra fetch.
+
+**Then read the response for `companion.instructions`.** When it is there and no hard stop
+fired, follow them ([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)), unless the
+user chose the surface or the run resumes a draft set: the one change of surface after
+selection.
+
+### Companion probe (artifact host)
+
+On an `Artifact` host, only when a tool ending `cap_table__get__draft_set_companion` is listed,
+unless the user chose the surface or the run resumes a draft set, and before the build:
+Step 1's `ToolSearch`, Step 3's `list_accounts(search="<name>")` (skip it when you already
+hold a bare `corporation_id`), then Step 4's `issuance_init` with
+[Phase 0.5's arguments](#phase-05--configure-the-issuance). No stakeholder probes and no
+question: anything short of one exact name match and a response carrying
+`companion.instructions` — no match, several, an error, a hard stop — goes straight to the
+build, unmentioned. The page resolves the company and shows its own hard stops.
 
 ---
 
