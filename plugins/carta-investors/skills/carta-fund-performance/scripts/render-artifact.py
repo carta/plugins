@@ -10,11 +10,13 @@ from pathlib import Path
 _LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
 sys.path.insert(0, str(_LIB))
 
-from live_artifact_render import CLAUDE_ARTIFACT_URL_RE, check_path_under_cwd, inline_tracker  # noqa: E402
+from live_artifact_render import CLAUDE_ARTIFACT_URL_RE, check_path_under_cwd, inline_tracker, read_skill_version  # noqa: E402
 from live_artifact_render.customizations import stamp_baseline  # noqa: E402
 
-TEMPLATE = Path(__file__).resolve().parent.parent / "references" / "artifact.html"
+SKILL_DIR = Path(__file__).resolve().parent.parent
+TEMPLATE = SKILL_DIR / "references" / "artifact.html"
 PLACEHOLDER = "{{HOME_URL}}"
+VERSION_PLACEHOLDER = "{{ARTIFACT_VERSION}}"
 
 
 def main() -> int:
@@ -39,10 +41,15 @@ def main() -> int:
         print(f"error: template missing {PLACEHOLDER}", file=sys.stderr)
         return 1
 
-    # Restamp after the Home link goes in, so the baseline records the page exactly as
-    # published: a later republish compares the live page against it to find what the
-    # user changed (references/keep-customizations.md).
-    content = stamp_baseline(content.replace(PLACEHOLDER, home_url))
+    # Restamp after the Home link and version go in, so the baseline records the page
+    # exactly as published: a later republish compares the live page against it to find
+    # what the user changed (references/keep-customizations.md).
+    version = read_skill_version(SKILL_DIR)
+    content = content.replace(PLACEHOLDER, home_url).replace(VERSION_PLACEHOLDER, version)
+    if VERSION_PLACEHOLDER in content:
+        print(f"error: {VERSION_PLACEHOLDER} still present after substitution", file=sys.stderr)
+        return 1
+    content = stamp_baseline(content, version)
     out_path.write_text(content, encoding="utf-8")
     print(out_path)
     return 0

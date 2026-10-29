@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.19</carta-plugin>
+<carta-plugin>carta-investors:7.6.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -117,7 +117,7 @@ publish the template itself: its Home link is a placeholder.
 
 ## Step 2 — Publish the artifact
 
-Publish the rendered file with the Artifact tool. The artifact calls `read_tool` (`dwh__execute__query`, plus `fa__get__fund-irr` for a fund family's Net IRR),
+Publish the rendered file with the Artifact tool. The artifact calls `read_tool` (`dwh__execute__query`, `fa__get__fund-irr` for a fund family's Net IRR, and `plugin__get__version` for the update banner),
 `list_contexts` and `set_context`, so grant exactly those, plus `track_ui_event` for the page's usage analytics. Set `server` to the viewer's
 Carta connector display name from `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md`
 (the plugin's `references/`, not this skill's); the page looks that name up at runtime.
@@ -181,7 +181,7 @@ carta-fund-performance/
     benchmarks.md     ← peer-benchmark answers in chat: query, percentile bands, presentation
   scripts/
     customizations.py  ← finds what a user changed on their published page
-    render-artifact.py ← stamps the Carta Home link into the page
+    render-artifact.py ← stamps the Carta Home link and the version into the page
 ```
 
 `artifact.html` carries a baseline of itself on its last line, so a later republish can
@@ -191,6 +191,12 @@ tell what the user changed. After editing the page, restamp it from the repo roo
 ```
 uv run plugins/carta-investors/skills/carta-fund-performance/scripts/customizations.py stamp plugins/carta-investors/skills/carta-fund-performance/references/artifact.html
 ```
+
+A published page is a frozen copy. It shows an update banner when a newer version is
+published, keyed to `carta-fund-performance` in
+`plugins/carta-investors/.claude-plugin/skill-versions.json`. Any change to `artifact.html`
+needs that `version` raised in the same change. Patch is the default and raises no banner;
+minor and major need a fresh `headline` for the person who reads the banner.
 
 The CSP in the artifact runtime allows no external host except Google Fonts, which serves
 the Inter stylesheet. Everything else is inlined, and nothing may be converted to a CDN

@@ -23,6 +23,34 @@ BASE_URL_RE = re.compile(r"^https://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$")
 CLAUDE_ARTIFACT_URL_RE = re.compile(r"^https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9-]+$")
 
 
+# Strict major.minor.patch: the update banner compares semver and fires on major/minor.
+SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def read_skill_version(skill_dir: Path) -> str:
+    """Return the skill's version from its plugin's .claude-plugin/skill-versions.json.
+
+    Fails the build rather than defaulting: a wrong version either suppresses a real
+    update banner forever, or shows one that can never be satisfied.
+    """
+    skill_dir = Path(skill_dir)
+    versions_file = skill_dir.parent.parent / ".claude-plugin" / "skill-versions.json"
+    label = "{}[{}]".format(versions_file.name, skill_dir.name)
+    if not versions_file.exists():
+        sys.exit("ERROR: {} is missing".format(versions_file))
+    try:
+        data = json.loads(versions_file.read_text())
+    except ValueError as exc:
+        sys.exit("ERROR: {} is not valid JSON: {}".format(versions_file.name, exc))
+    entry = data.get(skill_dir.name)
+    if not isinstance(entry, dict):
+        sys.exit('ERROR: {} needs an entry like {{"version": "1.2.3"}}'.format(label))
+    version = entry.get("version")
+    if not isinstance(version, str) or not SEMVER_RE.match(version):
+        sys.exit('ERROR: {} needs a "version" like "1.2.3", got {!r}'.format(label, version))
+    return version
+
+
 def js_safe_json(obj) -> str:
     """JSON-encode for embedding in a <script> block.
 

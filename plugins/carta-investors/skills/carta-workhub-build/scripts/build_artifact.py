@@ -38,15 +38,13 @@ import re
 import sys
 from pathlib import Path
 
+_LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
+sys.path.insert(0, str(_LIB))
+
+from live_artifact_render import read_skill_version  # noqa: E402
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RES = SKILL_DIR / "resources"
-
-SKILL_NAME = SKILL_DIR.name
-VERSIONS_FILE = SKILL_DIR.parent.parent / ".claude-plugin" / "skill-versions.json"
-# A built artifact can never update itself, so it carries its version with it and
-# compares against the published one at runtime. Strict major.minor.patch: the
-# comparison is semver, and the banner fires on major/minor only.
-SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 # The part list, its order and the template markers live in artifact_parts.json. App
 # parts are concatenated in order into the one app-JS slot; the pdf.js worker bundle goes
@@ -82,29 +80,6 @@ def compute_build_id(template, parts):
         h.update(name.encode("utf-8"))
         h.update(parts[name].encode("utf-8"))
     return h.hexdigest()[:8]
-
-
-def read_version():
-    """Return this skill's version from the plugin's skill-versions registry.
-
-    Fails the build rather than defaulting: a wrong version is worse than no build,
-    because it either suppresses a real update banner forever or shows one that can
-    never be satisfied.
-    """
-    label = "{}[{}]".format(VERSIONS_FILE.name, SKILL_NAME)
-    if not VERSIONS_FILE.exists():
-        sys.exit("ERROR: {} is missing".format(VERSIONS_FILE))
-    try:
-        data = json.loads(VERSIONS_FILE.read_text())
-    except ValueError as exc:
-        sys.exit("ERROR: {} is not valid JSON: {}".format(VERSIONS_FILE.name, exc))
-    entry = data.get(SKILL_NAME)
-    if not isinstance(entry, dict):
-        sys.exit('ERROR: {} needs an entry like {{"version": "1.2.3"}}'.format(label))
-    version = entry.get("version")
-    if not isinstance(version, str) or not SEMVER_RE.match(version):
-        sys.exit('ERROR: {} needs a "version" like "1.2.3", got {!r}'.format(label, version))
-    return version
 
 
 def build(mcp_server, ccr_fund_uuid="", ccr_activity_id="", frt_seed_period=""):
@@ -147,7 +122,7 @@ def build(mcp_server, ccr_fund_uuid="", ccr_activity_id="", frt_seed_period=""):
         "{{FRT_SEED_PERIOD}}": frt_seed_period or "",
         "{{BUILD_ID}}": build_id,
     }
-    version = read_version()
+    version = read_skill_version(SKILL_DIR)
     values["{{ARTIFACT_VERSION}}"] = version
     for placeholder in PARTS["placeholders"]:
         if placeholder not in values:
