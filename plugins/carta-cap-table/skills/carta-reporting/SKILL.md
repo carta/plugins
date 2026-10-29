@@ -45,7 +45,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.109.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.109.2</carta-plugin>
 
 # Custom Reports
 
@@ -395,6 +395,7 @@ Run each script only in the one-line form shown below, as its own command: write
      "reportType":    "<Human-readable report type>",
      "entityName":    "<Corporation legal name>",
      "corporationId": "<numeric corporation_id>",
+     "userReportPk":  "<user_report_pk of the full report>",
      "generatedBy":   "<User full name>",
      "asOfDate":      "<YYYY-MM-DD>",
      "metaRows": [
@@ -403,6 +404,8 @@ Run each script only in the one-line form shown below, as its own command: write
      ]
    }
    ```
+
+   `userReportPk` and `asOfDate` ride along in the Excel export prompt-bar payload so the Excel skill can find the report; `build_report_page.py` adds the per-sheet `sheetSources` itself.
 
    `metaRows` always include `Corporation` and `As of Date`; add `["Stakeholder", "<name>"]` for stakeholder reports, `["Period", "<issued_from> – <issued_to>"]` for date-range reports, `["Equity Plan", "<plan name>"]` when a plan is a param.
 
@@ -414,7 +417,7 @@ Run each script only in the one-line form shown below, as its own command: write
 
    It prints `{"output": <file>, "omitted_sheets": [...]}`.
 
-   **Multi-corporation artifact:** The artifact engine has exactly one `id="sheetsNav"` and one `id="sheets"` element, so build one page: run `report_processor.py` once per corporation with its own `--out` (`carta-reporting/result-<corporation_id>.json`); each run prints its own `stats`, then pass every result to `build_report_page.py` with `--result "<file>" --label "<corporation name>"` repeated once per corporation. Sheets come out named `"Meetly — Securities Ledger"`, `"BiscuitByte — Securities Ledger"`. Set `entityName` in `params.json` to comma-joined corporation names, `title` to `"Multi-Corporation — {Report Type}"`, and include one `["Corporation", "{name}"]` metaRow per corporation.
+   **Multi-corporation artifact:** The artifact engine has exactly one `id="sheetsNav"` and one `id="sheets"` element, so build one page: run `report_processor.py` once per corporation with its own `--out` (`carta-reporting/result-<corporation_id>.json`); each run prints its own `stats`, then pass every result to `build_report_page.py` with `--result "<file>" --label "<corporation name>" --report "<corporation_id>:<user_report_pk>"` repeated once per corporation (each corporation's own full-report `user_report_pk`; `userReportPk` in `params.json` is for a single corporation). Two sheets with the same final name are refused, so each corporation needs its own `--label`. Sheets come out named `"Meetly — Securities Ledger"`, `"BiscuitByte — Securities Ledger"`. Set `entityName` in `params.json` to comma-joined corporation names, `title` to `"Multi-Corporation — {Report Type}"`, and include one `["Corporation", "{name}"]` metaRow per corporation. This one page is only the view: its Excel export bar produces one Excel file per report (one per corporation), through `carta-reporting-excel`, not a single workbook.
 
    **Naming** — use a short slug: `{stakeholder-or-entity}-{report-type}`, e.g. `meetly-securities-ledger`.
 

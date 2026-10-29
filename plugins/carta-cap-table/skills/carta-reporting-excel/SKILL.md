@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.109.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.109.2</carta-plugin>
 
 # Excel Export
 
@@ -37,12 +37,16 @@ When the user pastes an **artifact prompt bar payload**, it arrives as a complet
 ```
 Generate Carta Excel —
 Corporation: Meetly, Inc. (ID: 7)
+As of: 2024-01-15
+Reports:
+  Equity Grants: user_report_pk 4812; corporation_id 7; source sheet: Equity Grants
+  Vesting Schedule: user_report_pk 4812; corporation_id 7; source sheet: Vesting Schedule
 Columns:
   Equity Grants: columns: Grant ID, Award Type, Exercise Price; sorted by: Grant Date desc
   Vesting Schedule: columns: Grant ID, Vest Date, Shares Vested; totals: Shares Vested sum
 ```
 
-Use the `Corporation:` line to confirm which company the export is for. Each indented line under `Columns:` is one sheet tab. This is always **one Excel file** with one tab per sheet. Parse each sheet line and pass all sheets to `report_processor.py` in a single run using the per-sheet `sheets` dict format. No further questions needed.
+Use the `Corporation:` line to confirm which company the export is for, and `As of:` as `as_of_date`. Each `Reports:` line gives the report behind that sheet: use its `user_report_pk` and `corporation_id` for the cached file and download URL, and its `source sheet` as the sheet name in `report_processor.py` (a multi-corporation page names sheets `Corp — Sheet`, which matches no single report's own sheet). Sheets from different corporations come from different reports, so run steps 1-4 below once per `user_report_pk`, each with its own `--out` and `--output`. Each indented line under `Columns:` is one sheet tab. This is always **one Excel file per report (one per corporation)**, with one tab per sheet. Parse the sheet lines of one report and pass its sheets to `report_processor.py` in a single run using the per-sheet `sheets` dict format. No further questions needed.
 
 **The column list from the artifact is authoritative; do not merge with or override it from the earlier conversation.**
 
@@ -80,7 +84,7 @@ Check if `carta-reporting/carta_report_<user_report_pk>.json` is available (use 
 
 For combining sheets into one tab, use `merge_sheets` in the `report_processor.py` call.
 
-Pass all sheets in one run using the `sheets` dict. Two commands, each run on its own, on one line: a heredoc, a pipe or a chained command needs approval every time. Never search for the scripts.
+Pass all of one report's sheets in one run using the `sheets` dict; with several reports, repeat steps 1-4 for each `user_report_pk` (file names below use `<user_report_pk>`). Two commands, each run on its own, on one line: a heredoc, a pipe or a chained command needs approval every time. Never search for the scripts.
 
 1. `Write` `carta-reporting/config.json` (in the working directory) with the config:
 
@@ -96,21 +100,21 @@ Pass all sheets in one run using the `sheets` dict. Two commands, each run on it
 }
 ```
 
-2. Process it into `carta-reporting/result.json`:
+2. Process it into `carta-reporting/result-<user_report_pk>.json`:
 
 ```bash
-UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json" --out "carta-reporting/result.json"
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json" --out "carta-reporting/result-<user_report_pk>.json"
 ```
 
-3. Check `carta-reporting/result.json` before exporting: if its `warnings` is non-empty, or any sheet's `stats` has `schema_warnings`, tell the user which sheet was left out and why (wording: the `warnings.*` rows of the Error Handling table in `carta-reporting`), then export what is there. Never present a workbook with a missing sheet or merged rows as complete.
+3. Check `carta-reporting/result-<user_report_pk>.json` before exporting: if its `warnings` is non-empty, or any sheet's `stats` has `schema_warnings`, tell the user which sheet was left out and why (wording: the `warnings.*` rows of the Error Handling table in `carta-reporting`), then export what is there. Never present a workbook with a missing sheet or merged rows as complete.
 
 4. Export the workbook:
 
 ```bash
-UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-excel/scripts/excel_exporter.py" --input "carta-reporting/result.json" --title "Securities Ledger Report" --as-of-date "2024-01-15" --generated-by "Jane Doe" --output "./{report-slug}.xlsx"
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-excel/scripts/excel_exporter.py" --input "carta-reporting/result-<user_report_pk>.json" --title "Securities Ledger Report" --as-of-date "2024-01-15" --generated-by "Jane Doe" --output "./{corporation-slug}-{report-slug}.xlsx"
 ```
 
-`excel_exporter.py` prints the absolute output path on success. Present it as a clickable link: `computer://<absolute-path>` (e.g. `computer:///Users/jane/meetly-equity-grants.xlsx`). Tell the user their file is ready to open, then offer next steps:
+`excel_exporter.py` prints the absolute output path on success. Present it as a clickable link: `computer://<absolute-path>` (e.g. `computer:///Users/jane/meetly-equity-grants.xlsx`). Tell the user their file is ready to open (with several reports, list one link per file, naming the corporation each is for), then offer next steps:
 
 - **Run another report** — for a different company or report type
 - **Customize this export** — adjust filters, columns, or formulas
@@ -127,6 +131,6 @@ UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-e
 | Subtitle | Cell B3, Arial 10pt, `#666666` — `"As of MMM d, yyyy • Generated with Claude AI by {user} at MMM d, yyyy h:mm:ss AM/PM TZ • Date format: MMM D, YYYY"` |
 | Header row | Row 5 with auto-filter; freeze panes at A6; data starts at row 6 |
 
-Column type → number format: `money` → `#,##0.00` prefixed with the row's currency symbol, set per cell by the exporter · `percentage` → `0.00%` · `integer` → `#,##0` · `date` → `mmm d, yyyy` · `decimal` → `#,##0.0000`
+Column type → number format: `money` → the row's currency symbol quoted before `#,##0.00####`, set per cell by the exporter (no symbol when the data names none) · `percentage` → `0.00%` · `integer` → `#,##0` · `date` → `mmm d, yyyy` · `decimal` → `#,##0.0#####`
 
 Column widths: string/date → **35**, number types → **18**.

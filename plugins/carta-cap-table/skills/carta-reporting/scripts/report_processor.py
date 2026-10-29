@@ -121,6 +121,7 @@ def _numeric_parser(ctype):
     return _parse_percentage if ctype == "percentage" else _parse_numeric
 
 
+# The engine's parseDate (skills/carta-reporting/assets/artifact_engine.html) reads the same formats; change them together.
 def _parse_date(val):
     if val is None:
         return None

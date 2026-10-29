@@ -1,9 +1,11 @@
 """Row shapes in Carta report JSON that label or total the data instead of carrying it.
 
-Shared by report_processor.py and excel_exporter.py. The artifact engine
-(skills/carta-reporting/assets/artifact_engine.html: rowIsSection / rowIsTotal) applies the
-same section rules in JavaScript, plus one extra total rule: a plain list of 2+ cells whose
-first cell starts with "Total" is a totals row there but a data row here. Change them together.
+Shared by report_processor.py and excel_exporter.py. `{_t}` rows are totals in the engine and the
+exporter. The artifact engine (skills/carta-reporting/assets/artifact_engine.html) applies the
+section and total rules in JavaScript: rowIsSection (the `{_s}` object and one-string list) and
+rowIsTotal (the `{_t}` object only). A plain list is always a data row, whatever its first cell
+says. excel_exporter counts its summary formula rows from the end of the sheet
+(summary_meta.count), not from `{_t}`. Change the shared rules together.
 
   {"_s": "Preferred"}      section heading
   ["Preferred"]            section heading (one-element string list) -- only when the sheet

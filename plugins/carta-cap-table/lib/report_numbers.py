@@ -2,6 +2,7 @@
 
 Shared by report_processor.py (filters, sorts, formulas, aggregations) and excel_exporter.py
 (workbook cells), so a figure means the same thing at every stage of the pipeline.
+Mirrored in JavaScript by skills/carta-reporting/assets/artifact_engine.html parseNum; change them together.
 """
 import math
 

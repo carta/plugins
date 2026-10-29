@@ -5,15 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Carta Report</title>
 <style>
-@font-face {
-  font-family: "SangBleu Versailles";
-  font-style: normal;
-  font-weight: 100 900;
-  src: local("SangBleu Versailles"), local("SangBleuVersailles-Regular"),
-       url(/static/bundles/SangBleuVersailles-Regular-WebS.ff8ddd14.woff2) format("woff2"),
-       url(/static/bundles/SangBleuVersailles-Regular-WebS.e128d197.woff) format("woff"),
-       url(/static/bundles/SangBleuVersailles-Regular-WebS.8e685522.ttf) format("truetype");
-}
 /* ── Ink Semantic Tokens — ux-patterns/css/cap-table-artifact.css ── */
 :root{
   color-scheme:light;
@@ -179,6 +170,7 @@ let _panelSectionCollapsed = new Set();
 let _entityName     = '';
 let _corporationId  = '';
 let _asOfDate       = '';
+let _sheetSources   = {};
 
 // initReport — called once data is available (fetch or inline)
 // payload shape: { config: {...}, data: { SheetName: { columns, rows } } }
@@ -192,6 +184,7 @@ function initReport(payload) {
   _entityName    = C.entityName    || '';
   _corporationId = C.corporationId || '';
   _asOfDate      = C.asOfDate      || '';
+  _sheetSources  = C.sheetSources  || {};
   sheetsNav       = document.getElementById('sheetsNav');
   sheetsDiv       = document.getElementById('sheets');
 
@@ -221,14 +214,59 @@ function initReport(payload) {
 const colDisplayName = (col, ci) => col.name || ('Column ' + (ci + 1));
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
-const PCT = v => { if (v === null || v === undefined || v === '') return '—'; if (typeof v === 'string' && v.includes('%')) return v; const p = parseFloat(v) * 100; return isNaN(p) ? '—' : p.toFixed(4) + '%' };
-const INT = v => { if (v === null || v === undefined || v === '') return '—'; const n = parseInt(v); return isNaN(n) ? '—' : n.toLocaleString() };
+// parseNum mirrors lib/report_numbers.py parse_number (plain numbers, "1,000", "$1,234.56", "46.81%",
+// "(5.00)" as negative); a percent sign is stripped, not scaled. Change them together.
+const parseNum = v => {
+  if (v === null || v === undefined || typeof v === 'boolean') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let t = String(v).trim();
+  const neg = t.startsWith('(') && t.endsWith(')');
+  t = t.replace(/^\(+|\)+$/g, '').replace(/[,$]/g, '').replace(/%+$/, '').trim();
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return null;
+  return neg ? -Number(t) : Number(t);
+};
+// Percentage columns aggregate and sort as fractions: "46.81%" -> 0.4681, 0.5 -> 0.5.
+const parseCell = (v, type) => {
+  const n = parseNum(v);
+  return n !== null && type === 'percentage' && typeof v === 'string' && v.includes('%') ? n / 100 : n;
+};
+const isBlank = v => v === null || v === undefined || String(v).trim() === '';
+const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+// Same formats as report_processor._parse_date; returns a UTC day number or null.
+function parseDate(v) {
+  const t = String(v).trim();
+  let m, y, mo, d;
+  if ((m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(t))) [y, mo, d] = [m[1], m[2], m[3]];
+  else if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t))) [mo, d, y] = [m[1], m[2], m[3]];
+  else if ((m = /^([A-Za-z]+) (\d{1,2}), (\d{4})$/.exec(t))) {
+    const name = m[1].toLowerCase();
+    [y, d] = [m[3], m[2]];
+    mo = MONTHS.findIndex(n => n === name || (name.length === 3 && n.startsWith(name))) + 1;
+  } else return null;
+  const day = Date.UTC(+y, +mo - 1, +d);
+  const dt  = new Date(day);
+  return mo >= 1 && dt.getUTCMonth() === +mo - 1 && dt.getUTCDate() === +d ? day : null;
+}
+const PCT = v => { if (isBlank(v)) return '—'; if (typeof v === 'string' && v.includes('%')) return v; const n = parseNum(v); return n === null ? '—' : (n * 100).toFixed(4) + '%' };
+// Integer and decimal columns: grouped, whole numbers stay whole, fractions keep up to 6 places.
+const NUM = v => { if (isBlank(v)) return '—'; const n = parseNum(v); return n === null ? '—' : n.toLocaleString(undefined, { maximumFractionDigits: 6 }) };
 // cur is a currency object {code, symbol}. Prefer ISO-code-driven Intl currency
-// formatting (correct symbol + grouping per the viewer's locale, like INT); fall
-// back to a symbol prefix + grouped decimal when the code is missing/invalid
-// (never assert USD). Negatives render in parentheses per Carta number rules.
-const MON = (v, cur) => { if (v === null || v === undefined || v === '') return '—'; const n = parseFloat(v); if (isNaN(n)) return '—'; const code = cur && cur.code; const sym = (cur && cur.symbol) || '$'; let a; try { a = code ? new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).format(Math.abs(n)) : sym + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch (e) { a = sym + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } return n < 0 ? '(' + a + ')' : a };
-const FMT = (v, t, cur) => { if (v === null || v === undefined || v === '') return '—'; switch (t) { case 'percentage': return PCT(v); case 'integer': return INT(v); case 'money': return MON(v, cur); case 'date': return v || '—'; default: return String(v) } };
+// formatting (correct symbol + grouping per the viewer's locale); fall back to a
+// symbol prefix + grouped decimal when the code is missing/invalid. With no currency
+// at all the amount shows bare: never assert USD. Negatives render in parentheses per
+// Carta number rules. At least 2 and up to 6 decimals, so $0.0001 is not shown as $0.00.
+const MON_DIGITS = { minimumFractionDigits: 2, maximumFractionDigits: 6 };
+const MON = (v, cur) => {
+  if (isBlank(v)) return '—';
+  const n = parseNum(v);
+  if (n === null) return '—';
+  const code = cur && cur.code;
+  const plain = () => ((cur && cur.symbol) || '') + Math.abs(n).toLocaleString(undefined, MON_DIGITS);
+  let a;
+  try { a = code ? new Intl.NumberFormat(undefined, Object.assign({ style: 'currency', currency: code }, MON_DIGITS)).format(Math.abs(n)) : plain(); } catch (e) { a = plain(); }
+  return n < 0 ? '(' + a + ')' : a;
+};
+const FMT = (v, t, cur) => { if (isBlank(v)) return '—'; switch (t) { case 'percentage': return PCT(v); case 'integer': case 'decimal': return NUM(v); case 'money': return MON(v, cur); case 'date': return v || '—'; default: return String(v) } };
 const NUM_TYPES   = new Set(['integer', 'money', 'percentage', 'decimal']);
 const BADGE_COLS  = new Set(['Security Type', 'Award Type', 'Base Award Type']);
 const STATUS_COLS = new Set(['Status', 'Award Status', 'Grant Status', 'Certificate Status']);
@@ -266,20 +304,28 @@ let _dragSrcCi       = null;
 function initSheet(sName) {
   const sh = data[sName];
   if (!sh._colOrder) sh._colOrder = sh.columns.map((_, i) => i);
-  if (!sh._hidden)   sh._hidden   = new Set(sh.columns.flatMap((c, i) => c.hidden ? [i] : []));
+  if (!sh._hidden)   sh._hidden   = defaultHidden(sh);
   if (!sh._sort)     sh._sort     = [];   // [{ci, dir}]
   if (!sh._totals)   sh._totals   = {};   // {ci: op}
-  // WeakMap keyed by the array makeRow renders (the row itself, or a totals row's _t cells),
-  // so currency survives sort reorders
+  // WeakMap keyed by the row itself (a data array or a {_t} object) so currency survives sort reorders
   if (!sh._rowCurrencyMap && sh.row_currencies) {
     sh._rowCurrencyMap = new WeakMap();
     sh.rows.forEach((row, i) => {
-      const cells = row && totalArray(row);
-      if (Array.isArray(cells) && sh.row_currencies[i]) {
-        sh._rowCurrencyMap.set(cells, sh.row_currencies[i]);
+      if (row && typeof row === 'object' && sh.row_currencies[i]) {
+        sh._rowCurrencyMap.set(row, sh.row_currencies[i]);
       }
     });
   }
+}
+
+// The columns a sheet starts with hidden (the processor's `hidden: true` flag)
+function defaultHidden(sh) { return new Set(sh.columns.flatMap((c, i) => c.hidden ? [i] : [])); }
+
+// Currency of one cell: cell-level, then row-level, then the sheet's; null when the data names none
+function cellCurrency(sh, row, ci) {
+  const info = sh._rowCurrencyMap ? sh._rowCurrencyMap.get(row) : null;
+  if (Array.isArray(info)) return info[ci] || sh.currency || null;
+  return info || sh.currency || null;
 }
 
 function isVis(sh, ci) { return !sh._hidden.has(ci); }
@@ -287,18 +333,18 @@ function isVis(sh, ci) { return !sh._hidden.has(ci); }
 // Row classification helpers — lib/report_rows.py holds the Python side; change them together.
 // "Section" = {_s:"..."} object OR single-element string array ["label"] — the array form only
 //             when the sheet has more than one column (in a one-column sheet it is a data row)
-// "Total"   = {_t:[...]} object, OR (engine only) a 2+ cell array whose first cell starts with "Total"
+// "Total"   = {_t:[...]} object only (the processor emits its summary rows that way)
 function rowIsSection(r, nCols) {
   return r && (r._s || (nCols > 1 && Array.isArray(r) && r.length === 1 && typeof r[0] === 'string'));
 }
-function rowIsTotal(r)   { return r && (!!r._t || (Array.isArray(r) && r.length > 1 && typeof r[0] === 'string' && r[0].startsWith('Total'))); }
+function rowIsTotal(r) { return !!r && !!r._t; }
 function sectionText(r)  { return r._s || r[0]; }
 function totalArray(r)   { return r._t || r; }
 
 function buildSheet(sName, idx) {
   const sh       = data[sName];
   initSheet(sName);
-  const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length));
+  const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length) && !rowIsTotal(r));
   const div      = document.createElement('div');
   div.className  = 'sheet';
   div.id         = 'sheet-' + idx;
@@ -377,17 +423,24 @@ function rebuildHeaders(idx) {
 }
 
 // ─── Sort ─────────────────────────────────────────────────────────────────────
+// A cell's sort key; null (blank or unreadable) sorts last in both directions
+function sortKey(v, type) {
+  if (isBlank(v)) return null;
+  if (NUM_TYPES.has(type)) return parseCell(v, type);
+  if (type === 'date') return parseDate(v);
+  return String(v);
+}
+
 function applySort(sh, rows) {
   if (!sh._sort.length) return rows;
   return [...rows].sort((a, b) => {
     for (const {ci, dir} of sh._sort) {
-      const col = sh.columns[ci];
-      const va  = a[ci], vb = b[ci];
-      if (va === null && vb === null) continue;
-      if (va === null) return 1; if (vb === null) return -1;
-      const cmp = NUM_TYPES.has(col.type)
-        ? parseFloat(va) - parseFloat(vb)
-        : String(va).localeCompare(String(vb));
+      const type = sh.columns[ci].type;
+      const ka = sortKey(a[ci], type), kb = sortKey(b[ci], type);
+      if (ka === null && kb === null) continue;
+      if (ka === null) return 1;
+      if (kb === null) return -1;
+      const cmp = typeof ka === 'string' ? ka.localeCompare(kb) : ka - kb;
       if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
     }
     return 0;
@@ -425,27 +478,17 @@ function renderBody(idx) {
   const visCis  = sh._colOrder.filter(ci => isVis(sh, ci));
   const nVis    = visCis.length;
 
-  const baseCur = sh.currency || { symbol: '$' };
-  const makeRow = (rd, cls) => {
+  const makeRow = (row, cls) => {
+    const rd = totalArray(row);
     const tr = document.createElement('tr');
     if (cls) tr.className = cls;
-    // rowCurrInfo: undefined/null → base; {code,symbol} → row-level; Array → per-column cell-level
-    const rowCurrInfo = sh._rowCurrencyMap ? sh._rowCurrencyMap.get(rd) : null;
     visCis.forEach(ci => {
       const col = cols[ci];
       const td  = document.createElement('td');
       td.dataset.col = ci;
       td.className   = NUM_TYPES.has(col.type) ? 'num' : '';
       const v   = rd[ci] !== undefined ? rd[ci] : null;
-      // Resolve currency: cell-level → row-level → base (each a {code, symbol})
-      let cur = baseCur;
-      if (Array.isArray(rowCurrInfo)) {
-        const cellCurr = rowCurrInfo[ci];
-        if (cellCurr) cur = cellCurr;
-      } else if (rowCurrInfo) {
-        cur = rowCurrInfo;
-      }
-      const fmt = FMT(v, col.type, cur);
+      const fmt = FMT(v, col.type, cellCurrency(sh, row, ci));
       const bc  = BADGE_COLS.has(col.name)  ? BADGE(fmt)      : null;
       const sc  = STATUS_COLS.has(col.name) ? STATUS_KEY(fmt) : null;
       const blc = BOOL_COLS.has(col.name)   ? BOOL_BADGE(fmt) : null;
@@ -458,25 +501,26 @@ function renderBody(idx) {
     return tr;
   };
 
-  const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length) && !rowIsTotal(r)); // exclude totals from sort pool
-  const sorted   = sh._sort.length ? applySort(sh, dataRows) : null;
-  let   di       = 0; // pointer into sorted array when sorting
-
+  // Sorting reorders the data rows between section headings and total rows, never across them
+  let run = [];
+  const flushRun = () => {
+    applySort(sh, run).forEach(r => tbody.appendChild(makeRow(r, '')));
+    run = [];
+  };
   sh.rows.forEach(row => {
     if (rowIsSection(row, sh.columns.length)) {
+      flushRun();
       const tr = document.createElement('tr'); tr.className = 'section-hdr';
       const td = document.createElement('td'); td.colSpan = Math.max(1, nVis); td.textContent = sectionText(row);
       tr.appendChild(td); tbody.appendChild(tr);
     } else if (rowIsTotal(row)) {
-      tbody.appendChild(makeRow(totalArray(row), 'total-row'));
+      flushRun();
+      tbody.appendChild(makeRow(row, 'total-row'));
     } else if (Array.isArray(row)) {
-      // If sorting is active, pull from the pre-sorted data array in order
-      const rd = sorted ? sorted[di++] : row;
-      if (rd) tbody.appendChild(makeRow(rd, ''));
+      run.push(row);
     }
   });
-  // If sorted, append any remaining rows (can happen if section rows altered the count)
-  if (sorted) { while (di < sorted.length) tbody.appendChild(makeRow(sorted[di++], '')); }
+  flushRun();
   renderTotalsBar(idx);
 }
 
@@ -511,15 +555,19 @@ function renderTotalsBar(idx) {
       td.className = 'tot-cell num' + (op ? ' active' : '');
       td.title     = op ? 'Click to change aggregation' : 'Click to add totals';
       if (op) {
-        const nums = dataRows.map(r => parseFloat(r[ci])).filter(n => !isNaN(n));
+        const cells = dataRows.map(r => ({ n: parseCell(r[ci], col.type), cur: cellCurrency(sh, r, ci) })).filter(c => c.n !== null);
+        const nums  = cells.map(c => c.n);
         let result = null;
         if (op === 'sum')   result = nums.reduce((a, b) => a + b, 0);
         if (op === 'avg')   result = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
         if (op === 'min')   result = nums.length ? Math.min(...nums) : null;
         if (op === 'max')   result = nums.length ? Math.max(...nums) : null;
         if (op === 'count') result = nums.length;
-        const totCur = sh.currency || { symbol: '$' };
-        td.innerHTML = `<span class="tot-op">${esc(op)}</span>${result !== null ? esc(FMT(result, op === 'count' ? 'integer' : col.type, totCur)) : '—'}`;
+        // Amounts in different currencies are never combined: a mixed column shows no total
+        const curs  = new Set(cells.map(c => c.cur ? (c.cur.code || c.cur.symbol) : ''));
+        const mixed = col.type === 'money' && op !== 'count' && curs.size > 1;
+        const totCur = cells.length ? cells[0].cur : null;
+        td.innerHTML = `<span class="tot-op">${esc(op)}</span>${result !== null && !mixed ? esc(FMT(result, op === 'count' ? 'integer' : col.type, totCur)) : '—'}`;
       } else {
         td.textContent = '—';
       }
@@ -584,14 +632,29 @@ const _PLACEHOLDER_NAMES = new Set(['sample data', 'sample schema', '']);
 function updateGlobalPromptBar() {
   const ta = document.getElementById('globalPbar');
   if (!ta) return;
-  const parts = sheetNames
-    .map((name, idx) => hiddenSheets.has(idx) ? null : sheetSegment(name, idx))
-    .filter(Boolean);
+  const shown = sheetNames.map((name, idx) => ({ name, segment: hiddenSheets.has(idx) ? '' : sheetSegment(name, idx) }))
+    .filter(s => s.segment);
+  const parts = shown.map(s => s.segment);
   const lines = ['Generate Carta Excel —'];
   const realName = !_PLACEHOLDER_NAMES.has((_entityName || '').toLowerCase());
   if (realName || _corporationId) {
     const corp = (realName ? _entityName : '') + (_corporationId ? ' (ID: ' + _corporationId + ')' : '');
     lines.push('Corporation: ' + corp.trim());
+  }
+  if (_asOfDate) lines.push('As of: ' + _asOfDate);
+  // The report behind each sheet; a merged sheet name ("Corp — Sheet") is not a report's own sheet name
+  const refs = shown.map(({ name }) => {
+    const src = _sheetSources[name];
+    if (!src) return null;
+    const ids = [];
+    if (src.userReportPk) ids.push('user_report_pk ' + src.userReportPk);
+    if (src.corporationId) ids.push('corporation_id ' + src.corporationId);
+    ids.push('source sheet: ' + src.sourceSheet);
+    return '  ' + name + ': ' + ids.join('; ');
+  }).filter(Boolean);
+  if (refs.length) {
+    lines.push('Reports:');
+    refs.forEach(r => lines.push(r));
   }
   if (parts.length) {
     lines.push('Columns:');
@@ -601,8 +664,20 @@ function updateGlobalPromptBar() {
 }
 
 // ─── Export Excel (SpreadsheetML — no library needed) ─────────────────────────
-function exportExcel(idx) {
+// One number format per currency symbol in use, quoted so Excel reads it as literal text; a money cell
+// with no currency in the data gets a plain format (never a dollar sign). Money and decimal keep up to
+// six decimals like the on-screen formatter; integer shows whole numbers. excel_exporter.py (_money_format, FORMAT_MAP) uses the same
+// patterns; change them together.
+function moneyFormat(sym) { return (sym ? '"' + sym.replace(/"/g, '""') + '"' : '') + '#,##0.00####'; }
+
+function excelXml(idx) {
   const sName  = sheetNames[idx]; const sh = data[sName]; const cols = sh.columns;
+  const moneyStyles = new Map();   // symbol -> style id
+  const moneyStyle = cur => {
+    const sym = cur ? (cur.symbol || cur.code || '') : '';
+    if (!moneyStyles.has(sym)) moneyStyles.set(sym, 'money' + moneyStyles.size);
+    return moneyStyles.get(sym);
+  };
   const visCis = sh._colOrder.filter(ci => isVis(sh, ci));
 
   const headerCells = visCis.map(ci =>
@@ -616,11 +691,12 @@ function exportExcel(idx) {
       const col   = cols[ci];
       const raw   = rd[ci];
       const isNum = NUM_TYPES.has(col.type);
-      const val   = isNum
-        ? (String(raw ?? '').replace(/[$,%]/g, '').replace(/,/g, '') || '0')
-        : esc(FMT(raw, col.type));
-      const sid   = isNum ? col.type : (isTotal ? 'total' : '');
-      return `<Cell${sid ? ` ss:StyleID="${sid}"` : ''}><Data ss:Type="${isNum ? 'Number' : 'String'}">${val}</Data></Cell>`;
+      const n     = isNum ? parseCell(raw, col.type) : null;
+      const sid   = col.type === 'money' ? moneyStyle(cellCurrency(sh, row, ci)) : isNum ? col.type : (isTotal ? 'total' : '');
+      const style = sid ? ` ss:StyleID="${sid}"` : '';
+      // A number cell holds a real number; text that is not one (blank, "n/a") becomes an empty text cell
+      if (n !== null) return `<Cell${style}><Data ss:Type="Number">${String(n)}</Data></Cell>`;
+      return `<Cell${style}><Data ss:Type="String">${isNum ? '' : esc(FMT(raw, col.type))}</Data></Cell>`;
     }).join('');
     return `<Row>${cells}</Row>`;
   }).join('');
@@ -631,9 +707,9 @@ function exportExcel(idx) {
   <Styles>
     <Style ss:ID="header"><Font ss:Bold="1"/><Interior ss:Color="#EAF0F8" ss:Pattern="Solid"/></Style>
     <Style ss:ID="total"><Font ss:Bold="1"/><Interior ss:Color="#F4F4F4" ss:Pattern="Solid"/></Style>
-    <Style ss:ID="money"><NumberFormat ss:Format="$#,##0.00"/></Style>
+    ${[...moneyStyles].map(([sym, id]) => `<Style ss:ID="${id}"><NumberFormat ss:Format="${esc(moneyFormat(sym))}"/></Style>`).join('\n    ')}
     <Style ss:ID="integer"><NumberFormat ss:Format="#,##0"/></Style>
-    <Style ss:ID="decimal"><NumberFormat ss:Format="#,##0.0000"/></Style>
+    <Style ss:ID="decimal"><NumberFormat ss:Format="#,##0.0#####"/></Style>
     <Style ss:ID="percentage"><NumberFormat ss:Format="0.00%"/></Style>
   </Styles>
   <Worksheet ss:Name="${esc(sName)}">
@@ -643,7 +719,12 @@ function exportExcel(idx) {
     </Table>
   </Worksheet>
 </Workbook>`;
+  return xml;
+}
 
+function exportExcel(idx) {
+  const sName = sheetNames[idx];
+  const xml = excelXml(idx);
   const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -702,7 +783,7 @@ function buildGlobalColumnsPanel() {
       const sh = data[sName];
       const el = document.getElementById('sheet-' + i);
       if (allChk.checked) {
-        hiddenSheets.delete(i); sh._hidden.clear();
+        hiddenSheets.delete(i); sh._hidden = defaultHidden(sh);
         if (el) el.style.display = '';
       } else {
         hiddenSheets.add(i); sh._colOrder.forEach(ci => sh._hidden.add(ci));
@@ -710,8 +791,7 @@ function buildGlobalColumnsPanel() {
       }
       rebuildHeaders(i); renderBody(i);
     });
-    panel.querySelectorAll('input[data-sheet-chk]').forEach(c => c.checked = allChk.checked);
-    panel.querySelectorAll('input[data-col-chk]').forEach(c => c.checked = allChk.checked);
+    rebuildGlobalPanel(srchInput.value);
     updateGlobalPromptBar();
   };
   allLbl.appendChild(allChk); allLbl.appendChild(document.createTextNode(' All'));
@@ -739,9 +819,9 @@ function buildGlobalColumnsPanel() {
         e.stopPropagation();
         const el = document.getElementById('sheet-' + i);
         if (shChk.checked) {
-          hiddenSheets.delete(i); sh._hidden.clear();
+          hiddenSheets.delete(i); sh._hidden = defaultHidden(sh);
           if (el) el.style.display = '';
-          colsDiv.querySelectorAll('input[data-col-chk]').forEach(c => c.checked = true);
+          colsDiv.querySelectorAll('input[data-col-chk]').forEach(c => { c.checked = isVis(sh, Number(c.dataset.colChk)); });
         } else {
           hiddenSheets.add(i); sh._colOrder.forEach(ci => sh._hidden.add(ci));
           if (el) el.style.display = 'none';

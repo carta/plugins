@@ -42,12 +42,25 @@ HEADER_FG  = "2F3943"
 SUMMARY_BG = "E8F5E9"
 LOGO_PATH  = Path(__file__).parent.parent / "assets" / "Carta_Logo.png"
 
+_MONEY_DIGITS = "#,##0.00####"
+
+
+def _money_format(symbol: str) -> str:
+    """Excel number format for the given currency symbol; "" (no currency in the data) gives the
+    plain format with no symbol. artifact_engine.html moneyFormat mirrors this; change them together."""
+    if not symbol:
+        return _MONEY_DIGITS
+    return f'"{symbol}"{_MONEY_DIGITS}'
+
+
+# The digit patterns match artifact_engine.html (moneyFormat and the integer/decimal styles in
+# excelXml), which writes the same workbook formats from the report page; change them together.
 FORMAT_MAP = {
-    "money":      "$#,##0.00",  # overridden per-cell when currency differs
+    "money":      _money_format(""),  # the money style with no currency symbol
     "percentage": "0.00%",
     "integer":    "#,##0",
     "date":       "mmm d, yyyy",
-    "decimal":    "#,##0.0000",
+    "decimal":    "#,##0.0#####",  # a required decimal digit, so a whole value never shows "1."
 }
 
 # Date columns arrive from api-reporting-service JSON as ISO-8601 strings — every
@@ -81,11 +94,6 @@ def _parse_date(val):
     return None
 
 
-def _money_format(symbol: str) -> str:
-    """Return an Excel number format string for the given currency symbol."""
-    if symbol == "$":
-        return "$#,##0.00"
-    return f'"{symbol}"#,##0.00'
 NUMBER_TYPES = {"money", "integer", "percentage", "decimal"}
 
 EXCEL_AGG_FN = {
@@ -137,7 +145,7 @@ def _prepare_sheet(sheet):
 
 def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_meta=None,
                  currency=None, row_currencies=None):
-    base_symbol    = (currency or {}).get("symbol", "$")
+    base_symbol    = (currency or {}).get("symbol", "")
     row_currencies = row_currencies or []
 
     last_col = get_column_letter(len(columns))
