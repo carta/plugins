@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.7.10</carta-plugin>
+<carta-plugin>carta-investors:7.7.11</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -150,6 +150,6 @@ question the user asked. The page is a snapshot; ask again to refresh it.
 ## Notes
 
 - Never show SQL, ids, table names, or the words "Snowflake", "DWH" or "warehouse" in chat.
-- Expiry is best effort: only NDAs with both an executed date and a term have one. Say so when
+- Expiry is best effort: only NDAs with both a start date (effective date, else signing date) and a term have one. Say so when
   you quote an expiry count, and never call an "Unknown / perpetual" restriction lapsed.
 - Aggregate in SQL; every dataset is already small. Never pull raw NDA rows.

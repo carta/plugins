@@ -22,7 +22,8 @@ WITH nda AS (
   SELECT r.document_id,
     r.attributes:metadata:disclosing_party:name:value::string AS disc,
     r.attributes:metadata:receiving_party:name:value::string  AS recv,
-    TRY_TO_DATE(r.attributes:metadata:executed_date:value::string) AS executed_date,
+    COALESCE(TRY_TO_DATE(r.attributes:metadata:effective_date:value::string),
+             TRY_TO_DATE(r.attributes:metadata:executed_date:value::string)) AS start_date,
     r.attributes:term:initial_term:text::string AS term_text,
     TRY_TO_NUMBER(r.attributes:term:initial_term:value::string) AS term_num,
     r.attributes:term:initial_term:unit::string AS term_unit,
@@ -39,6 +40,7 @@ WITH nda AS (
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY COALESCE(r.attributes:metadata:disclosing_party:name:value::string,'')
       ||'|'||COALESCE(r.attributes:metadata:receiving_party:name:value::string,'')
+      ||'|'||COALESCE(r.attributes:metadata:effective_date:value::string,'')
       ||'|'||COALESCE(r.attributes:metadata:executed_date:value::string,'')
       ||'|'||COALESCE(r.attributes:term:initial_term:text::string,'')
       ||'|'||COALESCE(r.attributes:governing:governing_law:value::string,'')
@@ -56,7 +58,7 @@ calc AS (
       WHEN term_unit ILIKE 'month%' THEN term_num
       WHEN term_unit ILIKE 'day%'   THEN CEIL(term_num / 30)
     END AS term_months,
-    DATEADD(month, term_months, executed_date) AS expiry,
+    DATEADD(month, term_months, start_date) AS expiry,
     expiry >= CURRENT_DATE AND expiry < DATEADD(month, 24, CURRENT_DATE) AS expiring_soon,
     (non_solicitation OR contact_restrictions OR non_circumvention)
       AND (expiry IS NULL OR expiry >= CURRENT_DATE) AS restriction_in_force,
@@ -96,7 +98,7 @@ True totals over the deduped set. Never derive these from the capped tab dataset
 
 ```sql
 SELECT COUNT(*) AS TOTAL_NDAS,
-  SUM(IFF(executed_date IS NOT NULL, 1, 0)) AS WITH_EXEC_DATE,
+  SUM(IFF(start_date IS NOT NULL, 1, 0)) AS WITH_START_DATE,
   COUNT(DISTINCT counterparty) AS DISTINCT_COUNTERPARTIES,
   COUNT(DISTINCT IFF(restriction_in_force, counterparty, NULL)) AS RESTRICTED_COMPANIES,
   SUM(IFF(expiring_soon, 1, 0)) AS EXPIRING_NEXT_2_YEARS
@@ -129,7 +131,7 @@ NDAs with no governing law come back as a null bucket, which `process.py` drops 
 ## expiring
 
 ```sql
-SELECT c.counterparty AS COUNTERPARTY, wi.deal_name AS DEAL_NAME, c.executed_date AS EXECUTED_DATE,
+SELECT c.counterparty AS COUNTERPARTY, wi.deal_name AS DEAL_NAME, c.start_date AS START_DATE,
   c.term_text AS TERM_TEXT, c.term_months AS TERM_MONTHS, c.expiry AS EXPIRY
 FROM calc c
 LEFT JOIN wi ON c.document_id = wi.document_id

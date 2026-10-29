@@ -21,7 +21,7 @@ MCP** (`read_tool` → `dwh__execute__query`).
    - `wi_count = 0` → **Path B.** No work items; every NDA record is treated as live.
 
    Then dedupe to one row per agreement: the same NDA is often uploaded more than once, so
-   `QUALIFY ROW_NUMBER() = 1` over the parties, executed date, term text and governing law.
+   `QUALIFY ROW_NUMBER() = 1` over the parties, effective date, executed date, term text and governing law.
 4. **`LATERAL FLATTEN` is blocked** by the MCP. Use direct VARIANT paths, `CASE`, `IFF`,
    `SUM`, `REGEXP_*` and `GROUP BY` on scalar expressions. `QUALIFY` works.
 5. **Aggregate in SQL** — never pull raw rows; responses are capped. Cast every VARIANT path.
@@ -42,7 +42,8 @@ Each leaf is a wrapper object; read the scalar at `...:value`. **Party fields ar
 |---|---|
 | Disclosing party name | `attributes:metadata:disclosing_party:name:value::string` |
 | Receiving party name | `attributes:metadata:receiving_party:name:value::string` |
-| Executed date | `TRY_TO_DATE(attributes:metadata:executed_date:value::string)` |
+| Effective date (the date it says it takes effect) | `TRY_TO_DATE(attributes:metadata:effective_date:value::string)` |
+| Executed date (signature evidence only) | `TRY_TO_DATE(attributes:metadata:executed_date:value::string)` |
 | Initial term — number | `TRY_TO_NUMBER(attributes:term:initial_term:value::string)` |
 | Initial term — unit (`year` / `month` / `day`) | `attributes:term:initial_term:unit::string` |
 | Initial term — display text ("2 years") | `attributes:term:initial_term:text::string` |
@@ -72,8 +73,11 @@ parenthetical dropped ("Acme Capital Partners, LP" → `acme`). A party with no 
 ## Term and expiry
 
 The term is a number plus a separate unit. Don't read the number alone — "2" is 2 *years* and
-"24" is 24 *months*. `term_months` converts with the unit; expiry is executed date +
-`term_months`. Expiry exists only when **both** an executed date and a term were captured.
+"24" is 24 *months*. `term_months` converts with the unit; expiry is start date +
+`term_months`. The start date is the effective date, else the executed date: an NDA's term runs
+from its effective date, and the executed date is filled only from a dated signature, so most
+NDAs carry an effective date and no executed date. Expiry exists only when **both** a start date
+and a term were captured.
 Every other NDA has no start date on file or is perpetual — say so, don't drop them silently.
 
 ## Governing law

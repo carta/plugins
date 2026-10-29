@@ -118,7 +118,7 @@ def main() -> None:
     kpi_rows = load(args.kpi)
     kpi = kpi_rows[0] if kpi_rows else {}
     total = _int(kpi.get("TOTAL_NDAS"))
-    with_date = _int(kpi.get("WITH_EXEC_DATE"))
+    with_date = _int(kpi.get("WITH_START_DATE"))
 
     # Provision frequency (independent shares of all NDAs)
     provisions = []
@@ -146,7 +146,7 @@ def main() -> None:
         expiring.append({
             "counterparty": _str(r.get("COUNTERPARTY")),
             "deal": _str(r.get("DEAL_NAME")),
-            "executed": _date10(r.get("EXECUTED_DATE")),
+            "start": _date10(r.get("START_DATE")),
             "term": _canonical_term(months) or _str(r.get("TERM_TEXT")),
             "termMonths": months,
             "expiry": _date10(r.get("EXPIRY")),
@@ -187,7 +187,7 @@ def main() -> None:
         "restrictedCompanies": _int(kpi.get("RESTRICTED_COMPANIES")),
         "expiringNext2Years": _int(kpi.get("EXPIRING_NEXT_2_YEARS")),
         "topGovLaw": top_gov_law,
-        "withExecDate": with_date,
+        "withStartDate": with_date,
     }
 
     data = {

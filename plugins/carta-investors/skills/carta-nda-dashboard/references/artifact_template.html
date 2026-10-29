@@ -138,7 +138,7 @@
     <div class="tab-pane" id="tab-restrictions">
       <div class="card"><h2>Active restrictions — non-solicit, no-contact &amp; non-circumvention</h2><div class="sub" id="restrictions-sub"></div>
         <div id="table-restrictions"></div>
-        <div class="note">"NDA expiry" is the expiration date of the NDA as a whole (executed date + the NDA's term), <b>not</b> the duration of the individual provision — a non-solicit and a no-contact in the same NDA can run for different lengths. "Unknown / perpetual" means no NDA expiry could be computed; the restriction may still apply.</div>
+        <div class="note">"NDA expiry" is the expiration date of the NDA as a whole (start date + the NDA's term), <b>not</b> the duration of the individual provision — a non-solicit and a no-contact in the same NDA can run for different lengths. "Unknown / perpetual" means no NDA expiry could be computed; the restriction may still apply.</div>
       </div>
     </div>
   </div>
@@ -326,12 +326,12 @@
       makeTable('table-expiring', [
         {key: 'counterparty', label: 'Counterparty'},
         {key: 'deal', label: 'Deal', workflow: true, render: orDash},
-        {key: 'executed', label: 'Executed'},
+        {key: 'start', label: 'Start date'},
         {key: 'term', label: 'Term', sortKey: 'termMonths', type: 'num'},
         {key: 'expiry', label: 'Expiry'},
       ], DATA.expiring || [], {defaultSort: 'expiry', searchKeys: ['counterparty', 'deal']});
       document.getElementById('expiring-note').textContent =
-        'Expiry is computed from executed date + term; only NDAs with both are shown (' + fmt(k.withExecDate) + ' of ' + fmt(k.totalNdas) + ' NDAs have a captured start date).';
+        'Expiry is computed from start date (effective date, else signing date) + term; only NDAs with both are shown (' + fmt(k.withStartDate) + ' of ' + fmt(k.totalNdas) + ' NDAs have a captured start date).';
 
       // Restrictions
       document.getElementById('restrictions-sub').textContent =
