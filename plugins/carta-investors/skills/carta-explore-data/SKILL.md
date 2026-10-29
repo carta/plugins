@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.12</carta-plugin>
+<carta-plugin>carta-investors:7.5.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -105,7 +105,7 @@ Required even for specific-company queries — establishes accessible companies 
 read_tool({"name": "fa__list__entities", "arguments": {"entity_types": "spv,syndicate_spv"}})
 ```
 
-- `entity_types` accepts names — `fund`, `gp_entity`, `spv`, `syndicate_spv`, `management_co`, `elimination` — comma-separated. Always pass `entity_types`; never call without it. For every entity, call once per type. If a call returns "response too large", narrow it with `search` (e.g. `"search": "TVC"`) instead of reporting the entities missing.
+- `entity_types` accepts names — `fund`, `gp_entity`, `spv`, `syndicate_spv`, `management_co`, `elimination` — comma-separated. To list the firm's entities, follow `${CLAUDE_PLUGIN_ROOT}/references/list-firm-entities.md` (the plugin's own `references/`, not this skill's — do not search for it) instead of reporting the entities missing.
 - Each row carries `id` (the integer entity key other `fa:*` commands take as `entity_ids`), `uuid`, `entity_type_string`, `currency`, `is_churned` and `_links.web_url`. Churned and inactive entities are included, so check `is_churned` rather than assuming absence means the entity is gone.
 - To map SPVs to their underlying investments, take the entities from this call and query `AGGREGATE_INVESTMENTS` (`investments.md`), which has `fund_name` and `fund_uuid` per investment, for those funds.
 - If the call succeeds and returns no SPVs, say so: the firm's SPVs are not administered on Carta Fund Admin (or are not visible with the user's permissions). Do not infer them from the fund entities that `dwh__execute__question` happened to return.
@@ -234,6 +234,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 - **Single SELECT only — no UNION / UNION ALL, no SHOW commands** — the tool enforces one SELECT at a time; `SHOW TABLES LIKE '%...'` and other `SHOW *` commands also return `Only a single SELECT statement is allowed`. Use `read_tool({"name": "dwh__list__tables", ...})` for table discovery and run separate `read_tool` calls when you need counts from multiple tables.
 - **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse and returns a hard `ValueError: Querying INFORMATION_SCHEMA is not allowed`. Use `read_tool({"name": "dwh__list__tables", ...})` to list tables and `read_tool({"name": "dwh__get__table_schema", ...})` to inspect columns. These MCP tools are the only valid schema-discovery path.
 - **`LATERAL` (including `LATERAL FLATTEN`) is not permitted** — returns `ValueError: Lateral is not permitted in query execution`. To access keys in a VARIANT/ARRAY column, use explicit JSON path notation (e.g. `col:key::STRING`) rather than `LATERAL FLATTEN`.
+- **Inline `VALUES` lists are not permitted** — returns `Values is not permitted in query execution`, so a date spine or literal list built with `FROM VALUES (...)` fails. Use `WHERE col IN ('a', 'b')` for a literal list, or select the dates from a real table.
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata

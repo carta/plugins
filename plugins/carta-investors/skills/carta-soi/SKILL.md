@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.12</carta-plugin>
+<carta-plugin>carta-investors:7.5.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -102,7 +102,7 @@ With the firm list in hand:
 
 > **Run in parallel with Step 3.** Fund enumeration (this step) and MCP UUID discovery (Step 3) are fully independent — issue both tool batches concurrently in the same response, not sequentially. 
 
-Call `read_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency, fund_family_id, fund_family_name, is_churned, service_stop_date}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact. `fund_family_name` is non-null for funds that belong to a fund family (e.g. side-by-side vehicles of the same strategy) and null/absent for standalone funds — carry it through verbatim to Step 4a so the artifact can group the fund dropdown by family. This response does **not** include `vintage_date` — see Step 2c.
+Fetch the firm's `fund` and `spv` entities by reading `${CLAUDE_PLUGIN_ROOT}/references/list-firm-entities.md` (the plugin's own `references/`, not this skill's — do not search for it) and following it with those two types; issue the two calls in parallel. The filter excludes entity types that can't hold investments so it is critical. If that file says the list is incomplete, carry `incomplete_entities` (the entity type that may be missing) to Step 6. Capture the full `[{uuid, name, currency, fund_family_id, fund_family_name, is_churned, service_stop_date}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact. `fund_family_name` is non-null for funds that belong to a fund family (e.g. side-by-side vehicles of the same strategy) and null/absent for standalone funds — carry it through verbatim to Step 4a so the artifact can group the fund dropdown by family. This response does **not** include `vintage_date` — see Step 2c.
 
 **Drop churned funds before anything else.** The response lists every fund the firm has ever had, including ones Carta no longer services — a churned fund's figures stopped updating on its service stop date, so it would read as current when it isn't. Each entry carries `is_churned` and `service_stop_date`: drop the fund when `service_stop_date` is today or earlier, or when `is_churned` is `true` and `service_stop_date` is null. A stop date still in the future means Carta services the fund until then, so keep it even if `is_churned` is already `true`. Everything after this — the initial-fund pick below, the single-fund rule, Step 2c, the Step 4a funds file — works on the list with churned funds removed. If the user named a fund, match their name against the full list first, so you know whether they asked for a churned one. Two exceptions:
 
@@ -323,7 +323,9 @@ Pick the branch from the `name_status` value captured in Step 2.
 - `named_churned` — *"Carta no longer services **<Fund Name>**, so its figures are as of **<service_stop_date>** and won't update."* Write the date out, e.g. June 30, 2023.
 - `all_churned` — *"Carta no longer services any of **<Firm Name>**'s funds, so these figures won't update."*
 
-If both apply, use the `named_churned` sentence only. Say nothing when churned funds were simply left out — the user didn't ask about them.
+- `incomplete_entities` — *"I couldn't load every **<fund / SPV>** for **<Firm Name>**, so some may be missing from this view."* Add it whenever Step 2 set `incomplete_entities`, whether or not a fund was named.
+
+If both churned sentences apply, use the `named_churned` sentence only. Say nothing when churned funds were simply left out — the user didn't ask about them.
 
 After the branch sentence, append a 3–5 bullet summary of what the artifact contains (e.g. interactive holdings table, Deal IRR columns — proceeds, total value, multiple and IRR — an Investment Cash Flows tab, summary metrics, sortable columns, expand/collapse rows, filter by company name, fund switcher across all funds you have access to). Keep it brief — the customer can see the artifact themselves. The bullet summary is optional on re-invocation branches; if you've already shown it earlier in the conversation, skip it.
 
