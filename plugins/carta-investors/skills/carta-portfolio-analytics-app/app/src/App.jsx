@@ -219,7 +219,7 @@ function DataStatusLine({ source }) {
   );
 }
 
-export default function App({ firm }) {
+export default function App({ firm, canSwitchFirm = false, onChooseFirm }) {
   const [userName, setUserName] = useState(null);
   useEffect(() => {
     fetch("/auth/check").then((r) => r.json()).then((d) => { if (d.userName) setUserName(d.userName); }).catch(() => {});
@@ -389,6 +389,11 @@ export default function App({ firm }) {
             transition: "background 0.2s" }} />
         ))}
       </div>}
+      {/* A build can take minutes, so a firm opened by mistake must not trap the user. */}
+      {canSwitchFirm && <Btn kind="link" onClick={onChooseFirm} data-testid="switch-firm"
+        style={{ marginTop: 16, fontSize: FS.small, textDecoration: "underline" }}>
+        Switch firm
+      </Btn>}
     </Center>;
   }
 
@@ -412,6 +417,12 @@ export default function App({ firm }) {
     <CurrencyMenu variant="sidebar" present={presentCurrencies(rawData)} fundCurrency={data.source?.currency || null}
       value={currency} onChange={(next) => dashboard.update((d) => { d.currency = next; return d; })} />
   );
+  const switchFirm = canSwitchFirm && (
+    <Btn kind="link" onClick={onChooseFirm} data-testid="switch-firm"
+      style={{ fontSize: FS.small, textDecoration: "underline" }}>
+      Switch firm
+    </Btn>
+  );
 
   const sidebar = (
     // Ink's SideNav has no side padding on the rail — nav rows are full-bleed. Logo
@@ -431,6 +442,7 @@ export default function App({ firm }) {
           <Mark branding={data.branding} size={30} style={{ flex: "none", transform: "translateY(-5px)" }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ ...sans, fontSize: FS.value, fontWeight: 600, lineHeight: "20px", letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)", wordBreak: "break-word" }}>{resolvedFirmName}</div>
+            {switchFirm}
           </div>
         </div>
         {/* Only the nav list scrolls, so sidebar action popovers below aren't
@@ -475,6 +487,7 @@ export default function App({ firm }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Mark branding={data.branding} size={24} />
         <span style={{ ...serif, fontSize: FS.h3, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{resolvedFirmName}</span>
+        {switchFirm}
         <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton firm={firm} datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} /><PublishEditsButton firm={firm} data={data} dashboard={dashboard} /><ConflictsButton data={data} dashboard={dashboard} />{themeToggle}
       </div>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>

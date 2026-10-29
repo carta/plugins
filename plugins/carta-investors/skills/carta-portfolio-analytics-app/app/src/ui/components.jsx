@@ -134,6 +134,15 @@ export function Mark({ size = 30, style }) {
     </svg>
   );
 }
+// A firm's card tile on the chooser: a near-black square that inverts in dark mode, as in Fund Modeling.
+export function FirmTile({ size = 42, style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" style={{ display: "block", ...style }} aria-hidden>
+      <rect width="64" height="64" rx="3" style={{ fill: "var(--ink-color-global-text-default)" }} />
+      <text x="32" y="43" textAnchor="middle" fontSize="32" fontWeight="700" style={{ fill: "var(--ink-color-global-surface-background-default)" }}>·</text>
+    </svg>
+  );
+}
 // Ink's Dropdown.Trigger caret — a real chevron-down (not the right-chevron
 // rotated 90°), static since this app's popovers always open downward. Ink
 // only rotates this for an upward (top-*) placement, which this app's

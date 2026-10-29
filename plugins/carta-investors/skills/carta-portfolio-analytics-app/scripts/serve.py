@@ -491,6 +491,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, dict(_refresh_state))
         if path == "/api/publish/status":
             return self._send(200, _read_publish_state())
+        # One firm per launch and no staff search, so the chooser opens the firm on its own.
+        if path == "/api/me":
+            return self._send(200, {"isStaff": False})
         if path == "/api/capabilities":
             return self._send(200, {"refresh": _refresh_supported(), "publish": _publish_supported()})
         if path == "/api/portfolio":
