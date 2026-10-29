@@ -79,7 +79,6 @@ Output JSON: {"data", "stats", "warnings"} — the full shape is the Output bloc
 
 import argparse
 import json
-import re
 import sys
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -90,6 +89,7 @@ for _root in Path(__file__).resolve().parents:
     if (_root / "lib" / "report_rows.py").is_file() and (_root / "lib" / "report_numbers.py").is_file():
         sys.path.insert(0, str(_root / "lib"))
         break
+from report_display import detect_hidden_columns, normalize_columns  # noqa: E402
 from report_numbers import parse_number  # noqa: E402
 from report_rows import is_structural, relabel_structural  # noqa: E402
 
@@ -137,74 +137,8 @@ def _parse_date(val):
     return datetime(parsed.year, parsed.month, parsed.day)
 
 
-def _normalize_columns(columns):
-    """Give unnamed columns a stable synthetic name matching the artifact engine.
-    Marks them with _synthetic so the Excel export can restore the blank header."""
-    result = []
-    for i, col in enumerate(columns):
-        if not col["name"]:
-            result.append({**col, "name": f"Column {i + 1}", "_synthetic": True})
-        else:
-            result.append(col)
-    return result
-
-
 def _col_map(columns):
     return {col["name"]: i for i, col in enumerate(columns)}
-
-
-# ---------------------------------------------------------------------------
-# Auto-hide technical identifier columns
-# ---------------------------------------------------------------------------
-
-_ID_NAME_RE    = re.compile(r"(^id$|\bid$)", re.IGNORECASE)
-_EMAIL_NAME_RE = re.compile(r"\bemail\b", re.IGNORECASE)
-_UUID_RE       = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
-)
-_HASH_RE  = re.compile(r"^[0-9a-f]{24,}$", re.IGNORECASE)
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-_SAMPLE_ROWS = 20
-
-
-def _column_values_match(rows, idx, pattern, sample_size=_SAMPLE_ROWS):
-    """True if every non-null sampled value in column idx matches pattern."""
-    sample = [row[idx] for row in rows[:sample_size] if idx < len(row) and row[idx] not in (None, "")]
-    if not sample:
-        return False
-    return all(pattern.match(str(v).strip()) for v in sample)
-
-
-def detect_hidden_columns(columns, rows):
-    """Tag columns that carry no end-user meaning with 'hidden': true.
-
-    Detection is name- and value-based, never magnitude-based — a numeric ID
-    column looks identical to a legitimate count/amount column by size alone,
-    so guessing from magnitude would false-positive on real report data.
-    Columns are tagged, not removed; they stay selectable in the Columns panel.
-    """
-    result = []
-    for i, col in enumerate(columns):
-        if col.get("hidden"):
-            result.append(col)
-            continue
-        name  = col.get("name") or ""
-        ctype = col.get("type")
-        hide  = False
-
-        if _ID_NAME_RE.search(name):
-            hide = True
-        elif _EMAIL_NAME_RE.search(name) and ctype in ("string", "text", None):
-            hide = True
-        elif ctype in ("string", "text", None):
-            if _column_values_match(rows, i, _UUID_RE) or \
-               _column_values_match(rows, i, _HASH_RE) or \
-               _column_values_match(rows, i, _EMAIL_RE):
-                hide = True
-
-        result.append({**col, "hidden": True} if hide else col)
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -771,7 +705,7 @@ def main():
             for cell in ov.get("cell_indexes", []):
                 cell_currency_map[(cell[0], cell[1])] = ov_info
 
-        cols           = _normalize_columns(sheet["columns"])
+        cols           = normalize_columns(sheet["columns"])
         all_rows       = sheet["rows"]
         # Section and total rows are set aside: every transform below assumes plain data rows.
         n_cols         = len(sheet["columns"])
@@ -929,7 +863,7 @@ def main():
 
     # merge_sheets: {"Target Tab Name": ["Source Sheet A", "Source Sheet B"]}
     # Concatenates rows from source sheets into a single output tab; removes sources from output.
-    # Columns in `result` are already normalized by _normalize_columns in the per-sheet loop above.
+    # Columns in `result` are already normalized by normalize_columns in the per-sheet loop above.
     for target_name, sources in config.get("merge_sheets", {}).items():
         merged_cols: list | None = None
         merged_rows: list = []

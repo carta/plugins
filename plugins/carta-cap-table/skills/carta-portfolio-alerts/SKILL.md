@@ -9,7 +9,8 @@ when_to_use: >-
   running low on something (option pool below a threshold, runway), which
   SAFEs are approaching their valuation-cap trigger or expiring before
   conversion across the portfolio, which 83(b) elections are not filed or
-  have a filing deadline coming up, or to run a portfolio health audit or
+  have a filing deadline coming up, how much Rule 701 room a company has
+  left, or to run a portfolio health audit or
   red-flag scan. For raw multi-company data without a risk or
   time or threshold lens, prefer a portfolio data-query skill. For
   statistical norms across the portfolio, prefer a portfolio-benchmarks
@@ -34,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.106.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -61,6 +62,7 @@ For each company, these are the relevant checks:
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- note maturity check (summary includes `maturity.nearest_date`)
 - `read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": corporation_id}})` -- SAFE exposure check
 - `read_tool({"name": "cap_table__list__83b_elections", "arguments": {"company": corporation_id, "status": "not_filed"}})` -- 83(b) deadline check
+- `read_tool({"name": "cap_table__get__rule_701", "arguments": {"company": corporation_id}})` -- Rule 701 limit check (last 12 months)
 
 The server defaults to `detail=summary` for list commands. The first four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes. The 83(b) list always returns its `summary` with the rows: `not_filed_open` and `next_deadline` count only deadlines today or later.
 
@@ -74,6 +76,7 @@ From 409A: `expiration_date`, `price`, `effective_date`
 From cap table option plans: `available_ownership`, `name`
 From convertible notes (summary): `maturity.nearest_date`, `maturity.total_outstanding_debt`, `by_status`, `by_type`
 From 83(b) elections: `summary.not_filed_open`, `summary.next_deadline`; each row's `holder_name`, `label`, `type`, `deadline`
+From Rule 701: `within_limit`, `from_date`, `to_date`; each test's `type`, `result`, `limit`, `used`, `remaining`
 
 ## Workflow
 
@@ -85,13 +88,15 @@ Call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 nume
 
 Issue ALL `read_tool` calls for ALL companies **in a single response** — do NOT loop company-by-company. Each `read_tool` call is independent and will execute concurrently.
 
-For example, with 5 companies and all 5 checks, issue all 25 `read_tool` calls at once:
+For example, with 5 companies and all 6 checks, issue all 30 `read_tool` calls at once:
 
 ```
 read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__list__83b_elections", "arguments": {"company": 1, "status": "not_filed"}})
+read_tool({"name": "cap_table__get__rule_701", "arguments": {"company": 1}})
 read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 2}})
 read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
 ... (all companies)
@@ -141,6 +146,14 @@ Sum outstanding SAFE amounts per company.
 
 The list can include holders outside the US, who do not file an 83(b). Name the holder and the security label for each finding.
 
+#### 6. Rule 701 Limit
+
+| Check | Critical | Warning | Info | Rationale |
+|-------|----------|---------|------|-----------|
+| Rule 701 | `within_limit` is false | The `disclosure` test fails, or `within_limit` is null | — | Rule 701 allows the greatest of the `amount`, `outstanding_shares` and `total_assets` limits; above $10M in 12 months the holders must get the extra disclosure before they buy |
+
+For room left, give the `remaining` of each limit test that ran: shares for `outstanding_shares`, the company currency for `amount` and `total_assets`. The company may use the test with the most room. `within_limit` null means the `total_assets` test did not run: ask the user for the total assets at the most recent balance sheet date, then call again with `total_assets`.
+
 ### Step 4 — Present Results
 
 Present a summary dashboard (see Presentation section).
@@ -149,7 +162,7 @@ Present a summary dashboard (see Presentation section).
 
 **Required inputs**: None — portfolio enumeration is automatic.
 
-**AI computation**: Yes — severity classifications (critical, warning, info) for 409A expiry, option pool health, note maturity, SAFE exposure, and 83(b) deadlines are AI-derived.
+**AI computation**: Yes — severity classifications (critical, warning, info) for 409A expiry, option pool health, note maturity, SAFE exposure, 83(b) deadlines and Rule 701 limits are AI-derived.
 Before you fetch data or compute, call `AskUserQuestion` (never plain text) with: "No saved Carta model matches these terms. I can compute severity classifications using AI — this would be Claude's analysis, not Carta data. Would you like me to proceed?" If the user says no, stop: no output, no fallback. If the user says yes, start the computed output with:
 
 > ⚠️ **Claude's analysis** — computed from cap table data, not from a saved Carta model. Verify with counsel before relying on these numbers.

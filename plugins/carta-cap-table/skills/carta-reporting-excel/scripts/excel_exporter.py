@@ -28,6 +28,7 @@ for _root in Path(__file__).resolve().parents:
     if (_root / "lib" / "report_rows.py").is_file() and (_root / "lib" / "report_numbers.py").is_file():
         sys.path.insert(0, str(_root / "lib"))
         break
+from report_display import excel_sheet_name  # noqa: E402
 from report_numbers import parse_number  # noqa: E402
 from report_rows import is_section_list  # noqa: E402
 
@@ -48,14 +49,6 @@ FORMAT_MAP = {
     "date":       "mmm d, yyyy",
     "decimal":    "#,##0.0000",
 }
-
-# Excel forbids [ ] \ / ? * : in sheet tab names.
-_EXCEL_INVALID = str.maketrans("", "", "[]\\/?*:")
-
-
-def _sanitize_sheet_name(name: str) -> str:
-    sanitized = name.translate(_EXCEL_INVALID).strip()
-    return (sanitized or "Sheet")[:31]
 
 # Date columns arrive from api-reporting-service JSON as ISO-8601 strings — every
 # date-styled column serializes via LocalDate.toString().
@@ -298,7 +291,7 @@ def main():
 
     for sheet_name, sheet in data.items():
         sheet = _prepare_sheet(sheet)
-        ws = wb.create_sheet(title=_sanitize_sheet_name(sheet_name))
+        ws = wb.create_sheet(title=excel_sheet_name(sheet_name))
         _write_sheet(
             ws,
             columns=sheet["columns"],

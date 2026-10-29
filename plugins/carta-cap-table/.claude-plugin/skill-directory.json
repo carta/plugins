@@ -95,6 +95,19 @@
       "body": "Turns a spreadsheet, award document or plain request into drafts on your Carta cap table, then issues them only after you review each one."
     }
   },
+  "carta-manage-securities": {
+    "category": "issuance",
+    "name": "Fix or cancel a security",
+    "order": 20,
+    "prompts": [
+      "Correct the exercise price on option grant [grant label] for {{COMPANY}}",
+      "Cancel [employee name]'s option grant on {{COMPANY}}"
+    ],
+    "whatsNewCopy": {
+      "headline": "Fix, cancel or uncancel issued equity",
+      "body": "Edits, cancels or reverses the cancellation of an issued security on your Carta cap table. Shows a preview of every change before anything saves."
+    }
+  },
   "carta-market-benchmarks": {
     "category": "governance",
     "name": "Market norms",
@@ -108,31 +121,18 @@
       "body": "Computes the median and range of option pool sizes, SAFE valuation caps and round sizes across your companies in Carta, answered in chat."
     }
   },
-  "carta-modify-issuables": {
-    "category": "issuance",
-    "name": "Fix a grant, certificate or note",
-    "order": 20,
-    "prompts": [
-      "Update the vesting start date on [employee name]'s option grant",
-      "Correct the exercise price on certificate [certificate label] for {{COMPANY}}"
-    ],
-    "whatsNewCopy": {
-      "headline": "Fix dates, prices or quantities on issued equity",
-      "body": "Opens a form to edit an issued certificate or option grant on your Carta cap table, then shows a before-and-after review before anything saves."
-    }
-  },
   "carta-portfolio-alerts": {
     "category": "governance",
     "name": "Risk & expiration alerts",
     "order": 10,
     "prompts": [
-      "What's expiring soon across our 409A valuations, SAFEs, option pool, and 83(b) deadlines?",
+      "What's expiring soon across our 409A valuations, SAFEs, option pool, 83(b) deadlines and Rule 701 limit?",
       "Which convertible notes mature in the next 90 days?",
       "Is the option pool running low at {{COMPANY}}?"
     ],
     "whatsNewCopy": {
       "headline": "Catch expiring 409As, SAFEs and deadlines before they lapse",
-      "body": "Scans your companies in Carta for expiring 409As, SAFEs near their cap, low option pools and unfiled 83(b) elections, ranked by severity in chat."
+      "body": "Scans your companies for expiring 409As, SAFEs near their cap, low option pools, unfiled 83(b) elections and the Rule 701 limit, ranked by severity."
     }
   },
   "carta-register-of-allotments": {

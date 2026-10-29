@@ -38,11 +38,12 @@ allowed-tools:
   - Bash(date +%s)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_report_page.py" *)
+  - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py" *)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.106.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
 
 # Custom Reports
 
@@ -77,6 +78,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - "Run a report for each stakeholder with fully diluted ownership above 5%, showing their individual securities and any exercises this year"
 - "Generate a report of employees with unvested RSUs with a final vesting date past 2027, and include their current fully diluted ownership"
 - "Help me build a cap table report — I'm not sure what's available"
+- "Save this as a template" (after a report is shown; see "Save as a template")
 - "What can I export from the cap table?"
 - "Compare my option grant spreadsheet with Carta" (see Reconciliation below)
 - NOT: "What's [Alice]'s vesting schedule?" (use carta-grant-vesting instead)
@@ -113,6 +115,7 @@ If the file exists, its instructions override the defaults in this skill for any
 **Script paths:** they are fixed — never search for them.
 - `report_processor.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`
 - `build_report_page.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_report_page.py` (it reads the engine HTML itself; do not `Read` it)
+- `build_template_definition.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py`
 
 Run each script only in the one-line form shown below, as its own command: write its input files with `Write` first, then pass them by flag. A heredoc, a pipe or a chained command needs approval every time.
 
@@ -443,6 +446,8 @@ Run each script only in the one-line form shown below, as its own command: write
    > - **Formulas** — add computed columns (% of total, running sum, ratio, USD conversion, etc.)
    >
    > Say **Export to Excel** when ready, or describe your changes.
+   >
+   > _(Add this line only when `_templates_available_<corporation_id>` is `true` after the check in "Save as a template":)_ Or say **Save this as a template** to keep the report in Carta and run it again at a new as-of date.
 
    If the dataset is large (> 300 rows), append: "This report has {N} rows — you may want to filter before exporting." (For a preview: "The preview already has {N} rows.")
 
@@ -461,6 +466,51 @@ Run each script only in the one-line form shown below, as its own command: write
 6. **Export to Excel**
    - **Claude Desktop prompt bar** — when the user's message starts with `Generate Carta Excel —`, skip steps 1–5 and invoke `Skill(carta-cap-table:carta-reporting-excel)` directly. The payload includes the corporation ID, so no company lookup is needed.
    - **Claude Code** — handled by `carta-reporting-markdown`, which invokes `Skill(carta-cap-table:carta-reporting-excel)` when the user confirms.
+
+---
+
+## Save as a template
+
+A report built here can be kept in Carta as a template: its sheets, columns, filters and sort, with no as-of date, so it can be run again at a new date. This step is only for a report the user has seen in full.
+
+**Check once per company, before that company's first customization checkpoint is shown:** whether templates are on is decided per company, so a listed tool says nothing. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})`. Set `_templates_available_<corporation_id>` to `true` only when the call succeeds; on any failure (templates not enabled for the company, not found, no permission, or anything else), set it to `false` and do not retry. When it is `false`, never offer a template and never mention one. If the user asks for one anyway, say "I can't save this report as a template for this company right now." and stop.
+
+**Run this when the user says "save this as a template" (or accepts the offer in the checkpoint), in either output mode:**
+
+0. **Decide availability first.** If `_templates_available_<corporation_id>` is not set for this company (in MARKDOWN mode the check above never ran), run that check now, and stop as it says when it is `false`.
+
+1. **One company, full report only.** If the report covers more than one company, say a template is saved for one company's report at a time and stop. If only a preview of the data came in, say the template can be saved once the full report has loaded, and stop. The data file for the save is the full report's `carta-reporting/carta_report_<pk>.json`.
+
+2. **Ask for the name and the audience in one `AskUserQuestion` call** (two questions):
+   - *Name*: offer a short name that says what the report shows, such as "Outstanding grants by holder", and the report type's own name as the second option. The user can type their own.
+   - *Who can see it*: "Only me" (recommended, the default) or "All company admins".
+
+3. **Write the inputs**, each with `Write`:
+   - `carta-reporting/template-config.json`: the current `carta-reporting/config.json`, with `sheets` set to a list of the sheets shown in the report when the config names none. In ARTIFACT mode those are the sheets in `report_processor.py`'s `stats` that `build_report_page.py` did not list in `omitted_sheets`; in MARKDOWN mode, the sheets in `report_processor.py`'s `stats`.
+   - `carta-reporting/template-name.txt`: the name, exactly as the user chose it, and nothing else.
+   - `carta-reporting/create-params.json`: the `arguments` object of the full report's `reporting__create__report` call.
+
+4. **Build the definition**, as its own command, on one line. The name goes in by file, never on the command line:
+
+   ```bash
+   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py" --config "carta-reporting/template-config.json" --report "carta-reporting/carta_report_<pk>.json" --report-type "<report_type>" --name-file "carta-reporting/template-name.txt" --create-params "carta-reporting/create-params.json" --out "carta-reporting/template-definition.json"
+   ```
+
+   - **It exits 1 and prints `{"refused": [...]}`:** nothing is saved. Tell the user why in plain words, one line per reason, and offer to change the report so it can be saved (for example, drop the formula or pick another column). Do not retry the same input.
+   - **`dropped_params` is not empty:** after the save, say the template does not keep those filters (name each one the report used: people, plans, securities, share classes or issue dates), so every run covers all of them.
+
+5. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the template's `id`; say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." Never show the id.
+
+**When the save does not go through, always tell the user; never drop a save silently. The report on screen is unchanged.**
+
+| Answer | Tell the user |
+|---|---|
+| `scope_required` | Handle it as for `reporting__create__report`: ask, call `request_permissions` once, then repeat the save once. |
+| The name is taken | Ask for another name with `AskUserQuestion`, write it to `carta-reporting/template-name.txt`, then repeat steps 4 and 5 once with it. |
+| A list of problems with the definition | Say each problem in plain words (the column or filter and what is wrong) and that nothing was saved. For a report type Carta does not take yet, say which report types it does take, as its reason names them. For an `unknown_sheet` problem on a sheet saved by its own name, say that its name comes from the company's data (a share class, a plan) or its terms, so a template cannot find it by name on another date; offer to merge it with the sheets that share the same start or end of name, which a template can save. |
+| Templates aren't enabled for this company, or Carta did not save it | "I couldn't save this as a template in Carta. Your report is still here." Do not retry. |
+| They can't run this report here | "I couldn't save this as a template: your access doesn't let you run this report at this company. Your report is still here." Do not retry. |
+| Any other failure, or no answer | Say the save may not have gone through. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})` once to check; report whether a template with that name is there. Never save the same template twice. |
 
 ---
 

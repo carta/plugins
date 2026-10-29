@@ -11,7 +11,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.106.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
 
 # issuance-import
 
@@ -29,7 +29,7 @@ saves and validates, Phase 2 still reviews, Phase 3 is still the only mutate.
 | File | Purpose |
 |---|---|
 | `scripts/parse_upload.py` | **Does the parsing.** Header detection, column mapping, value coercion, `security_type` detection, and local name→id resolution. The model never hand-parses a workbook — a hand-read column is exactly how a quantity lands in an exercise-price field. |
-| `references/column-map.md` | The header synonyms and value picklists as documentation, for humans and for `carta-modify-issuables` to reuse rather than fork. |
+| `references/column-map.md` | The header synonyms and value picklists as documentation, for humans and for other skills to reuse rather than fork. |
 
 ## Two rules the script exists to enforce
 

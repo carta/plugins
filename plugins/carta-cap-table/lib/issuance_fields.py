@@ -61,9 +61,8 @@ RULE_144_REASON_CHOICES = [
     ("non_affiliates", "Non-affiliates"),
 ]
 
-# `grant_reason` picklist (option grant only) — matches carta-web's own field
-# (carta-modify-issuables/references/field-contract.md). Free text was never
-# actually valid; the server field is choice-only.
+# `grant_reason` picklist (option grant only) — matches carta-web's own field.
+# Free text was never actually valid; the server field is choice-only.
 GRANT_REASON_CHOICES = [
     "New Hire", "Merit", "Promotion", "Refresh", "Corporate transaction",
     "Relationship change", "Retention", "Advisor", "Consultant", "Board",

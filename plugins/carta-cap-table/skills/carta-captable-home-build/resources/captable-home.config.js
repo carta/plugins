@@ -150,7 +150,7 @@ const WHATS_NEW_SKILL_OUTPUTS = {
     'carta-reporting': 'spreadsheet',
     'carta-reporting-excel': 'spreadsheet',
     'carta-issuance': 'document',
-    'carta-modify-issuables': 'document',
+    'carta-manage-securities': 'rows',
     'carta-register-of-allotments': 'register',
     'carta-round-history': 'chart',
     'carta-valuation-history': 'chart',

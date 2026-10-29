@@ -3,8 +3,8 @@
 The header vocabulary `parse_upload.py` recognizes, and the value picklists it
 normalizes against. `COLUMN_SYNONYMS` in the script is what actually runs — this
 file is the human-readable copy, and the two must be kept in step. Written as
-shared data so `carta-modify-issuables` can point at it rather than
-fork a second table that drifts.
+shared data so other skills can point at it rather than fork a second table
+that drifts.
 
 Matching is on a **normalized** key: lowercased, every run of non-alphanumerics
 folded to a single space, trimmed. So `Vesting Commencement Date`,

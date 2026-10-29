@@ -13,6 +13,9 @@ required params (Step 3) or filter IDs — it is not part of the always-loaded S
 #   reporting__get__report_status   read_tool   user_report_pk
 #   reporting__get__download_url    read_tool   user_report_pk, corporation_id — only once status is "complete"
 #   reporting__search__report_types read_tool   corporation_id, query, json_export_supported (optional)
+#   reporting__create__report_template call_tool corporation_id, name, definition, visibility (optional)
+#   reporting__list__report_templates read_tool  corporation_id
+#   reporting__get__report_template read_tool    corporation_id, template_id
 
 call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json" }})
   → { user_report_pk }
@@ -168,4 +171,39 @@ read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk
                        # not_found: re-check report_status once; if "complete", call this once more;
                        # if "pending", resume polling within the attempts left; never call this more
                        # than twice.
+
+# Report templates — keep a report in Carta to run again at a new as-of date.
+# Offered only when reporting__list__report_templates succeeds for the company (see "Save as a template" in SKILL.md).
+# Every one of the three answers "Report templates aren't enabled for this company." when they are off: do not retry.
+
+call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, definition, visibility }})
+  → { id, display_name, report_type, visibility, version, message }
+  # name — 1-255 characters, unique among the company's templates (case-insensitive).
+  # visibility — optional: "creator" (only the person saving; the default) or "company_admins".
+  # definition — the object build_template_definition.py writes to its --out file; pass it as the file holds it.
+  #   { schema_version: 1, default_name, source: { report_type, params: {} },
+  #     sheets: [{ name, from: { match: "exact" | "prefix" | "suffix", value, merge? },
+  #                columns: [{ key } | { dynamic, field?, source }], filters: [{ key, op, value }], sort: [{ key, direction }] }] }
+  #   Columns, filters and sort are named by `key`, never by header. A per-item column (one per share
+  #   class, plan, currency…) is named by `dynamic`, `field` and `source`; filters and sort take keys only.
+  #   Merged sheets are saved as one sheet whose `from` matches every merged sheet by a common start or
+  #   end of name, with `merge: true`; a prefix or suffix value is 1-31 characters. Carta refuses a report
+  #   type it does not take yet (unsupported_report_type, its reason names the types it takes). No as-of
+  #   date, formulas or aggregations.
+  #   At most 10 sheets with distinct tab names and at most 200 columns per sheet; op is one of
+  #   > < >= <= = != contains; direction is asc or desc.
+  # Failures are tool errors, never an empty result:
+  #   "Carta did not save this template" — not available for this user or company; nothing was saved.
+  #   "…the user can't run this report here" — their access does not cover this report type; nothing was saved.
+  #   a list of "path: reason (code)" lines — the definition was refused; nothing was saved.
+  #   "A template with that name already exists" — ask for another name. A retried save answers the same,
+  #     so after any save that may have gone through, list the templates before saving again.
+  # Needs the write permission: scope_required is handled as for reporting__create__report.
+
+read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})
+  → { templates: [{ id, display_name, report_type, origin, visibility, created_by, current_version,
+                    created, last_modified, last_run }] }   # newest change first; only what the user may see
+
+read_tool({"name": "reporting__get__report_template", "arguments": { corporation_id, template_id }})
+  → { id, display_name, report_type, visibility, origin, current_version: { version, schema_version, created, definition } }
 ```

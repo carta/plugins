@@ -192,7 +192,7 @@ Frontend enum key for *Startup Concessions* is `ESS`; canonical persisted string
 
 `has_determined_144_date` · `non_restricted_144` · `relevance_provision` · `affiliates` · `non_affiliates`
 
-**`grant_reason`** (carta-web's own field schema — [carta-modify-issuables/references/field-contract.md](../../carta-modify-issuables/references/field-contract.md) is authoritative):
+**`grant_reason`** (carta-web's own field schema — `GRANT_REASON_CHOICES` in `lib/issuance_fields.py` is authoritative):
 
 New Hire · Merit · Promotion · Refresh · Corporate transaction · Relationship change · Retention · Advisor · Consultant · Board · Performance bonus · Boxcar grant
 

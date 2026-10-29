@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.106.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
 
 # Issue Securities
 
@@ -67,8 +67,8 @@ From raw input to issued securities on a Carta cap table. These three types, and
 | Profits interest unit | "5,000 CC units to Jane, $2.00 per-unit threshold." |
 
 A spreadsheet or award document sources those same three types; *"resume draft set 472"*
-re-enters a saved one. To **fix** an already-issued certificate or grant, use
-`carta-modify-issuables`; it does not handle PIUs — send those to the Carta app.
+re-enters a saved one. To **fix** or cancel an already-issued security, use
+`carta-manage-securities`.
 
 **Out of scope** — route to the Drafts UI for RSUs, SARs, CBUs, warrants, convertibles,
 SAFEs, convertible debt, and anything **custom**: a legend, schedule or exercise period the
