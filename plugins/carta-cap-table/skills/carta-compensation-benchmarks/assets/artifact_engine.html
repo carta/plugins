@@ -48,6 +48,7 @@
   --ink-color-global-brand-yellow-80:             light-dark(#C88600, #FBE284);
   --ink-color-global-feedback-info-subtle:        light-dark(#EAF0F8, #122948);
   --ink-color-global-feedback-info-strong:        light-dark(#285DA3, #8BABD6);
+  --ink-color-global-link-default:                light-dark(#285DA3, #8BABD6);
 
   /* Brand */
   --ink-color-global-brand-gray-30:              light-dark(#E9EAEA, #394040);
@@ -410,10 +411,68 @@ td.remove-col { padding: 10px 8px 10px 4px; width: 30px; }
 }
 .gf-btn--ghost { background: transparent; color: var(--ink-color-global-text-default); border-color: var(--ink-color-global-border-default); }
 .gf-btn--ghost:hover { background: var(--ink-color-global-surface-background-underlay); }
+
+.ink-banner {
+  width: 100%;
+  margin: 0 0 28px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-sizing: border-box;
+}
+.ink-banner--info { background: var(--ink-color-global-feedback-info-subtle); }
+.ink-banner__body { flex: 1 1 auto; font-size: 14px; line-height: 24px; }
+.ink-banner__title { font-weight: 600; color: var(--ink-color-global-text-default); margin: 0 0 2px; font-size: 14px; }
+.ink-banner__message { color: var(--ink-color-global-text-subtle); margin: 0; font-size: 14px; line-height: 24px; }
+.ink-banner__cta {
+  all: unset;
+  color: var(--ink-color-global-link-default);
+  font-weight: 500; cursor: pointer;
+  text-decoration: none;
+}
+.ink-banner__cta:hover { text-decoration: underline; }
+
+/* `all: unset` makes the base class inline, hence inline-flex here. The icon variant sits
+   on its own line under the message so the icon does not interrupt a sentence. */
+.ink-banner__cta--icon {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+/* `all: unset` resets outline-style to none at author origin, which suppresses the UA
+   focus ring. Restore it explicitly — same for __dismiss below. */
+.ink-banner__cta:focus-visible {
+  outline: 2px solid var(--ink-color-global-border-focus-default);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+}
+.ink-banner__dismiss {
+  all: unset;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  cursor: pointer;
+  color: var(--ink-color-global-text-subtle);
+  border-radius: 4px;
+}
+.ink-banner__dismiss:hover { color: var(--ink-color-global-text-default); background: light-dark(rgba(0,0,0,0.06), rgba(255,255,255,0.08)); }
+.ink-banner__dismiss:focus-visible {
+  outline: 2px solid var(--ink-color-global-border-focus-default);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+}
+.ink-banner__dismiss svg { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
 <div class="page">
+
+  <div id="update-banner-slot"></div>
 
   <div class="header">
     <div class="brand" aria-label="Carta">
@@ -1525,6 +1584,171 @@ function fmtCurrency(val, currency) {
     return currency + ' ' + k.toLocaleString() + 'K';
   }
 }
+
+// ── Update banner: is this page behind the published build? ──
+
+const PLUGIN = "carta-cap-table";
+// The skill that BUILDS this artifact. A plugin's own version moves daily for reasons
+// this artifact's user never sees, so keying the banner to it raises one almost daily.
+const SKILL = "carta-compensation-benchmarks";
+// Substituted at build time from the skill-versions registry. Never hand-edit.
+const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
+const PRODUCT_NAME = "Compensation Benchmarks";
+const UPDATE_PROMPT = "Rebuild my Compensation Benchmarks artifact";
+
+const UPDATE_INSTRUCTION =
+  "To get the latest version, tell Claude to update the " + PRODUCT_NAME + " artifact.";
+const DISMISS_KEY = "cartaCompensationBenchmarks.dismissedUpdateVersion";
+
+// ── Version comparison ──────────────────────────────────────────────────────────
+
+// Patch is deliberately dropped. Interrupting every user for a copy tweak trains them to
+// dismiss the banner unread — including the one that mattered.
+function parseMajorMinor(v) {
+  const m = /^(\d+)\.(\d+)\.\d+$/.exec(String(v || ""));
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+function isUpdateAvailable(current, latest) {
+  const c = parseMajorMinor(current);
+  const l = parseMajorMinor(latest);
+  if (!c || !l) return false;                 // unparseable either side → say nothing
+  if (l[0] !== c[0]) return l[0] > c[0];
+  return l[1] > c[1];
+}
+
+// ── Dismissal ───────────────────────────────────────────────────────────────────
+
+// Storage works in the Cowork sandbox but may not in a future host. A failed persist must
+// degrade to "banner returns next load", never to a broken render.
+function readDismissed() {
+  try {
+    return localStorage.getItem(DISMISS_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeDismissed(version) {
+  try {
+    localStorage.setItem(DISMISS_KEY, version);
+  } catch (e) {
+    /* dismissal is best-effort */
+  }
+}
+
+function dismissUpdateBanner(version) {
+  writeDismissed(version);
+  const slot = document.getElementById("update-banner-slot");
+  if (slot) slot.innerHTML = "";
+}
+
+// ── Render ──────────────────────────────────────────────────────────────────────
+
+const COPY_ICON =
+  '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+const COPY_LABEL = COPY_ICON + "Copy this prompt";
+
+function escUpdateHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
+  ));
+}
+
+function copyUpdatePrompt(btn) {
+  if (!navigator.clipboard?.writeText) return;
+  navigator.clipboard.writeText(UPDATE_PROMPT).then(() => {
+    btn.textContent = "✓ Copied";
+    setTimeout(() => { btn.innerHTML = COPY_LABEL; }, 2000);
+  }).catch(() => { /* clipboard denied — the prompt is still readable in the banner */ });
+}
+
+function renderUpdateBanner(latest, headline) {
+  const slot = document.getElementById("update-banner-slot");
+  if (!slot) return;
+  // The headline leads because it is the reason to act. The instruction always follows,
+  // so the banner never states a change without saying what to do about it.
+  const message = headline
+    ? escUpdateHtml(headline) + " " + UPDATE_INSTRUCTION
+    : UPDATE_INSTRUCTION;
+  slot.innerHTML = `
+    <div class="ink-banner ink-banner--info" role="status" id="update-banner">
+      <div class="ink-banner__body">
+        <p class="ink-banner__title">New version of ${escUpdateHtml(PRODUCT_NAME)} available!</p>
+        <p class="ink-banner__message">${message}</p>
+        <button class="ink-banner__cta ink-banner__cta--icon" id="update-banner-copy">${COPY_LABEL}</button>
+      </div>
+      <button class="ink-banner__dismiss" id="update-banner-dismiss" aria-label="Dismiss">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M1.5 1.5L12.5 12.5M12.5 1.5L1.5 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>`;
+  const copyBtn = document.getElementById("update-banner-copy");
+  copyBtn.addEventListener("click", () => copyUpdatePrompt(copyBtn));
+  document
+    .getElementById("update-banner-dismiss")
+    .addEventListener("click", () => dismissUpdateBanner(latest));
+}
+
+// ── Reading the published version ───────────────────────────────────────────────
+
+function tryParseVersionJson(str) {
+  try { return JSON.parse(str); } catch (e) { return null; }
+}
+
+// callMcpTool wraps the payload as a raw object, `content[].text`, or `{result:"<json>"}`.
+// Matching one fixed shape reads `undefined` and the banner never appears. Walk them all.
+function extractVersionPayload(res) {
+  const candidates = [];
+  const add = v => {
+    if (typeof v === "string") {
+      const p = tryParseVersionJson(v);
+      if (p) candidates.push(p);
+    } else if (v && typeof v === "object") {
+      candidates.push(v);
+      if (typeof v.result === "string") {
+        const p = tryParseVersionJson(v.result);
+        if (p) candidates.push(p);
+      }
+    }
+  };
+  // A transport that hands back the bare JSON string still has to resolve.
+  if (typeof res === "string") {
+    add(res);
+  } else if (res && typeof res === "object") {
+    add(res);
+    add(res.structuredContent);
+    add(res.result);
+    if (Array.isArray(res.content)) {
+      res.content.forEach(c => { if (c && c.type === "text") add(c.text); });
+    }
+  }
+  for (const c of candidates) {
+    if (c && typeof c.version === "string") return c;
+  }
+  return null;
+}
+
+// Silent on every failure path. No banner beats one the user cannot act on.
+async function checkForUpdate() {
+  try {
+    const res = await readMcp("plugin:get:version", { plugin: PLUGIN, skill: SKILL });
+    // Use `version` (this skill's), not the `plugin_version` alongside it. The plugin
+    // version moves for changes that never touch this artifact.
+    const payload = extractVersionPayload(res);
+    const latest = payload?.version;
+    if (!latest || !isUpdateAvailable(ARTIFACT_VERSION, latest)) return;
+    // Dismissal is per-version: a newer release re-raises the banner.
+    if (readDismissed() === latest) return;
+    renderUpdateBanner(latest, payload.headline);
+  } catch (e) {
+    console.log("[update-check] unavailable:", e && e.message);
+  }
+}
+
+// Deferred so the check never competes with the first data paint.
+setTimeout(checkForUpdate, 0);
 </script>
 </body>
 </html>

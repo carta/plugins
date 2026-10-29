@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.105.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.105.8</carta-plugin>
 
 # Benchmark Query
 
@@ -269,12 +269,19 @@ Write the payload to `/tmp/benchmark_payload_<corp_id>.json`.
 
 **Step 2 — Publish the artifact panel**
 
-Read the engine HTML, replace `{{CARTA_MCP_SERVER}}` with the Carta connector's display
-name, and inject the payload as a `<script>` block before the engine's own JavaScript runs:
+Read the engine HTML and the plugin's version registry (the full paths below — do not
+search for them):
 
 ```
 Read ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/assets/artifact_engine.html
+Read ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skill-versions.json
 ```
+
+In the engine HTML, replace `{{CARTA_MCP_SERVER}}` with the Carta connector's display name
+and `{{ARTIFACT_VERSION}}` with the `version` of the `carta-compensation-benchmarks` entry
+in `skill-versions.json` (for example `1.0.0`). The panel shows an update banner when a
+newer version is published; a wrong or missing version hides it. Then inject the payload
+as a `<script>` block before the engine's own JavaScript runs.
 
 `Write` `<script>window._BENCHMARK_PAYLOAD = <payload JSON>;</script>` + engine HTML to
 `comp-benchmarks-<company-slug>.html`. The script tag MUST appear in the document before
@@ -296,7 +303,8 @@ Artifact({
 })
 ```
 
-The panel's own controls (corp search, refetch, Download Excel) call Carta at runtime, so
+The panel's own controls (corp search, refetch, Download Excel) and its update banner
+(`read_tool` with `plugin__get__version`) call Carta at runtime, so
 both tools must be in the grant or those controls fail with `not_in_manifest`. Re-renders
 for the same company reuse the same `url`, so redeploying in place is the common case
 after the first publish.

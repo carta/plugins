@@ -2,5 +2,9 @@
   "carta-captable-home-build": {
     "version": "0.16.4",
     "headline": "Carta Home has a new look: roomier dashboards, suggested prompts you can copy, and a What's new showcase."
+  },
+  "carta-compensation-benchmarks": {
+    "version": "1.0.0",
+    "headline": "Compensation Benchmarks now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   }
 }
