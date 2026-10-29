@@ -2,7 +2,7 @@ import { useState } from "react";
 import { sans, INK, FAINT, RED, FS } from "../ui/theme.js";
 import HoverTip from "../ui/HoverTip.jsx";
 import { trackClick } from "../analytics.js";
-import { AlertIcon, CloudUploadIcon, UsersIcon } from "./icons.jsx";
+import { AlertIcon, RefreshIcon, UsersIcon } from "./icons.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
 import { ownShare } from "./reportState.js";
 import { duplicateReport, REPORT_ACTIONS } from "../state/useReports.js";
@@ -21,13 +21,18 @@ export function sharerName(shared) {
   return shared?.created_by_name || "Carta";
 }
 
-// Who a report you shared reaches, in words: everyone, one name, or a count.
+const NAMED_LIMIT = 3;
+
+// Who a report you shared reaches, in words: everyone, up to NAMED_LIMIT names and "+N more",
+// or a count when no names were recorded.
 export function audienceText(shared, firmName) {
   if (shared.shared_with_everyone) return `everyone at ${firmName || "your firm"} who can view this entity`;
   const ids = shared.shared_with || [];
-  const people = peopleOf(shared);
-  if (ids.length === 1 && people[0]) return people[0].name || people[0].email;
-  return `${ids.length} ${ids.length === 1 ? "person" : "people"}`;
+  const names = peopleOf(shared).map(p => p.name || p.email).filter(Boolean);
+  if (!names.length) return `${ids.length} ${ids.length === 1 ? "person" : "people"}`;
+  const shown = names.slice(0, NAMED_LIMIT);
+  const more = ids.length - shown.length;
+  return more > 0 ? `${shown.join(", ")} +${more} more` : shown.join(", ");
 }
 
 export function peopleOf(shared) {
@@ -50,7 +55,7 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, accou
   const [duplicateError, setDuplicateError] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState(null);
-  if (!report) return null;
+  if (!reportsApi?.available || !report) return null;
   const shared = report.shared || null;
   const sharedAsOf = shared?.snapshot_basis?.as_of;
   const drift = report.read_only && sharedAsOf && asOf && sharedAsOf !== asOf;
@@ -116,7 +121,7 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, accou
           <HoverTip text={updating ? "Sharing…" : "Share update"} style={S.iconTip}>
             <button type="button" onClick={shareUpdate} disabled={updating} aria-label="Share update"
               style={{ ...S.iconButton, ...(updating ? S.iconButtonBusy : null) }}>
-              <CloudUploadIcon size={15} />
+              <RefreshIcon size={15} />
             </button>
           </HoverTip>
         )}
@@ -161,7 +166,7 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, accou
     );
   }
   if (!items.length) return null;
-  return <div role="status" style={S.row}>{items}</div>;
+  return <div data-export-exclude role="status" style={S.row}>{items}</div>;
 }
 
 const S = {

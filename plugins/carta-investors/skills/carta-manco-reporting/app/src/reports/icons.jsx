@@ -21,11 +21,11 @@ export const ShareIcon = (p) => (
   </Glyph>
 );
 
-// Sends your local changes up to the shared copy (Lucide's cloud-upload).
-export const CloudUploadIcon = (p) => (
+// Refreshes the shared copy with your local changes (Lucide's refresh-cw).
+export const RefreshIcon = (p) => (
   <Glyph {...p}>
-    <path d="M12 13v8" /><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.24" />
-    <path d="M8 17l4-4 4 4" />
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />
   </Glyph>
 );
 

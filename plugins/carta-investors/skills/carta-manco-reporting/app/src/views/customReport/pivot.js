@@ -175,6 +175,25 @@ export function applyCut(entries, fields, cut) {
     && !(hiddenKeys.size && rowKeysOf(e, fields, rows).some(k => hiddenKeys.has(k))));
 }
 
+// A field's values in Statement of Ops order, as the Carta app breaks them out: by date for a
+// time field, otherwise alphabetically with the no-value bucket ("No events") after every real value.
+export function compareFieldValues(f, a, b) {
+  if (a === b) return 0;
+  if (f?.order) return f.order(a) - f.order(b);
+  if (f?.none !== undefined && (a === f.none) !== (b === f.none)) return a === f.none ? 1 : -1;
+  return a < b ? -1 : 1;
+}
+
+// Column order: field by field, each by compareFieldValues.
+function compareCols(a, b, colFields, fields) {
+  const as = a.split(SEP), bs = b.split(SEP);
+  for (let i = 0; i < colFields.length; i++) {
+    const c = compareFieldValues(fields[colFields[i]], as[i], bs[i]);
+    if (c) return c;
+  }
+  return 0;
+}
+
 export function buildReportGrid(entries, fields, savedZones, filterSelections) {
   // A saved zone may name a field this firm's data no longer carries (a since-removed tag).
   const keep = (list) => list.filter(f => fields[f]);
@@ -198,12 +217,7 @@ export function buildReportGrid(entries, fields, savedZones, filterSelections) {
     colSet.add(colKey);
   }
   const cols = [...colSet];
-  if (colFields.length === 1 && fields[colFields[0]]?.order) {
-    const orderFn = fields[colFields[0]].order;
-    cols.sort((a, b) => orderFn(a) - orderFn(b));
-  } else {
-    cols.sort();
-  }
+  cols.sort((a, b) => compareCols(a, b, colFields, fields));
 
   const tree = buildRowTree(filtered, fields, rowFields, actualGetter, null, [], 0) || [];
   attachColData(tree, fields, colFields, actualGetter);

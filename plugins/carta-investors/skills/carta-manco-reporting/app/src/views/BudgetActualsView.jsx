@@ -284,12 +284,8 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
         }
       >{titleText}</H1>
       <Capped>
-      {reportsApi?.available && report && (
-        <div data-export-exclude>
-          <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi}
-            accountsData={accountsData} onOpenReport={onOpenReport} onShareDone={onShareDone} />
-        </div>
-      )}
+      <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi}
+        accountsData={accountsData} onOpenReport={onOpenReport} onShareDone={onShareDone} />
       <div style={styles.metaRow}>
         {!isTagCrosstab && !isOutline && !ownsPeriodControl(viewKind, budget) && (
           <span style={styles.metaChip}>

@@ -6,6 +6,7 @@ import { H1, Btn, Tag, Chevron, Bubble, TOOLBAR_CONTROL_STYLE } from "../ui/comp
 import ExportButton from "../ui/ExportButton.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
+import ReportNotice from "../reports/ReportNotice.jsx";
 import { REPORT_ACTIONS, actSaved } from "../state/useReports.js";
 import { reportFor } from "../shell/reportNav.js";
 import { exportPropsFor } from "../ui/exportHtml.js";
@@ -17,6 +18,7 @@ import {
   VALUE_FIELDS, ROW_TOTAL_KEY, TOTAL_KEY, buildFields, buildBudgetLookup, buildReportGrid, applyCut,
   cutOf, selectedValues, summarize, sortedTree, flattenTree, defaultRowsFor, glOf, budgetInfoFor, actualFor,
   valueCell, totalCells, footerPolarityOf, sectionsOf, isBudgetComparable, entriesForCol, drilldownScopes, scopeEntries,
+  compareFieldValues,
 } from "./customReport/pivot.js";
 
 const REPORT_EXPORT_ID = "manco-export-custom-report";
@@ -299,13 +301,9 @@ export default function CustomReportView({
     }
   }
 
-  // Distinct values a filter field takes, for its value checklist: sorted, with the
-  // no-value case ("No vendor") always last rather than wherever it would sort to.
-  const filterOptions = (fieldKey) => {
-    const { get, none } = fields[fieldKey];
-    const values = [...new Set(entries.map(get))].sort();
-    return values.includes(none) ? [...values.filter(v => v !== none), none] : values;
-  };
+  // Distinct values a filter field takes, for its value checklist, in the breakout columns' order.
+  const filterOptions = (fieldKey) =>
+    [...new Set(entries.map(fields[fieldKey].get))].sort((a, b) => compareFieldValues(fields[fieldKey], a, b));
 
   const titleText = savedReport ? savedReport.label : "New custom report";
   const sourceOptions = [
@@ -364,6 +362,11 @@ export default function CustomReportView({
       </H1>
 
       {saveError && <p role="alert" style={styles.saveError}>{saveError}</p>}
+
+      {mode === "report" && (
+        <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi}
+          accountsData={accountsData} onOpenReport={onOpenReport} onShareDone={onShareDone} />
+      )}
 
       {mode === "report" && zones.filters.length > 0 && (
         <FilterRibbon>
