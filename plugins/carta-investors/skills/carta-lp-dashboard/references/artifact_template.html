@@ -19,6 +19,7 @@
   <script>/* __LP_DASHBOARD_CHART_JS__ */</script>
   <style>
     :root {
+      --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' stroke='%23656B6B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
       --white: #FFFFFF;
       --gray-10: #F1F1F1;
       --gray-20: #DEDFDF;
@@ -269,7 +270,16 @@
     .pill-text { background: none; color: var(--gray-50); padding: 0 4px; }
     .pill-teal { background: var(--green); color: #fff; }
     .pill-lightblue { background: #5B9BD5; color: #fff; }
-    .nav-toggle { height: 24px; font-size: 12px; border: 1px solid var(--gray-20); border-radius: 4px; }
+    /* One on/off switch for every chart overlay; a pill is a legend entry, a switch is a control. */
+    .switch-wrap { display: inline-flex; align-items: center; gap: 8px; margin-right: 8px; font-size: 12px; color: var(--gray-50); }
+    .switch { position: relative; width: 28px; height: 16px; padding: 0; border: none; border-radius: 8px;
+      background: var(--gray-30); cursor: pointer; flex-shrink: 0; }
+    .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--white); transition: transform .12s; }
+    .switch[aria-checked="true"] { background: var(--blue); }
+    .switch[aria-checked="true"]::after { transform: translateX(12px); }
+    .switch:focus-visible { outline: 2px solid var(--link-blue); outline-offset: 2px; }
+    .switch:disabled { cursor: not-allowed; opacity: 0.6; }
     .chart-area { position: relative; height: 220px; }
     .chart-area-sm { position: relative; height: 180px; }
 
@@ -314,13 +324,15 @@
     /* ── Fund performance by quarter ── */
     .movers-title { font-size: 15px; font-weight: 600; }
     .movers-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    /* The same chevron and right padding on every dropdown: native selects and the fund picker. */
     .quarter-picker, .portfolio-picker {
       font-family: inherit; font-size: 12px; color: var(--black);
-      background: var(--white); border: 1px solid var(--gray-20);
-      border-radius: 4px; padding: 6px 10px; cursor: pointer;
-      min-width: 140px;
+      background: var(--white) var(--chevron) no-repeat right 10px center; border: 1px solid var(--gray-20);
+      border-radius: 4px; padding: 8px 32px 8px 10px; cursor: pointer;
+      min-width: 140px; appearance: none; -webkit-appearance: none;
     }
-    .portfolio-picker { margin-top: 8px; max-width: 320px; }
+    .portfolio-picker { margin-top: 8px; max-width: 320px; height: 32px; font-size: 13px; font-weight: 500; }
+    .chev { width: 12px; height: 12px; margin-left: 4px; flex-shrink: 0; background: var(--chevron) no-repeat center; }
 
     /* ── Fund picker: the Schedule of Investments picker's look, multi-select ── */
     .combo { position: relative; display: inline-flex; margin-top: 8px; }
@@ -445,7 +457,7 @@
           <select class="portfolio-picker" id="portfolio-picker" aria-label="Portfolio" style="display:none" onchange="onPortfolioPickerChange()"></select>
           <div class="combo" id="fund-combo" style="display:none" onkeydown="onFundComboEscape(event)">
             <button class="combo-trigger" id="fund-combo-trigger" aria-haspopup="listbox" aria-expanded="false" onclick="toggleFundCombo()">
-              <span class="combo-trigger-value" id="fund-combo-label"></span><span id="fund-combo-count"></span><span aria-hidden="true">▾</span>
+              <span class="combo-trigger-value" id="fund-combo-label"></span><span id="fund-combo-count"></span><span class="chev" aria-hidden="true"></span>
             </button>
             <div class="combo-panel" id="fund-combo-panel" style="display:none">
               <div class="combo-search-wrap"><input class="combo-search" id="fund-combo-search" type="text" placeholder="Search funds" aria-label="Search funds" oninput="renderFundCombo()"></div>
@@ -583,10 +595,10 @@
           <div class="chart-sub">Total contributions / distributions Q on Q.</div>
         </div>
         <div class="pills">
+          <span class="switch-wrap"><span id="nav-toggle-label">Show NAV</span><button class="switch" id="nav-toggle" role="switch" aria-checked="false" aria-labelledby="nav-toggle-label" onclick="toggleNav()"></button></span>
           <span class="pill pill-green">Contributions</span>
           <span class="pill pill-red">Distributions</span>
           <span class="pill pill-blue" id="nav-pill" style="display:none">NAV</span>
-          <button class="toggle-btn nav-toggle" id="nav-toggle" aria-pressed="false" onclick="toggleNav()">Show NAV</button>
         </div>
       </div>
       <div class="section-msg" id="cd-msg" style="display:none"></div>
@@ -604,7 +616,7 @@
           <div class="chart-sub" id="perf-sub">Aggregated TVPI, DPI, RVPI from all funds.</div>
         </div>
         <div class="pills">
-          <span class="pill pill-blue">TVPI</span>
+          <span class="switch-wrap"><span id="tvpi-toggle-label">Show TVPI</span><button class="switch" id="tvpi-toggle" role="switch" aria-checked="true" aria-labelledby="tvpi-toggle-label" onclick="toggleTvpi()"></button></span>
           <span class="pill pill-teal">DPI</span>
           <span class="pill pill-lightblue">RVPI</span>
         </div>
@@ -978,13 +990,18 @@ let showNav = false;
 
 function toggleNav() {
   showNav = !showNav;
-  const btn = document.getElementById('nav-toggle');
-  btn.classList.toggle('active', showNav);
-  btn.setAttribute('aria-pressed', String(showNav));
-  btn.textContent = showNav ? 'Hide NAV' : 'Show NAV';
+  document.getElementById('nav-toggle').setAttribute('aria-checked', String(showNav));
   document.getElementById('nav-pill').style.display = showNav ? '' : 'none';
   // Redraw only from a series that has loaded: while a refetch is in flight, or after it
   // failed, there is none, and a load that lands later draws NAV as the toggle now says.
+  if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries });
+}
+
+// TVPI is DPI + RVPI, so it is written above each bar rather than drawn as a third one.
+let showTvpi = true;
+function toggleTvpi() {
+  showTvpi = !showTvpi;
+  document.getElementById('tvpi-toggle').setAttribute('aria-checked', String(showTvpi));
   if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries });
 }
 
@@ -1162,7 +1179,7 @@ function renderCharts(data) {
       {label:'DPI',data:padded(q.map(m=>m.dpi)),backgroundColor:'rgba(45,158,144,0.5)',borderColor:'#2D9E90',borderWidth:1,stack:'p'},
       {label:'RVPI',data:padded(q.map(m=>m.rvpi)),backgroundColor:'rgba(91,155,213,0.5)',borderColor:'#5B9BD5',borderWidth:1,stack:'p',borderRadius:{topLeft:2,topRight:2}}
     ]},
-    plugins:[tvpiLabels(tvpi)],
+    plugins:showTvpi ? [tvpiLabels(tvpi)] : [],
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
@@ -1171,7 +1188,7 @@ function renderCharts(data) {
       scales:{x:{stacked:true,ticks:ts,grid:{display:false}},y:{stacked:true,grace:'12%',ticks:{...ts,callback:v=>fmtMultiple(v, 2)},grid:gs}},
       plugins:{legend:{display:false},tooltip:{callbacks:{
         label:c=>' '+c.dataset.label+': '+fmtMultiple(c.parsed.y),
-        footer:items=>items.length ? 'TVPI: '+fmtMultiple(tvpi[items[0].dataIndex]) : ''
+        footer:items=>showTvpi && items.length ? 'TVPI: '+fmtMultiple(tvpi[items[0].dataIndex]) : ''
       }}}
     }
   });
@@ -1909,9 +1926,13 @@ async function initPortfolioPicker(){
     picker.style.display = 'none';
     return;
   }
-  picker.innerHTML = candidates.map(c =>
-    '<option value="' + esc(c.portfolio_id) + '">' + esc(c.partner_name || '—') + ' (' + fundCountLabel(c.fund_count || 0) + ')</option>'
-  ).join('');
+  // The Funds tile already shows the count; it is kept here only where two portfolios share a name.
+  const nameCount = {};
+  candidates.forEach(c => { const n = c.partner_name || '—'; nameCount[n] = (nameCount[n] || 0) + 1; });
+  picker.innerHTML = candidates.map(c => {
+    const name = c.partner_name || '—';
+    return '<option value="' + esc(c.portfolio_id) + '">' + esc(name) + (nameCount[name] > 1 ? ' (' + fundCountLabel(c.fund_count || 0) + ')' : '') + '</option>';
+  }).join('');
   picker.value = portfolioId;
   picker.style.display = '';
 }

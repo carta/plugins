@@ -74,17 +74,6 @@
 }
 /* ── Filter panel ── */
 .fp-wrap { position: relative; }
-.fp-btn {
-  padding: 6px 28px 6px 10px;
-  border: 1px solid #A7AAAA;
-  border-radius: 4px;
-  font-size: 13px;
-  font-family: inherit;
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23656B6B' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
-  color: #1A1A1A;
-  cursor: pointer;
-  white-space: nowrap;
-}
 .fp-btn:hover { border-color: #656B6B; }
 .fp-btn.active { border-color: #1A1A1A; font-weight: 500; }
 .fp-panel {
@@ -184,13 +173,13 @@
 
 /* ── Group by ── */
 .gb-wrap { position: relative; }
-.gb-btn {
-  padding: 6px 30px 6px 10px;
+.fp-btn, .gb-btn {
+  padding: 8px 32px 8px 10px;
   border: 1px solid #A7AAAA;
   border-radius: 4px;
   font-size: 13px;
   font-family: inherit;
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23656B6B' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%23656B6B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
   color: #1A1A1A;
   cursor: pointer;
   white-space: nowrap;
@@ -434,17 +423,15 @@ tr:hover td { background: #E9EAEA; }
 <div class="table-wrap">
   <table>
     <colgroup>
-      <col style="width:220px">
-      <col style="min-width:200px">
-      <col style="width:120px">
-      <col style="width:25%">
-      <col style="width:15%">
+      <col style="min-width:220px">
+      <col style="width:140px">
+      <col style="width:28%">
+      <col style="width:22%">
     </colgroup>
     <thead id="thead">
       <tr>
-        <th>Type</th>
         <th data-col="name">Document</th>
-        <th data-col="date">Date</th>
+        <th data-col="date">Document date</th>
         <th>Fund</th>
         <th>Firm</th>
       </tr>
@@ -1150,13 +1137,12 @@ function render() {
       if (groupBy) {
         const gval = d[groupBy] || '—';
         if (gval !== lastGroup) {
-          rows += '<tr class="group-header"><td colspan="5">' + esc(gval) + '</td></tr>';
+          rows += '<tr class="group-header"><td colspan="4">' + esc(gval) + '</td></tr>';
           lastGroup = gval;
         }
       }
-      const tip = 'Type: ' + (d.type || '—') + '\nDocument: ' + (d.name || '—') + '\nDate: ' + fmtDate(d.date) + '\nFund: ' + (d.fund || '—') + '\nFirm: ' + (d.firm || '—') + '\nPortfolio: ' + (d.portfolio || '—');
+      const tip = 'Type: ' + (d.type || '—') + '\nDocument: ' + (d.name || '—') + '\nDocument date: ' + fmtDate(d.date) + '\nFund: ' + (d.fund || '—') + '\nFirm: ' + (d.firm || '—') + '\nPortfolio: ' + (d.portfolio || '—');
       rows += '<tr title="' + esc(tip) + '">' +
-        '<td style="white-space:nowrap">' + esc(d.type || '—') + '</td>' +
         '<td>' + docCell(d) + '</td>' +
         '<td style="white-space:nowrap;color:#656B6B">' + fmtDate(d.date) + '</td>' +
         '<td>' + esc(d.fund || '—') + '</td>' +
