@@ -34,16 +34,18 @@ allowed-tools:
   - Agent
   - AskUserQuestion
   - Read
+  - Write
   - Skill(carta-cap-table:carta-reporting-markdown)
   - Bash(date +%s)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_report_page.py" *)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py" *)
+  - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" *)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.109.1</carta-plugin>
 
 # Custom Reports
 
@@ -54,7 +56,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 **How it works:**
 - Connects to your Carta account and searches for the right report type based on what you describe
 - Lets you customize columns, filters, sorts, formulas, and aggregations in the chat
-- Delivers results as a live interactive artifact (Claude Desktop) or a branded Excel file (Claude Code)
+- Delivers results as a live interactive artifact (`Artifact` tool available) or a branded Excel file (`Artifact` tool not available)
 
 > **Prerequisites**
 > - Access to a Carta account with cap table data
@@ -91,8 +93,8 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - Only speak to the user when you need input, have a result to show, or must surface an error.
 - Never expose technical terms like "MCP", "ToolSearch", "UUID", or "corporation_id" in user-facing messages.
 - Use plain language. "I couldn't find that company" not "list_accounts returned no corporation_pk match."
-- **When output mode is ARTIFACT (Cowork available): do not render report data as a markdown table in chat.** The only exceptions are trivially small results: a single data point, a single column with fewer than 10 rows, or a single row with 4 or fewer columns. All other results must go through the live artifact path.
-- When output mode is MARKDOWN (Cowork unavailable): render all results as markdown tables and offer Excel export.
+- **When output mode is ARTIFACT (`Artifact` tool available): do not render report data as a markdown table in chat.** The only exceptions are trivially small results: a single data point, a single column with fewer than 10 rows, or a single row with 4 or fewer columns. All other results must go through the live artifact path.
+- When output mode is MARKDOWN (`Artifact` tool not available): render all results as markdown tables and offer Excel export.
 
 > **What happens if things aren't set up yet or take a while?**
 > - **Carta isn't connected:** The skill will prompt you to connect — just reply "ready" when done.
@@ -164,11 +166,11 @@ Run each script only in the one-line form shown below, as its own command: write
    **GATE — pick exactly one outcome and hold it for the rest of this session:**
 
    - **`Artifact` available** → output mode is **ARTIFACT**. All non-trivial report data **must** be rendered as a published artifact. Do not render report data as a markdown table in chat. Skip this check for all subsequent steps — output mode is already set.
-   - **Cowork unavailable** (tool not found) → output mode is **MARKDOWN**. Use markdown tables and Excel export for all results.
+   - **`Artifact` not available** (tool not found) → output mode is **MARKDOWN**. Use markdown tables and Excel export for all results.
 
-   Do not re-run this check later in the workflow. Do not rely on environment heuristics — a user may be on Claude Desktop without Cowork installed.
+   Do not re-run this check later in the workflow. Do not rely on environment heuristics: only the `Artifact` tool decides the mode.
 
-1. **Find the company** — do not call `list_accounts` or ask which company before step 1a's first read: Carta finds the company. Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, nicknames included, else no `corporation_id` (Carta uses the user's only company). For errors, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it), with these parts for this skill. Step 1a's `cap_table__list__cbus` call is the first read for each company. Take the numeric id from `meta.company.id` in that response and send it as `corporation_id` in every later call. `reporting__create__report` takes neither a default nor a partial name, so it always gets this id. When that read fails with an error that is not a company error (as find-the-company *Company errors* defines it), so it gives no `meta.company`, call `list_accounts` once on `_carta_prefix` (with `search` when the user named the company), do a case-insensitive substring match across the account names, and take the number from `corporation_pk:<id>`. Ask with the `AskUserQuestion` tool, never in plain text: the user cannot respond to plain text questions. When find-the-company's steps or this fallback find nothing, do not ask again: say "I couldn't find [CompanyName] — it won't be included in the report" — never fabricate or estimate data for it. If the user names several companies, send all their step 1a reads in parallel in one main-thread message, ask once for each read that returns `ambiguous` or `not_found`, and run each `list_accounts` fallback on the main thread. Do not resolve companies in subagents: a subagent cannot call `AskUserQuestion`.
+1. **Find the company** — do not call `list_accounts` or ask which company before step 1a's first read: Carta finds the company. Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, nicknames included, else no `corporation_id` (Carta uses the user's only company). For errors, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it), with these parts for this skill, which override its steps where they differ. Step 1a's `cap_table__list__cbus` call is the first read for each company. Take the numeric id from `meta.company.id` in that response and send it as `corporation_id` in every later call. `reporting__create__report` takes neither a default nor a partial name, so it always gets this id. When that read fails with an error that is not a company error (as find-the-company *Company errors* defines it), so it gives no `meta.company`, call `list_accounts` once on `_carta_prefix` for the id (with `search` when the user named the company), do a case-insensitive substring match across the account names, and take the number from `corporation_pk:<id>`. Ask with the `AskUserQuestion` tool, never in plain text: the user cannot respond to plain text questions. When find-the-company's steps or this fallback find nothing, do not ask the user for the company name (this replaces find-the-company's 'ask the user for the company name as Carta shows it' after an empty `list_accounts` search; its 'Carta found no single company for the user' case is still asked): say "I couldn't find [CompanyName] — it won't be included in the report" — never fabricate or estimate data for it. If the user names several companies, send all their step 1a reads in parallel in one main-thread message, ask once for each read that returns `ambiguous` or `not_found`, and run each `list_accounts` fallback on the main thread. Do not resolve companies in subagents: a subagent cannot call `AskUserQuestion`.
 
 1a. **Resolve phantom equity display label (silent)** — run this step on the **main thread** for each company. A company error here (as find-the-company *Company errors* defines it) is step 1's company question, not a failed call. Do NOT delegate to a subagent — the resolved label must be available in the parent context before report processing begins.
 
@@ -176,7 +178,7 @@ Run each script only in the one-line form shown below, as its own command: write
    ```
    read_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, detail: "minimal", page_size: 1 }})
    ```
-   The `detail: "minimal"` response shape is `{ results: [...] }`. If `results` is empty or the call fails (403/404), set `_phantom_label_<corporation_id>` to `null` — the corporation has no CBUs.
+   The `detail: "minimal"` response shape is `{ results: [...] }`. If `results` is empty or the call fails with an error that is not a company error, set `_phantom_label_<corporation_id>` to `null` — the corporation has no CBUs; step 1 takes the id from `meta.company`, or from its `list_accounts` fallback when the response has none.
 
    If `results` is non-empty, call `read_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
 
@@ -241,7 +243,7 @@ Run each script only in the one-line form shown below, as its own command: write
      can be run from the Reports page in Carta. The closest report I can run here is
      **{closest runnable name from `reports`}** — would you like that instead?"
 
-3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `cat` command) and look up the matched report type in its **REQUIRED params by report_type** table. **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
+3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `Read` path) and look up the matched report type in its **REQUIRED params by report_type** table. **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
 
    **Vesting without a named person.** `vesting_details_report` covers one stakeholder at a time and needs an issuance date range, so it cannot answer a company-wide "show me vesting schedules". When the request names no stakeholder, call `AskUserQuestion` before running it: "Schedule-level vesting detail is per person — which stakeholder, and which grant issue dates? Or I can show company-wide outstanding awards instead." If they choose company-wide, call `reporting__search__report_types` again with the query `"outstanding equity awards"` and run `equity_awards_outstanding` if it is in `reports`; if it is not, give step 2a's unavailable-type message.
 
@@ -269,7 +271,7 @@ Run each script only in the one-line form shown below, as its own command: write
    - `call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json", ...required_params }})` → `user_report_pk` (full report)
    - `call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json", preview: true, ...required_params }})` → `user_report_pk_preview` (preview report — generates faster with partial corporation data)
 
-   If multiple report types matched, dispatch one `Agent` call per report type in the same message so all types trigger simultaneously.
+   If several report types matched, issue each type's full and preview create pair in the same main-thread message, then run one 4b and 4c agent pair per type.
    **Both `user_report_pk` and `user_report_pk_preview` must be in hand before proceeding to 4b, 4c, and 4d.**
 
    **4b. Background subagent — poll and download the full report** — call the `Agent` tool with `run_in_background: true` in the **same message as 4c** so both background agents start simultaneously. Use this prompt, substituting real values:
@@ -281,20 +283,20 @@ Run each script only in the one-line form shown below, as its own command: write
    corporation_id: <corp_id>
    carta_prefix:   <_carta_prefix>
    output_path:    carta-reporting/carta_report_<pk>.json
-   Every write to output_path (error JSON or the download) goes to <output_path>.part first, then `mv <output_path>.part <output_path>` — the main thread treats the file's existence as "ready", so it must only ever appear complete.
+   The main thread treats the file's existence as "ready". Only `report_files.py` writes output_path, atomically, and it also creates the git-ignored `carta-reporting/` folder. Never write or move that file any other way.
 
    Steps:
-   0. If `carta-reporting/.gitignore` does not exist, create it with the Write tool (which also creates `carta-reporting/`) containing `*`, so downloaded report data can never be committed. If it already exists, or the Write fails because it now exists, leave it and continue. Write every error JSON below to <output_path>.part with the Write tool, then `mv <output_path>.part <output_path>`.
+   0. Every error below is written with this one-line command, `--message` being the quoted error text: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" error --out <output_path> --message "<error text>"`
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
       20 attempts.
       - Status "complete" → proceed to step 2.
-      - Status "error" or "failed" → write {"error":"report failed"} to output_path and stop.
-      - Status "not_found" → write {"error":"report not found"} to output_path and stop.
-      - 20 attempts without complete → write {"error":"timeout"} to output_path and stop.
+      - Status "error" or "failed" → write the error "report failed" and stop.
+      - Status "not_found" → write the error "report not found" and stop.
+      - 20 attempts without complete → write the error "timeout" and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
-      → presigned URL, only after step 1 returned "complete". On not_found, call report_status once more: if "complete", call download_url once more; if "pending", go back to step 1 within the attempts left; otherwise, or if download_url fails again, write {"error":"download_url failed"} to output_path and stop.
-   3. Run, as one command: curl --create-dirs -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
-      If it exits non-zero, write {"error":"download failed"} to output_path and stop.
+      → presigned URL, only after step 1 returned "complete". On not_found, call report_status once more: if "complete", call download_url once more; if "pending", go back to step 1 within the attempts left; otherwise, or if download_url fails again, write the error "download_url failed" and stop.
+   3. Run, as one command: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" download --url "<presigned_url>" --out <output_path>`
+      If it exits non-zero it has already written the error "download failed" to output_path; stop.
    ```
 
    **4c. Background subagent — poll and download the preview report** — call the `Agent` tool with `run_in_background: true` in the **same message as 4b**. Use this prompt, substituting real values:
@@ -306,43 +308,47 @@ Run each script only in the one-line form shown below, as its own command: write
    corporation_id:         <corp_id>
    carta_prefix:           <_carta_prefix>
    output_path:            carta-reporting/carta_preview_<pk_preview>.json
-   Every write to output_path (error JSON or the download) goes to <output_path>.part first, then `mv <output_path>.part <output_path>` — the main thread treats the file's existence as "ready", so it must only ever appear complete.
+   The main thread treats the file's existence as "ready". Only `report_files.py` writes output_path, atomically, and it also creates the git-ignored `carta-reporting/` folder. Never write or move that file any other way.
 
    Steps:
-   0. If `carta-reporting/.gitignore` does not exist, create it with the Write tool (which also creates `carta-reporting/`) containing `*`, so downloaded report data can never be committed. If it already exists, or the Write fails because it now exists, leave it and continue. Write every error JSON below to <output_path>.part with the Write tool, then `mv <output_path>.part <output_path>`.
+   0. Every error below is written with this one-line command, `--message` being the quoted error text: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" error --out <output_path> --message "<error text>"`
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
       up to 10 attempts.
       - Status "complete" → proceed to step 2.
-      - Status "error" or "failed" → write {"error":"preview failed"} to output_path and stop.
-      - Status "not_found" → write {"error":"preview not found"} to output_path and stop.
-      - 10 attempts without complete → write {"error":"preview timeout"} to output_path and stop.
+      - Status "error" or "failed" → write the error "preview failed" and stop.
+      - Status "not_found" → write the error "preview not found" and stop.
+      - 10 attempts without complete → write the error "preview timeout" and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
-      → presigned URL only after step 1 returned "complete". On not_found, call report_status once more: if "complete", call download_url once more; if "pending", go back to step 1 within the attempts left; otherwise, or if download_url fails again, write {"error":"download_url failed"} to output_path and stop.
-   3. Run, as one command: curl --create-dirs -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
-      If it exits non-zero, write {"error":"download failed"} to output_path and stop.
+      → presigned URL only after step 1 returned "complete". On not_found, call report_status once more: if "complete", call download_url once more; if "pending", go back to step 1 within the attempts left; otherwise, or if download_url fails again, write the error "download_url failed" and stop.
+   3. Run, as one command: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" download --url "<presigned_url>" --out <output_path>`
+      If it exits non-zero it has already written the error "download failed" to output_path; stop.
    ```
 
    **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. The page is built by `build_report_page.py` below.
 
    If the build or the publish fails, say so — do **not** fall back to the xlsx skill or generate Excel directly.
 
-   Check for `carta-reporting/carta_preview_<pk_preview>.json` every 5 s (up to 12 attempts = 60 s):
-   - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source. The preview holds partial data, so add `["Status", "Preview — full report loading"]` to the artifact's `metaRows` and do not present its row count as final. If `build_report_page.py` exits with "No rows matched" on a build that used any preview file, treat it as **Preview failed** and run the full-report wait: the partial data says nothing about the final result.
-   - **Preview failed** (file contains `"error"`, or 12 attempts elapse without the file appearing) → switch to the full-report fallback: poll for `carta-reporting/carta_report_<pk>.json` every 5 s, up to 20 attempts (the **full-report wait**).
+   Wait for the preview file with two one-line commands, each its own call (`--attempts` counts checks 5 s apart; the default is 12):
+   1. `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" wait --path "carta-reporting/carta_preview_<pk_preview>.json" --attempts 6`
+   2. Only if it printed `{"ready": false}`: emit the mid-wait check-in below, then run `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" wait --path "carta-reporting/carta_preview_<pk_preview>.json" --attempts 6`.
 
-   **Mid-wait check-in (emit exactly once per report request):** If 30 seconds elapse during the preview poll (i.e., after 6 failed attempts) with no data yet available, output this message to the user before continuing to poll:
+   The result is `{"ready": true, "error": <text or null>}` or `{"ready": false}`:
+   - **Preview succeeded** (`ready` with `error` null) → use the preview file as the data source. The preview holds partial data, so add `["Status", "Preview — full report loading"]` to the artifact's `metaRows` and do not present its row count as final. If `build_report_page.py` exits with "No rows matched" on a build that used any preview file, treat it as **Preview failed** and run the full-report wait: the partial data says nothing about the final result.
+   - **Preview failed** (`error` set, or `ready: false` after both waits) → switch to the full-report fallback: the **full-report wait**: run `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" wait --path "carta-reporting/carta_report_<pk>.json" --attempts 20`, and while it prints `{"ready": false}` run it again, up to 3 calls in total. Do not raise `--attempts`: one call past about 2 minutes exceeds the Bash tool timeout. One call can give up while the 4b agent is still polling or downloading. `ready` with `error` null means the file is the data source; anything else is a failed full report (see the swap step).
 
-   > Still processing — large reports can take up to 90 seconds.
+   **Mid-wait check-in (emit exactly once per report request):** when the first wait ends with `ready: false` (no data yet), output this message to the user before the second wait:
 
-   Do not emit this message more than once. Do not emit it if the preview file arrives before 30 seconds.
+   > Still processing — large reports can take a few minutes.
+
+   Do not emit this message more than once. Do not emit it if the preview file arrives during the first wait.
 
    Once data file(s) are ready, proceed based on output mode:
-   - **MARKDOWN mode (Claude Code):** invoke `Skill(carta-cap-table:carta-reporting-markdown)`. The following context is available in this session: data file path, `corporation_id`, `user_report_pk`.
-   - **ARTIFACT mode (Cowork):** build the artifact inline (no subskill invocation — see below).
+   - **MARKDOWN mode (no `Artifact` tool):** invoke `Skill(carta-cap-table:carta-reporting-markdown)`. The following context is available in this session: data file path, `corporation_id`, `user_report_pk`.
+   - **ARTIFACT mode (`Artifact` tool available):** build the artifact inline (no subskill invocation — see below).
 
-   **Swap in the full report (when any data source was a preview).** After publishing the preview artifact, run the full-report wait in this same turn: for each corporation whose data came from its preview, wait for its `carta-reporting/carta_report_<pk>.json`. The wait is bounded, because the 4b agent writes data or an error within its own limit. Then:
+   **Swap in the full report (when any data source was a preview).** After publishing the preview artifact, run the full-report wait in this same turn: for each corporation whose data came from its preview, run the full-report wait for its `carta_report_<pk>.json`. The wait is bounded by its 3 calls, and it ends at once when the 4b agent gives up, because the agent always writes an error file then. Then:
    - **Every full report landed without an `"error"` key** → run `report_processor.py` on the full files with the same config (including `label_overrides`) as the preview build, rebuild the artifact without the `Status` row(s) and with the normal description, and republish in place by passing the existing artifact `url`. Every sheet in it must come from a full report.
-   - **Any failed or timed out** → keep that corporation's preview sheets, set `["Status", "Preview only — {Corp Name}'s full report didn't finish"]` for each such corporation (a single corporation: `["Status", "Preview only — full report didn't finish"]`), rebuild with the full sheets for the rest, republish in place with a preview description, then say plainly: "The full report didn't finish for {Corp Name}, so that part shows only a preview of the data — tell me to retry."
+   - **Any failed or timed out** → if the error is "report not found", first recreate that report once: the same `reporting__create__report` call as 4a with the same params, then dispatch a fresh 4b agent for the new pk and wait again (run the full-report wait), saying nothing to the user. The new pk replaces `user_report_pk` for the rest of the session, including the hand-off to the output skill. A full report that lands this way is handled as above. For every other failure, or if that retry also fails: keep that corporation's preview sheets, set `["Status", "Preview only — {Corp Name}'s full report didn't finish"]` for each such corporation (a single corporation: `["Status", "Preview only — full report didn't finish"]`), rebuild with the full sheets for the rest, republish in place with a preview description, then say plainly: "The full report didn't finish for {Corp Name}, so that part shows only a preview of the data — tell me to retry."
    Then show the customization checkpoint below. Never present a preview as the final report.
 
    **Do not dispatch Excel generation here or in parallel with the artifact.** The Excel path opens only after the user responds to the customization checkpoint. Triggering Excel before that checkpoint bypasses the user's chance to adjust columns, filters, and transforms.
@@ -465,7 +471,7 @@ Run each script only in the one-line form shown below, as its own command: write
 
 6. **Export to Excel**
    - **Claude Desktop prompt bar** — when the user's message starts with `Generate Carta Excel —`, skip steps 1–5 and invoke `Skill(carta-cap-table:carta-reporting-excel)` directly. The payload includes the corporation ID, so no company lookup is needed.
-   - **Claude Code** — handled by `carta-reporting-markdown`, which invokes `Skill(carta-cap-table:carta-reporting-excel)` when the user confirms.
+   - **MARKDOWN mode (`Artifact` tool not available)** — handled by `carta-reporting-markdown`, which invokes `Skill(carta-cap-table:carta-reporting-excel)` when the user confirms.
 
 ---
 
@@ -496,7 +502,7 @@ A report built here can be kept in Carta as a template: its sheets, columns, fil
    UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py" --config "carta-reporting/template-config.json" --report "carta-reporting/carta_report_<pk>.json" --report-type "<report_type>" --name-file "carta-reporting/template-name.txt" --create-params "carta-reporting/create-params.json" --out "carta-reporting/template-definition.json"
    ```
 
-   - **It exits 1 and prints `{"refused": [...]}`:** nothing is saved. Tell the user why in plain words, one line per reason, and offer to change the report so it can be saved (for example, drop the formula or pick another column). Do not retry the same input.
+   - **It exits 1 and prints `{"refused": [...]}`:** nothing is saved. Tell the user why in plain words, one line per reason, and offer to change the report so it can be saved (for example, drop the formula, or pick another column for the column or filter a reason names). Do not retry the same input.
    - **`dropped_params` is not empty:** after the save, say the template does not keep those filters (name each one the report used: people, plans, securities, share classes or issue dates), so every run covers all of them.
 
 5. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the template's `id`; say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." Never show the id.
@@ -535,8 +541,8 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `403` / access denied, no message | Your account doesn't have permission to access this company's data. | "It looks like you don't have access to this company's Carta data. Reach out to your Carta admin to request access." |
 | `status: error` | Report generation failed. If single report: regenerate once sequentially. If parallel reports: retry failed ones one at a time (sequential — parallel retries cause load failures). If still failing after retry: skip and continue. | "I wasn't able to generate the [Report Name] report — continuing with the rest." |
 | `status: error` and `_scope_<corporation_id>` has `is_limited_admin: true` | The status carries no reason, but the most common cause for a scoped account is that no share class in its scope has data for this report. Retry once, then stop — a second failure will not clear. | "I couldn't generate the **{Report Type}** report. Your access covers {share class names}, and this report may have nothing there. Want me to try {alternative from `reports`} instead?" |
-| `status: not_found` | Report expired. Regenerate immediately with same params from this session — no user prompt needed. Poll until `complete`, fetch download URL, run `report_processor.py` automatically. | _(silent recovery — no message needed unless recovery also fails)_ |
-| `empty_rows_dropped` > 0 | Rows whose numeric columns are all zero or blank were dropped (placeholder security types Carta emits for types never issued). | "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets) |
+| `status: not_found` | Report expired. The 4b agent writes `report not found` as the error. | Silent: the main thread recreates that report once with the same params and dispatches a fresh download agent (4d swap step); the new pk replaces `user_report_pk` for the rest of the session. Only if that also fails, use the "didn't finish" wording there. |
+| `empty_rows_dropped` > 0 | Rows whose numeric columns are all zero or blank were dropped (placeholder security types Carta emits for types never issued). Not applied to a sheet with a filter asking for zero on a numeric column (op `=`, value 0, e.g. `Shares = 0`): the all-zero rows it matched are the answer and stay. Any other numeric filter (e.g. `Shares < 1000`) still drops them. | "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets) |
 | `filtered_row_count` = 0 | No rows matched the filters | Full-report build: "No rows matched those filters." Offer to loosen the filter or try a different date. Preview build: do not relay; run the full-report wait first. |
 | `original_row_count` > ~1,000 rows | Large dataset | "This report has a lot of rows — want to narrow it down by date range, report type, or a specific person?" |
 | `401` / session expired | Auth expired | "It looks like your Carta session expired — reconnect and try again." |
@@ -544,6 +550,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `mixed_currency_columns` non-empty | That column's amounts are in more than one currency, so its totals (summary or per group), `pct_of_total`, `running_sum` and `delta` were left out — those formulas are also listed in `skipped_formulas`. Never total them yourself. | "'[Column]' has amounts in several currencies, so I left its total out rather than add them together." |
 | `missing_columns` or `skipped_formulas` non-empty (other than for `mixed_currency_columns`) | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
 | `unknown_filter_columns` non-empty | A filter named a column this sheet does not have, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't filter on '[Column]' — it isn't in this report, so these rows are unfiltered. Here are the columns I can filter on: […]" Offer to re-run against a real column. |
+| `unknown_sort_columns` non-empty | A sort named a column this sheet does not have, so **that sort did not run** and the rows are not in the order asked for. Never present the result as sorted. A column that is one of the `formulas` names you requested is computed after the sort runs, so it cannot be sorted on (unless it is aggregated by a `group_by`). | Formula column: "I can't sort by a computed column — the rows are not sorted by '[Column]'". Any other name: "I couldn't sort by '[Column]' — it isn't in this report, so the rows are not sorted by it. Here are the columns I can sort on: […]" Offer to re-run against a real column. |
 | `unsupported_filters` non-empty | A `>`, `<`, `>=` or `<=` filter named a text column, which has no order, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't apply '[Column] [op] [value]' — '[Column]' is text, so these rows are unfiltered on it." Offer `=`, `!=` or `contains` instead, or a numeric or date column. |
 | `structural_rows_dropped` > 0 | The sheet has section headings or total rows, and a filter, sort, column pick, formula or aggregation was applied, which cannot keep them in place. | "Section headings and totals were left out because of the filters/sort — say so if you want them back unsorted." |
 | `warnings.unknown_sheets` present | A name in `warnings.unknown_sheets.requested` is not in this report, so it was left out. | "This report has no sheet called '[Name]'. Its sheets are: […]" (list `warnings.unknown_sheets.available`) Offer to re-run with a real sheet. |
@@ -601,6 +608,16 @@ presenting a filtered report, the same way you check `missing_columns`. An order
 (`>` `<` `>=` `<=`) on a text column applies no restriction either; it is reported in
 `stats.unsupported_filters` as `{"column", "op"}`.
 
+`sort` runs before `columns` selects, so a sort column need not be one of the selected columns.
+Rows with no value in the sort column go last, ascending or descending. A sort naming a column
+the sheet does not have applies no ordering and is reported in `stats.unknown_sort_columns`; so does a
+sort on a `formulas` column (formulas run after the sort), unless a `group_by` aggregates it.
+`running_sum` and `delta` over a money column are money, in the currency of the source cells.
+A summary's totals row is `{"_t": [cells]}`, like a source totals row, and its "Total" label sits in
+the first visible (not `hidden`) column with no aggregation (no label when every such column has one).
+A sheet with a filter asking for zero on a numeric column (op `=`, value 0) keeps its all-zero rows
+(no `empty_rows_dropped`); other numeric filters still drop them.
+
 `label_overrides` — optional dict mapping raw string cell values to display names. Applied to all string-typed columns across every sheet. Use to replace Carta's internal security type codes with the corporation's configured equity language names (e.g. `{"CBU": "Phantom Units"}`). Matching is exact and case-sensitive.
 
 Multi-sheet with per-sheet config:
@@ -655,7 +672,7 @@ All fields except the file source are optional — omit or set to `null` to skip
   "stats": {sheet_name: {"original_row_count": N, "filtered_row_count": N,
                          "empty_rows_dropped": N, "kept_row_count": N,
                          "displayed_row_count": N,
-                         "missing_columns": [], "unknown_filter_columns": [],
+                         "missing_columns": [], "unknown_filter_columns": [], "unknown_sort_columns": [],
                          "unsupported_filters": [],
                          "skipped_formulas": [], "structural_rows_dropped": N,
                          "mixed_currency_columns": [],   // merged tabs: every list stat is the union over the merged sources
@@ -675,7 +692,7 @@ group row whose amounts are all in a non-base currency carries it in `row_curren
 
 A merged tab built from more than one source has no `summary_meta`: each source's Total row stays a
 literal value in its own currency, and Excel writes no `SUM` across sources. Each list stat of a
-merged tab (`missing_columns`, `unknown_filter_columns`, `unsupported_filters`, `skipped_formulas`,
+merged tab (`missing_columns`, `unknown_filter_columns`, `unknown_sort_columns`, `unsupported_filters`, `skipped_formulas`,
 `mixed_currency_columns`) is the union over the merged sources, in first-seen order, so a source's
 skipped formula or unrun filter still shows.
 

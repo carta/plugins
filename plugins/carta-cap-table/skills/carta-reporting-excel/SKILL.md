@@ -13,23 +13,24 @@ allowed-tools:
   - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - Write
   - Bash(sleep 5)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-excel/scripts/excel_exporter.py" *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.109.1</carta-plugin>
 
 # Excel Export
 
 **Context expected from the calling skill (must be in session before this skill is invoked):**
 - `user_report_pk` — needed to check for the cached report file and to fetch a fresh download URL if the file is absent
 - `corporation_id` — needed for `read_tool({"name": "reporting__get__download_url", ...})`
-- Column config — either parsed from the artifact prompt bar payload (Claude Desktop) or confirmed during the Customization Checkpoint in `carta-reporting-markdown` (Claude Code)
+- Column config — either parsed from the artifact prompt bar payload (ARTIFACT mode, `Artifact` tool available) or confirmed during the Customization Checkpoint in `carta-reporting-markdown` (MARKDOWN mode, `Artifact` tool not available)
 - Corporation legal name, `as_of_date`, user full name — used as `--title`, `--as-of-date`, `--generated-by` args to `excel_exporter.py`
 
-## Column source (Claude Desktop — artifact prompt bar)
+## Column source (ARTIFACT mode — artifact prompt bar)
 
 When the user pastes an **artifact prompt bar payload**, it arrives as a complete instruction starting with `Generate Carta Excel —`:
 
@@ -62,7 +63,7 @@ whether the account is share-class-scoped, so it cannot label a percentage colum
 name the in-scope classes — the same limitation as `label_overrides`. The numbers are correct and
 already scoped; only the labelling is generic. Do not describe any total as company-wide.
 
-## Column source (Claude Code)
+## Column source (MARKDOWN mode)
 
 Use the column list confirmed during the Customization Checkpoint (resolved in `carta-reporting-markdown`).
 
@@ -71,7 +72,7 @@ Use the column list confirmed during the Customization Checkpoint (resolved in `
 Hand the user the generated `.xlsx` file itself. Never give them a Carta web link to the report: it makes them sign in to Carta. If the file cannot be delivered, the presigned `download_url` works without signing in but expires, so say so.
 
 
-Check if `carta-reporting/carta_report_<user_report_pk>.json` is available (use `user_report_pk` from this session):
+Check if `carta-reporting/carta_report_<user_report_pk>.json` is available (use the current `user_report_pk` from this session: a recreated report's pk replaces the original):
 - **File ready** → pass it as `"local_file"` to `report_processor.py`.
 - **Not ready** → call `read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})` first (no `corporation_id`). Only when it is `complete`, call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})` to get a fresh presigned URL and pass it as `"download_url"` instead. While it is `pending`, poll every 5 s up to 20 attempts. On `error` or `failed`, tell the user the report failed. On `not_found` or a timeout, say the report is not available and offer to regenerate it. If `download_url` itself returns `not_found`, check `report_status` once more: if `complete`, call `download_url` once more; if `pending`, resume polling within the attempts left. Never call `download_url` more than twice; if the second call fails, say the report is not available and offer to regenerate it. Never give the user the `url` that `report_status` returns: it is a Carta web page that needs a sign-in.
 
@@ -126,6 +127,6 @@ UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-e
 | Subtitle | Cell B3, Arial 10pt, `#666666` — `"As of MMM d, yyyy • Generated with Claude AI by {user} at MMM d, yyyy h:mm:ss AM/PM TZ • Date format: MMM D, YYYY"` |
 | Header row | Row 5 with auto-filter; freeze panes at A6; data starts at row 6 |
 
-Column type → number format: `money` → `$#,##0.00` · `percentage` → `0.00%` · `integer` → `#,##0` · `date` → `mmm d, yyyy` · `decimal` → `#,##0.0000`
+Column type → number format: `money` → `#,##0.00` prefixed with the row's currency symbol, set per cell by the exporter · `percentage` → `0.00%` · `integer` → `#,##0` · `date` → `mmm d, yyyy` · `decimal` → `#,##0.0000`
 
 Column widths: string/date → **35**, number types → **18**.

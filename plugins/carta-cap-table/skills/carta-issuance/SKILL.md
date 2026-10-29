@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.109.1</carta-plugin>
 
 # Issue Securities
 
@@ -150,10 +150,11 @@ disk, never an env var.
 | else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
 
 **Carta's companion instructions are part of this skill.** Follow them for the rest of the
-run, ahead of this file's surface paths and [§ Issue](#issue). The hard rules still bind. If
-a command they name is unknown or refused before anything is saved, take the row the table
-would otherwise pick, unmentioned; after a save, report it and carry the set's `draft_set_id`
-([hard rule 3](#hard-rules)).
+run, ahead of this file's surface paths and [§ Issue](#issue). They may cover several
+security types in one run, over the [Mixed in one prompt](#resolve-security_type) row.
+The hard rules still bind. If a command they name is unknown or refused before anything is
+saved, take the row the table would otherwise pick, unmentioned; after a save, report it and
+carry each saved set's `draft_set_id` ([hard rule 3](#hard-rules)).
 
 Record the selection once. Never re-detect, except into the companion row.
 
@@ -168,7 +169,7 @@ submitted on some hosts
 
 ## Resolve `security_type`
 
-Resolve once, at the top. Pass on every draft-set tool call.
+Resolve once per type, at the top. Pass it on that type's draft-set tool calls.
 
 | Cue | `security_type` |
 |---|---|
@@ -439,15 +440,14 @@ clear, read [references/mutate-recovery.md](references/mutate-recovery.md).
 
 Every surface.
 
-1. **Never mix two security types in one mutate.** Run the skill once per type for a mixed
-   request.
+1. **Never mix two security types in one mutate.**
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
    the artifact's own Confirm sheet, one `AskUserQuestion` on the chat surface, or the Issue
    button on the Carta page the companion instructions open — **never
    stacked on an open page** ([§ What not to do on this path](#what-not-to-do-on-this-path)).
    Recovery questions after a server short-circuit are unrestricted.
-3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from the
-   first mutate on every later `issue_securities`, `save_drafts`, `load_drafts`,
+3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from
+   each type's first mutate on that type's later `issue_securities`, `save_drafts`, `load_drafts`,
    `validate_drafts`, `resolve_duplicate_stakeholder`: omit it and the server mints a
    *second* draft set of the same incomplete rows. Put each row's `draft_pk` from its first
    save on every retry, plus *every* required field: omit it and the row inserts instead of

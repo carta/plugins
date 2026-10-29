@@ -133,7 +133,7 @@ response onward ([hard rule 3](../SKILL.md#hard-rules)):
 
 | Track | From | Goes on |
 |---|---|---|
-| `draft_set_id` | the first mutate response | every subsequent `issue_securities`, `save_drafts`, `load_drafts`, `validate_drafts`, `resolve_duplicate_stakeholder` |
+| `draft_set_id` | the first mutate response of its security type | every subsequent call of that type: `issue_securities`, `save_drafts`, `load_drafts`, `validate_drafts`, `resolve_duplicate_stakeholder` |
 | each row's `draft_pk` | that row's first save | that row on every retry, alongside *every* required field |
 | each row's `row_key` | the key you assigned the row when you collected it | the key you match `draft_pk` back by |
 

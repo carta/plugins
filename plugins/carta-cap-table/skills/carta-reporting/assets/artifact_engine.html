@@ -269,12 +269,14 @@ function initSheet(sName) {
   if (!sh._hidden)   sh._hidden   = new Set(sh.columns.flatMap((c, i) => c.hidden ? [i] : []));
   if (!sh._sort)     sh._sort     = [];   // [{ci, dir}]
   if (!sh._totals)   sh._totals   = {};   // {ci: op}
-  // WeakMap keyed by the actual row array so currency survives sort reorders
+  // WeakMap keyed by the array makeRow renders (the row itself, or a totals row's _t cells),
+  // so currency survives sort reorders
   if (!sh._rowCurrencyMap && sh.row_currencies) {
     sh._rowCurrencyMap = new WeakMap();
     sh.rows.forEach((row, i) => {
-      if (Array.isArray(row) && sh.row_currencies[i]) {
-        sh._rowCurrencyMap.set(row, sh.row_currencies[i]);
+      const cells = row && totalArray(row);
+      if (Array.isArray(cells) && sh.row_currencies[i]) {
+        sh._rowCurrencyMap.set(cells, sh.row_currencies[i]);
       }
     });
   }

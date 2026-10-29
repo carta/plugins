@@ -90,6 +90,7 @@ for _root in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_root / "lib"))
         break
 from report_display import detect_hidden_columns, normalize_columns  # noqa: E402
+from report_hosts import DOWNLOAD_TIMEOUT_SECONDS, check_download_url  # noqa: E402
 from report_numbers import parse_number  # noqa: E402
 from report_rows import is_structural, relabel_structural  # noqa: E402
 
@@ -145,21 +146,10 @@ def _col_map(columns):
 # Download
 # ---------------------------------------------------------------------------
 
-def _load_allowed_hosts():
-    import json
-    from pathlib import Path
-    cfg = Path(__file__).parent.parent / "staff" / "allowed-hosts.json"
-    base = {"documents.carta.com"}
-    return base | set(json.loads(cfg.read_text())) if cfg.exists() else base
-
-
 def download(url):
-    from urllib.parse import urlparse
     import requests
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.netloc not in _load_allowed_hosts():
-        raise ValueError(f"Unexpected download URL host: {parsed.netloc!r}")
-    r = requests.get(url, timeout=60)
+    check_download_url(url)
+    r = requests.get(url, timeout=DOWNLOAD_TIMEOUT_SECONDS)
     r.raise_for_status()
     return r.json()
 
@@ -174,8 +164,13 @@ NUMERIC_TYPES = ("money", "decimal", "percentage", "integer")
 ORDERED_TYPES = NUMERIC_TYPES + ("date",)
 
 
+def unknown_columns(spec, names):
+    """Sorted names a filter or sort spec asks for that are not in `names`: those entries do nothing."""
+    return sorted({e["column"] for e in spec or [] if "column" in e and e["column"] not in names})
+
+
 def _make_filter_predicate(columns, filters):
-    """Return a (predicate, unknown_columns) pair for the given filter list.
+    """Return a (predicate, unknown_filter_columns) pair for the given filter list.
 
     Raises ValueError on an unrecognized op. A silently-ignored op would leave
     every row kept, which reads as a successful filter that returned everything.
@@ -203,7 +198,7 @@ def _make_filter_predicate(columns, filters):
 
     # A filter on a column the sheet does not have cannot be evaluated. Report it
     # rather than dropping it, so the caller can surface the typo.
-    unknown_columns = sorted({f["column"] for f in filters if f["column"] not in idx_map})
+    unknown_filter_columns = unknown_columns(filters, idx_map)
 
     def predicate(row):
         for f in filters:
@@ -251,7 +246,7 @@ def _make_filter_predicate(columns, filters):
                 return False
         return True
 
-    return predicate, unknown_columns
+    return predicate, unknown_filter_columns
 
 
 def unsupported_filters(columns, filters):
@@ -338,8 +333,16 @@ def select_columns(columns, rows, column_names):
 CROSS_ROW_FORMULAS = ("pct_of_total", "running_sum", "delta")
 
 
+def _cross_row_type(source_col):
+    """The type of a running_sum or delta column: an amount stays an amount, so it keeps its currency."""
+    return "money" if source_col.get("type") == "money" else "decimal"
+
+
 def apply_formulas(columns, rows, formulas, mixed_currency_columns=()):
     """Returns (new_columns, new_rows, skipped_formula_names, mixed_currency_skips).
+
+    A column built from one source column records its name as "source"; main() reads it to give a
+    money formula column the currency of its source cells, then strips it from the output.
 
     A cross-row formula over a column in mixed_currency_columns is skipped; the columns
     skipped for that reason are mixed_currency_skips."""
@@ -370,7 +373,7 @@ def apply_formulas(columns, rows, formulas, mixed_currency_columns=()):
             parse = _numeric_parser(new_cols[idx].get("type"))
             vals = [(parse(r[idx]) if idx < len(r) else None) or 0.0 for r in new_rows]
             total = sum(vals) or 1.0
-            new_cols.append({"name": name, "type": "percentage"})
+            new_cols.append({"name": name, "type": "percentage", "source": src})
             for r, v in zip(new_rows, vals):
                 r.append(round(v / total, 6))
 
@@ -382,7 +385,7 @@ def apply_formulas(columns, rows, formulas, mixed_currency_columns=()):
             idx     = idx_map[src]
             running = 0.0
             parse   = _numeric_parser(new_cols[idx].get("type"))
-            new_cols.append({"name": name, "type": "decimal"})
+            new_cols.append({"name": name, "type": _cross_row_type(new_cols[idx]), "source": src})
             for r in new_rows:
                 running += (parse(r[idx]) if idx < len(r) else None) or 0.0
                 r.append(round(running, 4))
@@ -410,7 +413,7 @@ def apply_formulas(columns, rows, formulas, mixed_currency_columns=()):
             idx  = idx_map[src]
             prev = None
             parse = _numeric_parser(new_cols[idx].get("type"))
-            new_cols.append({"name": name, "type": "decimal"})
+            new_cols.append({"name": name, "type": _cross_row_type(new_cols[idx]), "source": src})
             for r in new_rows:
                 curr = parse(r[idx]) if idx < len(r) else None
                 r.append(round(curr - prev, 4) if curr is not None and prev is not None else None)
@@ -469,6 +472,7 @@ def apply_aggregations(columns, rows, agg_spec, currencies=None):
     hold an amount). An amount aggregate over more than one currency is left as None: adding
     100 USD to 100 EUR is not 200 of anything.
     Returns (new_columns, new_rows, summary_meta, agg_currencies).
+    A summary's totals row is `{"_t": [cells]}`, like a totals row in the source report.
     summary_meta is {"count": N, "ops": {col_name: op}} for summary type, else None; a column
     whose total was left out is not in its ops, so the Excel export writes no formula for it.
     agg_currencies is {"rows": [...], "mixed_columns": [...]}: "rows" holds, per row the
@@ -500,17 +504,23 @@ def apply_aggregations(columns, rows, agg_spec, currencies=None):
     if agg_type == "summary":
         summary, summary_currencies = [], []
         all_rows = range(len(rows))
+        # The label goes in the first visible column without an op (a hidden column is dropped by the
+        # Excel export and the artifact); with no such column there is no label.
+        label_idx = next((i for i, col in enumerate(columns)
+                          if not agg_cols.get(col["name"]) and not col.get("hidden")), None)
         for i, col in enumerate(columns):
             op = agg_cols.get(col["name"])
             value, currency = None, None
-            if i == 0:
+            if i == label_idx:
                 value = "Total"
             elif op:
                 value, currency = aggregate(all_rows, i, col, op)
             summary.append(value)
             summary_currencies.append(currency)
         ops = {name: op for name, op in agg_cols.items() if name not in mixed}
-        return (columns, rows + [summary], {"count": 1, "ops": ops},
+        # `_t`, not a plain list: the artifact reads a list as a totals row only when its first cell
+        # starts with "Total", and never reads summary_meta.
+        return (columns, rows + [{"_t": summary}], {"count": 1, "ops": ops},
                 {"rows": [summary_currencies], "mixed_columns": mixed})
 
     elif agg_type == "group_by":
@@ -572,17 +582,19 @@ def sort_rows_with_indices(columns, rows, orig_indices, sort_spec):
         reverse = s.get("direction", "asc") == "desc"
 
         def key_fn(pair, ci=ci, ctype=ctype):
+            """The sort key of the row's cell; None when it has no value."""
             row = pair[1]
             val = row[ci] if ci < len(row) else None
             if ctype in NUMERIC_TYPES:
-                v = _numeric_parser(ctype)(val)
-                return (1, v) if v is not None else (0, 0.0)
+                return _numeric_parser(ctype)(val)
             if ctype == "date":
-                d = _parse_date(val)
-                return (1, d) if d is not None else (0, datetime.min)
-            return (1, str(val or "").lower()) if val is not None else (0, "")
+                return _parse_date(val)
+            return str(val or "").lower() if val is not None else None
 
-        paired = sorted(paired, key=key_fn, reverse=reverse)
+        # Rows without a value go last whichever the direction, so reverse applies to the rest only.
+        keyed   = [(key_fn(p), p) for p in paired]
+        present = sorted((k for k in keyed if k[0] is not None), key=lambda k: k[0], reverse=reverse)
+        paired  = [p for _, p in present] + [p for k, p in keyed if k is None]
 
     orig_indices_out = [p[0] for p in paired]
     rows_out         = [p[1] for p in paired]
@@ -740,7 +752,13 @@ def main():
         # Automatically drop rows where all numeric/value columns are null or zero.
         # This removes placeholder security-type rows (e.g. Options, RSAs) that
         # Carta emits even when the company has never issued that security type.
-        nonempty = drop_empty_rows(cols, rows)
+        # A filter asking for zero on a numeric column (`= 0`) wants the all-zero rows: they are
+        # an answer, not placeholders, so the drop is skipped.
+        numeric_parsers = {c["name"]: _numeric_parser(c["type"]) for c in cols if c.get("type") in NUMERIC_TYPES}
+        asks_for_zero = any(f["op"] == "=" and f["column"] in numeric_parsers
+                            and numeric_parsers[f["column"]](f["value"]) == 0
+                            for f in filters or [])
+        nonempty = rows if asks_for_zero else drop_empty_rows(cols, rows)
         if len(nonempty) < len(rows):
             kept_set     = {id(r) for r in nonempty}
             pairs        = [(oi, r) for oi, r in zip(orig_indices, rows) if id(r) in kept_set]
@@ -749,13 +767,15 @@ def main():
 
         empty_rows_dropped = filtered_count - len(rows)
 
+        # Sort the rows before column selection, so a sort column need not be selected, and before
+        # formulas, so running_sum and delta follow the requested order.
+        # A group_by sorts again after grouping, to order the groups by the columns they have.
+        sortable = {col["name"] for col in cols}
+        rows, orig_indices = sort_rows_with_indices(cols, rows, orig_indices, sort_spec)
+
         cols, rows, missing_cols = select_columns(cols, rows, columns)
         # Map: output column position j → original column index (None for unknown)
         new_to_old_col = [orig_col_name_to_idx.get(col["name"]) for col in cols]
-
-        # Sort the rows before formulas, so running_sum and delta follow the requested order.
-        # A group_by sorts again after grouping, to order the groups by the columns they have.
-        rows, orig_indices = sort_rows_with_indices(cols, rows, orig_indices, sort_spec)
 
         def _cell_override(orig_row_idx, orig_col_idx):
             """The override currency of one cell: its row's, else its own; None means the base."""
@@ -775,13 +795,25 @@ def main():
 
         n_before_formulas = len(cols)
         cols, rows, skipped_fmls, formula_mixed = apply_formulas(cols, rows, formulas, mixed_currency_cols)
-        # Formula columns have no original column index
-        new_to_old_col.extend([None] * (len(cols) - n_before_formulas))
+        # A money formula column is in the currency of its source column's cells, on every row,
+        # also where the source cell is empty. A total or group total over it reads the same value.
+        # The other formula columns have no original column index.
+        formula_currency: dict = {}  # output column index → override currency, None for the base
+        for j in range(n_before_formulas, len(cols)):
+            source = cols[j].pop("source", None)
+            new_to_old_col.append(None)
+            if cols[j].get("type") == "money" and source is not None:
+                found = _currencies_of(range(len(rows)), source, row_amount_currencies)
+                currency = next(iter(found.values()), base_currency)
+                for amounts in row_amount_currencies:
+                    amounts[cols[j]["name"]] = currency
+                formula_currency[j] = None if currency == base_currency else currency
 
         cols, rows, summary_meta, agg_currencies = apply_aggregations(
             cols, rows, aggregations, row_amount_currencies)
         if aggregations and aggregations.get("type") == "group_by":
             # Each group's currencies travel with it, so the order of the groups cannot strand them.
+            sortable |= {col["name"] for col in cols}
             rows, group_order = sort_rows_with_indices(cols, rows, list(range(len(rows))), sort_spec)
             agg_currencies["rows"] = [agg_currencies["rows"][i] for i in group_order]
         mixed_currency_columns = sorted(set(formula_mixed) | set(agg_currencies["mixed_columns"]))
@@ -811,11 +843,13 @@ def main():
         def _row_currency_entry(orig_row_idx):
             if orig_row_idx is None:
                 return None
-            if orig_row_idx in row_currency_map:
-                return row_currency_map[orig_row_idx]
-            if not cell_currency_map:
-                return None
-            cell_entries = [_cell_override(orig_row_idx, old_ci) for old_ci in new_to_old_col]
+            if not formula_currency:
+                if orig_row_idx in row_currency_map:
+                    return row_currency_map[orig_row_idx]
+                if not cell_currency_map:
+                    return None
+            cell_entries = [formula_currency[j] if j in formula_currency else _cell_override(orig_row_idx, old_ci)
+                            for j, old_ci in enumerate(new_to_old_col)]
             return cell_entries if any(e is not None for e in cell_entries) else None
 
         # Structural rows only keep their meaning while the data rows are untouched:
@@ -843,6 +877,12 @@ def main():
         displayed      = rows[:preview_n] if preview_n is not None else rows
         row_currencies = row_currencies[:preview_n] if preview_n is not None else row_currencies
 
+        # Everything shown but section headings and source totals rows; the summary's own Total row
+        # is the last row, a `_t` dict like a source totals row, and is counted.
+        summary_idx = len(rows) - 1 if summary_meta else None
+        displayed_row_count = sum(1 for i, r in enumerate(displayed)
+                                  if i == summary_idx or not is_structural(r, len(cols)))
+
         result[sheet_name] = {"columns": cols, "rows": displayed,
                               "currency": base_currency,
                               "row_currencies": row_currencies,
@@ -852,9 +892,10 @@ def main():
             "filtered_row_count":    filtered_count,
             "empty_rows_dropped":    empty_rows_dropped,
             "kept_row_count":        kept_count,
-            "displayed_row_count":   sum(1 for r in displayed if not is_structural(r, len(cols))),
+            "displayed_row_count":   displayed_row_count,
             "missing_columns":       missing_cols,
             "unknown_filter_columns": unknown_filter_cols,
+            "unknown_sort_columns":  unknown_columns(sort_spec, sortable),
             "unsupported_filters":   unsupported_filter_list,
             "skipped_formulas":      skipped_fmls,
             "mixed_currency_columns": mixed_currency_columns,
@@ -872,12 +913,13 @@ def main():
         merged_sources: list = []  # sources whose rows were extended into merged_rows
         merged_summary = None
         # List stats are the union over the sources actually merged, in first-seen order.
-        lists = {k: [] for k in ("missing_columns", "unknown_filter_columns", "unsupported_filters",
+        lists = {k: [] for k in ("missing_columns", "unknown_filter_columns", "unknown_sort_columns",
+                                 "unsupported_filters",
                                      "skipped_formulas", "mixed_currency_columns")}
         schema_warnings: list = []
         counts = {"original_row_count": 0, "filtered_row_count": 0,
                   "empty_rows_dropped": 0, "kept_row_count": 0,
-                  "structural_rows_dropped": 0}
+                  "displayed_row_count": 0, "structural_rows_dropped": 0}
         for src in sources:
             if src not in result:
                 warnings.setdefault("merge_sources_missing", []).append(
@@ -919,10 +961,8 @@ def main():
                                    "currency": merged_currency or {"code": "USD", "symbol": "$"},
                                    "row_currencies": merged_row_currencies,
                                    "summary_meta": merged_summary}
-            # Count stats are sums over the sources actually merged; only the displayed
-            # count is computed from the merged tab's own rows.
+            # Count stats are sums over the sources actually merged.
             stats[target_name] = {**counts,
-                                  "displayed_row_count": sum(1 for r in merged_rows if not is_structural(r, len(merged_cols))),
                                   **lists,
                                   "merged_from": sources,
                                   **({"schema_warnings": schema_warnings} if schema_warnings else {})}

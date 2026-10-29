@@ -1,24 +1,25 @@
 ---
 name: carta-reporting-markdown
 description: >-
-  Internal subskill for carta-reporting. Drives the full Claude Code interaction:
+  Internal subskill for carta-reporting. Drives the full MARKDOWN-mode interaction:
   schema preview, customization checkpoint, transform config (filtering, sorting,
   formulas, aggregations), output preview, and hand-off to carta-reporting-excel.
-  Invoked by carta-reporting (Claude Code path) after the preview file lands.
+  Invoked by carta-reporting (MARKDOWN mode, `Artifact` tool not available) after the preview file lands.
   Not for direct user invocation.
 model: sonnet
 allowed-tools:
   - AskUserQuestion
+  - Write
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.107.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.109.1</carta-plugin>
 
 # Transform Configuration
 
-Called from `carta-reporting` step 4d (Claude Code / MARKDOWN path). Use values resolved earlier in this session: data file path, `corporation_id`, `user_report_pk`. The script lives at `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`; never search for it. Run it only in the one-line form below, as its own command: a heredoc, a pipe or a chained command needs approval every time.
+Called from `carta-reporting` step 4d (MARKDOWN mode, `Artifact` tool not available). Use values resolved earlier in this session: data file path, `corporation_id`, `user_report_pk`. The script lives at `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`; never search for it. Run it only in the one-line form below, as its own command: a heredoc, a pipe or a chained command needs approval every time.
 
 ## Schema Preview
 
@@ -198,7 +199,7 @@ Example:
 
 Aggregation is handled by `report_processor.py`.
 
-**Summary row** — appends one totals row at the bottom; first column reads "Total":
+**Summary row** — appends one totals row at the bottom (a `{"_t": [...]}` row); the label "Total" sits in the first visible column with no aggregation:
 ```json
 {"type": "summary", "columns": {"Shares Issued": "sum", "Vested %": "avg"}}
 ```
@@ -232,7 +233,7 @@ Always check `stats` after running:
 
 ## Output Preview
 
-After the Customization Checkpoint, check if `carta-reporting/carta_report_<user_report_pk>.json` exists. If ready, use it as `local_file`. If not, poll every 5 s up to 5 more attempts.
+After the Customization Checkpoint, check if `carta-reporting/carta_report_<user_report_pk>.json` exists. If ready, use it as `local_file`. If not, poll every 5 s up to 5 more attempts. If the data file is a preview (`carta_preview_<pk>.json`), label every table as a preview with partial rows. If the full report doesn't arrive, say "The full report didn't finish, so this is a preview — tell me to retry." Never present a preview as final.
 
 Run the script with `"preview": 5`:
 
@@ -273,7 +274,7 @@ If the user chooses **Excel**, invoke `Skill(carta-cap-table:carta-reporting-exc
 
 - **One table per sheet** — label with the sheet name as a heading.
 - **Summary line above each table** — e.g. "89 of 212 grants matched (Vested % > 50%)."
-- **Money columns** — format as `$1,234.56`.
+- **Money columns** — format as `1,234.56` with the row's currency symbol or code from the data (never assume `$`).
 - **Percentage columns** — format as `12.34%` (script stores as decimal, including percentage totals and formula columns; multiply × 100 for display. A cell that already reads like `5%` is already formatted).
 - **Date columns** — format as `MMM D, YYYY` (e.g. `May 3, 2026`) — the Carta brand standard.
 - If multiple sheets are returned and only one has data after filtering, hide the empty sheets.

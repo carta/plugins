@@ -21,7 +21,14 @@ The config names columns by header, and headers follow each company's terminolog
 definition names them by `key`, which the downloaded report JSON carries on every column, so the
 script looks each header up in that file. It writes only what a template stores, and only what
 the screen showed: the sheets in report order, the columns, the filters and the sort. A template
-never stores an as-of date: every run asks for one.
+never stores an as-of date: every run asks for one. It ignores the config's `label_overrides`:
+a renamed value is a display choice, and Carta's template renders its own labels. A filter on a
+renamed value cannot be reproduced reliably there (text matches case-insensitively, a rename can
+land on a value the report already holds, several raw values can share a label), so the script
+never rewrites a filter value. When the config has `label_overrides`, it refuses only a filter a
+rename can affect: a `contains` whose text (ignoring letter case) is inside a rename's raw value
+or label, or any other operator whose value equals one of them. Every other filter is saved
+unchanged.
 
 Stdout is JSON. On success: {"out": <file>, "sheets": [<sheet name>, ...], "dropped_params": [...]},
 where dropped_params are the report's scoping filters (people, plans, securities, share classes,
@@ -71,7 +78,6 @@ SCOPING_FILTERS = frozenset(
 UNSUPPORTED = {
     "formulas": "Formulas (computed columns) can't be saved in a template yet.",
     "aggregations": "Summary rows and group-by totals can't be saved in a template yet.",
-    "label_overrides": "Renamed values (such as a custom equity name) can't be saved in a template yet.",
 }
 # Custom-field columns exist only at some dates; every other dynamic column (one per share class,
 # equity plan, currency...) is saved by kind, field and the item the screen showed.
@@ -93,7 +99,41 @@ def _unsupported_features(config):
         for feature in UNSUPPORTED_PER_SHEET:
             if feature not in found and any(sheet.get(feature) for sheet in sheets.values()):
                 found.append(feature)
-    return [UNSUPPORTED[feature] for feature in found]
+    reasons = [UNSUPPORTED[feature] for feature in found]
+    reasons += _unreproducible_filters(config)
+    return reasons
+
+
+def _unreproducible_filters(config):
+    """Refusal reasons for filters that touch a renamed value.
+
+    A template cannot keep a `label_overrides` rename, and report_processor filters on the
+    relabelled text. A rename replaces whole cells only, so it changes a filter's rows only when
+    a `contains` text is inside a raw value or label, or another operator's value equals one
+    (ignoring letter case, as report_processor does)."""
+    overrides = config.get("label_overrides")
+    if not overrides:
+        return []
+    sheets = config.get("sheets")
+    filters = list(config.get("filters") or [])
+    if isinstance(sheets, dict):
+        filters += [item for sheet in sheets.values() for item in sheet.get("filters") or []]
+    reasons = []
+    for item in filters:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("value")).lower()
+        op = item.get("op")
+        for raw, label in overrides.items():
+            names = (str(raw).lower(), str(label).lower())
+            if text and any(text in name if op == "contains" else text == name for name in names):
+                reasons.append(
+                    f'The filter on "{item.get("column")}" uses "{item.get("value")}", a renamed value '
+                    f'("{raw}" is shown as "{label}"), and a template can\'t keep that rename. '
+                    "Filter on another column to save it."
+                )
+                break
+    return reasons
 
 
 def _sheet_transforms(config, report):

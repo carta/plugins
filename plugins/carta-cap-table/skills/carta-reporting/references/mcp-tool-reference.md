@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Lazy-loaded reference for `carta-reporting`. `cat` this file on demand when resolving
+Lazy-loaded reference for `carta-reporting`. `Read` this file on demand when resolving
 required params (Step 3) or filter IDs — it is not part of the always-loaded SKILL.md.
 
 ```
@@ -44,7 +44,7 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   # REQUIRED params by report_type — the API fails silently or errors if these are omitted.
   # Collect any that the user has not already provided via AskUserQuestion BEFORE calling this command.
   #
-  # Each entry in the reporting:search:report_types response carries a params_schema for its own
+  # Each entry in the reporting__search__report_types response carries a params_schema for its own
   # report type, generated from the same source as this table. Prefer it when present; this table
   # is the fallback for when search was not called.
   #
@@ -167,7 +167,7 @@ read_tool({"name": "reporting__get__report_status", "arguments": { user_report_p
                  # never pass corporation_id — endpoint is user-scoped and rejects it
 
 read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})
-  → { download_url }   # S3 presigned URL — pass to report_processor.py, not WebFetch.
+  → { download_url }   # S3 presigned URL — pass to report_files.py download, not WebFetch.
                        # not_found: re-check report_status once; if "complete", call this once more;
                        # if "pending", resume polling within the attempts left; never call this more
                        # than twice.

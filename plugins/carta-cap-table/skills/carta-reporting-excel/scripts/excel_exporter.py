@@ -110,7 +110,8 @@ def _prepare_sheet(sheet):
     A row's kind is decided here, once, from the row as it arrived: one-element string lists
     become `{"_s": text}` section rows, so dropping columns can never turn a data row into one.
     Columns report_processor.py tagged `hidden` (technical identifiers the artifact hides by
-    default) are dropped, except the first, which is the row label (summary "Total", group key).
+    default) are dropped, except the first, which is always kept so the sheet keeps its leading
+    column. The summary "Total" label is not tied to it: report_processor.py puts it in a visible column.
     Rows, totals and per-cell currencies stay aligned."""
     columns = sheet["columns"]
     n_cols = len(columns)  # before the pick: a one-column sheet has no section headings
@@ -227,13 +228,12 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
             if is_summary:
                 col_letter = get_column_letter(col_idx)
                 op = agg_ops.get(col["name"])
-                if col_idx == 1:
-                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
-                elif op:
+                if op:
                     formula = _summary_formula(op, col_letter, DATA_START, last_data_row)
                     cell = ws.cell(row=row_idx, column=col_idx, value=formula)
                 else:
-                    cell = ws.cell(row=row_idx, column=col_idx, value=None)
+                    # The "Total" label sits in a visible column without an op (report_processor.py picked it); the rest are blank.
+                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
                 cell.fill = summary_fill
                 cell.font = summary_font
             else:
@@ -304,7 +304,7 @@ def main():
             row_currencies=sheet.get("row_currencies"),
         )
 
-    out_path = Path(args.output)
+    out_path = Path(args.output).resolve()
     wb.save(out_path)
     print(out_path)
 
