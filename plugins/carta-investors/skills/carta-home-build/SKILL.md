@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.17</carta-plugin>
+<carta-plugin>carta-investors:7.5.18</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -202,21 +202,20 @@ rejects with `not_in_manifest`:
 - `welcome` — re-initializes an expired MCP session
 - `list_contexts` — auto-detects the active firm
 - `set_context` — activates the firm's DWH session
-- `fetch` — the cards' reads: warehouse queries (`dwh:execute:query`) and the Fund Admin reads behind Capital Activity and the firm logo (`fa:list:*`, `fa:get:*`)
 - `get_current_user` — signed-in user's profile; `has_tactyc` and `has_active_manco` gate
   their Skill Directory categories (see `fetchUserEnrichment`), and the product flags lock
   What's new's microapps
 - `list_accounts` — finds the firm's organization account, whose Data Collection setting
   unlocks What's new's Portfolio Analytics (`resolveDataCollection` in
   `resources/app/whats-new.js`) and whose pk builds locked ManCo's in-app link
-- `mutate` — the legacy write dispatcher, granted as a fallback; nothing in `resources/`
-  calls it
 - `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
 - `call_tool` — the gateway dispatcher, carrying the Capital Activity reminder sends
   (`fa__mutate__send-capital-call-reminder`), the Plugin news live-content cards, and the
   Data Collection settings read (`data_collection__get__firm_settings`)
-- `read_tool` — runs a read without asking the viewer; carries `plugin:get:version` for the
-  update banner and `plugin:list:skills` for the Skill Directory
+- `read_tool` — runs a read without asking the viewer; carries the cards' warehouse queries
+  (`dwh__execute__query`), the Fund Admin reads behind Capital Activity, the email preview and
+  the firm logo (`fa__list__*`, `fa__get__*`), `plugin__get__version` for the update banner and
+  `plugin__list__skills` for the Skill Directory
 
 ## Source layout — the artifact is BUILT, not hand-edited
 
@@ -598,7 +597,7 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool", "read_tool", "list_accounts", "track_ui_event"]
+          tools: ["welcome", "list_contexts", "set_context", "get_current_user", "call_tool", "read_tool", "list_accounts", "track_ui_event"]
         }
       ]
     }
@@ -615,6 +614,7 @@ Artifact({
 > Anything the page calls that is missing from `tools` rejects with `not_in_manifest`.
 > `get_current_user` **must** be there or `fetchUserEnrichment()` fails silently — the
 > debug log never prints and the Skill Directory falls back to showing all categories.
+> `read_tool` carries every card's data read; without it the cards stay empty.
 > `call_tool` carries the Capital Activity reminder sends, and is the gateway dispatcher
 > the Plugin news live content cards use to reach
 > `marketing__list__content` / `marketing__get__asset_data`
@@ -828,7 +828,7 @@ Carta Home dashboard as a whole, not on requests for one of those cards in isola
 | SOI | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.FUNDS` | Joined on FUND_UUID |
 | Fund Performance | `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` (chart + metrics); `FUND_ADMIN.AGGREGATE_FUND_METRICS` (Total Value fallback when benchmarks empty) | All funds for the firm, ≥ 2021-06-01 |
 | LP Summary | `FUND_ADMIN.PARTNER_DATA` + `FUND_ADMIN.FUNDS` + `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` | Largest LP families by commitment per fund currency, net TVPI from each partner's latest month; Fund Admin firms only (`resources/app/segment-dashboards.js`) |
-| Capital Activity | none — `fa:list:active-capital-activity` + `fa:list:capital-activity-partner` | Active capital calls/distributions + per-partner detail; the row `id`/`fund_uuid` feed the reminder `mutate` call |
+| Capital Activity | none — `fa:list:active-capital-activity` + `fa:list:capital-activity-partner` | Active capital calls/distributions + per-partner detail; the row `id`/`fund_uuid` feed the reminder `call_tool` call |
 
 ## Notes
 

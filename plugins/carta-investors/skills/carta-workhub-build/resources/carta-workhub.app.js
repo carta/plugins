@@ -52,13 +52,39 @@ async function _mcp(tool, args) {
   }
 }
 
-// discover answers an exact command name only when the viewer may call it, so this
-// gates a view whose reads sit behind a server-side flag the task list lacks.
+// Carta names each command's tool with "__" for ":". The page reaches them through
+// read_tool and call_tool, which the connector always lists.
+function mcpToolName(command) {
+  return command.replaceAll(":", "__");
+}
+
+function mcpRead(command, params) {
+  return _mcp("read_tool", { name: mcpToolName(command), arguments: params || {} });
+}
+
+function mcpWrite(command, params) {
+  return _mcp("call_tool", { name: mcpToolName(command), arguments: params || {} });
+}
+
+function _mcpFirstToolName(res) {
+  for (const c of _mcpResultCandidates(res)) {
+    const list = Array.isArray(c) ? c : Array.isArray(c && c.result) ? c.result : null;
+    if (list) return (list[0] && list[0].name) || null;
+  }
+  return null;
+}
+
+// search_tools ranks an exact tool name first only when the viewer may call it.
+async function mcpCommandListed(command) {
+  const name = mcpToolName(command);
+  const res = await _mcp("search_tools", { query: name });
+  return Boolean(res && !res.isError && _mcpFirstToolName(res) === name);
+}
+
+// Gates a view whose reads sit behind a server-side flag the task list lacks.
 const _mcpCommandProbes = {};
 function mcpCommandAvailable(command) {
-  return _mcpCommandProbes[command] ??= _mcp("discover", { domain: command })
-    .then((res) => Boolean(res && !res.isError))
-    .catch(() => false);
+  return _mcpCommandProbes[command] ??= mcpCommandListed(command).catch(() => false);
 }
 
 // ── Snowplow UI-event tracking via @carta/mcp-ui-tracker (window.mcpUiTracker) ──

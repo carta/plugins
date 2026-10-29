@@ -1,6 +1,6 @@
 // Financial Reporting Tracker: one card per reporting period that needs the GP.
-// Depends on carta-workhub.app.js (_mcp, escHtml, trackWorkhub, mcpCommandAvailable, openClaudeChat)
-// and fund-admin-requests.js (overlay, queue).
+// Depends on carta-workhub.app.js (mcpRead, mcpToolName, escHtml, trackWorkhub, mcpCommandAvailable,
+// openClaudeChat) and fund-admin-requests.js (overlay, queue).
 
 // A build can name one period so the panel is reachable for a demo. Empty is normal;
 // an unsubstituted {{...}} means this source is read outside a build.
@@ -207,7 +207,7 @@ function workhubTaskAppsFrom(res) {
 let _workhubTaskApps = null;   // read once per page: the viewer's flags do not change while it is open
 function workhubTaskApps() {
   return _workhubTaskApps ??= mcpCommandAvailable(FRT_TASK_APPS_COMMAND)
-    .then(ok => (ok ? _mcp("fetch", { command: FRT_TASK_APPS_COMMAND, params: {} }) : null))
+    .then(ok => (ok ? mcpRead(FRT_TASK_APPS_COMMAND, {}) : null))
     .then(workhubTaskAppsFrom)
     .catch(() => []);
 }
@@ -288,7 +288,7 @@ function frtAppPrompt(app, firm) {
   const params = JSON.stringify(app.params);
   if (app.kind === "companion") {
     const using = app.skill ? ` with the ${app.skill} skill` : "";
-    return `Open the Carta ${app.label} companion page for ${app.entity}${where}${using}: call fetch with command "${app.target}" and params ${params}, then open its companion_url beside this chat as its next_step says.`;
+    return `Open the Carta ${app.label} companion page for ${app.entity}${where}${using}: call read_tool with name "${mcpToolName(app.target)}" and arguments ${params}, then open its companion_url beside this chat as its next_step says.`;
   }
   return `Open the Carta ${app.label} app for ${app.entity}${where}: call view_remote with name "${app.target}" and params ${params}.`;
 }
@@ -509,10 +509,7 @@ async function frtFetchPeriod(p) {
   const key = frtPeriodKey(p);
   if (_frtPayloads[key]) return _frtPayloads[key];
   if (!_benchmarkFirmId) return null;
-  const res = await _mcp("fetch", {
-    command: FRT_COMMAND,
-    params: { firm_uuid: _benchmarkFirmId, period: p.period, year: p.year },
-  });
+  const res = await mcpRead(FRT_COMMAND, { firm_uuid: _benchmarkFirmId, period: p.period, year: p.year });
   if (!res || res.isError) {
     console.error("[frt] tracker read failed —", frtErrorText(res));
     return null;

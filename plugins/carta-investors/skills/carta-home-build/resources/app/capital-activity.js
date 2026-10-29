@@ -8,7 +8,7 @@ let _capActivityData = null; // null = not yet fetched; [] = none active; [...ro
 // the detail overlay. Firm-scoped from the session context set during boot.
 async function fetchCapitalActivity() {
   try {
-    const res = await _mcp("fetch", { command: "fa:list:active-capital-activity", params: {} });
+    const res = await _mcp("read_tool", { name: "fa__list__active-capital-activity", arguments: {} });
     if (res.isError) {
       console.error('[capactivity] fa:list:active-capital-activity failed —',
         res.content?.[0]?.text ?? res);
@@ -231,9 +231,9 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate, isCall) {
   let failed = false;
   try {
     for (let page = 1; rows.length < CA_ROWS_MAX; page++) {
-      const res = await _mcp("fetch", {
-        command: "fa:list:capital-activity-partner",
-        params: {
+      const res = await _mcp("read_tool", {
+        name: "fa__list__capital-activity-partner",
+        arguments: {
           fund_uuid: fundUuid,
           capital_activity_id: activityId,
           page,
@@ -1225,9 +1225,9 @@ let _previewRequestId = 0;     // discards a response whose modal has moved on
 // is_reminder renders the chase email that Resend would send, not the release
 // notice. The backend renders reminders for capital calls only.
 async function fetchEmailPreview(fundUuid, activityId, partnerId) {
-  const res = await _mcp("fetch", {
-    command: "fa:get:capital-activity-partner-email-preview",
-    params: {
+  const res = await _mcp("read_tool", {
+    name: "fa__get__capital-activity-partner-email-preview",
+    arguments: {
       fund_uuid: fundUuid,
       capital_activity_id: activityId,
       partner_id: parseInt(partnerId, 10),
@@ -1300,9 +1300,9 @@ let _firmLogoPromise = null;
 function fetchFirmLogo() {
   if (!_benchmarkFirmId) return Promise.resolve(null);
   if (!_firmLogoPromise) {
-    _firmLogoPromise = _mcp("fetch", {
-      command: "fa:get:firm_logo",
-      params: { firm_uuid: _benchmarkFirmId },
+    _firmLogoPromise = _mcp("read_tool", {
+      name: "fa__get__firm_logo",
+      arguments: { firm_uuid: _benchmarkFirmId },
     }).then(res => {
       if (res.isError) return null;
       return JSON.parse(res.content?.[0]?.text ?? '{}');

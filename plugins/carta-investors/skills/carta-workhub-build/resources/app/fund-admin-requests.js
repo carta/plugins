@@ -1,6 +1,6 @@
 // ── Carta Workhub queue: composer bar, tabbed task queue, request thread overlay ──
-// Depends on carta-workhub.app.js: _mcp, escHtml, showToast, trackWorkhub,
-// _mcpResultCandidates, _benchmarkFirmId.
+// Depends on carta-workhub.app.js: _mcp, mcpRead, mcpWrite, mcpCommandListed, escHtml,
+// showToast, trackWorkhub, _mcpResultCandidates, _benchmarkFirmId.
 
 // The tab for the open task's pending_actor; an unknown value shows as with Carta.
 const FAR_TAB_BY_PENDING = {
@@ -112,10 +112,7 @@ async function farWalk(command, params, { maxPages = FAR_LIST_MAX_PAGES, partial
   for (let page = 0; page < maxPages; page++) {
     let res;
     try {
-      res = await _mcp('fetch', {
-        command,
-        params: Object.assign({}, params, { size: FAR_LIST_PAGE_SIZE }, after ? { after } : {}),
-      });
+      res = await mcpRead(command, Object.assign({}, params, { size: FAR_LIST_PAGE_SIZE }, after ? { after } : {}));
     } catch (e) {
       onFail(e?.message || String(e));
       throw e;
@@ -881,10 +878,7 @@ async function farHydrateTitles() {
 async function farFetchThread(workflowId) {
   if (_farThreadCache[workflowId]) return _farThreadCache[workflowId];
   try {
-    const res = await _mcp('fetch', {
-      command: 'fa:list:workflow-message',
-      params: { workflow_id: Number(workflowId) },
-    });
+    const res = await mcpRead('fa:list:workflow-message', { workflow_id: Number(workflowId) });
     const rows = farResults(res);
     if (!rows) {
       console.error('[far] fa:list:workflow-message failed —', res?.content?.[0]?.text ?? res);
@@ -1674,10 +1668,10 @@ async function submitFarCompose() {
       return;
     }
 
-    const res = await _mcp('mutate', {
-      command: 'fa:create:fund-admin-message',
-      params: tokens.length ? { message, attachment_tokens: tokens } : { message },
-    });
+    const res = await mcpWrite(
+      'fa:create:fund-admin-message',
+      tokens.length ? { message, attachment_tokens: tokens } : { message },
+    );
     if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
     const id = farWorkflowId(res);
     if (id == null) throw new Error('no workflow id returned');
@@ -1872,14 +1866,12 @@ function farResolveViewer() {
   return _farViewerProbe;
 }
 
-// Staff-gated, so most viewers cannot attach. discover() runs the same access
-// check; fetch() rejects writes on method first, so it would answer yes for all.
+// Staff-gated, so most viewers cannot attach. search_tools runs the same access check.
 function farUploadAvailable() {
   if (!_farUploadProbe) {
     _farUploadProbe = (async () => {
       try {
-        const res = await _mcp('discover', { domain: FAR_UPLOAD_COMMAND });
-        if (res && !res.isError) return true;
+        if (await mcpCommandListed(FAR_UPLOAD_COMMAND)) return true;
         console.info('[far attach] attaching is not available to this viewer');
         return false;
       } catch (e) {
@@ -2026,10 +2018,7 @@ async function farUploadPicked(key, onProgress) {
     try {
       // Restored from a plan the bytes are already encoded; a fresh pick is not.
       const content_base64 = item.b64 ?? await farFileToBase64(item.file);
-      const res = await _mcp('mutate', {
-        command: FAR_UPLOAD_COMMAND,
-        params: { filename: item.name, content_base64 },
-      });
+      const res = await mcpWrite(FAR_UPLOAD_COMMAND, { filename: item.name, content_base64 });
       if (res.isError) throw new Error(res.content?.[0]?.text ?? 'upload rejected');
       const token = farDocToken(res);
       if (!token) throw new Error('upload returned no token');
@@ -2068,12 +2057,12 @@ async function submitFarReply() {
     }
     const sentFiles = (_farPicked.reply ?? []).map(f => ({ name: f.name, href: null }));
 
-    const res = await _mcp('mutate', {
-      command: 'fa:create:workflow-message',
-      params: tokens.length
+    const res = await mcpWrite(
+      'fa:create:workflow-message',
+      tokens.length
         ? { workflow_id: Number(workflowId), message, attachment_tokens: tokens }
         : { workflow_id: Number(workflowId), message },
-    });
+    );
     if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
 
     // The thread is cached, so append rather than refetch — and the ball is back

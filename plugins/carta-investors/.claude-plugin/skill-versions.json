@@ -1,14 +1,14 @@
 {
   "carta-home-build": {
-    "version": "1.18.10",
-    "headline": "What's new on Carta Home describes each featured skill by what you get from it."
+    "version": "1.19.0",
+    "headline": "Carta Home now reads Carta through its current tools, so your cards keep loading as Carta's connector changes. Rebuild to keep it working."
   },
   "carta-soi": {
     "version": "1.4.9",
     "headline": "SOI now has an Investment Cash Flows tab: every dated investment, proceed and terminal value behind Deal IRR, grouped by company and fund, following the same fund, as-of and exited filters."
   },
   "carta-workhub-build": {
-    "version": "1.10.8",
-    "headline": "Workhub now groups your tasks the way the Firm Dash does, and files each request to Carta under what it is about."
+    "version": "1.11.0",
+    "headline": "Workhub now reads and sends through Carta's current tools, so tasks, replies and reviews keep working as Carta's connector changes. Rebuild to keep it working."
   }
 }

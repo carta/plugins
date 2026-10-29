@@ -81,7 +81,7 @@ async function fetchLpSummary() {
   _lpLoading = true;
   const firmId = _segment.firmId;
   try {
-    const res = await _mcp("fetch", { command: "dwh:execute:query", params: { sql: lpSummarySql(firmId), format: "ndjson" } });
+    const res = await _mcp("read_tool", { name: "dwh__execute__query", arguments: { sql: lpSummarySql(firmId), format: "ndjson" } });
     if (res.isError) throw new Error("LP summary query failed");
     renderLpRows(parseDWH(res));
   } catch (e) {

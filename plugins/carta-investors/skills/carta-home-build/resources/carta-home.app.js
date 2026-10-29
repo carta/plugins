@@ -292,9 +292,9 @@ async function fetchBenchmarkData() {
   if (!(await mcpAvailable()) || !_benchmarkFirmId) return;
 
   try {
-    const res = await _mcp("fetch", {
-      command: "dwh:execute:query",
-      params: {
+    const res = await _mcp("read_tool", {
+      name: "dwh__execute__query",
+      arguments: {
         sql: `SELECT FUND_NAME, FUND_UUID, PERFORMANCE_QUARTER_START_DATE, NET_IRR, TVPI, DPI, MOIC,
                      NET_IRR_50TH, VINTAGE_YEAR, ENTITY_TYPE_NAME
               FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
@@ -402,9 +402,9 @@ async function fetchBenchmarkFallback() {
   if (!(await mcpAvailable()) || !_benchmarkFirmId) return false;
   // IRR/TVPI/DPI are almost always null for these firms; TOTAL_VALUE is populated,
   // so the card previews that (with per-fund currency — never assume USD).
-  const res = await _mcp("fetch", {
-    command: "dwh:execute:query",
-    params: {
+  const res = await _mcp("read_tool", {
+    name: "dwh__execute__query",
+    arguments: {
       sql: `SELECT FUND_NAME, FUND_UUID, TOTAL_VALUE, FUND_REPORTING_CURRENCY, ENDING_TOTAL_NAV, MONTH_END_DATE
             FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
             WHERE FIRM_ID = '${_benchmarkFirmId}'
@@ -634,9 +634,9 @@ async function fetchLiveData() {
     // Step 2: single DWH query — fund names + portfolio values (no set_context or fa:list:entities needed)
     let dwhFundRows = [];
     try {
-      const dwhRes = await _mcp("fetch", {
-        command: "dwh:execute:query",
-        params: {
+      const dwhRes = await _mcp("read_tool", {
+        name: "dwh__execute__query",
+        arguments: {
           sql: `SELECT f.FUND_UUID, f.FUND_NAME, SUM(ai.REMAINING_VALUE) AS TOTAL_VALUE, SUM(ai.TOTAL_UNREALIZED_GAIN_LOSS) AS TOTAL_GL FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID WHERE ai.IS_ACTIVE_INVESTMENT = TRUE AND f.FIRM_ID = '${firmId}' GROUP BY f.FUND_UUID, f.FUND_NAME ORDER BY TOTAL_VALUE DESC NULLS LAST`,
           format: 'ndjson',
           }

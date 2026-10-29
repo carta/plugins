@@ -24,10 +24,10 @@ function whTimingMark(name) {
   _whSave();
 }
 
-// A fetch is named by the command it carries, since every list goes through one tool.
+// A command call is named by the tool it carries, since every command goes through one of two tools.
 function _whLabel(tool, args) {
-  if (tool !== "fetch" || !args || !args.command) return tool;
-  return args.params && args.params.after ? `${args.command} (next page)` : args.command;
+  if ((tool !== "read_tool" && tool !== "call_tool") || !args || !args.name) return tool;
+  return args.arguments && args.arguments.after ? `${args.name} (next page)` : args.name;
 }
 
 // Returns the callback that closes the call with what came back.

@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.5.17</carta-plugin>
+<carta-plugin>carta-investors:7.5.18</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -139,8 +139,8 @@ not inside a fund-data dashboard.
     `carta`. Every open task is kept when its `workflow_template` is in
     `TASK_TEMPLATES_WITH_TILES` (the command takes no template filter), grouped by `pending_actor` (`customer`
     → Needs Action, `carta` → With Carta), one card per workflow; the customer's task wins. A
-    capital call review opens its panel only when `discover` answers for
-    `fa:get:capital-activity-review-summary` — the panel's commands need
+    capital call review opens its panel only when `search_tools` ranks
+    `fa__get__capital-activity-review-summary` first — the panel's commands need
     `CARTA_MCP_CAPITAL_ACTIVITY_REVIEW`, which the list ignores — and is otherwise a Capital
     calls card linking to the review in Carta. A failed page, or pages left past 25, drops to
     the `localStorage` path rather than show a short list as complete. A task's `created_at`
@@ -164,7 +164,7 @@ not inside a fund-data dashboard.
   `fa:list:capital-activity-review-row` (its rows carry each group's `wire_status` for the Wires
   tab), `fa:get:capital-activity-partner-email-preview` and
   `fa:get:capital-activity-notice-pdf-preview`; written with `fa:mutate:request-capital-activity-changes`
-  and `fa:mutate:approve-capital-activity`. All of them ride the `fetch` and `mutate` tools
+  and `fa:mutate:approve-capital-activity`. Reads ride `read_tool` and writes `call_tool`, both
   already in the grant, so adding a command never changes the publish call.
 
   There is no build flag for this: the server decides which rows exist, so no review card
@@ -274,7 +274,7 @@ not inside a fund-data dashboard.
   or queue card whose task has a companion page or a Carta MCP App opens a **new Claude Desktop
   chat** instead of Carta, prefilled with a prompt that names the page or app, the entity, the
   firm and the exact call; the GP sends it. A companion opening has Claude call the read with
-  `fetch` and open the `companion_url` it returns in the browser pane beside the chat, as the
+  `read_tool` and open the `companion_url` it returns in the browser pane beside the chat, as the
   read's `next_step` says; an app opening has Claude call `view_remote`. A companion page with
   a skill of its own in `COMPANION_SKILLS` (`carta-workhub.config.js`, by column or template)
   has the prompt name that skill too, so Claude drives the page with its commands and rules: the
@@ -288,8 +288,9 @@ not inside a fund-data dashboard.
   copy worked. On a tracker cell, a small ↗ beside the button keeps the cell's Carta link; a
   queue card with an opening has no Carta link of its own, and is marked **Claude ↗**.
 
-  carta-mcp decides how each task opens: `workhubTaskApps` in the tracker file asks `discover`
-  about `fa:list:workhub-task-app` once, and only when that answers reads it through `fetch`.
+  carta-mcp decides how each task opens: `workhubTaskApps` in the tracker file asks `search_tools`
+  about `fa__list__workhub-task-app` once, and only when that ranks it first reads it through
+  `read_tool`.
   Each entry names a tracker `column` or a queue card's workflow `template` (`tasks` limits it
   to those steps), and its `openings`, most preferred first: the companion page, then the app.
   Each opening maps every param to the row field that fills it, and `taskOpeningFor` takes the
@@ -348,16 +349,17 @@ Every tool below must appear in the publish call's `capabilities.mcp` grant, or 
 rejects with `not_in_manifest`:
 
 - `list_contexts` / `set_context` — resolve and pin the firm
-- `fetch` — the list and thread reads
-- `read_tool` — `plugin:get:version` for the update banner, run without asking the viewer
-- `mutate` — sending a request, replying, uploading an attachment, and the review decision
+- `read_tool` — every read: the lists, the thread, the review panel, the tracker, and
+  `plugin:get:version` for the update banner, run without asking the viewer
+- `call_tool` — sending a request, replying, uploading an attachment, and the review decision
 - `welcome` — re-initializes an expired MCP session
-- `discover` — asks whether this viewer may attach files at all
+- `search_tools` — asks whether this viewer may attach files, open the review panel, or read
+  task openings; a command is available only when its tool name comes back first
 - `get_current_user` — whose messages are whose in a thread
 - `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
 
-`fa:create:document-content` is staff-gated, so the composer probes `discover` and
-stays text-only when the viewer may not attach. Publish without `discover` and every
+`fa:create:document-content` is staff-gated, so the composer probes `search_tools` and
+stays text-only when the viewer may not attach. Publish without `search_tools` and every
 viewer looks un-entitled, staff included.
 
 Thread attribution compares each message's author against the viewer's own id, since
@@ -496,8 +498,8 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["list_contexts", "set_context", "fetch", "read_tool", "mutate", "welcome",
-                  "discover", "get_current_user", "track_ui_event"]
+          tools: ["list_contexts", "set_context", "read_tool", "call_tool", "welcome",
+                  "search_tools", "get_current_user", "track_ui_event"]
         }
       ]
     }
@@ -506,7 +508,7 @@ Artifact({
 ```
 
 > Anything the page calls that is missing from `tools` rejects with `not_in_manifest`.
-> `mutate` is what Send and Reply use, so leaving it out breaks both while the queue still
+> `call_tool` is what Send and Reply use, so leaving it out breaks both while the queue still
 > renders. Restate the whole `capabilities` object on every redeploy: a non-empty object
 > replaces the stored grant, so a tool you leave out is revoked. Keep `favicon` and `title`
 > stable — users find the tab by its icon.
@@ -525,7 +527,7 @@ queue shows its no-connector state.
 - **The queue reports `not_in_manifest`** — the publish call carried an incomplete
   `capabilities.mcp` grant. Compare it against the `tools` list in Step 3 and republish with
   every entry, passing the same `url`.
-- **No Attach files control, even for staff** — most often `discover` missing from the
+- **No Attach files control, even for staff** — most often `search_tools` missing from the
   grant, which reads exactly like being un-entitled. The console says which:
   `[far attach] availability probe failed` is the manifest, `not available to this viewer`
   is the staff gate on `fa:create:document-content`.

@@ -1,5 +1,5 @@
 // Capital call review panel: the drafted call a GP approves, opened from its
-// task card. Depends on carta-workhub.app.js for _mcp, escHtml, showToast.
+// task card. Depends on carta-workhub.app.js for mcpRead, mcpWrite, escHtml, showToast.
 
 // A build can name one activity so the panel is reachable without a live review
 // task to open it from. Empty is the normal case.
@@ -542,10 +542,7 @@ async function ccrLoad() {
     // Not awaited: the summary must not wait on a run that can take a while.
     ccrLoadHealth(snap, params);
 
-    const sRes = await _mcp("fetch", {
-      command: CCR_SUMMARY_COMMAND,
-      params: params,
-    });
+    const sRes = await mcpRead(CCR_SUMMARY_COMMAND, params);
     if (_ccr !== snap) return;
     ccrThrowIfFailed(sRes, "review summary failed");
 
@@ -572,10 +569,10 @@ async function ccrLoad() {
     let walked = [];
     let page = 1;
     for (; page <= CCR_MAX_PAGES; page++) {
-      const rRes = await _mcp("fetch", {
-        command: "fa:list:capital-activity-review-row",
-        params: Object.assign({ page: page, page_size: CCR_PAGE_SIZE }, params),
-      });
+      const rRes = await mcpRead(
+        "fa:list:capital-activity-review-row",
+        Object.assign({ page: page, page_size: CCR_PAGE_SIZE }, params),
+      );
       if (_ccr !== snap) return;
       const refused = ccrFailure(rRes);
       if (refused) {
@@ -677,10 +674,10 @@ function ccrWiresTabBody(s) {
 
 async function ccrLoadHealth(snap, params) {
   try {
-    const res = await _mcp("fetch", {
-      command: "fa:get:capital-activity-health-check",
-      params: Object.assign({ include_passing: true }, params),
-    });
+    const res = await mcpRead(
+      "fa:get:capital-activity-health-check",
+      Object.assign({ include_passing: true }, params),
+    );
     if (_ccr !== snap) return;
     ccrThrowIfFailed(res, "health checks failed");
     const page = ccrPayload(res, (c) => Array.isArray(c.results));
@@ -736,26 +733,20 @@ function ccrForgetDocs(activityId) {
 }
 
 async function ccrFetchEmail(target, partnerId) {
-  const res = await _mcp("fetch", {
-    command: "fa:get:capital-activity-partner-email-preview",
-    params: {
-      fund_uuid: target.fundUuid,
-      capital_activity_id: target.activityId,
-      partner_id: partnerId,
-      body_format: "html",
-    },
+  const res = await mcpRead("fa:get:capital-activity-partner-email-preview", {
+    fund_uuid: target.fundUuid,
+    capital_activity_id: target.activityId,
+    partner_id: partnerId,
+    body_format: "html",
   });
   let p = res.isError ? null : ccrPayload(res, (c) => "subject" in c || "body" in c);
   if (!p) {
     // The command's own oversize hint: markup can exceed the response budget.
-    const alt = await _mcp("fetch", {
-      command: "fa:get:capital-activity-partner-email-preview",
-      params: {
-        fund_uuid: target.fundUuid,
-        capital_activity_id: target.activityId,
-        partner_id: partnerId,
-        body_format: "text",
-      },
+    const alt = await mcpRead("fa:get:capital-activity-partner-email-preview", {
+      fund_uuid: target.fundUuid,
+      capital_activity_id: target.activityId,
+      partner_id: partnerId,
+      body_format: "text",
     });
     if (alt.isError) throw new Error(alt.content?.[0]?.text ?? "preview failed");
     p = ccrPayload(alt, (c) => "subject" in c || "body" in c);
@@ -765,13 +756,10 @@ async function ccrFetchEmail(target, partnerId) {
 }
 
 async function ccrFetchPdf(target, interestId) {
-  const res = await _mcp("fetch", {
-    command: "fa:get:capital-activity-notice-pdf-preview",
-    params: {
-      fund_uuid: target.fundUuid,
-      capital_activity_id: target.activityId,
-      interest_id: interestId,
-    },
+  const res = await mcpRead("fa:get:capital-activity-notice-pdf-preview", {
+    fund_uuid: target.fundUuid,
+    capital_activity_id: target.activityId,
+    interest_id: interestId,
   });
   if (res.isError) throw new Error(res.content?.[0]?.text ?? "the notice could not be rendered");
   const p = ccrPayload(res, (c) => "data_uri" in c);
@@ -842,13 +830,10 @@ async function ccrSubmitChanges() {
   if (CCR_IS_DEMO) { done(); return; }
 
   try {
-    const res = await _mcp("mutate", {
-      command: "fa:mutate:request-capital-activity-changes",
-      params: {
-        fund_uuid: snap.target.fundUuid,
-        capital_activity_id: snap.target.activityId,
-        comment: text,
-      },
+    const res = await mcpWrite("fa:mutate:request-capital-activity-changes", {
+      fund_uuid: snap.target.fundUuid,
+      capital_activity_id: snap.target.activityId,
+      comment: text,
     });
     if (_ccr !== snap) return;
     ccrThrowIfFailed(res, "request failed");
@@ -893,7 +878,7 @@ function ccrApprove() {
   if (snap.consent.call && snap.summary && snap.summary.uses_fbo_contributions) params.amm_consent = true;
   _ccrReleasing[id] = Date.now();
   _ccrUnconfirmed.delete(id);
-  _mcp("mutate", { command: "fa:mutate:approve-capital-activity", params: params }).then(
+  mcpWrite("fa:mutate:approve-capital-activity", params).then(
     (res) => ccrReleaseAnswered(id, res, null),
     (err) => ccrReleaseAnswered(id, null, err),
   );
