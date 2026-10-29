@@ -404,7 +404,7 @@ Bash tool's `timeout: 600000`: where the CLI does reach Carta, it waits out that
   the brief below,
   filling in `<SERVER>`, `<UV_BIN>`, `<dashboard_dir>` and the `pushes` list verbatim. A
   payload is up to 256 KB, so it stays out of this conversation. Don't wait to tell the
-  user anything: the dashboard's own-sync notice clears the next time its tab is shown.
+  user anything.
 
 Sub-agent brief:
 

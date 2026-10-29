@@ -653,12 +653,14 @@ function mcpNamespace() {
   return _mcpNsPromise;
 }
 
+var CALL_TIMEOUT_MS = 60000;
+
 async function callTool(name, args) {
   const mcp = await mcpNamespace();
   if (!mcp) throw loadError('connector', 'No live Carta connector in this view');
   let res;
   try {
-    res = await withTimeout(mcp.callTool(CARTA_MCP_SERVER, name, args || {}), 60000, name);
+    res = await withTimeout(mcp.callTool(CARTA_MCP_SERVER, name, args || {}), CALL_TIMEOUT_MS, name);
   } catch (e) {
     throw asLoadError(e);
   }

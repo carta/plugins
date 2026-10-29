@@ -88,11 +88,8 @@ is sent (`scripts/report_payload.py`) and again by Carta.
   (`own_sync._record_blocked`): `no_user_id` whenever no user id is saved, for every report;
   `not_installed`, `not_logged_in` or `unreachable` only while some of the owner's reports have
   a push due, with `due` naming them; otherwise `null`, including after any push, a sweep's or
-  a session's `--record`. `GET /api/reports` returns it as `own_sync`. The local app re-reads
-  that list whenever its tab becomes visible again, and shows the reason, with what to do, on
-  each of the owner's reports it applies to (`app/src/reports/OwnSyncNotice.jsx`): "Not on the
-  hosted app" for a report no sync has pushed yet, "Changes won't reach the hosted app" for one
-  an earlier sync did.
+  a session's `--record`. `own_sync.py --plan` reads it under the sweep lock to decide whether
+  a session push (Step 5.2) is due.
   `unreachable` is the usual case for a dashboard built in the Claude desktop app: its
   Carta connector isn't available to the `claude` CLI.
 - A Claude session with its own Carta connector makes those pushes itself through

@@ -1224,18 +1224,21 @@ function renderFunds(summary) {
       }
       const ccy=g.currency;
       const tr=document.createElement('tr');
-      const n=f.nav_cents,k=f.called_cents,u=f.committed_cents-k;
-      const tv=k>0?((n+f.distributed_cents)/k):null;
+      const n=f.nav_cents,k=f.called_cents,c=f.committed_cents;
+      // Carta's own per-fund unfunded amount and TVPI; the sums are only for an older backend
+      // that leaves them out. TVPI divides by paid-in capital, not by capital called.
+      const u=f.unfunded_cents!=null?f.unfunded_cents:(c!=null&&k!=null?c-k:null);
+      const paidIn=f.contributed_cents;
+      const tv=f.tvpi!==undefined?f.tvpi:(paidIn>0?((n+f.distributed_cents)/paidIn):null);
       const z=v=>v===0;
-      const c=f.committed_cents;
-      const amount=v=>'<td'+(z(v)?' class="zero"':'')+'>'+esc(fmtCents(v, ccy))+'</td>';
+      const amount=v=>v==null?'<td><span class="zero">—</span></td>':'<td'+(z(v)?' class="zero"':'')+'>'+esc(fmtCents(v, ccy))+'</td>';
       tr.innerHTML=
         // The firm sits under the fund name: a column of its own would push the table wider than the page.
         '<td>'+esc(f.fund_name)+(f.firm_name ? '<span class="fund-firm">'+esc(f.firm_name)+'</span>' : '')+'</td>'+
         '<td>'+(g.nav_cents>0?PCT_FMT.format(f.allocation_pct||0):'<span class="zero">—</span>')+'</td>'+
         amount(c)+amount(k)+amount(f.contributed_cents)+amount(u)+amount(f.distributed_cents)+
         '<td>'+(z(n)?'<span class="zero">'+esc(fmtCents(0, ccy))+'</span>':'<span class="nav-wrap">'+esc(fmtCents(n, ccy))+'<span class="nav-sub">'+fmtShort(f.as_of_date||asOf)+'</span></span>')+'</td>'+
-        '<td>'+(tv>0?fmtMultiple(tv):'<span class="zero">—</span>')+'</td>';
+        '<td>'+(tv==null?'<span class="zero">—</span>':fmtMultiple(tv))+'</td>';
       tbody.appendChild(tr);
     });
   }
@@ -1454,7 +1457,11 @@ function initQuarterPicker(currentQuarterLabel){
 
 function withTimeout(promise, ms, label){
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error((label || 'request') + ' timed out after ' + ms + 'ms')), ms);
+    const timer = setTimeout(() => {
+      const e = new Error((label || 'request') + ' timed out after ' + ms + 'ms');
+      e.clientTimeout = true;
+      reject(e);
+    }, ms);
     promise.then(v => { clearTimeout(timer); resolve(v); }, e => { clearTimeout(timer); reject(e); });
   });
 }
@@ -1614,6 +1621,35 @@ function mcpError(err, fallbackCode) {
 }
 
 const NO_CONNECTOR_CODE = 'no_connector';
+const CALL_TIMEOUT_MS = 60000;
+
+// carta-mcp reports a failure as JSON {code, message, ...}; the code, never the wording,
+// says what happened. Two replies carry no code: a plain-text "not enabled" for a login
+// the LP flag is off for, and the portfolio reads' "failed: 401 ..." / "failed: 403 ...".
+const FAILURE_CODE_BY_MCP_CODE = {
+  unauthenticated: 'needs_reauth',
+  scope_required: 'forbidden',
+  role_required: 'forbidden',
+  out_of_scope: 'forbidden',
+  throttled: 'rate_limited',
+};
+
+function failureCode(text){
+  const s = String(text);
+  const i = s.indexOf('{');
+  if (i !== -1) {
+    try {
+      const body = JSON.parse(s.slice(i));
+      if (body && typeof body.code === 'string' && typeof body.message === 'string') {
+        return FAILURE_CODE_BY_MCP_CODE[body.code] || null;
+      }
+    } catch (_) {}
+  }
+  if (/is not enabled for this user/i.test(s)) return 'not_enabled';
+  if (/\b401\b/.test(s)) return 'needs_reauth';
+  if (/\b403\b/.test(s)) return 'forbidden';
+  return null;
+}
 
 function describeFailure(err) {
   switch ((err && err.code) || 'upstream_error') {
@@ -1626,6 +1662,10 @@ function describeFailure(err) {
       return 'No Carta connector is set up for this account. Add Carta in Settings → Connectors, then reload.';
     case 'needs_reauth':
       return 'Your Carta session has expired. Reconnect Carta in Settings → Connectors, then reload.';
+    case 'not_enabled':
+      return "The LP dashboard isn't turned on for this Carta login yet. Ask your Carta contact to enable it.";
+    case 'forbidden':
+      return "This Carta login can't open this portfolio.";
     case 'selection_required':
       return 'More than one Carta connector is available. Choose one when Claude asks, then reload.';
     case 'not_in_manifest':
@@ -1656,15 +1696,23 @@ async function callTool(name, args){
   if (!mcp) throw mcpError({ message: 'no Carta connector is available in this view' }, NO_CONNECTOR_CODE);
   let res;
   try {
-    res = await mcp.callTool(CARTA_MCP_SERVER, name, args || {});
+    res = await withTimeout(mcp.callTool(CARTA_MCP_SERVER, name, args || {}), CALL_TIMEOUT_MS, name);
   } catch (err) {
-    throw mcpError(err);
+    const e = mcpError(err, err && err.clientTimeout ? 'server_unavailable' : undefined);
+    e.clientTimeout = Boolean(err && err.clientTimeout);
+    throw e;
   }
   if (res && res.isError) {
     const text = (Array.isArray(res.content) && res.content[0] && res.content[0].text) || 'tool error';
-    throw mcpError({ message: text, code: res.code }, 'tool_error');
+    throw mcpError({ message: text, code: res.code || failureCode(text) }, 'tool_error');
   }
-  return extractPayload(res);
+  try {
+    return extractPayload(res);
+  } catch (err) {
+    const code = failureCode((err && err.message) || '');
+    if (code) throw mcpError(err, code);
+    throw err;
+  }
 }
 
 async function callToolWithRetry(name, args, attempts){
@@ -1677,7 +1725,7 @@ async function callToolWithRetry(name, args, attempts){
     } catch (e) {
       lastErr = e;
       const msg = (e && e.message) ? e.message : String(e);
-      const isTimeout = /time(d)?\s*out|timeout/i.test(msg);
+      const isTimeout = !e.clientTimeout && /time(d)?\s*out|timeout/i.test(msg);
       debugLog('[retry] ' + cmd + ' attempt ' + (i + 1) + '/' + max + ' failed', e);
       if (!isTimeout || i === max - 1) throw e;
       // backoff: 1s, 4s

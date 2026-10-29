@@ -188,8 +188,6 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.ShareStatus.CopyPrompt` | click | Copy on the ask-Claude prompt for a failed shared-reports load. |
 | `MancoReporting.ShareStatus.CopyFixPrompt` | click | Copy on the Claude install/sign-in prompt for a failed shared-reports load whose error names the `claude` CLI itself as the problem. |
 | `MancoReporting.ShareStatus.SignIn` | click | "Sign in to Claude" shown for a failed shared-reports load coded `not_logged_in`. |
-| `MancoReporting.OwnSyncNotice.CopyPrompt` | click | Copy on the ask-Claude prompt in the own-sync notice ("Not on the hosted app" or "Changes won't reach the hosted app"), shown on your own report in a local build while own-sync is blocked: on every report when no Carta user id is saved, otherwise only on reports with a push still due. |
-| `MancoReporting.OwnSyncNotice.SignIn` | click | "Sign in to Claude" in the own-sync notice when that sync stopped because Claude Code is signed out. |
 
 ### Custom report
 

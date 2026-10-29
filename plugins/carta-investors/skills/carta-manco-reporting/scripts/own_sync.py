@@ -84,9 +84,9 @@ from share_bridge import ShareError
 
 Emit = Callable[[str], None]
 
-# Why a sweep couldn't reach Carta, recorded for serve.py (manco_paths.write_own_sync_status)
-# so the local app can tell the owner their reports aren't on the hosted app. preflight_claude's
-# own reasons are recorded as they are.
+# Why a sweep couldn't reach Carta, recorded in own_sync_status.json
+# (manco_paths.write_own_sync_status) for --plan. preflight_claude's own reasons are
+# recorded as they are.
 BLOCKED_NO_USER_ID = "no_user_id"
 BLOCKED_NOT_INSTALLED = preflight_claude.REASON_NOT_INSTALLED
 BLOCKED_NOT_LOGGED_IN = preflight_claude.REASON_NOT_LOGGED_IN
@@ -429,12 +429,13 @@ def _due_plans(store: report_store.ReportStore, data_dir: Path, report_ids: List
 
 
 def _record_blocked(data_dir: Path, reason: str, detail: str, user_id: Optional[int] = None) -> None:
-    """Log why a sweep couldn't reach Carta, and record it for the local app: the one rule
-    for own_sync_status.json.
+    """Log why a sweep couldn't reach Carta, and record it in own_sync_status.json for
+    --plan (the one rule for that file): a session push reads it under the sweep lock to
+    decide whether it has pushes to make.
 
     - `no_user_id` (no `user_id` here) is recorded for every report.
-    - Any other reason is recorded with `due`, the reports that still have a push due, so the
-      app shows it only on those; with none due, `blocked_by` is None.
+    - Any other reason is recorded with `due`, the reports that still have a push due; with
+      none due, `blocked_by` is None.
     - _record_push writes None after any push, a sweep's or a session's --record."""
     print("[own_sync] not synced to the hosted app: %s" % detail, file=sys.stderr)
     if user_id is None:

@@ -6,7 +6,6 @@ import { H1, Btn, Tag, Chevron, Bubble, TOOLBAR_CONTROL_STYLE } from "../ui/comp
 import ExportButton from "../ui/ExportButton.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
-import OwnSyncNotice from "../reports/OwnSyncNotice.jsx";
 import ReportNotice from "../reports/ReportNotice.jsx";
 import { REPORT_ACTIONS, actSaved } from "../state/useReports.js";
 import { isCustomReportBudget, reportFor } from "../shell/reportNav.js";
@@ -367,7 +366,6 @@ export default function CustomReportView({
         <>
           <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi}
             accountsData={accountsData} onOpenReport={onOpenReport} onShareDone={onShareDone} />
-          <OwnSyncNotice report={report} reportsApi={reportsApi} hosted={hosted} />
         </>
       )}
 

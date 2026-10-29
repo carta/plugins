@@ -35,14 +35,13 @@ allowed-tools:
 trigger-phrases:
   - "get my lp docs tutorial"
   - "show me the get my lp docs tutorial"
-  - "how do I find my documents"
   - "walk me through get my lp docs"
   - "getting started with get my lp docs"
   - "documents tutorial"
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.7.1</carta-plugin>
+<carta-plugin>carta-investors:7.7.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -55,7 +54,6 @@ trigger-phrases:
 If the user's message matches ANY of these patterns, **skip the main skill and run the Tutorial (see Section below)**:
 - "get my lp docs tutorial"
 - "show me the get my lp docs tutorial"
-- "how do I find my documents"
 - "walk me through get my lp docs"
 - "getting started with get my lp docs"
 - "documents tutorial"

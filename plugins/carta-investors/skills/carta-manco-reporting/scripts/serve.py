@@ -292,7 +292,6 @@ def _reports_listing():
                     for r in doc["reports"]],
         "share_target": share_bridge.describe_target(manco_paths.read_carta_environment(DATA_DIR),
                                                        manco_paths.read_share_mcp_server(DATA_DIR)),
-        "own_sync": manco_paths.read_own_sync_status(DATA_DIR),
     }, store.etag()
 
 

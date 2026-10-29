@@ -191,7 +191,7 @@ def own_sync_status_file(dashboard_dir):
 
 
 def write_own_sync_status(dashboard_dir, blocked_by, due=None):
-    """Write own_sync_status.json for serve.py to show the owner: `blocked_by` (one of
+    """Write own_sync_status.json for own_sync.py --plan: `blocked_by` (one of
     own_sync's BLOCKED_* reasons, or None) and, when given, `due`, the report ids it
     applies to. own_sync._record_blocked holds the rule for what is written when."""
     status = {"blocked_by": blocked_by}
