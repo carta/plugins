@@ -340,6 +340,9 @@
       border: 1px solid var(--gray-20); border-radius: 4px; background: var(--white); font-family: inherit; font-size: 13px;
       font-weight: 500; color: var(--black); cursor: pointer; white-space: nowrap; }
     .combo-trigger-value { overflow: hidden; text-overflow: ellipsis; }
+    /* The outline goes black on hover, while focused (a click focuses it) and while its menu is open. */
+    .combo-trigger:hover:not(:disabled), .combo-trigger:focus, .combo-trigger[aria-expanded="true"] {
+      border-color: var(--black); box-shadow: 0 0 0 1px var(--black); outline: none; }
     .bub { display: inline-flex; align-items: center; height: 18px; min-width: 18px; padding: 0 6px; border: 1px solid var(--link-blue);
       border-radius: 999px; background: var(--link-blue-tint); color: var(--link-blue); font-size: 12px; flex-shrink: 0; }
     .combo-panel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; min-width: 420px; max-width: min(560px, calc(100vw - 32px));
@@ -467,7 +470,7 @@
             <button class="combo-trigger" id="portfolio-picker" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="portfolio-title portfolio-label" onclick="togglePortfolioMenu()">
               <span class="combo-trigger-value" id="portfolio-label"></span><span class="chev" aria-hidden="true"></span>
             </button>
-            <div class="combo-panel portfolio-panel" id="portfolio-panel" style="display:none">
+            <div class="combo-panel portfolio-panel" id="portfolio-menu-panel" style="display:none">
               <div class="portfolio-title" id="portfolio-title">Portfolios</div>
               <ul class="combo-list" id="portfolio-list" role="listbox" aria-labelledby="portfolio-title" onclick="onPortfolioMenuClick(event)" onkeydown="onPortfolioMenuKey(event)"></ul>
             </div>
@@ -1971,18 +1974,18 @@ function renderPortfolioMenu() {
 }
 
 function togglePortfolioMenu() {
-  if (document.getElementById('portfolio-panel').style.display === 'none') openPortfolioMenu(); else closePortfolioMenu();
+  if (document.getElementById('portfolio-menu-panel').style.display === 'none') openPortfolioMenu(); else closePortfolioMenu();
 }
 function openPortfolioMenu() {
   closeFundCombo();
   renderPortfolioMenu();
-  document.getElementById('portfolio-panel').style.display = '';
+  document.getElementById('portfolio-menu-panel').style.display = '';
   document.getElementById('portfolio-picker').setAttribute('aria-expanded', 'true');
   const current = document.getElementById('portfolio-list').querySelector('.is-current');
   if (current) current.focus();
 }
 function closePortfolioMenu() {
-  document.getElementById('portfolio-panel').style.display = 'none';
+  document.getElementById('portfolio-menu-panel').style.display = 'none';
   document.getElementById('portfolio-picker').setAttribute('aria-expanded', 'false');
 }
 function onPortfolioMenuClick(e) {
