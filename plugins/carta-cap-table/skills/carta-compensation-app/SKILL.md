@@ -1,17 +1,19 @@
 ---
 name: carta-compensation-app
 description: >
-  Serves a live, clickable CTC console — builds one corporation's Carta Total Compensation
-  data into a React app on localhost, where you filter by job area, compare peer groups and
-  explore the scorecard yourself. CLAUDE CODE ONLY; it serves a local web app. Use it when
-  the ask is to run an app, launch a console, or explore the data live, rather than to be
-  told a figure. Invoke with a corporation name or id, e.g. "launch a comp dashboard for Acme".
-  Its Benchmarks and Scorecard tabs are surfaces inside the app, not separately routable.
-  Route by deliverable, not subject — an answer, CSV or figure to quote belongs to a sibling
-  even when the wording overlaps: use carta-compensation-benchmarks for a role's market rate,
-  and carta-compensation-scorecard for roster positioning, compa-ratios or who is below market.
-  So "what are our comp benchmarks" is a sibling even though it names them, while "open our
-  comp benchmarks so I can filter them" is this skill. NOT for a single role lookup. READ-ONLY.
+  Open an interactive pay dashboard you can filter and explore. Serves one corporation's
+  Carta Total Compensation (CTC) data as a live React console on localhost, with job
+  area filters, peer groups and the scorecard. CLAUDE CODE ONLY; it serves a local web
+  app. Use it when the ask is to run an app, launch a console, or explore the data live,
+  rather than to be told a figure. Invoke with a corporation name or id, e.g. "launch a
+  comp dashboard for Acme". Its Benchmarks and Scorecard tabs are surfaces inside the
+  app, not separately routable. Route by deliverable, not subject — an answer, CSV or
+  figure to quote belongs to a sibling even when the wording overlaps: use
+  carta-compensation-benchmarks for a role's market rate, and
+  carta-compensation-scorecard for roster positioning, compa-ratios or who is below
+  market. So "what are our comp benchmarks" is a sibling even though it names them,
+  while "open our comp benchmarks so I can filter them" is this skill. NOT for a single
+  role lookup. READ-ONLY.
 argument-hint: "<corporation name or numeric corporation id — required>"
 version: 0.3.0
 model: inherit
@@ -59,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 

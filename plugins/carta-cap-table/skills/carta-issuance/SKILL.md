@@ -1,19 +1,18 @@
 ---
 name: carta-issuance
 description: >-
-  Issue securities on a Carta cap table. Use when the user asks to issue
-  certificates, stock certificates, option grants (ISO, NSO, EMI, CSOP,
-  Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest
-  units (PIUs), to draft shares, grants or units, or to resume issuing from a
-  draft set. USE WHEN the user says "issue", "grant", "draft", "award", "give
-  equity", "give shares", "give stock", "create a certificate", "create a
-  grant", "issue a profits interest", "issue PIUs", "grant profits interest
-  units", "set up an option grant", "issue equity to a named person", or names
-  any specific security type above. Also USE WHEN the user points at a
-  spreadsheet, CSV, Carta import template, or a grant/award document as the
+  Issue shares, option grants or units to people on your cap table. Use when the user
+  asks to issue certificates, stock certificates, option grants (ISO, NSO, EMI, CSOP,
+  Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest units
+  (PIUs), to draft shares, grants or units, or to resume issuing from a draft set. USE
+  WHEN the user says "issue", "grant", "draft", "award", "give equity", "give shares",
+  "give stock", "create a certificate", "create a grant", "issue a profits interest",
+  "issue PIUs", "grant profits interest units", "set up an option grant", "issue equity
+  to a named person", or names any specific security type above. Also USE WHEN the user
+  points at a spreadsheet, CSV, Carta import template, or a grant/award document as the
   source of the issuance ("issue the grants in this file", "here's our import
-  template"). Also USE WHEN asked for help issuing with nothing attached
-  ("help me issue options in Carta", "can I issue grant awards?").
+  template"). Also USE WHEN asked for help issuing with nothing attached ("help me issue
+  options in Carta", "can I issue grant awards?").
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -54,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 # Issue Securities
 

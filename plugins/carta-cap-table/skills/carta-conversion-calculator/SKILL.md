@@ -1,7 +1,10 @@
 ---
 name: carta-conversion-calculator
 description: >-
-  Calculate SAFE and convertible note conversion into equity at a financing close. Use when asked about SAFE conversion, note conversion, conversion shares, conversion math, how instruments convert in a priced round, or what happens to outstanding SAFEs and notes when a new round closes. Do NOT use for exit/sale/acquisition payouts at a sale price.
+  Calculate how SAFEs and convertible notes convert into shares in a new round. Use when
+  asked about SAFE conversion, note conversion, conversion shares, conversion math, how
+  instruments convert in a priced round, or what happens to outstanding SAFEs and notes
+  when a new round closes. Do NOT use for exit/sale/acquisition payouts at a sale price.
 when_to_use: >-
   Use when asked how SAFEs or convertible notes convert at a given round
   price or pre-money valuation, how many shares outstanding instruments
@@ -31,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

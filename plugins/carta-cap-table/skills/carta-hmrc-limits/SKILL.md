@@ -1,7 +1,10 @@
 ---
 name: carta-hmrc-limits
 description: >-
-  Report a UK company's HMRC EMI/CSOP limit usage. Use when asked how much EMI allowance is left, whether the company is near the £6m EMI limit, who is close to or over their £250k individual limit, CSOP headroom, or whether a planned grant fits.
+  Check how much of a UK company's EMI and CSOP allowance is left. Reports HMRC EMI/CSOP
+  limit usage. Use when asked how much EMI allowance is left, whether the company is
+  near the £6m EMI limit, who is close to or over their £250k individual limit, CSOP
+  headroom, or whether a planned grant fits.
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -23,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

@@ -1,16 +1,17 @@
 ---
 name: carta-reporting
 description: >-
-  Build a custom cap table report or file for one company — filtered, sorted, or
-  multi-column tables of grants, stakeholders, securities, SAFEs, convertible notes,
-  preferred holders, liquidation seniority, and rights & preferences, delivered as an
-  interactive artifact, markdown or Excel. Also handles any request starting with
-  "Generate Carta Excel —" (the artifact prompt bar payload). For a single fact or a
-  short answer (one holder's ownership, the largest grants, one stakeholder), use
-  carta-cap-table. Defers to specialized skills for: SAFE/note conversion math, voting
-  rights, issuance, modifying issuables, per-stakeholder vesting detail (use
-  carta-grant-vesting for "How much has [name] vested?"), and round history lookup (use
-  carta-round-history for "What was our Series B round?"). Not for cross-portfolio data.
+  Build a custom cap table report as a table, Excel file or interactive page. Covers
+  filtered, sorted or multi-column tables of grants, stakeholders, securities, SAFEs,
+  convertible notes, preferred holders, liquidation seniority, and rights & preferences
+  for one company, delivered as an interactive artifact, markdown or Excel. Also handles
+  any request starting with "Generate Carta Excel —" (the artifact prompt bar payload).
+  For a single fact or a short answer (one holder's ownership, the largest grants, one
+  stakeholder), use carta-cap-table. Defers to specialized skills for: SAFE/note
+  conversion math, voting rights, issuance, modifying issuables, per-stakeholder vesting
+  detail (use carta-grant-vesting for "How much has [name] vested?"), and round history
+  lookup (use carta-round-history for "What was our Series B round?"). Not for
+  cross-portfolio data.
 model: sonnet
 allowed-tools:
   - ToolSearch
@@ -45,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 # Custom Reports
 

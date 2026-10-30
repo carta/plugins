@@ -1,7 +1,17 @@
 ---
 name: carta-compensation-rolematcher
 description: >-
-  Classify a job title or description into the CTC taxonomy (job area, focus, level, track). Use when the user wants to know how a role is categorized or mapped to the taxonomy structure — not to fetch salary, equity, or benchmark numbers. Do NOT use when the user is asking for "market rates", "benchmark data", "compensation ranges", "what does X pay", or "show me benchmarks" — use carta-compensation-benchmarks for that. Do NOT use when the user is asking how their own company compares to market — e.g. "our internal pay bands vs Carta benchmarks", "compare our pay bands against the 25th/50th/75th percentile", "who at our company is below market" — that's roster-level positioning, use carta-compensation-scorecard. Do NOT use for general career advice or job search queries unrelated to compensation benchmarking.
+  Match a job title to Carta's standard job area, level and track. Classifies a job
+  title or description into the CTC taxonomy (job area, focus, level, track). Use when
+  the user wants to know how a role is categorized or mapped to the taxonomy structure —
+  not to fetch salary, equity, or benchmark numbers. Do NOT use when the user is asking
+  for "market rates", "benchmark data", "compensation ranges", "what does X pay", or
+  "show me benchmarks" — use carta-compensation-benchmarks for that. Do NOT use when the
+  user is asking how their own company compares to market — e.g. "our internal pay bands
+  vs Carta benchmarks", "compare our pay bands against the 25th/50th/75th percentile",
+  "who at our company is below market" — that's roster-level positioning, use
+  carta-compensation-scorecard. Do NOT use for general career advice or job search
+  queries unrelated to compensation benchmarking.
 version: 1.0.0
 model: sonnet
 allowed-tools:
@@ -10,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 # CTC RoleMatcher
 

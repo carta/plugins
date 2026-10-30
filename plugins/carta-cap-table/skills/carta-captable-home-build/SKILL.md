@@ -1,15 +1,14 @@
 ---
 name: carta-captable-home-build
 description: >
-  Build or rebuild the Carta Home live artifact for one Carta cap-table company — a
-  dashboard page published as "Carta Home - {company}". Use when the user asks to "build
-  cap table home", "rebuild cap table home", "deploy cap table home", "set up cap table
-  home", or asks to build, rebuild, deploy or set up Carta Home for a named company or
-  corporation — and to open an existing one: "open cap table home", "where's my cap table
-  home", or to open or find Carta Home for a named company. For a fund firm's
-  Carta Home (SOI, fund performance, LP reporting), use carta-investors' carta-home-build
-  instead; for a CRM home of pipeline, deals and contacts, use carta-crm's
-  carta-crm-home-build.
+  Build or open a live dashboard for one company's cap table, published as "Carta Home -
+  {company}". Use when the user asks to "build cap table home", "rebuild cap table
+  home", "deploy cap table home", "set up cap table home", or asks to build, rebuild,
+  deploy or set up Carta Home for a named company or corporation — and to open an
+  existing one: "open cap table home", "where's my cap table home", or to open or find
+  Carta Home for a named company. For a fund firm's Carta Home (SOI, fund performance,
+  LP reporting), use carta-investors' carta-home-build instead; for a CRM home of
+  pipeline, deals and contacts, use carta-crm's carta-crm-home-build.
 model: sonnet
 allowed-tools:
   # The two Step 0 gates live in the plugin's own references/ directory.
@@ -33,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 

@@ -1,7 +1,10 @@
 ---
 name: carta-portfolio-alerts
 description: >-
-  Time-bounded and threshold-bounded risk detection across portfolio companies — finds items that are expiring soon, maturing soon, running low, or otherwise at risk. Surfaces what needs attention now, not what the data looks like in general.
+  Flag what needs attention across your portfolio, like expiring 409As. Finds items
+  across portfolio companies that are expiring soon, maturing soon, running low, or
+  otherwise at risk. Surfaces what needs attention now, not what the data looks like in
+  general.
 when_to_use: >-
   Use when asked which companies have an expiring item (409As, agreements,
   exercise windows), what is maturing in the next N months across the
@@ -35,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

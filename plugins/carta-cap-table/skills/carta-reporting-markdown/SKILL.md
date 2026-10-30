@@ -1,11 +1,11 @@
 ---
 name: carta-reporting-markdown
 description: >-
-  Internal subskill for carta-reporting. Drives the full MARKDOWN-mode interaction:
-  schema preview, customization checkpoint, transform config (filtering, sorting,
-  formulas, aggregations), output preview, and hand-off to carta-reporting-excel.
-  Invoked by carta-reporting (MARKDOWN mode, `Artifact` tool not available) after the preview file lands.
-  Not for direct user invocation.
+  Internal step of carta-reporting: walks you through shaping a report. Drives the full
+  MARKDOWN-mode interaction: schema preview, customization checkpoint, transform config
+  (filtering, sorting, formulas, aggregations), output preview, and hand-off to
+  carta-reporting-excel. Invoked by carta-reporting (MARKDOWN mode, `Artifact` tool not
+  available) after the preview file lands. Not for direct user invocation.
 model: sonnet
 allowed-tools:
   - AskUserQuestion
@@ -15,7 +15,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
 
 # Transform Configuration
 
