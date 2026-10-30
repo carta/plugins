@@ -236,17 +236,24 @@ function appParamsFrom(paramMap, source) {
 // its app. A row that stands for one package (`pkg`) fills package_params, and an opening
 // without them is not for it. An entity row over a single package (`onePackage`) fills an
 // opening from the entity first and falls back to that package, so a page that takes a
-// package still opens there. A companion opening carries the skill that guides its page.
+// package still opens there. A companion opening carries the skill that guides its page, and
+// the app carta-mcp names to open right after the page (`then`) when the row fills it too.
 function taskOpeningFor(entry, source, pkg, onePackage) {
   const byPackage = (opening, p) =>
     Object.keys(opening.package_params || {}).length > 0 && appParamsFrom(opening.package_params, p);
+  const fill = (opening) => pkg
+    ? byPackage(opening, pkg)
+    : appParamsFrom(opening.params, source) || (onePackage && byPackage(opening, onePackage));
   for (const opening of entry.openings) {
-    const params = pkg
-      ? byPackage(opening, pkg)
-      : appParamsFrom(opening.params, source) || (onePackage && byPackage(opening, onePackage));
+    const params = fill(opening);
     if (!params) continue;
     const skill = opening.kind === "companion" ? COMPANION_SKILLS[entry.column ?? entry.template] : null;
-    return Object.assign({ kind: opening.kind, target: opening.target, params }, skill ? { skill } : {});
+    const thenParams = opening.then ? fill(opening.then) : null;
+    return Object.assign(
+      { kind: opening.kind, target: opening.target, params },
+      skill ? { skill } : {},
+      thenParams ? { then: { target: opening.then.target, params: thenParams } } : {},
+    );
   }
   return null;
 }
@@ -282,13 +289,17 @@ function frtAttachApps(rows, payload, apps) {
 // What the new chat is prefilled with. It names the call and params verbatim so Claude
 // opens the page or app rather than answering in prose; the firm lets Claude switch to it
 // if the chat's Carta context differs. A companion read returns its page's companion_url,
-// and the step that opens it beside the chat.
+// and the step that opens it beside the chat; an app to open after the page is named the
+// same way, so the chat opens it every time rather than when Claude chooses to.
 function frtAppPrompt(app, firm) {
   const where = firm ? ` (${firm})` : "";
   const params = JSON.stringify(app.params);
   if (app.kind === "companion") {
     const using = app.skill ? ` with the ${app.skill} skill` : "";
-    return `Open the Carta ${app.label} companion page for ${app.entity}${where}${using}: call read_tool with name "${mcpToolName(app.target)}" and arguments ${params}, then open its companion_url beside this chat as its next_step says.`;
+    const then = app.then
+      ? `, then call view_remote with name "${app.then.target}" and params ${JSON.stringify(app.then.params)}`
+      : "";
+    return `Open the Carta ${app.label} companion page for ${app.entity}${where}${using}: call read_tool with name "${mcpToolName(app.target)}" and arguments ${params}, then open its companion_url beside this chat as its next_step says${then}.`;
   }
   return `Open the Carta ${app.label} app for ${app.entity}${where}: call view_remote with name "${app.target}" and params ${params}.`;
 }

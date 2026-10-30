@@ -136,6 +136,7 @@ const COMPANION_SKILLS = {
   financial_report: 'carta-investors:financial-package-companion',
   cash_reconciliation: 'carta-investors:carta-gp-cash-reconciliation',
   [TASK_TEMPLATE_CASH_RECONCILIATION]: 'carta-investors:carta-gp-cash-reconciliation',
+  [TASK_TEMPLATE_MANAGEMENT_FEES]: 'carta-investors:review-management-fees',
   [TASK_TEMPLATE_SOI_REVIEW]: 'carta-investors:open-soi-review',
 };
 

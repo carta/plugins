@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.10.1</carta-plugin>
+<carta-plugin>carta-investors:7.10.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -275,11 +275,14 @@ not inside a fund-data dashboard.
   chat** instead of Carta, prefilled with a prompt that names the page or app, the entity, the
   firm and the exact call; the GP sends it. A companion opening has Claude call the read with
   `read_tool` and open the `companion_url` it returns in the browser pane beside the chat, as the
-  read's `next_step` says; an app opening has Claude call `view_remote`. A companion page with
+  read's `next_step` says, and then call `view_remote` on the app carta-mcp names to open after
+  the page (the opening's `then`, set for the management fee review's decision app) when the row
+  fills its params; an app opening has Claude call `view_remote`. A companion page with
   a skill of its own in `COMPANION_SKILLS` (`carta-workhub.config.js`, by column or template)
   has the prompt name that skill too, so Claude drives the page with its commands and rules: the
   Financial Report column's package pages name `carta-investors:financial-package-companion`,
-  cash reconciliation `carta-investors:carta-gp-cash-reconciliation`, and an SOI review card
+  cash reconciliation `carta-investors:carta-gp-cash-reconciliation`, a management fee review
+  card `carta-investors:review-management-fees`, and an SOI review card
   `carta-investors:open-soi-review`. A queue row names no firm, so the firm the Workhub shows
   fills `firm_uuid` (the SOI review read takes it). An artifact cannot post
   into a chat or render an app itself, so neither runs inside the Workhub. `openClaudeChat` in
