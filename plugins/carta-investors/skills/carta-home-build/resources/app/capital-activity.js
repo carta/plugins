@@ -1,7 +1,7 @@
 // ── Capital activity: pinned card + detail overlay ──
 // Depends on core.js (carta-home.app.js): _mcp(), fmtShort(), fmtFull(),
 // fmtDDMmmYYYY(), escHtml(), showToast(), trackHome(), and the shared _benchmarkFirmId.
-let _capActivityData = null; // null = not yet fetched; [] = none active; [...rows] = active
+let _capActivityData = null; // null = not fetched (or the fetch failed); [] = none active; [...rows] = active
 
 // ── Capital activity: fetch active capital calls + distributions ──
 // The transactional endpoint rather than the warehouse, so the cards agree with
@@ -12,7 +12,7 @@ async function fetchCapitalActivity() {
     if (res.isError) {
       console.error('[capactivity] fa:list:active-capital-activity failed —',
         res.content?.[0]?.text ?? res);
-      _capActivityData = [];
+      _capActivityData = null;
     } else {
       const payload = JSON.parse(res.content?.[0]?.text ?? '{}');
       _capActivityData = (payload.results ?? []).map(a => {
@@ -32,10 +32,21 @@ async function fetchCapitalActivity() {
     }
   } catch (e) {
     console.error('[capactivity error]', e);
-    _capActivityData = [];
+    _capActivityData = null;
   }
   renderCapActivitySection();
   loadDistributionProgress();
+}
+
+// Whether any capital activity pop-up (details, reminder confirmation, email preview) is open.
+function caPopupOpen() {
+  return !!document.querySelector('.ca-detail-visible, .ca-confirm-visible, .ca-preview-visible');
+}
+
+// Whether Carta answered with no pending capital activity. The viewer's dismissals don't count,
+// and a distribution whose progress hasn't loaded yet counts as open.
+function caNoneOpen() {
+  return Array.isArray(_capActivityData) && _capActivityData.every(isPaidOutDistribution);
 }
 
 // Replaces a visible distribution card's backend counts with ones read from its

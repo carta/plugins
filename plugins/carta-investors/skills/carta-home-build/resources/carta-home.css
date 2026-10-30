@@ -1238,15 +1238,17 @@
 }
 #tour-spotlight {
   display: none;
-  position: fixed;
+  position: absolute;  /* page coordinates: a scroll carries it */
   z-index: 999;
   border-radius: var(--ink-size-global-radius-flat);
   pointer-events: none;
-  transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+  /* Moved frame by frame from the app (see _tourPaint), so it follows the page as it scrolls. */
+  animation: tour-fade-in 0.3s ease;
 }
+@keyframes tour-fade-in { from { opacity: 0; } }
 #tour-tooltip {
   display: none;
-  position: fixed;
+  position: absolute;  /* page coordinates: a scroll carries it */
   z-index: 1000;
   width: 308px;
   background: var(--ink-color-global-surface-background-default);
@@ -1255,16 +1257,19 @@
   box-shadow: var(--ink-elevation-global-shadow-large);
   padding: 20px 22px;
   font-family: inherit;
-  transition: top 0.2s ease, left 0.2s ease;
+  transition: opacity 0.2s ease, translate 0.2s ease;
 }
+/* Between steps (and on open) the card fades and drops slightly, then settles in place. */
+#tour-tooltip.tour-tooltip--switching { opacity: 0; translate: 0 6px; }
 .tour-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: 3px;
   background: var(--ink-color-global-border-default);
   flex-shrink: 0;
+  transition: width 0.25s ease, background 0.25s ease;
 }
-.tour-dot.active { background: var(--ink-color-global-border-active); }
+.tour-dot.active { width: 18px; background: var(--ink-color-global-border-active); }
 /* Ink primary-button hover for the inline-styled #tour-next-btn in the template. */
 #tour-next-btn { transition: background 0.13s; }
 #tour-next-btn:hover { background: var(--ink-button-background-color-primary-base-hover); }

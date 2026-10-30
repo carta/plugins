@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.19.1",
+    "version": "1.19.2",
     "headline": "Carta Home now reads Carta through its current tools, so your cards keep loading as Carta's connector changes. Rebuild to keep it working."
   },
   "carta-soi": {

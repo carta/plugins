@@ -1415,36 +1415,38 @@ const TOUR_STEPS = [
   {
     id:    'tab-btn-recommended',
     title: 'Welcome to Carta Home',
-    desc:  "Your firm's Carta data in one place. We've set up a few views to get you started, and you can change any of them.",
+    desc:  "Your firm's Carta data, dashboards and skills on one page.",
   },
   {
+    // Spotlights the cards, not the full-width row; _tourPaint picks the copy for a hidden section.
     id:        'ca-section-v2',
+    spotId:    'ca-section-cards',
     title:     'Capital activity',
-    desc:      "Track open capital calls and distributions, and remind investors who haven't paid, without opening Carta.",
-    forceShow: true,
+    desc:      "Open capital calls and distributions, with who's paid. Send reminders to investors without opening Carta.",
+    emptyDesc: "You have no open capital calls or distributions. When you do, they'll show here with who's paid.",
   },
   {
     id:    'dashboards-section',
     title: 'Your dashboards',
-    desc:  "Live views of your firm's data, like your schedule of investments and fund performance. Open one to see the full dashboard.",
+    desc:  "Live views of your firm's data from Carta. Open one for the details.",
   },
   {
     id:    'prompts-section',
     title: 'Suggested for you',
-    desc:  'Start with prompts curated for how you use Carta. Edit the details, then copy one into a chat.',
+    desc:  'Prompts based on how you use Carta. Fill in the details, then copy one into a chat.',
   },
   {
     // Shown only once get_current_user says which microapps the firm has, so the tour
     // leaves it out while the section is hidden.
     id:           'whats-new-section',
     title:        "What's new",
-    desc:         'The latest skills and microapps in the Carta plugin, picked for your firm.',
+    desc:         'The skills and microapps Carta released most recently.',
     skipIfHidden: true,
   },
   {
     id:    'tab-btn-directory',
     title: 'Skill directory',
-    desc:  'Browse the skills and microapps in the Carta plugin.',
+    desc:  'Skills and microapps your firm can use, like portfolio analytics, fund forecasting and tear sheets.',
   },
 ];
 
@@ -1452,8 +1454,6 @@ let _tourIdx = 0;
 // The steps this tour walks and counts, fixed when it opens: a section that appears later
 // (What's new after a slow get_current_user) is not part of it, so the counter never changes.
 let _tourSteps = [];
-let _tourRestoreEl = null;
-let _tourRestoreVal = '';
 // Element that had focus when the tour opened, so focus can be handed back on
 // exit. The tour currently auto-starts, so this is usually <body>.
 let _tourReturnFocusEl = null;
@@ -1469,6 +1469,8 @@ function tourStart() {
   // Not over the Skill directory tab, where every Home step would point at a hidden pane, and
   // not while the viewer is typing, since the tour takes focus. A later visit opens it instead.
   if (!document.getElementById('tab-recommended')?.classList.contains('active')) return;
+  // Nor over a capital activity pop-up.
+  if (typeof caPopupOpen === 'function' && caPopupOpen()) return;
   if (document.activeElement?.closest?.('input, textarea, [contenteditable="true"]')) return;
   trackHome("click", "CartaHome.Tour.Start");
   _tourReturnFocusEl = document.activeElement;
@@ -1479,7 +1481,7 @@ function tourStart() {
 
 function _tourIsOpen() {
   // The overlay is the earliest signal: _tourPaint shows it synchronously,
-  // whereas the tooltip only appears after the 80ms layout-settle timeout.
+  // whereas the card only fades in near the end of the spotlight's move.
   const overlay = document.getElementById('tour-overlay');
   return !!overlay && overlay.style.display === 'block';
 }
@@ -1491,7 +1493,12 @@ function _tourPos() {
 }
 
 function _tourShownSteps() {
-  return TOUR_STEPS.filter(step => !step.skipIfHidden || !_tourGetEl(step)?.hidden);
+  return TOUR_STEPS.filter(step => !step.skipIfHidden || _tourIsShown(_tourGetEl(step)));
+}
+
+// Hidden by attribute, folded away (capital activity with every card dismissed) or not shown.
+function _tourIsShown(el) {
+  return !!el && !el.hidden && !el.inert && el.style.display !== 'none';
 }
 
 function _tourGetEl(step) {
@@ -1500,12 +1507,86 @@ function _tourGetEl(step) {
   return null;
 }
 
-function _tourRestore() {
-  if (_tourRestoreEl) {
-    _tourRestoreEl.style.display = _tourRestoreVal;
-    _tourRestoreEl  = null;
-    _tourRestoreVal = '';
-  }
+// The spotlight and card are positioned in page coordinates (position: absolute), so a scroll
+// carries them with the content: the cut-out glides between two fixed points on the page while
+// the page scrolls, and never chases a moving target.
+
+// Where the spotlight sits now, so the next step can glide from it.
+let _tourSpot = null;
+// The element the open step points at (null for a centred step), and whether to wrap its children.
+let _tourEl = null, _tourFit = false, _tourPaintId = 0;
+// Where the page is scrolling to, so the card can be placed before the scroll ends, and
+// whether _tourTarget put the card above the cut-out.
+let _tourScrollTo = 0, _tourAbove = false;
+
+// Breathing room kept above a section scrolled to the top of the screen.
+const TOUR_TOP_ROOM = 24;
+// Space between a section and the spotlight's edge.
+const TOUR_SPOT_PAD = 8;
+// The card's class while it fades between steps; Next waits until it's gone.
+const TOUR_SWITCHING = 'tour-tooltip--switching';
+
+// A step is still gliding in while its card is switching.
+function _tourSwitching() {
+  return document.getElementById('tour-tooltip').classList.contains(TOUR_SWITCHING);
+}
+// Space between the card and the cut-out, and between the card and the screen edge.
+const TOUR_CARD_GAP = 14, TOUR_SCREEN_MARGIN = 12;
+
+// The element's box in page coordinates, or with `fit` the box around its children (the
+// capital activity cards, not the full-width row they sit in).
+function _tourBox(el, fit) {
+  const kids  = fit ? [...el.children].map(c => c.getBoundingClientRect()).filter(r => r.width) : [];
+  const boxes = kids.length ? kids : [el.getBoundingClientRect()];
+  const top = Math.min(...boxes.map(r => r.top)), left = Math.min(...boxes.map(r => r.left));
+  return { top: top + window.scrollY, left: left + window.scrollX,
+           width: Math.max(...boxes.map(r => r.right)) - left,
+           height: Math.max(...boxes.map(r => r.bottom)) - top };
+}
+
+// The card's height, measured once it has been shown; a typical height before then.
+function _tourCardHeight() {
+  return document.getElementById('tour-tooltip').offsetHeight || 220;
+}
+
+// Room the card needs beside the cut-out: its height, the gap and the screen margin.
+function _tourCardRoom() { return _tourCardHeight() + TOUR_CARD_GAP + TOUR_SCREEN_MARGIN; }
+
+// Where the page should scroll for a step, and the cut-out it shows there, both in page
+// coordinates, and whether the card goes above the cut-out. A section is centred when the card fits under it; otherwise it goes to the top
+// and the cut-out is cropped to leave the card room below. Near the end of the page, where it
+// can't scroll that far, the card goes above if it fits there. With no element the cut-out is
+// a zero-size point at the centre, which closes it while the scrim stays on. `at` lays the step
+// out for a scroll the page is already at (a resize, which doesn't move the page) instead.
+function _tourTarget(el, fit, at) {
+  const vw = window.innerWidth, vh = window.innerHeight, p = TOUR_SPOT_PAD;
+  const max = Math.max(0, document.documentElement.scrollHeight - vh);
+  if (!el) return { scroll: window.scrollY, above: false,
+                    rect: { top: window.scrollY + vh / 2, left: vw / 2, width: 0, height: 0 } };
+  const b      = _tourBox(el, fit);
+  const room   = _tourCardRoom();
+  const h      = b.height + p * 2;
+  const want   = h + room <= vh ? b.top - p - (vh - h - room) / 2 : b.top - p - TOUR_TOP_ROOM;
+  const scroll = at ?? Math.max(0, Math.min(max, want));
+  const top    = b.top - p;
+  // Below by default; above only when the end of the page leaves no room below and there is above.
+  const above  = scroll + vh - (top + h) < room && top - scroll >= room;
+  const bottom = scroll + (above ? vh - TOUR_SCREEN_MARGIN : vh - room);
+  return { scroll, above, rect: { top, left: b.left - p, width: b.width + p * 2,
+                           height: Math.max(0, Math.min(top + h, bottom) - top) } };
+}
+
+function _tourPlaceSpot(rect, ring) {
+  const spotlight = document.getElementById('tour-spotlight');
+  spotlight.style.top    = rect.top + 'px';
+  spotlight.style.left   = rect.left + 'px';
+  spotlight.style.width  = rect.width + 'px';
+  spotlight.style.height = rect.height + 'px';
+  // Scrim + focus ring both come from Ink tokens. Orange is notification-only, so the ring
+  // is border-active. A step with no element keeps the scrim and drops the ring.
+  spotlight.style.boxShadow = '0 0 0 9999px var(--ink-color-global-surface-background-overlay)'
+    + (ring ? ', 0 0 0 2.5px var(--ink-color-global-border-active)' : '');
+  _tourSpot = rect;
 }
 
 function _tourPaint() {
@@ -1517,89 +1598,109 @@ function _tourPaint() {
   const spotlight = document.getElementById('tour-spotlight');
   const tooltip   = document.getElementById('tour-tooltip');
 
-  _tourRestore();
+  // A hidden section gets a centred card rather than a spotlight on nothing. It says nothing
+  // is open only when caNoneOpen(): never while the fetch runs, after it failed, or when the
+  // viewer dismissed cards for activity that is still pending.
+  let el       = _tourGetEl(step);
+  const hidden = !_tourIsShown(el);
+  const desc   = hidden && step.emptyDesc && typeof caNoneOpen === 'function' && caNoneOpen() ? step.emptyDesc : step.desc;
+  if (hidden && step.emptyDesc) el = null;
+  else if (el && step.spotId) el = document.getElementById(step.spotId) || el;
 
-  let el = _tourGetEl(step);
-
-  // Temporarily show hidden elements (e.g. capital activity section)
-  if (el && step.forceShow && window.getComputedStyle(el).display === 'none') {
-    _tourRestoreEl  = el;
-    _tourRestoreVal = el.style.display;
-    el.style.display = 'block';
-  }
-
-  // Scroll into view instantly so getBoundingClientRect is accurate
-  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-
+  // The card fades out where it is (riding off with the page), the page scrolls while the
+  // cut-out eases to its new place, then the card fades in beside it.
+  const opening = overlay.style.display !== 'block';
   overlay.style.display = 'block';
+  spotlight.style.display = 'block';
+  tooltip.classList.add(TOUR_SWITCHING);
+  _tourEl  = el;
+  _tourFit = !!step.spotId;
+  const target = _tourTarget(el, _tourFit);
+  _tourScrollTo = target.scroll;
+  _tourAbove    = target.above;
+  const from   = opening ? _tourTarget(null).rect : _tourSpot;
+  // The page scroll and the cut-out run on one clock (the browser's own smooth scroll starts
+  // late and runs longer, so the cut-out would lurch the wrong way first). Longer scrolls take
+  // a little longer, up to 600ms.
+  const reduce     = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const fromScroll = window.scrollY;
+  const ms    = reduce ? 0 : Math.min(600, 420 + Math.abs(target.scroll - fromScroll) * 0.1);
+  const start = performance.now();
+  const ease  = t => 1 - Math.pow(1 - t, 3);
+  const paint = ++_tourPaintId;
+  const to    = target.rect;
+  let carded  = false;
+  const glide = () => {
+    if (paint !== _tourPaintId) return;  // a newer step, or the end, took over
+    const t = ms ? Math.min(1, (performance.now() - start) / ms) : 1;
+    const k = ease(t);
+    window.scrollTo(0, fromScroll + (target.scroll - fromScroll) * k);
+    // The ring stays on through the first half of a move to a step with nothing to point at.
+    _tourPlaceSpot({ top: from.top + (to.top - from.top) * k, left: from.left + (to.left - from.left) * k,
+                     width: from.width + (to.width - from.width) * k,
+                     height: from.height + (to.height - from.height) * k }, !!el || k < 0.5);
+    // The card starts fading in for the last fifth of the move, already at its final place,
+    // so the screen is never long without text.
+    if (!carded && t >= 0.8) { carded = true; _tourShowCard(step, desc, pos, shown, to); }
+    if (t < 1) requestAnimationFrame(glide);
+  };
+  requestAnimationFrame(glide);
+}
 
-  // Small delay to let layout settle after scroll/display change
-  setTimeout(() => {
-    if (!el) {
-      spotlight.style.display = 'none';
-      spotlight.style.boxShadow = '';
-    } else {
-      const r = el.getBoundingClientRect();
-      const p = 8;
-      spotlight.style.display  = 'block';
-      spotlight.style.top      = (r.top  - p) + 'px';
-      spotlight.style.left     = (r.left - p) + 'px';
-      spotlight.style.width    = (r.width  + p*2) + 'px';
-      spotlight.style.height   = (r.height + p*2) + 'px';
-      // Scrim + focus ring both come from Ink tokens. Orange is notification-only,
-      // so the ring is border-active, not #FF7D55. The scrim darkens from 0.52 to
-      // the token's 0.8 alpha — intentional: surface-background-overlay is canonical.
-      spotlight.style.boxShadow =
-        '0 0 0 9999px var(--ink-color-global-surface-background-overlay), '
-        + '0 0 0 2.5px var(--ink-color-global-border-active)';
-    }
+// A resize moves the layout under the tour. A settled step is measured again in place, at the
+// scroll the page is at; a step still gliding in restarts its glide toward the new layout, so
+// the card is placed for where the move really lands.
+function _tourRemeasure() {
+  if (!_tourIsOpen()) return;
+  if (_tourSwitching()) return _tourPaint();
+  const target  = _tourTarget(_tourEl, _tourFit, window.scrollY);
+  _tourScrollTo = window.scrollY;
+  _tourAbove    = target.above;
+  _tourPlaceSpot(target.rect, !!_tourEl);
+  _tourPlaceCard();
+}
+window.addEventListener('resize', _tourRemeasure);
 
-    // Tooltip content
-    document.getElementById('tour-title').textContent   = step.title;
-    document.getElementById('tour-desc').textContent    = step.desc;
-    document.getElementById('tour-counter').textContent = `${pos + 1} of ${shown.length}`;
-    document.getElementById('tour-next-btn').textContent =
-      pos < shown.length - 1 ? 'Next →' : 'Get started';
+// Under the cut-out, or above it where _tourTarget decided; centred with nothing to point at.
+function _tourPlaceCard(r = _tourSpot) {
+  const tooltip = document.getElementById('tour-tooltip');
+  const ttw = tooltip.offsetWidth || 308, tth = _tourCardHeight();
+  const gap = TOUR_CARD_GAP, mv = TOUR_SCREEN_MARGIN;
+  const vw  = window.innerWidth, vh = window.innerHeight;
+  let top, left;
+  if (!_tourEl) {
+    top  = _tourScrollTo + (vh - tth) / 2;
+    left = (vw - ttw) / 2;
+  } else {
+    top  = _tourAbove ? r.top - gap - tth : r.top + r.height + gap;
+    left = Math.max(mv, Math.min(r.left + r.width / 2 - ttw / 2, vw - ttw - mv));
+  }
+  tooltip.style.top  = top  + 'px';
+  tooltip.style.left = left + 'px';
+}
 
-    // Progress dots — the container is role="group" aria-label="Tour progress"
-    // in the template, so the active dot marks itself as the current step.
-    document.getElementById('tour-dots').innerHTML = shown
-      .map((_, i) => `<div class="tour-dot${i === pos ? ' active' : ''}"${i === pos ? ' aria-current="step"' : ''}></div>`).join('');
+function _tourShowCard(step, desc, pos, shown, rect) {
+  const tooltip = document.getElementById('tour-tooltip');
+  document.getElementById('tour-title').textContent   = step.title;
+  document.getElementById('tour-desc').textContent    = desc;
+  document.getElementById('tour-counter').textContent = `${pos + 1} of ${shown.length}`;
+  document.getElementById('tour-next-btn').textContent =
+    pos < shown.length - 1 ? 'Next →' : 'Finish tour';
 
-    // Position tooltip relative to spotlight
-    tooltip.style.display = 'block';
-    if (el) {
-      const r   = el.getBoundingClientRect();
-      const p   = 8;
-      const ttw = 308;
-      const gap = 14;
-      const mv  = 12;
-      const vw  = window.innerWidth;
-      const vh  = window.innerHeight;
-      let top  = r.bottom + p + gap;
-      let left = r.left + r.width / 2 - ttw / 2;
+  // Progress dots — the container is role="group" aria-label="Tour progress"
+  // in the template, so the active dot marks itself as the current step.
+  document.getElementById('tour-dots').innerHTML = shown
+    .map((_, i) => `<div class="tour-dot${i === pos ? ' active' : ''}"${i === pos ? ' aria-current="step"' : ''}></div>`).join('');
 
-      // If below goes off-screen, flip above
-      if (top + 230 > vh) top = r.top - p - gap - 200;
+  // Placed while invisible, then faded in.
+  tooltip.style.display = 'block';
+  _tourPlaceCard(rect);
+  requestAnimationFrame(() => tooltip.classList.remove(TOUR_SWITCHING));
 
-      // Clamp horizontally
-      left = Math.max(mv, Math.min(left, vw - ttw - mv));
-      top  = Math.max(mv, top);
-
-      tooltip.style.top       = top  + 'px';
-      tooltip.style.left      = left + 'px';
-      tooltip.style.transform = '';
-    } else {
-      tooltip.style.top       = '50%';
-      tooltip.style.left      = '50%';
-      tooltip.style.transform = 'translate(-50%,-50%)';
-    }
-
-    // Hand focus to the primary action so the dialog is keyboard-operable and
-    // announced on open. preventScroll: the tooltip is position:fixed, so there
-    // is nothing to scroll to and scrolling would fight the spotlight.
-    document.getElementById('tour-next-btn')?.focus({ preventScroll: true });
-  }, 80);
+  // Hand focus to the primary action so the dialog is keyboard-operable and
+  // announced on open. preventScroll: the page is already scrolling to the step,
+  // and a second scroll to the button would fight it.
+  document.getElementById('tour-next-btn')?.focus({ preventScroll: true });
 }
 
 // The only way past a step once the tour is open: the next one, or the end after the last.
@@ -1609,7 +1710,10 @@ function _tourAdvance() {
   else _tourPaint();
 }
 
+// Next (button, Enter or overlay click) moves on only from a step whose card is showing, so a
+// quick second press can't skip the step still gliding in. Skip and Escape always work.
 function tourNext() {
+  if (_tourSwitching()) return;
   trackHome("click", "CartaHome.Tour.Next", { value: _tourPos() + 1 });
   _tourAdvance();
 }
@@ -1617,7 +1721,8 @@ function tourNext() {
 function tourSkip() { trackHome("click", "CartaHome.Tour.Skip", { value: _tourPos() + 1 }); tourEnd(); }
 
 function tourEnd() {
-  _tourRestore();
+  _tourEl = null;
+  _tourPaintId++;
   // A failed save must not leave the viewer stuck behind the overlay.
   try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {}
   ['tour-overlay','tour-spotlight','tour-tooltip'].forEach(id => {
