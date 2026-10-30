@@ -131,7 +131,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.9.3</carta-plugin>
+<carta-plugin>carta-investors:7.10.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -215,6 +215,7 @@ every invocation regardless.
 | 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
 | 5.2 | when this run has a Carta MCP and the build's own sweep recorded that the `claude` CLI couldn't reach Carta | Push the owner's reports to the hosted app from this session | [serve-and-update.md](references/serve-and-update.md) |
+| 5.3 | when this firm's Budget vs Actuals is backed by an imported workbook | Offer the hosted app's link to this firm's report | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
 | 7 | only when the operator asks for their budget in the hosted app | Export the workbook budget as a bundle to upload | [serve-and-update.md](references/serve-and-update.md) |
 

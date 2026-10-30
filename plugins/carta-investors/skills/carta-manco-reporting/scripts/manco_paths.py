@@ -16,6 +16,12 @@ Subcommands:
                               (the skill launches a localhost server + browser,
                               which only works in a local Claude Code session —
                               not Cowork or a Claude Code cloud session)
+  hosted-url <firm_name> <report_id> [--tab TAB]
+                            → the hosted app's deep link to one report, with firm_name
+                              slugged the way the hosted Worker does (hosted_firm_slug,
+                              NOT this module's own slugify) — the report_id is a
+                              report's own-sync uuid, own_sync.push_one's or
+                              push_if_changed's "uuid" result
 
 snapshot_age_days is the age of the last datadir rebuild (Step 4), which runs
 on every invocation. raw_age_days is the age of the last actual DWH fetch
@@ -42,6 +48,7 @@ import pathlib
 import re
 import time
 import unicodedata
+import urllib.parse
 
 
 def reporting_window(today=None):
@@ -81,6 +88,48 @@ def slugify(name):
         h = hashlib.sha1(name.strip().casefold().encode("utf-8")).hexdigest()[:12]
         slug = f"firm-{h}"
     return slug
+
+
+# The hosted app's one production host — server/worker.js's CANONICAL_HOST, and the
+# address DEPLOY.md gives operators. No environment variants exist for this app (unlike
+# Carta's own multi-environment system), so this is the only value hosted_url ever builds
+# against.
+HOSTED_APP_URL = "https://manco-reporting.carta.cloud"
+
+# Budget vs Actuals' own route segment — app/src/shell/reportNav.js's BVA — the default
+# tab hosted_url and the CLI's --tab both build a link against. One name, so the function
+# and the CLI can't drift onto different defaults.
+BVA_TAB = "budget-vs-actuals"
+
+
+def hosted_firm_slug(name):
+    """server/worker.js's slugify(), ported exactly — the slug the hosted app's own
+    `/api/firms` and its deep-link routing (authorizedFirm) key a firm on.
+
+    Deliberately NOT this module's own slugify() above: that one NFKD-folds accents to
+    ASCII and hashes a non-Latin name into a stable `firm-<sha1>`, for a local cache
+    directory that only this machine ever reads. The hosted Worker does neither — it only
+    lowercases and collapses everything but `[a-z0-9]` to a hyphen, falling back to
+    "unknown" on an empty result — so "Société Générale Capital" slugs to
+    "societe-generale-capital" here but "soci-t-g-n-rale-capital" there. A hosted link
+    built with the wrong one names a firm the Worker's own list doesn't contain, and
+    `authorizedFirm` 403s with "No access to firm" for an operator who very much does."""
+    return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-") or "unknown"
+
+
+def hosted_url(firm_name, report_id, tab=BVA_TAB):
+    """The hosted app's deep link to one report: the same `/firm/<slug>/<tab>/<reportId>`
+    shape app/src/shell/route.js's parseRoute() reads client-side, with `firm_name` slugged
+    the way the hosted Worker itself does (hosted_firm_slug, above) — never this module's
+    own cache-dir slugify(), which can produce a different slug for the same name.
+
+    `report_id` is this dashboard's own-sync uuid for the report, as own_sync.push_one or
+    push_if_changed last recorded it — not a live check that the mirror still exists on
+    the hosted app, just the uuid this dashboard has on record for it. A report that has
+    never been pushed has no uuid and so nothing to link to."""
+    return "{}/firm/{}/{}/{}".format(
+        HOSTED_APP_URL, urllib.parse.quote(hosted_firm_slug(firm_name), safe=""),
+        urllib.parse.quote(tab, safe=""), urllib.parse.quote(report_id, safe=""))
 
 
 def cache_root():
@@ -489,6 +538,10 @@ def cmd_detect_surface(_args):
     print(json.dumps({"surface": surface, "signals": signals}, indent=2))
 
 
+def cmd_hosted_url(args):
+    print(json.dumps({"url": hosted_url(args.firm_name, args.report_id, args.tab)}))
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -505,6 +558,12 @@ def main():
     f.set_defaults(fn=cmd_find_by_id)
 
     sub.add_parser("detect-surface", help="classify local vs sandboxed runtime surface").set_defaults(fn=cmd_detect_surface)
+
+    u = sub.add_parser("hosted-url", help="build the hosted app's deep link to one report")
+    u.add_argument("firm_name")
+    u.add_argument("report_id")
+    u.add_argument("--tab", default=BVA_TAB)
+    u.set_defaults(fn=cmd_hosted_url)
 
     args = p.parse_args()
     args.fn(args)

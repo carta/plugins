@@ -542,10 +542,10 @@ def main(argv: Optional[list] = None) -> int:
                         help="stamp a push a Claude session made from this report's plan")
     parser.add_argument("--uuid", help="with --record: the report uuid Carta answered with")
     parser.add_argument("--push-one", metavar="REPORT_ID",
-                        help="push this one report synchronously and print {\"uuid\"} (its "
-                             "own-sync mirror, confirmed by Carta only when a push was due) "
-                             "or {\"error\"} (plus \"detail\" for push_failed) as JSON, "
-                             "without running the rest of the sweep; exits 3 on "
+                        help="push this one report synchronously and print {\"uuid\"} (this "
+                             "dashboard's own-sync mirror, as last recorded locally — not a "
+                             "live check) or {\"error\"} (plus \"detail\" for push_failed) "
+                             "as JSON, without running the rest of the sweep; exits 3 on "
                              "{\"error\"}, same as --plan")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).expanduser()
@@ -642,6 +642,15 @@ def _sweep_under_lock(data_dir: Path, user_id: Optional[int]) -> None:
         bridge.close()
 
 
+def _recorded_uuid(store: report_store.ReportStore, report_id: str) -> Optional[str]:
+    """The own-sync uuid `report_id` has on record locally right now, or `None` if it has
+    never been pushed — the one lookup push_one's "nothing more to do" exits share, so a
+    change to it (or to what counts as "recorded") only needs making once."""
+    doc = store.load()
+    report = report_store.ReportStore.find(doc, report_id)
+    return report_store.ReportStore.own_sync_uuid(report)
+
+
 def push_one(data_dir: Path, user_id: Optional[int], report_id: str) -> Dict[str, Any]:
     """Push `report_id` alone, synchronously — for a caller that wants its own-sync uuid
     right away, such as the import flow's end-of-workflow hosted-app offer, rather than
@@ -649,37 +658,50 @@ def push_one(data_dir: Path, user_id: Optional[int], report_id: str) -> Dict[str
     cross-process lock the full sweep holds, so a push made this way never races the
     detached sweep over the same report.
 
-    Returns `{"uuid": <uuid or None>}` once the attempt has settled. The uuid is the
-    report's own-sync mirror as this dashboard last recorded it — confirmed by Carta just
-    now only when `push_if_changed` actually had something to push; when there was nothing
-    due (already synced and unchanged, read-only, or unbuilt — the common case, since the
-    detached sweep usually gets there first), it is whatever this dashboard last pushed,
-    not rechecked by this call, or `None` if it has never pushed at all. A caller that
-    needs a guarantee the report is live right now must not treat an unrechecked uuid as
-    one.
+    When nothing is due — the report is already synced and unchanged, read-only, or
+    unbuilt, the common case since the detached sweep usually gets there first — this
+    returns the report's own-sync uuid straight from reports.json, without probing for a
+    `claude` CLI or reaching Carta at all: a report with nothing to push needs neither, so
+    a signed-out or missing CLI must not hide a uuid this dashboard already has on record.
+    Otherwise it pushes through the same `claude` CLI bridge the detached sweep uses.
 
-    Returns `{"error": <reason>}` when the push couldn't even be attempted (`no_user_id`,
-    or a `claude` CLI preflight reason), or Carta refused it outright: `"unreachable"`, or
-    `"push_failed"` with a `"detail"` message — also returned when the report vanished
-    locally while the push was in flight (another process's `own_sync.forget`, which
-    doesn't take this lock), the same local lookup `push_if_changed` itself can return
-    `None` for.
+    Returns `{"uuid": <uuid or None>}` once the attempt has settled. Either way the uuid is
+    this dashboard's own-sync mirror as recorded locally — just now, if a push was due and
+    it succeeded, or from an earlier push otherwise — never a live check that the mirror
+    still exists on the hosted app. `None` means the report has never been pushed (no prior
+    push to fall back on).
+
+    Returns `{"error": <reason>}` when a push was due but couldn't even be attempted
+    (`no_user_id`, or a `claude` CLI preflight reason), or Carta refused it outright:
+    `"unreachable"`, or `"push_failed"` with a `"detail"` message — also returned when the
+    report vanished locally (another process's `own_sync.forget`, which doesn't take this
+    lock) while being planned or pushed.
     """
     if user_id is None:
         return {"error": BLOCKED_NO_USER_ID}
+
+    store = report_store.ReportStore(data_dir)
+    try:
+        plan = plan_push(store, data_dir, report_id, user_id)
+        if plan is None:
+            return {"uuid": _recorded_uuid(store, report_id)}
+    except ShareError as e:
+        if _is_unreachable(e):
+            return {"error": BLOCKED_UNREACHABLE}
+        return {"error": "push_failed", "detail": str(e)}
+    except report_store.ReportEditError as e:
+        return {"error": "push_failed", "detail": str(e)}
+
     probed = preflight_claude.probe()
     if probed["reason"] != preflight_claude.REASON_OK:
         return {"error": probed["reason"]}
 
-    store = report_store.ReportStore(data_dir)
     bridge = _cli_bridge(data_dir, probed["bin"])
     try:
         result = push_if_changed(bridge, store, data_dir, report_id, user_id, lambda message: None)
         if result is not None:
             return {"uuid": result["own_sync"]["uuid"]}
-        doc = store.load()
-        report = report_store.ReportStore.find(doc, report_id)
-        return {"uuid": report_store.ReportStore.own_sync_uuid(report)}
+        return {"uuid": _recorded_uuid(store, report_id)}
     except ShareError as e:
         if _is_unreachable(e):
             return {"error": BLOCKED_UNREACHABLE}

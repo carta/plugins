@@ -431,6 +431,59 @@ If the sub-agent returns any `needs_human:` line, tell the user in one sentence 
 report isn't on the hosted app yet and the reason, and go on. Never retry it in this run.
 
 
+## Step 5.3 — Offer the hosted app's link to this firm's report
+
+**Only when this firm's Budget vs Actuals is backed by an imported workbook** — 2.75
+resolved one, never Carta's own `fa__list__budgets` fallback, which has no local report to
+mirror and so nothing own_sync could ever push. `<REPORT_ID>` is the workbook report's id
+(`manco_paths.default_budget_id`): "primary" for the usual single-workbook case, or
+whatever the workbook's own file name or declared `id` names otherwise. Skip entirely for
+a firm using Carta's own budget.
+
+Run this after Step 5.2 has returned (when 5.2 ran at all), once the URL is out, with the
+Bash tool's `timeout: 600000`. `own_sync.push_one` first waits for any sweep already
+running on this dashboard — it shares the sweep's lock, the same way Step 5.2's `--plan`
+does — so the usual wait is however long Step 4's detached sweep takes: a dashboard with
+several reports can have this step wait out the whole sweep before push_one even starts:
+
+```bash
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --push-one "<REPORT_ID>"
+```
+
+- **The command times out:** the build's sweep is still pushing. Offer no link, say
+  nothing, and don't retry it in this run.
+
+- **`{"uuid": "<uuid>"}`** — build the hosted link and offer it, after 5c's gap line (if
+  any) and before Step 6's menu:
+
+  ```bash
+  <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url "<FIRM_NAME>" "<uuid>"
+  ```
+
+  `<FIRM_NAME>` is the firm name already resolved earlier in this run (Step 0/1) — never
+  the local cache slug (`manco_paths.slugify`), which can differ from the slug the hosted
+  app itself routes on (`hosted_url` slugs the name the hosted app's own way internally).
+  Offer the printed `url` on one line, e.g. *"Also on the hosted app: `<url>`"*. The uuid
+  is this dashboard's own-sync mirror as recorded locally, just now or from an earlier
+  push — not a live check that the mirror still exists on the hosted app (it could have
+  been deleted there, or from another checkout, since the last push). Do not build this
+  link from any other uuid (a local report id, a remembered one from an earlier turn) —
+  only from this call's own `"uuid"`.
+
+- **`{"uuid": null}`** — the report is read-only or hasn't been built yet. There's nothing
+  to offer; say nothing.
+
+- **`{"error": "no_user_id"}`**, **`{"error": "not_installed"}`**, **`{"error":
+  "not_logged_in"}`** — a push was due (the common no-op path above skips the `claude` CLI
+  check entirely) but couldn't be attempted. Say nothing — the detached sweep's own log
+  carries the detail, and repeating it here on every budget import would be noise.
+
+- **`{"error": "unreachable"}`** or **`{"error": "push_failed", "detail": ...}`** — one
+  line, naming the reason: *"Couldn't get your report onto the hosted app yet (`<reason or
+  detail>`) — it'll catch up on the next build."* Never claim the report is on the hosted
+  app when this call didn't push it there. Never retry it in this run.
+
+
 ## Step 5.5 — Offer to open the account rows up
 
 **The workbook is the anchor.** A budget already broken out one way is
