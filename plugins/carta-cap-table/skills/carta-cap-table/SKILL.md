@@ -1,12 +1,12 @@
 ---
 name: carta-cap-table
 description: >-
-  Carta's rules for every cap table answer, and the commands for a single fact or a short
-  answer about one company: who owns what, one stakeholder, the largest grants or
-  holders, totals of grants, certificates, RSUs, SARs, CBUs, SAFEs, convertible notes or
-  option plans, and rights and preferences. Load for such a read, or when no other
-  carta-cap-table skill matches. For every row of a list, a table, a report or a file,
-  use carta-reporting.
+  Answer quick questions about one company's cap table, like who owns what. Holds
+  Carta's rules for every cap table answer, and the commands for a single fact or a
+  short answer: one stakeholder, the largest grants or holders, totals of grants,
+  certificates, RSUs, SARs, CBUs, SAFEs, convertible notes or option plans, and rights
+  and preferences. Load for such a read, or when no other carta-cap-table skill matches.
+  For every row of a list, a table, a report or a file, use carta-reporting.
 user-invocable: false
 model: inherit
 allowed-tools:
@@ -27,7 +27,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

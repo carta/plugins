@@ -1,10 +1,11 @@
 ---
 name: carta-reporting-excel
 description: >-
-  Internal subskill for carta-reporting. Exports Carta report data to a branded
-  Excel file. Invoked by carta-reporting or carta-reporting-markdown when the user requests Excel output. Also the entry point
-  when the main skill receives a message starting with "Generate Carta Excel —"
-  (the artifact prompt bar payload).
+  Internal step of carta-reporting: saves a report as an Excel file. Exports Carta
+  report data to a branded Excel file. Invoked by carta-reporting or
+  carta-reporting-markdown when the user requests Excel output. Also the entry point
+  when the main skill receives a message starting with "Generate Carta Excel —" (the
+  artifact prompt bar payload).
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
@@ -20,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
 
 # Excel Export
 

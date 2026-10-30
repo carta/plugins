@@ -1,7 +1,9 @@
 ---
 name: carta-market-benchmarks
 description: >-
-  Computed statistics across portfolio companies — median, average, typical, range — used as market benchmarks. Returns aggregate numbers and percentiles, not raw per-company listings.
+  Compare deal terms across your portfolio, like SAFE caps and pool sizes. Computes
+  market benchmarks across portfolio companies: median, average, typical and range.
+  Returns aggregate numbers and percentiles, not raw per-company listings.
 when_to_use: >-
   Use when asked what's typical for a metric, what's normal at a given
   stage, what the median value is, what the average comes out to, how
@@ -32,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

@@ -1,7 +1,10 @@
 ---
 name: carta-valuation-history
 description: >-
-  Fetch a company's valuation history and current fair market value (FMV) — 409A, EMI, CSOP or share price. Use for questions about valuations, FMV, exercise prices, or expiry. Not for cross-portfolio comparisons — prefer a portfolio-benchmarks skill.
+  See a company's 409A and other valuations, and when the current one expires. Covers
+  valuation history and current fair market value (FMV): 409A, EMI, CSOP or share price.
+  Use for questions about valuations, FMV, exercise prices, or expiry. Not for
+  cross-portfolio comparisons — prefer a portfolio-benchmarks skill.
 when_to_use: >-
   Use when asked about the current valuation, fair market value (FMV),
   common stock exercise price, when the current valuation expires or is
@@ -31,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

@@ -1,11 +1,18 @@
 ---
 name: carta-compensation-benchmarks
 description: >
-  Retrieves Carta Total Compensation market benchmarks (salary, equity, total cash) for a role. Output to chat or CSV.
-  Market benchmarks are triggered by queries like: "sales benchmarks", "comp benchmarks", "market rate", "what does a [role] pay", "put benchmarks in a CSV", "get benchmarks", "get carta's market benchmarks", "show me benchmarks for [role]", "compensation ranges for [role]", "p25/p50/p75 for [role]".
-  Do NOT use for job classification or role mapping — use carta-compensation-rolematcher for that.
-  Do NOT use for "how is OUR company positioned vs market", "who at our company is below market", or "our internal pay bands vs benchmarks" — those are roster-level positioning, use carta-compensation-scorecard.
-  Do NOT use for fund performance benchmarks (use carta-fund-performance) or portfolio structural metrics like SAFE terms and option pool sizes (use carta-market-benchmarks).
+  See market pay for a role: salary, equity and total cash. Retrieves Carta Total
+  Compensation (CTC) market benchmarks for the role. Output to chat or CSV. Market
+  benchmarks are triggered by queries like: "sales benchmarks", "comp benchmarks",
+  "market rate", "what does a [role] pay", "put benchmarks in a CSV", "get benchmarks",
+  "get carta's market benchmarks", "show me benchmarks for [role]", "compensation ranges
+  for [role]", "p25/p50/p75 for [role]". Do NOT use for job classification or role
+  mapping — use carta-compensation-rolematcher for that. Do NOT use for "how is OUR
+  company positioned vs market", "who at our company is below market", or "our internal
+  pay bands vs benchmarks" — those are roster-level positioning, use
+  carta-compensation-scorecard. Do NOT use for fund performance benchmarks (use
+  carta-fund-performance) or portfolio structural metrics like SAFE terms and option
+  pool sizes (use carta-market-benchmarks).
 version: 1.1.1
 model: sonnet
 allowed-tools:
@@ -31,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
 
 # Benchmark Query
 

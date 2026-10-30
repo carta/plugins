@@ -1,9 +1,10 @@
 ---
 name: carta-manage-securities
 description: >-
-  Fix, amend, cancel, partly cancel or uncancel an issued certificate, option
-  grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or warrant, with a preview first.
-  Not for terminating a person (cancelling everything they hold).
+  Edit or cancel an issued security, with a preview before anything changes. Covers
+  fixing, amending, cancelling, partly cancelling or uncancelling a certificate, option
+  grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or warrant. Not for terminating a person
+  (cancelling everything they hold).
 owner: carta-cap-table maintainers (#cap-table-eng)
 model: inherit
 allowed-tools:
@@ -32,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
 
 # Manage securities
 

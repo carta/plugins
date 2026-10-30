@@ -1,13 +1,18 @@
 ---
 name: carta-compensation-scorecard
 description: >
-  Carta Total Compensation scorecard — shows how a corporation's employees compare to market.
-  Two lenses: corporation-level rollup (band distribution — what % of employees are below / at / above market) and per-employee scorecard (each employee's compa-ratio + percentile + market band).
-  Triggered by queries like: "scorecard", "how is our comp positioned", "who's below market", "which employees are below P50", "show me the roster", "are we paying market", "comp posture", "employee compa-ratios", "is [employee] underpaid", "pay adjustment analysis", "our internal pay bands vs benchmarks", "score these employees".
-  Operates on the corporation's already-ingested CTC roster (HRIS-synced employees).
-  Do NOT use for market-rate lookups for a role (use carta-compensation-benchmarks).
-  Do NOT use for job classification (use carta-compensation-rolematcher).
-  Do NOT use for fund performance scorecards or portfolio-level metrics.
+  See how your employees' pay compares to market. This is the Carta Total Compensation
+  scorecard for a corporation. Two lenses: corporation-level rollup (band distribution —
+  what % of employees are below / at / above market) and per-employee scorecard (each
+  employee's compa-ratio + percentile + market band). Triggered by queries like:
+  "scorecard", "how is our comp positioned", "who's below market", "which employees are
+  below P50", "show me the roster", "are we paying market", "comp posture", "employee
+  compa-ratios", "is [employee] underpaid", "pay adjustment analysis", "our internal pay
+  bands vs benchmarks", "score these employees". Operates on the corporation's
+  already-ingested CTC roster (HRIS-synced employees). Do NOT use for market-rate
+  lookups for a role (use carta-compensation-benchmarks). Do NOT use for job
+  classification (use carta-compensation-rolematcher). Do NOT use for fund performance
+  scorecards or portfolio-level metrics.
 version: 0.1.0
 model: sonnet
 allowed-tools:
@@ -28,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.4</carta-plugin>
 
 # CTC Scorecard
 
