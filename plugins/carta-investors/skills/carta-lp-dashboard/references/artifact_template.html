@@ -231,7 +231,8 @@
     }
     .cap-bar-contributed { background: var(--blue); }
     .cap-bar-called { background: #5B7EC2; }
-    .cap-bar-unfunded { background: #C8D4EA; }
+    /* The unfunded part of the bar is the empty track; its legend swatch is the same grey. */
+    .cap-swatch-unfunded { background: var(--gray-20); }
 
     .cap-grid {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
@@ -573,7 +574,7 @@
         </div>
         <div>
           <div class="cap-grid-label">Unfunded <span style="white-space:nowrap">commitment <span class="info-dot">?<span class="tooltip">Capital committed but not yet called by fund managers</span></span></span></div>
-          <div class="cap-grid-value" id="cap-unfunded"><span class="cap-swatch" style="background:#C8D4EA"></span>—</div>
+          <div class="cap-grid-value" id="cap-unfunded"><span class="cap-swatch cap-swatch-unfunded"></span>—</div>
         </div>
         <div>
           <div class="cap-grid-label">Total <span style="white-space:nowrap">distributions <span class="info-dot">?<span class="tooltip">Total cash returned across all funds</span></span></span></div>
@@ -1010,7 +1011,7 @@ function toggleNav() {
   document.getElementById('nav-toggle').setAttribute('aria-checked', String(showNav));
   // Redraw only from a series that has loaded: while a refetch is in flight, or after it
   // failed, there is none, and a load that lands later draws NAV as the toggle now says.
-  if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries });
+  if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries }, 'cd');
 }
 
 // TVPI is DPI + RVPI, so it is written above each bar rather than drawn as a third one.
@@ -1018,7 +1019,7 @@ let showTvpi = true;
 function toggleTvpi() {
   showTvpi = !showTvpi;
   document.getElementById('tvpi-toggle').setAttribute('aria-checked', String(showTvpi));
-  if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries });
+  if (currentData.timeseries) renderCharts({ timeseries: currentData.timeseries }, 'perf');
 }
 
 function setCapMode(m) {
@@ -1053,7 +1054,7 @@ function renderCap() {
     const calledNotContributed = Math.max(0, called - contributed);
     document.getElementById('cap-contributed').innerHTML = '<span class="cap-swatch" style="background:var(--blue)"></span> ' + esc(fmtFull(contributed, ccy));
     document.getElementById('cap-called').innerHTML = '<span class="cap-swatch" style="background:#5B7EC2"></span> ' + esc(fmtFull(calledNotContributed, ccy));
-    document.getElementById('cap-unfunded').innerHTML = '<span class="cap-swatch" style="background:#C8D4EA"></span> ' + esc(fmtFull(unfunded, ccy));
+    document.getElementById('cap-unfunded').innerHTML = '<span class="cap-swatch cap-swatch-unfunded"></span> ' + esc(fmtFull(unfunded, ccy));
     document.getElementById('cap-distributions').textContent = fmtFull(distributed, ccy);
   } else {
     const calledNotContributed = Math.max(0, called - contributed);
@@ -1061,7 +1062,7 @@ function renderCap() {
     document.getElementById('cap-commitments').textContent = PCT_FMT.format(1);
     document.getElementById('cap-contributed').innerHTML = '<span class="cap-swatch" style="background:var(--blue)"></span> ' + p(contributed);
     document.getElementById('cap-called').innerHTML = '<span class="cap-swatch" style="background:#5B7EC2"></span> ' + p(calledNotContributed);
-    document.getElementById('cap-unfunded').innerHTML = '<span class="cap-swatch" style="background:#C8D4EA"></span> ' + p(unfunded);
+    document.getElementById('cap-unfunded').innerHTML = '<span class="cap-swatch cap-swatch-unfunded"></span> ' + p(unfunded);
     document.getElementById('cap-distributions').textContent = p(distributed);
   }
 }
@@ -1128,14 +1129,17 @@ function setChartMessage(text) {
   });
 }
 
-function destroyCharts() {
-  [cdChart, perfChart].forEach(c => { if (c) c.destroy(); });
-  cdChart = perfChart = null;
+// `only` ('cd' or 'perf') keeps the other chart; without it both go.
+function destroyCharts(only) {
+  if (only !== 'perf') { if (cdChart) cdChart.destroy(); cdChart = null; }
+  if (only !== 'cd') { if (perfChart) perfChart.destroy(); perfChart = null; }
 }
 
 // The timeseries covers one currency: the active one.
 const CHART_QUARTERS = 8;
-function renderCharts(data) {
+// `only` ('cd' or 'perf') redraws that one chart and leaves the other as it is, so a switch on
+// one chart does not animate the other; it applies once both charts exist.
+function renderCharts(data, only) {
   const ax='#A6A6A6', gr='#EFEFEF';
   const months = (data.timeseries && data.timeseries.points) || [];
   // The quarter before the window is where the first bar's change starts; when the history
@@ -1144,7 +1148,8 @@ function renderCharts(data) {
   const hasBase = withBase.length > CHART_QUARTERS;
   const q = hasBase ? withBase.slice(1) : withBase;
   const base = hasBase ? withBase[0] : {contributions_cumulative_cents: 0, distributions_cumulative_cents: 0};
-  destroyCharts();
+  const partial = Boolean(only && cdChart && perfChart && q.length > 0);
+  destroyCharts(partial ? only : undefined);
   if (q.length === 0) {
     setChartMessage('Not enough history to chart yet.');
     return;
@@ -1168,7 +1173,7 @@ function renderCharts(data) {
   const sumBy = (vals, keep) => vals.filter(keep).reduce((a, b) => a + b, 0);
   const cdAxis = symmetricAxis(cQ.map((c, i) => Math.max(sumBy([c, dQ[i]], v => v > 0), -sumBy([c, dQ[i]], v => v < 0))));
   const navAxis = symmetricAxis(q.map(m => Math.abs(m.nav_cents / 100)));
-  cdChart = new Chart(document.getElementById('contdist-chart'),{
+  if (!partial || only === 'cd') cdChart = new Chart(document.getElementById('contdist-chart'),{
     type:'bar',
     data:{labels,datasets:[
       {label:'Contributions',data:padded(cQ),backgroundColor:'rgba(45,158,144,0.7)',borderColor:'#2D9E90',borderWidth:1,borderRadius:2,stack:'cd'},
@@ -1189,7 +1194,7 @@ function renderCharts(data) {
   });
 
   const tvpi = padded(q.map(m=>m.tvpi));
-  perfChart = new Chart(document.getElementById('perf-chart'),{
+  if (!partial || only === 'perf') perfChart = new Chart(document.getElementById('perf-chart'),{
     type:'bar',
     data:{labels,datasets:[
       {label:'DPI',data:padded(q.map(m=>m.dpi)),backgroundColor:'rgba(45,158,144,0.5)',borderColor:'#2D9E90',borderWidth:1,stack:'p'},
