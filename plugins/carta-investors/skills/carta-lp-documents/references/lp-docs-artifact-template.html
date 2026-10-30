@@ -244,6 +244,8 @@ th[data-col]:hover { color: #1A1A1A; }
 th.sort-active { color: #1A1A1A; }
 th .sort-arrow { margin-left: 4px; opacity: 0.4; }
 th.sort-active .sort-arrow { opacity: 1; }
+/* The firm sits under the fund name, as in the dashboard's fund table. */
+.fund-firm { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: #656B6B; }
 td {
   padding: 10px 14px;
   font-size: 13px;
@@ -423,17 +425,17 @@ tr:hover td { background: #E9EAEA; }
 <div class="table-wrap">
   <table>
     <colgroup>
-      <col style="min-width:220px">
+      <col style="width:220px">
+      <col style="min-width:200px">
       <col style="width:140px">
-      <col style="width:28%">
-      <col style="width:22%">
+      <col style="width:35%">
     </colgroup>
     <thead id="thead">
       <tr>
+        <th>Type</th>
         <th data-col="name">Document</th>
         <th data-col="date">Document date</th>
         <th>Fund</th>
-        <th>Firm</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -1143,10 +1145,10 @@ function render() {
       }
       const tip = 'Type: ' + (d.type || '—') + '\nDocument: ' + (d.name || '—') + '\nDocument date: ' + fmtDate(d.date) + '\nFund: ' + (d.fund || '—') + '\nFirm: ' + (d.firm || '—') + '\nPortfolio: ' + (d.portfolio || '—');
       rows += '<tr title="' + esc(tip) + '">' +
+        '<td style="white-space:nowrap">' + esc(d.type || '—') + '</td>' +
         '<td>' + docCell(d) + '</td>' +
         '<td style="white-space:nowrap;color:#656B6B">' + fmtDate(d.date) + '</td>' +
-        '<td>' + esc(d.fund || '—') + '</td>' +
-        '<td style="color:#656B6B">' + esc(d.firm || '—') + '</td>' +
+        '<td>' + esc(d.fund || '—') + '<span class="fund-firm">' + esc(d.firm || '—') + '</span></td>' +
         '</tr>';
     });
     tbody.innerHTML = rows;
