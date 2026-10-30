@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Package a built workbook budget as one JSON file for the hosted app's "Import budget".
 
+A fallback path, for whichever audience the build's own sweep (own_sync.py) didn't deliver
+this budget to: that sweep only mirrors a budget privately to its owner's own hosted
+session (and can fail there too — a refused push, see own_sync.py's docstring), so
+colleagues still need this export, shared through "Import budget" rather than own_sync's
+Share. The hosted app's "Import budget" control
+(app/src/shell/importBudgetFeature.js's IMPORT_BUDGET_ENABLED) is off by default, so this
+file has nowhere to go unless that flag is on.
+
 Reads snapshot.json and accounts.json from --dashboard-dir. The hosted app builds each
 budget's share payload itself from what this exports. Exits 2 when nothing is safe to export.
 Keep SCHEMA_VERSION equal to BUDGET_BUNDLE_SCHEMA in server/worker.js.

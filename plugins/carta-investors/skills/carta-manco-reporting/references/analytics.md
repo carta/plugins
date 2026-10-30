@@ -75,9 +75,9 @@ Every row spells the full id, prefix included.
 | `MancoReporting.App.AccountsUnavailable` | render | `/api/accounts` failed. Every drill-down is disabled for the session, and custom reports show a reload notice instead of figures. |
 | `MancoReporting.App.BudgetVsActualsHidden` | render | The firm has no budget loaded, so Budget vs Actuals is not offered — Monthly Actuals is offered in its place. |
 | `MancoReporting.App.ToggleTheme` | click | Light/dark toggle, on either page. |
-| `MancoReporting.App.ImportBudget` | click | "Import budget" in the sidebar (hosted app only): opens the file picker for an exported budget bundle. |
+| `MancoReporting.App.ImportBudget` | click | "Import budget" in the sidebar (hosted app only, and only when `IMPORT_BUDGET_ENABLED` is on): opens the file picker for an exported budget bundle. |
 | `MancoReporting.App.RemoveBudget` | click | "Remove" beside an uploaded budget: restores Carta's stored budget. |
-| `MancoReporting.App.DownloadBudget` | click | The download icon beside an uploaded budget's note: saves the stored bundle as JSON, to fix and import again. |
+| `MancoReporting.App.DownloadBudget` | click | The download icon beside an uploaded budget's note: saves the stored bundle as JSON, to fix and import again (re-import needs `IMPORT_BUDGET_ENABLED` on). |
 
 ### Navigation
 

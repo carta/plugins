@@ -3,10 +3,13 @@ import { Download } from "lucide-react";
 import { sans, FS, FAINT, RED, LINE, INK } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 import { uploadBudget, removeBudget, describeUpload, attempt, budgetDownloadUrl } from "./budgetUpload.js";
+import { IMPORT_BUDGET_ENABLED } from "./importBudgetFeature.js";
 
 // Sidebar control for the hosted app: import the budget file exported from the local flow.
 // `hosted` (App.jsx's useHostedApp()) hides it on the local server, which never implements
 // /api/budget-upload — the route this control itself calls through budgetUpload.js.
+// IMPORT_BUDGET_ENABLED gates only the "Import budget" button; an existing upload's note and
+// Remove stay.
 export default function BudgetImport({ hosted, budgetUpload, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -53,13 +56,15 @@ export default function BudgetImport({ hosted, budgetUpload, onChanged }) {
       )}
       {error && <div role="alert" style={{ color: RED }}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button
-          type="button" disabled={busy}
-          style={{ ...sans, fontSize: FS.small, color: INK, background: "none", border: `1px solid ${LINE}`, padding: "4px 8px", cursor: "pointer" }}
-          onClick={() => { trackClick("MancoReporting.App.ImportBudget"); input.current?.click(); }}
-        >
-          {busy ? "Working…" : "Import budget"}
-        </button>
+        {IMPORT_BUDGET_ENABLED && (
+          <button
+            type="button" disabled={busy}
+            style={{ ...sans, fontSize: FS.small, color: INK, background: "none", border: `1px solid ${LINE}`, padding: "4px 8px", cursor: "pointer" }}
+            onClick={() => { trackClick("MancoReporting.App.ImportBudget"); input.current?.click(); }}
+          >
+            {busy ? "Working…" : "Import budget"}
+          </button>
+        )}
         {budgetUpload && (
           <button
             type="button" disabled={busy}

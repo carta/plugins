@@ -690,10 +690,25 @@ the operator has nothing left to change.
 
 ## Step 7 — Export the budget for the hosted app
 
-**Only when the operator asks** to put their workbook budget in the hosted app ("upload my
-budget to the hosted version", "export the budget"). The hosted app does not read a workbook.
-The operator uploads one JSON file with **Import budget** in the hosted app's sidebar.
-The download icon beside the uploaded budget's note saves that file back, to fix and import again.
+**Usually not needed for your own view.** The build's own sweep (or Step 5.2, when the
+`claude` CLI couldn't reach Carta) mirrors every workbook budget you own to Carta privately,
+so it shows only in your own hosted session. Colleagues see it only through Share or a
+firm-wide upload from this step. Reach for this step only when the sync didn't deliver what
+the operator asks for: this budget isn't in their own hosted session (no sync path could
+run, Step 5.2 reported `needs_human` for it, or the build's sweep skipped its push; see
+`<dashboard_dir>/own_sync.log`), or they want colleagues to see it without sharing it.
+
+**Even then, check the hosted button exists before exporting anything.** The hosted app's
+**Import budget** control is gated by `IMPORT_BUDGET_ENABLED` in
+`app/src/shell/importBudgetFeature.js`, shipped `false`. If it's off, there is nowhere to
+upload the file this step produces — tell the operator the manual path needs that flag
+turned on in a `claude-marketplace` PR, and don't export a bundle with nowhere to put it.
+
+Once both of those hold **and the operator asks** to put their workbook budget in the hosted
+app ("upload my budget to the hosted version", "export the budget", "I need my team to see
+this budget"): the hosted app does not read a workbook. The operator uploads one JSON file
+with **Import budget** in the hosted app's sidebar. The download icon beside the uploaded
+budget's note saves that file back, to fix and import again.
 
 The dashboard must be built (Step 4) from a workbook budget. Then:
 
