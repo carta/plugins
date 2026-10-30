@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.2</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -211,6 +211,7 @@ the full file in context. Edit the small source file for what you're changing:
 | `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`), validates it, keeps each skill's baked `tag` / `whatsNew` / `whatsNewCopy` when the server omits them, and re-renders over the baked list | change how the published list is merged or when it loads |
 | `resources/app/version-check.js` | update banner: stays quiet for a week after the build (`BUILT_AT`), then reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news — live Contentful fetch, adapters, asset resolution; and `_listWhatsNewPrompts`, the Contentful fetch behind What's new's skills | change which content types render or how news cards look |
+| `resources/app/tour.js` | the first-visit guided tour: `TOUR_STEPS` (each step's element id, title and copy), the spotlight and tooltip, and its `CaptableHome.Tour.Start` / `.Next` / `.Skip` events; it opens once per browser (localStorage `captable-home-tour-v1`) | change the tour's steps or copy |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/captable-home.css` | styles (Ink tokens) | change appearance |
 | `resources/captable-home.template.html` | HTML skeleton + injection markers | change page structure |

@@ -267,6 +267,23 @@
 
 <div id="toast" role="status" aria-live="polite">Skill queued in chat ↗</div>
 
+<!-- Guided tour (app/tour.js). The overlay only advances on click, which the Next
+     button also does, so it is hidden from assistive tech. -->
+<div id="tour-overlay" aria-hidden="true"></div>
+<div id="tour-spotlight" aria-hidden="true"></div>
+<div id="tour-tooltip" role="dialog" aria-modal="true" aria-labelledby="tour-title" onclick="event.stopPropagation()">
+  <div class="tour-head">
+    <span id="tour-counter"></span>
+    <button class="tour-skip" type="button" onclick="tourSkip()">Skip tour</button>
+  </div>
+  <p id="tour-title"></p>
+  <p id="tour-desc"></p>
+  <div class="tour-foot">
+    <div id="tour-dots" role="group" aria-label="Tour progress"></div>
+    <button id="tour-next-btn" type="button" onclick="tourNext()"></button>
+  </div>
+</div>
+
 <script>
 /* __CAPTABLE_HOME_TRACKER_JS__ */
 /* __CAPTABLE_HOME_CONFIG_JS__ */

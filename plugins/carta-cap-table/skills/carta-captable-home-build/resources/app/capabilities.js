@@ -250,7 +250,8 @@ function readProductFlag(profile, key) {
 // painted at load (static prompts, the config cards in What's new) when the profile never
 // arrives.
 async function fetchUserEnrichment() {
-  if (!(await mcpAvailable())) return;
+  // The first-visit tour waits for this to settle (see _tourReady in tour.js).
+  if (!(await mcpAvailable())) { _tourReady(); return; }
   try {
     // The Contentful fetch needs nothing from the profile, so it runs alongside it; the
     // skills join the carousel when they arrive.
@@ -266,6 +267,8 @@ async function fetchUserEnrichment() {
       .catch(err => console.error("[captable-home] what's new skills failed — showing the microapps only", err));
   } catch (e) {
     console.log("[captable-home] get_current_user unavailable:", e && e.message);
+  } finally {
+    _tourReady();
   }
 }
 

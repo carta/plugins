@@ -87,6 +87,7 @@ APP_JS_PARTS = [
     "app/version-check.js",
     "app/live-content.js",
     "app/skill-directory.js",
+    "app/tour.js",
 ]
 
 MARKERS = {

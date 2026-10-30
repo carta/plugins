@@ -1309,3 +1309,47 @@
       max-width: 100%;
       object-fit: contain;
     }
+
+    /* ── Guided tour (app/tour.js) ── */
+    #tour-overlay { display: none; position: fixed; inset: 0; z-index: 998; background: transparent; cursor: pointer; }
+    /* The spotlight's huge outer shadow is the scrim; the inner ring marks the step. */
+    /* Spotlight and card sit in page coordinates (position: absolute), so a scroll carries them.
+       The app moves the spotlight frame by frame (see _tourPaint); the scrim and ring are set there. */
+    #tour-spotlight {
+      display: none; position: absolute; z-index: 999; pointer-events: none;
+      border-radius: var(--ink-size-global-radius-flat);
+      animation: tour-fade-in 0.3s ease;
+    }
+    @keyframes tour-fade-in { from { opacity: 0; } }
+    #tour-tooltip {
+      display: none; position: absolute; z-index: 1000; width: 308px; box-sizing: border-box; padding: 20px 22px;
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-flat);
+      box-shadow: var(--ink-elevation-global-shadow-large);
+      transition: opacity 0.2s ease, translate 0.2s ease;
+    }
+    /* Between steps the card fades and drops slightly, then settles in place. */
+    #tour-tooltip.tour-tooltip--switching { opacity: 0; translate: 0 6px; }
+    .tour-head, .tour-foot { display: flex; align-items: center; justify-content: space-between; }
+    .tour-head { margin-bottom: 10px; }
+    #tour-counter { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-color-global-text-subtle); }
+    .tour-skip { background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-size: 12px; line-height: 1; color: var(--ink-color-global-text-subtle); }
+    #tour-title { margin: 0 0 6px; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--ink-color-global-text-default); }
+    #tour-desc { margin: 0 0 18px; font-size: 13px; line-height: 1.55; color: var(--ink-color-global-text-subtle); }
+    #tour-dots { display: flex; gap: 5px; align-items: center; }
+    .tour-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 3px; background: var(--ink-color-global-border-default); transition: width 0.25s ease, background 0.25s ease; }
+    .tour-dot.active { width: 18px; background: var(--ink-color-global-border-active); }
+    #tour-next-btn {
+      border: none; cursor: pointer; padding: 8px 18px; white-space: nowrap;
+      font: inherit; font-size: 13px; font-weight: 500;
+      color: var(--ink-button-font-color-primary-base);
+      background: var(--ink-button-background-color-primary-base-default);
+      border-radius: var(--ink-size-global-radius-subtle);
+      transition: background 0.13s;
+    }
+    #tour-next-btn:hover { background: var(--ink-button-background-color-primary-base-hover); }
+    @media (prefers-reduced-motion: reduce) {
+      #tour-spotlight { animation: none; }
+      #tour-tooltip, .tour-dot, #tour-next-btn { transition: none; }
+    }
