@@ -9,7 +9,7 @@ description: >
   Use instead: carta-explore-data for general fund/investment/portfolio data —
   this skill is specifically for co-investor ("who else invested alongside us")
   analysis.
-version: 0.8.9
+version: 0.8.10
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.7.20</carta-plugin>
+<carta-plugin>carta-investors:7.7.21</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -344,7 +344,9 @@ Open every invocation with:
 
 Then proceed immediately to Step 1.
 
-> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_started")` before proceeding. Use the same MCP server name (`carta` or `claude_ai_carta`) you're using for `list_contexts` in this session.
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the MCP server name you're using for `list_contexts` in this session.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-render, a follow-up, a drill-down, a re-publish) does not checkpoint again.
 
 ---
 
@@ -767,7 +769,7 @@ Do not repeat the full menu after every result. If the user asks "what else can 
 
 ## Error handling
 
-> **Checkpoint on every stop in this table**: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a retry, a fall-through to Mode B) do not checkpoint.
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a retry, a fall-through to Mode B) do not checkpoint.
 
 | Scenario | Response |
 |---|---|

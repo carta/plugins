@@ -2,7 +2,7 @@
 name: carta-spa-audit
 description: >-
   SPA coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed, and can drill into a specific company's SPA documents. Use when asked about SPA coverage, missing SPAs, unexecuted SPAs, document completeness, or a named company's SPA. Do NOT use for general portfolio metrics, capital deployment analysis, or co-investor lookups — use carta-co-investors for who else invested alongside you.
-version: 0.9.5
+version: 0.9.6
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.7.20</carta-plugin>
+<carta-plugin>carta-investors:7.7.21</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -193,6 +193,10 @@ Open every invocation with:
 > "I'll audit SPA coverage across your portfolio — pulling every investment record and SPA document from Carta, then categorizing each company by execution status. Larger portfolios take a moment."
 
 Then proceed immediately to Step 1.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the MCP server name you're using for `list_contexts` in this session.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-render, a follow-up, a drill-down, a re-publish) does not checkpoint again.
 
 ---
 
@@ -338,6 +342,8 @@ Then a 3–5 bullet summary of what it shows — the four-bucket audit (missing,
 
 > **Numbers live in the artifact, not in your reply.** Do not restate coverage percentages, bucket counts, or company names in chat — you have not seen them. The page queries Carta after your turn ends, so any figure you quote is invented.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="skill_finished")` once the publish in Step A3 has succeeded. Mode A has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
+
 ---
 
 ## Mode B — Audit (text)
@@ -472,6 +478,8 @@ Use `Write` to write the JSON. Group the main audit query's rows by `spa_bucket`
 
 ### Step B2: Present results
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="data_fetched")` once the audit data is in hand, whether Step B1 fetched it or Step B0 read it from the cache.
+
 **BLUF lead:** One sentence with the coverage fraction and bucket breakdown before the tables.
 
 > "**X** of your **Y** priced-equity portfolio companies have an SPA on file. Of those equity investments: **A** are missing an SPA entirely, **B** have executed SPAs on file, and **C** have an SPA uploaded but not yet executed. **Z** additional investment(s) don't need an SPA (SAFEs, convertible notes, fund/LP positions, tokens, warrants)."
@@ -558,6 +566,8 @@ AskUserQuestion(
 
 If the user picks "Drill into a company," continue with the **Drill-down** section below. If they pick "Show only gaps," re-render Step B2 with only buckets 1 and 2. If they pick "Run co-investor analysis," hand off to `carta-co-investors` (do not re-fetch — the SPA data is already cached at `$WORKSPACE`).
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="skill_finished")` after showing the next-step question.
+
 **Suggested next step after presenting the audit.** Always append, in plain text after Step B2 and before the AskUserQuestion: *"To close any coverage gap, drop missing or signed SPAs into this chat and I'll add them to your firm's Documents page, or [upload them in Carta](\<base_url>/investors/firm/\<org_pk>/portfolio/documents/). Uploaded SPAs unlock co-investor analysis and more downstream skills."*
 
 ---
@@ -581,6 +591,8 @@ read_tool({"name": "dwh__execute__query", "arguments": {
 }})
 ```
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="data_fetched")` after the Step B query returns.
+
 ### Step C
 
 Present results in two sub-tables. Both use `SPA #` as the join key so the user can correlate rows.
@@ -603,6 +615,8 @@ Show each price per share with the decimals the document states (`0.05071`, not 
 - **Upload date** — when Carta extracted the document. For SPAs that predate the current extraction pipeline this falls back to a data-refresh date and reads as approximate.
 - **Executed?** — Yes/No from document extraction; a specific execution date is not available
 - **Currency** — read from the document extraction, per SPA. Null when the document itself stated no currency.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="skill_finished")` after the two sub-tables.
 
 ### Step D
 
@@ -637,6 +651,8 @@ AskUserQuestion(
 ---
 
 ## Error handling
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a retry, a fall-through to Mode B, an audit with every company in bucket 1) do not checkpoint.
 
 | Symptom | Likely cause | What to tell the user |
 |---------|-------------|----------------------|
