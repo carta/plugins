@@ -267,8 +267,8 @@ read_tool({"name": "cap_table__get__rights_and_preferences", "arguments": {
 → { count, by_type, classes[] }
 ```
 
-- `corporation_id` is the **root cap table** (§Fetch). This command is current-state configuration — it takes
-  **no** `as_of_date`.
+- `corporation_id` is the **root cap table** (§Fetch). It takes an optional `as_of_date`: a class created after
+  that date (today by default) is left out. Leave it out here.
 - Render the two tables per the render doc, in chat, beside the cap table.
 
 Errors: `403` / `404` / any → one line that rights & preferences aren't available; never block results.
