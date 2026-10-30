@@ -2,17 +2,19 @@
 name: carta-brand-extraction
 version: 0.1.0
 description: >
-  Generates a brand board from a firm's website URL and optional user-provided assets.
-  Analyzes the website to extract theme colors, typography, logos, and imagery, then
+  Generates a brand board from a firm's website URL, a deck it already has (a PowerPoint or
+  PDF pitch deck or LP letter), and optional user-provided assets.
+  Analyzes them to extract theme colors, typography, logos, and imagery, then
   produces a polished brand board as an HTML artifact, PDF, slide deck, or React component.
   Trigger phrases: "build a brand board", "create a brand board", "generate a brand board",
   "extract brand identity", "brand board from website", "visual identity from URL",
-  "brand guidelines from site", "analyze brand from website", "brand audit".
+  "brand guidelines from site", "analyze brand from website", "brand from this deck", "brand audit".
 allowed-tools:
   - Read
   - Write
   - Edit
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_website.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_deck.py" *)
   - WebFetch
   - mcp__claude_ai_carta__welcome
   - mcp__claude_ai_carta__list_contexts
@@ -37,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.7.11</carta-plugin>
+<carta-plugin>carta-investors:7.7.20</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -62,6 +64,7 @@ Fire this skill when the user asks to:
 
 - Build, create, or generate a brand board from a website URL
 - Extract a company's visual identity / brand elements from their site
+- Extract a firm's brand from a deck it drops in: a pitch deck or LP letter (PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF)
 - Analyze a firm's website for colors, fonts, and design patterns
 - Create brand guidelines from a URL
 - Produce a "look and feel" reference from a website
@@ -119,10 +122,11 @@ mcp__claude_ai_carta__read_tool({"name": "fa__get__brand_board"})
 
 ### Phase 1: Gather inputs
 
-1. **Ask for the website URL** if not already provided. Accept bare domains (`acme.com`) — the script prepends `https://` automatically.
+1. **Ask for the website URL** if not already provided. Accept bare domains (`acme.com`) — the script prepends `https://` automatically. When the user gave a deck (a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF pitch deck or LP letter) and no URL, the deck is the source: don't ask for a URL.
 
 2. **Ask about additional assets** (optional). The user may provide:
    - Logo files (PNG, SVG) they want used instead of / in addition to extracted logos
+   - A pitch deck or LP letter (PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF), read in Phase 2
    - Brand color specifications (hex codes, color names)
    - Existing brand guidelines or style guides
    - Reference brand boards from other companies they admire
@@ -146,6 +150,14 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_webs
 ```
 
 This returns a JSON report with raw extraction data. **Save the output** — you will reference it throughout composition.
+
+**From a deck.** When the user gave a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF deck, run the deck reader on it (alongside the website analysis when there is a URL too), saving logo candidates in your working folder:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_deck.py" "<deck file path>" --out-dir "<working folder>"
+```
+
+It prints `accent_candidates` (`#RRGGBB`, best first, neutrals already left out), `fonts` (`heading`, `body`) and `logo_candidates` (saved file paths, best first). A PowerPoint's colours and fonts come exactly from its theme (`"colors_exact": true`). A PDF's colours are the ones its first pages paint most (`"colors_exact": false`) and it has no fonts: tell the user the colours are a best guess from the PDF. An empty `accent_candidates` means the deck has no brand colour: ask the user for one. Exit 1 prints why the file couldn't be read (not a deck, password-protected); tell the user and ask for another file or the website.
 
 If the script fails (e.g., the site blocks automated access, CAPTCHA, JS-heavy SPA with no server-rendered content):
 - Try `WebFetch` on the URL as a fallback to get the HTML
@@ -263,6 +275,7 @@ Skip this step if:
 If the user provided additional assets in Phase 1:
 
 - **Logo files** — replace extracted logos with user-provided ones
+- **A deck** — its colours, fonts and logo override the website's; the website fills gaps only
 - **Color specs** — override extracted colors with user-specified hex codes; keep extracted colors as secondary/neutral fill if they complement the user's choices
 - **Brand guidelines** — use as the authoritative source; extracted data fills gaps only
 - **Reference boards** — match the layout/style/mood of the reference when composing
