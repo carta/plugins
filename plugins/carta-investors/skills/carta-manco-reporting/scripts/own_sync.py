@@ -526,6 +526,9 @@ def main(argv: Optional[list] = None) -> int:
     for this dashboard), or no working `claude` CLI to reach Carta through —
     both are "try again next build", not failures. Why goes to the log, and to the
     status file under own_sync._record_blocked's rule.
+
+    `--push-one` is this same push, for one report, run synchronously instead of
+    detached — see push_one's docstring.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", required=True)
@@ -538,6 +541,12 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--record", metavar="REPORT_ID",
                         help="stamp a push a Claude session made from this report's plan")
     parser.add_argument("--uuid", help="with --record: the report uuid Carta answered with")
+    parser.add_argument("--push-one", metavar="REPORT_ID",
+                        help="push this one report synchronously and print {\"uuid\"} (its "
+                             "own-sync mirror, confirmed by Carta only when a push was due) "
+                             "or {\"error\"} (plus \"detail\" for push_failed) as JSON, "
+                             "without running the rest of the sweep; exits 3 on "
+                             "{\"error\"}, same as --plan")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).expanduser()
 
@@ -554,6 +563,19 @@ def main(argv: Optional[list] = None) -> int:
             return 3
         return _plan(data_dir, user_id, args.recreate)
 
+    if args.push_one:
+        result = _locked(data_dir, lambda: push_one(data_dir, user_id, args.push_one))
+        print(json.dumps(result))
+        return 3 if "error" in result else 0
+
+    _locked(data_dir, lambda: _sweep_under_lock(data_dir, user_id))
+    return 0
+
+
+def _locked(data_dir: Path, fn: Callable[[], Any]) -> Any:
+    """Run `fn` holding the cross-process sweep lock, with a heartbeat thread refreshing it
+    for as long as `fn` runs — shared by the full sweep and a single-report push, so the
+    two never race over the same report. Returns whatever `fn` returns."""
     lock_path = manco_paths.own_sync_lock_file(data_dir)
     with _sweep_lock(data_dir):
         # The heartbeat runs for exactly as long as this process holds the lock.
@@ -562,13 +584,12 @@ def main(argv: Optional[list] = None) -> int:
                                      daemon=True)
         heartbeat.start()
         try:
-            _sweep_under_lock(data_dir, user_id)
+            return fn()
         finally:
             # Stop (and wait for) the heartbeat before the lock is released: it must never
             # refresh a lock this process no longer holds.
             stop_heartbeat.set()
             heartbeat.join()
-    return 0
 
 
 def _plan(data_dir: Path, user_id: int, recreate: Optional[str]) -> int:
@@ -591,6 +612,15 @@ def _plan(data_dir: Path, user_id: int, recreate: Optional[str]) -> int:
     return 0
 
 
+def _cli_bridge(data_dir: Path, claude_bin: str) -> share_bridge.Bridge:
+    """The one way this dashboard's sync paths — the sweep and a single-report push alike —
+    reach Carta through the `claude` CLI: the same environment, the same `.share-mcp-server`
+    pin and the same probed binary, so the two never talk to different connectors."""
+    return share_bridge.Bridge(str(data_dir), manco_paths.read_carta_environment(data_dir),
+                               override=manco_paths.read_share_mcp_server(data_dir),
+                               claude_bin=claude_bin)
+
+
 def _sweep_under_lock(data_dir: Path, user_id: Optional[int]) -> None:
     """The sweep proper, with the sweep lock held from before the CLI probe on, so every
     status it writes lands before a waiting --plan reads it."""
@@ -605,11 +635,57 @@ def _sweep_under_lock(data_dir: Path, user_id: Optional[int]) -> None:
                         user_id)
         return
 
-    bridge = share_bridge.Bridge(str(data_dir), manco_paths.read_carta_environment(data_dir),
-                                 override=manco_paths.read_share_mcp_server(data_dir),
-                                 claude_bin=probed["bin"])
+    bridge = _cli_bridge(data_dir, probed["bin"])
     try:
         sweep(data_dir, user_id, bridge)
+    finally:
+        bridge.close()
+
+
+def push_one(data_dir: Path, user_id: Optional[int], report_id: str) -> Dict[str, Any]:
+    """Push `report_id` alone, synchronously — for a caller that wants its own-sync uuid
+    right away, such as the import flow's end-of-workflow hosted-app offer, rather than
+    waiting on the detached post-build sweep. Call under `_locked` (main() does), the same
+    cross-process lock the full sweep holds, so a push made this way never races the
+    detached sweep over the same report.
+
+    Returns `{"uuid": <uuid or None>}` once the attempt has settled. The uuid is the
+    report's own-sync mirror as this dashboard last recorded it — confirmed by Carta just
+    now only when `push_if_changed` actually had something to push; when there was nothing
+    due (already synced and unchanged, read-only, or unbuilt — the common case, since the
+    detached sweep usually gets there first), it is whatever this dashboard last pushed,
+    not rechecked by this call, or `None` if it has never pushed at all. A caller that
+    needs a guarantee the report is live right now must not treat an unrechecked uuid as
+    one.
+
+    Returns `{"error": <reason>}` when the push couldn't even be attempted (`no_user_id`,
+    or a `claude` CLI preflight reason), or Carta refused it outright: `"unreachable"`, or
+    `"push_failed"` with a `"detail"` message — also returned when the report vanished
+    locally while the push was in flight (another process's `own_sync.forget`, which
+    doesn't take this lock), the same local lookup `push_if_changed` itself can return
+    `None` for.
+    """
+    if user_id is None:
+        return {"error": BLOCKED_NO_USER_ID}
+    probed = preflight_claude.probe()
+    if probed["reason"] != preflight_claude.REASON_OK:
+        return {"error": probed["reason"]}
+
+    store = report_store.ReportStore(data_dir)
+    bridge = _cli_bridge(data_dir, probed["bin"])
+    try:
+        result = push_if_changed(bridge, store, data_dir, report_id, user_id, lambda message: None)
+        if result is not None:
+            return {"uuid": result["own_sync"]["uuid"]}
+        doc = store.load()
+        report = report_store.ReportStore.find(doc, report_id)
+        return {"uuid": report_store.ReportStore.own_sync_uuid(report)}
+    except ShareError as e:
+        if _is_unreachable(e):
+            return {"error": BLOCKED_UNREACHABLE}
+        return {"error": "push_failed", "detail": str(e)}
+    except report_store.ReportEditError as e:
+        return {"error": "push_failed", "detail": str(e)}
     finally:
         bridge.close()
 
