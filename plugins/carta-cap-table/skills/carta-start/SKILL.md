@@ -1,7 +1,7 @@
 ---
 name: carta-start
 description: >
-  The entry point for a company's cap table in Carta. Use when the user says "get
+  Get started: see what Claude can do with your cap table. Use when the user says "get
   started", "what can you do with Carta", "what can Claude do with my cap table", or
   "show me what you can do": it shows their company, what their role can do and three
   prompts to try, then sets up their Carta Home. Not for a direct build, rebuild or open
@@ -24,7 +24,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.3</carta-plugin>
 
 # Carta start
 
