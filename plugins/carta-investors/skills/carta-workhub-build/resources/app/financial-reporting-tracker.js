@@ -509,6 +509,8 @@ async function frtFetchPeriod(p) {
   const key = frtPeriodKey(p);
   if (_frtPayloads[key]) return _frtPayloads[key];
   if (!_benchmarkFirmId) return null;
+  // The command is flag-gated per firm; without the flag every period read is refused.
+  if (!(await mcpCommandAvailable(FRT_COMMAND))) return null;
   const res = await mcpRead(FRT_COMMAND, { firm_uuid: _benchmarkFirmId, period: p.period, year: p.year });
   if (!res || res.isError) {
     console.error("[frt] tracker read failed —", frtErrorText(res));
