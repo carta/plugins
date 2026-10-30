@@ -45,6 +45,16 @@
       "body": "Reads live Carta Fund Admin data into Excel, with the entities you pick side by side and an optional P&L by department or tag."
     }
   },
+  "carta-cap-table-access": {
+    "category": "portfolio",
+    "name": "Cap table access",
+    "order": 40,
+    "prompts": [
+      "Show me which of {{FIRM}}'s portfolio companies we have cap table access to",
+      "Request cap table access for the companies where {{FIRM}} has none",
+      "Remind companies that haven't answered our cap table access request"
+    ]
+  },
   "carta-co-investors": {
     "category": "portfolio",
     "name": "Co-investor lookup",
