@@ -1,9 +1,9 @@
 ---
 name: carta-manage-securities
 description: >-
-  Edit, cancel, partly cancel or uncancel an issued certificate, option grant,
-  SAFE, note, RSU, RSA, SAR, CBU, PIU or warrant, with a preview first. Use to
-  fix, amend, correct, cancel or undo a cancellation.
+  Fix, amend, cancel, partly cancel or uncancel an issued certificate, option
+  grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or warrant, with a preview first.
+  Not for terminating a person (cancelling everything they hold).
 owner: carta-cap-table maintainers (#cap-table-eng)
 model: inherit
 allowed-tools:
@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.109.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.109.3</carta-plugin>
 
 # Manage securities
 
@@ -94,7 +94,9 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 
 1. **Bootstrap.** Call it once per change, after any earlier apply, with `company`,
    `security_type` and `label` (a list), `security` (ids) or `holder`. To reverse a
-   cancellation, send `label` or `security`: `holder` finds only securities held now. Send `look_first: true` when the user wants to look first.
+   cancellation, send `label` or `security`: `holder` finds only securities held now. For an
+   edit, always send `look_first: true`, so the Change page opens before the first preview
+   ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)).
 2. **Read the bootstrap.**
    - `blockers`: for `hard_stop`, quote `message` and `fix`, then stop. Ask about each
      `needs_decision`. Say each `informational` once.
@@ -113,8 +115,10 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    - **Partial cancel:** `security`, `effective_date` and `quantity`. The last tranches go first.
    - **Reverse cancel:** `security` and `reason`. `notes` is required when the reason is
      `Other - describe below`.
-4. **Preview.** Send the `thread_id` of an earlier preview of the same change. A rework is one
-   new preview on the same thread.
+4. **Preview.** Every change goes through the preview in [§ Actions](#actions), never
+   `cap_table__mutate__modify_issuable`, which keeps no Change page. Send this pass's
+   `thread_id` (see [§ Several changes](#several-changes)). A rework is one new preview on
+   the same thread.
    `status: blocked` (no `plan_id`): quote each failed check, ask for the fix, ask no approval.
 5. **Show the preview.** With `next_step` and the browser tool it names, follow it, then keep
    the chat to one line: the count, the fields, the reason, any problem and the full text of a
@@ -139,10 +143,25 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 One approval applies one change: one action, one reason, one security type, and at most
 `limits.max_securities` securities for an edit. Cancels, partial cancels and reverse cancels take
 one security each. Run each change as its own pass through steps 1 to 8, and say the split
-first: *"These are two changes. I'll apply them one at a time, starting with CS-1."* A later pass
-sends no `thread_id`.
+first: *"These are two changes. I'll apply them one at a time, starting with CS-1."* Each pass
+opens its own page with its own bootstrap and sends that pass's `thread_id`, never an earlier
+pass's.
 
 ## Closing
 
-One line per change: what changed, on which company, and the reason, plus each change not
-applied: *"ES-220 is canceled on Acme (Relationship change). CS-2 was not changed."*
+End the run with one short message and nothing after it:
+
+- One line: what was done and on which company.
+- One bullet per security that changed: label, field, before → after.
+- One bullet per change that was not applied.
+- One line only for something that cannot be undone or is still running, such as an email to a
+  holder or a job still in progress.
+
+```
+2 option grants updated on Meetly.
+- ES-218 · Board approval date 08/01/2022 → 06/15/2024
+- ES-219 · Board approval date 08/01/2022 → 06/15/2024
+```
+
+Leave out the reason, the note and the audit log (the Change page and Carta show them), and
+any repeat of the request, of what Carta reported, or of an offer to do more.

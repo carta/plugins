@@ -17,15 +17,19 @@ page shows the latest revision, read-only. Every change happens in chat; the pag
   same thread**.
 - If the tab lands on a `login.` address, ask the user to sign in to Carta in that panel once.
 
-## Look first
+## Open the page first
 
-**When:** the user wants to see before changing ("show me first", "something is wrong"). Also
-when they named a person or 2+ securities and gave no field and no value. Decide it from the
-words before the bootstrap, so the first bootstrap call sends `look_first: true`.
+Every edit's first bootstrap sends `look_first: true`, whatever the user said, so the page is up
+before the first preview. With the Change page on, the result leads with `next_step`,
+`companion_url` and `how_to_reply`, and carries `thread_id`. Follow `next_step`, post the link,
+then:
 
-With the Change page on, the result leads with `next_step`, `companion_url` and `how_to_reply`,
-and carries `thread_id`. Post the link, follow `next_step`, say in one line what the page shows,
-then ask what to change. Send that `thread_id` with the first preview.
+- **The user named the field and the value:** go on to the preview with that `thread_id`. The
+  open page turns into the diff.
+- **They did not** ("show me first", "something is wrong", only a person or securities): say in
+  one line what the page shows, then ask what to change.
+
+Send that `thread_id` with the first preview.
 
 ## Fields and values
 
