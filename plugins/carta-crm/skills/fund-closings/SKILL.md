@@ -6,13 +6,12 @@ description: >
   commitments), and what it takes to send subscription documents or a data room invite to an LP.
   Use this skill when the user says things like "is closings set up for [fund]", "data room
   status for [fund]", "subscription details for [fund]", "subscription progress", "who has
-  signed", "KYC status of our LPs",
-  "what do I need to send subscription docs to the next LP", "send subscription docs to [LP]",
-  "invite [LP] to the data room", or "/fund-closings". Use it even when the user does not say
-  CRM. Only for a fund's closing, LP subscriptions, sub docs and the closing data room: a data
-  room request fires this skill only when it names a fund or its LPs. Never for a company's data
-  room (e.g. a portfolio company's diligence room), a company's financing round, or fund accounting
-  (capital accounts, capital calls, distributions).
+  signed", "what do I need to send subscription docs to the next LP", "send subscription docs to
+  [LP]", "invite [LP] to the data room", or "/fund-closings". A data room request fires this
+  skill only when it names a fund or its LPs. Not for a fund's fundraising pipeline (LPs by
+  stage, indicated interest): use search-fundraisings. Not for KYC evaluations or KYC document
+  review: use the carta-kyc skills. Never for a company's data room, a company's financing
+  round, or fund accounting (capital accounts, capital calls, distributions).
 allowed-tools:
   - AskUserQuestion
   - mcp__carta__read_tool
@@ -29,7 +28,7 @@ model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.19.1</carta-plugin>
+<carta-plugin>carta-crm:1.19.2</carta-plugin>
 
 ## Overview
 
