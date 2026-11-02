@@ -25,8 +25,9 @@ const KEBAB_RIGHT = TILE_PAD_X + RADIO_SIZE + RADIO_GAP;
 const SUBTLE = "var(--ink-color-global-text-subtle)";
 // FIRM_METRICS stack under the name as label | figure | move rows: labels at the left,
 // figures and moves at the right edge, the moves in one column so their carets line up.
+// Smaller than the scenario name (FS.value) so the name reads as the tile's heading.
 const FIGURE_ROWS = { display: "grid", gridTemplateColumns: "1fr auto auto", columnGap: 8, alignItems: "baseline",
-  marginTop: 6, whiteSpace: "nowrap", fontSize: FS.bodyLg, lineHeight: "20px" };
+  marginTop: 6, whiteSpace: "nowrap", fontSize: FS.body, lineHeight: "20px" };
 
 const KebabIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -62,7 +63,7 @@ export function TileContent({ slice, firm, reserveRight = 0 }) {
           display: "inline-flex", justifyContent: "center", color: MICRO }}>
           <ScenarioMarker slice={slice} />
         </span>
-        <span style={{ fontSize: FS.value, lineHeight: "20px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{slice.name}</span>
+        <span className="tile-name" style={{ fontSize: FS.value, lineHeight: "20px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{slice.name}</span>
         {isShared(slice) && <Bubble variant="info" style={{ flex: "none" }}>Shared</Bubble>}
       </span>
       <span style={FIGURE_ROWS}>
