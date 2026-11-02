@@ -101,6 +101,10 @@ a discrete option and cite its source (e.g. _"Use one from earlier — $800M (lo
 $1.6B (high) — or type your own?"_). If none exists for this company this session, no
 suggestions — period.
 
+However the value arrives — typed, picked from earlier, or read from a spreadsheet — send it
+as a `DECIMAL` (§Formatting by `input_type`): **round to at most 6 decimal places** and send a
+plain decimal string, never a number.
+
 ## `NESTED_LIST` — row inputs
 
 Render `rows` as a numbered table — `#`, the row `label`, then one column per `facts` key

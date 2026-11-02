@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.12</carta-plugin>
+<carta-plugin>carta-investors:7.12.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -375,8 +375,8 @@ first `get_command` call in Step 6 is what waits on completion.
 
 The user may ask for **several** equity values on the **same date** — low/base/high cases, or a
 row of exit values from their spreadsheet. Confirm the set once (the list of values + the one
-shared date), then run them as a batch: dispatch each value (Step 5) and render each run's results
-(Step 6). Fetch and show the cap table **once** for that `(target, date)` — the once-per-batch
+shared date), then run them as a batch: dispatch each value (Step 5), formatted per
+`references/inputs.md` §`EQUITY_VALUE`, and render each run's results (Step 6). Fetch and show the cap table **once** for that `(target, date)` — the once-per-batch
 reuse rule (in the cap-table detail doc for the active noun, §Step 6a.5) handles this; never
 re-fetch or re-print it per value.
 Different dates → each date is its own cap table (fetched once).
