@@ -1,5 +1,5 @@
 """How a report's sheets and columns are shown: the name a blank header gets, which columns are
-hidden by default, and the tab name Excel accepts for a sheet.
+hidden by default, which sheets flag data quality, and the tab name Excel accepts for a sheet.
 
 Shared by report_processor.py, excel_exporter.py and build_template_definition.py, so a saved
 template holds what the screen and the workbook show. Stdlib only and Python 3.9-safe: the
@@ -7,6 +7,10 @@ template script imports it under the system interpreter.
 """
 
 import re
+
+# Sheets Carta adds to a report to flag securities with bad data. They are not report content, so
+# report_processor.py leaves them out unless the config's `sheets` names them.
+DATA_QUALITY_SHEETS = frozenset({"Data Warnings", "Defective Securities"})
 
 
 def normalize_columns(columns):

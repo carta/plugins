@@ -7,6 +7,10 @@ required params (Step 3) or filter IDs — it is not part of the always-loaded S
 # Reads go through read_tool; reporting__create__report changes data, so it goes through call_tool
 
 # PARAM CONTRACT — send exactly the argument names below and nothing else; unknown keys are rejected.
+#   This contract alone decides what may be sent. A report type's params_schema (from
+#   reporting__search__report_types) decides only what to ask the user for: its `required` list.
+#   An optional param that params_schema lists but this contract does not (include_drafts,
+#   with_formula_enabled) is never sent.
 #   reporting__create__report       call_tool   corporation_id, report_type, as_of_date, report_name,
 #                                               export_format, preview, the filter keys and per-type params below
 #                                               (no formula flag: live Excel totals come from report_processor aggregations)
@@ -45,8 +49,8 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   # Collect any that the user has not already provided via AskUserQuestion BEFORE calling this command.
   #
   # Each entry in the reporting__search__report_types response carries a params_schema for its own
-  # report type, generated from the same source as this table. Prefer it when present; this table
-  # is the fallback for when search was not called.
+  # report type. Use its `required` list when present; this table is the fallback for when search
+  # was not called. Never send an optional param from params_schema that the PARAM CONTRACT omits.
   #
   #   stakeholder_ownership_details_report
   #     stakeholder_pk       — the stakeholder to report on (REQUIRED)
@@ -138,7 +142,7 @@ read_tool({"name": "cap_table__list__sars", "arguments": { corporation_id, searc
   → { results: [{ id, label, ... }] }   # SAR:<id>
 
 read_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
-  → { results: [{ id, label, ... }] }   # CBU:<id>
+  → { data: { count, results: [{ id, label, ... }], ... }, meta }   # CBU:<id>
 
 read_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
   → { corporation_id, is_limited_admin,
@@ -150,14 +154,15 @@ read_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corpora
 
 read_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})
   → {
-      reports: [{report_type, name, similarity, answers_question, params_schema, runs_through_api_report}],
+      count: N,
+      results: [{report_type, name, similarity, answers_question, params_schema, runs_through_api_report}],
       questions: [{question, similarity, answers, hide_from_ui}]
     }
-  # `reports` is already filtered to what this account may run — a share-class-scoped admin sees a
+  # `results` is already filtered to what this account may run — a share-class-scoped admin sees a
   # shorter list. A report type absent from it is unavailable, not mis-ranked: never fall back to a
   # hardcoded list and never retry it.
   # runs_through_api_report — true when reporting__create__report can run the type. Send it only
-  # types with true (or, when the field is absent, types from `reports`); any other type fails, and
+  # types with true (or, when the field is absent, types from `results`); any other type fails, and
   # the user runs it from the Reports page in Carta instead.
 
 read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})

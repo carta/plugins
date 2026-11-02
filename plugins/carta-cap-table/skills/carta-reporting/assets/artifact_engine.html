@@ -306,7 +306,7 @@ function initSheet(sName) {
   if (!sh._colOrder) sh._colOrder = sh.columns.map((_, i) => i);
   if (!sh._hidden)   sh._hidden   = defaultHidden(sh);
   if (!sh._sort)     sh._sort     = [];   // [{ci, dir}]
-  if (!sh._totals)   sh._totals   = {};   // {ci: op}
+  if (!sh._totals)   sh._totals   = summaryTotals(sh);   // {ci: op}
   // WeakMap keyed by the row itself (a data array or a {_t} object) so currency survives sort reorders
   if (!sh._rowCurrencyMap && sh.row_currencies) {
     sh._rowCurrencyMap = new WeakMap();
@@ -316,6 +316,14 @@ function initSheet(sName) {
       }
     });
   }
+}
+
+// A summary sheet's ∑ bar starts with the aggregations its Total row shows (summary_meta.ops is {column name: op})
+function summaryTotals(sh) {
+  const ops = sh.rows.some(rowIsTotal) && sh.summary_meta && sh.summary_meta.ops;
+  const totals = {};
+  sh.columns.forEach((c, ci) => { if (ops && NUM_TYPES.has(c.type) && TOT_CYCLE.includes(ops[c.name])) totals[ci] = ops[c.name]; });
+  return totals;
 }
 
 // The columns a sheet starts with hidden (the processor's `hidden: true` flag)
@@ -562,7 +570,7 @@ function renderTotalsBar(idx) {
         if (op === 'avg')   result = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
         if (op === 'min')   result = nums.length ? Math.min(...nums) : null;
         if (op === 'max')   result = nums.length ? Math.max(...nums) : null;
-        if (op === 'count') result = nums.length;
+        if (op === 'count') result = dataRows.filter(r => r[ci] !== null && r[ci] !== undefined && r[ci] !== '').length;
         // Amounts in different currencies are never combined: a mixed column shows no total
         const curs  = new Set(cells.map(c => c.cur ? (c.cur.code || c.cur.symbol) : ''));
         const mixed = col.type === 'money' && op !== 'count' && curs.size > 1;

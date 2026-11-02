@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.6</carta-plugin>
 
 # Custom Reports
 
@@ -107,7 +107,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 **Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
 
-**Report tool contract:** `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/mcp-tool-reference.md` lists the only params each `reporting__*` tool accepts — send nothing else (no `include_drafts`, no `with_formula_enabled`, no `corporation_id` on `report_status`). `reporting__create__report` always goes through `call_tool`. If `create__report` or `search__report_types` returns `scope_required`, do not call it again yet: ask the user whether to grant Carta the permission the error names, and if they agree call `<_carta_prefix>request_permissions` (a top-level connector tool, not a `call_tool` name; no arguments) once, show them the authorization link it returns verbatim, and retry the call once after they say they have authorized. When the full and preview creates both return it, ask and call `request_permissions` once, then retry both. Only the main thread runs this: a subagent that gets `scope_required` returns it without retrying. If they decline or it is still refused, tell them in plain words that their Carta connection needs that permission, then stop.
+**Report tool contract:** `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/mcp-tool-reference.md` lists the only params each `reporting__*` tool accepts (its PARAM CONTRACT) — send nothing else, even an optional param that a `params_schema` lists (e.g. `include_drafts`, `with_formula_enabled`), and no `corporation_id` on `report_status`. `reporting__create__report` always goes through `call_tool`. If `create__report` or `search__report_types` returns `scope_required`, do not call it again yet: ask the user whether to grant Carta the permission the error names, and if they agree call `<_carta_prefix>request_permissions` (a top-level connector tool, not a `call_tool` name; no arguments) once, show them the authorization link it returns verbatim, and retry the call once after they say they have authorized. When the full and preview creates both return it, ask and call `request_permissions` once, then retry both. Only the main thread runs this: a subagent that gets `scope_required` returns it without retrying. If they decline or it is still refused, tell them in plain words that their Carta connection needs that permission, then stop.
 
 **Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The only exceptions are the two reconnect retries, each after the user says "ready": the FAIL outcome in step 0b and a failed access check in step 0c. Each re-runs this discovery and replaces `_tool_results`.
 
@@ -179,9 +179,9 @@ Run each script only in the one-line form shown below, as its own command: write
    ```
    read_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, detail: "minimal", page_size: 1 }})
    ```
-   The `detail: "minimal"` response shape is `{ results: [...] }`. If `results` is empty or the call fails with an error that is not a company error, set `_phantom_label_<corporation_id>` to `null` — the corporation has no CBUs; step 1 takes the id from `meta.company`, or from its `list_accounts` fallback when the response has none.
+   The `detail: "minimal"` response shape is `{ data: { count, results: [...], ... }, meta }`. If `data.results` is empty or the call fails with an error that is not a company error, set `_phantom_label_<corporation_id>` to `null` — the corporation has no CBUs; step 1 takes the id from `meta.company`, or from its `list_accounts` fallback when the response has none.
 
-   If `results` is non-empty, call `read_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
+   If `data.results` is non-empty, call `read_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
 
    Key per-corporation using `_phantom_label_<corporation_id>` (e.g. `_phantom_label_12345`) so multi-corporation flows each have their own label without collision.
 
@@ -204,7 +204,7 @@ Run each script only in the one-line form shown below, as its own command: write
 
    **When `is_limited_admin` is true, drop `intermediate_cap` and `transactions_ledger` from any `reports` value you send** to `cap_table_summary_report` — see the reference file. Sending them yields a workbook with the sheet missing rather than an error.
 
-2. **Find the right report type** — call `read_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `reports` from the response, ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
+2. **Find the right report type** — call `read_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `results` from the response (`{count, results}`), ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
 
    **Supported report types** (support `export_format: "json"`):
    `canceled_and_returned_report`, `cap_table_summary_report`, `common_securities_report`,
@@ -216,37 +216,37 @@ Run each script only in the one-line form shown below, as its own command: write
    `stakeholder_share_registry_report`, `stakeholder_ownership_details_report`,
    `termination_modeling_report`, `vesting_details_report`
 
-   This list is a fallback for ranking only — `reports` from the search response is authoritative,
+   This list is a fallback for ranking only — `results` from the search response is authoritative,
    because it is already narrowed to what this account may run. Seven of the types above are
-   unavailable to a share-class-scoped admin and will never appear in `reports` for one:
+   unavailable to a share-class-scoped admin and will never appear in `results` for one:
    `exercised_and_settled_report`, `historical_terminations_report`, `ocx_report`,
    `rule_701_compliance_report`, `secondary_transaction_seller_model`, `stakeholder_ledger_report`,
    `termination_modeling_report`.
 
-   **Only run a type that `reports` returned** and, when its entry carries `runs_through_api_report`,
+   **Only run a type that `results` returned** and, when its entry carries `runs_through_api_report`,
    only one with `runs_through_api_report: true`. `reporting__create__report` cannot run any other
    type, so a request for one only fails. Proceed with the top runnable result automatically — only ask for confirmation if the top two runnable results have nearly identical similarity scores AND the request is genuinely ambiguous between two different data categories. When the user's prompt clearly names a report type (e.g. "equity awards", "securities ledger", "vesting details", "exercised and settled"), proceed without asking.
 
    **2a. In MARKDOWN mode, still make the `reporting__search__report_types` call — skip only the
    ranking dialogue.** The response is the one place a share-class-scoped admin's narrower
-   catalogue appears, so every matched type must be confirmed against `reports`. Take the top
+   catalogue appears, so every matched type must be confirmed against `results`. Take the top
    runnable result without asking, then continue to "Collect report details".
 
    **If the report the user needs is not runnable here, never send `reporting__create__report` a
-   type outside `reports`, and do not fall back to the list above.** Never retry a type search did
+   type outside `results`, and do not fall back to the list above.** Never retry a type search did
    not return.
-   - A type from the list above that is absent from `reports` is not available to this account.
+   - A type from the list above that is absent from `results` is not available to this account.
      Say: "The **{Report Type}** report isn't available on your access level — I can run {two or
-     three names from `reports`} instead. Which would you like?" Never describe this as lacking
+     three names from `results`} instead. Which would you like?" Never describe this as lacking
      access to the company.
    - Any other report the user needs — one not in the list above, or returned with
      `runs_through_api_report: false` — can't be run from here. Say: "The **{Report Type}** report
      can be run from the Reports page in Carta. The closest report I can run here is
-     **{closest runnable name from `reports`}** — would you like that instead?"
+     **{closest runnable name from `results`}** — would you like that instead?"
 
-3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `Read` path) and look up the matched report type in its **REQUIRED params by report_type** table. **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
+3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `Read` path) and look up the matched report type in its **REQUIRED params by report_type** table (or the `required` list of its `params_schema`). **Every param listed for that report type is required.** What you may send is set only by the reference's PARAM CONTRACT. If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
 
-   **Vesting without a named person.** `vesting_details_report` covers one stakeholder at a time and needs an issuance date range, so it cannot answer a company-wide "show me vesting schedules". When the request names no stakeholder, call `AskUserQuestion` before running it: "Schedule-level vesting detail is per person — which stakeholder, and which grant issue dates? Or I can show company-wide outstanding awards instead." If they choose company-wide, call `reporting__search__report_types` again with the query `"outstanding equity awards"` and run `equity_awards_outstanding` if it is in `reports`; if it is not, give step 2a's unavailable-type message.
+   **Vesting without a named person.** `vesting_details_report` covers one stakeholder at a time and needs an issuance date range, so it cannot answer a company-wide "show me vesting schedules". When the request names no stakeholder, call `AskUserQuestion` before running it: "Schedule-level vesting detail is per person — which stakeholder, and which grant issue dates? Or I can show company-wide outstanding awards instead." If they choose company-wide, call `reporting__search__report_types` again with the query `"outstanding equity awards"` and run `equity_awards_outstanding` if it is in `results`; if it is not, give step 2a's unavailable-type message.
 
    **Filters** — many report types accept filter params; the same reference file lists which filters each report type supports and the ID-lookup commands to resolve them. If the user mentions specific stakeholders, share classes, equity plans, securities, or a date range, resolve their IDs/values and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"CERTIFICATE:42,OPTION:7"`); valid types: `CERTIFICATE`, `RSA`, `RSU`, `OPTION`, `SAR`, `CBU`, `PIU`, `WARRANT`, `CONVERTIBLE_NOTE`. Passing unsupported filters for a report type has no effect.
 
@@ -459,6 +459,8 @@ Run each script only in the one-line form shown below, as its own command: write
    >
    > _(Add this line only when `_templates_available_<corporation_id>` is `true` after the check in "Save as a template":)_ Or say **Save this as a template** to keep the report in Carta and run it again at a new as-of date.
 
+   When `warnings.data_quality` is non-empty, add one sentence with a clause for each sheet in it: "Carta flagged {N} securities with data warnings" ({N} is the "Data Warnings" count) and "{M} defective securities" ({M} is the "Defective Securities" count), then "Say **show data warnings** to see them." When the user says **show data warnings**, rerun `report_processor.py` with `sheets` naming every sheet in `warnings.data_quality`, keeping the sheets already in the report in `sheets`, and rebuild the report.
+
    If the dataset is large (> 300 rows), append: "This report has {N} rows — you may want to filter before exporting." (For a preview: "The preview already has {N} rows.")
 
    **Percentage columns under a share-class scope.** `pct_of_total` divides by the sum of the rows
@@ -541,10 +543,10 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | Symptom | Cause | Tell user |
 |---|---|---|
 | No matching report types | Query didn't match any known report type | Describe what kinds of reports are available and ask what they're looking for |
-| `403` with a message naming share classes or an access level | The account holds a share-class-scoped role that cannot run this report type, or cannot run it across several companies. This is a restriction on the report, not on the company. | Relay the message's own wording, then offer an alternative from `reports`. Never say they lack access to the company. |
+| `403` with a message naming share classes or an access level | The account holds a share-class-scoped role that cannot run this report type, or cannot run it across several companies. This is a restriction on the report, not on the company. | Relay the message's own wording, then offer an alternative from `results`. Never say they lack access to the company. |
 | `403` / access denied, no message | Your account doesn't have permission to access this company's data. | "It looks like you don't have access to this company's Carta data. Reach out to your Carta admin to request access." |
 | `status: error` | Report generation failed. If single report: regenerate once sequentially. If parallel reports: retry failed ones one at a time (sequential — parallel retries cause load failures). If still failing after retry: skip and continue. | "I wasn't able to generate the [Report Name] report — continuing with the rest." |
-| `status: error` and `_scope_<corporation_id>` has `is_limited_admin: true` | The status carries no reason, but the most common cause for a scoped account is that no share class in its scope has data for this report. Retry once, then stop — a second failure will not clear. | "I couldn't generate the **{Report Type}** report. Your access covers {share class names}, and this report may have nothing there. Want me to try {alternative from `reports`} instead?" |
+| `status: error` and `_scope_<corporation_id>` has `is_limited_admin: true` | The status carries no reason, but the most common cause for a scoped account is that no share class in its scope has data for this report. Retry once, then stop — a second failure will not clear. | "I couldn't generate the **{Report Type}** report. Your access covers {share class names}, and this report may have nothing there. Want me to try {alternative from `results`} instead?" |
 | `status: not_found` | Report expired. The 4b agent writes `report not found` as the error. | Silent: the main thread recreates that report once with the same params and dispatches a fresh download agent (4d swap step); the new pk replaces `user_report_pk` for the rest of the session. Only if that also fails, use the "didn't finish" wording there. |
 | `empty_rows_dropped` > 0 | Rows whose numeric columns are all zero or blank were dropped (placeholder security types Carta emits for types never issued). Not applied to a sheet with a filter asking for zero on a numeric column (op `=`, value 0, e.g. `Shares = 0`): the all-zero rows it matched are the answer and stay. Any other numeric filter (e.g. `Shares < 1000`) still drops them. | "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets) |
 | `filtered_row_count` = 0 | No rows matched the filters | Full-report build: "No rows matched those filters." Offer to loosen the filter or try a different date. Preview build: do not relay; run the full-report wait first. |
@@ -558,6 +560,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `unsupported_filters` non-empty | A `>`, `<`, `>=` or `<=` filter named a text column, which has no order, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't apply '[Column] [op] [value]' — '[Column]' is text, so these rows are unfiltered on it." Offer `=`, `!=` or `contains` instead, or a numeric or date column. |
 | `structural_rows_dropped` > 0 | The sheet has section headings or total rows, and a filter, sort, column pick, formula or aggregation was applied, which cannot keep them in place. | "Section headings and totals were left out because of the filters/sort — say so if you want them back unsorted." |
 | `warnings.unknown_sheets` present | A name in `warnings.unknown_sheets.requested` is not in this report, so it was left out. | "This report has no sheet called '[Name]'. Its sheets are: […]" (list `warnings.unknown_sheets.available`) Offer to re-run with a real sheet. |
+| `warnings.data_quality` present | The report has data-quality sheets (`{sheet name: row count}`); they are left out of `data` unless `sheets` names them. | Use the checkpoint wording in step 4d. |
 | `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty | A sheet to merge was missing (`warnings.merge_sources_missing[].source`), or its columns differ (`schema_warnings`), so its rows are not in the merged tab. | Name the sheet that was left out and why; never present the merged tab as complete. |
 | `filtered_row_count` == `original_row_count` with filters set | The filters matched every row. Legitimate, but confirm it is not a mis-typed filter before presenting. | State plainly that the filter matched all N rows. |
 
@@ -623,6 +626,8 @@ A sheet with a filter asking for zero on a numeric column (op `=`, value 0) keep
 (no `empty_rows_dropped`); other numeric filters still drop them.
 
 `label_overrides` — optional dict mapping raw string cell values to display names. Applied to all string-typed columns across every sheet. Use to replace Carta's internal security type codes with the corporation's configured equity language names (e.g. `{"CBU": "Phantom Units"}`). Matching is exact and case-sensitive.
+`sheets` leaves out the data-quality sheets "Data Warnings" and "Defective Securities" unless it names them. Named, they ignore the global `columns`, `filters`, `sort`, `formulas` and `aggregations` and take only their own per-sheet entry.
+
 
 Multi-sheet with per-sheet config:
 Write `carta-reporting/config.json` (in the working directory) with:
@@ -682,7 +687,8 @@ All fields except the file source are optional — omit or set to `null` to skip
                          "mixed_currency_columns": [],   // merged tabs: every list stat is the union over the merged sources
                          "merged_from": [...], "schema_warnings": [...]}},   // last two: merged tabs only
   "warnings": {"unknown_sheets": {"requested": [...], "available": [...]},
-               "merge_sources_missing": [{"target": ..., "source": ...}]}   // keys present only when raised
+               "merge_sources_missing": [{"target": ..., "source": ...}],
+               "data_quality": {"Data Warnings": N, "Defective Securities": N}}   // keys present only when raised
 }
 ```
 

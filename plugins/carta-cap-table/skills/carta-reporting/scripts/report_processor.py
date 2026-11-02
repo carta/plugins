@@ -13,7 +13,10 @@ file and stdout carries a short summary (shape: "Script Reference" in the carta-
 
 Config JSON fields:
   download_url    str              S3 presigned URL
-  sheets          list[str]|dict   Sheets to include (null = all).
+  sheets          list[str]|dict   Sheets to include (null = all except the data-quality
+                                   sheets "Data Warnings" and "Defective Securities", which
+                                   only a list or dict naming them includes, and which ignore
+                                   the global transforms).
                                    List form: filter to named sheets, apply global transforms.
                                    Dict form: per-sheet config — each key is a sheet name,
                                    value is an object with any of: columns, filters, sort,
@@ -89,7 +92,7 @@ for _root in Path(__file__).resolve().parents:
     if (_root / "lib" / "report_rows.py").is_file() and (_root / "lib" / "report_numbers.py").is_file():
         sys.path.insert(0, str(_root / "lib"))
         break
-from report_display import detect_hidden_columns, normalize_columns  # noqa: E402
+from report_display import DATA_QUALITY_SHEETS, detect_hidden_columns, normalize_columns  # noqa: E402
 from report_hosts import DOWNLOAD_TIMEOUT_SECONDS, check_download_url  # noqa: E402
 from report_numbers import parse_number  # noqa: E402
 from report_rows import is_structural, relabel_structural  # noqa: E402
@@ -677,6 +680,11 @@ def main():
         allowed = None
 
     def sheet_transforms(name):
+        if name in DATA_QUALITY_SHEETS:
+            # Global transforms are written for the report's own sheets, so these take only their own entry.
+            sc = sheets_config.get(name, {}) if per_sheet else {}
+            return (sc.get("columns"), sc.get("filters", []), sc.get("sort", []),
+                    sc.get("formulas", []), sc.get("aggregations"))
         if per_sheet:
             sc = sheets_config.get(name, {})
             return (
@@ -697,8 +705,16 @@ def main():
     if unknown_sheets:
         warnings["unknown_sheets"] = {"requested": unknown_sheets, "available": list(data)}
 
+    # Data-quality sheets are reported by row count, and returned only when `sheets` names them.
+    named = allowed or set()
+    left_out = {n: len(s["rows"]) for n, s in data.items() if n in DATA_QUALITY_SHEETS - named}
+    if left_out:
+        warnings["data_quality"] = left_out
+
     for sheet_name, sheet in data.items():
         if allowed is not None and sheet_name not in allowed:
+            continue
+        if sheet_name in left_out:
             continue
 
         columns, filters, sort_spec, formulas, aggregations = sheet_transforms(sheet_name)
