@@ -29,14 +29,15 @@ model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.19.0</carta-plugin>
+<carta-plugin>carta-crm:1.19.1</carta-plugin>
 
 ## Overview
 
-Fund closings are answered from the CRM tools, not through `search_tools`. The only Fund Admin
-read is closing contacts, used to fill gaps (see Combining with Fund Admin), because it needs
-Edit Partners on the fund. The CRM tools read closings for any user whose organisation has the
-Carta integration.
+Fund closings are answered from the CRM tools, not through `search_tools`. The CRM tools read
+closings for any user whose organisation has the Carta integration. Fund Admin is read in two
+places only, and either read can be refused by the user's Fund Admin access: the fund lookup,
+to find a fund's Carta id when the record's fund field holds none (Step 1), and closing contacts,
+to fill gaps CRM leaves (see Combining with Fund Admin), which needs Edit Partners on the fund.
 
 | Question | Tool | Runs through |
 |---|---|---|
@@ -44,22 +45,37 @@ Carta integration.
 | How far has each LP got? KYC, risk rating, commitments | `crm:get_fund_closing_prospect_statuses` | `crm_read_tool` |
 | Send subscription documents to an LP | `crm:send_fundraising_subscription_docs` | `crm_call_tool` |
 | Invite an LP to the data room | `crm:send_fundraising_data_room_invite` | `crm_call_tool` |
+| Find the fund's Carta id when the fund field has none | `fa__list__entities` | `read_tool` |
 | Fill a gap CRM leaves in the LP list (Fund Admin closing contacts) | `fa__list__closing_contacts` | `read_tool` |
 
 If `crm_read_tool` refuses a read tool, run the same call through `crm_call_tool`.
 
 ## Step 1 — Find the fund's Carta id
 
-Both read tools take the Carta fund id as an integer (`fundCartaId`, `fundCartaIds`). It lives on
-the fundraising record, in its fund field, as `cartaId`.
+Both read tools take the fund's **Carta id** as an integer (`fundCartaId`, `fundCartaIds`): the
+number in `/investors/firm/<firm_id>/portfolio/fund/<fund_carta_id>/closings/...`, which Fund
+Admin calls `carta_id`. It is the only id they accept. Never pass a Fund Admin `id`, `fund_id` or
+UUID as `fundCartaId`: the tools then report the fund as not set up or not found.
 
 1. Resolve the fundraising opportunity (the fund's name, or the LP's name) through
    `crm_call_tool` and `crm:search_fundraising` with `query` and `limit: 10`. Never resolve
    through a view: a view collapses the rows, and the `id` never reaches you.
-2. Open one record with `crm:get_fundraising` and read `cartaId` from its fund field. If the
-   field list is unclear, `crm:get_fundraising_fields` lists each field's id and type.
-3. No fund field value → tell the user to link the fundraising record to a Carta fund first,
-   and stop. Several funds match → ask which one; do not guess.
+2. Open one record with `crm:get_fundraising` and read its fund field. If the field list is
+   unclear, `crm:get_fundraising_fields` lists each field's id and type. Use the field only when
+   it is an object with `cartaId`. A bare number or string there (e.g. `296940`) is a Fund Admin
+   id, not a Carta id: do not use it.
+3. No usable `cartaId` → look the fund up in Fund Admin by name (the fund field's `name`, else the
+   fundraising record's name) and take its `carta_id`. Several funds match → ask which one; do
+   not guess.
+
+   ```
+   read_tool({"name": "fa__list__entities", "arguments": {"entity_types": "fund", "search": "<fund name>"}})
+   ```
+4. The lookup was refused or failed (no access, response too large) → say the fund field holds
+   no Carta id and the Fund Admin lookup failed, with the reason, and stop. Do not tell the user
+   to link the record: it may already be linked.
+5. The lookup ran and no fund matches → tell the user to link the fundraising record to a Carta
+   fund first, and stop.
 
 ## Step 2 — Read closings and subscription progress
 
@@ -74,6 +90,11 @@ crm_read_tool({
   not set up **or not readable by you**, never that the fund has no closing.
 - Check `isSetUp` and `closingsLedgerUrl` separately: the URL can be empty when `isSetUp` is
   true. Report the data room state from the response, not from another tool.
+- `isSetUp: false`, or `fund_admin_closings_fund_not_found` from the call below, when the id came
+  from the fund field: check the id **once** with the Fund Admin lookup in Step 1. A different
+  `carta_id` → rerun the call with it. Only then report not set up or not found. One lookup, no
+  other ids tried. A refused or failed lookup leaves the first result: report it as is. Always
+  say which Carta id you used.
 
 For LP-by-LP progress, one call covers the whole fund. Never call it per LP.
 
@@ -97,12 +118,12 @@ While the CRM tools are available to the user, CRM is the primary source. Read F
 closing contacts only for what CRM does not return, such as a contact state it lacks. Say which
 source each figure came from. When the two disagree, report the CRM figure and say they differ.
 
-Fund Admin takes the fund's UUID. Look up only the fund being asked about, by the name on the
-record's fund field from Step 1, and match the `carta_id` field to the Carta id from Step 1.
-Never list every fund: a large firm's list comes back too large. Then read the closing contacts:
+Fund Admin takes the fund's UUID. Look up only the fund being asked about with the Step 1
+`fa__list__entities` lookup (`search` set to the fund name), and match its `carta_id` field to the
+Carta id from Step 1. Never list every fund: a large firm's list comes back too large. Then read
+the closing contacts:
 
 ```
-read_tool({"name": "fa__list__entities", "arguments": {"entity_types": "fund", "search": "<fund name from Step 1>"}})
 read_tool({"name": "fa__list__closing_contacts", "arguments": {"fund_uuid": "<fund_uuid>"}})
 ```
 
