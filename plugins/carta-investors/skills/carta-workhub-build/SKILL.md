@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.1</carta-plugin>
+<carta-plugin>carta-investors:7.12.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -95,11 +95,7 @@ not inside a fund-data dashboard.
   reviews (`review-management-fees`), cash reconciliation (`cash-reconciliation`, one workflow per bank
   transaction) and SOI reviews (`review-soi-v2`). No panel opens the last four, so each is a Carta link under
   Expense payments, Management fees, Cash reconciliation or SOI review, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
-  so finished work never shows a kind of task the open tabs leave out. Where the firm has the
-  capital activity payments page on (see the payment cards below), capital call reminder requests
-  (`request-capital-call-reminders`, in `CAPITAL_ACTIVITY_PAYMENTS_TEMPLATES`; opened when a GP reminds
-  several investors at once, then Carta reviews and sends) join that list as Carta links under Capital
-  calls, With Carta. Every task of a listed workflow
+  so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
   shows, including the ones no panel opens (a capital call With Carta or Completed), as a
   Carta link. Inside a tab, rows are grouped by the `task_display_group` (`{id, name, order}`)
   fund-admin sends on every task and finished workflow, the same group the Firm Dash shows: the
@@ -110,8 +106,8 @@ not inside a fund-data dashboard.
   `TASK_GROUP_ICONS` in `resources/carta-workhub.config.js` holds only the icons, keyed by group
   id; any other id gets `TASK_GROUP_DEFAULT_ICON`. Rows the queue builds before fund-admin has sent
   them — drafts, request ids restored from storage, a just-sent request, and the capital call
-  review and reporting tracker seed cards, and a payment card for a released call or distribution — carry a group id (`TASK_GROUP_OTHER`,
-  `TASK_GROUP_CAPITAL_CALLS`, `TASK_GROUP_DISTRIBUTIONS`, `TASK_GROUP_FINANCIAL_REPORTING`) and take its name and order from
+  review and reporting tracker seed cards — carry a group id (`TASK_GROUP_OTHER`,
+  `TASK_GROUP_CAPITAL_CALLS`, `TASK_GROUP_FINANCIAL_REPORTING`) and take its name and order from
   any payload row with the same id, in any tab; until one exists they follow the payload's
   groups under their own names. Filter chips under the
   description (All, then each group present, with counts) narrow the tab to one group;
@@ -156,24 +152,6 @@ not inside a fund-data dashboard.
     read; at that cap its count shows a `+` (a floor), and a plain `0` when nothing read is recent. The
     list is ordered by `created_at`, so it can miss old work finished recently. A failure
     leaves it empty. A workflow in both lists shows once, as open.
-- **Capital calls collecting payments and distributions paying out** — a released call or
-  distribution has no open task, so each one with
-  investors still unpaid is a seed card read from `fa:list:active-capital-activity`
-  (`activity_types: ["capital_call", "distribution"]`, one unpaged read sending only that param, since the gateway
-  refuses any other; the command's availability is probed with `search_tools` first). The cards and the
-  reminder-request tiles show only where the firm has the payments page's fund-admin flag
-  (`CAPITAL_ACTIVITY_PAYMENT_TRACKING_COMPANION_PAGE`) on: carta-mcp lists the tool for
-  `CAPITAL_ACTIVITY_PAYMENTS_PAGE_COMMAND` only there, so a firm without that flag gets no payment cards, no reminder-request tiles and no payments read. The read starts with the queue's and its cards join after the queue
-  paints; a refused or failed read adds no cards and no error. One card per capital activity id
-  in the Capital calls group, named `Collect payments: <fund name>`, with "N of M investors
-  paid" and a **Due** date. It is in Needs Action once the due date is before today in the
-  viewer's local date, else With Carta, and never Completed. A distribution is in the
-  Distributions group (`TASK_GROUP_DISTRIBUTIONS`), named `Pay out: <fund name>`, with the number of investors being paid (the page shows who has been paid) and a **Pays** date (its payment date); it waits on Carta, so it is always With Carta. A call or distribution with an
-  open `request-capital-activity` workflow in the queue keeps that card only; a Completed one does not hide it. The card opens the
-  payment tracking page (`.../investors/firm/<firm id>/portfolio/gp-activity/capital-activity-payments/<fund carta id>/<activity id>`)
-  in a new tab, taking host and firm id from the item's `_links.web_url` (`cartaGpActivityUrl` in
-  `carta-workhub.app.js`); an item whose link names no
-  firm keeps that link.
 - **Capital call review** — a `request-capital-activity` workflow carrying an open
   `review-capital-activity` (or `review-capital-activity-changes`) task opens the review panel
   instead of the thread. It is one page: a sidebar with the summary (the total, the notice and due
@@ -418,7 +396,7 @@ The cards stay on screen throughout, and a read that fails in any part keeps the
 | `resources/app/fund-admin-requests.js` | composer, queue, thread overlay — the whole feature |
 | `resources/app/capital-call-review.js` | the capital call review panel |
 | `resources/app/financial-reporting-tracker.js` | the Financial Reporting Tracker cards and panel |
-| `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`, `openClaudeChat`, `cartaGpActivityUrl`) plus firm resolution and boot |
+| `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`, `openClaudeChat`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
 | `resources/app/load-timing.js` | per-load record of each Carta call and boot milestone; first in the part order |
 | `resources/carta-workhub.config.js` | `TASK_PRESETS` — the composer's preset tiles |

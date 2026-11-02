@@ -116,13 +116,6 @@ function showToast(msg) {
 
 function tryParse(str) { try { return JSON.parse(str); } catch { return null; } }
 
-// A page under the firm's GP activity, on the host and firm `href` names; null when it
-// names no firm.
-function cartaGpActivityUrl(href, path) {
-  const m = /^(https?:\/\/[^/]+)\/investors\/firm\/(\d+)\//i.exec(href ?? '');
-  return m ? `${m[1]}/investors/firm/${m[2]}/portfolio/gp-activity/${path}` : null;
-}
-
 // An artifact cannot post into a chat, and an MCP App renders only when Claude calls its
 // tool there. So the Workhub opens a new Claude Desktop chat with the prompt prefilled, for
 // the GP to send. It also tries to put the prompt on the clipboard, in case the link handler
