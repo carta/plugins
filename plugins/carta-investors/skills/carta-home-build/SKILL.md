@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.3</carta-plugin>
+<carta-plugin>carta-investors:7.12.6</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -532,7 +532,7 @@ never write over each other's file. The bundle itself is firm-agnostic — the s
 keeps the paths apart.
 
 ```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --firm-name "<firm name from Step 1>" --dashboard-building soi --dashboard-building perf --out <outputs-directory>/carta-home-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --firm-name "<firm name from Step 1>" --dashboard-building soi --dashboard-building perf --dashboard-building lp --out <outputs-directory>/carta-home-<slug>.html
 ```
 
 `--firm-name` is stamped into the page's `<title>` as `Carta Home - <Firm>`, which is what
@@ -542,7 +542,8 @@ still detects whichever firm is active when a viewer opens it.
 **This build runs twice.** On this pass, every entry with a `buildSkill` takes
 `--dashboard-building <key>` and nothing else — including one whose artifact Step 2
 already found. Step 5 rebuilds that artifact too, so linking to it now would point at the
-page this run is about to replace. Step 6 runs the same command again with the URLs Step 5
+page this run is about to replace. Drop `--dashboard-building lp` for a firm whose
+`get_current_user` profile lacks `has_fund_admin`: Step 5 skips it and the card is hidden. Step 6 runs the same command again with the URLs Step 5
 returns, and the cards become launchers.
 
 **An existing URL is not a reason to skip Step 5.** Every entry with a `buildSkill` is
