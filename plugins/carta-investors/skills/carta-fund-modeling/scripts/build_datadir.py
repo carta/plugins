@@ -47,6 +47,10 @@ lowercased name, so extra columns are harmless. Logical files (stem.md|psv|tsv|t
                              config_name, carry_rate, preferred_return, gp_catchup_rate,
                              gp_catchup_limit, recommended_config_rank, is_automated
                              — keeps the rank-1 config; seeds per-fund carry/pref/catch-up
+    fund_families  optional  FUNDS (Fund Admin's fund family): fund_uuid, fund_family_id,
+                             fund_family_name — the family each fund belongs to, exactly as
+                             Fund Admin records it → snapshot.funds[].familyId / familyName;
+                             a fund Fund Admin has not placed in a family gets null
     cohort         optional  TEMPORAL_FUND_COHORT_BENCHMARKS (§8): fund_uuid,
                              vintage_year, fund_count, moic, tvpi_*/net_irr_*/dpi_*/moic_*
     deal_irr       optional  TEMPORAL_DEAL_IRR latest/issuer (§10): fund_uuid,
@@ -582,6 +586,13 @@ def build(rawdir, out, meta):
         if a and (dist_carry_asof is None or a > dist_carry_asof):
             dist_carry_asof = a
 
+    # ---- Fund Admin's fund family per fund: carried as is, never inferred or edited here ----
+    family_of = {}  # fund_uuid -> (family id, family name)
+    for r in parse_table(find(rawdir, "fund_families")):
+        u, fam_id = col(r, "fund_uuid"), col(r, "fund_family_id")
+        if u and fam_id:
+            family_of[u] = (fam_id, col(r, "fund_family_name") or None)
+
     # ---- waterfall config (PROFIT_ALLOCATION_WATERFALL_CONFIG): per-fund carry,
     #      preferred return, GP catch-up. Keep the recommended (rank-1) config. ----
     waterfall_of = {}  # fund_uuid -> (rank, cfg)
@@ -1067,6 +1078,8 @@ def build(rawdir, out, meta):
             "gpCommit": (lambda g: round(g, 2) if g is not None else None)(gp_commit_of(f["uuid"], f["gpContrib"])),
             "grossMoic": fmetrics.get(f["uuid"], {}).get("grossMoic"),
             "currency": fmetrics.get(f["uuid"], {}).get("currency"),
+            "familyId": family_of.get(f["uuid"], (None, None))[0],
+            "familyName": family_of.get(f["uuid"], (None, None))[1],
         })
         baseLpNav[i] = round(f["lpNav"], 2)
         baseAccruedCarry[i] = round(f["accrued"], 2)
@@ -1589,6 +1602,8 @@ STEM_CONTRACT = [
     # has none (a missing/empty file must NOT gate the build); when absent, carry falls
     # back to the flat carryRate default and pref/catch-up disable.
     ("waterfall",     False,  ["fund_id", "carry_rate"]),
+    # fund_families: Fund Admin's family per fund. Optional — a firm that has not set up families has none.
+    ("fund_families", False,  ["fund_uuid", "fund_family_id"]),
     # Optional: they only feed Fund Construction's past-fund and market-range helpers, hidden without them.
     ("fee_schedules", False,  ["fund_uuid", "fee_rate", "calculation_base"]),
     ("expense_ledger", False, ["fund_uuid", "account_name", "year", "amount"]),

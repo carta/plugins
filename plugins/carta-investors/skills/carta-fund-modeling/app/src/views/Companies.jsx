@@ -11,7 +11,7 @@ import { repricePosition, positionReprice, carryRateFor, companyRepriceState, ex
   secondarySales, secondaryEvents, retainedFraction, saleRepriceConfig, repricesByValuation } from "../model/reprice.js";
 import { fundExitProceeds, fundProceedsCurve, normClass } from "../model/liqpref.js";
 import { scenarioDealIrr } from "../model/dealIrr.js";
-import { isStaleMark, daysBetween, fundIdsOf, ownFundHeldAs, fundCurrency } from "../model/funds.js";
+import { isStaleMark, daysBetween, fundIdsOf, ownFundHeldAs, fundCurrency, scopeFundIds, scopeName, isFamilyScope, scopeMixedCurrency } from "../model/funds.js";
 import { zeroOutFund, resetFundToCarta, zeroOutAll, resetAllToCarta, companiesInFund, crossFundCompanies, applyReserveDilution } from "../model/slices.js";
 import { FULL_RESERVE_DILUTION, companyBaseReserve, dilutionDefended, reserveForDilution, dilutionForReserve } from "../model/reserves.js";
 import { useFirmData } from "../state/FirmData.jsx";
@@ -1469,8 +1469,14 @@ function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden, locked
 }
 
 export default function Companies({ portfolio, snapshot, exitHorizonOverrides, updateCompany, updateSlice, setAssumption, readOnly, onOpenCompany, reload, flush, holdingsPulled, fundScope, setFundScope, fundStates, firmFigs, sliceName, onOpenFundSection }) {
-  // fund filter is the GLOBAL scope (driven by the header picker): "all" ⇔ ALL_FUNDS
-  const fundFilter = fundScope === ALL_FUNDS ? "all" : fundScope;
+  // fund filter is the GLOBAL scope (driven by the header picker): null ⇔ ALL_FUNDS, else the ids
+  // of the one fund, or the funds of the one family, in scope
+  const scopeIds = fundScope === ALL_FUNDS ? null : scopeFundIds(snapshot.funds, fundScope);
+  const inScope = (fundId) => !scopeIds || scopeIds.includes(fundId);
+  // the map sizes boxes by value, so it can't span funds in more than one currency
+  const mapMixedCurrency = scopeMixedCurrency(snapshot.funds, fundStates, fundScope, fundScope === ALL_FUNDS && !!snapshot.source?.mixedCurrency);
+  const scopeLabel = isFamilyScope(fundScope) ? scopeName(snapshot.funds, fundScope)
+    : fundLabel(snapshot.funds.find((f) => f.id === fundScope)?.name || fundScope);
   const [confirm, setConfirm] = useState(null); // {title, message, confirmLabel, danger, onConfirm} or null
   const [query, setQuery] = useState("");
   const [expandedId, setExpandedId] = useState(null); // which company's detail modal is open, if any
@@ -1507,22 +1513,19 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
     { d: `${navYr + 5}-12-31`, label: "+5 years" },
     { d: `${navYr + 7}-12-31`, label: "+7 years" },
   ];
-  // Highlighted value: the scoped fund's horizon; in All-Funds mode, the shared
-  // value when every fund agrees, else null (mixed → nothing highlighted).
-  const scopedHorizon = fundFilter === "all"
-    ? (() => {
-        const ds = FUND_IDS.map((id) => exitHorizonFor(portfolio.assumptions, snapshot, id));
-        return ds.length && ds.every((d) => d === ds[0]) ? ds[0] : null;
-      })()
-    : exitHorizonFor(portfolio.assumptions, snapshot, fundFilter);
-  // Persist: a specific fund sets only that fund; All Funds applies to every fund
-  // so the whole grid's Deal IRR reprices to one terminal.
+  // Highlighted value: the shared horizon when every fund in scope agrees (the one fund's
+  // own), else null (mixed → nothing highlighted).
+  const scopedHorizon = (() => {
+    const ds = (scopeIds ?? FUND_IDS).map((id) => exitHorizonFor(portfolio.assumptions, snapshot, id));
+    return ds.length && ds.every((d) => d === ds[0]) ? ds[0] : null;
+  })();
+  // Persist: a specific fund sets only that fund; All Funds, or a family, applies to every fund
+  // in scope so the whole grid's Deal IRR reprices to one terminal.
   const setExitHorizon = (d) => {
     // Merge onto the RAW overrides (not the effective map) so pinning one fund
     // can't freeze other funds' derived horizons as explicit picks.
     const map = { ...(exitHorizonOverrides || {}) };
-    if (fundFilter === "all") FUND_IDS.forEach((id) => { map[id] = d; });
-    else map[fundFilter] = d;
+    (scopeIds ?? FUND_IDS).forEach((id) => { map[id] = d; });
     setAssumption("exitHorizon", map);
   };
 
@@ -1536,9 +1539,9 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
     { id: "partial", label: "Partial", dilution: FULL_RESERVE_DILUTION / 2 }, // defend ~half
     { id: "full", label: "Full", dilution: 0 },                           // pro-rata defense → no dilution
   ];
-  const reserveTargets = (fundFilter === "all"
-    ? portfolio.companies.filter((c) => !c.archived)
-    : companiesInFund(portfolio, fundFilter)
+  const reserveTargets = (scopeIds
+    ? companiesInFund(portfolio, scopeIds)
+    : portfolio.companies.filter((c) => !c.archived)
   ).filter((c) => !c.realized && !c.defunct);
   // highlight a strategy only when every scoped target is live at that dilution
   const scopedStrategy = (() => {
@@ -1548,7 +1551,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
   })();
   const setReserveStrategy = (id) => {
     const s = RESERVE_STRATEGIES.find((x) => x.id === id);
-    if (s) updateSlice((body) => applyReserveDilution(body, fundFilter, s.dilution));
+    if (s) updateSlice((body) => applyReserveDilution(body, scopeIds ?? "all", s.dilution));
   };
 
   const fvOf = (c) => c.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
@@ -1604,7 +1607,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
 
   // Pre-status: fund + archived only — used for status option counts
   const preScopeFiltered = portfolio.companies
-    .filter((c) => (fundFilter === "all" ? true : companyFundIds(c).includes(fundFilter)))
+    .filter((c) => !scopeIds || companyFundIds(c).some(inScope))
     .filter((c) => !c.archived);
   const statusCountMap = {};
   preScopeFiltered.forEach((c) => {
@@ -1654,7 +1657,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
   // ── Map: a company's boxes are its in-scope stakes. The map draws operating
   //    companies only: a holding in one of the firm's own funds never gets a box,
   //    since its value is the companies that fund holds.
-  const mapStakesOf = (c) => companyFundValues(c, updateCompany).stakes.filter((st) => fundFilter === "all" || st.fundId === fundFilter);
+  const mapStakesOf = (c) => companyFundValues(c, updateCompany).stakes.filter((st) => inScope(st.fundId));
   // A company's value across every fund holding it, for the map's tooltip — only
   // when more than one fund holds it, and never summed across currencies.
   const mapTotalOf = (c) => {
@@ -1663,10 +1666,10 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
     return curFv;
   };
 
-  // the Reset menu's zero-out/reset actions — scoped to the selected fund, or
-  // firm-wide across every non-archived company when "All Funds" is selected.
+  // the Reset menu's zero-out/reset actions — scoped to the selected fund, or to every fund of
+  // the selected family, or firm-wide across every non-archived company when "All Funds" is selected.
   const onZeroOut = () => {
-    if (fundFilter === "all") {
+    if (!scopeIds) {
       const total = portfolio.companies.filter((c) => !c.archived).length;
       setConfirm({
         title: "Write off all companies",
@@ -1677,9 +1680,9 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
       });
       return;
     }
-    const fundName = fundLabel(snapshot.funds.find((f) => f.id === fundFilter)?.name || fundFilter);
-    const targets = companiesInFund(portfolio, fundFilter);
-    const spans = crossFundCompanies(portfolio, fundFilter);
+    const fundName = scopeLabel;
+    const targets = companiesInFund(portfolio, scopeIds);
+    const spans = crossFundCompanies(portfolio, scopeIds);
     const warning = spans.length
       ? `\n\nNote: ${spans.map((c) => c.name).join(", ")} also hold${spans.length === 1 ? "s" : ""} positions in other funds — zeroing affects those positions too.`
       : "";
@@ -1688,11 +1691,11 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
       message: `Write off all ${targets.length} companies in ${fundName} to $0?\n\nThen write up only the ones you believe in — dragging a company's tape revives it. “Reset ${fundName} to Carta” undoes everything.${warning}`,
       confirmLabel: "Write off",
       danger: true,
-      onConfirm: () => { updateSlice((s) => zeroOutFund(s, fundFilter)); setConfirm(null); },
+      onConfirm: () => { updateSlice((s) => zeroOutFund(s, scopeIds)); setConfirm(null); },
     });
   };
   const onResetToCarta = () => {
-    updateSlice((s) => (fundFilter === "all" ? resetAllToCarta(s) : resetFundToCarta(s, fundFilter)));
+    updateSlice((s) => (scopeIds ? resetFundToCarta(s, scopeIds) : resetAllToCarta(s)));
   };
 
   return (
@@ -1786,7 +1789,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
         </table>
       </TableScroll>
       )}
-      {view === "map" && (fundFilter === "all" && snapshot.source?.mixedCurrency ? (
+      {view === "map" && (mapMixedCurrency ? (
         <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", padding: "16px 12px" }}>
           These funds report in more than one currency, so their values can't be compared by size. Pick one fund above to see its map.
         </div>

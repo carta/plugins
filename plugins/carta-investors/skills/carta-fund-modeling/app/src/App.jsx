@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useSyncExternalStore } from "react";
 import usePortfolio from "./state/usePortfolio.js";
-import { computeFundStates, firmRollup } from "./model/funds.js";
+import { computeFundStates, firmRollup, isPooledScope, isLiveFamilyScope, scopeFundIds } from "./model/funds.js";
 import { scenarioFirmFigures } from "./model/report.js";
 import { effectiveExitHorizons } from "./model/reprice.js";
 import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, PINNED_Z } from "./ui/theme.js";
@@ -187,7 +187,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
     const name = snapshot?.branding?.firmName ?? snapshot?.source?.firm;
     postToOuter("title", { firmName: name });
   }, [snapshot]);
-  const [fundScope, setFundScope] = useState(ALL_FUNDS); // global fund scope: "ALL" or a fund id; shared across views
+  const [fundScope, setFundScope] = useState(ALL_FUNDS); // global fund scope (model/funds.js): ALL_FUNDS, a family scope or a fund id; shared across views
   // Ambient context for pinpoint anchors — "where the user was" (firm/tab/scenario
   // slice/fund scope/currency) so a pinned data question narrows to the right slice.
   useEffect(() => {
@@ -267,13 +267,20 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   // while they are on screen.
   const tileSlices = useMemo(() => (doc?.slices ? scenariosInTileOrder(doc.slices) : []), [doc]);
 
-  // LP Returns and GP Economics are per-entity tabs: when
-  // landing on one with the firm-wide "All Funds" scope, auto-select the first fund
-  // so the page (and its picker) name a real entity instead of silently falling back.
+  // A family scope names a family the snapshot currently lists; after a reload in which Fund Admin
+  // removed it or cut it to one fund, fall back to all funds so no view holds a family scope that
+  // matches no picker option.
+  useEffect(() => {
+    if (snapshot?.funds && !isLiveFamilyScope(snapshot.funds, fundScope)) setFundScope(ALL_FUNDS);
+  }, [fundScope, snapshot]);
+
+  // LP Returns and GP Economics are per-entity tabs: when landing on one with a scope that
+  // spans funds (firm-wide "All Funds", or a family), auto-select its first fund so the page
+  // (and its picker) name a real entity instead of silently falling back.
   const PER_FUND_TABS = ["lp-returns", "gp-economics"];
   useEffect(() => {
-    if (PER_FUND_TABS.includes(tab) && fundScope === ALL_FUNDS && snapshot?.funds?.length) {
-      setFundScope(snapshot.funds[0].id);
+    if (PER_FUND_TABS.includes(tab) && isPooledScope(fundScope) && snapshot?.funds?.length) {
+      setFundScope(scopeFundIds(snapshot.funds, fundScope)[0]);
     }
   }, [tab, fundScope, snapshot]);
 

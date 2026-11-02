@@ -629,11 +629,12 @@ export function Segmented({ options, value, onChange, small, disabled, locked })
   );
 }
 
-/** Fund scope dropdown — "All funds" plus one entry per fund (names, not ids).
- *  Replaces the overflowing per-view segmented strips. `value` is "ALL" or a
- *  fund id; options come from snapshot.funds. Custom menu (not native select)
+/** Fund scope dropdown — "All funds", one entry per Fund Admin family, then one entry per fund
+ *  (names, not ids). Replaces the overflowing per-view segmented strips. `value` is a fund scope
+ *  (see model/funds.js): ALL_FUNDS, a family scope or a fund id; options come from snapshot.funds. Custom menu (not native select)
  *  so 18 long fund names render cleanly and theme in dark mode. */
-export const ALL_FUNDS = "ALL";
+import { ALL_FUNDS, familyScope, fundFamilies } from "../model/funds.js";
+export { ALL_FUNDS };
 
 import { fundLabel, fundNameOnly } from "./format.js";
 export { fundLabel, fundNameOnly };
@@ -818,8 +819,12 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
  *  builds the option list (with the "All funds" divider) and hands it off.
  *  `triggerLabel` passes through, for a self-labeling "Fund: …" trigger. */
 export function FundPicker({ funds, value, onChange, includeAll = true, triggerLabel }) {
+  // A family Fund Admin records is a scope of its own, listed between "All funds" and the funds;
+  // only a scope picker offers it, since a picker without "All funds" selects one fund.
+  const families = includeAll ? fundFamilies(funds) : [];
   const opts = [
     ...(includeAll ? [{ id: ALL_FUNDS, label: "All funds" }] : []),
+    ...families.map((fam, i) => ({ id: familyScope(fam.id), label: fam.name, separatorBefore: i === 0 })),
     ...funds.map((f, i) => ({ id: f.id, label: fundLabel(f.name || f.id), separatorBefore: includeAll && i === 0 })),
   ];
   return <Dropdown options={opts} value={value} onChange={onChange} testId="fund-picker" triggerLabel={triggerLabel} />;

@@ -184,6 +184,18 @@
         "ORDER BY fund_uuid, period_order"
       ]
     },
+    "fund_families": {
+      "id_param": "fund_uuids",
+      "wave": 1,
+      "limit": 200,
+      "format": "ndjson",
+      "sql": [
+        "SELECT fund_uuid, fund_family_id, fund_family_name",
+        "FROM FUND_ADMIN.FUNDS",
+        "WHERE fund_uuid IN ({fund_uuids}) AND fund_family_id IS NOT NULL",
+        "ORDER BY fund_uuid"
+      ]
+    },
     "expense_ledger": {
       "id_param": "fund_uuids",
       "wave": 1,

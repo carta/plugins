@@ -50,6 +50,7 @@ scenario; the booked history comes from dated LP flows and NAV marks (§5 `snaps
 | `snapshot.source` (**object**, not a string) | §0 firm name + latest `month_end_date` (§2) → `{firm, navAsOf, marksAsOf, marksPulledAt, currency, mixedCurrency:false}` — the app reads `source.navAsOf.slice(0,4)`, so a string blanks Companies & Exit&IRR |
 | `snapshot.funds[].{committed,lpPaidIn,lpDistributed}` | §2 `MONTHLY_NAV_CALCULATIONS` (commitment / lp contributions / distributions) |
 | `snapshot.funds[].{type,vintage,name}` | §0 entity enumeration (+ fund start year / vintage) |
+| `snapshot.funds[].{familyId,familyName}` | §20 `FUNDS` (`fund_family_id`, `fund_family_name`) — Fund Admin's own family, `null` when none |
 | `snapshot.funds[].netLpIrr` | `xirr` of §5 flows + ending LP NAV (suppress for funds < ~1yr old) |
 | `snapshot.funds[].gpCapitalNav` | §2 `MONTHLY_NAV_CALCULATIONS.ending_gp_nav` — derived |
 | `snapshot.baseAccruedCarry`, `gpEconomics[].accruedCarryToday`, `accruedCarryAsOf` | §7 `ALLOCATIONS` (`Carried interest accrued`, GP side) — **real booked figure** |
@@ -382,6 +383,14 @@ be in the entry's own currency, so the fund's base-currency amount is used where
 SQL: the `expense_ledger` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem expense_ledger`).
 → `expense-history.json` `{ asOf, funds: { <fundId>: [{ name, byYear: { "<year>": amount } }] } }`, biggest account first.
 
+## 20. Fund families (optional) → `FUNDS` → `snapshot.funds[].familyId` / `familyName`
+The family Fund Admin records for each fund (parallel funds that are managed together). The app carries it as
+recorded and never infers, edits or stores a family of its own. A fund Fund Admin has not placed in a family has no
+row here and its fields are `null`; a firm with no families has an empty file. Optional: a missing or empty
+`fund_families.ndjson` still builds, and the app shows no family scope.
+SQL: the `fund_families` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem fund_families`).
+→ `snapshot.funds[].familyId` / `familyName`.
+
 ## 14. Portfolio-company financials (attempt-required) → `COMPANY_FINANCIALS`
 Carta **Data Collection** financials (revenue / ARR / KPIs reported *by the portfolio company*) come from the
 **base `COMPANY_FINANCIALS`** table (the legacy `COMPANY_FINANCIALS_LATEST` view is deprecated/empty). This is a
@@ -413,7 +422,7 @@ Collection appear, and a company must also be a tracked holding to surface on it
 ## Hosted variants → `queries.json` `hosted`
 The hosted app (`server/worker.js`) runs the local `nav_latest`, `fund_metrics`, `cohort`, `ownership`,
 `corporations`, `captable`, `waterfall`, `accrued_carry`, `distributed_carry`, `deal_irr`, `financing`,
-`fee_schedules`, `partners`, `gp_partners`, `gp_carry`, `expense_ledger`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
+`fee_schedules`, `fund_families`, `partners`, `gp_partners`, `gp_carry`, `expense_ledger`, `ops_benchmarks` and `financials` stems, each fund-scoped one scoped to the firm's funds through
 the §0 directory query (`ops_benchmarks` holds no firm data and has no scope; `financials` is row-scoped by
 `set_context`, as locally). It pages every query (`server/dwh-pages.js`) in blob pages of 10,000 rows, the DWH's
 row cap; a blob has no inline size cap. A page over the DWH's 16 MiB page cap is `too_large`: it is retried at the
@@ -424,7 +433,7 @@ total order** (a unique key, or `ORDER BY ALL`): the DWH reruns the query for ea
 the query's own `QUALIFY` or `GROUP BY` partition; these are unique only in the data, checked against the
 warehouse, so recheck them if their table changes: `(fund_uuid, month_end_date)` for `nav_history` and
 `cashflows`, `(fund_uuid, performance_quarter_start_date)` for `cohort`, `(fund_id, config_name)` for
-`waterfall`, `(fund_id, period_order)` for `fee_schedules` and `(fund_uuid, general_ledger_asset_id)` for
+`waterfall`, `(fund_id, period_order)` for `fee_schedules`, `fund_uuid` for `fund_families` and `(fund_uuid, general_ledger_asset_id)` for
 `investments`; `partners` and `gp_partners` order by every column they select. A query stops after 400 pages,
 a cap chosen so every hosted query together stays under the Worker's 10,000 subrequests a load. Only `nav_latest`,
 `fund_metrics` and the three hosted queries below are required: one that fails rejects the load, so a partial

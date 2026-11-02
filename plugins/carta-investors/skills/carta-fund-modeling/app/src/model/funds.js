@@ -11,6 +11,54 @@ import { fundNameOnly } from "../ui/format.js";
 /** Fund ids in display order, derived from the snapshot (no hardcoded list). */
 export const fundIdsOf = (snapshot) => (snapshot?.funds ?? []).map((f) => f.id);
 
+/** The global fund scope: every fund, one fund (its id), or one Fund Admin family. */
+export const ALL_FUNDS = "ALL";
+const FAMILY_SCOPE_PREFIX = "family:";
+
+/** The scope that selects Fund Admin family `familyId`. */
+export const familyScope = (familyId) => FAMILY_SCOPE_PREFIX + familyId;
+
+/** True when `scope` selects a family. */
+export const isFamilyScope = (scope) => typeof scope === "string" && scope.startsWith(FAMILY_SCOPE_PREFIX);
+
+/** True when `scope` spans more than one fund (all funds, or a family). */
+export const isPooledScope = (scope) => scope === ALL_FUNDS || isFamilyScope(scope);
+
+/** The families Fund Admin records among `funds`, as { id, name, fundIds } in the order
+ *  their first fund is listed. A family of one fund is the fund itself, so only families
+ *  of two or more are returned. A family keeps Fund Admin's own name. */
+export function fundFamilies(funds) {
+  const byId = new Map();
+  for (const f of funds ?? []) {
+    if (!f.familyId) continue;
+    if (!byId.has(f.familyId)) byId.set(f.familyId, { id: f.familyId, name: f.familyName || "Unnamed family", fundIds: [] });
+    byId.get(f.familyId).fundIds.push(f.id);
+  }
+  return [...byId.values()].filter((fam) => fam.fundIds.length > 1);
+}
+
+const familyOfScope = (funds, scope) => fundFamilies(funds).find((fam) => familyScope(fam.id) === scope);
+
+/** False only for a family scope that `fundFamilies(funds)` no longer lists; every other scope
+ *  passes. App keeps the scope in state across data reloads and resets a family scope that fails
+ *  this to all funds, so the views below never see a stale family. */
+export const isLiveFamilyScope = (funds, scope) => !isFamilyScope(scope) || !!familyOfScope(funds, scope);
+
+/** The ids of the funds `scope` selects, in display order. A family scope must be live
+ *  (see isLiveFamilyScope); one that is not selects every fund. */
+export function scopeFundIds(funds, scope) {
+  const all = (funds ?? []).map((f) => f.id);
+  if (isFamilyScope(scope)) return familyOfScope(funds, scope)?.fundIds ?? all;
+  return scope === ALL_FUNDS ? all : [scope];
+}
+
+/** The name `scope` is shown under: "All funds", the family's name, or the fund's id. */
+export function scopeName(funds, scope) {
+  if (scope === ALL_FUNDS) return "All funds";
+  if (isFamilyScope(scope)) return familyOfScope(funds, scope)?.name ?? "All funds";
+  return scope;
+}
+
 /** Days between two ISO dates. */
 export function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000);
@@ -323,3 +371,12 @@ export function ownFundHeldAs(funds, company) {
 
 /** A fund's reporting currency, by id from `funds`; null when unknown. */
 export const fundCurrency = (funds, fundId) => funds.find((f) => f.id === fundId)?.currency ?? null;
+
+/** True when the funds `scope` pools report in more than one currency, so their amounts can't
+ *  be added. Under a family only the family's own funds count; otherwise `firmMixed`, the
+ *  firm-wide flag, decides. */
+export function scopeMixedCurrency(funds, fundStates, scope, firmMixed) {
+  if (!isFamilyScope(scope)) return firmMixed;
+  const ids = scopeFundIds(funds, scope);
+  return firmRollup(fundStates.filter((f) => ids.includes(f.id))).mixedCurrency;
+}

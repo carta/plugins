@@ -162,22 +162,23 @@ export function dehydrateDoc(doc) {
   return { ...doc, version: 3, slices: doc.slices.map((s) => dehydrateSlice(s, base)) };
 }
 
-/** Companies holding positions in a fund (live ones only). Defunct companies
- *  are individually uneditable (UI lock) but fund-level zero/reset DO include
- *  them — a written-off fund zeroes its dead companies' stale Carta marks too. */
-export function companiesInFund(body, fundId) {
-  return body.companies.filter((c) => !c.archived && c.positions.some((p) => p.fundId === fundId));
+/** Companies holding positions in a fund, or in any fund of a list (live ones only).
+ *  Defunct companies are individually uneditable (UI lock) but fund-level zero/reset DO
+ *  include them — a written-off fund zeroes its dead companies' stale Carta marks too. */
+export function companiesInFund(body, fundIds) {
+  const ids = [].concat(fundIds);
+  return body.companies.filter((c) => !c.archived && c.positions.some((p) => ids.includes(p.fundId)));
 }
 
 /**
- * Write off every company in a fund: tapes to zero, connected to NAV.
+ * Write off every company in a fund (or in each fund of a list): tapes to zero, connected to NAV.
  * Repriced FV, position tables, and fund NAV all read zero — then write up
  * only the survivors by dragging their tapes back. Companies that also hold
  * positions in OTHER funds get zeroed everywhere (the tape is company-level);
  * surface those via crossFundCompanies() before calling.
  */
-export function zeroOutFund(body, fundId) {
-  for (const c of companiesInFund(body, fundId)) {
+export function zeroOutFund(body, fundIds) {
+  for (const c of companiesInFund(body, fundIds)) {
     c.includeInNav = true;
     // zero BOTH modes — a mixed company (some positions with a basis, some
     // without) reprices per-position, so one input alone wouldn't zero it
@@ -188,9 +189,9 @@ export function zeroOutFund(body, fundId) {
   return body;
 }
 
-/** Undo: every company in the fund back to Carta marks (parked, disconnected). */
-export function resetFundToCarta(body, fundId) {
-  for (const c of companiesInFund(body, fundId)) {
+/** Undo: every company in the fund (or list of funds) back to Carta marks (parked, disconnected). */
+export function resetFundToCarta(body, fundIds) {
+  for (const c of companiesInFund(body, fundIds)) {
     c.valuationB = c.defaultValuationB ?? null;
     c.markMultiple = 1;
     c.includeInNav = false;
@@ -202,9 +203,10 @@ export function resetFundToCarta(body, fundId) {
   return body;
 }
 
-/** Companies a fund-level zero would also affect elsewhere. */
-export function crossFundCompanies(body, fundId) {
-  return companiesInFund(body, fundId).filter((c) => c.positions.some((p) => p.fundId !== fundId));
+/** Companies a fund-level zero would also affect outside the fund (or list of funds). */
+export function crossFundCompanies(body, fundIds) {
+  const ids = [].concat(fundIds);
+  return companiesInFund(body, ids).filter((c) => c.positions.some((p) => !ids.includes(p.fundId)));
 }
 
 /** Firm-wide write-off: every non-archived company across every fund, tapes to zero. */
@@ -240,12 +242,13 @@ export function resetAllToCarta(body) {
  * marks it live in NAV (dilution only bites once includeInNav is true — same as
  * the per-company dilution slider). Skips realized/defunct; preserves any
  * existing valuationB/markMultiple reprice (dilution stacks on top).
- * `fundId === "all"` applies firm-wide; otherwise scoped to that fund.
+ * `fundIds === "all"` applies firm-wide; otherwise scoped to that fund, or to each
+ * fund of a list.
  */
-export function applyReserveDilution(body, fundId, dilution) {
-  const targets = fundId === "all"
+export function applyReserveDilution(body, fundIds, dilution) {
+  const targets = fundIds === "all"
     ? body.companies.filter((c) => !c.archived)
-    : companiesInFund(body, fundId);
+    : companiesInFund(body, fundIds);
   for (const c of targets) {
     if (c.realized || c.defunct) continue;
     c.futureDilution = dilution;

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { H1, H2, JumpLinks, FundPicker, EmptyState, MixedCurrencyNote, ALL_FUNDS } from "../../ui/components.jsx";
+import { H1, H2, JumpLinks, FundPicker, EmptyState, MixedCurrencyNote } from "../../ui/components.jsx";
+import { isPooledScope, scopeMixedCurrency } from "../../model/funds.js";
 import { concentrationAcrossAll } from "../../model/concentration.js";
 import { recentActivity } from "../../model/activity.js";
 import { useFirmData } from "../../state/FirmData.jsx";
@@ -23,9 +24,10 @@ import RecentActivityCard from "./Activity.jsx";
 // lacks is left out, and so is a theme left with no charts.
 const SELECT_FUND = "Select a fund to see this chart.";
 const selectFund = (text) => () => <EmptyState icon="pending" text={text} />;
-// An all-funds chart that adds funds' amounts together; funds in more than one currency can't be added.
-// Without a `render` of its own it draws the entry's `render`, which then pools every fund.
-const combined = (title, render) => (p, own) => (p.mixedCurrency ? <MixedCurrencyNote title={title} /> : (render ?? own)(p));
+// A pooled chart (all funds, or one family) that adds funds' amounts together; funds in more than one
+// currency can't be added. Without a `render` of its own it draws the entry's `render`, which then pools
+// the funds in scope.
+const combined = (title, render) => (p, own) => (p.poolMixedCurrency ? <MixedCurrencyNote title={title} /> : (render ?? own)(p));
 
 const THEMES = [
   {
@@ -70,11 +72,14 @@ export default function Reports({ returnsProps, snapshot, portfolio, fundStates,
     () => recentActivity(portfolio.companies, snapshot.funds, snapshot.source?.navAsOf),
     [portfolio, snapshot]
   );
-  const props = { returnsProps, snapshot, portfolio, fundStates, mixedCurrency, pacing, activity, onShowActivity };
+  // The funds an all-funds chart adds together: every fund, or one family's. A family can sit in
+  // one currency inside a firm that mixes several, so its own funds decide whether it can be added.
+  const poolMixedCurrency = scopeMixedCurrency(snapshot.funds, fundStates, returnsProps.fundScope, mixedCurrency);
+  const props = { returnsProps, snapshot, portfolio, fundStates, mixedCurrency, poolMixedCurrency, pacing, activity, onShowActivity };
   const themes = THEMES
     .map((t) => ({ ...t, reports: t.reports.filter((r) => r.available(props)) }))
     .filter((t) => t.reports.length);
-  const allFunds = returnsProps.fundScope === ALL_FUNDS;
+  const allFunds = isPooledScope(returnsProps.fundScope);
   const jump = (id) => trackClick(`FundModeling.Reports.Jump.${themes.find((t) => reportsSectionId(t.id) === id).viewName}`);
   return (
     <div>

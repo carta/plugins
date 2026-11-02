@@ -3,7 +3,7 @@ import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, shortCompany } from "../../ui/format.js";
 import { H3, MethodNote, SourceNote, Slider, Segmented, MultiFundPicker, EmptyState, fundLabel } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
-import { fundIdsOf, ownFundHeldAs } from "../../model/funds.js";
+import { ownFundHeldAs, scopeName } from "../../model/funds.js";
 import { exitValueImpact, fundCompanyReturns } from "../../model/sensitivity.js";
 import { returnTheFundSolutions, rtfTargetBand, rtfSearch } from "../../model/returnthefund.js";
 import { useScenarioModel } from "./useScenarioModel.js";
@@ -36,11 +36,11 @@ function SwingBar({ lowVal, highVal, baseVal, pct }) {
  *  Built bottoms-up: each company's realizable value is scaled ±exitDelta and
  *  flowed through the LP make-whole waterfall, so Net TVPI (net LP total value
  *  over paid-in, net of carry) is an OUTPUT. Ranked by the size of that swing. */
-function ExitImpactCard({ snapshot, portfolio, states, allMode }) {
+function ExitImpactCard({ pooledFunds, portfolio, states, allMode, familyMode, poolLabel }) {
   const t = useMemo(() => exitValueImpact(portfolio, states), [portfolio, states]);
   if (t.baseMultiple == null) return null;
-  // Under All funds, leave out the firm's own funds held as companies: pooling would list that capital a second time beside the companies the other fund holds directly.
-  const listed = allMode ? t.companies.filter((c) => !ownFundHeldAs(snapshot.funds, c)) : t.companies;
+  // Under a pooled scope, leave out holdings that are one of the pooled funds: pooling would list that capital a second time beside the companies the other fund holds directly. A fund outside the pool is a real holding.
+  const listed = allMode ? t.companies.filter((c) => !ownFundHeldAs(pooledFunds, c)) : t.companies;
   const rows = listed.filter((c) => c.swing != null).slice(0, TOP_N);
   if (!rows.length) return null;
   // shared multiple scale across every endpoint + the baseline, with padding
@@ -63,7 +63,7 @@ function ExitImpactCard({ snapshot, portfolio, states, allMode }) {
         <H3>{EXIT_IMPACT_TITLE}</H3>
       </div>
       <MethodNote>
-        Each holding's value is scaled ±{pctLabel}, one at a time, and run through the LP make-whole waterfall; the bars rank where {allMode ? "the firm's Net TVPI across all funds" : "the fund's Net TVPI"} is most exposed, and the impacts aren't additive.
+        Each holding's value is scaled ±{pctLabel}, one at a time, and run through the LP make-whole waterfall; the bars rank where {allMode ? (familyMode ? `the Net TVPI across ${poolLabel}` : "the firm's Net TVPI across all funds") : "the fund's Net TVPI"} is most exposed, and the impacts aren't additive.
       </MethodNote>
       <TableScroll>
         <table className="ledger sheet">
@@ -224,12 +224,13 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
 export default function PowerLaw({ section, ...props }) {
   const { snapshot, portfolio, readOnly, setAssumption } = props;
   const m = useScenarioModel(props);
-  // Under All funds a record that is one of the firm's own funds (a feeder investing
-  // through a parallel fund) drops out: pooling would count that capital twice.
+  // Under a pooled scope a record that is one of the pooled funds (a feeder investing through a
+  // parallel fund in the pool) drops out: pooling would count that capital twice. A record for a
+  // fund outside the pool stays: it is the pool's only exposure to that capital.
   const returns = useMemo(() => {
     if (!m.allMode) return fundCompanyReturns(portfolio, [m.fundId]);
-    return fundCompanyReturns(portfolio, fundIdsOf(snapshot)).filter((c) => !ownFundHeldAs(snapshot.funds, c));
-  }, [portfolio, snapshot, m.allMode, m.fundId]);
+    return fundCompanyReturns(portfolio, m.scopeIds).filter((c) => !ownFundHeldAs(m.scopeFunds, c));
+  }, [portfolio, m.allMode, m.fundId, m.scopeIds, m.scopeFunds]);
   // The Return-the-fund target lives in the scenario's assumptions (per fund), so each
   // scenario keeps its own and it persists like every other scenario setting — through
   // reloads and server restarts, not just this session.
@@ -242,18 +243,18 @@ export default function PowerLaw({ section, ...props }) {
     ...(portfolio.assumptions?.rtfConfig || {}),
     [m.fundId]: { ...(portfolio.assumptions?.rtfConfig?.[m.fundId] || {}), ...patch },
   });
-  // the Net TVPI sensitivity pools every fund with paid-in capital under All funds
-  const states = useMemo(() => (m.allMode ? props.fundStates : [m.fs]), [m.allMode, props.fundStates, m.fs]);
+  // the Net TVPI sensitivity pools the funds in scope (all funds, or a family)
+  const states = useMemo(() => (m.allMode ? props.fundStates.filter((f) => m.scopeIds.includes(f.id)) : [m.fs]), [m.allMode, props.fundStates, m.fs, m.scopeIds]);
   return (
     <div>
-      {section === "curve" && <PowerLawChart companies={returns} fundName={m.allMode ? "All funds" : fundLabel(m.fs.name)} allFunds={m.allMode} />}
+      {section === "curve" && <PowerLawChart companies={returns} fundName={m.allMode ? scopeName(snapshot.funds, props.fundScope) : fundLabel(m.fs.name)} allFunds={m.allMode} poolLabel={m.poolLabel} />}
       {/* target is stored per fund in the scenario's assumptions, so each scenario
           keeps its own and it persists like the other scenario settings. */}
       {section === "return-the-fund" && (m.allMode ? <ReturnTheFundAllFunds /> : (
         <ReturnTheFund portfolio={portfolio} fundId={m.fundId} readOnly={readOnly}
           target={rtfTarget} setTarget={setRtfTarget} config={rtfConfig} setConfig={setRtfConfig} />
       ))}
-      {section === "sensitivity" && <ExitImpactCard snapshot={snapshot} portfolio={portfolio} states={states} allMode={m.allMode} />}
+      {section === "sensitivity" && <ExitImpactCard pooledFunds={m.scopeFunds} portfolio={portfolio} states={states} allMode={m.allMode} familyMode={m.familyMode} poolLabel={m.poolLabel} />}
     </div>
   );
 }

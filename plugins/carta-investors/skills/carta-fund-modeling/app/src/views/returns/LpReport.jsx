@@ -11,11 +11,11 @@ import { LP_SENSITIVITY_TITLE } from "./chartTitles.js";
 /** Net to LPs across exit multiples — distributions, profit and net LP IRR vs the
  *  public-market benchmark, with the scenario's current marks highlighted. */
 function LpSensitivity({ m, snapshot, fundStates, portfolio, readOnly }) {
-  const { sliceRows, spRate, exitDate, allMode } = m;
-  // under All funds the grid pools every fund's LP flows instead of modeling one
+  const { sliceRows, spRate, exitDate, allMode, scopeIds, poolLabel } = m;
+  // under All funds, or a family, the grid pools those funds' LP flows instead of modeling one
   const { entries, excluded } = useMemo(
-    () => (allMode ? pooledEntries(snapshot, fundStates, portfolio.assumptions) : { entries: [], excluded: [] }),
-    [allMode, snapshot, fundStates, portfolio.assumptions]);
+    () => (allMode ? pooledEntries(snapshot, fundStates, portfolio.assumptions, scopeIds) : { entries: [], excluded: [] }),
+    [allMode, snapshot, fundStates, portfolio.assumptions, scopeIds]);
   const rows = useMemo(() => (allMode ? pooledScenarioTable(entries, spRate) : sliceRows),
     [allMode, entries, spRate, sliceRows]);
   // the benchmark column label carries the live rate. Net TVPI sorts on the exit
@@ -45,7 +45,7 @@ function LpSensitivity({ m, snapshot, fundStates, portfolio, readOnly }) {
       <MethodNote>
         Net to LPs across exit multiples — distributions, profit and net LP IRR vs the benchmark; current marks highlighted.
         The public-market benchmark is set on the <strong>LP Returns</strong> tab and the exit horizon on <strong>Companies</strong>.
-        {allMode && " Pooled across all funds: each row assumes every fund delivers that multiple net to LPs."}
+        {allMode && ` Pooled across ${poolLabel}: each row assumes every fund delivers that multiple net to LPs.`}
         {excluded.length > 0 && ` Excludes ${excluded.join(", ")} (nothing called by its exit date).`}
       </MethodNote>
       {/* scrolls in place via .table-scroll (theme.js) — no sticky here, this
@@ -87,8 +87,8 @@ function LpSensitivity({ m, snapshot, fundStates, portfolio, readOnly }) {
 }
 
 /** LP Returns report — one of the LP charts; the Reports page's fund picker,
- *  in the jump-link bar, picks the fund (or All funds, where the sensitivity pools
- *  every fund's LP flows), and the LP returns theme stands in for both
+ *  in the jump-link bar, picks the fund (or All funds, or a family, where the sensitivity pools
+ *  the LP flows of the funds in scope), and the LP returns theme stands in for both
  *  charts when the fund has no NAV close. `section` picks the chart: "sensitivity"
  *  (net-to-LP grid across exit multiples) or "glidepath" (LP multiples over the
  *  fund's life, chart + per-year table). */

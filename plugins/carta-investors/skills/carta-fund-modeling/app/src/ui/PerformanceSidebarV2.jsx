@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { FS, sans, inkNum, SIDEBAR_PANEL_BG } from "./theme.js";
 import { fmtM, fmtX, fmtPct, DELTA_MONEY, DELTA_MULTIPLE } from "./format.js";
-import { Num, Btn, ALL_FUNDS, fundLabel, DeltaCaret } from "./components.jsx";
-import { scenarioFund, gpCarryOf, baseGpCarryOf } from "../model/funds.js";
+import { Num, Btn, fundLabel, DeltaCaret } from "./components.jsx";
+import { scenarioFund, gpCarryOf, baseGpCarryOf, scopeFundIds } from "../model/funds.js";
 import { scenarioRow, exitDateIrr } from "../model/scenarios.js";
 import { waterfallCfgFor, exitHorizonFor } from "../model/reprice.js";
 import { reservesEarmarked, baseReservesEarmarked } from "../model/reserves.js";
@@ -196,7 +196,8 @@ export function ReturnsPreviewContent({ fundStates, firmFigs, fundScope, snapsho
   // hovered/expanded on the Companies table (activeFundIds set), narrow the
   // list to only the fund(s) that company actually touches — rather than
   // showing every fund with the irrelevant ones greyed out.
-  const scopedFunds = fundScope === ALL_FUNDS ? fundStates : fundStates.filter((f) => f.id === fundScope);
+  const scopeIds = scopeFundIds(snapshot.funds, fundScope);
+  const scopedFunds = fundStates.filter((f) => scopeIds.includes(f.id));
   const funds = activeFundIds != null ? scopedFunds.filter((f) => activeFundIds.includes(f.id)) : scopedFunds;
   const sectionBox = { background: SIDEBAR_PANEL_BG, padding: "8px 12px" };
   const sectionHeading = { ...sans, fontSize: 14, fontWeight: 600, lineHeight: "24px", color: "var(--ink-color-global-text-default)", marginBottom: 8 };
