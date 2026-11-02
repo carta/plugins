@@ -31,6 +31,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__request_permissions
+  - mcp__8eb65db0-0cbd-4f50-833b-3057c150d41a__call_tool
+  - mcp__8eb65db0-0cbd-4f50-833b-3057c150d41a__read_tool
+  - mcp__8eb65db0-0cbd-4f50-833b-3057c150d41a__search_tools
+  - mcp__8eb65db0-0cbd-4f50-833b-3057c150d41a__list_accounts
+  - mcp__8eb65db0-0cbd-4f50-833b-3057c150d41a__request_permissions
   - Artifact
   - Agent
   - AskUserQuestion
@@ -46,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.7</carta-plugin>
 
 # Custom Reports
 
@@ -111,7 +116,7 @@ If the file exists, its instructions override the defaults in this skill for any
 
 **Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The only exceptions are the two reconnect retries, each after the user says "ready": the FAIL outcome in step 0b and a failed access check in step 0c. Each re-runs this discovery and replaces `_tool_results`.
 
-**Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. Finding that tool does not mean calling it: step 1 calls it only as the fallback below. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`, `request_permissions`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls.)
+**Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. Finding that tool does not mean calling it: step 1 calls it only as the fallback below. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`, `request_permissions`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls through the confirmed `_carta_prefix`.)
 
 **Working files:** downloaded report data lives under `carta-reporting/` in the working directory (the same folder as `config.json`), never `/tmp`, so the paths work on macOS and Windows alike. Background agents run in that same working directory and create the folder (with a `.gitignore` of `*`, so nothing in it can be committed) before they write anything.
 
@@ -126,13 +131,14 @@ Run each script only in the one-line form shown below, as its own command: write
 
 0. **Connect Carta (Claude Desktop only — skip entirely in Claude Code)**
 
-   **0a. Environment UUID map**
+   **0a. Environment map**
 
-   | Environment | UUID |
-   |---|---|
-   | Production | 4b463f8b-6db0-4d0e-9693-8b39f37e4447 |
+   | Environment | Desktop segment | Registry ID (for `mcp_registry_suggest_connectors` only) |
+   |---|---|---|
+   | Production | 2827383e-1775-4df3-b6ff-04d5392f6d18 | 4b463f8b-6db0-4d0e-9693-8b39f37e4447 |
+   | Sandbox | 8eb65db0-0cbd-4f50-833b-3057c150d41a | |
 
-   Keep this map in memory for the rest of this workflow. (Staff override: `staff/overrides.md` may append additional environments to this table.)
+   A Desktop segment is the part of a tool name between `mcp__` and `__list_accounts`. A registry ID is never a segment. Keep this map in memory for the rest of this workflow. (Staff override: `staff/overrides.md` may append additional environments to this table.)
 
    **0b. Verify the connected Carta MCP — evaluate this gate before doing anything else**
 
@@ -142,11 +148,15 @@ Run each script only in the one-line form shown below, as its own command: write
 
    **GATE — pick exactly one outcome and act on it before proceeding:**
 
-   - **PASS:** At least one extracted segment is an exact match for a UUID value in the loaded environment map → that tool is the confirmed Carta connector. Set `_carta_prefix` to `mcp__<segment>__`. Continue to the reporting access check below.
-   - **PASS (unmapped connector):** A `__list_accounts` tool was found, but none of the extracted segments match a UUID in the loaded environment map → before treating this as FAIL, make one live `list_accounts` call on that tool. A successful response means the connector works even though its environment UUID isn't in the map — treat as PASS and set `_carta_prefix` to that tool's `mcp__<segment>__`. Only a real 401/403 (or an explicit auth error) from this call falls through to FAIL.
-   - **FAIL:** No `__list_accounts` tool was found in `_tool_results` at all, OR the live `list_accounts` call above returned a 401/403/auth error → call `mcp_registry_suggest_connectors` with the Production UUID from the loaded map. **Stop immediately — do not proceed to Step 1.** Say to the user: "I need access to [Company Name]'s Carta account to pull this report. Connect Carta using the button above — once you're in, say 'ready' and I'll pick up from here." When the user replies, re-run tool discovery (see its reconnect exception) and continue from this gate — do not ask them to repeat the original request.
+   - **PASS:** At least one extracted segment is in the Desktop segment column of the environment map → each such tool is a Carta connector for the environment on its row. Choose one:
+     - the user named an environment (production, sandbox, preprod, test, demo) → the connector for that environment;
+     - the user named none and one found connector is Production → Production;
+     - the user named none and only one Carta connector was found → that connector;
+     - the user named none, no Production connector was found and several Carta connectors were found → `AskUserQuestion` listing the environments found, then use the one they pick.
 
-   If multiple tools pass the gate, use the one whose environment appears earliest in the loaded map; its segment sets `_carta_prefix`. If the user's message includes an explicit environment qualifier (production, preprod, sandbox, test, demo), cross-check the confirmed UUID against that environment; if it doesn't match, treat as FAIL.
+     Set `_carta_prefix` to `mcp__<segment>__` and `_carta_environment` to the environment name. Continue to the reporting access check below. When the user named an environment and no mapped connector serves it, go to the unmapped-connector outcome if any `__list_accounts` segment is unmapped, otherwise FAIL.
+   - **PASS (unmapped connector):** A `__list_accounts` tool was found, and either none of the extracted segments are in the Desktop segment column (this includes `mcp__carta__`) or the user named an environment that no mapped connector serves while an unmapped one exists → before treating this as FAIL, make one live `list_accounts` call on that unmapped tool. A successful response means the connector works even though its environment is not in the map — treat as PASS, set `_carta_prefix` to that tool's `mcp__<segment>__` and `_carta_environment` to the environment the user named (Production when none was named). Only a real 401/403 (or an explicit auth error) from this call falls through to FAIL.
+   - **FAIL:** No `__list_accounts` tool was found in `_tool_results` at all, OR the live `list_accounts` call above returned a 401/403/auth error, OR the user named an environment and every found `__list_accounts` segment is mapped to a different environment → call `mcp_registry_suggest_connectors` with the Production registry ID from the loaded map. **Stop immediately — do not proceed to Step 1.** Say to the user: "I need access to [Company Name]'s Carta account to pull this report. Connect Carta using the button above — once you're in, say 'ready' and I'll pick up from here." When the user named Sandbox, add: "To use Carta Sandbox, add Carta (Sandbox) in Settings → Connectors." When the user replies, re-run tool discovery (see its reconnect exception) and continue from this gate — do not ask them to repeat the original request.
 
    **Switching accounts mid-conversation** — if the company is already identified from earlier in this conversation and the user is asking to switch to a different Carta account, skip the "Find the company" step once reporting access is confirmed (0c). Carry forward all previously resolved values and resume from "Find the right report type".
 
@@ -408,7 +418,7 @@ Run each script only in the one-line form shown below, as its own command: write
 
    `userReportPk` and `asOfDate` ride along in the Excel export prompt-bar payload so the Excel skill can find the report; `build_report_page.py` adds the per-sheet `sheetSources` itself.
 
-   `metaRows` always include `Corporation` and `As of Date`; add `["Stakeholder", "<name>"]` for stakeholder reports, `["Period", "<issued_from> – <issued_to>"]` for date-range reports, `["Equity Plan", "<plan name>"]` when a plan is a param.
+   `metaRows` always include `Corporation` and `As of Date`; add `["Stakeholder", "<name>"]` for stakeholder reports, `["Period", "<issued_from> – <issued_to>"]` for date-range reports, `["Equity Plan", "<plan name>"]` when a plan is a param. When `_carta_environment` is set and is not Production, also add `["Environment", "<Environment>"]` (for Sandbox, `["Environment", "Sandbox"]`).
 
    Then run this as its own command, on one line:
 
@@ -441,9 +451,10 @@ Run each script only in the one-line form shown below, as its own command: write
    **Present a customization checkpoint after the full report renders (or fails), and after every later rebuild — never for the preview artifact:**
 
    Compute `{elapsed}` as the output of `date +%s` (run on its own, one line, no shell arithmetic) minus `_report_start_time`, rounded to the nearest whole second.
+   Set `{environment}` to ` (Sandbox)` (the environment's name in parentheses) when `_carta_environment` is set and is not Production, otherwise to nothing.
    Compute `{N}` as `kept_row_count` (sum across all sheets) from `report_processor.py`'s `stats` output — the data rows in the report, before any preview cut. When any sheet has `empty_rows_dropped` > 0, also say so, using the `empty_rows_dropped` row of the Error Handling table.
 
-   > Here's your **{Report Type}** for **{Company Name}** — {N} rows as of {date}, built in {elapsed}s.
+   > Here's your **{Report Type}** for **{Company Name}**{environment} — {N} rows as of {date}, built in {elapsed}s.
    >
    > _(When the full report failed, use instead: "Here's a preview of your **{Report Type}** for **{Company Name}** — {N} rows so far (the full report didn't finish), as of {date}." The Status row and the chat message above are the preview caveat.)_
    >
@@ -476,7 +487,7 @@ Run each script only in the one-line form shown below, as its own command: write
 5. **Show a preview** — the artifact created in step 4d is the live preview.
 
 6. **Export to Excel**
-   - **Claude Desktop prompt bar** — when the user's message starts with `Generate Carta Excel —`, skip steps 1–5 and invoke `Skill(carta-cap-table:carta-reporting-excel)` directly. The payload includes the corporation ID, so no company lookup is needed.
+   - **Claude Desktop prompt bar** — when the user's message starts with `Generate Carta Excel —`, skip steps 1–5 and invoke `Skill(carta-cap-table:carta-reporting-excel)` directly. The payload includes the corporation ID, so no company lookup is needed. Run step 0 first, with the payload's `Environment:` line as the environment the user named in gate 0b (Production when the line is absent).
    - **MARKDOWN mode (`Artifact` tool not available)** — handled by `carta-reporting-markdown`, which invokes `Skill(carta-cap-table:carta-reporting-excel)` when the user confirms.
 
 ---

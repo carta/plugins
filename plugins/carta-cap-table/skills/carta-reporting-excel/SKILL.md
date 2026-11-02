@@ -14,6 +14,8 @@ allowed-tools:
   - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - mcp__8eb65db0-0cbd-4f50-833b-3057c150d41a__call_tool
+  - mcp__8eb65db0-0cbd-4f50-833b-3057c150d41a__read_tool
   - Write
   - Bash(sleep 5)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
@@ -21,12 +23,13 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.7</carta-plugin>
 
 # Excel Export
 
 **Context expected from the calling skill (must be in session before this skill is invoked):**
 - `user_report_pk` — needed to check for the cached report file and to fetch a fresh download URL if the file is absent
+- `_carta_prefix` — the confirmed `mcp__<segment>__` of the Carta connector
 - `corporation_id` — needed for `read_tool({"name": "reporting__get__download_url", ...})`
 - Column config — either parsed from the artifact prompt bar payload (ARTIFACT mode, `Artifact` tool available) or confirmed during the Customization Checkpoint in `carta-reporting-markdown` (MARKDOWN mode, `Artifact` tool not available)
 - Corporation legal name, `as_of_date`, user full name — used as `--title`, `--as-of-date`, `--generated-by` args to `excel_exporter.py`
@@ -39,6 +42,7 @@ When the user pastes an **artifact prompt bar payload**, it arrives as a complet
 Generate Carta Excel —
 Corporation: Meetly, Inc. (ID: 7)
 As of: 2024-01-15
+Environment: Sandbox
 Reports:
   Equity Grants: user_report_pk 4812; corporation_id 7; source sheet: Equity Grants
   Vesting Schedule: user_report_pk 4812; corporation_id 7; source sheet: Vesting Schedule
@@ -47,7 +51,7 @@ Columns:
   Vesting Schedule: columns: Grant ID, Vest Date, Shares Vested; totals: Shares Vested sum
 ```
 
-Use the `Corporation:` line to confirm which company the export is for, and `As of:` as `as_of_date`. Each `Reports:` line gives the report behind that sheet: use its `user_report_pk` and `corporation_id` for the cached file and download URL, and its `source sheet` as the sheet name in `report_processor.py` (a multi-corporation page names sheets `Corp — Sheet`, which matches no single report's own sheet). Sheets from different corporations come from different reports, so run steps 1-4 below once per `user_report_pk`, each with its own `--out` and `--output`. Each indented line under `Columns:` is one sheet tab. This is always **one Excel file per report (one per corporation)**, with one tab per sheet. Parse the sheet lines of one report and pass its sheets to `report_processor.py` in a single run using the per-sheet `sheets` dict format. No further questions needed.
+Use the `Corporation:` line to confirm which company the export is for, and `As of:` as `as_of_date`. The optional `Environment:` line names the Carta environment that built the report; `carta-reporting` gate 0b has already used it to set `_carta_prefix`. Each `Reports:` line gives the report behind that sheet: use its `user_report_pk` and `corporation_id` for the cached file and download URL, and its `source sheet` as the sheet name in `report_processor.py` (a multi-corporation page names sheets `Corp — Sheet`, which matches no single report's own sheet). Sheets from different corporations come from different reports, so run steps 1-4 below once per `user_report_pk`, each with its own `--out` and `--output`. Each indented line under `Columns:` is one sheet tab. This is always **one Excel file per report (one per corporation)**, with one tab per sheet. Parse the sheet lines of one report and pass its sheets to `report_processor.py` in a single run using the per-sheet `sheets` dict format. No further questions needed.
 
 **The column list from the artifact is authoritative; do not merge with or override it from the earlier conversation.**
 
@@ -76,6 +80,8 @@ Use the column list confirmed during the Customization Checkpoint (resolved in `
 
 Hand the user the generated `.xlsx` file itself. Never give them a Carta web link to the report: it makes them sign in to Carta. If the file cannot be delivered, the presigned `download_url` works without signing in but expires, so say so.
 
+
+Make every Carta call (`read_tool`, `call_tool`) through `_carta_prefix`, in both modes.
 
 Check if `carta-reporting/carta_report_<user_report_pk>.json` is available (use the current `user_report_pk` from this session: a recreated report's pk replaces the original):
 - **File ready** → pass it as `"local_file"` to `report_processor.py`.

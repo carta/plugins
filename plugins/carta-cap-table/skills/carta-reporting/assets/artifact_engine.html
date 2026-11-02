@@ -170,6 +170,7 @@ let _panelSectionCollapsed = new Set();
 let _entityName     = '';
 let _corporationId  = '';
 let _asOfDate       = '';
+let _environment    = '';
 let _sheetSources   = {};
 
 // initReport — called once data is available (fetch or inline)
@@ -184,6 +185,7 @@ function initReport(payload) {
   _entityName    = C.entityName    || '';
   _corporationId = C.corporationId || '';
   _asOfDate      = C.asOfDate      || '';
+  _environment   = ((C.metaRows || []).find(([label]) => label === 'Environment') || [])[1] || '';
   _sheetSources  = C.sheetSources  || {};
   sheetsNav       = document.getElementById('sheetsNav');
   sheetsDiv       = document.getElementById('sheets');
@@ -650,6 +652,7 @@ function updateGlobalPromptBar() {
     lines.push('Corporation: ' + corp.trim());
   }
   if (_asOfDate) lines.push('As of: ' + _asOfDate);
+  if (_environment) lines.push('Environment: ' + _environment);
   // The report behind each sheet; a merged sheet name ("Corp — Sheet") is not a report's own sheet name
   const refs = shown.map(({ name }) => {
     const src = _sheetSources[name];
