@@ -41,7 +41,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.13</carta-plugin>
+<carta-plugin>carta-investors:7.12.15</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -193,6 +193,7 @@ The non-FLPD endpoints flatten their documents to a single generic type. Use the
 **Response fields to honour:**
 - `warnings` — when non-empty (for example a source timed out), tell the LP the results may be partial.
 - `delivery_terms_accepted` — `false` means the LP has not accepted electronic delivery for that fund. The document is **locked**: show it, never link it, and leave it out of zips. `accept_url`, when present, is where they accept. A document without the field is not locked.
+- `sent_date` — when the sender shared the document with the LP (`MM/DD/YYYY`), where `document_date` is the date on the document, which for a K-1 is year-end. It is null when unknown, which does not mean the document was not sent: never tell the LP a document was not shared because of it.
 - `source: "source_file"` — `download_url` opens a Carta page, not a file. Label it "View in Carta" and never put it in a zip.
 
 ---
@@ -367,6 +368,7 @@ All 4 endpoints return the same document shape:
   "firm_name": "Harborview Partners",
   "portfolio_name": "Personal",
   "document_date": "12/31/2024",
+  "sent_date": "03/20/2025",
   "download_url": "https://…"
 }
 ```
@@ -389,7 +391,7 @@ Only after the budget in "Stop and retry rules" is spent: "No [type] documents f
 
 ### Fewer than 5 documents — inline table
 
-Columns: **Type**, **Fund**, **Document**, **Firm**, **Date**. Add a **Portfolio** column only when `portfolio_name` differs between rows. Write dates in the LP's own date style (for example "31 Mar 2025" or "Mar 31, 2025"), never a bare `MM/DD/YYYY`.
+Columns: **Type**, **Fund**, **Document**, **Firm**, **Sent date**, **Document date**. Order rows newest first by `sent_date`, by `document_date` when `sent_date` is null; a null `sent_date` shows `—`. Add a **Portfolio** column only when `portfolio_name` differs between rows. Write dates in the LP's own date style (for example "31 Mar 2025" or "Mar 31, 2025"), never a bare `MM/DD/YYYY`.
 
 - **Document** is the document name linked to its `download_url`, which opens it in Carta.
 - A **locked** row (`delivery_terms_accepted: false`) shows `🔒 Locked — <name>` with **no link**.
@@ -397,10 +399,10 @@ Columns: **Type**, **Fund**, **Document**, **Firm**, **Date**. Add a **Portfolio
 
 Example:
 
-| Type | Fund | Document | Firm | Date |
-|---|---|---|---|---|
-| K-1 (Tax Year 2024) | Harborview Growth Fund II | [2024 K-1 Schedule](https://…) | Harborview Partners | Dec 31, 2024 |
-| K-1 (Tax Year 2024) | Pinecrest Growth Fund I | 🔒 Locked — Tax Form K-1 | Pinecrest Capital | Dec 31, 2024 |
+| Type | Fund | Document | Firm | Sent date | Document date |
+|---|---|---|---|---|---|
+| K-1 (Tax Year 2024) | Harborview Growth Fund II | [2024 K-1 Schedule](https://…) | Harborview Partners | Mar 20, 2025 | Dec 31, 2024 |
+| K-1 (Tax Year 2024) | Pinecrest Growth Fund I | 🔒 Locked — Tax Form K-1 | Pinecrest Capital | — | Dec 31, 2024 |
 
 Below the table, one line per fund with locked rows:
 
@@ -531,8 +533,8 @@ curl --proto '=https' --tlsv1.2 -sSL "<signed_url>" -o ~/Downloads/"<FILENAME>.z
 
 ## Important Notes
 
-- Always show investment name and date alongside every document.
-- K-1s are annual. If the LP asks for "my K-1" without a year, surface the most recent one.
+- Always show investment name, sent date and document date alongside every document.
+- K-1s are annual. If the LP asks for "my K-1" without a year, surface the most recent one by `sent_date` (by `document_date` when it is null).
 - **Always use the Synonym Map** before fetching — never pass user terms directly as `document_type`. "PCAP" → `Capital account statements`, "K-1" → `Tax - Schedule K-1`.
 - Capital call and distribution notices can be time-sensitive. Note the date prominently.
 - Never guess at a document's content.
@@ -594,11 +596,11 @@ Here's what comes back:
 
 > **Found 3 K-1s for tax year 2023:**
 >
-> | # | Investment | Firm | Tax Year | Date | Download |
-> |---|---|---|---|---|---|
-> | 1 | Pinecrest Growth Fund II | Pinecrest Capital | 2023 | Dec 31, 2023 | [Download](#) |
-> | 2 | Pinecrest Growth Fund I | Pinecrest Capital | 2023 | Dec 31, 2023 | [Download](#) |
-> | 3 | Oakwood Ventures Fund III | Oakwood Capital | 2023 | Dec 31, 2023 | [Download](#) |
+> | # | Investment | Firm | Tax Year | Sent date | Document date | Download |
+> |---|---|---|---|---|---|---|
+> | 1 | Pinecrest Growth Fund II | Pinecrest Capital | 2023 | Mar 22, 2024 | Dec 31, 2023 | [Download](#) |
+> | 2 | Pinecrest Growth Fund I | Pinecrest Capital | 2023 | Mar 20, 2024 | Dec 31, 2023 | [Download](#) |
+> | 3 | Oakwood Ventures Fund III | Oakwood Capital | 2023 | — | Dec 31, 2023 | [Download](#) |
 >
 > K-1s on file for: **2019, 2020, 2021, 2022, 2023**
 >

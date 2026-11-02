@@ -428,12 +428,14 @@ tr:hover td { background: #E9EAEA; }
       <col style="width:220px">
       <col style="min-width:200px">
       <col style="width:140px">
-      <col style="width:35%">
+      <col style="width:140px">
+      <col style="width:30%">
     </colgroup>
     <thead id="thead">
       <tr>
         <th>Type</th>
         <th data-col="name">Document</th>
+        <th data-col="sent">Sent date</th>
         <th data-col="date">Document date</th>
         <th>Fund</th>
       </tr>
@@ -496,7 +498,8 @@ var isLoading = true;
 var loadGen = 0;
 
 // ── State ───────────────────────────────────────────────────────────────────
-let activeSort = 'date';
+let activeSort = 'sent';
+const DATE_COLS = new Set(['sent', 'date']);
 const SEL = { type: new Set(), fund: new Set(), year: new Set(), portfolio: new Set() };
 let fpCat = 'type';
 let sortDir = 'desc';
@@ -701,6 +704,8 @@ function normalizeDoc(d) {
     firm:      d.firm_name || '',
     portfolio: d.portfolio_name || '',
     date:      isoDate(d.document_date),
+    // When the sender shared it with the LP; empty when the backend does not provide it.
+    sent:      isoDate(d.sent_date),
     url:       d.download_url || '',
     isSourceFile: d.source === 'source_file',
     // Only an explicit false locks a row: a backend that does not send the field
@@ -1039,8 +1044,10 @@ function getFiltered() {
       const gc = ga.localeCompare(gb2);
       if (gc !== 0) return gc;
     }
-    let av = a[activeSort] || '', bv = b[activeSort] || '';
-    if (activeSort === 'date') return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
+    // A document with no sent date sorts by its document date.
+    const keyOf = d => (activeSort === 'sent' ? d.sent || d.date : d[activeSort]) || '';
+    let av = keyOf(a), bv = keyOf(b);
+    if (DATE_COLS.has(activeSort)) return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
     return av.localeCompare(bv) * dir;
   });
   return docs;
@@ -1139,14 +1146,16 @@ function render() {
       if (groupBy) {
         const gval = d[groupBy] || '—';
         if (gval !== lastGroup) {
-          rows += '<tr class="group-header"><td colspan="4">' + esc(gval) + '</td></tr>';
+          rows += '<tr class="group-header"><td colspan="5">' + esc(gval) + '</td></tr>';
           lastGroup = gval;
         }
       }
-      const tip = 'Type: ' + (d.type || '—') + '\nDocument: ' + (d.name || '—') + '\nDocument date: ' + fmtDate(d.date) + '\nFund: ' + (d.fund || '—') + '\nFirm: ' + (d.firm || '—') + '\nPortfolio: ' + (d.portfolio || '—');
+      const sentText = fmtDate(d.sent);
+      const tip = 'Type: ' + (d.type || '—') + '\nDocument: ' + (d.name || '—') + '\nSent date: ' + sentText + '\nDocument date: ' + fmtDate(d.date) + '\nFund: ' + (d.fund || '—') + '\nFirm: ' + (d.firm || '—') + '\nPortfolio: ' + (d.portfolio || '—');
       rows += '<tr title="' + esc(tip) + '">' +
         '<td style="white-space:nowrap">' + esc(d.type || '—') + '</td>' +
         '<td>' + docCell(d) + '</td>' +
+        '<td style="white-space:nowrap;color:#656B6B">' + sentText + '</td>' +
         '<td style="white-space:nowrap;color:#656B6B">' + fmtDate(d.date) + '</td>' +
         '<td>' + esc(d.fund || '—') + '<span class="fund-firm">' + esc(d.firm || '—') + '</span></td>' +
         '</tr>';
@@ -1174,7 +1183,7 @@ function goPage(n) { page = n; render(); }
 
 function setSort(s) {
   if (activeSort === s) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
-  else { activeSort = s; sortDir = s === 'date' ? 'desc' : 'asc'; }
+  else { activeSort = s; sortDir = DATE_COLS.has(s) ? 'desc' : 'asc'; }
   page = 1;
   render();
 }
