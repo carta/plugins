@@ -1,8 +1,8 @@
 ---
 name: carta-spa-audit
 description: >-
-  SPA coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed, and can drill into a specific company's SPA documents. Use when asked about SPA coverage, missing SPAs, unexecuted SPAs, document completeness, or a named company's SPA. Do NOT use for general portfolio metrics, capital deployment analysis, or co-investor lookups — use carta-co-investors for who else invested alongside you.
-version: 0.9.6
+  SPA (stock purchase agreement) coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed, and can drill into a specific company's SPA documents. Use for any question about which investments are missing an SPA or an executed or signed SPA ("Which of our investments are missing an executed SPA?", "what's our SPA status?"), SPA coverage, document completeness, or a named company's SPA — even when the same request also asks for another skill, such as co-investors: run both. Not for general portfolio metrics; for who else invested alongside you, use carta-co-investors.
+version: 0.9.7
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.18</carta-plugin>
+<carta-plugin>carta-investors:7.12.19</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

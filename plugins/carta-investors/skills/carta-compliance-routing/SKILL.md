@@ -1,15 +1,21 @@
 ---
 name: carta-compliance-routing
-version: 1.0.0
+version: 1.1.0
 description: >
-  Routes to Form ADV for regulatory filing data. Trigger on any of:
+  Routes to Form ADV for regulatory filing data and to the SPA coverage audit.
+  Trigger on any of:
   "Form ADV", "Schedule D", "regulatory AUM", "Form PF", "annual filing",
   "annual amendment", "SEC filing", "total AUM", "AUM for filing", "AUM for the SEC",
   "regulatory assets", "AUM across all funds", "filing season", "RAUM",
   "how much AUM to report", "pull our Form ADV data",
+  "SPA audit", "SPA coverage", "missing SPAs", "unexecuted SPAs",
+  "missing an executed SPA", "unsigned SPAs", "SPA status", "SPA completeness",
+  "SPA gap", "which companies are missing SPAs",
+  "which are missing subscription agreements",
+  "investments still need subscription agreements",
   /carta-compliance-routing.
   NOT FOR: 409A valuations, cap table ownership, LP reporting, fund financials,
-  performance benchmarks, SPA document views, SPA coverage audits.
+  performance benchmarks, SPA document views.
 model: sonnet
 allowed-tools:
   - mcp__carta__welcome
@@ -33,10 +39,11 @@ allowed-tools:
   - Write
   - Read
   - AskUserQuestion
+  - Skill(carta-investors:carta-spa-audit)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.18</carta-plugin>
+<carta-plugin>carta-investors:7.12.19</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -44,13 +51,14 @@ allowed-tools:
 
 Routes to Form ADV for regulatory filing data, executed inline from a content
 mirror of `carta-investors:carta-form-adv` — see **`carta-form-adv` is unchanged**
-in Architecture Notes below. Additional Compliance capabilities (document
-intelligence, SPA coverage audit) are internal-only today and will be wired into
-this router as they reach general availability for external users.
+in Architecture Notes below — and dispatches SPA coverage audits to
+`carta-investors:carta-spa-audit`. Document Intelligence is internal-only today
+and will be wired into this router when it reaches general availability for
+external users.
 
 > **Scope note:** This router covers the Compliance skill(s) available to external
-> customers today. Document Intelligence and SPA Audit exist as internal skills but
-> are not yet GA for external users — see **Future routes** below.
+> customers today. Document Intelligence exists as an internal skill but is not yet
+> GA for external users — see **Future route** below.
 
 ---
 
@@ -59,6 +67,7 @@ this router as they reach general availability for external users.
 | Intent | Skill |
 |---|---|
 | Form ADV, Schedule D, regulatory AUM, Form PF, annual SEC filing | `references/form-adv.md` |
+| SPA coverage — missing, unexecuted or executed SPAs across the portfolio | `carta-investors:carta-spa-audit` (dispatched) |
 
 ---
 
@@ -69,6 +78,7 @@ Use this as the semantic layer when Step 1 signal phrases don't produce an exact
 | What the customer is trying to do | Typical phrasing | Route |
 |---|---|---|
 | **Pull regulatory filing data** — AUM, Schedule D, Form PF, annual SEC filing prep | "pull our Form ADV data", "what's our regulatory AUM", "Schedule D for this year's filing", "what do I need for Form PF Section 1", "how much AUM do we report to the SEC", "filing season is coming up" | `form-adv` |
+| **Check SPA coverage** — which investments are missing a signed stock purchase agreement | "which of our investments are missing an executed SPA?", "run an SPA audit", "what's our SPA status?", "which companies are missing SPAs?", "are any SPAs unsigned?" | `spa-audit` |
 
 ---
 
@@ -83,13 +93,14 @@ Respond immediately without extended reasoning.
 | "409A", "409A valuation", "409A pricing", "stock option pricing" | **Stop.** 409A is a separate cap table valuation product — not covered here. Tell the user: "409A is handled by a separate workflow — reach out to your Carta account manager or use the 409A valuation process directly." |
 | "cap table", "option grants", "equity management", "share classes", "equity ownership" | **Stop.** Cap table management is out of scope for this router. Tell the user: "Cap table management isn't handled here — use the cap table tools directly in Carta." |
 
-**Route rows — classify and proceed to Step 2.5:**
+**Route rows — classify, then follow the row's next step:**
 
 | Message signals | Route |
 |---|---|
 | "Form ADV", "Schedule D", "regulatory AUM", "Form PF", "annual filing", "annual amendment", "SEC filing", "total AUM", "AUM for filing", "AUM for the SEC", "regulatory assets", "AUM across all funds", "filing season", "RAUM", "how much AUM to report", "pull our Form ADV data" | `form-adv` → proceed to Step 2.5 |
+| "SPA audit", "SPA coverage", "missing SPAs", "unexecuted SPAs", "missing an executed SPA", "unsigned SPAs", "SPA status", "SPA completeness", "SPA gap", "which companies are missing SPAs", "which are missing subscription agreements", "investments still need subscription agreements" | `spa-audit` → proceed to Step 3 |
 
-If the route matches: proceed to Step 2.5.
+If `form-adv` matches: proceed to Step 2.5. If `spa-audit` matches: proceed to Step 3 — the SPA audit skill runs its own connection checks.
 If no route matches: proceed to Step 2.
 
 ---
@@ -98,7 +109,7 @@ If no route matches: proceed to Step 2.
 
 Fire only if Step 1 returned no clear match.
 
-Reason over the message first. If you can confidently determine the user wants Form ADV filing data, proceed directly to Step 2.5 without asking.
+Reason over the message first. If you can confidently determine the user wants Form ADV filing data, proceed directly to Step 2.5 without asking. If they want SPA coverage, proceed directly to Step 3.
 
 If you genuinely cannot determine the intent, call `AskUserQuestion`:
 
@@ -106,12 +117,14 @@ If you genuinely cannot determine the intent, call `AskUserQuestion`:
 
 **Options:**
 1. **Form ADV filing data** — Pull regulatory AUM, Schedule D §7.B.(1), and Form PF data for your annual SEC filing
-2. **Something else** — Describe what you need and I'll point you in the right direction
+2. **SPA coverage audit** — See which investments are missing a signed stock purchase agreement
+3. **Something else** — Describe what you need and I'll point you in the right direction
 
 | User picks | Action |
 |---|---|
 | Option 1 — Form ADV filing data | Proceed to Step 2.5 |
-| Option 2 — Something else | Respond: "I specialize in Form ADV regulatory filing data. Tell me what you're trying to do and I'll point you to the right Carta workflow." Then stop. |
+| Option 2 — SPA coverage audit | Proceed to Step 3 (`spa-audit`) |
+| Option 3 — Something else | Respond: "I cover Form ADV regulatory filing data and SPA coverage audits. Tell me what you're trying to do and I'll point you to the right Carta workflow." Then stop. |
 
 ### Out-of-scope
 
@@ -126,7 +139,7 @@ If you genuinely cannot determine the intent, call `AskUserQuestion`:
 
 ---
 
-## Step 2.5 — MCP session + Fund Admin SKU gate [Hard gate]
+## Step 2.5 — MCP session + Fund Admin SKU gate [Hard gate] (form-adv route only)
 
 If the Carta MCP server is not connected (`noMcp` environment), skip this step and proceed to Step 3.
 
@@ -156,6 +169,8 @@ If `welcome` returns an error, surface: "I wasn't able to connect to your Carta 
 
 Output leads with the routing action. Respond immediately without extended reasoning.
 
+**Route `form-adv`:**
+
 > Routing to Form ADV.
 
 Then read and execute the Form ADV instructions inline:
@@ -166,6 +181,16 @@ Read ${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/references/form-adv.m
 
 Follow that file's instructions exactly, starting from Step 1 with the user's original message as context. All `references/form-adv/` paths cited within that file resolve to `${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/references/form-adv/`.
 
+**Route `spa-audit`:**
+
+> Routing to SPA coverage audit.
+
+```
+Skill('carta-investors:carta-spa-audit')
+```
+
+It runs under its own frontmatter and owns its whole workflow, including the Carta connection and firm checks. Pass the user's original message along.
+
 Do not summarize what the target skill will do. Do not add any other output before the routing announcement.
 
 ---
@@ -174,12 +199,12 @@ Do not summarize what the target skill will do. Do not add any other output befo
 
 | Situation | Response |
 |---|---|
-| User asks about something that isn't Form ADV filing data | Use Step 2 `AskUserQuestion` to clarify — offer Form ADV filing data or "Something else" |
+| User asks about something that isn't Form ADV filing data or SPA coverage | Use Step 2 `AskUserQuestion` to clarify — offer Form ADV filing data, SPA coverage audit or "Something else" |
 | User asks about 409A valuations | Out of scope — separate cap table valuation product, see STOP rows |
 | User asks about cap table ownership | Out of scope — see STOP rows |
 | User asks about LP reporting, fund financials, or fund performance, IRR, or TVPI benchmarks | Out of scope — use the matching redirect in Step 2's suggestion table |
-| User asks to view all SPA documents, DI page, purchaser breakdowns | Not yet GA externally — see **Future routes** below |
-| User asks about SPA coverage, missing/unexecuted SPAs | Not yet GA externally — see **Future routes** below |
+| User asks to view all SPA documents, DI page, purchaser breakdowns | Not yet GA externally — see **Future route** below |
+| The SPA audit skill stops (no firm, connection error) | Pass its message to the user as it is. Don't retry and don't try another route. |
 
 ---
 
@@ -192,10 +217,10 @@ promote a future route to active.
 
 ---
 
-## Future routes — not yet active
+## Future route — not yet active
 
-These routes exist as internal skills today. They are **not active** in this
-version — do not route to them.
+This route exists as an internal skill today. It is **not active** in this
+version — do not route to it.
 
 ### Document Intelligence
 
@@ -204,17 +229,10 @@ version — do not route to them.
 - **CTA until GA:** "Viewing all SPA documents in one table is coming to external users soon. Reach out to your Carta account manager or contact Carta Support to request early access."
 - **Skill when live:** `carta-investors:carta-doc-intelligence`
 
-### SPA Audit
-
-- **Status:** Not yet available to external users
-- **Signals:** "SPA audit", "SPA coverage", "missing SPAs", "unexecuted SPAs", "SPA status", "document completeness", "which companies are missing SPAs", "which are missing subscription agreements", "outstanding SPA issues", "SPA completeness", "SPA gap", "SPA coverage gap", "portfolio SPA completeness", "investments still need subscription agreements"
-- **CTA until GA:** "SPA coverage audits are coming to external users soon. Reach out to your Carta account manager or contact Carta Support to request early access."
-- **Skill when live:** `carta-investors:carta-spa-audit`
-
-### Disambiguation note (for when both routes above go live)
+### Disambiguation note (for when Document Intelligence goes live)
 
 "SPA" alone is ambiguous between Document Intelligence (viewing) and SPA Audit
-(coverage/gap checking). When both routes are promoted, add a disambiguation
+(coverage/gap checking). When Document Intelligence is promoted, add a disambiguation
 table to Step 2 keyed on intent verbs: "view" / "see" / "browse" / "in one table"
 → Document Intelligence; "missing" / "unexecuted" / "coverage" / "audit" / "gap"
 → SPA Audit.

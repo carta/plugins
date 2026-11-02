@@ -8,8 +8,9 @@ description: >
   "who else invested", "co-investors by stage/round", "co-investors on Aumni".
   Use instead: carta-explore-data for general fund/investment/portfolio data —
   this skill is specifically for co-investor ("who else invested alongside us")
-  analysis.
-version: 0.8.10
+  analysis. For SPA coverage (which investments are missing an SPA or an executed
+  SPA), use carta-spa-audit — also when the same request asks for co-investors.
+version: 0.8.11
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -49,10 +50,12 @@ allowed-tools:
   # Interaction
   - AskUserQuestion
   - ToolSearch
+  # Hand-off for SPA coverage asked in the same request
+  - Skill(carta-investors:carta-spa-audit)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.18</carta-plugin>
+<carta-plugin>carta-investors:7.12.19</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -333,6 +336,8 @@ Users who need a WCAG-compliant text view can ask for text ("just tell me", "no 
 - "Who co-invested with me most often?"
 - "Who are my most frequent co-investors with more than 5% of a round?"
 - "Who co-invested in [Company Name]?"
+
+**SPA coverage is a different skill.** When the request also asks which investments are missing an SPA, whether SPAs are executed or signed, or for an SPA audit — e.g. "Which of our investments are missing an executed SPA? Run the co-investor skill as well" — that part belongs to `carta-spa-audit`. Run this skill for the co-investor part, then run `Skill('carta-investors:carta-spa-audit')` for the SPA part. Do not answer SPA coverage from this skill's SPA queries: they read purchasers, not whether each investment's SPA is on file and executed.
 
 ---
 
