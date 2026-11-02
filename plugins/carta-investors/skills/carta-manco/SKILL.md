@@ -2,7 +2,7 @@
 name: carta-manco
 model: opus
 description: >-
-  ManCo (management company) budgeting in Excel for Carta Fund Admin firms. TRIGGER: build/create/draft a budget, pull/import the budget, add/refresh actuals, interleave Budget/Actual/Variance, sub-account drill-down, pacing/variance analysis, "what did we spend on [X] YTD", "where did we overspend", what-if/scenario modeling (headcount, revenue shocks). ALSO fires on ANY generic management-company ask naming no specific report AND no visual surface, and shows the capability menu: "help with our ManCo", "ManCo financials", "ManCo reporting", "not sure what I need". NOT FOR: a ManCo microapp/dashboard/visual report — "build a manco microapp for [firm]", "spin up the ManCo dashboard" → carta-manco-reporting whatever the verb ("build" claims this skill only for a budget); single-FUND financials, portfolio valuations, LP reporting, cap tables, loans (carta-loan-dashboard); a NAMED consolidating statement (P&L, BS, TB, cash flow) → carta-consolidating-financial-reports or fa-manco:carta-consolidating-cash-flow.
+  ManCo (management company) budgeting in Excel for Carta Fund Admin firms. TRIGGER: build/create/draft a budget, pull/import the budget, add/refresh actuals, interleave Budget/Actual/Variance, sub-account drill-down, pacing/variance analysis, "what did we spend on [X] YTD", what-if/scenario modeling. ALSO a short follow-up on budget work already underway, no firm or ManCo named again: "refresh/update/recheck the budget", "update this budget for 2027". ALSO any generic management-company ask naming no specific report AND no visual surface (shows the capability menu): "help with our ManCo", "ManCo financials", "not sure what I need". NOT FOR: a ManCo microapp/dashboard/visual report → carta-manco-reporting whatever the verb ("build" claims this skill only for a budget); single-FUND financials, portfolio valuations, LP reporting, cap tables, loans; a NAMED consolidating statement (P&L, BS, TB, cash flow) → carta-consolidating-financial-reports or fa-manco:carta-consolidating-cash-flow.
 version: 1.0.0
 allowed-tools:
   # Production
@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.8</carta-plugin>
+<carta-plugin>carta-investors:7.12.12</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

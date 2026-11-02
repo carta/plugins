@@ -1,7 +1,7 @@
 ---
 name: carta-manco-reporting
 description: >-
-  Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under any verb (spin up, open, launch, build, create, run), firm named or not — P&L drill-down, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. DISAMBIGUATION: "build" means render this dashboard, not draft a budget. NOT FOR: drafting or editing a budget, or a generic ManCo ask naming no firm and no visual surface (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch → skill-dev:build-micro-app.
+  Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under any verb (spin up, open, launch, build, create, run), firm named or not — P&L drill-down, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. ALSO fires on a short follow-up that continues a Budget vs Actuals view already open, even with no firm named again — "refresh Budget vs Actuals for the refreshed actuals", "pull up Budget vs Actuals", "refresh the ManCo budget app". DISAMBIGUATION: "build" means render this dashboard, not draft a budget. NOT FOR: drafting or editing a budget, or a generic ManCo ask naming no firm and no visual surface (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch → skill-dev:build-micro-app.
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
 version: 0.6.3
 # `version` gates delivery of app/src: each user runs their own copy, and a change
@@ -131,7 +131,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.8</carta-plugin>
+<carta-plugin>carta-investors:7.12.12</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
