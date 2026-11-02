@@ -180,7 +180,7 @@ export function computeFundStates(snapshot, portfolio) {
     // (LPA/config) carry rate, else the flat default — NOT a hardcoded 20%. The
     // Baseline slice seeds this same rate, so at Baseline the reprice is neutral
     // (factor 1): carry and LP NAV tie out exactly to Carta's books. The carry-rate
-    // dial then reprices the booked carry relative to this anchor.
+    // dial then reprices the booked carry relative to this rate (a 0% rate leaves it as booked).
     const bookedRate = f.waterfall?.carryRate ?? BOOKED_CARRY_RATE;
     const base = {
       lpNav: snapshot.baseLpNav[f.id],

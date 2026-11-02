@@ -255,7 +255,8 @@ export const BOOKED_CARRY_RATE = 0.2;
  * caller passes as the fund's own baseline (LPA/config) carry rate so Baseline
  * ties out to Carta's books (factor 1); it defaults to 20% for callers with no
  * per-fund rate. The booked carry rescales by carryRate/bookedRate (linear, no
- * hurdle), and the marginal uplift splits (1−c)/c. Below
+ * hurdle); with a bookedRate of 0 it stays as booked, whatever the dial. The
+ * marginal uplift splits (1−c)/c. Below
  * the make-whole line (deep markdown scenarios), LPs absorb 100% of the move
  * and accrued carry floors at zero — the GP holds no carry until LPs are made
  * whole. Value is conserved at the gross marks, so cutting the rate moves
@@ -268,19 +269,18 @@ export const BOOKED_CARRY_RATE = 0.2;
 export function fundReprice(base, uplift, cfg, bookedRate = BOOKED_CARRY_RATE) {
   const wf = typeof cfg === "number" ? { carryRate: cfg } : (cfg || {});
   const carryRate = wf.carryRate ?? 0.2;
-  // Anchor the booked-carry rescale to a non-zero rate. A fund can carry at 0%
-  // (its config carryRate is a real 0, so `?? default` upstream keeps it), which
-  // would make carryRate/bookedRate a divide-by-zero → NaN that poisons lpNav and
-  // every firm rollup. A 0% fund has no booked carry to rescale anyway, so falling
-  // back to the flat default is safe (0 × anything = 0).
-  const anchor = bookedRate > 0 ? bookedRate : BOOKED_CARRY_RATE;
+  // The booked carry rescales by carryRate/bookedRate. A fund booked at 0% (a real 0, so
+  // `?? default` upstream keeps it) has no rate to rescale against, and dividing by it would
+  // be NaN: its booked carry stays as booked at every dial value, and the dial moves only
+  // the marginal carry on uplift. Accrued carry therefore never falls as the dial rises.
+  const carryScale = bookedRate > 0 ? carryRate / bookedRate : 1;
   const gross0 = base.lpNav + base.accruedCarry + base.lpDistributed;
   const gross1 = gross0 + uplift;
   const profit = (g) => Math.max(0, g - base.lpPaidIn);
   // Marginal carry across the reprice, through the full waterfall (pref + catch-up).
   // Flat case: splitProfit(p) = carryRate·p, so this reduces to carryRate·Δprofit.
   const gpCarryAt = (g) => splitProfit(profit(g), base.lpPaidIn, wf).gpCarry;
-  const rawCarry = base.accruedCarry * (carryRate / anchor) + (gpCarryAt(gross1) - gpCarryAt(gross0));
+  const rawCarry = base.accruedCarry * carryScale + (gpCarryAt(gross1) - gpCarryAt(gross0));
   // Hard invariants, in priority order: carry is never negative, and carry can
   // never exceed total profit above the make-whole line — so an underwater
   // fund holds zero carry even when Carta's base carry exceeds carryRate ×
