@@ -450,6 +450,7 @@ function farNormalizeWorkflow(w, reviews = true, apps = []) {
     lastActivity: w.last_activity_at ?? w.created_at ?? null,
     webUrl: farSafeHref(w._links?.web_url),
     objectId: w.object_id ?? null,
+    template: w.workflow_template ?? null,
     ccr,
     // A package task always opens the tracker for its period, never Carta.
     frt: frtTargetFor(w),
@@ -700,19 +701,28 @@ function farRecentlyFinished(w, now = Date.now()) {
   return !at || now - at <= FAR_DONE_DAYS * 86400000;
 }
 
+// Whether this firm has the capital activity payments page on.
+function farPaymentsPageOn() { return mcpCommandAvailable(CAPITAL_ACTIVITY_PAYMENTS_PAGE_COMMAND); }
+
+// The workflows with tiles, with the payments page's own where it is on.
+function farTileTemplates(paymentsOn) {
+  return paymentsOn ? TASK_TEMPLATES_WITH_TILES.concat(CAPITAL_ACTIVITY_PAYMENTS_TEMPLATES) : TASK_TEMPLATES_WITH_TILES;
+}
+
 // The task list takes no template filter, so the rest are dropped here.
-function farQueueTasks(open) {
-  return farOneTaskPerWorkflow(open.filter(t => TASK_TEMPLATES_WITH_TILES.includes(t.workflow_template)));
+function farQueueTasks(open, paymentsOn = false) {
+  const templates = farTileTemplates(paymentsOn);
+  return farOneTaskPerWorkflow(open.filter(t => templates.includes(t.workflow_template)));
 }
 
 // One tab's read: Needs Action and With Carta are the task list's two pending_actor halves,
 // Completed the finished workflows. Null on failure; `onFail` hears why.
 function farReadTab(key, onFail) {
   const read = key === 'done'
-    ? farWalk('fa:list:firm-workflow', {
-      workflow_templates: TASK_TEMPLATES_WITH_TILES,
+    ? farPaymentsPageOn().then(paymentsOn => farWalk('fa:list:firm-workflow', {
+      workflow_templates: farTileTemplates(paymentsOn),
       statuses: FAR_FINISHED_STATUSES,
-    }, { maxPages: FAR_DONE_MAX_PAGES, partialOk: true, onFail })
+    }, { maxPages: FAR_DONE_MAX_PAGES, partialOk: true, onFail }))
     : farWalk(FAR_ACTIVE_TASKS_COMMAND, { pending_actor: key === 'todo' ? 'customer' : 'carta' }, { onFail });
   return read.catch(e => {
     if (FAR_PAGE_LEVEL_CODES.includes(e?.code)) throw e;
@@ -732,13 +742,14 @@ function farQueueReads(onFail) {
       statuses: ['active'],
     }, { partialOk: true }).catch(() => null),
     done: farReadTab('done', d => onFail('done', d)),
+    paymentsOn: farPaymentsPageOn(),
   };
 }
 
 // The queue from whichever reads have landed; an absent or failed part adds nothing.
 function farComposeQueue(parts) {
   const filed = new Map((parts.filed ?? []).map(w => [w.workflow_id, w.created_at]));
-  const tasks = farQueueTasks((parts.todo ?? []).concat(parts.progress ?? []))
+  const tasks = farQueueTasks((parts.todo ?? []).concat(parts.progress ?? []), parts.paymentsOn)
     .map(t => Object.assign({}, t, { created_at: filed.get(t.workflow_id) ?? t.created_at }));
   // A workflow that finished between the reads shows once, as open.
   const openIds = new Set(tasks.map(t => t.workflow_id));
@@ -792,8 +803,11 @@ async function farFetchRequests({ keepOnFailure = false } = {}) {
   let loaded = false;
   // Local, so a read still out from an earlier load cannot report into this one.
   const failures = {};
+  let paymentCards = Promise.resolve([]);
   try {
     const flags = Promise.all([ccrReviewAvailable(), workhubTaskApps()]);
+    // Joins after the queue paints, like the tracker's period card.
+    if (_benchmarkFirmId) paymentCards = farFetchPaymentCards().catch(() => []);
     const onPart = _farRows === null
       ? (parts) => flags.then(([reviews, apps]) => farPaintParts(parts, reviews, apps))
         .catch(e => console.error('[far] early paint —', e))
@@ -846,12 +860,88 @@ async function farFetchRequests({ keepOnFailure = false } = {}) {
   // A seeded build's period card comes from a second read, so the queue paints first
   // and it joins. The opening tab waits for it: it can be the only work on the GP.
   await frtAttachPeriodRows().catch(e => { console.error('[frt] tracker cards —', e); return false; });
+  const cards = await paymentCards;
+  if (cards.length) _farRows = farWithPaymentCards(_farRows || [], cards);
   farPickFirstTab();
   renderFarSection();
   // Hydration only improves titles, so it stays outside the try above — sharing
   // that catch let a cosmetic failure reset _farRows and blank a loaded queue.
   if (loaded) await farHydrateTitles().catch(e => console.error('[far] title hydration —', e));
   return true;
+}
+
+// ── Capital activities collecting payments ──
+
+// Today as YYYY-MM-DD in the viewer's own timezone.
+function farLocalToday(now = new Date()) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+// The payment tracking page, on the host and firm the item's own Carta link names. An item
+// whose link does not name them keeps that link.
+function farPaymentLink(item) {
+  const web = farSafeHref(item._links?.web_url);
+  const page = item.fund_carta_id
+    ? cartaGpActivityUrl(web, `capital-activity-payments/${item.fund_carta_id}/${item.id}`)
+    : null;
+  return page ?? web;
+}
+
+// A call past due with investors unpaid is when the GP would remind, so it needs action;
+// until then Carta is collecting. A distribution waits on Carta to pay out, so it is
+// always With Carta; its date is the payment date. Its completed count covers only
+// reconciled rows, so the subtitle gives the size, not progress.
+function farPaymentCard(item, today) {
+  const isDistribution = ccrIsDistribution(item);
+  const due = String(item.due_date ?? '').slice(0, 10);
+  const total = Number(item.investors_count);
+  const state = !isDistribution && due && due < today ? 'pending-customer' : 'pending-carta';
+  const dueLabel = frtDayMonth(due);
+  const prefix = isDistribution ? DISTRIBUTION_PAYMENTS_CARD_PREFIX : CAPITAL_CALL_PAYMENTS_CARD_PREFIX;
+  return {
+    id: `cap-pay-${item.id}`,
+    title: `${prefix}: ${item.fund_name}`,
+    subtitle: isDistribution
+      ? ccrInvestors(total)
+      : `${Number(item.completed_investors_count)} of ${total} investors paid`,
+    tab: FAR_TAB_BY_PENDING[state],
+    displayGroup: isDistribution ? TASK_GROUP_DISTRIBUTIONS : TASK_GROUP_CAPITAL_CALLS,
+    state,
+    canceled: false,
+    needsTitle: false,
+    requested: null,
+    lastActivity: null,
+    footnote: dueLabel ? `${isDistribution ? 'Pays' : 'Due'} ${dueLabel}` : null,
+    webUrl: farPaymentLink(item),
+    objectId: String(item.id),
+    capitalCallPayments: true,
+  };
+}
+
+// One card per call or distribution with unpaid investors. A failed or refused read adds nothing. The
+// command is one unpaged list that takes only activity_types, and the gateway refuses
+// any other param.
+async function farFetchPaymentCards() {
+  const [pageOn, listOn] = await Promise.all([
+    farPaymentsPageOn(), mcpCommandAvailable(CAPITAL_CALL_PAYMENTS_COMMAND),
+  ]);
+  if (!pageOn || !listOn) return [];
+  const items = farResults(await mcpRead(CAPITAL_CALL_PAYMENTS_COMMAND, {
+    activity_types: ['capital_call', 'distribution'],
+  }));
+  const today = farLocalToday();
+  return (items ?? [])
+    .filter(i => i?.id != null && Number(i.completed_investors_count) < Number(i.investors_count))
+    .map(i => farPaymentCard(i, today));
+}
+
+// A call or distribution with an open request-capital-activity workflow in the queue keeps that card.
+function farWithPaymentCards(rows, cards) {
+  const have = new Set(rows.filter(r => r.template === TASK_TEMPLATE_CAPITAL_ACTIVITY && r.tab !== 'done' && r.objectId != null)
+    .map(r => String(r.objectId)));
+  const ids = new Set(rows.map(r => r.id));
+  return rows.concat(cards.filter(c => !have.has(c.objectId) && !ids.has(c.id)));
 }
 
 // A row created on another device has no cached type and a generic request_type,

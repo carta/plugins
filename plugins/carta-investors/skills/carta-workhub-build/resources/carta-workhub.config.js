@@ -114,6 +114,8 @@ const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
 const TASK_TEMPLATE_MANAGEMENT_FEES = 'review-management-fees';
 const TASK_TEMPLATE_CASH_RECONCILIATION = 'cash-reconciliation';
 const TASK_TEMPLATE_SOI_REVIEW = 'review-soi-v2';
+// Opened when a GP reminds several investors of an unpaid call at once; Carta reviews and sends.
+const TASK_TEMPLATE_CAPITAL_CALL_REMINDERS = 'request-capital-call-reminders';
 // The tasks that wait on the GP's decision on a drafted capital call or distribution.
 const TASK_CAPITAL_ACTIVITY_REVIEW = 'review-capital-activity';
 const TASK_CAPITAL_ACTIVITY_CHANGES = 'review-capital-activity-changes';
@@ -128,6 +130,8 @@ const TASK_TEMPLATES_WITH_TILES = [
   TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES, TASK_TEMPLATE_CASH_RECONCILIATION,
   TASK_TEMPLATE_SOI_REVIEW,
 ];
+// The tiles the capital activity payments page brings, shown only where that page is on.
+const CAPITAL_ACTIVITY_PAYMENTS_TEMPLATES = [TASK_TEMPLATE_CAPITAL_CALL_REMINDERS];
 
 // The skill that guides Claude on a task's companion page, by the task app's tracker column or
 // queue template. The prompt names it so Claude drives the page with its commands and rules;
@@ -158,7 +162,18 @@ const TASK_GROUP_DEFAULT_ICON = '<path d="M10.1 2.18a9.93 9.93 0 0 1 3.8 0"/><pa
 
 // The groups for rows the queue builds before fund-admin has sent them: a draft or
 // a just-sent request (uncategorized, so Other), a seeded review with no row read for
-// its activity, and a seeded tracker period. A row from the payload with the same id supplies the name and order shown.
+// its activity, a payment card for a released call or distribution, and a seeded tracker period. A row from the payload with the same id supplies the name and order shown.
 const TASK_GROUP_OTHER = { id: 'other', name: 'Other' };
 const TASK_GROUP_CAPITAL_CALLS = { id: 'capital-calls', name: 'Capital calls' };
+const TASK_GROUP_DISTRIBUTIONS = { id: 'distributions', name: 'Distributions' };
 const TASK_GROUP_FINANCIAL_REPORTING = { id: 'financial-reporting', name: 'Financial reporting' };
+
+// The capital activity payments page sits behind a fund-admin firm flag, and carta-mcp
+// lists this read only where that flag is on. Its payment cards and
+// reminder-request tiles show only for such a firm.
+const CAPITAL_ACTIVITY_PAYMENTS_PAGE_COMMAND = 'fa:get:capital-activity-payments-page';
+// Released capital calls collecting payments and distributions paying out have no open
+// task, so the queue reads them from this list and files one card per activity.
+const CAPITAL_CALL_PAYMENTS_COMMAND = 'fa:list:active-capital-activity';
+const CAPITAL_CALL_PAYMENTS_CARD_PREFIX = 'Collect payments';
+const DISTRIBUTION_PAYMENTS_CARD_PREFIX = 'Pay out';
