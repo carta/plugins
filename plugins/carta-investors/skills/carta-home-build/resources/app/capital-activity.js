@@ -278,10 +278,11 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate, isCall) {
     failed = true;
     console.error('[ca detail error]', e);
   }
-  // The tracker returns the backend's order; the overlay reads paid-first, then
-  // largest owed.
+  // The tracker returns the backend's order; the overlay lists who still owes
+  // first (unpaid, then part paid, then paid), largest amount first within each.
+  const rank = { partially_paid: 1, paid: 2 };
   rows.sort((a, b) =>
-    a.paymentStatus.localeCompare(b.paymentStatus) || b.amount - a.amount);
+    (rank[a.paymentStatus] ?? 0) - (rank[b.paymentStatus] ?? 0) || b.amount - a.amount);
   return { rows, failed };
 }
 
