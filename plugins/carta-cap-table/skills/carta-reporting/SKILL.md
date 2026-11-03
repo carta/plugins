@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.10</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.12</carta-plugin>
 
 # Custom Reports
 
@@ -86,7 +86,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - "Run a report for each stakeholder with fully diluted ownership above 5%, showing their individual securities and any exercises this year"
 - "Generate a report of employees with unvested RSUs with a final vesting date past 2027, and include their current fully diluted ownership"
 - "Help me build a cap table report — I'm not sure what's available"
-- "Save this as a template" (after a report is shown; see "Save as a template")
+- "Save this as a custom report" or "Save this as a template" (after a report is shown; see "Save as a custom report")
 - "What can I export from the cap table?"
 - "Compare my option grant spreadsheet with Carta" (see Reconciliation below)
 - NOT: "What's [Alice]'s vesting schedule?" (use carta-grant-vesting instead)
@@ -237,6 +237,8 @@ Run each script only in the one-line form shown below, as its own command: write
    only one with `runs_through_api_report: true`. `reporting__create__report` cannot run any other
    type, so a request for one only fails. Proceed with the top runnable result automatically — only ask for confirmation if the top two runnable results have nearly identical similarity scores AND the request is genuinely ambiguous between two different data categories. When the user's prompt clearly names a report type (e.g. "equity awards", "securities ledger", "vesting details", "exercised and settled"), proceed without asking.
 
+   **Prefer one report type.** A custom report kept in Carta holds one report type, so an answer built from one type can be kept and one built from several cannot (see "Save as a custom report"). Before running more than one type, check whether one type carries every column the request names, and run only that one. Securities Ledger (`securities_ledger_report`) carries each holder's Country and Relationship beside the security's Exercise Price and its vested and unvested quantities, so "grants or options by country, relationship, exercise price or vested" needs no second report; Options Outstanding and Equity Awards Outstanding have no Country column. Run several types only when no single one has what the request asks for, and say in your reply which reports you combined.
+
    **2a. In MARKDOWN mode, still make the `reporting__search__report_types` call — skip only the
    ranking dialogue.** The response is the one place a share-class-scoped admin's narrower
    catalogue appears, so every matched type must be confirmed against `results`. Take the top
@@ -282,7 +284,7 @@ Run each script only in the one-line form shown below, as its own command: write
    - `call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json", ...required_params }})` → `user_report_pk` (full report)
    - `call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json", preview: true, ...required_params }})` → `user_report_pk_preview` (preview report — generates faster with partial corporation data)
 
-   If several report types matched, issue each type's full and preview create pair in the same main-thread message, then run one 4b and 4c agent pair per type.
+   If several report types matched (step 2's "Prefer one report type" came first), issue each type's full and preview create pair in the same main-thread message, then run one 4b and 4c agent pair per type. Keep each type's own `report_type`, `user_report_pk` and report processor config: "Save as a custom report" needs them one type at a time.
    **Both `user_report_pk` and `user_report_pk_preview` must be in hand before proceeding to 4b, 4c, and 4d.**
 
    **4b. Background subagent — poll and download the full report** — call the `Agent` tool with `run_in_background: true` in the **same message as 4c** so both background agents start simultaneously. Use this prompt, substituting real values:
@@ -468,7 +470,9 @@ Run each script only in the one-line form shown below, as its own command: write
    >
    > Say **Export to Excel** when ready, or describe your changes.
    >
-   > _(Add this line only when `_templates_available_<corporation_id>` is `true` after the check in "Save as a template":)_ Or say **Save this as a template** to keep the report in Carta and run it again at a new as-of date.
+   > _(Add this line only when `_templates_available_<corporation_id>` is `true` after the check in "Save as a custom report":)_ Or say **Save this as a custom report** to keep the report in Carta and run it again at a new as-of date.
+   >
+   > _(When the answer combined more than one report type, or used a formula, a summary or group total, a date window, picked people, plans, securities or share classes, or data from outside the reports, write instead:)_ Or say **Save this as a custom report**: a custom report keeps one report's sheets, columns, filters and sort, so I'll tell you what it would keep before I save anything.
 
    When `warnings.data_quality` is non-empty, add one sentence with a clause for each sheet in it: "Carta flagged {N} securities with data warnings" ({N} is the "Data Warnings" count) and "{M} defective securities" ({M} is the "Defective Securities" count), then "Say **show data warnings** to see them." When the user says **show data warnings**, rerun `report_processor.py` with `sheets` naming every sheet in `warnings.data_quality`, keeping the sheets already in the report in `sheets`, and rebuild the report.
 
@@ -492,48 +496,70 @@ Run each script only in the one-line form shown below, as its own command: write
 
 ---
 
-## Save as a template
+## Save as a custom report
 
-A report built here can be kept in Carta as a template: its sheets, columns, filters and sort, with no as-of date, so it can be run again at a new date. This step is only for a report the user has seen in full.
+A report built here can be kept in Carta as a custom report: one report's sheets, columns, filters and sort, with no as-of date, so it can be run again from Run Reports at a new date. This step is only for a report the user has seen in full.
 
-**Check once per company, before that company's first customization checkpoint is shown:** whether templates are on is decided per company, so a listed tool says nothing. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})`. Set `_templates_available_<corporation_id>` to `true` only when the call succeeds; on any failure (templates not enabled for the company, not found, no permission, or anything else), set it to `false` and do not retry. When it is `false`, never offer a template and never mention one. If the user asks for one anyway, say "I can't save this report as a template for this company right now." and stop.
+A custom report holds **one report type**. It cannot keep rows from two report types lined up, formulas, summary or group totals, a date window such as "the last 12 months" (a date filter keeps the exact date it had), or anything that did not come from the report itself. Step 2 tells the user what the saved custom report would and would not keep, and waits for their choice: never save something different from what the user saw without saying so.
 
-**Run this when the user says "save this as a template" (or accepts the offer in the checkpoint), in either output mode:**
+**Check once per company, before that company's first customization checkpoint is shown:** whether custom reports are on is decided per company, so a listed tool says nothing. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})`. Set `_templates_available_<corporation_id>` to `true` only when the call succeeds; on any failure (custom reports not enabled for the company, not found, no permission, or anything else), set it to `false` and do not retry. When it is `false`, never offer a custom report and never mention one. If the user asks for one anyway, say "I can't save this report as a custom report for this company right now." and stop.
+
+**Run this when the user says "save this as a custom report" or "save this as a template" (or accepts the offer in the checkpoint), in either output mode:**
 
 0. **Decide availability first.** If `_templates_available_<corporation_id>` is not set for this company (in MARKDOWN mode the check above never ran), run that check now, and stop as it says when it is `false`.
 
-1. **One company, full report only.** If the report covers more than one company, say a template is saved for one company's report at a time and stop. If only a preview of the data came in, say the template can be saved once the full report has loaded, and stop. The data file for the save is the full report's `carta-reporting/carta_report_<pk>.json`.
+1. **One company, full report only.** If the report covers more than one company, say a custom report is saved for one company's report at a time and stop. If only a preview of the data came in, say the custom report can be saved once the full report has loaded, and stop. The data file for the save is the full report's `carta-reporting/carta_report_<pk>.json`.
 
-2. **Ask for the name and the audience in one `AskUserQuestion` call** (two questions):
+2. **Compare the answer with what a custom report keeps, before asking for anything else.** From this conversation, list what the answer on screen used: the report types run for it (step 4a), any `formulas`, `aggregations` or `group_by` in its config (global or per sheet), a date window (the `issued_from` and `issued_to` create params, or a date filter on a column), any other scoping create param the save drops (`stakeholder_ids`, `equity_plan_ids`, `security_ids`, `share_class_ids`), and anything that did not come from a downloaded report (a figure you worked out yourself, a file or table the user gave you, the web).
+
+   - One report type, and only sheets, columns, filters and sort → go to step 3.
+   - Anything else → **save nothing yet.** Tell the user in plain words what the custom report would keep and what it would not, one line per difference, using these:
+
+     | The answer used | Say |
+     |---|---|
+     | More than one report type | "This answer combines {Report A} and {Report B}. A custom report holds one report, so it can't keep how they line up." |
+     | A formula, summary or group total | "A custom report can't keep {the {name} column, or the totals}; it saves the rest." |
+     | A date window | "A custom report doesn't keep {the window}. For issue dates set on the report: every run covers all dates. For a date filter on a column: it keeps the date {date}, so every run uses that same date." |
+     | People, plans, securities or share classes picked as report settings | "A custom report doesn't keep the {people, plans, securities or share classes} you picked, so every run covers all of them." |
+     | Data from outside the reports | "{What it was} isn't in a Carta report, so it can't be kept." |
+
+     Then ask with `AskUserQuestion`, the first option marked recommended:
+     - **Closest single custom report**: name the one report type whose sheet holds the main table of the answer and what it would keep from the answer (for the columns Securities Ledger carries, see "Prefer one report type" in step 2).
+     - **One custom report per report type**: only when the answer used more than one type. List the types. Each is saved on its own, with its own columns and filters, and rows are not lined up between them.
+     - **Don't save**: stop, and say the report on screen is unchanged.
+
+   Act on their choice. For the closest single custom report, step 4 writes the config of that one report type with `formulas` and `aggregations` left out everywhere. For one per report type, run steps 3 to 6 once per type, one after the other, each with that type's own data file, `report_type`, config and create params, and name each "{name} — {Report Type}". Never choose for the user.
+
+3. **Ask for the name and the audience in one `AskUserQuestion` call** (two questions):
    - *Name*: offer a short name that says what the report shows, such as "Outstanding grants by holder", and the report type's own name as the second option. The user can type their own.
    - *Who can see it*: "Only me" (recommended, the default) or "All company admins".
 
-3. **Write the inputs**, each with `Write`:
-   - `carta-reporting/template-config.json`: the current `carta-reporting/config.json`, with `sheets` set to a list of the sheets shown in the report when the config names none. In ARTIFACT mode those are the sheets in `report_processor.py`'s `stats` that `build_report_page.py` did not list in `omitted_sheets`; in MARKDOWN mode, the sheets in `report_processor.py`'s `stats`.
+4. **Write the inputs**, each with `Write`:
+   - `carta-reporting/template-config.json`: the current `carta-reporting/config.json`, with `sheets` set to a list of the sheets shown in the report when the config names none. In ARTIFACT mode those are the sheets in `report_processor.py`'s `stats` that `build_report_page.py` did not list in `omitted_sheets`; in MARKDOWN mode, the sheets in `report_processor.py`'s `stats`. Keep only what step 2 told the user would be kept, whichever option they chose: leave `formulas` and `aggregations` out (global and per sheet), and take out of `columns`, `filters` and `sort` every column a formula, an aggregation or you produced yourself, since the report has no such column. When the config names no `columns`, set `columns` to the report's columns the answer showed, by their headers: a custom report with no `columns` keeps every column of the report, usually far more than the answer showed.
    - `carta-reporting/template-name.txt`: the name, exactly as the user chose it, and nothing else.
    - `carta-reporting/create-params.json`: the `arguments` object of the full report's `reporting__create__report` call.
 
-4. **Build the definition**, as its own command, on one line. The name goes in by file, never on the command line:
+5. **Build the definition**, as its own command, on one line. The name goes in by file, never on the command line:
 
    ```bash
    UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py" --config "carta-reporting/template-config.json" --report "carta-reporting/carta_report_<pk>.json" --report-type "<report_type>" --name-file "carta-reporting/template-name.txt" --create-params "carta-reporting/create-params.json" --out "carta-reporting/template-definition.json"
    ```
 
    - **It exits 1 and prints `{"refused": [...]}`:** nothing is saved. Tell the user why in plain words, one line per reason, and offer to change the report so it can be saved (for example, drop the formula, or pick another column for the column or filter a reason names). Do not retry the same input.
-   - **`dropped_params` is not empty:** after the save, say the template does not keep those filters (name each one the report used: people, plans, securities, share classes or issue dates), so every run covers all of them.
+   - **`dropped_params` is not empty:** step 2 already told the user; after the save, say again that the custom report does not keep those filters (name each one the report used: people, plans, securities, share classes or issue dates), so every run covers all of them.
 
-5. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the template's `id`; say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." Never show the id.
+6. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the custom report's `id`; say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." When step 2 found differences, add what the saved custom report keeps and what it does not, in one or two sentences (for example "It keeps the {Report Type} sheets with the columns, filters and sort you saw, and none of {what was left out}."). Never show the id.
 
 **When the save does not go through, always tell the user; never drop a save silently. The report on screen is unchanged.**
 
 | Answer | Tell the user |
 |---|---|
 | `scope_required` | Handle it as for `reporting__create__report`: ask, call `request_permissions` once, then repeat the save once. |
-| The name is taken | Ask for another name with `AskUserQuestion`, write it to `carta-reporting/template-name.txt`, then repeat steps 4 and 5 once with it. |
-| A list of problems with the definition | Say each problem in plain words (the column or filter and what is wrong) and that nothing was saved. For a report type Carta does not take yet, say which report types it does take, as its reason names them. For an `unknown_sheet` problem on a sheet saved by its own name, say that its name comes from the company's data (a share class, a plan) or its terms, so a template cannot find it by name on another date; offer to merge it with the sheets that share the same start or end of name, which a template can save. |
-| Templates aren't enabled for this company, or Carta did not save it | "I couldn't save this as a template in Carta. Your report is still here." Do not retry. |
-| They can't run this report here | "I couldn't save this as a template: your access doesn't let you run this report at this company. Your report is still here." Do not retry. |
-| Any other failure, or no answer | Say the save may not have gone through. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})` once to check; report whether a template with that name is there. Never save the same template twice. |
+| The name is taken | Ask for another name with `AskUserQuestion`, write it to `carta-reporting/template-name.txt`, then repeat steps 5 and 6 once with it. |
+| A list of problems with the definition | Say each problem in plain words (the column or filter and what is wrong) and that nothing was saved. For a report type Carta does not take yet, say which report types it does take, as its reason names them. For an `unknown_sheet` problem on a sheet saved by its own name, say that its name comes from the company's data (a share class, a plan) or its terms, so a custom report cannot find it by name on another date; offer to merge it with the sheets that share the same start or end of name, which a custom report can save. |
+| Custom reports aren't enabled for this company, or Carta did not save it | "I couldn't save this as a custom report in Carta. Your report is still here." Do not retry. |
+| They can't run this report here | "I couldn't save this as a custom report: your access doesn't let you run this report at this company. Your report is still here." Do not retry. |
+| Any other failure, or no answer | Say the save may not have gone through. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})` once to check; report whether a custom report with that name is there. Never save the same custom report twice. |
 
 ---
 

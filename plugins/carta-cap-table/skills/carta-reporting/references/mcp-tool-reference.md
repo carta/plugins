@@ -177,15 +177,17 @@ read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk
                        # if "pending", resume polling within the attempts left; never call this more
                        # than twice.
 
-# Report templates — keep a report in Carta to run again at a new as-of date.
-# Offered only when reporting__list__report_templates succeeds for the company (see "Save as a template" in SKILL.md).
-# Every one of the three answers "Report templates aren't enabled for this company." when they are off: do not retry.
+# Custom reports (the tools say "report template") — keep a report in Carta to run again at a new as-of date.
+# Offered only when reporting__list__report_templates succeeds for the company (see "Save as a custom report" in SKILL.md).
+# Every one of the three answers "Custom reports aren't enabled for this company." when they are off: do not retry.
 
 call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, definition, visibility }})
   → { id, display_name, report_type, visibility, version, message }
-  # name — 1-255 characters, unique among the company's templates (case-insensitive).
+  # name — 1-255 characters, unique among the company's custom reports (case-insensitive).
   # visibility — optional: "creator" (only the person saving; the default) or "company_admins".
   # definition — the object build_template_definition.py writes to its --out file; pass it as the file holds it.
+  #   A custom report holds ONE report type: `source` is a single object, and Carta refuses `sources`, `join`
+  #   (unsupported_block), `dates`, formulas and aggregations (not_supported). A date filter keeps its exact date.
   #   { schema_version: 1, default_name, source: { report_type, params: {} },
   #     sheets: [{ name, from: { match: "exact" | "prefix" | "suffix", value, merge? },
   #                columns: [{ key } | { dynamic, field?, source }], filters: [{ key, op, value }], sort: [{ key, direction }] }] }
@@ -198,11 +200,11 @@ call_tool({"name": "reporting__create__report_template", "arguments": { corporat
   #   At most 10 sheets with distinct tab names and at most 200 columns per sheet; op is one of
   #   > < >= <= = != contains; direction is asc or desc.
   # Failures are tool errors, never an empty result:
-  #   "Carta did not save this template" — not available for this user or company; nothing was saved.
+  #   "Carta did not save this custom report" — not available for this user or company; nothing was saved.
   #   "…the user can't run this report here" — their access does not cover this report type; nothing was saved.
   #   a list of "path: reason (code)" lines — the definition was refused; nothing was saved.
-  #   "A template with that name already exists" — ask for another name. A retried save answers the same,
-  #     so after any save that may have gone through, list the templates before saving again.
+  #   "A custom report with that name already exists" — ask for another name. A retried save answers the same,
+  #     so after any save that may have gone through, list the custom reports before saving again.
   # Needs the write permission: scope_required is handled as for reporting__create__report.
 
 read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})

@@ -76,8 +76,8 @@ SCOPING_FILTERS = frozenset(
 
 # A config field that transforms the data beyond select, filter and sort, with what to tell the user.
 UNSUPPORTED = {
-    "formulas": "Formulas (computed columns) can't be saved in a template yet.",
-    "aggregations": "Summary rows and group-by totals can't be saved in a template yet.",
+    "formulas": "Formulas (computed columns) can't be saved in a custom report yet.",
+    "aggregations": "Summary rows and group-by totals can't be saved in a custom report yet.",
 }
 # Custom-field columns exist only at some dates; every other dynamic column (one per share class,
 # equity plan, currency...) is saved by kind, field and the item the screen showed.
