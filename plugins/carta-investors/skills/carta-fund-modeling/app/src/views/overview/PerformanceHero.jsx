@@ -44,6 +44,21 @@ function HeroFigures({ firm }) {
 const TH = 214, TPL = 44, TPR = 8, TPT = 10, TPB = 26;
 const GAP = 2; // surface gap between stacked segments
 
+// A year label is about 28px wide; this is the least centre-to-centre room two labels need.
+const YEAR_LABEL_GAP = 36;
+
+/** One label per calendar year, at the first quarter of that year in `years` (one entry per
+ *  column), thinned so no two labels touch. Walks from the latest year back, so when room
+ *  runs out it is an older year (often a one-quarter leading year) that gives way. */
+export function thinYearTicks(years, cx) {
+  const firsts = years.map((yr, i) => ({ i, yr })).filter((t, idx) => idx === 0 || t.yr !== years[idx - 1]);
+  const kept = [];
+  for (let k = firsts.length - 1; k >= 0; k--) {
+    if (!kept.length || cx(kept[0].i) - cx(firsts[k].i) >= YEAR_LABEL_GAP) kept.unshift(firsts[k]);
+  }
+  return kept;
+}
+
 /** Round step for about three gridlines up to `max`. */
 function niceStep(max) {
   const raw = max / 3, mag = 10 ** Math.floor(Math.log10(raw || 1));
@@ -93,9 +108,7 @@ export function NavByFundCard({ snapshot, fundStates, firmLpNav, firmName, span 
   const bw = Math.min(16, slot * 0.6);
   const cx = (i) => TPL + i * slot + slot / 2;
   const y = (v) => TPT + (1 - v / top) * (TH - TPT - TPB);
-  const rawYearTicks = cols.map((c, i) => ({ i, yr: c.date.slice(0, 4) })).filter((t, idx, arr) => idx === 0 || t.yr !== arr[idx - 1].yr);
-  // Drop a partial leading year's label when it would collide with the next year's.
-  const yearTicks = rawYearTicks.length > 1 && cx(rawYearTicks[1].i) - cx(rawYearTicks[0].i) < 26 ? rawYearTicks.slice(1) : rawYearTicks;
+  const yearTicks = thinYearTicks(cols.map((c) => c.date.slice(0, 4)), cx);
 
   const hc = hoverI != null ? cols[hoverI] : null;
   const tipLeft = hc ? Math.max(12, Math.min(88, (cx(hoverI) / TW) * 100)) : 0;

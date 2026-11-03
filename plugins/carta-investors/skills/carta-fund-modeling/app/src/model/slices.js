@@ -22,19 +22,23 @@ export const BASELINE_ASSUMPTION_DEFAULTS = {
 // A fund with entries in these maps is modelled with its own waterfall instead of the flat carryRate.
 export const FUND_WATERFALL_KEYS = ["carryRates", "preferredReturns", "catchupRates", "catchupLimits"];
 
+/** One company back to its Carta mark: parked (`includeInNav` off), whole stake held (no partial
+ *  sales), and valuation mode unchosen so it reopens in its default mode. */
+function resetCompanyToCarta(c) {
+  c.valuationB = c.defaultValuationB ?? null;
+  c.markMultiple = 1;
+  c.includeInNav = false;
+  c.exited = false;
+  c.futureDilution = 0;
+  c.waterfallMode = null;
+  c.secondaries = [];
+}
+
 /** Reset every editable input in a slice body to its default. */
 export function normalizeToDefaults(body) {
   const doc = structuredClone(body);
   doc.assumptions = { ...doc.assumptions, carryRate: 0.2, carryRates: {}, spRate: 0.102, feeLoads: {}, followOnRatios: {}, recyclingRatios: {} };
-  for (const c of doc.companies) {
-    c.valuationB = c.defaultValuationB ?? null;
-    c.markMultiple = 1;
-    c.includeInNav = false; // baseline holds EVERY company at Carta marks
-    c.exited = false;
-    c.futureDilution = 0;
-    c.waterfallMode = false; // baseline uses the flat reprice, not the preference waterfall
-    c.secondaries = []; // baseline holds the whole stake — no modeled partial sales
-  }
+  for (const c of doc.companies) resetCompanyToCarta(c); // baseline holds EVERY company at Carta marks
   return doc;
 }
 
@@ -191,15 +195,7 @@ export function zeroOutFund(body, fundIds) {
 
 /** Undo: every company in the fund (or list of funds) back to Carta marks (parked, disconnected). */
 export function resetFundToCarta(body, fundIds) {
-  for (const c of companiesInFund(body, fundIds)) {
-    c.valuationB = c.defaultValuationB ?? null;
-    c.markMultiple = 1;
-    c.includeInNav = false;
-    c.exited = false;
-    c.futureDilution = 0;
-    c.waterfallMode = false;
-    c.secondaries = [];
-  }
+  for (const c of companiesInFund(body, fundIds)) resetCompanyToCarta(c);
   return body;
 }
 
@@ -222,15 +218,7 @@ export function zeroOutAll(body) {
 
 /** Firm-wide undo: every non-archived company back to Carta marks. */
 export function resetAllToCarta(body) {
-  for (const c of body.companies.filter((c) => !c.archived)) {
-    c.valuationB = c.defaultValuationB ?? null;
-    c.markMultiple = 1;
-    c.includeInNav = false;
-    c.exited = false;
-    c.futureDilution = 0;
-    c.waterfallMode = false;
-    c.secondaries = [];
-  }
+  for (const c of body.companies.filter((c) => !c.archived)) resetCompanyToCarta(c);
   return body;
 }
 

@@ -7,7 +7,7 @@ import { useTableSort, SortIcon, useStickyHeader, TableScroll, TableHead } from 
 import RepriceControl from "../ui/RepriceControl.jsx";
 import ConfirmDialog from "../ui/ConfirmDialog.jsx";
 import { repricePosition, positionReprice, carryRateFor, companyRepriceState, exitHorizonFor,
-  companyIsWaterfall, companyHasCapTable, companyReferenceExit, companyExitValueAbs, quarterOffsetDate, quartersBetween,
+  companyIsWaterfall, valuationModeOffered, companyHasCapTable, companyReferenceExit, companyExitValueAbs, quarterOffsetDate, quartersBetween,
   secondarySales, secondaryEvents, retainedFraction, saleRepriceConfig, repricesByValuation } from "../model/reprice.js";
 import { fundExitProceeds, fundProceedsCurve, normClass } from "../model/liqpref.js";
 import { scenarioDealIrr } from "../model/dealIrr.js";
@@ -958,6 +958,9 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
   // (see ReturnsPreviewContent/FundCard's `dim` props in PerformanceSidebarV2.jsx).
   const [draggingSlider, setDraggingSlider] = useState(null);
   const { cfg, dilutionCfg, uplift, canReprice } = companyRepriceState(company, updateCompany);
+  // What Realize sells at is priced by the engine, so its label is in the PRICING mode's units
+  // (an unchosen mode is MOIC here even while the slider above shows Company valuation).
+  const realizeCfg = saleRepriceConfig(company, null, () => {});
   // FV aggregates + curFv from the shared helper so this row and dealIrrOf agree
   const { live, totalFv, totalCost, totalProceeds, curFv } = companyFvState(company, { canReprice });
   // Reserve earmarked for THIS company — the same reserves.js rule as the sidebar total.
@@ -1137,7 +1140,7 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
                       otherwise seed a $0 reference exit, and a control with nothing
                       reachable behind it reads better absent than shown-but-greyed-out. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                    {!hasBasis && companyHasCapTable(company) && !company.realized && !company.defunct && companyReferenceExit(company) > 0 ? (
+                    {valuationModeOffered(company) ? (
                       <ValuationModeChange company={company} updateCompany={updateCompany}
                         locked={readOnly}
                         label={companyIsWaterfall(company) ? "Company valuation" : "MOIC"}
@@ -1253,7 +1256,7 @@ function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, ass
                         trackClick("FundModeling.Companies.ToggleRealize");
                         updateCompany(company.id, { exited: val, includeInNav: true });
                       }}
-                      labels={Array(2).fill(`Realize at ${cfg.fmtVal(cfg.value)} ${companyIsWaterfall(company) || hasBasis ? "valuation" : "MOIC"}`)}
+                      labels={Array(2).fill(`Realize at ${realizeCfg.fmtVal(realizeCfg.value)} ${repricesByValuation(company) ? "valuation" : "MOIC"}`)}
                       locked={readOnly} textColor="var(--ink-color-global-text-default)"
                       title="Crystallize this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount." />
                     <InfoTip label="What does Realize mean?" width={320}>

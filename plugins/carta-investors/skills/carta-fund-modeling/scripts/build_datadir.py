@@ -980,7 +980,7 @@ def build(rawdir, out, meta):
         # enrichment is lost since it has no ownership/financing/cap-table either).
         corp_uuid = corp_by_el.get(cid) if entry["keyType"] == "entity_link" else None
         comp = {"id": cid, "slug": s, "name": name, "corpUuid": corp_uuid, "fundId": SLUG[primary],
-                "valuationB": None, "defaultValuationB": None, "includeInNav": False,
+                "valuationB": None, "defaultValuationB": None, "includeInNav": False, "waterfallMode": None,
                 "archived": False, "anchors": [], "sliderRange": None, "notes": "",
                 "costBasis": round(tot_cost, 2), "positions": positions}
         if realized:

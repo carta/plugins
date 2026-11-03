@@ -49,7 +49,8 @@ export default function ViewControl({ views, viewId, dirty, onApply, onUpdate, o
               Unsaved changes — Update saves them to this view, Revert discards them.
             </div>
           )}
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
+          {/* Scrolls once "a view for each lead" has added dozens. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10, maxHeight: 280, overflowY: "auto" }}>
             {/* onClick (not just onChange) — a radio already checked fires no change
                 event, so re-picking the current view/Default must still re-apply it
                 and discard any manual edits made since. */}

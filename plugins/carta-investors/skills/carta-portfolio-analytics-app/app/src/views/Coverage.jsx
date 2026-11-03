@@ -18,7 +18,9 @@ import { H2, Dropdown, StatBar, Btn, Checkbox, Glossary, StickyRibbon, HintIcon,
   FilterMenu, FilterCheckboxList, FilterRadioList,
   MenuItem, POPOVER_SHADOW, useDismissable, usePortalAnchor } from "../ui/components.jsx";
 import ViewControl from "../ui/ViewControl.jsx";
-import { useSavedViews } from "../state/useSavedViews.js";
+import { useSavedViews, newViewId } from "../state/useSavedViews.js";
+import ViewsPerTagButton from "../ui/ViewsPerTagButton.jsx";
+import { planViewsPerTag } from "../model/viewsPerTag.js";
 import { allTags, tagId, tagsFor, companyMatchesTags } from "../model/tags.js";
 import { STATUS_CAT } from "../model/status.js";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
@@ -341,8 +343,17 @@ function Completeness({ data, dashboard }) {
       onChange: (v) => setCfg((c) => ({ ...c, tags: new Set([...[...c.tags].filter((id) => !ids.has(id)), ...v]) })),
       count: (v) => v.size,
       chipLabel: (v) => (v.size === 1 ? `${g.cat}: ${opts.find((o) => v.has(o.id))?.label}` : `${g.cat} (${v.size})`),
-      render: (v, setV) => <FilterCheckboxList options={opts} selected={v} onChange={setV} searchPlaceholder={`Search ${g.cat.toLowerCase()}`} /> };
+      render: (v, setV) => (
+        <>
+          {dashboard && g.values.length > 0 && (
+            <ViewsPerTagButton key={g.cat} cat={g.cat} onCreate={addTagViews}
+              plan={planViewsPerTag({ cat: g.cat, values: g.values, base: encodeView(cfg), existing: savedViews.views, makeId: newViewId })} />
+          )}
+          <FilterCheckboxList options={opts} selected={v} onChange={setV} searchPlaceholder={`Search ${g.cat.toLowerCase()}`} />
+        </>
+      ) };
   };
+  const addTagViews = (list) => { trackClick("PortfolioAnalytics.Coverage.ViewsPerTag"); savedViews.onAddMany(list); };
   const statusTagGroup = tagGroups.find((g) => g.cat === STATUS_CAT);
   const otherTagGroups = tagGroups.filter((g) => g.cat !== STATUS_CAT);
 

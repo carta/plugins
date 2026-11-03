@@ -20,16 +20,40 @@ import { fmtB } from "../ui/format.js";
 // `waterfallMode` on, the company's valuation slider is read as an EXIT company
 // (equity) value and the fund's FV becomes its actual proceeds through the
 // preference stack (model/liqpref.js) — non-linear, with the preference floor —
-// instead of the flat `cartaFv × multiple` line. Off (the default) → unchanged.
+// instead of the flat `cartaFv × multiple` line. Anything but an explicit on → unchanged.
 
 /** True if the company has an embedded Carta cap table with share classes. */
 export function companyHasCapTable(c) {
   return !!(c && c.capTable && c.capTable.classes && c.capTable.classes.length);
 }
 
-/** True if this company should reprice through the liquidation waterfall. */
+/** Whether the company page offers the MOIC / Company valuation dropdown: a cap
+ *  table and a reference exit to value it at, and no realized, defunct or $-basis
+ *  mark (a $-basis company has its own toggle). */
+export function valuationModeOffered(c) {
+  return !!(c && companyHasCapTable(c) && !c.realized && !c.defunct
+    && !(c.positions || []).some((p) => p.markBasisB) && companyReferenceExit(c) > 0);
+}
+
+/** Whether an unchosen company opens in Company valuation. `waterfallMode` is
+ *  true/false once someone has chosen, null/undefined until then. DISPLAY ONLY:
+ *  the label and the slider's units. Pricing never reads it (see
+ *  `pricesViaWaterfall`), so an untouched company keeps its Carta FV. Applies only
+ *  while the company is held at the Carta mark (`includeInNav` off). */
+export function waterfallByDefault(c) {
+  return !!c && !c.includeInNav && valuationModeOffered(c);
+}
+
+/** The mode the company page SHOWS: the stored choice, else the default. Drives
+ *  the label, the slider's units and the dropdown — not the price. */
 export function companyIsWaterfall(c) {
-  return !!(c && c.waterfallMode && companyHasCapTable(c));
+  return !!(c && companyHasCapTable(c) && (c.waterfallMode ?? waterfallByDefault(c)));
+}
+
+/** True if this company's FV is priced through the liquidation waterfall: only
+ *  when someone chose it. An unset mode is priced by the flat reprice. */
+export function pricesViaWaterfall(c) {
+  return !!(c && c.waterfallMode === true && companyHasCapTable(c));
 }
 
 /** A reference "current" exit company value ($ absolute) for a cap-table company:
@@ -64,7 +88,7 @@ export function companyExitValueAbs(c) {
 export function positionReprice(company, position, opts = {}) {
   const live = opts.live !== false;
   const dil = opts.dilution != null ? opts.dilution : company.futureDilution ?? 0;
-  if (live && companyIsWaterfall(company)) {
+  if (live && pricesViaWaterfall(company)) {
     const repricedFv = positionValueAt(company, position, {
       valuationB: company.valuationB,
       dilution: dil,
@@ -210,7 +234,7 @@ export function positionTotalValue(company, position, opts = {}) {
  *  through the same engine — liquidation waterfall included — as the mark it is
  *  compared against. */
 export function positionValueAt(company, position, { valuationB, markMultiple, dilution = 0 } = {}) {
-  if (companyIsWaterfall(company)) {
+  if (pricesViaWaterfall(company)) {
     const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
     const exitAbs = valuationB != null ? valuationB * 1e9 : companyReferenceExit(company);
     const wfFv = fundExitProceeds(company.capTable, exitAbs).proceeds;
@@ -456,11 +480,11 @@ function sentimentPresets(anchor) {
  *  same function — same modes, same units, same presets — against its own fields.
  */
 function repriceConfig(company, { totalFv, hasBasis, cartaMoic, cartaRef, updateCompany,
-                                  target = company, write }) {
+                                  target = company, write, waterfall = companyIsWaterfall(company) }) {
   const set = write || ((patch) => updateCompany(company.id, { ...patch, includeInNav: true }));
   // Waterfall mode: the slider is an EXIT company valuation ($B). 1× snaps to the
   // company's reference (current) value; proceeds flow through the preference stack.
-  if (companyIsWaterfall(company)) {
+  if (waterfall) {
     const refB = companyReferenceExit(company) / 1e9; // billions
     const cur = target.valuationB ?? refB ?? 0;
     // `ref` (→ max, → presets) must NEVER fall back to `cur` — cur is the value
@@ -524,7 +548,7 @@ export function companyRepriceState(company, updateCompany) {
   const totalCost = company.positions.reduce((s, p) => s + (p.cost || 0), 0);
   const hasBasis = company.positions.some((p) => p.markBasisB);
   const canReprice = !company.realized && !company.defunct
-    && (hasBasis || totalFv > 0 || companyIsWaterfall(company));
+    && (hasBasis || totalFv > 0 || pricesViaWaterfall(company));
   const cartaMoic = totalCost > 0 ? totalFv / totalCost : null;
   const cartaRef = cartaReferenceB(company);
   const cfg = canReprice && !company.archived
@@ -558,13 +582,16 @@ export function saleRepriceConfig(company, sale, write) {
     cartaMoic: totalCost > 0 ? totalFv / totalCost : null,
     cartaRef: cartaReferenceB(company),
   };
-  const atMark = repriceConfig(company, { ...args, target: company, write: () => {} });
-  const cfg = repriceConfig(company, { ...args, target: salePrice(company, sale), write });
+  // A sale's price is read by the pricing engine, so it takes the PRICING mode's units, not the
+  // display default: an unset mode is MOIC here even while the company's own slider shows valuation.
+  const waterfall = pricesViaWaterfall(company);
+  const atMark = repriceConfig(company, { ...args, target: company, write: () => {}, waterfall });
+  const cfg = repriceConfig(company, { ...args, target: salePrice(company, sale), write, waterfall });
   return { ...cfg, resetValue: atMark.value };
 }
 
 /** True when the company's reprice mode is a $ company valuation rather than a
  *  MOIC multiple — the two units a price can be entered in. */
 export function repricesByValuation(company) {
-  return companyIsWaterfall(company) || company.positions.some((p) => p.markBasisB);
+  return pricesViaWaterfall(company) || company.positions.some((p) => p.markBasisB);
 }

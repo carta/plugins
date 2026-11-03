@@ -3,6 +3,7 @@
 // store with a short debounce. All edits land in the ACTIVE slice; baseline is locked.
 import { useState, useEffect, useRef, useCallback } from "react";
 import { activeSlice, getSlice, makeSlice, sliceId, BASELINE_ID, hydrateDoc, dehydrateDoc } from "../model/slices.js";
+import { companyIsWaterfall } from "../model/reprice.js";
 import { setTrackingFirm } from "../analytics.js";
 import useEtagAutosave from "./useEtagAutosave.js";
 import { runFirmLoad } from "./firmLoad.js";
@@ -109,7 +110,17 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     (id, patch) =>
       update((s) => {
         const c = s.companies.find((x) => x.id === id);
-        if (c) Object.assign(c, typeof patch === "function" ? patch(c) : patch);
+        if (!c) return;
+        const next = { ...(typeof patch === "function" ? patch(c) : patch) };
+        // Dragging the valuation of a company that opens in Company valuation (mode unset) takes it
+        // off the Carta mark, which ends that default. Choose the mode it showed, so it prices as
+        // shown. Any other first edit (dilution, reserve, Realize, a sale) leaves the mode unset and
+        // prices as MOIC at the Carta FV, as the fund-wide reserve path does.
+        if ("valuationB" in next && next.includeInNav && c.waterfallMode == null
+            && next.waterfallMode === undefined && companyIsWaterfall(c)) {
+          next.waterfallMode = true;
+        }
+        Object.assign(c, next);
       }),
     [update]
   );

@@ -4,6 +4,8 @@ import { useState } from "react";
 
 const NO_VIEWS = [];
 
+export const newViewId = () => "v-" + Math.random().toString(36).slice(2, 8);
+
 /** `encode(cfg)` turns the live config into plain JSON for storage; `decode(view)`
  *  turns a stored view back into a full config, filling fields a view lacks from
  *  the defaults. A view is dirty when the live config encodes differently from it.
@@ -27,17 +29,18 @@ export function useSavedViews({ dashboard, docKey, cfg, setCfg, defaults, encode
   const onSave = () => {
     const name = newName.trim();
     if (!name) return;
-    const id = "v-" + Math.random().toString(36).slice(2, 8);
+    const id = newViewId();
     write((list) => [...list, { id, name, ...encode(cfg) }]);
     setViewId(id); setSaving(false); setNewName("");
   };
   const onUpdate = () => {
     if (current) write((list) => list.map((v) => (v.id === viewId ? { ...v, ...encode(cfg) } : v)));
   };
+  const onAddMany = (list) => write((prev) => [...prev, ...list]);
   const onDelete = () => {
     if (!current) return;
     write((list) => list.filter((v) => v.id !== viewId));
     setViewId(null);
   };
-  return { views, viewId: current ? viewId : null, dirty, onApply, onSave, onUpdate, onDelete, saving, setSaving, newName, setNewName };
+  return { views, viewId: current ? viewId : null, dirty, onApply, onSave, onUpdate, onDelete, onAddMany, saving, setSaving, newName, setNewName };
 }

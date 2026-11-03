@@ -24,6 +24,9 @@ import { allTags, tagId, tagsFor, companyMatchesTags, hasCartaTags } from "../mo
 import { STATUS_CAT } from "../model/status.js";
 import { CompanyTags, CHIP, WRAP } from "../ui/tags.jsx";
 import ViewControl from "../ui/ViewControl.jsx";
+import ViewsPerTagButton from "../ui/ViewsPerTagButton.jsx";
+import { planViewsPerTag } from "../model/viewsPerTag.js";
+import { newViewId } from "../state/useSavedViews.js";
 import { FavoriteStar } from "../ui/favorites.jsx";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
 import { openCompany } from "../state/focus.js";
@@ -275,7 +278,7 @@ export default function PivotDashboard({ data, dashboard }) {
   }, [views, viewId, selMetrics, metricOrder, selPos, fund, selCompanies, selTags, window, qOnly, dateOrder, allMetricKeys, allCompanyIds, metrics]);
   const saveView = () => {
     const nm = newName.trim(); if (!nm) return;
-    const id = "v-" + Math.random().toString(36).slice(2, 8);
+    const id = newViewId();
     dashboard.update((doc) => { doc.views = [...(doc.views || []), { id, name: nm, ...snapshot() }]; return doc; });
     setViewId(id); setSaving(false); setNewName("");
   };
@@ -287,6 +290,11 @@ export default function PivotDashboard({ data, dashboard }) {
     if (!viewId) return;
     dashboard.update((doc) => { doc.views = (doc.views || []).filter((v) => v.id !== viewId); return doc; });
     setViewId(null);
+  };
+  const planTagViews = (g) => planViewsPerTag({ cat: g.cat, values: g.values, base: snapshot(), existing: views, makeId: newViewId });
+  const addViews = (list) => {
+    trackClick("PortfolioAnalytics.Pivot.ViewsPerTag");
+    dashboard.update((doc) => { doc.views = [...(doc.views || []), ...list]; return doc; });
   };
 
   // ---- conditional formatting (color scales / color-code rules per metric) ----
@@ -802,7 +810,8 @@ export default function PivotDashboard({ data, dashboard }) {
             fundOpts={fundOpts} fund={fund} onFund={setFund}
             companyOpts={companyOpts} selCompanies={selCompanies} onCompanies={setSelCompanies}
             metricOpts={metricOpts} selMetrics={selMetrics} onMetrics={onMetrics}
-            posOpts={posOpts} selPos={selPos} onPos={setSelPos} posAvailable={posAvailable} />
+            posOpts={posOpts} selPos={selPos} onPos={setSelPos} posAvailable={posAvailable}
+            planTagViews={dashboard ? planTagViews : null} onAddViews={addViews} />
         </div>
         <div style={{ position: "relative", display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn size="toolbar" onClick={() => setShowSettings(true)}>Configure{nonDefault ? ` (${nonDefault})` : ""}</Btn>
@@ -1149,7 +1158,7 @@ export default function PivotDashboard({ data, dashboard }) {
 function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOnly, favTotal, hasCartaTags,
   signalOptions, selSignals, onSignals,
   fundOpts, fund, onFund, companyOpts, selCompanies, onCompanies,
-  metricOpts, selMetrics, onMetrics, posOpts, selPos, onPos, posAvailable }) {
+  metricOpts, selMetrics, onMetrics, posOpts, selPos, onPos, posAvailable, planTagViews, onAddViews }) {
   const hasFav = favTotal > 0 || favOnly;
   const hasSignals = signalOptions.length > 0;
   const hasFunds = fundOpts.length > 1; // "All funds" is always entry 0
@@ -1380,6 +1389,9 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                       <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by {activeItem.label.toLowerCase()}
                       </h3>
+                      {planTagViews && activeGroup.values.length > 0 && (
+                        <ViewsPerTagButton key={activeGroup.cat} cat={activeGroup.cat} plan={planTagViews(activeGroup)} onCreate={onAddViews} />
+                      )}
                       {activeGroup.values.length === 0 ? (
                         <p style={{ ...sans, fontSize: FS.bodyLg, color: MICRO, margin: 0 }}>
                           {!hasCartaTags
