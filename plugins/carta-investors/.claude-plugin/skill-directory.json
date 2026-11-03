@@ -152,6 +152,16 @@
     }
   },
   "carta-home-build": null,
+  "carta-lpa-audit": {
+    "category": "fund-accounting",
+    "name": "LPA and side letter terms",
+    "order": 30,
+    "prompts": [
+      "Show me all of {{FIRM}}'s LPAs and side letters",
+      "Compare management fees and carry across my funds",
+      "Which of my funds are missing an LPA?"
+    ]
+  },
   "carta-loan-dashboard": null,
   "carta-lp-dashboard": null,
   "carta-lp-documents": null,

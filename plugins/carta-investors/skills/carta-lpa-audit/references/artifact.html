@@ -1,0 +1,3678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+  <style>
+    /* Carta LPA audit — Ink-themed styles.
+       Every color token is a light-dark(<light>, <dark>) pair, resolved via
+       color-scheme. Token values come verbatim from Ink's tokens.css. */
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      color-scheme: light dark;
+
+      /* === Text === */
+      --ink-color-global-text-default:     light-dark(#1A1A1A, #EDEDED);
+      --ink-color-global-text-subtle:      light-dark(#656B6B, #A7AAAA);
+      --ink-color-global-text-very-subtle: light-dark(#9C9F9F, #394040);
+      --ink-color-global-text-inverse:     light-dark(#FFFFFF, #1A1A1A);
+
+      /* === Surfaces === */
+      --ink-color-global-surface-background-default:  light-dark(#FFFFFF, rgb(18 18 18));
+      --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+      --ink-color-global-surface-background-overlay:  light-dark(rgb(0 0 0 / 0.8), rgb(80 80 80 / 0.8));
+
+      /* === Borders === */
+      --ink-color-global-border-subtle:        light-dark(#DEDFDF, #2D2D2D);
+      --ink-color-global-border-default:       light-dark(#A7AAAA, #656B6B);
+      --ink-color-global-border-hover:         light-dark(#656B6B, #9C9F9F);
+      --ink-color-global-border-active:        light-dark(#1A1A1A, #CECFCF);
+      --ink-color-global-border-focus-default: light-dark(#285DA3, #8BABD6);
+      --ink-color-global-border-focus-light:   light-dark(#C0D1E9, #1A3E6D);
+
+      /* === Semantic feedback === */
+      --ink-color-global-feedback-positive-subtle: light-dark(#EBF7F6, #063A32);
+      --ink-color-global-feedback-positive-strong: light-dark(#2D9E90, #2D9E90);
+      --ink-color-global-feedback-negative-subtle: light-dark(#FFEEEF, #401018);
+      --ink-color-global-feedback-negative-strong: light-dark(#E52431, #FAD9D7);
+      --ink-color-global-feedback-warning-subtle:  light-dark(#FFFCED, #341C00);
+      --ink-color-global-feedback-warning-strong:  light-dark(#F8D648, #B58A00);
+      --ink-color-global-feedback-info-subtle:     light-dark(#EAF0F8, #122948);
+      --ink-color-global-feedback-info-strong:     light-dark(#285DA3, #2C67B5);
+
+      /* === Links === */
+      --ink-color-global-link-default: light-dark(#285DA3, #8BABD6);
+      --ink-color-global-link-hover:   light-dark(#1A3E6D, #4176BC);
+
+      /* === Radius === */
+      --ink-size-global-radius-flat:   0;
+      --ink-size-global-radius-subtle: 4px;
+      --ink-radius-pill: 9999px;
+
+      /* === Spacing === */
+      --ink-spacing-global-vertical-xxsmall: 4px;
+      --ink-spacing-global-vertical-xsmall:  8px;
+      --ink-spacing-global-vertical-small:   12px;
+      --ink-spacing-global-vertical-normal:  16px;
+      --ink-spacing-global-vertical-gutter:  20px;
+      --ink-spacing-global-vertical-large:   24px;
+      --ink-spacing-global-vertical-xlarge:  32px;
+
+      --ink-spacing-global-horizontal-xxsmall: 4px;
+      --ink-spacing-global-horizontal-xsmall:  8px;
+      --ink-spacing-global-horizontal-small:   12px;
+      --ink-spacing-global-horizontal-normal:  16px;
+      --ink-spacing-global-horizontal-large:   24px;
+      --ink-spacing-global-horizontal-xlarge:  32px;
+
+      /* === Typography === */
+      --ink-font-global-family-base:      "Inter", "Inter var", system-ui, sans-serif;
+      --ink-font-global-family-prominent: "SangBleu Versailles", Georgia, serif;
+
+      --ink-font-global-size-small-1:           12px;
+      --ink-font-global-size-body-1:            14px;
+      --ink-font-global-size-heading-3:         16px;
+      --ink-font-global-size-heading-2-desktop: 20px;
+      --ink-font-global-size-display-1:         28px;
+
+      --ink-font-global-leading-small-1:           20px;
+      --ink-font-global-leading-body-1:            24px;
+      --ink-font-global-leading-heading-3:         28px;
+      --ink-font-global-leading-heading-2-desktop: 36px;
+      --ink-font-global-leading-display-1:         48px;
+
+      --ink-font-global-weight-body-3:    400;
+      --ink-font-global-weight-body-2:    500;
+      --ink-font-global-weight-body-1:    600;
+      --ink-font-global-weight-heading-1: 400;
+      --ink-font-global-weight-heading-3: 500;
+      --ink-font-global-weight-small-1:   500;
+
+      /* === Elevation === */
+      --ink-elevation-global-shadow-small:  0 4px 12px 0 rgb(0 0 0 / 0.08);
+      --ink-elevation-global-shadow-large:  0 4px 20px 0 rgb(0 0 0 / 0.2);
+
+      /* === Focus ring === */
+      --ink-focus-ring: 0 0 0 4px var(--ink-color-global-border-focus-light);
+    }
+    /* The host stamps data-theme for an explicit theme choice. light-dark() follows
+       color-scheme, so pinning it lets that choice beat the OS setting. */
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"]  { color-scheme: dark; }
+
+    /* === Base resets === */
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    body {
+      margin: 0;
+      background: var(--ink-color-global-surface-background-default);
+      color: var(--ink-color-global-text-default);
+      font-family: var(--ink-font-global-family-base);
+      font-size: var(--ink-font-global-size-body-1);
+      line-height: var(--ink-font-global-leading-body-1);
+      font-weight: var(--ink-font-global-weight-body-3);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    h1, h2, h3, h4 {
+      margin: 0;
+      font-family: var(--ink-font-global-family-base);
+      font-weight: var(--ink-font-global-weight-heading-3);
+      color: var(--ink-color-global-text-default);
+    }
+    h1 {
+      font-family: var(--ink-font-global-family-prominent);
+      font-size: var(--ink-font-global-size-display-1);
+      line-height: 40px;
+      font-weight: var(--ink-font-global-weight-heading-1);
+    }
+    @media (max-width: 599px) { h1 { font-size: 22px; line-height: 32px; } }
+    p { margin: 0; }
+    button { font: inherit; color: inherit; }
+
+    a { color: var(--ink-color-global-link-default); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:hover { color: var(--ink-color-global-link-hover); }
+
+    :focus-visible {
+      outline: 2px solid var(--ink-color-global-border-focus-default);
+      box-shadow: var(--ink-focus-ring);
+      outline-offset: 0;
+    }
+
+    /* === Shell: fund table | details panel === */
+
+    .shell { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 100vh; }
+    /* Tiles size off .main, not the viewport: when the panel pushes the table
+       over, the tiles narrow without the window changing. */
+    .main {
+      min-width: 0;
+      padding: var(--ink-spacing-global-vertical-large) var(--ink-spacing-global-horizontal-xlarge) 40px;
+      container-type: inline-size;
+    }
+    @media (max-width: 599px) { .main { padding: var(--ink-spacing-global-vertical-normal); } }
+
+    .carta-logo {
+      display: block;
+      width: 64px;
+      height: 32px;
+      margin-bottom: var(--ink-spacing-global-vertical-large);
+      color: var(--ink-color-global-text-default);
+    }
+    .page-subtitle {
+      margin-top: var(--ink-spacing-global-vertical-xxsmall);
+      font-size: var(--ink-font-global-size-small-1);
+      line-height: var(--ink-font-global-leading-small-1);
+      color: var(--ink-color-global-text-subtle);
+    }
+
+    /* === KPI tiles — geometry from carta-loan-dashboard === */
+
+    .kpis {
+      display: grid;
+      gap: var(--ink-spacing-global-vertical-normal);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin: 20px 0 var(--ink-spacing-global-vertical-large);
+    }
+    @container (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @container (max-width: 440px) { .kpis { grid-template-columns: 1fr; } }
+    .tile {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: var(--ink-spacing-global-vertical-normal);
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--ink-color-global-surface-background-underlay));
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-flat);
+      box-shadow: var(--ink-elevation-global-shadow-small);
+      font: inherit;
+      color: inherit;
+      text-align: left;
+    }
+    .tile-label {
+      color: var(--ink-color-global-text-subtle);
+      font-size: 12px;
+      line-height: 16px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .tile-value { font-size: 24px; line-height: 32px; font-variant-numeric: tabular-nums; }
+    .tile-sub { color: var(--ink-color-global-text-subtle); font-size: 12px; line-height: 18px; }
+    /* Coverage tiles double as filters; the side-letter tile is read-only. */
+    button.tile { cursor: pointer; transition: border-color 0.15s ease; }
+    button.tile:hover { border-color: var(--ink-color-global-border-hover); }
+    button.tile[aria-pressed="true"] {
+      border-color: var(--ink-color-global-border-active);
+      box-shadow: inset 0 0 0 1px var(--ink-color-global-border-active), var(--ink-elevation-global-shadow-small);
+    }
+    @media (prefers-reduced-motion: reduce) { button.tile { transition: none; } }
+
+    /* === Toolbar === */
+
+    .table-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--ink-spacing-global-vertical-xsmall) var(--ink-spacing-global-horizontal-normal);
+      margin-bottom: var(--ink-spacing-global-vertical-small);
+    }
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--ink-spacing-global-horizontal-small);
+      font-size: var(--ink-font-global-size-small-1);
+      color: var(--ink-color-global-text-subtle);
+    }
+    .filter-select,
+    .table-search input {
+      height: 32px;
+      padding: 0 var(--ink-spacing-global-horizontal-small);
+      font-family: inherit;
+      font-size: var(--ink-font-global-size-body-1);
+      color: var(--ink-color-global-text-default);
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-default);
+      border-radius: var(--ink-size-global-radius-subtle);
+    }
+    /* The native arrow sits flush against the border, so draw our own with room around it. */
+    .filter-select {
+      cursor: pointer;
+      appearance: none;
+      padding-right: 32px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+    .filter-select:hover,
+    .table-search input:hover { border-color: var(--ink-color-global-border-hover); }
+    .filter-select:focus-visible,
+    .table-search input:focus-visible {
+      border-color: var(--ink-color-global-border-focus-default);
+      outline: none;
+      box-shadow: var(--ink-focus-ring);
+    }
+    .table-search { position: relative; display: flex; align-items: center; flex: 0 1 260px; min-width: 0; }
+    .table-search svg { position: absolute; left: 10px; color: var(--ink-color-global-text-subtle); pointer-events: none; }
+    .table-search input { width: 100%; padding-left: 30px; }
+
+    /* === Fund table === */
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--ink-color-global-border-subtle); }
+    .fund-table { width: 100%; min-width: 700px; border-collapse: separate; border-spacing: 0; }
+    .fund-table th,
+    .fund-table td {
+      padding: 10px var(--ink-spacing-global-horizontal-small);
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+      background: var(--ink-color-global-surface-background-default);
+    }
+    .fund-table tbody tr:last-child > * { border-bottom: 0; }
+    .fund-table thead th {
+      padding: 0;
+      font-size: var(--ink-font-global-size-small-1);
+      font-weight: var(--ink-font-global-weight-small-1);
+      color: var(--ink-color-global-text-subtle);
+      background: var(--ink-color-global-surface-background-underlay);
+      white-space: nowrap;
+    }
+    .sort-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: 100%;
+      padding: var(--ink-spacing-global-vertical-xsmall) var(--ink-spacing-global-horizontal-small);
+      background: none;
+      border: 0;
+      cursor: pointer;
+      font-size: var(--ink-font-global-size-small-1);
+      color: inherit;
+      text-align: inherit;
+    }
+    .sort-btn:hover { color: var(--ink-color-global-text-default); }
+    /* The indicator leads on right-aligned columns, so the label's right edge
+       lines up with the figures below it. */
+    .num .sort-btn { flex-direction: row-reverse; justify-content: flex-start; }
+    .sort-ind { width: 8px; font-size: 9px; }
+    .num,
+    .fund-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Pinned so the fund stays in view while the term columns scroll sideways. */
+    .c-fund {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      width: 300px;
+      min-width: 220px;
+      box-shadow: 1px 0 0 var(--ink-color-global-border-subtle);
+    }
+    .fund-table thead .c-fund { z-index: 2; }
+    @media (max-width: 599px) { .c-fund { width: 190px; min-width: 190px; } }
+
+    .fund-table tbody tr { cursor: pointer; }
+    .fund-table tbody tr:hover > * { background: light-dark(#F8F8F8, #1E1E1E); }
+    .fund-table tbody tr.is-selected > * { background: var(--ink-color-global-surface-background-underlay); }
+    .fund-table tbody tr.is-selected > .c-fund {
+      box-shadow: inset 3px 0 0 var(--ink-color-global-border-active), 1px 0 0 var(--ink-color-global-border-subtle);
+    }
+    .fund-btn {
+      display: block;
+      padding: 0;
+      background: none;
+      border: 0;
+      cursor: pointer;
+      font-weight: var(--ink-font-global-weight-body-2);
+      line-height: 20px;
+      text-align: left;
+    }
+    .fund-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; }
+    .c-gap { color: var(--ink-color-global-text-subtle); font-size: 13px; }
+    .not-found { color: var(--ink-color-global-text-subtle); }
+    .empty-bucket {
+      padding: var(--ink-spacing-global-vertical-xlarge) var(--ink-spacing-global-horizontal-normal);
+      text-align: center;
+      color: var(--ink-color-global-text-subtle);
+    }
+
+    /* === Status badges === */
+
+    .bucket-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 6px;
+      font-size: var(--ink-font-global-size-small-1);
+      font-weight: var(--ink-font-global-weight-small-1);
+      border-radius: var(--ink-size-global-radius-subtle);
+      white-space: nowrap;
+    }
+    .bucket-badge.executed {
+      background: var(--ink-color-global-feedback-positive-subtle);
+      color: var(--ink-color-global-feedback-positive-strong);
+    }
+    .bucket-badge.unexecuted {
+      background: var(--ink-color-global-feedback-warning-subtle);
+      color: light-dark(#705010, #F8D648);
+    }
+    .bucket-badge.missing {
+      background: var(--ink-color-global-feedback-negative-subtle);
+      color: var(--ink-color-global-feedback-negative-strong);
+    }
+    .bucket-badge.vehicle {
+      background: var(--ink-color-global-feedback-info-subtle);
+      color: var(--ink-color-global-feedback-info-strong);
+    }
+    .bucket-badge.none {
+      background: light-dark(#EEF0F2, #2A2D31);
+      color: var(--ink-color-global-text-subtle);
+    }
+
+    .not-audited {
+      margin-top: var(--ink-spacing-global-vertical-small);
+      font-size: var(--ink-font-global-size-small-1);
+      line-height: var(--ink-font-global-leading-small-1);
+      color: var(--ink-color-global-text-subtle);
+    }
+    .not-audited summary { width: fit-content; cursor: pointer; }
+    .not-audited ul { margin: 4px 0 0; padding-left: 18px; }
+    .not-audited p { margin: 4px 0 0; }
+
+    /* === Page footer === */
+
+    .page-footer { margin-top: var(--ink-spacing-global-vertical-large); }
+    .carta-link { color: var(--ink-color-global-link-default); text-decoration: none; }
+    .carta-link:hover { color: var(--ink-color-global-link-hover); text-decoration: underline; }
+
+    /* === Fund details panel ===
+       Wide: a sticky second column that pushes the table over. Narrower: a drawer over it. */
+
+    .panel {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: var(--ink-color-global-surface-background-default);
+      border-left: 1px solid var(--ink-color-global-border-subtle);
+    }
+    @media (min-width: 1100px) {
+      .shell.has-panel { grid-template-columns: minmax(0, 1fr) clamp(560px, 50vw, 960px); }
+      .panel { position: sticky; top: 0; height: 100vh; }
+      .scrim { display: none; }
+    }
+    @media (max-width: 1099px) {
+      .panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 20;
+        width: min(880px, 100vw);
+        box-shadow: var(--ink-elevation-global-shadow-large);
+      }
+      .scrim { position: fixed; inset: 0; z-index: 19; background: rgb(0 0 0 / 0.32); }
+      /* The drawer covers the page, so the page behind it shouldn't scroll too. */
+      body:has(.shell.has-panel) { overflow: hidden; }
+    }
+
+    .panel-head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: var(--ink-spacing-global-vertical-small) var(--ink-spacing-global-horizontal-large) var(--ink-spacing-global-vertical-normal);
+      background: var(--ink-color-global-surface-background-default);
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .panel-nav { display: flex; align-items: center; gap: 4px; margin-bottom: var(--ink-spacing-global-vertical-xsmall); }
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: none;
+      border: 1px solid transparent;
+      border-radius: var(--ink-size-global-radius-subtle);
+      color: var(--ink-color-global-text-subtle);
+      cursor: pointer;
+    }
+    .icon-btn:hover:not(:disabled) {
+      background: var(--ink-color-global-surface-background-underlay);
+      color: var(--ink-color-global-text-default);
+    }
+    .icon-btn:disabled { opacity: 0.35; cursor: default; }
+    .panel-pos,
+    .panel-hint { font-size: var(--ink-font-global-size-small-1); color: var(--ink-color-global-text-subtle); }
+    .panel-pos { margin-left: 4px; font-variant-numeric: tabular-nums; }
+    .panel-hint { margin-left: var(--ink-spacing-global-horizontal-xsmall); }
+    @media (max-width: 599px) { .panel-hint { display: none; } }
+    .panel-close { margin-left: auto; }
+    .panel-title {
+      font-size: var(--ink-font-global-size-heading-2-desktop);
+      line-height: 28px;
+      font-weight: var(--ink-font-global-weight-heading-3);
+      word-break: break-word;
+    }
+    /* Focus lands here programmatically to anchor screen readers; it isn't a
+       control, so no ring. */
+    .panel-title:focus,
+    .panel-title:focus-visible { outline: none; box-shadow: none; }
+    .panel-sub {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px var(--ink-spacing-global-horizontal-xsmall);
+      margin-top: 6px;
+      font-size: var(--ink-font-global-size-small-1);
+      line-height: var(--ink-font-global-leading-small-1);
+      color: var(--ink-color-global-text-subtle);
+    }
+    .panel-body { padding: 20px var(--ink-spacing-global-horizontal-large) var(--ink-spacing-global-vertical-xlarge); }
+    @media (max-width: 599px) {
+      .panel-head,
+      .panel-body { padding-left: var(--ink-spacing-global-horizontal-normal); padding-right: var(--ink-spacing-global-horizontal-normal); }
+    }
+
+    .drawer-section { margin-bottom: 28px; }
+    .drawer-section:last-child { margin-bottom: 0; }
+    .drawer-section-title {
+      display: flex;
+      align-items: center;
+      gap: var(--ink-spacing-global-horizontal-xsmall);
+      margin-bottom: 10px;
+      font-size: var(--ink-font-global-size-heading-3);
+      line-height: var(--ink-font-global-leading-body-1);
+    }
+    .drawer-section-count {
+      padding: 0 var(--ink-spacing-global-horizontal-xsmall);
+      font-size: var(--ink-font-global-size-small-1);
+      font-weight: var(--ink-font-global-weight-small-1);
+      color: var(--ink-color-global-text-subtle);
+      background: var(--ink-color-global-surface-background-underlay);
+      border-radius: var(--ink-radius-pill);
+    }
+    .drawer-empty {
+      padding: var(--ink-spacing-global-vertical-small) var(--ink-spacing-global-horizontal-normal);
+      color: var(--ink-color-global-text-subtle);
+      background: var(--ink-color-global-surface-background-underlay);
+    }
+    .drawer-caveat {
+      margin-top: 20px;
+      font-size: var(--ink-font-global-size-small-1);
+      line-height: 18px;
+      color: var(--ink-color-global-text-subtle);
+    }
+
+    /* Economic terms — the carta-loan-dashboard label/value list. Labels keep their
+       width; a long value (the waterfall) wraps inside the value column, right-aligned. */
+    .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px var(--ink-spacing-global-horizontal-normal); margin: 0; }
+    .facts dt { color: var(--ink-color-global-text-subtle); }
+    /* balance: a wrapped value splits into even lines rather than leave one word alone. */
+    .facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; text-wrap: balance; }
+    /* On a phone, natural-width labels leave values ~110px; split evenly and let labels wrap too. */
+    @media (max-width: 599px) { .facts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+    .nowrap { white-space: nowrap; }
+
+    /* Fund identity */
+    .kv-table { display: grid; grid-template-columns: minmax(120px, 34%) 1fr; border: 1px solid var(--ink-color-global-border-subtle); }
+    .kv-table > div { padding: var(--ink-spacing-global-vertical-xsmall) var(--ink-spacing-global-horizontal-small); border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+    .kv-table > div:nth-last-child(-n+2) { border-bottom: 0; }
+    .kv-key { font-size: 13px; color: var(--ink-color-global-text-subtle); background: var(--ink-color-global-surface-background-underlay); }
+    .kv-value { word-break: break-word; }
+
+    /* Side letters */
+    .sl-list { border: 1px solid var(--ink-color-global-border-subtle); }
+    .sl { padding: var(--ink-spacing-global-vertical-small) 14px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+    .sl:last-child { border-bottom: 0; }
+    .sl-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-weight: var(--ink-font-global-weight-body-2); }
+    /* Side letter details read at body size: they are what a reader comes to the panel for. */
+    .sl-meta {
+      font-size: var(--ink-font-global-size-body-1);
+      line-height: var(--ink-font-global-leading-body-1);
+      color: var(--ink-color-global-text-subtle);
+      font-variant-numeric: tabular-nums;
+    }
+    .provision-list { margin: 6px 0 0; padding-left: 18px; font-size: var(--ink-font-global-size-body-1); line-height: var(--ink-font-global-leading-body-1); }
+    .provision-list li + li { margin-top: 2px; }
+    .provision-cmp { color: var(--ink-color-global-text-subtle); }
+    .provision-none { margin-top: 4px; font-size: var(--ink-font-global-size-body-1); color: var(--ink-color-global-text-subtle); }
+    .chip {
+      display: inline-flex;
+      padding: 0 5px;
+      font-size: 11px;
+      line-height: 18px;
+      font-weight: var(--ink-font-global-weight-small-1);
+      color: var(--ink-color-global-text-default);
+      background: var(--ink-color-global-feedback-info-subtle);
+      border-radius: 3px;
+    }
+    .chip-check { background: var(--ink-color-global-feedback-warning-subtle); }
+    .term-checks { margin-top: 10px; font-size: 13px; line-height: 20px; }
+    .term-checks ul { margin: 2px 0 0; padding-left: 18px; }
+    .investor-letters { margin-top: 10px; font-size: var(--ink-font-global-size-body-1); }
+    .investor-letters summary { width: fit-content; cursor: pointer; color: var(--ink-color-global-text-subtle); }
+    .investor-letters .sl-list { margin-top: var(--ink-spacing-global-vertical-xsmall); }
+
+    /* Limited partners */
+    .lp-table { width: 100%; border-collapse: collapse; border: 1px solid var(--ink-color-global-border-subtle); }
+    .lp-table th,
+    .lp-table td {
+      padding: var(--ink-spacing-global-vertical-xsmall) var(--ink-spacing-global-horizontal-small);
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .lp-table thead th {
+      font-size: var(--ink-font-global-size-small-1);
+      font-weight: var(--ink-font-global-weight-small-1);
+      color: var(--ink-color-global-text-subtle);
+      background: var(--ink-color-global-surface-background-underlay);
+    }
+    .lp-table .num { text-align: right; }
+    .lp-type { display: block; font-size: var(--ink-font-global-size-small-1); line-height: 16px; color: var(--ink-color-global-text-subtle); }
+    .lp-table tfoot td {
+      font-weight: var(--ink-font-global-weight-body-1);
+      background: var(--ink-color-global-surface-background-underlay);
+      border-bottom: 0;
+    }
+    .lp-table tfoot .lp-type { font-weight: var(--ink-font-global-weight-body-3); }
+
+    /* === Load / error states (live artifact only) ===
+       The page has no data at first paint — it queries Carta on load — so it
+       opens on a shimmer and swaps to content when the fetch resolves. */
+    #loading-state { padding: 8px 0 32px; }
+    #loading-status {
+      font-size: var(--ink-font-global-size-small-1);
+      color: var(--ink-color-global-text-subtle);
+      margin-bottom: var(--ink-spacing-global-vertical-normal);
+      min-height: 18px;
+    }
+    .shimmer-row {
+      height: 44px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg,
+        var(--ink-color-global-surface-background-underlay) 25%,
+        light-dark(#E8E8E8, #3A3A3A) 37%,
+        var(--ink-color-global-surface-background-underlay) 63%);
+      background-size: 400% 100%;
+      animation: shimmer 1.4s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 100% 50%; }
+      100% { background-position: 0 50%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .shimmer-row { animation: none; }
+    }
+    #error-state {
+      display: none;
+      padding: var(--ink-spacing-global-vertical-large);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: 8px;
+      background: var(--ink-color-global-surface-background-underlay);
+    }
+    #error-state h2 {
+      font-size: var(--ink-font-global-size-heading-3);
+      font-weight: 600;
+      margin: 0 0 8px;
+      color: var(--ink-color-global-text-default);
+    }
+    #error-state p {
+      font-size: var(--ink-font-global-size-small-1);
+      color: var(--ink-color-global-text-subtle);
+      margin: 0 0 6px;
+      line-height: 1.5;
+    }
+    #error-detail {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      color: var(--ink-color-global-text-subtle);
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell" id="shell">
+    <main class="main">
+      <svg class="carta-logo" role="img" aria-label="Carta" fill="none" viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
+        <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
+      </svg>
+      <div class="header" id="page-header"></div>
+
+      <div id="loading-state">
+        <div id="loading-status">Loading LPAs and side letters from Carta…</div>
+        <div class="shimmer-row" style="width: 100%"></div>
+        <div class="shimmer-row" style="width: 92%"></div>
+        <div class="shimmer-row" style="width: 96%"></div>
+        <div class="shimmer-row" style="width: 88%"></div>
+        <div class="shimmer-row" style="width: 94%"></div>
+      </div>
+
+      <div id="error-state">
+        <h2 id="error-title">Couldn't load your fund terms</h2>
+        <p id="error-message"></p>
+        <p id="error-detail"></p>
+      </div>
+
+      <div id="content-area" style="display: none">
+        <section class="kpis" id="summary-tiles" aria-label="LPA coverage"></section>
+
+        <div class="table-toolbar">
+          <label class="filter-bar">Show
+            <select id="filter-select" class="filter-select" aria-label="Filter by LPA status"></select>
+          </label>
+          <div class="table-search">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <circle cx="6" cy="6" r="4.5"/>
+              <path d="M9.5 9.5 L12.5 12.5" stroke-linecap="round"/>
+            </svg>
+            <input type="search" id="search-input" placeholder="Search funds…" aria-label="Search funds">
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="fund-table">
+            <thead><tr id="fund-thead"></tr></thead>
+            <tbody id="fund-tbody"></tbody>
+          </table>
+        </div>
+
+        <details class="not-audited" id="not-audited" hidden></details>
+        <details class="not-audited" id="unmatched-docs" hidden></details>
+        <details class="not-audited" id="received-docs" hidden></details>
+        <details class="not-audited" id="unmatched-letters" hidden></details>
+
+        <div class="page-footer" id="page-footer"></div>
+      </div>
+    </main>
+
+    <aside class="panel" id="fund-panel" aria-labelledby="fund-panel-title" hidden>
+      <div class="panel-head">
+        <div class="panel-nav">
+          <button type="button" class="icon-btn" id="panel-prev" aria-label="Previous fund">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 8 L6 4 L10 8"/></svg>
+          </button>
+          <button type="button" class="icon-btn" id="panel-next" aria-label="Next fund">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 4 L6 8 L10 4"/></svg>
+          </button>
+          <span class="panel-pos" id="panel-pos" aria-live="polite"></span>
+          <span class="panel-hint">↑ ↓ to move between funds</span>
+          <button type="button" class="icon-btn panel-close" id="panel-close" aria-label="Close fund details">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 2 L10 10 M10 2 L2 10"/></svg>
+          </button>
+        </div>
+        <h2 class="panel-title" id="fund-panel-title" tabindex="-1"></h2>
+        <div class="panel-sub" id="fund-panel-sub"></div>
+      </div>
+      <div class="panel-body" id="fund-panel-body"></div>
+    </aside>
+  </div>
+  <div class="scrim" id="panel-scrim" hidden></div>
+
+  <script type="application/json" id="lpa-audit-state">{{STATE_JSON}}</script>
+
+  <script>
+    // ── Injected at render time by scripts/render-artifact.py ─────────────────
+    // FIRM_UUID          the firm this LPA audit covers. Pinned via set_context
+    //                    on load, and substituted into every query.
+    // FIRM_NAME          display name, used in the page header.
+    // FIRM_CARTA_ID      the numeric organization pk, for the documents deep link.
+    // FIRM_FUND_NAMES    the firm's own fund vehicle names (from fa__list__entities,
+    //                    collected by the agent in Step 1). Baked in via the render
+    //                    script — the artifact has no MCP call for this, so it
+    //                    cannot fetch it itself the way it fetches Query T / Query L.
+    // CARTA_MCP_SERVER   the Carta connector's DISPLAY NAME. The artifact runtime
+    //                    addresses a connector by display name only — never a UUID
+    //                    and never an mcp__…__ tool name — because a published page
+    //                    runs for many viewers and connector ids are per-viewer facts.
+    // BASE_URL           environment web URL, resolved from auth state by the skill.
+    //                    Never hardcode app.carta.com: sandbox firms would deep-link
+    //                    into production.
+    //
+    // Queries this page issues at runtime:
+    //   Query T — buildLpaRowsSql          every LPA extraction row for the firm (required)
+    //   Query L — buildSideLetterRowsSql   every side-letter extraction row for the firm (required)
+    const STATE = JSON.parse(document.getElementById('lpa-audit-state').textContent);
+    const FIRM_UUID = '{{FIRM_UUID}}';
+    const FIRM_NAME = STATE.firm_name;
+    const FIRM_CARTA_ID = STATE.firm_carta_id;
+    const FIRM_FUND_NAMES = STATE.firm_fund_names;
+    // Per-entity carta_id, entity_type and currency, for the fund deep link, the
+    // not-audited filter and amounts an agreement states no currency for. Older
+    // renders carry names only.
+    const FIRM_FUNDS = STATE.firm_funds || FIRM_FUND_NAMES.map(name => ({ name, carta_id: null, entity_type: null }));
+    const CARTA_MCP_SERVER = '{{CARTA_MCP_SERVER}}';
+    const BASE_URL = STATE.base_url;
+    const CARTA_BASE_URL = /^https:\/\//.test(BASE_URL) ? BASE_URL.replace(/\/$/, '') : 'https://app.carta.com';
+
+    const CALL_TOOL = 'call_tool';
+    const SET_CONTEXT_TOOL = 'set_context';
+    const WELCOME_TOOL = 'welcome';
+
+    // The server returns an inline page only when it is under 200 KiB (otherwise a
+    // `too_large` error) and signals more rows with a next_offset token in the
+    // response header. Pages start at PAGE_LIMIT rows and shrink on `too_large`.
+    // The first page reports total_rows, so the rest are fetched PAGE_CONCURRENCY
+    // at a time. A query planned into more than MAX_PAGES ranges fails the load
+    // rather than showing a partial row set as complete.
+    const PAGE_LIMIT = 40;
+    const PAGE_CONCURRENCY = 4;
+    const MAX_PAGES = 500;
+
+    let DATA = null;
+
+    // ── Page state ────────────────────────────────────────────────────────────
+
+    function setLoadingStatus(msg) {
+      const el = document.getElementById('loading-status');
+      if (el) el.textContent = msg;
+    }
+
+    function showContent() {
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('error-state').style.display = 'none';
+      document.getElementById('content-area').style.display = 'block';
+    }
+
+    // `detail` carries the underlying error text. It is shown in a de-emphasized
+    // monospace line rather than hidden in the console: when a viewer reports "it
+    // won't load", the message they can copy is the whole diagnosis.
+    function showError(message, detail) {
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('content-area').style.display = 'none';
+      const el = document.getElementById('error-state');
+      el.style.display = 'block';
+      document.getElementById('error-message').textContent = message;
+      document.getElementById('error-detail').textContent = detail || '';
+    }
+
+    // ── Carta MCP plumbing ────────────────────────────────────────────────────
+
+    // The Carta MCP asks us to call `welcome` when the user's session state has
+    // expired (typically after a few days of inactivity). Match on the word
+    // "welcome" — narrow enough to avoid false positives on unrelated dwh errors,
+    // loose enough to survive minor wording tweaks from the MCP team.
+    function isWelcomeRequiredMessage(text) {
+      return typeof text === 'string' && /welcome/i.test(text);
+    }
+
+    // The text of an isError envelope. The gateway puts a wrapped command's own
+    // error in `result.result`, beside the generic message, so both are read.
+    function errorText(result) {
+      const text = (r) => (r && r.content && r.content[0] && r.content[0].text) || '';
+      return [text(result), text(result && result.result)].filter(Boolean).join(' ');
+    }
+
+    // Every Carta MCP call — call_tool, set_context, welcome alike — must carry
+    // _instrumentation_v2 or the MCP rejects it. Centralized here so every call
+    // site (including the retry and the welcome recovery call) gets it, instead
+    // of each caller having to remember it individually.
+    const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-lpa-audit'], from_ui: true };
+
+    function withInstrumentation(args) {
+      return { ...args, _instrumentation_v2: INSTRUMENTATION_V2 };
+    }
+
+    let _mcpNsPromise = null;
+    // null means this view cannot run mcp — not granted, not served, or failed to
+    // load. Polls up to 5 attempts, 4 × 500 ms gaps (2 s max) to handle
+    // window.claude not yet being ready on first render.
+    function mcpNamespace() {
+      if (!_mcpNsPromise) {
+        _mcpNsPromise = (async () => {
+          for (let i = 0; i < 5; i++) {
+            try {
+              const mcp = await Promise.resolve(window.claude?.use?.('mcp') ?? null);
+              if (mcp) return mcp;
+            } catch (_) {}
+            if (i < 4 && typeof setTimeout === 'function') await new Promise(r => setTimeout(r, 500));
+          }
+          return null;
+        })();
+      }
+      return _mcpNsPromise;
+    }
+
+    // A tool that ran and reported failure comes back as an isError envelope so the
+    // welcome recovery below can read its message. Connector-level codes
+    // (needs_reauth, server_not_connected) rethrow — those are page-level.
+    async function callCartaTool(toolName, args) {
+      const mcp = await mcpNamespace();
+      if (!mcp) {
+        throw new Error('No live Carta connector in this view — the page cannot load data');
+      }
+      try {
+        return await mcp.callTool(CARTA_MCP_SERVER, toolName, withInstrumentation(args || {}));
+      } catch (err) {
+        if (err && err.code === 'tool_error') {
+          return { isError: true, code: err.code, result: err.result, content: [{ type: 'text', text: err.message || 'tool error' }] };
+        }
+        throw err;
+      }
+    }
+
+    // Shared in-flight "call welcome" recovery, same idiom as `_mcpNsPromise`
+    // above: the first caller to hit "welcome required" starts the recovery and
+    // stashes the promise here; every other concurrent caller awaits this same
+    // promise instead of racing its own welcome() call or giving up on a stale
+    // error. `bootstrap()` fires Query T and Query L in one `Promise.all` — if
+    // the session had actually expired, both can independently see "welcome
+    // required" before either continuation gets a chance to run, so a plain
+    // boolean flag would only rescue whichever call happens to resume first;
+    // the other "loser" would see the flag already set and return its own
+    // stale error immediately, without waiting for the winner's welcome() to
+    // finish. A shared promise fixes that: everyone waits for the one
+    // recovery, then each caller retries its own original call.
+    let _welcomeRecoveryPromise = null;
+
+    function recoverSessionOnce() {
+      if (!_welcomeRecoveryPromise) {
+        setLoadingStatus('Reconnecting to Carta…');
+        _welcomeRecoveryPromise = (async () => {
+          const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
+          if (welcomeResult && welcomeResult.isError) {
+            throw new Error('Failed to initialize MCP session: ' + (errorText(welcomeResult) || '<no message>'));
+          }
+        })();
+      }
+      return _welcomeRecoveryPromise;
+    }
+
+    // Transparently recovers from "please call welcome first" errors. On the
+    // first such failure, call welcome to re-initialize the session; any
+    // concurrent caller that also hits "welcome required" awaits that same
+    // recovery (see `recoverSessionOnce` above) instead of failing early. Once
+    // recovery settles, each caller retries its own original call once — a
+    // failed recovery propagates to every waiter rather than retrying against a
+    // still-broken session.
+    async function callMcpWithWelcomeRetry(toolName, args) {
+      const result = await callCartaTool(toolName, args);
+      if (!result || !result.isError) return result;
+
+      if (!isWelcomeRequiredMessage(errorText(result))) {
+        return result;
+      }
+
+      await recoverSessionOnce();
+      return await callCartaTool(toolName, args);
+    }
+
+    // ── NDJSON response parsing ───────────────────────────────────────────────
+
+    function unwrapResponse(result) {
+      if (typeof result === 'string') return result;
+      if (!result || typeof result !== 'object') {
+        throw new Error('Unexpected response shape: ' + (typeof result));
+      }
+      if (result.isError) {
+        throw new Error(errorText(result) || '<no message>');
+      }
+      if (result.content && Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
+        return result.content[0].text;
+      }
+      if (result.structuredContent && typeof result.structuredContent.result === 'string') {
+        return result.structuredContent.result;
+      }
+      throw new Error('Could not find text payload in response');
+    }
+
+    // The MCP tool result is a JSON object of shape {result: "<ndjson body>"}.
+    // Without this unwrap the envelope parses as one valid JSON line whose only
+    // key is `result`, so every real row silently vanishes and the report comes
+    // out empty rather than erroring.
+    function unwrapEnvelope(text) {
+      const stripped = (text || '').trimStart();
+      if (!stripped.startsWith('{')) return text;
+      try {
+        const outer = JSON.parse(stripped);
+        if (outer && typeof outer.result === 'string') return outer.result;
+      } catch (_) { /* not an envelope — probably genuine ndjson */ }
+      return text;
+    }
+
+    // Wire shape:
+    //   total_rows: 33 | offset: 0 | limit: 1000 | format: ndjson
+    //   <blank line>
+    //   {"COL1": val, ...}
+    // Returns {rows, nextOffset}. A single malformed line is logged and skipped
+    // rather than aborting — earlier well-formed rows are still useful if a
+    // transport-layer truncation strikes mid-line.
+    function parseNdjson(text) {
+      const rows = [];
+      let nextOffset = null;
+      let totalRows = null;
+      if (!text) return { rows, nextOffset, totalRows };
+
+      let body = text;
+      const stripped = text.trimStart();
+      const firstLine = stripped.split('\n')[0] || '';
+      if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
+        const m = firstLine.match(/next_offset:\s*(\d+)/);
+        if (m) nextOffset = parseInt(m[1], 10);
+        const t = firstLine.match(/total_rows:\s*([\d,]+)/);
+        if (t) totalRows = parseInt(t[1].replace(/,/g, ''), 10);
+        body = text.slice(text.indexOf('\n\n') + 2);
+      }
+
+      for (const raw of body.split('\n')) {
+        const line = raw.trim();
+        if (!line || line.startsWith('(Result truncated')) continue;
+        try {
+          const obj = JSON.parse(line);
+          if (obj && typeof obj === 'object' && !Array.isArray(obj)) rows.push(obj);
+        } catch (e) {
+          console.warn('parseNdjson: skipping malformed line', e);
+        }
+      }
+      return { rows, nextOffset, totalRows };
+    }
+
+    // `too_large` is the server's "this page is over the inline ceiling" error;
+    // its fix text names a row count that fits ("lower the limit param to about 48").
+    // Returns the smaller limit to retry with, or null when the error is something
+    // else or the page is already a single row.
+    function shrunkLimit(message, limit) {
+      if (!/"code"\s*:\s*"too_large"/.test(message) || limit <= 1) return null;
+      const m = message.match(/limit param to about (\d+)/);
+      const suggested = m ? parseInt(m[1], 10) : limit;
+      return Math.max(1, Math.min(suggested, Math.floor(limit / 2)));
+    }
+
+    // Runs one query to exhaustion. The SQL carries no LIMIT or OFFSET: the server
+    // pages it from the `limit` / `offset` arguments. The first page is fetched
+    // alone, to learn total_rows and a page size that fits. The remaining ranges
+    // then run PAGE_CONCURRENCY at a time and are joined in offset order. A page
+    // that comes back `too_large` is retried at the same offset with fewer rows,
+    // and the smaller size is kept for the rest of the query. It returns every row
+    // of the query or rejects: a query needing more than MAX_PAGES pages, or any
+    // page that fails, fails the load, and no call for that query starts after that.
+    async function fetchAllRows(buildSql, label) {
+      const sql = buildSql();
+      let limit = PAGE_LIMIT;
+      let failed = false;
+
+      async function fetchPage(offset, count) {
+        for (;;) {
+          if (failed) throw new Error(label + ': stopped after a failed page');
+          const sent = Math.min(limit, count);
+          const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+            name: 'dwh__execute__query',
+            arguments: {
+              sql,
+              format: 'ndjson',
+              // The server infers delivery shape from clientInfo.name, which cannot
+              // distinguish clients that accept a binary blob from those that reject
+              // it. `inline` forces the always-safe plain-string path.
+              response_mode: 'inline',
+              limit: sent,
+              offset,
+            },
+          });
+          try {
+            return parseNdjson(unwrapEnvelope(unwrapResponse(result)));
+          } catch (error) {
+            const smaller = shrunkLimit(error.message || '', sent);
+            if (smaller === null) throw error;
+            // Concurrent pages sent at the old size fail together; only the first
+            // to report shrinks, the rest retry at the size it set.
+            limit = Math.min(limit, smaller);
+          }
+        }
+      }
+
+      // Every row of [start, end), paged at the current size.
+      async function fetchRange(start, end) {
+        const rows = [];
+        let offset = start;
+        while (offset < end) {
+          const page = await fetchPage(offset, end - offset);
+          if (page.rows.length === 0) throw new Error(label + ': empty page at offset ' + offset);
+          rows.push(...page.rows);
+          offset += page.rows.length;
+        }
+        return rows;
+      }
+
+      const first = await fetchPage(0, Infinity);
+      if (first.nextOffset === null) return first.rows;
+      if (first.rows.length === 0) throw new Error(label + ': empty first page with more rows pending');
+      if (first.totalRows === null) throw new Error(label + ': next_offset without total_rows');
+
+      const ranges = [];
+      for (let start = first.nextOffset; start < first.totalRows; start += limit) {
+        ranges.push([start, Math.min(start + limit, first.totalRows)]);
+      }
+      if (ranges.length > MAX_PAGES) {
+        throw new Error(label + ': more than ' + MAX_PAGES + ' pages; results incomplete');
+      }
+      const pages = new Array(ranges.length);
+      let nextRange = 0;
+      async function worker() {
+        while (nextRange < ranges.length) {
+          const i = nextRange++;
+          try {
+            pages[i] = await fetchRange(ranges[i][0], ranges[i][1]);
+          } catch (error) {
+            failed = true;
+            throw error;
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(PAGE_CONCURRENCY, ranges.length) }, worker));
+      return first.rows.concat(...pages);
+    }
+
+    // ── SQL ───────────────────────────────────────────────────────────────────
+    // SQL is verbatim — do not retype or "clean up". A retyped string is
+    // how a UUID or join key silently corrupts.
+    //
+    // The queries are the exact SQL Mode B's SKILL.md issues via agent-issued
+    // call_tool. They carry no LIMIT/OFFSET; fetchAllRows pages them through the
+    // call's `limit` / `offset` arguments.
+    //
+    // RAW_JSON is pruned in SQL to the paths buildLpas/buildSideLetters read,
+    // leaves kept verbatim (citation envelopes included), rooted at
+    // COALESCE(RAW_JSON:extraction, RAW_JSON). The whole document pushed a
+    // firm's response past the connector's 16 MB cap (ML-4715). Reading a new
+    // RAW_JSON path means adding it to the OBJECT_CONSTRUCT here and in
+    // SKILL.md, or it reads null everywhere; see SKILL.md Caveats.
+
+    // Query T — every LPA extraction row for the firm. DOCUMENT_CURRENCY_CODE is
+    // a per-extraction COALESCE over RAW_JSON:...:currency_code siblings (~6%
+    // populated); the pruned RAW_JSON also carries the freeform `currency` string,
+    // which buildLpas trusts only when it is exactly an ISO code. Both the
+    // bare and extraction.-prefixed shapes are tried since one extractor
+    // version wraps the whole payload a level deeper; see SKILL.md Caveats.
+    function buildLpaRowsSql() {
+      return `SELECT DOCUMENT_ID, EXTRACTION_ID, RECORD_TYPE, KIND, RECORD_INDEX, ATTRIBUTES, IFF(ROW_NUMBER() OVER (PARTITION BY EXTRACTION_ID ORDER BY RECORD_INDEX) = 1 AND RJ IS NOT NULL, OBJECT_CONSTRUCT('currency', RJ:currency, 'fund_info', OBJECT_CONSTRUCT('fund_name', RJ:fund_info:fund_name, 'state_of_formation', RJ:fund_info:state_of_formation, 'lpa_date', RJ:fund_info:lpa_date, 'master_series', RJ:fund_info:master_series, 'fund_purpose', RJ:fund_info:fund_purpose, 'registered_agent_name', RJ:fund_info:registered_agent_name, 'principal_office_address', RJ:fund_info:principal_office_address), 'document_metadata', OBJECT_CONSTRUCT('governing_law', RJ:document_metadata:governing_law), 'parties', OBJECT_CONSTRUCT('general_partner', OBJECT_CONSTRUCT('name', RJ:parties:general_partner:name, 'entity_type', RJ:parties:general_partner:entity_type, 'state_of_formation', RJ:parties:general_partner:state_of_formation, 'commitment_amount', RJ:parties:general_partner:commitment_amount, 'commitment_percentage', RJ:parties:general_partner:commitment_percentage, 'address', RJ:parties:general_partner:address, 'members', RJ:parties:general_partner:members), 'limited_partners', RJ:parties:limited_partners), 'carried_interest', OBJECT_CONSTRUCT('carried_interest_rate', RJ:carried_interest:carried_interest_rate, 'preferred_return_rate', RJ:carried_interest:preferred_return_rate, 'preferred_return_multiple', RJ:carried_interest:preferred_return_multiple, 'distribution_waterfall_type', RJ:carried_interest:distribution_waterfall_type, 'waterfall_tiers', TRANSFORM(RJ:carried_interest:waterfall_tiers, x VARIANT -> OBJECT_CONSTRUCT('kind', COALESCE(x:kind:value, x:kind), 'percentage_to_gp', COALESCE(x:percentage_to_gp:value, x:percentage_to_gp)))), 'management_fee', OBJECT_CONSTRUCT('pays_management_fee', RJ:management_fee:pays_management_fee, 'management_fee_rate_investment_period', RJ:management_fee:management_fee_rate_investment_period, 'management_fee_rate_post_investment', RJ:management_fee:management_fee_rate_post_investment, 'management_fee_basis_investment_period', RJ:management_fee:management_fee_basis_investment_period), 'fund_terms', OBJECT_CONSTRUCT('fund_term_years', RJ:fund_terms:fund_term_years, 'investment_period_years', RJ:fund_terms:investment_period_years, 'initial_closing_date', RJ:fund_terms:initial_closing_date), 'capital_provisions', OBJECT_CONSTRUCT('capital_call_notice_days', RJ:capital_provisions:capital_call_notice_days)), NULL) AS RAW_JSON, BOUNDING_BOXES, CREATED_AT, COALESCE(NULLIF(RAW_JSON:fund_size:gp_commitment_amount:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:fund_size:gp_commitment_amount:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:fund_size:target_fund_size:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:fund_size:target_fund_size:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:fund_size:minimum_lp_commitment:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:fund_size:minimum_lp_commitment:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:parties:limited_partners[0]:commitment_amount:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:parties:limited_partners[0]:commitment_amount:currency_code::VARCHAR, 'null')) AS DOCUMENT_CURRENCY_CODE FROM (SELECT DOCUMENT_ID, EXTRACTION_ID, RECORD_TYPE, KIND, RECORD_INDEX, ATTRIBUTES, RAW_JSON, BOUNDING_BOXES, CREATED_AT, COALESCE(RAW_JSON:extraction, RAW_JSON) AS RJ FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE DOCUMENT_TYPE = 'limited_partnership_agreement' AND FIRM_ID = '${FIRM_UUID}') ORDER BY DOCUMENT_ID, EXTRACTION_ID, RECORD_INDEX`;
+    }
+
+    // Query O — the same projection under DOCUMENT_TYPE = 'operating_agreement'. An LLC
+    // vehicle's governing document runs the LPA extractor and writes the same record
+    // types, so buildLpas assembles both. A second query rather than an IN list keeps
+    // each response under the connector's 16 MB cap.
+    function buildOperatingAgreementRowsSql() {
+      return `SELECT DOCUMENT_ID, EXTRACTION_ID, RECORD_TYPE, KIND, RECORD_INDEX, ATTRIBUTES, IFF(ROW_NUMBER() OVER (PARTITION BY EXTRACTION_ID ORDER BY RECORD_INDEX) = 1 AND RJ IS NOT NULL, OBJECT_CONSTRUCT('currency', RJ:currency, 'fund_info', OBJECT_CONSTRUCT('fund_name', RJ:fund_info:fund_name, 'state_of_formation', RJ:fund_info:state_of_formation, 'lpa_date', RJ:fund_info:lpa_date, 'master_series', RJ:fund_info:master_series, 'fund_purpose', RJ:fund_info:fund_purpose, 'registered_agent_name', RJ:fund_info:registered_agent_name, 'principal_office_address', RJ:fund_info:principal_office_address), 'document_metadata', OBJECT_CONSTRUCT('governing_law', RJ:document_metadata:governing_law), 'parties', OBJECT_CONSTRUCT('general_partner', OBJECT_CONSTRUCT('name', RJ:parties:general_partner:name, 'entity_type', RJ:parties:general_partner:entity_type, 'state_of_formation', RJ:parties:general_partner:state_of_formation, 'commitment_amount', RJ:parties:general_partner:commitment_amount, 'commitment_percentage', RJ:parties:general_partner:commitment_percentage, 'address', RJ:parties:general_partner:address, 'members', RJ:parties:general_partner:members), 'limited_partners', RJ:parties:limited_partners), 'carried_interest', OBJECT_CONSTRUCT('carried_interest_rate', RJ:carried_interest:carried_interest_rate, 'preferred_return_rate', RJ:carried_interest:preferred_return_rate, 'preferred_return_multiple', RJ:carried_interest:preferred_return_multiple, 'distribution_waterfall_type', RJ:carried_interest:distribution_waterfall_type, 'waterfall_tiers', TRANSFORM(RJ:carried_interest:waterfall_tiers, x VARIANT -> OBJECT_CONSTRUCT('kind', COALESCE(x:kind:value, x:kind), 'percentage_to_gp', COALESCE(x:percentage_to_gp:value, x:percentage_to_gp)))), 'management_fee', OBJECT_CONSTRUCT('pays_management_fee', RJ:management_fee:pays_management_fee, 'management_fee_rate_investment_period', RJ:management_fee:management_fee_rate_investment_period, 'management_fee_rate_post_investment', RJ:management_fee:management_fee_rate_post_investment, 'management_fee_basis_investment_period', RJ:management_fee:management_fee_basis_investment_period), 'fund_terms', OBJECT_CONSTRUCT('fund_term_years', RJ:fund_terms:fund_term_years, 'investment_period_years', RJ:fund_terms:investment_period_years, 'initial_closing_date', RJ:fund_terms:initial_closing_date), 'capital_provisions', OBJECT_CONSTRUCT('capital_call_notice_days', RJ:capital_provisions:capital_call_notice_days)), NULL) AS RAW_JSON, BOUNDING_BOXES, CREATED_AT, COALESCE(NULLIF(RAW_JSON:fund_size:gp_commitment_amount:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:fund_size:gp_commitment_amount:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:fund_size:target_fund_size:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:fund_size:target_fund_size:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:fund_size:minimum_lp_commitment:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:fund_size:minimum_lp_commitment:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:parties:limited_partners[0]:commitment_amount:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:parties:limited_partners[0]:commitment_amount:currency_code::VARCHAR, 'null')) AS DOCUMENT_CURRENCY_CODE FROM (SELECT DOCUMENT_ID, EXTRACTION_ID, RECORD_TYPE, KIND, RECORD_INDEX, ATTRIBUTES, RAW_JSON, BOUNDING_BOXES, CREATED_AT, COALESCE(RAW_JSON:extraction, RAW_JSON) AS RJ FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE DOCUMENT_TYPE = 'operating_agreement' AND FIRM_ID = '${FIRM_UUID}') ORDER BY DOCUMENT_ID, EXTRACTION_ID, RECORD_INDEX`;
+    }
+
+    // Query L — every side-letter extraction row for the firm. Both roles come
+    // back on the same filter — the firm's fund appears as the `fund` entity when
+    // it granted the terms and as a `limited_partner` entity when it received
+    // them, and the transform below (matchFunds) tells the two apart.
+    // DOCUMENT_CURRENCY_CODE here is the side letter's own capital_commitment
+    // currency, independent of Query T's — see SKILL.md Caveats.
+    function buildSideLetterRowsSql() {
+      return `SELECT DOCUMENT_ID, EXTRACTION_ID, RECORD_TYPE, KIND, RECORD_INDEX, ATTRIBUTES, IFF(ROW_NUMBER() OVER (PARTITION BY EXTRACTION_ID ORDER BY RECORD_INDEX) = 1 AND RJ IS NOT NULL, OBJECT_CONSTRUCT('issuer_name', RJ:issuer_name, 'executed_by_issuer', RJ:executed_by_issuer, 'has_draft_markings', RJ:has_draft_markings, 'has_unfilled_placeholders', RJ:has_unfilled_placeholders, 'side_letters', RJ:side_letters), NULL) AS RAW_JSON, BOUNDING_BOXES, CREATED_AT, COALESCE(NULLIF(RAW_JSON:side_letters[0]:capital_commitment:currency_code::VARCHAR, 'null'), NULLIF(RAW_JSON:extraction:side_letters[0]:capital_commitment:currency_code::VARCHAR, 'null')) AS DOCUMENT_CURRENCY_CODE FROM (SELECT DOCUMENT_ID, EXTRACTION_ID, RECORD_TYPE, KIND, RECORD_INDEX, ATTRIBUTES, RAW_JSON, BOUNDING_BOXES, CREATED_AT, COALESCE(RAW_JSON:extraction, RAW_JSON) AS RJ FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE DOCUMENT_TYPE = 'side_letter' AND FIRM_ID = '${FIRM_UUID}') ORDER BY DOCUMENT_ID, EXTRACTION_ID, RECORD_INDEX`;
+    }
+
+    // ── Value coercion ────────────────────────────────────────────────────────
+
+    const NULL_STRS = new Set(['', 'null', 'NULL', 'Null', '—', '-']);
+
+    function toFloat(v) {
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().replace(/,/g, '');
+      if (NULL_STRS.has(s)) return null;
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function toInt(v) {
+      const n = toFloat(v);
+      return n === null ? null : Math.trunc(n);
+    }
+
+    // Unlike toFloat/toStr, a None-ish input stays null (not false) — mirrors
+    // process.py's _to_bool exactly, since a tri-state (true/false/unknown) field
+    // like hasDraftMarkings must not silently become "false" when unextracted.
+    function toBool(v) {
+      if (typeof v === 'boolean') return v;
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().toLowerCase();
+      if (NULL_STRS.has(s)) return null;
+      return ['true', '1', 'yes', 't'].includes(s);
+    }
+
+    // Case-sensitive NULL_STRS check (no lowercasing) — matches process.py's
+    // _to_str, which differs from _to_bool on exactly this point.
+    function toStr(v) {
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim();
+      if (NULL_STRS.has(s)) return null;
+      return s;
+    }
+
+    // Bare 3-letter ISO-4217-shaped code, or null. Mirrors carta-spa-audit's
+    // cleanCurrency (references/artifact.html ~1260). It normalises a
+    // RAW_JSON:...:currency_code sibling; the free-form `currency` value goes
+    // through freeformCurrency.
+    function cleanCurrency(v) {
+      const s = toStr(v);
+      if (s === null) return null;
+      const upper = s.toUpperCase();
+      return (upper.length === 3 && /^[A-Z]{3}$/.test(upper)) ? upper : null;
+    }
+    // The free-form RAW_JSON `currency` string when it is itself a bare ISO code
+    // ("EUR"). The extractor also writes prose ("United States dollars"), so only an
+    // exact upper-case three-letter value is trusted.
+    function freeformCurrency(v) {
+      const s = toStr(v);
+      return s !== null && cleanCurrency(s) === s ? s : null;
+    }
+    const CCY_SYMBOL = { USD: '$', EUR: '€', GBP: '£', AUD: 'A$', CAD: 'CA$', MYR: 'RM', CHF: 'CHF ', JPY: '¥' };
+
+    // ATTRIBUTES may arrive as a JSON string or a native object depending on the
+    // connector serialization.
+    function loadAttrs(row) {
+      const attrs = row.ATTRIBUTES;
+      if (attrs === null || attrs === undefined) return {};
+      if (typeof attrs === 'object' && !Array.isArray(attrs)) return attrs;
+      if (typeof attrs === 'string') {
+        try { return JSON.parse(attrs); } catch (e) { return {}; }
+      }
+      return {};
+    }
+
+    // BOUNDING_BOXES may arrive as JSON string or native object; may be absent
+    // for event rows.
+    function loadBboxes(row) {
+      const bb = row.BOUNDING_BOXES;
+      if (bb === null || bb === undefined) return {};
+      if (typeof bb === 'object' && !Array.isArray(bb)) return bb;
+      if (typeof bb === 'string') {
+        try { return JSON.parse(bb); } catch (e) { return {}; }
+      }
+      return {};
+    }
+
+    // RAW_JSON may arrive as a JSON string or a native object; null pre-cutover
+    // (documents created before 2026-07-10) and for a small tail after.
+    function loadRawJson(row) {
+      const rj = row.RAW_JSON;
+      if (rj === null || rj === undefined) return {};
+      if (typeof rj === 'object' && !Array.isArray(rj)) return rj;
+      if (typeof rj === 'string') {
+        try { return JSON.parse(rj); } catch (e) { return {}; }
+      }
+      return {};
+    }
+
+    // Unwrap one citation envelope to its scalar value; pass a bare scalar
+    // through unchanged. A null-valued envelope unwraps to null.
+    function unwrapEnv(node) {
+      if (node !== null && typeof node === 'object' && !Array.isArray(node)
+          && 'value' in node && 'citations' in node) {
+        return node.value;
+      }
+      return node;
+    }
+
+    // Navigate parsed RAW_JSON by nested keys/indices and unwrap a citation
+    // envelope to its scalar value. Tries the bare path, then the
+    // `extraction`-prefixed path (see SKILL.md Caveats). Returns null if the
+    // path is missing or the envelope's own value is a JSON null, rather than
+    // a stringified envelope.
+    // The GP shares of the waterfall's split tiers, distinct and in document
+    // order; null unless there are two or more (a single share is a flat carry).
+    function rjCarryTierRates(rawJson) {
+      const tiers = rjGet(rawJson, 'carried_interest', 'waterfall_tiers');
+      const rates = [];
+      for (const tier of Array.isArray(tiers) ? tiers : []) {
+        if (!tier || typeof tier !== 'object' || toStr(unwrapEnv(tier.kind)) !== 'split') continue;
+        const rate = toFloat(unwrapEnv(tier.percentage_to_gp));
+        if (rate !== null && !rates.includes(rate)) rates.push(rate);
+      }
+      return rates.length > 1 ? rates : null;
+    }
+
+    function rjGet(rawJson, ...path) {
+      if (!rawJson) return null;
+      const roots = [rawJson];
+      if (rawJson.extraction && typeof rawJson.extraction === 'object' && !Array.isArray(rawJson.extraction)) {
+        roots.push(rawJson.extraction);
+      }
+      for (const root of roots) {
+        let node = root;
+        let ok = true;
+        for (const key of path) {
+          if (typeof key === 'number') {
+            if (Array.isArray(node) && key >= 0 && key < node.length) {
+              node = node[key];
+            } else {
+              ok = false;
+              break;
+            }
+          } else if (node !== null && typeof node === 'object' && !Array.isArray(node) && key in node) {
+            node = node[key];
+          } else {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok) continue;
+        const unwrapped = unwrapEnv(node);
+        if (unwrapped !== null && unwrapped !== undefined) return unwrapped;
+      }
+      return null;
+    }
+
+    // Read one scalar field from RAW_JSON. There is no ATTRIBUTES fallback:
+    // document-ai builds ATTRIBUTES from the same extraction, so a field RAW_JSON
+    // leaves null is null there too (see SKILL.md "RAW_JSON as the source").
+    function rjField(rawJson, path, caster) {
+      return caster(rjGet(rawJson, ...path));
+    }
+
+    // Truncate an ISO date/datetime string to its date-only prefix. RAW_JSON
+    // dates arrive as full datetimes; ATTRIBUTES carries date-only strings.
+    function toDate10(v) {
+      const s = toStr(v);
+      return s ? s.slice(0, 10) : null;
+    }
+
+    // Join a RAW_JSON member array's names into one string.
+    // The investment-period management fee rate, or 0 when the LPA states that no fee is charged.
+    function rjFeeRate(rawJson) {
+      const rate = rjField(rawJson, ['management_fee', 'management_fee_rate_investment_period'], toFloat);
+      if (rate === null && rjField(rawJson, ['management_fee', 'pays_management_fee'], toBool) === false) return 0;
+      return rate;
+    }
+
+    function rjMemberNames(rawJson, ...path) {
+      const members = rjGet(rawJson, ...path);
+      if (!Array.isArray(members)) return null;
+      const names = [];
+      for (const m of members) {
+        if (!m || typeof m !== 'object') continue;
+        const name = unwrapEnv(m.name);
+        if (name) names.push(String(name));
+      }
+      return names.length ? names.join(', ') : null;
+    }
+
+    // Parses a side letter's economic_provisions field — an array of provision
+    // objects, arriving as a native array, a JSON-encoded string, or null.
+    function loadProvisions(value) {
+      if (value === null || value === undefined) return [];
+      if (typeof value === 'string') {
+        const s = value.trim();
+        if (!s || NULL_STRS.has(s)) return [];
+        try { value = JSON.parse(s); } catch (e) { return []; }
+      }
+      if (Array.isArray(value)) {
+        return value.filter(p => p !== null && typeof p === 'object' && !Array.isArray(p));
+      }
+      return [];
+    }
+
+    // ── Fuzzy name matching ───────────────────────────────────────────────────
+    // Hand-implemented port of Python's difflib.SequenceMatcher.ratio() — the
+    // Ratcliff/Obershelp longest-matching-block similarity. autojunk (which flags
+    // "popular" elements as junk) only activates when len(b) >= 200; every
+    // fund/GP/LP name in this domain is well under that, so autojunk is always a
+    // no-op here and is deliberately not implemented. This must reproduce
+    // difflib's output exactly — the 0.85 threshold below was tuned against it,
+    // and a different similarity algorithm would silently reclassify funds across
+    // the Extracted/Partial/Missing boundary.
+
+    function buildB2j(b) {
+      const b2j = new Map();
+      for (let i = 0; i < b.length; i++) {
+        const c = b[i];
+        if (!b2j.has(c)) b2j.set(c, []);
+        b2j.get(c).push(i);
+      }
+      return b2j;
+    }
+
+    function findLongestMatch(a, b, b2j, alo, ahi, blo, bhi) {
+      let besti = alo, bestj = blo, bestsize = 0;
+      let j2len = new Map();
+      for (let i = alo; i < ahi; i++) {
+        const newj2len = new Map();
+        const js = b2j.get(a[i]) || [];
+        for (const j of js) {
+          if (j < blo) continue;
+          if (j >= bhi) break;
+          const k = (j2len.get(j - 1) || 0) + 1;
+          newj2len.set(j, k);
+          if (k > bestsize) {
+            besti = i - k + 1;
+            bestj = j - k + 1;
+            bestsize = k;
+          }
+        }
+        j2len = newj2len;
+      }
+      while (besti > alo && bestj > blo && a[besti - 1] === b[bestj - 1]) {
+        besti--; bestj--; bestsize++;
+      }
+      while (besti + bestsize < ahi && bestj + bestsize < bhi && a[besti + bestsize] === b[bestj + bestsize]) {
+        bestsize++;
+      }
+      return [besti, bestj, bestsize];
+    }
+
+    function getMatchingBlocks(a, b) {
+      const la = a.length, lb = b.length;
+      const b2j = buildB2j(b);
+      const queue = [[0, la, 0, lb]];
+      const matchingBlocks = [];
+      while (queue.length) {
+        const [alo, ahi, blo, bhi] = queue.pop();
+        const [i, j, k] = findLongestMatch(a, b, b2j, alo, ahi, blo, bhi);
+        if (k) {
+          matchingBlocks.push([i, j, k]);
+          if (alo < i && blo < j) queue.push([alo, i, blo, j]);
+          if (i + k < ahi && j + k < bhi) queue.push([i + k, ahi, j + k, bhi]);
+        }
+      }
+      matchingBlocks.sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]);
+      let i1 = 0, j1 = 0, k1 = 0;
+      const nonAdjacent = [];
+      for (const [i2, j2, k2] of matchingBlocks) {
+        if (i1 + k1 === i2 && j1 + k1 === j2) {
+          k1 += k2;
+        } else {
+          if (k1) nonAdjacent.push([i1, j1, k1]);
+          i1 = i2; j1 = j2; k1 = k2;
+        }
+      }
+      if (k1) nonAdjacent.push([i1, j1, k1]);
+      nonAdjacent.push([la, lb, 0]);
+      return nonAdjacent;
+    }
+
+    function seqRatio(a, b) {
+      const blocks = getMatchingBlocks(a, b);
+      let matches = 0;
+      for (const blk of blocks) matches += blk[2];
+      const length = a.length + b.length;
+      return length ? (2.0 * matches) / length : 1.0;
+    }
+
+    // Normalize a fund/GP name for fuzzy matching: strip parentheticals, then
+    // repeatedly strip stacked entity suffixes ("… GP, LLC" needs two passes),
+    // then punctuation, then uppercase.
+    const ENTITY_SUFFIX_RE = /,?\s*(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L\.?P\.?|PBC|CO\.?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY|COMPANY|PARTNERS|PARTNERSHIP|GP)\.?\s*$/i;
+    const PARENTHETICAL_RE = /\s*\([^)]*\).*$/;
+    const PUNCT_RE = /[,.]/g;
+    const GP_ENTITY_RE = /\b(GP|Management)\b(?:[\s-]*(?:[IVX]+|\d+))?\s*,?\s*(LLC|LTD|LLP|CORP|CORPORATION|INC\.?|CO\.?)\s*$/i;
+
+    function normName(name) {
+      if (!name) return '';
+      let s = name.trim();
+      s = s.replace(PARENTHETICAL_RE, '');
+      let prev = null;
+      while (prev !== s) {
+        prev = s;
+        s = s.replace(ENTITY_SUFFIX_RE, '').trim();
+      }
+      s = s.replace(PUNCT_RE, '');
+      return s.toUpperCase().trim();
+    }
+
+    // Series-number disambiguation — "Fund II" vs "Fund III" would otherwise
+    // fuzzy-match at ~0.94 (they share "Fund" and most of the name). Extracts the
+    // LAST Roman-or-digit token from the ORIGINAL (non-normalized) name.
+    const SERIES_RE_SRC = '\\b((?:M{0,4}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{1,3}))|\\d+)\\b';
+    const ROMAN_TO_INT = {
+      I: 1, II: 2, III: 3, IV: 4, V: 5,
+      VI: 6, VII: 7, VIII: 8, IX: 9, X: 10,
+      XI: 11, XII: 12,
+    };
+
+    function seriesNum(name) {
+      if (!name) return null;
+      const upper = name.toUpperCase();
+      const re = new RegExp(SERIES_RE_SRC, 'gi');
+      const tokens = [];
+      let m;
+      while ((m = re.exec(upper)) !== null) {
+        tokens.push(m[1].toUpperCase());
+        if (m[0].length === 0) re.lastIndex++;
+      }
+      if (!tokens.length) return null;
+      const last = tokens[tokens.length - 1];
+      if (/^\d+$/.test(last)) return parseInt(last, 10);
+      return Object.prototype.hasOwnProperty.call(ROMAN_TO_INT, last) ? ROMAN_TO_INT[last] : null;
+    }
+
+    // True if both names have the same series number, or neither has one — both
+    // None counts as a match, mirroring Python's `None == None`.
+    function sameSeries(a, b) {
+      return seriesNum(a) === seriesNum(b);
+    }
+
+    // SequenceMatcher.ratio() on normalized names. Returns 0 if the series
+    // numbers disagree — distinct vehicles even when the strings are similar.
+    function fuzzyRatio(a, b) {
+      if (!a || !b) return 0.0;
+      if (!sameSeries(a, b)) return 0.0;
+      return seqRatio(normName(a), normName(b));
+    }
+
+    function isGpEntity(name) {
+      if (!name) return false;
+      return GP_ENTITY_RE.test(name.trim());
+    }
+
+    function parseIsoDate(s) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if (!m) return null;
+      const year = +m[1], month = +m[2], day = +m[3];
+      const t = Date.UTC(year, month - 1, day);
+      const d = new Date(t);
+      if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null;
+      return t;
+    }
+
+    // True if ISO date strings a and b are within `days` calendar days of each other.
+    function dateWithinWindow(a, b, days = 7) {
+      if (!a || !b) return false;
+      const da = parseIsoDate(String(a).slice(0, 10));
+      const db = parseIsoDate(String(b).slice(0, 10));
+      if (da === null || db === null) return false;
+      return Math.abs(da - db) / 86400000 <= days;
+    }
+
+    // Best-matching candidate, or null if all are below threshold. On a tie, the
+    // FIRST candidate at the max score wins — mirrors Python's max() semantics.
+    function bestMatch(target, candidates, threshold = 0.85) {
+      if (!target || !candidates || candidates.length === 0) return null;
+      let best = candidates[0];
+      let bestScore = fuzzyRatio(target, best);
+      for (let i = 1; i < candidates.length; i++) {
+        const score = fuzzyRatio(target, candidates[i]);
+        if (score > bestScore) { best = candidates[i]; bestScore = score; }
+      }
+      return bestScore >= threshold ? best : null;
+    }
+
+    // ── Fund-name identity matching ───────────────────────────────────────────
+    // Port of process.py's fund_key / fund_match / resolve_fund — keep in lockstep.
+    // normName strips HOLDINGS / GP / parentheticals, so it can't tell sibling funds apart.
+    const LEGAL_FORMS = [
+      [['LIMITED', 'LIABILITY', 'COMPANY'], 'LLC'],
+      [['LIMITED', 'PARTNERSHIP'], 'LP'],
+      [['L', 'L', 'C'], 'LLC'],
+      [['L', 'P'], 'LP'],
+      [['LLLP'], 'LP'],
+      [['LP'], 'LP'],
+      [['LLC'], 'LLC'],
+      [['LLP'], 'LLP'],
+      [['LTD'], 'LTD'],
+      [['LIMITED'], 'LTD'],
+      [['INC'], 'INC'],
+      [['CORP'], 'CORP'],
+      [['CORPORATION'], 'CORP'],
+      [['PBC'], 'PBC'],
+      [['PLC'], 'PLC'],
+      [['SCSP'], 'SCSP'],
+      [['SCS'], 'SCS'],
+      [['SARL'], 'SARL'],
+    ];
+    const FUND_FILLER = new Set(['THE', 'AND', 'FUND']);
+    const ROMAN_NUMERALS = {
+      I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8,
+      IX: 9, X: 10, XI: 11, XII: 12, XIII: 13, XIV: 14, XV: 15,
+      XVI: 16, XVII: 17, XVIII: 18, XIX: 19, XX: 20,
+    };
+    const BOILERPLATE_PAREN_RE = /["“”]|^\s*(A|AN|THE)\s|LIMITED PARTNERSHIP|LIMITED LIABILITY|COMPANY|CORPORATION|FORMERLY|PREVIOUSLY|F\/K\/A|\bFKA\b|HEREINAFTER|REFERRED/i;
+    // Carta labels one legal vehicle's rounds as separate funds ("…, L.P. (Series B)").
+    const SECURITY_LABEL_PAREN_RE = /\b(SERIES|CLASS|COMMON|PREFERRED|STOCK|SECONDARY|SAFE|CONVERTIBLE|NOTES?|WARRANTS?|SEED|TRANCHE|BRIDGE|EXT|JAN(UARY)?|FEB(RUARY)?|MAR(CH)?|APR(IL)?|MAY|JUNE?|JULY?|AUG(UST)?|SEPT?(EMBER)?|OCT(OBER)?|NOV(EMBER)?|DEC(EMBER)?)\b/i;
+    // A series LLC's series follow its last spaced dash ("Acme Owl, LLC - Series I"); not the entity either.
+    // The word Carta's fund names use to split one series into classes ("… Series- Class A").
+    const CLASS_WORD = 'CLASS';
+    const SERIES_SUFFIX_RE = /\s[-–—]\s(?:(?!\s[-–—]\s).)*\b(SERIES|CLASS)\b(?:(?!\s[-–—]\s).)*$/i;
+    // A series named within its LLC ("Harbor Series (the “Series”) of Acme Series LLC") is the
+    // series Carta writes "Acme Series LLC - Harbor Series".
+    const SERIES_OF_PARENT_RE = /^(?<series>.+?)\s*(?:\([^)]*\))?\s*,?\s+(?<aSeries>an?\s+series\s+)?of\s+(?<parent>.+?\b(?:LLC|L\.L\.C\.?|LP|L\.P\.?))\s*$/i;
+    const SERIES_WORD = 'SERIES';
+    const SERIES_WORD_RE = new RegExp('\\b' + SERIES_WORD + '\\b', 'i');
+    const FUND_MATCH_EXACT = 3;
+    const FUND_MATCH_FORM_DIFFERS = 2;
+    const FUND_MATCH_CLOSE = 1;
+
+    function fundTokens(text) {
+      const s = text.toUpperCase().replace(/&/g, ' AND ').replace(/[.'’]/g, '');
+      return s.replace(/[^A-Z0-9]+/g, ' ').split(' ').filter(Boolean);
+    }
+
+    // A name with its parentheticals (closed or trailing-unclosed) blanked out.
+    function mainName(name) {
+      return name.replace(/\(([^)]*)\)/g, ' ').replace(/\(.*$/, ' ');
+    }
+
+    // Whether words end as a series is named: the last series word, followed only by labels
+    // ("Harbor Series", "Series I", "Series A-1", "Series 2021-A-1"). "Acme Series A Fund"
+    // names a fund, not a series: FUND is no label.
+    function isSeriesDesignation(tokens) {
+      const last = tokens.lastIndexOf(SERIES_WORD);
+      return last >= 0 && tokens.slice(last + 1).every(t => SERIES_LABEL_RE.test(t));
+    }
+
+    // A series named within its LLC, rewritten the way Carta names it: "‹LLC› - ‹series›".
+    // Any other name comes back unchanged. The text before "of" must end as a series
+    // designation, the last series word followed only by labels ("Series A-1"; see
+    // isSeriesDesignation), or the name must say ", a Series of", so "Acme Series A Fund
+    // of Funds, LP" and "Bank of America Fund LLC" stay as they are.
+    function seriesOfParent(name) {
+      const m = name.match(SERIES_OF_PARENT_RE);
+      if (!m) return name;
+      // One spaced dash may stand between the LLC and the series, so none stays inside it.
+      let series = m.groups.series.replace(/\s+[-–—]\s+/g, ' ').replace(/^[\s,\-–—]+|[\s,\-–—]+$/g, '');
+      if (!isSeriesDesignation(fundTokens(series))) {
+        if (!m.groups.aSeries) return name;
+        series += ' Series';
+      }
+      return m.groups.parent + ' - ' + series;
+    }
+
+    // [identity words, legal form]; roman numerals become digits so "IV" == "4".
+    function fundKey(name) {
+      if (!name) return [[], null];
+      name = seriesOfParent(name);
+      const keptParens = [];
+      for (const m of name.matchAll(/\(([^)]*)\)/g)) {
+        if (!BOILERPLATE_PAREN_RE.test(m[1]) && !SECURITY_LABEL_PAREN_RE.test(m[1])) keptParens.push(m[1]);
+      }
+      const main = mainName(name).replace(SERIES_SUFFIX_RE, '');
+      let tokens = fundTokens(main);
+      let form = null;
+      for (const [seq, canon] of LEGAL_FORMS) {
+        if (tokens.length > seq.length && seq.every((w, i) => tokens[tokens.length - seq.length + i] === w)) {
+          tokens = tokens.slice(0, tokens.length - seq.length);
+          form = canon;
+          break;
+        }
+      }
+      for (const paren of keptParens) tokens.push(...fundTokens(paren));
+      const out = [];
+      for (let tok of tokens) {
+        if (FUND_FILLER.has(tok)) continue;
+        if (Object.prototype.hasOwnProperty.call(ROMAN_NUMERALS, tok)) tok = String(ROMAN_NUMERALS[tok]);
+        else if (/^\d+$/.test(tok)) tok = String(parseInt(tok, 10));
+        out.push(tok);
+      }
+      return [out, form];
+    }
+
+    function fundTokensClose(x, y) {
+      if (x === y) return true;
+      if (/^\d+$/.test(x) || /^\d+$/.test(y) || x.length < 4 || y.length < 4) return false;
+      return seqRatio(x, y) >= 0.8;
+    }
+
+    function fundWordsAlign(a, b) {
+      return a.every(x => b.some(y => fundTokensClose(x, y))) &&
+        b.every(y => a.some(x => fundTokensClose(y, x)));
+    }
+
+    // [tier, similarity] if a and b name the same fund vehicle, else null.
+    function fundMatch(a, b) {
+      const [ta, fa] = fundKey(a);
+      const [tb, fb] = fundKey(b);
+      if (!ta.length || !tb.length) return null;
+      const ja = ta.join(''), jb = tb.join('');
+      const ratio = seqRatio(ja, jb);
+      if (ja === jb) {
+        if (fa === null || fb === null || fa === fb) return [FUND_MATCH_EXACT, ratio];
+        return [FUND_MATCH_FORM_DIFFERS, ratio];
+      }
+      if (fundWordsAlign(ta, tb)) return [FUND_MATCH_CLOSE, ratio];
+      return null;
+    }
+
+    // True if every name has the same identity words and no two state different legal forms.
+    function sameVehicle(names) {
+      const keys = names.map(fundKey);
+      const forms = new Set(keys.map(k => k[1]).filter(f => f !== null));
+      return new Set(keys.map(k => k[0].join(' '))).size === 1 && forms.size <= 1;
+    }
+
+    // { funds, tier, tied }. Tied candidates naming one legal vehicle all win; any
+    // other tie attributes nothing and `tied` lists the candidates. A name no fund matches
+    // resolves to the one fund whose name is it with one run of words written as initials,
+    // either way round ("FP Global I SPV" and "Future Positive Global I SPV").
+    function resolveFund(name, firmFundNames) {
+      const scored = [];
+      for (const fund of firmFundNames) {
+        const m = fundMatch(name, fund);
+        if (m !== null) scored.push({ tier: m[0], ratio: m[1], fund });
+      }
+      if (!scored.length) {
+        let named = bareSeries(name, firmFundNames);
+        if (!named.length) named = namedByInitials(name, firmFundNames);
+        return named.length ? { funds: named, tier: FUND_MATCH_CLOSE, tied: [] } : { funds: [], tier: null, tied: [] };
+      }
+      scored.sort((x, y) => (y.tier - x.tier) || (y.ratio - x.ratio));
+      const top = scored[0];
+      const tops = scored.filter(sc => sc.tier === top.tier && top.ratio - sc.ratio < 0.05).map(sc => sc.fund);
+      if (tops.length === 1 || sameVehicle(tops)) return { funds: tops, tier: top.tier, tied: [] };
+      return { funds: [], tier: null, tied: tops };
+    }
+
+    // The firm's series a name gives without its LLC ("Harbor Continuation Series" for "Acme
+    // Series LLC - Harbor Continuation Series"), or that series' classes. Empty unless the name
+    // says it is a series, carries a word beyond the series word and its label, and exactly
+    // one LLC at the firm has a series by that name.
+    function bareSeries(name, firmFundNames) {
+      if (!name || !SERIES_WORD_RE.test(name)) return [];
+      const tokens = fundTokens(mainName(name));
+      // "Series I" alone says which series of some LLC, not which LLC: it needs a name of its own.
+      if (tokens.every(t => t === SERIES_WORD || SERIES_LABEL_RE.test(t))) return [];
+      const key = tokens.join('');
+      const named = firmFundNames.filter(f => dashSeries(f) === key);
+      return named.length && sameVehicle(named) ? named : [];
+    }
+
+    // A fund name's identity words with its series or class label kept. fundKey drops
+    // the label so every series of an LLC resolves together; a series agreement or side
+    // letter is then narrowed to its series with this key.
+    function seriesTokens(name) {
+      if (!name) return [];
+      name = seriesOfParent(name);
+      const kept = name.replace(/\(([^)]*)\)/g, (m, inner) => BOILERPLATE_PAREN_RE.test(inner) ? ' ' : ' ' + inner + ' ');
+      const tokens = fundTokens(kept);
+      for (const [seq] of LEGAL_FORMS) {
+        for (let i = 0; i + seq.length <= tokens.length;) {
+          if (seq.every((w, j) => tokens[i + j] === w)) tokens.splice(i, seq.length);
+          else i += 1;
+        }
+      }
+      return tokens.filter(tok => !FUND_FILLER.has(tok)).map(tok =>
+        Object.prototype.hasOwnProperty.call(ROMAN_NUMERALS, tok) ? String(ROMAN_NUMERALS[tok])
+          : /^\d+$/.test(tok) ? String(parseInt(tok, 10)) : tok);
+    }
+    // seriesTokens as one string, for comparing two names whole.
+    const seriesKey = name => seriesTokens(name).join('');
+    // prefix is a leading run of whole words of tokens: whether a master_series already
+    // starts with its LLC's name, or needs the name joined to it.
+    const startsWithWords = (tokens, prefix) => prefix.length > 0 && prefix.every((w, i) => tokens[i] === w);
+
+    // The series among targets that name points to: the one it names, or that series'
+    // classes when Carta splits it. Empty when name points only to the parent, or to a
+    // series Carta doesn't list ("Series A" is not "Series A-1").
+    function seriesNamed(targets, name) {
+      const key = seriesKey(name);
+      let named = targets.filter(t => seriesKey(t) === key);
+      if (!named.length && key !== fundKey(name)[0].join('')) {
+        named = targets.filter(t => seriesKey(t).startsWith(key + CLASS_WORD));
+      }
+      return named;
+    }
+
+    // A series label after the series word: a numeral, roman numeral, letter or letter-digit code.
+    const SERIES_LABEL_RE = /^(?:\d+\w*|[IVXLCDM]+|[A-Z]\d*)$/;
+    // Words before the series word that quantify or describe series in general ("each series",
+    // "Delaware series limited liability company", which loses its legal form before this test).
+    const SERIES_GENERIC_WORDS = new Set(['EACH', 'ALL', 'ANY', 'EVERY', 'MULTIPLE', 'SEPARATE', 'VARIOUS',
+      'MORE', 'SUCH', 'ONE', 'NEW', 'ADDITIONAL', 'OTHER', 'FUTURE', 'DELAWARE', 'DISTINCT']);
+    // Words that make text before the series word a sentence, not a name ("may issue series",
+    // "interests in series"). "OF" is not one: "Class of 2024 Series" is a name. "A" is a class
+    // letter, not an article, right after a CLASS_LABEL_WORDS word ("Class A Series").
+    const SERIES_SENTENCE_WORDS = new Set(['A', 'AN', 'IN', 'MAY', 'BE', 'ISSUE', 'ISSUED', 'ESTABLISH', 'ESTABLISHED']);
+    const CLASS_LABEL_WORDS = new Set([CLASS_WORD, 'TRANCHE']);
+    // Statutory kinds of series: they describe series in general ("each protected series"), not one.
+    const SERIES_KIND_WORDS = new Set(['PROTECTED', 'REGISTERED']);
+
+    // The series an agreement states it governs, joined to its LLC's name. The
+    // extractor's master_series holds a series name ("Kraken Series"), the parent's
+    // name, or a sentence about issuing series; only a series name points anywhere.
+    function agreementSeriesName(lpa) {
+      const parent = lpa.fund.name, series = lpa.fund.masterSeries;
+      if (!parent || !series) return null;
+      return startsWithWords(seriesTokens(series), seriesTokens(parent)) ? series : parent + ' - ' + series;
+    }
+
+    // The series a name's final spaced-dash segment labels ("SERIES2"), or null. A class
+    // label after a series name is dropped, so every class Carta splits one series into is
+    // that series; a segment that starts with the class word keeps its whole label.
+    function dashSeries(name) {
+      const m = mainName(seriesOfParent(name)).match(SERIES_SUFFIX_RE);
+      if (!m) return null;
+      const tokens = fundTokens(m[0]);
+      const cls = tokens.indexOf(CLASS_WORD);
+      return (cls > 0 ? tokens.slice(0, cls) : tokens).join('');
+    }
+
+    // The targets an agreement names as its series: by its own name, or failing that
+    // by the series it states it governs (master_series).
+    function agreementSeries(targets, lpa) {
+      let named = seriesNamed(targets, lpa.fund.name);
+      const seriesName = named.length ? null : agreementSeriesName(lpa);
+      if (seriesName) named = seriesNamed(targets, seriesName);
+      return named;
+    }
+
+    // The series of one LLC an agreement's terms belong to: each series' terms sit in
+    // its own schedule, so it goes to the series it names, and nowhere if it names only
+    // the parent. Targets that aren't distinct dash-labelled series all keep it.
+    function distinctSeries(targets) {
+      return new Set(targets.map(dashSeries)).size >= 2;
+    }
+
+    function seriesForAgreement(targets, lpa) {
+      if (!distinctSeries(targets)) return targets;
+      return agreementSeries(targets, lpa);
+    }
+
+    // Whether the agreement's master_series, less the LLC's name, designates a series:
+    // the series word followed by a label ("Series I", "Series A-1", "Series 2021-A-1"),
+    // or the series word ending a name ("Kraken Series", "Class of 2024 Series"; only
+    // "of ..." may follow it; "Class A Series"). Text before the series word, less any
+    // trailing SERIES_KIND_WORDS, is a name only if it holds none of SERIES_SENTENCE_WORDS
+    // (bar a class letter) and does not end in one of SERIES_GENERIC_WORDS. The parent's
+    // name, a bare "Series", "Each Series" and a sentence about series ("a Delaware series
+    // limited liability company", "may issue series of interests") designate none.
+    function statesSeries(lpa) {
+      const parentTokens = seriesTokens(lpa.fund.name);
+      let tokens = seriesTokens(lpa.fund.masterSeries);
+      if (startsWithWords(tokens, parentTokens)) tokens = tokens.slice(parentTokens.length);
+      // A value naming two or more series ("Series I Units; Series II Units") is no one series' schedule.
+      // A designation followed by "of" and then a series word that is itself a designation by the same
+      // test ("Class A Series of Kraken Series") is part of that later series, not a second one; a later
+      // series word that designates nothing ("Kraken Series of Units of each Series") leaves it standing.
+      const designated = new Set();
+      tokens.forEach((token, i) => {
+        if (token !== SERIES_WORD) return;
+        const designation = seriesDesignation(tokens, i);
+        if (designation === null) return;
+        const rest = tokens.slice(SERIES_LABEL_RE.test(tokens[i + 1] || '') ? i + 2 : i + 1);
+        if (rest[0] === 'OF' && tokens.some((t, k) => k > i && t === SERIES_WORD && seriesDesignation(tokens, k) !== null)) return;
+        designated.add(designation);
+      });
+      return designated.size === 1;
+    }
+
+    // The series the series word at tokens[i] designates (its label, or the name before it), or null.
+    function seriesDesignation(tokens, i) {
+      const label = tokens[i + 1] || '';
+      if (SERIES_LABEL_RE.test(label)) return label;
+      const head = tokens.slice(0, i), tail = tokens.slice(i + 1);
+      while (head.length && SERIES_KIND_WORDS.has(head[head.length - 1])) head.pop();
+      const endsName = !tail.length || tail[0] === 'OF';
+      const sentence = head.some((w, j) => SERIES_SENTENCE_WORDS.has(w) && !(w === 'A' && j && CLASS_LABEL_WORDS.has(head[j - 1])));
+      return endsName && head.length > 0 && !SERIES_GENERIC_WORDS.has(head[head.length - 1]) && !sentence ? head.join(' ') : null;
+    }
+
+    // Whether an agreement is the parent LLC's own, so it governs series with none of
+    // their own: targets are distinct dash-labelled series and the agreement reaches none
+    // of them and designates none in its name or master_series. A schedule that states a
+    // series, listed or not, is that series' and says nothing about its siblings.
+    function isParentAgreement(targets, lpa) {
+      if (!distinctSeries(targets) || dashSeries(lpa.fund.name) != null) return false;
+      return !agreementSeries(targets, lpa).length && !statesSeries(lpa);
+    }
+
+    // The series of one LLC a side letter belongs to: the one it names, or that
+    // series' classes when Carta splits it. One naming only the parent LLC, or a
+    // series Carta doesn't list, stays on every series. A letter left on several is
+    // marked sharedAcrossSeries so the totals count it once.
+    function narrowToNamedSeries(targets, letterName, attributed) {
+      const named = seriesNamed(targets, letterName);
+      if (named.length === 1) return named;
+      attributed.sharedAcrossSeries = true;
+      return named.length ? named : targets;
+    }
+
+    // Carry above this percentage is not a fund's carry.
+    const FUND_CARRY_MAX_PCT = 50;
+
+    // Ranges outside which an extracted term is more likely a misread than a real
+    // term: a GP agreement's profit split read as carry, a hurdle multiple read as a
+    // percentage. Flagged for the reader to check against the LPA, never hidden: an
+    // unusual term can be real. [field, out of range?, reason]
+    const TERM_CHECKS = [
+      ['mgmtFeeRateInvestmentPeriod', (v) => v > 5, 'above 5%'],
+      ['mgmtFeeRatePostInvestment', (v) => v > 5, 'above 5%'],
+      ['mgmtFeeRatePostInvestment', (v, t) => t.mgmtFeeRateInvestmentPeriod != null && v > t.mgmtFeeRateInvestmentPeriod,
+        'higher than the fee during the investment period'],
+      ['carriedInterestRate', (v) => v > FUND_CARRY_MAX_PCT, `above ${FUND_CARRY_MAX_PCT}%`],
+      ['preferredReturnRate', (v) => v > 30, 'above 30%, may be a multiple'],
+      ['fundTermYears', (v) => v < 1 || v > 30, 'outside 1 to 30 years'],
+      ['investmentPeriodYears', (v, t) => t.fundTermYears != null && v > t.fundTermYears, 'longer than the fund term'],
+      ['capitalCallNoticeDays', (v) => v < 3 || v > 90, 'outside 3 to 90 days'],
+    ];
+
+    // The extracted terms worth checking against the LPA, each with its reason.
+    function termFlags(terms) {
+      return TERM_CHECKS
+        .filter(([field, outOfRange]) => terms[field] != null && outOfRange(terms[field], terms))
+        .map(([field, , reason]) => ({ field, reason }));
+    }
+
+    // ── LPA extraction assembly ───────────────────────────────────────────────
+    // Groups LPA rows by EXTRACTION_ID into structured objects: one document can
+    // hold several extractions (a packet split into segments), each its own
+    // agreement, so two from one document stay separate and share a documentId.
+    // Keyed in a Map (not a plain object) so iteration order stays insertion
+    // order even when an id happens to look numeric — JS objects reorder
+    // integer-like keys, Maps never do, and that order feeds tie-breaks in
+    // matchFunds below.
+    const LPA_DOCUMENT_TYPE = 'limited_partnership_agreement';
+    const OPERATING_AGREEMENT_DOCUMENT_TYPE = 'operating_agreement';
+    // An LLC fund's operating agreement states real carry, so it is kept. Above
+    // FUND_CARRY_MAX_PCT the figure is a member profit split (a holdings LLC paying 100%
+    // to its manager), not fund carry, so these terms are withheld.
+    const OPERATING_AGREEMENT_WITHHELD_TERMS = ['carriedInterestRate', 'carryTierRates', 'preferredReturnRate', 'preferredReturnMultiple', 'waterfallStructure'];
+
+    const SHORT_TEXT_LIMIT = 60;
+    // Cut long verbatim text to SHORT_TEXT_LIMIT characters at a word boundary, ending in an ellipsis.
+    function shorten(text, limit = SHORT_TEXT_LIMIT) {
+      if (text === null || text.length <= limit) return text;
+      const cut = text.slice(0, limit);
+      const space = cut.lastIndexOf(' ');
+      return (space > 0 ? cut.slice(0, space) : cut).replace(/[,;:. ]+$/, '') + '…';
+    }
+
+    // documentType is the DOCUMENT_TYPE the rows were queried under: an operating
+    // agreement runs the same extractor and writes the same record types as an LPA.
+    function buildLpas(lpaRows, documentType = LPA_DOCUMENT_TYPE) {
+      const grouped = new Map();
+      for (const row of lpaRows) {
+        const eid = row.EXTRACTION_ID;
+        if (!eid) continue;
+        if (!grouped.has(eid)) grouped.set(eid, []);
+        grouped.get(eid).push(row);
+      }
+
+      const out = new Map();
+      for (const [eid, rows] of grouped) {
+        const lpRecordIndexes = [];
+        let bboxes = {};
+        const createdAts = [];
+        let termsExtracted = false;
+        const currencyCodes = [];
+        let rawJson = {};
+
+        for (const row of rows) {
+          const recordType = (row.RECORD_TYPE || '').toLowerCase();
+          const kind = (row.KIND || '').toLowerCase();
+          const rowBboxes = loadBboxes(row);
+          if (rowBboxes && Object.keys(rowBboxes).length) bboxes = { ...bboxes, ...rowBboxes };
+          const ca = row.CREATED_AT;
+          if (ca) createdAts.push(String(ca));
+          const ccy = cleanCurrency(row.DOCUMENT_CURRENCY_CODE);
+          if (ccy) currencyCodes.push(ccy);
+          if (!rawJson || !Object.keys(rawJson).length) rawJson = loadRawJson(row);
+
+          if (kind === 'entity' && recordType === 'limited_partner') {
+            lpRecordIndexes.push(toInt(row.RECORD_INDEX) || 0);
+          } else if (kind === 'event' && recordType === 'limited_partnership') {
+            termsExtracted = true;
+          }
+        }
+
+        // LP rows are written in parties.limited_partners[] order, so the Nth
+        // row by RECORD_INDEX is the Nth array entry (validated: counts always
+        // match). Joining by name instead would miss every unnamed LP.
+        let rjLps = rjGet(rawJson, 'parties', 'limited_partners');
+        if (!Array.isArray(rjLps)) rjLps = [];
+
+        // The per-field currency_code siblings are rare; most LPAs carry only the free-form value.
+        const currencyCode = currencyCodes.length ? currencyCodes[0] : freeformCurrency(rjGet(rawJson, 'currency'));
+        const lps = lpRecordIndexes.map((_, lpPos) => {
+          const rjLp = rjLps[lpPos] && typeof rjLps[lpPos] === 'object' ? rjLps[lpPos] : {};
+          return {
+            name: toStr(unwrapEnv(rjLp.name)),
+            entityType: toStr(unwrapEnv(rjLp.entity_type)),
+            commitmentAmount: toFloat(unwrapEnv(rjLp.commitment_amount)),
+            percentageInterest: toFloat(unwrapEnv(rjLp.percentage_interest)),
+            address: toStr(unwrapEnv(rjLp.address)),
+            // A fund's roster can span several documents, so each LP keeps the
+            // currency of the extraction its amount came from.
+            currencyCode,
+          };
+        });
+
+        const feeBasis = rjField(rawJson, ['management_fee', 'management_fee_basis_investment_period'], toStr);
+        const terms = termsExtracted ? {
+          carriedInterestRate: rjField(rawJson, ['carried_interest', 'carried_interest_rate'], toFloat),
+          carryTierRates: rjCarryTierRates(rawJson),
+          preferredReturnRate: rjField(rawJson, ['carried_interest', 'preferred_return_rate'], toFloat),
+          // A hurdle stated as a multiple of capital (1.6 for 1.6x), beside or instead of a rate.
+          preferredReturnMultiple: rjField(rawJson, ['carried_interest', 'preferred_return_multiple'], toFloat),
+          waterfallStructure: rjField(rawJson, ['carried_interest', 'distribution_waterfall_type'], toStr),
+          mgmtFeeRateInvestmentPeriod: rjFeeRate(rawJson),
+          mgmtFeeRatePostInvestment: rjField(rawJson, ['management_fee', 'management_fee_rate_post_investment'], toFloat),
+          mgmtFeeBasisInvestmentPeriod: feeBasis,
+          mgmtFeeBasisShort: shorten(feeBasis),
+          fundTermYears: rjField(rawJson, ['fund_terms', 'fund_term_years'], toFloat),
+          investmentPeriodYears: rjField(rawJson, ['fund_terms', 'investment_period_years'], toFloat),
+          capitalCallNoticeDays: rjField(rawJson, ['capital_provisions', 'capital_call_notice_days'], toInt),
+          initialClosingDate: rjField(rawJson, ['fund_terms', 'initial_closing_date'], toDate10),
+        } : {};
+        // An event row with every term empty states nothing, so it is no more "Full data" than none.
+        termsExtracted = termsExtracted && Object.values(terms).some(v => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && !v.length));
+        const notFundLpa = documentType === OPERATING_AGREEMENT_DOCUMENT_TYPE
+          && terms.carriedInterestRate != null && terms.carriedInterestRate > FUND_CARRY_MAX_PCT;
+        if (notFundLpa) {
+          for (const field of OPERATING_AGREEMENT_WITHHELD_TERMS) terms[field] = null;
+        }
+
+        out.set(eid, {
+          documentId: rows[0].DOCUMENT_ID,
+          extractionId: eid,
+          documentType,
+          notFundLpa,
+          fund: {
+            name: rjField(rawJson, ['fund_info', 'fund_name'], toStr),
+            stateOfFormation: rjField(rawJson, ['fund_info', 'state_of_formation'], toStr),
+            lpaDate: rjField(rawJson, ['fund_info', 'lpa_date'], toDate10),
+            masterSeries: rjField(rawJson, ['fund_info', 'master_series'], toStr),
+            fundPurpose: rjField(rawJson, ['fund_info', 'fund_purpose'], toStr),
+            // RAW_JSON only -- ATTRIBUTES never carries these three.
+            registeredAgent: toStr(rjGet(rawJson, 'fund_info', 'registered_agent_name')),
+            principalOffice: toStr(rjGet(rawJson, 'fund_info', 'principal_office_address')),
+            governingLaw: toStr(rjGet(rawJson, 'document_metadata', 'governing_law')),
+          },
+          generalPartner: {
+            name: rjField(rawJson, ['parties', 'general_partner', 'name'], toStr),
+            entityType: rjField(rawJson, ['parties', 'general_partner', 'entity_type'], toStr),
+            stateOfFormation: rjField(rawJson, ['parties', 'general_partner', 'state_of_formation'], toStr),
+            commitmentAmount: rjField(rawJson, ['parties', 'general_partner', 'commitment_amount'], toFloat),
+            commitmentPercentage: rjField(rawJson, ['parties', 'general_partner', 'commitment_percentage'], toFloat),
+            address: rjField(rawJson, ['parties', 'general_partner', 'address'], toStr),
+            // RAW_JSON only -- ATTRIBUTES never carries it.
+            managingMembers: rjMemberNames(rawJson, 'parties', 'general_partner', 'members'),
+          },
+          limitedPartners: lps,
+          currencyCode,
+          termsExtracted,
+          terms,
+          termFlags: termFlags(terms),
+          boundingBoxes: bboxes,
+          createdAt: createdAts.length ? createdAts.slice().sort()[0] : null,
+        });
+      }
+
+      return out;
+    }
+
+    // ── Side letter extraction assembly ───────────────────────────────────────
+    // Groups side letter rows by EXTRACTION_ID and pairs each LP entity row with
+    // the NEXT side_letter event row. Each extraction contains a repeating
+    // pattern: fund entity row (once) → LP entity → event → LP entity → event…
+    function buildSideLetters(slRows) {
+      const grouped = new Map();
+      for (const row of slRows) {
+        const eid = row.EXTRACTION_ID;
+        if (!eid) continue;
+        if (!grouped.has(eid)) grouped.set(eid, []);
+        grouped.get(eid).push(row);
+      }
+
+      const out = [];
+      for (const [eid, rowsRaw] of grouped) {
+        // Sort by RECORD_INDEX so LP/event pairs stay adjacent. Array.sort is
+        // stable (ES2019+), matching Python's stable list.sort(). This order
+        // also lines up 1:1 with RAW_JSON's side_letters[] array (validated:
+        // cardinality always matches on real data).
+        const rows = rowsRaw.slice().sort((a, b) => (toInt(a.RECORD_INDEX) || 0) - (toInt(b.RECORD_INDEX) || 0));
+        let rawJson = {};
+        for (const row of rows) {
+          const rj = loadRawJson(row);
+          if (rj && Object.keys(rj).length) { rawJson = rj; break; }
+        }
+        let rjSideLetters = rjGet(rawJson, 'side_letters');
+        if (!Array.isArray(rjSideLetters)) rjSideLetters = [];
+
+        // Extraction-level, same for every side letter in this extraction.
+        const fundName = toStr(rjGet(rawJson, 'issuer_name'));
+
+        // Pair each LP entity with the next side_letter event row; slIdx
+        // tracks that row's position for the positional RAW_JSON join.
+        let pendingLp = null;
+        let slIdx = 0;
+        for (const row of rows) {
+          const rt = (row.RECORD_TYPE || '').toLowerCase();
+          const kind = (row.KIND || '').toLowerCase();
+          const attrs = loadAttrs(row);
+          if (rt === 'limited_partner' && kind === 'entity') {
+            pendingLp = attrs;
+          } else if (rt === 'side_letter' && kind === 'event') {
+            const slObj = slIdx < rjSideLetters.length ? rjSideLetters[slIdx] : null;
+            slIdx++;
+
+            const slField = (key, caster) => caster(slObj && typeof slObj === 'object' ? unwrapEnv(slObj[key]) : null);
+            const provisionSummary = (key) => {
+              const obj = slObj && typeof slObj === 'object' ? slObj[key] : null;
+              return obj && typeof obj === 'object' ? toStr(unwrapEnv(obj.summary)) : null;
+            };
+
+            // capital_commitment: ATTRIBUTES is pre-formatted ("$1,000,000"),
+            // RAW_JSON a bare number -- stays ATTRIBUTES-only.
+            out.push({
+              documentId: rows[0].DOCUMENT_ID,
+              extractionId: eid,
+              fundName: fundName,
+              lpName: slField('investor', toStr),
+              lpCapitalCommitment: pendingLp ? toStr(pendingLp.capital_commitment) : null,
+              // From RAW_JSON (~6.7% coverage) — see SKILL.md Caveats.
+              currencyCode: cleanCurrency(row.DOCUMENT_CURRENCY_CODE),
+              issueDate: slField('issue_date', toDate10),
+              executedByInvestor: slField('executed_by_investor', toBool),
+              executedByIssuer: toBool(rjGet(rawJson, 'executed_by_issuer')),
+              hasDraftMarkings: toBool(rjGet(rawJson, 'has_draft_markings')),
+              hasUnfilledPlaceholders: toBool(rjGet(rawJson, 'has_unfilled_placeholders')),
+              economicProvisions: loadProvisions(attrs.economic_provisions),
+              // RAW_JSON only -- no ATTRIBUTES counterpart. Tiered or IRR-based fee
+              // and carry terms land in complex_* rather than in economic_provisions.
+              complexManagementFee: provisionSummary('complex_management_fee'),
+              complexCarry: provisionSummary('complex_carry'),
+              mfnProvision: provisionSummary('mfn_provision'),
+              excuseRight: provisionSummary('excuse_right'),
+              transferRestrictionModification: provisionSummary('transfer_restriction_modification'),
+              createdAt: toStr(row.CREATED_AT),
+            });
+            pendingLp = null;
+          }
+        }
+      }
+
+      return out;
+    }
+
+    // The side letter provisions extracted as a summary sentence: [letter key, label on the page].
+    const PROVISION_SUMMARIES = [
+      ['complexManagementFee', 'Custom management fee'],
+      ['complexCarry', 'Custom carry'],
+      ['mfnProvision', 'MFN'],
+      ['excuseRight', 'Excuse right'],
+      ['transferRestrictionModification', 'Transfer'],
+    ];
+
+    // True when the letter carries any extracted provision, economic or not.
+    function hasProvisions(sl) {
+      return !!(sl.economicProvisions && sl.economicProvisions.length) || PROVISION_SUMMARIES.some(([key]) => sl[key]);
+    }
+
+    // Collapse duplicate side letter extractions of the same underlying letter —
+    // an LPA + side letter package is often re-uploaded per investor's
+    // subscription bundle. Groups by (counterparty, issueDate, role), folds a
+    // letter's unsigned copies into it, and keeps the "cleanest" extraction per the 4-key tiebreak: has provisions, not
+    // drafty, not unfilled, most recent createdAt. Ties fall through in order —
+    // first pass at the maximum tuple wins, mirroring Python's max().
+    function dedupeSideLetters(sls) {
+      // Counterparty compared modulo case and punctuation. Then a counterparty's one
+      // signed, dated letter absorbs its undated, draft, unfilled or fund-unsigned
+      // copies; two signed letters on different dates stay apart.
+      const groups = new Map();
+      const parts = new Map();
+      for (const sl of sls) {
+        const p = [lpKey(sl.counterpartyName), (sl.issueDate || '').trim(), (sl.role || '').trim()];
+        const key = p.join('\u0001');
+        if (!groups.has(key)) { groups.set(key, []); parts.set(key, p); }
+        groups.get(key).push(sl);
+      }
+      const finalsByParty = new Map();
+      for (const [key, group] of groups) {
+        const [party, date, role] = parts.get(key);
+        if (party && date && group.some(isFinalLetter)) {
+          const pk = party + '\u0001' + role;
+          if (!finalsByParty.has(pk)) finalsByParty.set(pk, []);
+          finalsByParty.get(pk).push(key);
+        }
+      }
+      for (const key of [...groups.keys()]) {
+        const [party, date, role] = parts.get(key);
+        const finals = finalsByParty.get(party + '\u0001' + role) || [];
+        if (finals.length !== 1 || key === finals[0]) continue;
+        if (!date || !groups.get(key).some(isFinalLetter)) {
+          groups.get(finals[0]).push(...groups.get(key));
+          groups.delete(key);
+        }
+      }
+
+      function cleanliness(sl) {
+        const hasProv = hasProvisions(sl) ? 1 : 0;
+        const notDrafty = sl.hasDraftMarkings ? 0 : 1;
+        const notUnfilled = sl.hasUnfilledPlaceholders ? 0 : 1;
+        return [hasProv, notDrafty, notUnfilled, sl.createdAt || ''];
+      }
+      function compareCleanliness(a, b) {
+        for (let i = 0; i < 3; i++) { if (a[i] !== b[i]) return a[i] - b[i]; }
+        return a[3] < b[3] ? -1 : a[3] > b[3] ? 1 : 0;
+      }
+
+      const out = [];
+      for (const group of groups.values()) {
+        if (group.length === 1) { out.push(group[0]); continue; }
+        let best = group[0];
+        let bestKey = cleanliness(best);
+        for (let i = 1; i < group.length; i++) {
+          const key = cleanliness(group[i]);
+          if (compareCleanliness(key, bestKey) > 0) { best = group[i]; bestKey = key; }
+        }
+        out.push(best);
+      }
+      return out;
+    }
+
+    // A signed copy: no draft markings, no blanks, and not marked unsigned by the fund.
+    function isFinalLetter(sl) {
+      return !sl.hasDraftMarkings && !sl.hasUnfilledPlaceholders && sl.executedByIssuer !== false;
+    }
+
+    // Secondary attribution for GP-entity side letters — the extraction pipeline
+    // sometimes stores the GP LLC name in the fund field rather than the LP fund
+    // vehicle. Tries LP-name lookup first, then an issue-date window (±7 days);
+    // first one that resolves to exactly one fund wins.
+    function gpEntityFallback(unattributed, fundsOut) {
+      const fundLpNorms = new Map();
+      const fundLpaDates = new Map();
+      for (const fund of fundsOut) {
+        const fn = fund.fundName;
+        const lpa = fund.lpa;
+        if (lpa) {
+          const set = new Set();
+          for (const lp of (lpa.limitedPartners || [])) {
+            if (lp.name) set.add(normName(lp.name));
+          }
+          fundLpNorms.set(fn, set);
+          const terms = lpa.terms || {};
+          fundLpaDates.set(fn, (lpa.fund && lpa.fund.lpaDate) || terms.initialClosingDate || null);
+        } else {
+          fundLpNorms.set(fn, new Set());
+          fundLpaDates.set(fn, null);
+        }
+      }
+
+      const unresolved = [];
+      for (const sl of unattributed) {
+        const lpName = sl.lpName;
+        const issueDate = sl.issueDate;
+        let matchedFund = null;
+        let method = 'unresolved';
+
+        if (lpName) {
+          const normLp = normName(lpName);
+          if (normLp) {
+            const lpMatches = [];
+            for (const [fn, lpSet] of fundLpNorms) {
+              if (lpSet.has(normLp)) lpMatches.push(fn);
+            }
+            if (lpMatches.length === 1) { matchedFund = lpMatches[0]; method = 'lp-name'; }
+          }
+        }
+
+        if (matchedFund === null) {
+          const dateMatches = [];
+          for (const [fn, d] of fundLpaDates) {
+            if (dateWithinWindow(issueDate, d)) dateMatches.push(fn);
+          }
+          if (dateMatches.length === 1) { matchedFund = dateMatches[0]; method = 'date-inferred'; }
+        }
+
+        const attributedSl = { ...sl, role: 'issuer', counterpartyName: lpName, attributionMethod: method };
+        if (matchedFund !== null) {
+          for (const fund of fundsOut) {
+            if (fund.fundName === matchedFund) {
+              fund.sideLetters.push(attributedSl);
+              fund.sideLetterCount += 1;
+              break;
+            }
+          }
+        } else {
+          unresolved.push(attributedSl);
+        }
+      }
+      return unresolved;
+    }
+
+    // Identity of an LP across LPA copies: the name modulo case and punctuation.
+    // Deliberately stricter than normName, which also drops legal forms and
+    // parentheticals — merging two different investors would hide one of them.
+    function lpKey(name) {
+      return (name || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+    }
+
+    // One LP roster for a fund, across every LPA document that resolved to it.
+    // Funds collect an executed copy of the LPA per investor, so any one copy
+    // names only its own signatory. A named LP appears once, preferring the entry
+    // that carries a commitment. Unnamed entries come from the selected LPA only,
+    // so N copies cannot multiply them.
+    function mergeLpRosters(selectedEid, hitEids, lpas) {
+      const roster = [];
+      const position = new Map();
+      for (const eid of [selectedEid, ...hitEids.filter(e => e !== selectedEid)]) {
+        for (const lp of lpas.get(eid).limitedPartners) {
+          const key = lpKey(lp.name);
+          if (!key) {
+            if (eid === selectedEid) roster.push(lp);
+            continue;
+          }
+          if (!position.has(key)) {
+            position.set(key, roster.length);
+            roster.push(lp);
+          } else if (roster[position.get(key)].commitmentAmount === null && lp.commitmentAmount !== null) {
+            roster[position.get(key)] = lp;
+          }
+        }
+      }
+      return roster;
+    }
+
+    // ── Firm-fund matching + coverage assembly ────────────────────────────────
+    // For each of the firm's funds, resolves the LPA extraction + side letter
+    // list. Returns fund objects in the order firmFundNames was supplied.
+    function matchFunds(firmFundNames, lpas, sideLetters) {
+      return matchAll(firmFundNames, lpas, sideLetters).funds;
+    }
+
+    // matchFunds, plus what it did not use: the extraction ids a fund claimed and the
+    // side-letter keys a fund received. The rest is listed as unmatched, not dropped.
+    const slKeyOf = sl => (sl.extractionId || '') + '\u0001' + (sl.lpName || '');
+    function matchAll(firmFundNames, lpas, sideLetters) {
+      const resolved = new Map();
+      const resolve = (name) => {
+        if (!resolved.has(name)) resolved.set(name, resolveFund(name, firmFundNames));
+        return resolved.get(name);
+      };
+
+      // Each LPA resolves to at most one fund, so "Fund IV Holdings" never also
+      // lands on "Fund IV". Copies of one LPA resolve together by name.
+      const lpaHits = new Map();
+      const possibleNames = new Map();
+      // Series left without their own agreement while the parent LLC's is on file.
+      const parentAgreements = new Map();
+      const governing = new Set();
+      for (const [eid, lpa] of lpas) {
+        const lpaName = lpa.fund.name;
+        if (!lpaName) continue;
+        let { funds, tier, tied } = resolve(lpaName);
+        if (funds.length > 1) {
+          const series = seriesForAgreement(funds, lpa);
+          if (isParentAgreement(funds, lpa)) {
+            for (const fund of funds) {
+              if (!parentAgreements.has(fund)) parentAgreements.set(fund, []);
+              const refs = parentAgreements.get(fund);
+              if (series.includes(fund)) continue;
+              governing.add(eid);
+              if (!refs.some(r => r.name === lpaName)) refs.push({ name: lpaName, documentId: lpa.documentId });
+            }
+            tied = [];
+          } else if (!series.length) {
+            tied = funds;
+          }
+          funds = series;
+        }
+        // [extraction, tier, names this fund's series]
+        const namesSeries = new Set(agreementSeries(funds, lpa));
+        for (const fund of funds) {
+          if (!lpaHits.has(fund)) lpaHits.set(fund, []);
+          lpaHits.get(fund).push([eid, tier, namesSeries.has(fund)]);
+        }
+        for (const t of tied) {
+          if (!possibleNames.has(t)) possibleNames.set(t, []);
+          const names = possibleNames.get(t);
+          if (!names.includes(lpaName)) names.push(lpaName);
+        }
+      }
+
+      // The firm's fund is the issuer (grants terms to an LP) or the investor (got
+      // terms from another manager's fund). Issuer resolves first so a letter never
+      // counts twice. A portfolio company's round letter naming the fund as investor
+      // stays unclaimed: sideLetterSummary counts it as a company letter.
+      const slsByFund = new Map();
+      const attributedSlKeys = new Set();
+      for (const sl of sideLetters) {
+        const fundName = sl.fundName;
+        const lpName = sl.lpName;
+        const issuer = fundName ? resolve(fundName) : { funds: [], tier: null, tied: [] };
+        let targets = [], attributed = null, letterName = null;
+        if (issuer.funds.length) {
+          targets = issuer.funds;
+          attributed = { ...sl, role: 'issuer', counterpartyName: lpName };
+          letterName = fundName;
+        } else if (!issuer.tied.length && lpName && !isCompanyLetter(sl)) {
+          targets = resolve(lpName).funds;
+          attributed = { ...sl, role: 'investor', counterpartyName: fundName };
+          letterName = lpName;
+        }
+        if (!targets.length) continue;
+        if (targets.length > 1) targets = narrowToNamedSeries(targets, letterName, attributed);
+        for (const target of targets) {
+          if (!slsByFund.has(target)) slsByFund.set(target, []);
+          slsByFund.get(target).push({ ...attributed });
+        }
+        attributedSlKeys.add(slKeyOf(sl));
+      }
+
+      const fundsOut = [];
+      for (const firmName of firmFundNames) {
+        // Prefer populated terms, then an agreement naming this fund's series, then the
+        // stronger name match, then recency. First maximum wins, mirroring Python's max().
+        let matchedEid = null, matchedLpa = null, matchTier = null;
+        const hits = lpaHits.get(firmName) || [];
+        if (hits.length) {
+          const keyOf = ([eid, tier, namesSeries]) => [lpas.get(eid).termsExtracted ? 1 : 0, namesSeries ? 1 : 0, tier, lpas.get(eid).createdAt || ''];
+          const cmpKey = (x, y) => (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]) || (x[3] < y[3] ? -1 : x[3] > y[3] ? 1 : 0);
+          let best = hits[0];
+          let bestKey = keyOf(best);
+          for (let i = 1; i < hits.length; i++) {
+            const key = keyOf(hits[i]);
+            if (cmpKey(key, bestKey) > 0) { best = hits[i]; bestKey = key; }
+          }
+          [matchedEid, matchTier] = best;
+          matchedLpa = {
+            ...lpas.get(matchedEid),
+            limitedPartners: mergeLpRosters(matchedEid, hits.map(([eid]) => eid), lpas),
+          };
+        }
+
+        let matchingSls = [...(slsByFund.get(firmName) || [])];
+
+        // Collapse duplicate uploads, then sort so side letters with extracted
+        // provisions float to the top (date-desc within each group). Both .sort()
+        // calls are stable, so this reproduces process.py's chained sort exactly.
+        matchingSls = dedupeSideLetters(matchingSls);
+        matchingSls.sort((a, b) => {
+          const da = a.issueDate || '', db = b.issueDate || '';
+          return da === db ? 0 : (da < db ? 1 : -1);
+        });
+        matchingSls.sort((a, b) => (hasProvisions(a) ? 0 : 1) - (hasProvisions(b) ? 0 : 1));
+
+        const parentRefs = matchedLpa ? [] : (parentAgreements.get(firmName) || []);
+        let status;
+        if (!matchedLpa && parentRefs.length) status = 'PARENT_AGREEMENT';
+        else if (!matchedLpa) status = 'MISSING';
+        else if (!matchedLpa.termsExtracted) status = 'PARTIAL';
+        else status = 'EXTRACTED';
+
+        fundsOut.push({
+          fundName: firmName,
+          lpaStatus: status,
+          sideLetterCount: grantedCount(matchingSls),
+          documentId: matchedLpa ? matchedLpa.documentId : null,
+          lpa: matchedLpa,
+          lpaMatch: matchTier === null ? null : (matchTier === FUND_MATCH_EXACT ? 'exact' : 'close'),
+          possibleLpaNames: matchedLpa === null ? (possibleNames.get(firmName) || []) : [],
+          parentAgreements: parentRefs,
+          sideLetters: matchingSls,
+        });
+      }
+
+      // GP-entity fallback: side letters whose fundName looks like "Firm GP, LLC"
+      // don't match any fund vehicle by name.
+      const gpSls = sideLetters.filter(sl =>
+        isGpEntity(sl.fundName) && !attributedSlKeys.has(slKeyOf(sl))
+      );
+      if (gpSls.length) {
+        gpEntityFallback(gpSls, fundsOut);
+      }
+
+      const claimed = new Set();
+      for (const hits of lpaHits.values()) for (const [eid] of hits) claimed.add(eid);
+      for (const eid of governing) claimed.add(eid);
+      for (const fund of fundsOut) for (const sl of fund.sideLetters) attributedSlKeys.add(slKeyOf(sl));
+      return { funds: fundsOut, claimed, attributedSlKeys };
+    }
+
+    // Side letters a fund granted its own LPs; ones it received as an investor in a
+    // portfolio company stay on the fund, listed apart, but are not counted.
+    function grantedCount(sls) {
+      return sls.filter(sl => sl.role !== 'investor').length;
+    }
+
+    // Every letter the firm's funds granted, once: a letter shown on each series of
+    // an LLC (sharedAcrossSeries) is one letter.
+    function grantedLetters(funds) {
+      const seen = new Set();
+      return funds.flatMap(f => f.sideLetters).filter(sl => {
+        if (sl.role === 'investor') return false;
+        if (!sl.sharedAcrossSeries) return true;
+        const key = [fundKey(sl.fundName)[0].join(' '), lpKey(sl.counterpartyName), sl.issueDate || ''].join('\u0001');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    // Words every manager's names share, so a match on one says nothing about whose fund it is.
+    const GENERIC_NAME_WORDS = new Set([
+      'THE', 'AND', 'OF', 'FUND', 'FUNDS', 'CAPITAL', 'VENTURE', 'VENTURES', 'PARTNERS', 'PARTNERSHIP',
+      'MANAGEMENT', 'GROUP', 'HOLDINGS', 'INVESTMENTS', 'INVESTMENT', 'ADVISORS', 'EQUITY', 'GROWTH',
+      'OPPORTUNITIES', 'OPPORTUNITY', 'COMPANY', 'SERIES', 'SPV', 'LP', 'LLC', 'GP', 'INC', 'LTD', 'CO', 'CORP',
+      // Words that name the type of vehicle, not the manager.
+      'PARALLEL', 'GLOBAL', 'OFFSHORE', 'CAYMAN', 'FEEDER', 'MASTER', 'LIMITED', 'INVESTORS', 'ASSOCIATES',
+      'PARTNER', 'INTERNATIONAL', 'AIV', 'AGGREGATOR', 'BLOCKER', 'TRUST',
+      // Words that name a manager's role, not which manager.
+      'MANAGER', 'MANAGERS', 'ADVISOR', 'ADVISER', 'ADVISERS', 'GENERAL',
+    ]);
+    // A word in at least this many of the firm's entity names is its fund family's
+    // ("Summit", "Northstar"): a document sharing only that word could be any of the family.
+    const FAMILY_WORD_MIN_NAMES = 3;
+
+    // The distinctive words of a manager or fund name ("Activate" in "Activate Venture Partners").
+    // A fund number ("III") is never one: it ties Acme Fund III to every manager's Fund III.
+    function brandWords(name) {
+      return new Set(fundTokens(name || '').filter(w =>
+        w.length > 2 && !/^\d+$/.test(w) && !Object.prototype.hasOwnProperty.call(ROMAN_NUMERALS, w) && !GENERIC_NAME_WORDS.has(w)));
+    }
+
+    // The distinctive words of the firm's and its entities' names.
+    function ownWordsOf(firmNames) {
+      return new Set(firmNames.flatMap(n => [...brandWords(n)]));
+    }
+
+    // The compact view of an extraction the report lists; no roster or terms.
+    function documentEntry(lpa) {
+      return {
+        documentId: lpa.documentId,
+        extractionId: lpa.extractionId,
+        documentType: lpa.documentType,
+        fundName: lpa.fund.name,
+        gpName: lpa.generalPartner.name,
+        lpaDate: lpa.fund.lpaDate,
+        termsExtracted: lpa.termsExtracted,
+      };
+    }
+
+    // A GP, manager or adviser entity: its operating agreement governs the manager, never a fund.
+    const MANAGER_ENTITY_RE = /\b(GP|General Partner|Managers?|Management|Advis[eo]rs?)\b(?:[\s-]*(?:[IVX]+|\d+))?(?:\s+(?:Company|Co\.?))?\s*,?\s*(LLC|L\.L\.C\.?|LTD\.?|LIMITED|LLP|LP|L\.P\.?|CORP\.?|CORPORATION|INC\.?|CO\.?)?\s*$/i;
+
+    // Whether an agreement's investor roster names one of the firm's entities, even one it cannot tell from a sibling.
+    function investsIn(lpa, firmNames) {
+      return lpa.limitedPartners.some(lp => {
+        if (!lp.name) return false;
+        const r = resolveFund(lp.name, firmNames);
+        return r.funds.length > 0 || r.tied.length > 0;
+      });
+    }
+
+    // Sorts extractions no fund claimed into { unmatched, received from other managers }.
+    // One that shares a distinctive word with the firm's or its entities' names (in the fund or
+    // GP name) is most likely the firm's own fund under a name Carta does not use, so a rebrand
+    // shows as "didn't match" for the user to link by hand. The rest are other managers'
+    // agreements: listed as received when their roster names one of the firm's entities as an
+    // investor, and otherwise dropped: nothing ties them to the firm, so the report neither lists
+    // nor counts them. An agreement whose fund name is a GP, manager or adviser entity's ("Acme
+    // Fund I GP, LLC") is dropped too: it governs the manager, so linking it to a fund is never the fix.
+    function splitUnclaimed(lpas, claimed, firmNames) {
+      const ownWords = ownWordsOf(firmNames);
+      const unmatched = [], received = [];
+      for (const [eid, lpa] of lpas) {
+        if (claimed.has(eid) || MANAGER_ENTITY_RE.test((lpa.fund.name || '').trim())) continue;
+        const words = [...brandWords(lpa.fund.name), ...brandWords(lpa.generalPartner.name)];
+        if (words.some(w => ownWords.has(w))) unmatched.push(documentEntry(lpa));
+        else if (investsIn(lpa, firmNames)) received.push(documentEntry(lpa));
+      }
+      return { unmatched, received };
+    }
+
+    // The words the firm's own name and its fund family share, which point at no one fund.
+    function familyWords(firmName, entityNames) {
+      const counts = new Map();
+      for (const name of entityNames) for (const w of brandWords(name)) counts.set(w, (counts.get(w) || 0) + 1);
+      const family = brandWords(firmName);
+      for (const [w, n] of counts) if (n >= FAMILY_WORD_MIN_NAMES) family.add(w);
+      return family;
+    }
+
+    // Each way to collapse one run of 2+ consecutive alphabetic words to its initials, as
+    // JSON strings. A number is never part of a run.
+    function initialsVariants(words) {
+      const variants = new Set();
+      for (let start = 0; start < words.length; start++) {
+        for (let end = start + 2; end <= words.length; end++) {
+          const run = words.slice(start, end);
+          if (!run.every(w => /^[A-Za-z]+$/.test(w))) break;
+          variants.add(JSON.stringify([...words.slice(0, start), run.map(w => w[0]).join(''), ...words.slice(end)]));
+        }
+      }
+      return variants;
+    }
+
+    // One name is the other with a run of words written as initials ("AV" for "Acme Ventures").
+    function sameNameByInitials(fundName, documentName) {
+      const fundWords = fundKey(fundName)[0], documentWords = fundKey(documentName)[0];
+      return initialsVariants(documentWords).has(JSON.stringify(fundWords)) ||
+        initialsVariants(fundWords).has(JSON.stringify(documentWords));
+    }
+
+    // The one fund whose name is this one with a run of words as initials, either way round; empty when none or
+    // several are. A GP or manager entity's name is never read this way: it is not a fund's agreement.
+    function namedByInitials(name, firmFundNames) {
+      if (!name || isGpEntity(name)) return [];
+      const named = firmFundNames.filter(f => !isGpEntity(f) && sameNameByInitials(f, name));
+      return named.length === 1 ? named : [];
+    }
+
+    // An unmatched document could be this fund's under another name: it shares a word
+    // naming this fund rather than its family ("Widgets"), or the fund's number. An
+    // unmatched document already shares a word with the firm, so "Summit Secondary VP
+    // VII" may be "Acme Venture Partners VII" before a rename. A GP or manager entity is
+    // never a fund's agreement, and "I" alone is too common a number to say anything: a
+    // number counts from 2 up. A document whose name is the fund's with a run of words
+    // written as initials is the fund's too ("AV Global I" for "Acme Ventures Global I").
+    function couldBeFund(fundName, doc, family) {
+      if (isGpEntity(doc.fundName)) return false;
+      if (sameNameByInitials(fundName, doc.fundName || '')) return true;
+      const words = new Set([...brandWords(doc.fundName), ...brandWords(doc.gpName)]);
+      if ([...brandWords(fundName)].some(w => !family.has(w) && words.has(w))) return true;
+      const number = seriesNum(fundName);
+      return number !== null && number >= 2 && number === seriesNum(doc.fundName || '');
+    }
+
+    // Splits MISSING into why. NO_DOCUMENTS: the firm has no LPA or operating agreement
+    // extractions at all. NAME_MISMATCH: this fund has no document, but an LPA tied between
+    // it and a sibling, or an unmatched document could be its (see couldBeFund); the
+    // candidates' fund names go in possibleLpaNames. MISSING stays for a fund with no sign of a document among the firm's own. An unmatched
+    // document elsewhere at the firm is no sign: a firm that invests in other managers'
+    // funds always has some.
+    function assignCoverageStates(funds, lpas, unmatched, firmName, entityNames) {
+      const family = familyWords(firmName, entityNames);
+      for (const fund of funds) {
+        if (fund.lpaStatus !== 'MISSING') continue;
+        if (!lpas.size) fund.lpaStatus = 'NO_DOCUMENTS';
+        else {
+          const candidates = unmatched.filter(d => d.fundName && couldBeFund(fund.fundName, d, family)).map(d => d.fundName);
+          if (candidates.length || fund.possibleLpaNames.length) {
+            fund.lpaStatus = 'NAME_MISMATCH';
+            fund.possibleLpaNames = [...new Set([...fund.possibleLpaNames, ...candidates])];
+          }
+        }
+      }
+    }
+
+    // Series that share one master agreement point at it instead of repeating it. Every
+    // series resolves to the same document, so each would otherwise repeat its terms and
+    // LP roster. The master is the fund the agreement names itself; the others keep their
+    // terms and say whose roster it is.
+    function markInherited(funds) {
+      const byDoc = new Map();
+      for (const fund of funds) {
+        if (!fund.lpa) continue;
+        if (!byDoc.has(fund.lpa.extractionId)) byDoc.set(fund.lpa.extractionId, []);
+        byDoc.get(fund.lpa.extractionId).push(fund);
+      }
+      for (const group of byDoc.values()) {
+        if (group.length < 2) continue;
+        const keyOf = name => JSON.stringify(fundKey(name));
+        const agreementKey = keyOf(group[0].lpa.fund.name);
+        const master = group.find(f => keyOf(f.fundName) === agreementKey) || group[0];
+        for (const fund of group) {
+          if (fund === master) continue;
+          fund.inheritedFromMaster = master.fundName;
+          // The roster stays so side letters still resolve commitments against it;
+          // renderLpSection shows the master's note instead of listing it again.
+          fund.lpa = { ...fund.lpa, limitedPartnerCount: fund.lpa.limitedPartners.length };
+        }
+      }
+    }
+
+    // Legal forms an operating company takes. Funds take them too (an offshore "Ltd.", a blocker or
+    // fund "Inc."), so a name with a fund or vehicle word is never a company's.
+    const COMPANY_FORMS = new Set(['INC', 'CORP', 'PBC', 'PLC', 'LTD']);
+    const FUND_WORDS = new Set(['FUND', 'FUNDS', 'CAPITAL', 'PARTNERS', 'VENTURES', 'INVESTMENTS', 'HOLDINGS', 'SICAV']);
+    // Forms companies take outside the US and UK. fundKey does not strip them, so they are read as
+    // the name's last word ("Anyfin AB", "Universal Diagnostics, S.A.", "Mondu GmbH").
+    const FOREIGN_COMPANY_FORMS = new Set(['AB', 'AG', 'GMBH', 'SA', 'SAS', 'SPA', 'SRL', 'BV', 'NV', 'OY', 'OYJ', 'ASA', 'KK']);
+
+    // Whether a side letter's issuer is an operating company: a portfolio company's round, not a fund's LPA.
+    function isCompanyLetter(sl) {
+      const name = sl.fundName || '';
+      if (VEHICLE_NAME.test(name) || fundTokens(name).some(t => FUND_WORDS.has(t))) return false;
+      if (COMPANY_FORMS.has(fundKey(name)[1])) return true;
+      const words = fundTokens(mainName(name));
+      return words.length > 1 && FOREIGN_COMPANY_FORMS.has(words[words.length - 1]);
+    }
+
+    // Whether an unclaimed letter could be the firm's: its issuer is unnamed, a party is one of the
+    // firm's names written with initials ("AV Global I SPV" for "Acme Ventures Global I SPV", which
+    // has no distinctive word left), or a party shares a distinctive word with the firm.
+    function namesTheFirm(sl, firmNames, ownWords) {
+      if (!sl.fundName) return true;
+      const parties = [sl.fundName, sl.lpName].filter(Boolean);
+      if (firmNames.some(name => parties.some(party => sameNameByInitials(name, party)))) return true;
+      return parties.some(party => [...brandWords(party)].some(w => ownWords.has(w)));
+    }
+
+    // Letters granted, received, from companies and unmatched, and the unmatched ones. Raw rows run
+    // above what lands on a fund because duplicate uploads fold together. A letter whose issuer is a
+    // company is a portfolio company's round: no fund receives it, and it is counted apart from, and
+    // never listed with, the unmatched ones. A letter no fund claimed whose parties could not be the
+    // firm is between another manager's fund and its investors: it is dropped, neither listed nor
+    // counted, and left out of `extracted` too. firmNames are the firm's and its entities' names.
+    function sideLetterSummary(funds, sideLetters, attributed, firmNames) {
+      const unclaimed = sideLetters.filter(sl => !attributed.has(slKeyOf(sl)));
+      const notCompany = unclaimed.filter(sl => !isCompanyLetter(sl));
+      const ownWords = ownWordsOf(firmNames);
+      const unmatched = notCompany.filter(sl => namesTheFirm(sl, firmNames, ownWords));
+      const otherParties = notCompany.length - unmatched.length;
+      const received = new Set(funds.flatMap(f => f.sideLetters).filter(sl => sl.role === 'investor').map(slKeyOf));
+      return {
+        counts: {
+          granted: grantedLetters(funds).length,
+          received: received.size,
+          company: unclaimed.length - notCompany.length,
+          unmatched: unmatched.length,
+          extracted: sideLetters.length - otherParties,
+        },
+        unmatched,
+      };
+    }
+
+    // Words in a name that say the entity pools money for a main fund or a single deal. "Holdings"
+    // and "Opportunity" are left out: both also name main funds.
+    const VEHICLE_WORDS = [
+      'aggregator', 'feeder', 'blocker', 'side[ -]?fund', 'aiv', 'alternative investment vehicle',
+      'co[ -]?invest(?:ment)?', 'spv',
+    ];
+    const VEHICLE_NAME = new RegExp('\\b(?:' + VEHICLE_WORDS.join('|') + ')\\b', 'i');
+    const SPV_TYPE = /\bSPV\b/i;
+    // A 0 fee or carry is the agreement saying there is none, so only a non-zero value counts.
+    const ECONOMIC_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', ...OPERATING_AGREEMENT_WITHHELD_TERMS];
+
+    // A vehicle whose agreement carries no fee, carry, hurdle or waterfall. SPVs, aggregators,
+    // feeders, blockers and side funds distribute pro rata or take their economics from the main
+    // fund's agreement, so blank terms there are by design, not a gap. A vehicle that states carry
+    // or a fee keeps EXTRACTED, and an operating agreement whose profit split was withheld is not one.
+    function isVehicleAgreement(fund) {
+      const lpa = fund.lpa;
+      if (!['EXTRACTED', 'PARTIAL'].includes(fund.lpaStatus) || !lpa || lpa.notFundLpa) return false;
+      const isVehicle = SPV_TYPE.test(fund.entityType || '') ||
+        [fund.fundName, lpa.fund.name].some(name => VEHICLE_NAME.test(name || ''));
+      return isVehicle && !ECONOMIC_TERMS.some(field => lpa.terms[field]);
+    }
+
+    // Needs entityType, so runs after splitAudited.
+    function markVehicleAgreements(funds) {
+      for (const fund of funds) {
+        if (isVehicleAgreement(fund)) fund.lpaStatus = 'VEHICLE_AGREEMENT';
+      }
+    }
+
+    function coverageCounts(funds) {
+      const count = status => funds.filter(f => f.lpaStatus === status).length;
+      return {
+        totalFunds: funds.length,
+        extracted: count('EXTRACTED'),
+        vehicleAgreement: count('VEHICLE_AGREEMENT'),
+        partial: count('PARTIAL'),
+        parentAgreement: count('PARENT_AGREEMENT'),
+        missing: count('MISSING'),
+        nameMismatch: count('NAME_MISMATCH'),
+        noDocuments: count('NO_DOCUMENTS'),
+        totalSideLetters: grantedLetters(funds).length,
+      };
+    }
+
+    // Everything the page shows that comes from the extractions: the fund list with its
+    // coverage states, what no fund claimed, and the side-letter split.
+    function assembleReport(firmName, entities, lpas, sideLetters) {
+      const names = entities.map(e => e.name);
+      const firmNames = [firmName, ...names];
+      const { funds: matched, claimed, attributedSlKeys } = matchAll(names, lpas, sideLetters);
+      const { unmatched, received } = splitUnclaimed(lpas, claimed, firmNames);
+      assignCoverageStates(matched, lpas, unmatched, firmName, names);
+      markInherited(matched);
+      const { funds, notAudited } = splitAudited(matched, entities, firmName);
+      markVehicleAgreements(funds);
+      const letters = sideLetterSummary(funds, sideLetters, attributedSlKeys, firmNames);
+      return {
+        coverage: coverageCounts(funds),
+        funds,
+        notAudited,
+        unmatchedDocuments: unmatched,
+        receivedDocuments: received,
+        sideLetterCounts: letters.counts,
+        unmatchedSideLetters: letters.unmatched,
+      };
+    }
+
+    // ── Bootstrap ─────────────────────────────────────────────────────────────
+
+    async function bootstrap() {
+      if (!FIRM_UUID) {
+        showError('This report is missing its firm. Re-run the LPA audit skill to rebuild it.');
+        return;
+      }
+      if (!CARTA_MCP_SERVER) {
+        showError('This report is missing its Carta connection. Re-run the LPA audit skill to rebuild it.');
+        return;
+      }
+      if (!FIRM_FUND_NAMES || !FIRM_FUND_NAMES.length) {
+        showError('This report has no funds to audit. Re-run the LPA audit skill to rebuild it.');
+        return;
+      }
+
+      // Pin firm context before any query. The warehouse views are firm-scoped
+      // secure views, so an unpinned or wrong context returns zero rows rather
+      // than an error — which would render as "every fund missing" and read as
+      // fact.
+      try {
+        const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
+        if (contextResult && contextResult.isError) {
+          throw new Error(errorText(contextResult) || '<no message>');
+        }
+      } catch (error) {
+        showError(
+          'You may not have access to ' + FIRM_NAME + ' in Carta, or your session has expired. ' +
+          'Try reloading; if it keeps happening, contact your Carta representative.',
+          error.message
+        );
+        return;
+      }
+
+      let lpaRows, oaRows, slRows;
+      try {
+        setLoadingStatus('Loading LPAs and side letters from Carta…');
+        [lpaRows, oaRows, slRows] = await Promise.all([
+          fetchAllRows(buildLpaRowsSql, 'Query T'),
+          fetchAllRows(buildOperatingAgreementRowsSql, 'Query O'),
+          fetchAllRows(buildSideLetterRowsSql, 'Query L'),
+        ]);
+      } catch (error) {
+        showError(
+          "Couldn't load your LPA data just now. Try reloading in a moment. " +
+          'If it keeps happening, contact your Carta representative.',
+          error.message
+        );
+        return;
+      }
+
+      // Zero LPA rows is NOT an error — every fund correctly lands in NO_DOCUMENTS.
+      // Either none have been uploaded, or this firm's extractions predate the
+      // FIRM_ID backfill (see SKILL.md Caveats). Same for zero side-letter rows.
+      setLoadingStatus('Building your report…');
+
+      const lpas = new Map([
+        ...buildLpas(lpaRows, LPA_DOCUMENT_TYPE),
+        ...buildLpas(oaRows, OPERATING_AGREEMENT_DOCUMENT_TYPE),
+      ]);
+      const sideLetters = buildSideLetters(slRows);
+      const report = assembleReport(FIRM_NAME, FIRM_FUNDS, lpas, sideLetters);
+
+      const now = new Date();
+      const generatedAt = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      DATA = {
+        meta: {
+          firmId: FIRM_UUID,
+          firmName: FIRM_NAME,
+          firmCartaId: FIRM_CARTA_ID,
+          generatedAt,
+        },
+        ...report,
+      };
+
+      renderHeader();
+      renderSummaryTiles();
+      renderFilterBar();
+      renderFundTable();
+      renderNotAudited();
+      renderUnclaimed();
+      renderPageFooter();
+      showContent();
+    }
+
+    // Entity types that never carry an LPA. Filtered after matching, so matching
+    // and side-letter attribution are unchanged; one with side letters stays visible.
+    const NOT_AUDITED_TYPES = new Set(['GP Entity', 'Management Co', 'Elimination Entity']);
+
+    // Carta entity names that mark a record as something other than a fund vehicle, each
+    // with the reason shown for it. Kept in step with NON_FUND_NAME_PATTERNS in process.py.
+    const NON_FUND_NAME_PATTERNS = [
+      ['wire instructions', ['\\bwire instructions?\\b']],
+      ['custodial account', ['\\bF/?B/?O\\b', 'for the benefit of', '\\bCust(odian)?\\b\\.?']],
+      ['trust', ['\\btrust\\b', '\\bEMBT\\b', '\\bdeed of (donation|trust)\\b']],
+      ['duplicate', ['\\bdupe\\b', '\\bduplicate\\b']],
+      ['combined entry', [
+        '(?:\\bLP\\b|\\bL\\.P\\.|\\bLLC\\b|\\bL\\.L\\.C\\.|\\bFund \\w+\\b).*\\s(and|&)\\s.*(?:\\bLP\\b|\\bL\\.P\\.|\\bLLC\\b|\\bL\\.L\\.C\\.|\\bFund\\b)',
+      ]],
+    ];
+    const NON_FUND_NAME_RES = NON_FUND_NAME_PATTERNS.map(([reason, sources]) => [reason, sources.map(p => new RegExp(p, 'i'))]);
+
+    // Why a Carta entity name marks a non-fund record, or null for a name that could be a fund.
+    function nonFundNameReason(name, firmName) {
+      for (const [reason, regexes] of NON_FUND_NAME_RES) {
+        if (regexes.some(r => r.test(name))) return reason;
+      }
+      const firmWords = fundKey(firmName)[0];
+      // fundKey drops a series and the word "Fund", so a series of an LLC named for the firm,
+      // or the firm's unnumbered "<Firm> Fund", would otherwise have the firm's key.
+      const addsFund = fundTokens(mainName(name)).includes('FUND') && !fundTokens(firmName).includes('FUND');
+      if (firmWords.length && dashSeries(name) === null && !addsFund
+          && JSON.stringify(fundKey(name)[0]) === JSON.stringify(firmWords)) {
+        return 'the firm itself';
+      }
+      return null;
+    }
+
+    // An entity of a type in NOT_AUDITED_TYPES is set aside unless a side letter landed on it;
+    // any other entity is set aside when its name matches NON_FUND_NAME_PATTERNS or is the
+    // firm's own, and no agreement (its own or a parent's) and no side letter matched it.
+    // The fund with every currency its agreement leaves unknown set to the fund's Carta
+    // currency (fa__list__entities' `currency`): the GP commitment and each LP row. A side
+    // letter's roster-backed commitment is read from those rows (sideLetterCommitment), so
+    // it follows. A currency a document states is never replaced. Returns a copy: funds can
+    // share one agreement's LP rows. Port of process.py fill_fund_currency.
+    function fillFundCurrency(fund, currency) {
+      if (!currency || !fund.lpa) return fund;
+      const lpa = {
+        ...fund.lpa,
+        currencyCode: fund.lpa.currencyCode || currency,
+        limitedPartners: (fund.lpa.limitedPartners || []).map(lp => ({ ...lp, currencyCode: lp.currencyCode || currency })),
+      };
+      return { ...fund, lpa };
+    }
+
+    function splitAudited(matched, entities, firmName) {
+      const byName = new Map(entities.map(e => [e.name, e]));
+      const funds = [], notAudited = [];
+      for (const fund of matched) {
+        const entity = byName.get(fund.fundName) || {};
+        const entityType = entity.entity_type ?? null;
+        let reason = null;
+        if (NOT_AUDITED_TYPES.has(entityType) && !fund.sideLetterCount) reason = 'entity type';
+        else if (!fund.lpa && !fund.parentAgreements.length && !fund.sideLetterCount) reason = nonFundNameReason(fund.fundName, firmName);
+        if (reason) notAudited.push({ name: fund.fundName, entityType, reason });
+        else funds.push({ ...fillFundCurrency(fund, entity.currency ?? null), cartaId: entity.carta_id ?? null, entityType });
+      }
+      return { funds, notAudited };
+    }
+
+    // ── UI layer ────────────────────────────────────────────────────────────
+    // All render functions below read from DATA, which bootstrap() assembles
+    // before calling any of them.
+
+    // ---------- Formatters ----------
+    // ccy is the extraction's currencyCode (from RAW_JSON, else the fund's Carta currency;
+    // see fillFundCurrency), or null when neither is known: then the amount renders bare,
+    // never with an assumed currency.
+    function fmtAmount(n, ccy) {
+        if (n === null || n === undefined) return '—';
+        const prefix = ccy ? (CCY_SYMBOL[ccy] || (ccy + ' ')) : '';
+        if (n === 0) return prefix + '0';
+        const v = Math.round(n);
+        return v < 0
+            ? '(' + prefix + Math.abs(v).toLocaleString() + ')'
+            : prefix + v.toLocaleString();
+    }
+    function fmtNum(n) {
+        if (n === null || n === undefined) return '—';
+        return n.toLocaleString();
+    }
+    function fmtPctSmart(n) {
+        // The pipeline stores these rates as whole percentages (2.0 means
+        // 2.00%, 0.5 means 0.50%) — never as a 0–1 fraction. A sub-1% rate
+        // (a real LPA term: access funds/SPVs commonly charge < 1% on
+        // invested capital) is a whole percentage too, not a fraction that
+        // needs scaling — confirmed against RAW_JSON citation source text for
+        // several Delta-v funds (e.g. "multiplied by 0.5000%" → value 0.5).
+        if (n === null || n === undefined) return '—';
+        return n.toFixed(2) + '%';
+    }
+    // A term computed from dates ("10.3753424657534") reads as one decimal.
+    const roundYears = n => Math.round(n * 10) / 10;
+    function fmtYears(n) {
+        if (n === null || n === undefined) return '—';
+        const y = roundYears(n);
+        return y + (y === 1 ? ' yr' : ' yrs');
+    }
+    function fmtYearsFull(n) {
+        if (n === null || n === undefined) return '—';
+        const y = roundYears(n);
+        return y + (y === 1 ? ' year' : ' years');
+    }
+    function fmtDays(n) {
+        if (n === null || n === undefined) return '—';
+        return n + (n === 1 ? ' day' : ' days');
+    }
+    function fmtDate(s) {
+        if (!s || s === '—') return '—';
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return s;
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return months[parseInt(m[2], 10) - 1] + ' ' + parseInt(m[3], 10) + ', ' + m[1];
+    }
+    function fmtBool(b) {
+        if (b === null || b === undefined) return '—';
+        return b ? 'Yes' : 'No';
+    }
+    function esc(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escAttr(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    }
+
+    // ---------- External links ----------
+    // Cowork Live Artifacts run in a real browser context, so a plain
+    // window.open() works — no save-server / POST /open-url plumbing needed
+    // (that existed only to escape the Claude Desktop preview pane's sandbox).
+    function openExternal(url) {
+        window.open(url, '_blank');
+    }
+
+    // ---------- Status metadata ----------
+    const STATUS = {
+        EXTRACTED: { label: 'Full data',   badge: 'executed',   filterLabel: 'Full data' },
+        // Says what the agreement states, not what the vehicle charges: with no terms row, nothing was read.
+        VEHICLE_AGREEMENT: { label: 'Vehicle agreement', badge: 'vehicle', filterLabel: 'Vehicle agreement',
+                     noEconomics: 'states no fee or carry of its own' },
+        PARTIAL:   { label: 'Partial data', badge: 'unexecuted', filterLabel: 'Partial data' },
+        // gap is the table row's text; detail is the fund panel's, for the states with no LPA.
+        PARENT_AGREEMENT: { label: 'Parent agreement', badge: 'unexecuted', filterLabel: 'Governed by parent agreement',
+                     gap: 'Governed by parent agreement · series-specific terms not on file', detail: '' },
+        MISSING:   { label: 'Missing LPA', badge: 'missing',    filterLabel: 'Missing LPA',
+                     gap: 'No LPA on file', detail: '' },
+        NAME_MISMATCH: { label: 'Name mismatch', badge: 'unexecuted', filterLabel: 'Name mismatch',
+                     gap: 'No document matches this name · see unmatched documents below',
+                     detail: 'The firm has documents that matched no fund. Check the unmatched documents below the table. ' },
+        NO_DOCUMENTS:  { label: 'No documents',  badge: 'none',       filterLabel: 'No documents',
+                     gap: 'No documents extracted for this firm',
+                     detail: 'No LPA or operating agreement has been extracted for this firm. ' },
+    };
+    // The states that explain a gap are listed only when a fund is in one.
+    const ALWAYS_LISTED = new Set(['EXTRACTED', 'PARTIAL', 'MISSING']);
+    const STATUS_ORDER = { EXTRACTED: 0, VEHICLE_AGREEMENT: 1, PARTIAL: 2, PARENT_AGREEMENT: 3, NAME_MISMATCH: 4, MISSING: 5, NO_DOCUMENTS: 6 };
+
+    function badgeHtml(status) {
+        const s = STATUS[status] || STATUS.MISSING;
+        return '<span class="bucket-badge ' + s.badge + '">' + esc(s.label) + '</span>';
+    }
+
+    // Flags an LPA matched on a near-identical fund name, so the GP can confirm it.
+    function similarNameTag(fund) {
+        if (fund.lpaMatch !== 'close' || !fund.lpa) return '';
+        const lpaName = (fund.lpa.fund && fund.lpa.fund.name) || '';
+        return '<span class="chip" title="' +
+            escAttr('Matched to the LPA for "' + lpaName + '". The names differ slightly. Confirm it is this fund\'s LPA.') +
+            '">Similar name</span>';
+    }
+
+    // A series that shares its master's agreement shows the master's terms; say whose.
+    function inheritedTag(fund) {
+        if (!fund.inheritedFromMaster) return '';
+        return '<span class="chip" title="' + escAttr('Terms and LP roster come from the agreement of "' + fund.inheritedFromMaster + '".') +
+            '">Inherited from master</span>';
+    }
+
+    // An LPA that tied between this fund and a sibling goes to neither; say so.
+    function possibleLpaNote(fund) {
+        const possible = fund.possibleLpaNames || [];
+        if (!possible.length) return '';
+        return 'An LPA for <strong>' + esc(possible[0]) + '</strong>' +
+            (possible.length > 1 ? ' (+' + (possible.length - 1) + ' more)' : '') +
+            ' could belong to this fund or a similarly named one. Check which fund it covers.';
+    }
+
+    // A series whose own agreement is not on file is governed by its parent LLC's.
+    function parentAgreementNote(fund) {
+        const refs = fund.parentAgreements || [];
+        if (!refs.length) return '';
+        return 'Governed by the <strong>' + esc(refs[0].name) + '</strong> agreement' +
+            (refs.length > 1 ? ' (+' + (refs.length - 1) + ' more)' : '') +
+            '. Series-specific terms are not on file.';
+    }
+
+    // Rates arrive as whole percentages already (see fmtPctSmart) — this just
+    // gives sorting and deltas a null-safe numeric value on that same scale.
+    function pctValue(n) {
+        if (n === null || n === undefined) return null;
+        return n;
+    }
+    // A 0% fee, carry or hurdle is a stated term (an SPV that charges no fee), not a gap.
+    function fmtTermRate(n) {
+        if (n === null || n === undefined) return '—';
+        return pctValue(n) === 0 ? 'None' : fmtPctSmart(n);
+    }
+    // A fee of 0 is the LPA stating no fee is charged; a missing fee is '—'.
+    function fmtFeeRate(n) {
+        return n === 0 ? 'No fee (per LPA)' : fmtTermRate(n);
+    }
+    // A hurdle is a rate, a multiple of capital, or both ("8.00% · 1.50x").
+    function fmtHurdle(t) {
+        const multiple = t.preferredReturnMultiple;
+        if (multiple === null || multiple === undefined) return fmtTermRate(t.preferredReturnRate);
+        const parts = [multiple.toFixed(2) + 'x'];
+        if (t.preferredReturnRate) parts.unshift(fmtTermRate(t.preferredReturnRate));
+        return parts.join(' · ');
+    }
+    const termsOf = f => (f.lpa && f.lpa.termsExtracted) ? f.lpa.terms : null;
+    const TERM_LABELS = {
+        mgmtFeeRateInvestmentPeriod: 'Management fee', mgmtFeeRatePostInvestment: 'Mgmt fee after investment period',
+        carriedInterestRate: 'Carried interest', preferredReturnRate: 'Hurdle', fundTermYears: 'Fund term',
+        investmentPeriodYears: 'Investment period', capitalCallNoticeDays: 'Capital call notice',
+    };
+    const flagsOf = f => (f.lpa && f.lpa.termFlags) || [];
+    function termCheckChip(fund, field) {
+        return checkChip(flagsOf(fund).filter(fl => fl.field === field).map(fl => fl.reason));
+    }
+    function checkChip(reasons) {
+        return reasons.length
+            ? ' <span class="chip chip-check" title="' + escAttr('Check the LPA: ' + reasons.join('; ')) + '">Check</span>'
+            : '';
+    }
+    const docsUrl = () => CARTA_BASE_URL + '/investors/firm/' + encodeURIComponent(DATA.meta.firmCartaId) + '/portfolio/documents/';
+    // DOCUMENT_ID is the fund-admin document's own id, so it opens that document's page.
+    const documentUrl = documentId => documentId ? docsUrl() + encodeURIComponent(documentId) : null;
+    const documentLink = (documentId, text) => documentId
+        ? '<a class="carta-link" href="' + escAttr(documentUrl(documentId)) + '" data-external>' + text + '</a>'
+        : text;
+    function fundUrl(fund) {
+        // cartaId is digits-only by render-artifact.py's validation; re-checked
+        // here because it is concatenated into an href.
+        if (!/^[0-9]+$/.test(String(fund.cartaId || ''))) return null;
+        return CARTA_BASE_URL + '/investors/firm/' + encodeURIComponent(DATA.meta.firmCartaId) +
+            '/portfolio/fund/' + fund.cartaId + '/overview/';
+    }
+
+    // ---------- Header + summary tiles ----------
+    function renderHeader() {
+        const m = DATA.meta;
+        document.getElementById('page-header').innerHTML =
+            '<h1>Fund terms &amp; LPAs</h1>' +
+            '<p class="page-subtitle">' + esc(m.firmName) +
+            ' · Extracted from LPA and side letter documents · Data as of ' + esc(m.generatedAt) + '</p>';
+    }
+
+    // Only provisions that move what an LP pays count toward the side-letter
+    // tile: the typed economic provisions, and a custom fee or carry schedule.
+    // An MFN or other non-economic clause is still listed on the letter.
+    const ECONOMIC_TYPES = new Set([
+        'REDUCED_MANAGEMENT_FEE', 'REDUCED_CARRIED_INTEREST', 'WAIVED_MANAGEMENT_FEE',
+        'WAIVED_CARRIED_INTEREST', 'INCREASED_PREFERRED_RETURN', 'INCREASED_HURDLE',
+    ]);
+    const changesEconomics = sl =>
+        !!(sl.complexManagementFee || sl.complexCarry) ||
+        (sl.economicProvisions || []).some(p => ECONOMIC_TYPES.has(String(p.provision_type || '').toUpperCase()));
+
+    function renderSummaryTiles() {
+        const c = DATA.coverage;
+        const ofTotal = 'of ' + c.totalFunds + ' fund' + (c.totalFunds === 1 ? '' : 's');
+        const letters = grantedLetters(DATA.funds);
+        const withEconomics = letters.filter(changesEconomics).length;
+        // Side letters on a fund with no LPA can't be compared against anything.
+        const withoutLpa = DATA.funds.filter(f => !f.lpa).reduce((s, f) => s + (f.sideLetterCount || 0), 0);
+        const lc = DATA.sideLetterCounts || { received: 0, unmatched: 0 };
+        const unmatchedDocs = (DATA.unmatchedDocuments || []).length;
+
+        const tile = (key, label, value, sub) => {
+            const inner = '<span class="tile-label">' + esc(label) + '</span>' +
+                '<span class="tile-value">' + esc(value) + '</span>' +
+                '<span class="tile-sub">' + esc(sub) + '</span>';
+            return key
+                ? '<button type="button" class="tile" data-filter="' + key + '" aria-pressed="' + (ACTIVE_FILTER === key) + '">' + inner + '</button>'
+                : '<div class="tile">' + inner + '</div>';
+        };
+        document.getElementById('summary-tiles').innerHTML =
+            tile('EXTRACTED', 'Full data', c.extracted, ofTotal) +
+            (c.vehicleAgreement ? tile('VEHICLE_AGREEMENT', 'Vehicle agreements', c.vehicleAgreement,
+                capitalized(STATUS.VEHICLE_AGREEMENT.noEconomics) + ' · ' + ofTotal) : '') +
+            // A gap tile shows only when there is a gap; Missing also stays for side letters on a fund with no LPA.
+            (c.partial ? tile('PARTIAL', 'Partial data', c.partial, 'On file · no terms in the documents') : '') +
+            (c.missing || withoutLpa ? tile('MISSING', 'Missing an LPA', c.missing,
+                ofTotal + (withoutLpa ? ' · ' + withoutLpa + ' side letter' + (withoutLpa === 1 ? '' : 's') + ' without one' : '')) : '') +
+            (c.parentAgreement ? tile('PARENT_AGREEMENT', 'Governed by parent', c.parentAgreement,
+                'Series terms not on file · ' + ofTotal) : '') +
+            (c.nameMismatch ? tile('NAME_MISMATCH', 'Name mismatch', c.nameMismatch,
+                unmatchedDocs + ' document' + (unmatchedDocs === 1 ? '' : 's') + ' matched no fund') : '') +
+            (c.noDocuments ? tile('NO_DOCUMENTS', 'No documents', c.noDocuments,
+                'Nothing extracted for this firm yet') : '') +
+            tile(null, 'Side letters', c.totalSideLetters, withEconomics + ' change fee, carry or hurdle · ' +
+                lc.received + ' received · ' + lc.unmatched + ' unmatched');
+    }
+
+    // ---------- Filter, search, sort ----------
+    let ACTIVE_FILTER = 'all';
+    let SEARCH_QUERY = '';
+    let SORT = null;          // null = default order: status, then name
+    let VISIBLE = [];         // the rows as currently filtered and sorted
+    let SELECTED_FUND = null;
+
+    function renderFilterBar() {
+        let opts = '<option value="all">All funds (' + DATA.funds.length + ')</option>';
+        Object.entries(STATUS).forEach(([key, meta]) => {
+            const count = DATA.funds.filter(f => f.lpaStatus === key).length;
+            if (!count && !ALWAYS_LISTED.has(key)) return;
+            opts += '<option value="' + key + '">' + esc(meta.filterLabel) + ' (' + count + ')</option>';
+        });
+        const select = document.getElementById('filter-select');
+        select.innerHTML = opts;
+        select.value = ACTIVE_FILTER;
+    }
+    function setFilter(key) {
+        ACTIVE_FILTER = key;
+        renderSummaryTiles();
+        renderFilterBar();
+        renderFundTable();
+    }
+    function setSearch(q) { SEARCH_QUERY = (q || '').toLowerCase().trim(); renderFundTable(); }
+
+    const COLUMNS = [
+        { key: 'name',   label: 'Fund',         get: f => f.fundName || '' },
+        { key: 'fee',    label: 'Mgmt fee',     num: true, term: true, field: 'mgmtFeeRateInvestmentPeriod', get: f => termsOf(f) && pctValue(termsOf(f).mgmtFeeRateInvestmentPeriod), fmt: f => fmtFeeRate(termsOf(f).mgmtFeeRateInvestmentPeriod) },
+        { key: 'carry',  label: 'Carry',        num: true, term: true, field: 'carriedInterestRate', get: f => termsOf(f) && pctValue(termsOf(f).carriedInterestRate),         fmt: f => fmtTermRate(termsOf(f).carriedInterestRate) + (termsOf(f).carryTierRates ? ' (tiered)' : '') },
+        { key: 'hurdle', label: 'Hurdle',       num: true, term: true, field: 'preferredReturnRate', get: f => termsOf(f) && pctValue(termsOf(f).preferredReturnRate),         fmt: f => fmtHurdle(termsOf(f)) },
+        { key: 'term',   label: 'Fund term',    num: true, term: true, field: 'fundTermYears', get: f => termsOf(f) && termsOf(f).fundTermYears,                         fmt: f => fmtYears(termsOf(f).fundTermYears) },
+        { key: 'ip',     label: 'Inv. period',  num: true, term: true, field: 'investmentPeriodYears', get: f => termsOf(f) && termsOf(f).investmentPeriodYears,                 fmt: f => fmtYears(termsOf(f).investmentPeriodYears) },
+        { key: 'sl',     label: 'Side letters', num: true, get: f => f.sideLetterCount || 0 },
+    ];
+    const TERM_COLUMNS = COLUMNS.filter(c => c.term);
+    // An empty extraction can't tell "the agreement has none" from "the agreement wasn't read for it",
+    // so a blank term says "Not found" rather than "None". A stated 0 still reads "None" or "No fee (per LPA)".
+    const NOT_FOUND_TITLE = 'Not found in the documents on file: the agreement may not state it, or it was not extracted.';
+    function termCell(text) {
+        if (!text.startsWith('—')) return esc(text);
+        return '<span class="not-found" title="' + escAttr(NOT_FOUND_TITLE) + '">Not found</span>' + esc(text.slice(1));
+    }
+    const isBlank = v => v === null || v === undefined || v === false;
+
+    function sortedFunds() {
+        const list = DATA.funds
+            .filter(f => ACTIVE_FILTER === 'all' || f.lpaStatus === ACTIVE_FILTER)
+            .filter(f => !SEARCH_QUERY || (f.fundName || '').toLowerCase().includes(SEARCH_QUERY));
+        const byName = (a, b) => (a.fundName || '').localeCompare(b.fundName || '');
+        if (!SORT) {
+            return list.sort((a, b) => ((STATUS_ORDER[a.lpaStatus] ?? 99) - (STATUS_ORDER[b.lpaStatus] ?? 99)) || byName(a, b));
+        }
+        const col = COLUMNS.find(c => c.key === SORT.key);
+        const dir = SORT.dir === 'asc' ? 1 : -1;
+        return list.sort((a, b) => {
+            const va = col.get(a), vb = col.get(b);
+            // Unextracted values sink whichever way the column sorts, so a sort
+            // never leads with gaps.
+            const na = isBlank(va);
+            const nb = isBlank(vb);
+            if (na && nb) return byName(a, b);
+            if (na) return 1;
+            if (nb) return -1;
+            const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+            return cmp * dir || byName(a, b);
+        });
+    }
+
+    // ---------- Fund table ----------
+    function renderTableHead() {
+        document.getElementById('fund-thead').innerHTML = COLUMNS.map(c => {
+            const active = SORT && SORT.key === c.key;
+            const ariaSort = active ? (SORT.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+            const indicator = active ? (SORT.dir === 'asc' ? '▲' : '▼') : '';
+            const cls = [c.key === 'name' ? 'c-fund' : '', c.num ? 'num' : ''].join(' ').trim();
+            return '<th scope="col" class="' + cls + '" aria-sort="' + ariaSort + '">' +
+                '<button type="button" class="sort-btn" data-sort="' + c.key + '">' + esc(c.label) +
+                '<span class="sort-ind" aria-hidden="true">' + indicator + '</span></button></th>';
+        }).join('');
+    }
+
+    function renderFundTable() {
+        renderTableHead();
+        VISIBLE = sortedFunds();
+        const tbody = document.getElementById('fund-tbody');
+        if (!VISIBLE.length) {
+            const empty = SEARCH_QUERY ? 'No funds match "' + esc(SEARCH_QUERY) + '".' : 'No funds in this view.';
+            tbody.innerHTML = '<tr><td class="empty-bucket" colspan="' + COLUMNS.length + '">' + empty + '</td></tr>';
+            syncPanelNav();
+            return;
+        }
+        tbody.innerHTML = VISIBLE.map(renderFundRow).join('');
+        syncPanelNav();
+    }
+
+    // The name rides in a data attribute read via .dataset. An inline handler would
+    // decode &#39; back to a bare ' and break for any fund name with an apostrophe.
+    function renderFundRow(fund) {
+        const selected = fund.fundName === SELECTED_FUND;
+        let cells = '<th scope="row" class="c-fund">' +
+            '<button type="button" class="fund-btn" aria-expanded="' + selected + '" aria-controls="fund-panel">' + esc(fund.fundName) + '</button>' +
+            '<div class="fund-meta">' + badgeHtml(fund.lpaStatus) + similarNameTag(fund) + inheritedTag(fund) + '</div></th>';
+        // Gap rows span the term columns with one message instead of five dashes,
+        // but keep their own side-letter cell: letters without an LPA is a real signal.
+        if (!fund.lpa) {
+            const gap = STATUS[fund.lpaStatus].gap +
+                (fund.lpaStatus === 'MISSING' && (fund.possibleLpaNames || []).length ? ' · possible match to check' : '');
+            cells += '<td class="c-gap" colspan="' + TERM_COLUMNS.length + '">' + esc(gap) + '</td>';
+        } else if (fund.lpaStatus === 'PARTIAL') {
+            cells += '<td class="c-gap" colspan="' + TERM_COLUMNS.length + '">On file, but the documents state no economic terms</td>';
+        } else if (fund.lpaStatus === 'VEHICLE_AGREEMENT') {
+            // Every vehicle row reads the same; a stated 0% fee or a fund term is in its panel, and any check flag stays on the row.
+            cells += '<td class="c-gap" colspan="' + TERM_COLUMNS.length + '">Vehicle agreement · ' +
+                esc(STATUS.VEHICLE_AGREEMENT.noEconomics) + checkChip(flagsOf(fund).map(fl => fl.reason)) + '</td>';
+        } else {
+            cells += TERM_COLUMNS.map(c => '<td class="num">' + termCell(c.fmt(fund)) + termCheckChip(fund, c.field) + '</td>').join('');
+        }
+        cells += '<td class="num">' + esc(fund.sideLetterCount || 0) + '</td>';
+        return '<tr data-fund-name="' + escAttr(fund.fundName) + '"' + (selected ? ' class="is-selected"' : '') + '>' + cells + '</tr>';
+    }
+
+    function renderNotAudited() {
+        const el = document.getElementById('not-audited');
+        const list = DATA.notAudited || [];
+        if (!list.length) { el.hidden = true; return; }
+        el.innerHTML = '<summary>' + list.length + ' entit' + (list.length === 1 ? 'y' : 'ies') +
+            ' not audited — ' + (list.length === 1 ? 'it doesn’t' : 'they don’t') + ' carry an LPA</summary><ul>' +
+            list.map(e => '<li>' + esc(e.name) + (e.entityType ? ' · ' + esc(e.entityType) : '') + ' · ' + esc(e.reason) + '</li>').join('') + '</ul>';
+        el.hidden = false;
+    }
+
+    function docLine(d) {
+        return documentLink(d.documentId, esc(d.fundName || 'Unnamed fund')) + (d.gpName ? ' · ' + esc(d.gpName) : '') +
+            (d.lpaDate ? ' · ' + esc(fmtDate(d.lpaDate)) : '');
+    }
+
+    function fillSection(id, items, summary, note, line) {
+        const el = document.getElementById(id);
+        if (!items.length) { el.hidden = true; return; }
+        el.innerHTML = '<summary>' + esc(summary) + '</summary><p>' + esc(note) + '</p><ul>' +
+            items.map(item => '<li>' + line(item) + '</li>').join('') + '</ul>';
+        el.hidden = false;
+    }
+
+    // What the extractions hold that no fund card shows: documents that may be the firm's own
+    // under another name, documents received from other managers, and letters no fund received.
+    function renderUnclaimed() {
+        const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+        const unmatched = DATA.unmatchedDocuments || [], received = DATA.receivedDocuments || [];
+        const letters = DATA.unmatchedSideLetters || [];
+        const companyLetters = (DATA.sideLetterCounts || {}).company || 0;
+        fillSection('unmatched-docs', unmatched,
+            plural(unmatched.length, 'document') + ' didn’t match any fund',
+            'These look like this firm’s own agreements, but the name matches no entity in Carta. A renamed fund is the usual cause. Link by asking your Carta team: send them each document and the fund it belongs to, and they will attach it.',
+            docLine);
+        fillSection('received-docs', received,
+            plural(received.length, 'agreement') + ' received from other managers',
+            'LPAs of other managers’ funds that name one of this firm’s entities as an investor. They are not errors and not part of the coverage count.',
+            docLine);
+        fillSection('unmatched-letters', letters,
+            plural(letters.length, 'side letter') + ' matched no fund',
+            'Side letters on file that may be this firm’s but name none of its funds.' +
+                (companyLetters ? ' ' + plural(companyLetters, 'side letter') + ' from portfolio companies’ funding rounds are left out.' : ''),
+            sl => documentLink(sl.documentId, esc(sl.fundName || 'Unnamed fund')) + (sl.lpName ? ' · ' + esc(sl.lpName) : '') + (sl.issueDate ? ' · ' + esc(fmtDate(sl.issueDate)) : ''));
+    }
+
+    // ---------- Fund details panel ----------
+    const documentLabel = lpa => lpa.documentType === OPERATING_AGREEMENT_DOCUMENT_TYPE ? 'operating agreement' : 'LPA';
+    const capitalized = text => text.charAt(0).toUpperCase() + text.slice(1);
+
+    function renderTermsSection(fund) {
+        let html = '<div class="drawer-section"><h3 class="drawer-section-title">Economic terms</h3>';
+        if (fund.lpaStatus === 'PARENT_AGREEMENT') {
+            return html + '<div class="drawer-empty">' + parentAgreementNote(fund) + ' ' +
+                documentLink(fund.parentAgreements[0].documentId, 'View the parent agreement ↗') + '</div></div>';
+        }
+        if (!fund.lpa) {
+            const possible = possibleLpaNote(fund);
+            const why = STATUS[fund.lpaStatus].detail;
+            return html + '<div class="drawer-empty">No LPA on file for this fund. ' + esc(why) +
+                (possible ? possible + ' ' : '') +
+                'Upload the LPA: drop it into this chat, or ' +
+                '<a class="carta-link" href="' + escAttr(docsUrl()) + '" data-external>upload it in Carta ↗</a></div></div>';
+        }
+        const t = termsOf(fund);
+        const isVehicle = fund.lpaStatus === 'VEHICLE_AGREEMENT';
+        const vehicleText = 'Vehicle agreement on file. It ' + STATUS.VEHICLE_AGREEMENT.noEconomics + ', which is usual for a vehicle that distributes pro rata or takes its economics from the main fund’s agreement.';
+        if (!t && isVehicle) {
+            return html + '<div class="drawer-empty">' + vehicleText + ' ' +
+                '<a class="carta-link" href="' + escAttr(docsUrl()) + '" data-external>Upload the full ' + documentLabel(fund.lpa) + ' ↗</a></div></div>';
+        }
+        const vehicleNote = isVehicle ? '<div class="drawer-empty">' + vehicleText + '</div>' : '';
+        if (!t) {
+            // These documents name the fund but state no fee, carry or term: signature
+            // pages from a subscription packet, or a short-form agreement.
+            return html + '<div class="drawer-empty">The documents on file for this fund name it but state no economic terms. ' +
+                'They are often signature pages from a subscription packet. ' +
+                'Upload the full ' + documentLabel(fund.lpa) + ': drop it into this chat, or ' +
+                '<a class="carta-link" href="' + escAttr(docsUrl()) + '" data-external>upload it in Carta ↗</a></div></div>';
+        }
+        const feeBasis = t.mgmtFeeBasisInvestmentPeriod ? ' of ' + esc(t.mgmtFeeBasisInvestmentPeriod) : '';
+        // Hyphenated terms ("whole-of-fund", "catch-up") stay on one line; a wrap falls between words.
+        const waterfall = t.waterfallStructure
+            ? esc(t.waterfallStructure).replace(/(\S*-\S*)/g, '<span class="nowrap">$1</span>')
+            : '—';
+        // One flat list: fee and carry economics, then timing. Unextracted rows
+        // are dropped rather than shown as a dash.
+        const rows = [
+            [TERM_LABELS.mgmtFeeRateInvestmentPeriod, t.mgmtFeeRateInvestmentPeriod == null ? '—'
+                : fmtFeeRate(t.mgmtFeeRateInvestmentPeriod) + (pctValue(t.mgmtFeeRateInvestmentPeriod) === 0 ? '' : feeBasis)],
+            [TERM_LABELS.mgmtFeeRatePostInvestment, fmtTermRate(t.mgmtFeeRatePostInvestment)],
+            [TERM_LABELS.carriedInterestRate, fmtTermRate(t.carriedInterestRate)],
+            ['Carry tiers', t.carryTierRates ? t.carryTierRates.map(fmtPctSmart).join(' → ') : '—'],
+            [TERM_LABELS.preferredReturnRate, fmtHurdle(t)],
+            ['Waterfall', waterfall],
+            [TERM_LABELS.fundTermYears, fmtYearsFull(t.fundTermYears)],
+            [TERM_LABELS.investmentPeriodYears, fmtYearsFull(t.investmentPeriodYears)],
+            [TERM_LABELS.capitalCallNoticeDays, fmtDays(t.capitalCallNoticeDays)],
+            ['Initial closing', fmtDate(t.initialClosingDate)],
+        ].filter(([, v]) => v !== '—');
+        const notFundLpa = fund.lpa.notFundLpa
+            ? '<div class="term-checks"><strong>Operating agreement, not a fund LPA</strong>' +
+              '<ul><li>The stated carry is above ' + FUND_CARRY_MAX_PCT + '%, so it is a member profit split rather than fund carry. Carry, hurdle and waterfall are not shown.</li></ul></div>'
+            : '';
+        const flags = flagsOf(fund);
+        const checks = flags.length
+            ? '<div class="term-checks"><strong>Check the LPA</strong><ul>' +
+              flags.map(fl => '<li>' + esc(TERM_LABELS[fl.field]) + ': ' + esc(fl.reason) + '</li>').join('') + '</ul></div>'
+            : '';
+        return html + vehicleNote + '<dl class="facts">' +
+            rows.map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>').join('') + '</dl>' + notFundLpa + checks + '</div>';
+    }
+
+    // Only ~15.7% of side letters state a commitment; the rest backfill from the LPA
+    // roster, and fromLpa lets the caller mark that figure as inferred.
+    function sideLetterCommitment(sl, lpa) {
+        // The letter's own value is a pipeline-formatted string ("MYR 15,000,000").
+        if (sl.lpCapitalCommitment) return { text: esc(sl.lpCapitalCommitment), fromLpa: false };
+        // Investor-role letters name a portfolio company as the counterparty and
+        // this fund as the LP, so neither side matches this fund's own roster.
+        if (sl.role === 'investor') return { text: null, fromLpa: false };
+        const name = sl.lpName || sl.counterpartyName;
+        if (!name || !lpa) return { text: null, fromLpa: false };
+        // Only LPs that actually carry an amount are candidates, so a name match
+        // against a commitment-less row can't shadow a usable one.
+        const byName = new Map();
+        for (const lp of (lpa.limitedPartners || [])) {
+            if (lp.name && lp.commitmentAmount != null) byName.set(lp.name, lp);
+        }
+        if (byName.size === 0) return { text: null, fromLpa: false };
+        const hit = bestMatch(name, Array.from(byName.keys()));
+        if (!hit) return { text: null, fromLpa: false };
+        return { text: fmtAmount(byName.get(hit).commitmentAmount, byName.get(hit).currencyCode), fromLpa: true };
+    }
+
+    // "15%" and "1.75%" are already percentages; a bare fraction ("0.15") is
+    // scaled like fmtPctSmart. Returns null when the string holds no number.
+    function parseRate(raw) {
+        if (raw === null || raw === undefined) return null;
+        const s = String(raw);
+        const m = s.match(/-?\d+(\.\d+)?/);
+        if (!m) return null;
+        const v = parseFloat(m[0]);
+        return (!s.includes('%') && v < 1) ? v * 100 : v;
+    }
+
+    const PROVISION_ACRONYMS = { mfn: 'MFN', lp: 'LP', gp: 'GP' };
+
+    // Known types show the letter's rate and its difference from this fund's LPA
+    // term: fees in basis points, carry and hurdle in points.
+    function provisionLine(p, lpa) {
+        const type = String(p.provision_type || '').toUpperCase();
+        const rate = parseRate(p.rate_paid);
+        const rateText = rate !== null ? ' ' + esc(rate.toFixed(2) + '%') : (p.rate_paid ? ' ' + esc(p.rate_paid) : '');
+        const terms = (lpa && lpa.termsExtracted) ? (lpa.terms || {}) : {};
+        const delta = (lpaRaw, unit) => {
+            const lpaVal = pctValue(lpaRaw);
+            if (rate === null || lpaVal === null) return '';
+            const diff = rate - lpaVal;
+            const sign = diff > 0 ? '+' : diff < 0 ? '−' : '±';
+            const mag = unit === 'bps'
+                ? Math.round(Math.abs(diff) * 100) + ' bps'
+                : Math.abs(diff).toFixed(2).replace(/\.?0+$/, '') + ' pts';
+            return ' <span class="provision-cmp">' + sign + mag + ' vs LPA ' + esc(fmtPctSmart(lpaRaw)) + '</span>';
+        };
+        switch (type) {
+            case 'REDUCED_MANAGEMENT_FEE':
+                return '<strong>Reduced management fee</strong>' + rateText + delta(terms.mgmtFeeRateInvestmentPeriod, 'bps');
+            case 'REDUCED_CARRIED_INTEREST':
+                return '<strong>Reduced carry</strong>' + rateText + delta(terms.carriedInterestRate, 'pts');
+            case 'INCREASED_PREFERRED_RETURN':
+            case 'INCREASED_HURDLE':
+                return '<strong>Increased hurdle</strong>' + rateText +
+                    (pctValue(terms.preferredReturnRate) === 0
+                        ? ' <span class="provision-cmp">LPA has no hurdle</span>'
+                        : delta(terms.preferredReturnRate, 'pts'));
+            // A waiver has no rate to show and none to compare against.
+            case 'WAIVED_MANAGEMENT_FEE':
+                return '<strong>Waived management fee</strong>';
+            case 'WAIVED_CARRIED_INTEREST':
+                return '<strong>Waived carried interest</strong>';
+            default: {
+                // Unknown types keep a readable label; a rate-less one renders bare
+                // rather than "Label: —", which would read as missing data.
+                const words = type.toLowerCase().split('_').filter(Boolean).map(w => PROVISION_ACRONYMS[w] || w);
+                const label = words.length ? words.join(' ').replace(/^\w/, ch => ch.toUpperCase()) : 'Provision';
+                return '<strong>' + esc(label) + '</strong>' + rateText;
+            }
+        }
+    }
+
+    function renderSideLetter(sl, fund) {
+        const chips = [];
+        if (sl.attributionMethod === 'lp-name') {
+            chips.push('<span class="chip" title="Fund assignment inferred from LP name match — verify against source document.">Fund inferred</span>');
+        } else if (sl.attributionMethod === 'date-inferred') {
+            chips.push('<span class="chip" title="Fund assignment inferred from issue date match — verify against source document.">Fund inferred (date)</span>');
+        }
+        if (sl.sharedAcrossSeries) {
+            chips.push('<span class="chip" title="The letter names the LLC, not one of its series, so it shows on each series and counts once in the totals.">All series</span>');
+        }
+        const meta = [esc(fmtDate(sl.issueDate))];
+        const commitment = sideLetterCommitment(sl, fund.lpa);
+        if (commitment.text) {
+            meta.push(commitment.text + ' commitment' + (commitment.fromLpa
+                ? ' <span class="chip" title="This side letter does not state a commitment amount. Figure taken from the fund\'s LPA by matching the investor name — verify against the source document.">From LPA</span>'
+                : ''));
+        }
+        const lines = (sl.economicProvisions || []).map(p => provisionLine(p, fund.lpa))
+            .concat(PROVISION_SUMMARIES.filter(([key]) => sl[key]).map(([key, label]) => '<strong>' + esc(label) + '</strong> ' + esc(sl[key])));
+        return '<div class="sl">' +
+            '<div class="sl-top">' + documentLink(sl.documentId, esc(sl.counterpartyName || sl.lpName || '—')) + chips.join('') + '</div>' +
+            '<div class="sl-meta">' + meta.join(' · ') + '</div>' +
+            (lines.length
+                ? '<ul class="provision-list">' + lines.map(line => '<li>' + line + '</li>').join('') + '</ul>'
+                : '<div class="provision-none">No provisions extracted</div>') +
+            '</div>';
+    }
+
+    // Dedup and sort already applied by matchFunds: provision-bearing letters
+    // first, then date-descending.
+    function renderSideLettersSection(fund) {
+        const all = fund.sideLetters || [];
+        const own = all.filter(sl => sl.role !== 'investor');
+        // The fund received these as an investor in a portfolio company — a
+        // different question from what it granted its own LPs.
+        const asInvestor = all.filter(sl => sl.role === 'investor');
+        let html = '<div class="drawer-section"><h3 class="drawer-section-title">Side letters ' +
+            '<span class="drawer-section-count">' + own.length + '</span></h3>';
+        html += own.length
+            ? '<div class="sl-list">' + own.map(sl => renderSideLetter(sl, fund)).join('') + '</div>'
+            : '<div class="drawer-empty">No side letters granted to this fund\'s LPs.</div>';
+        if (asInvestor.length) {
+            html += '<details class="investor-letters"><summary>' + asInvestor.length + ' side letter' +
+                (asInvestor.length === 1 ? '' : 's') + ' this fund received as an investor</summary>' +
+                '<div class="sl-list">' + asInvestor.map(sl => renderSideLetter(sl, fund)).join('') + '</div></details>';
+        }
+        return html + '</div>';
+    }
+
+    function renderLpSection(fund) {
+        const lps = ((fund.lpa && fund.lpa.limitedPartners) || []).slice()
+            .sort((a, b) => (b.commitmentAmount ?? -Infinity) - (a.commitmentAmount ?? -Infinity));
+        if (fund.inheritedFromMaster) {
+            return '<div class="drawer-section"><h3 class="drawer-section-title">Limited partners</h3><div class="drawer-empty">' +
+                'Inherited from the master agreement of <strong>' + esc(fund.inheritedFromMaster) + '</strong>' +
+                (fund.lpa.limitedPartnerCount ? ' (' + fund.lpa.limitedPartnerCount + ' LPs)' : '') + '. The roster is not repeated here.</div></div>';
+        }
+        const priced = lps.filter(lp => lp.commitmentAmount != null);
+        // Names with no commitment beside them say nothing the documents don't, so no table.
+        if (!priced.length) return '';
+        // The roster spans several documents. Amounts in different currencies are
+        // never added; a document with no known currency counts as a currency of its own.
+        const currencies = new Set(priced.map(lp => lp.currencyCode || ''));
+        const sameCurrency = currencies.size <= 1;
+        const total = sameCurrency ? priced.reduce((s, lp) => s + lp.commitmentAmount, 0) : null;
+        const unpriced = lps.length - priced.length;
+        const share = n => (n != null && total) ? (n / total * 100).toFixed(2) + '%' : '—';
+        const footNote = !sameCurrency
+            ? 'Not totalled: amounts are in more than one currency'
+            : unpriced ? 'Excludes ' + unpriced + ' LP' + (unpriced === 1 ? '' : 's') + ' with no extracted commitment' : '';
+        return '<div class="drawer-section"><h3 class="drawer-section-title">Limited partners ' +
+            '<span class="drawer-section-count">' + lps.length + '</span></h3>' +
+            '<table class="lp-table"><thead><tr><th scope="col">Name</th>' +
+            '<th scope="col" class="num">Commitment</th><th scope="col" class="num">% of total</th></tr></thead><tbody>' +
+            lps.map(lp => '<tr><td>' + esc(lp.name || '—') +
+                (lp.entityType ? '<span class="lp-type">' + esc(lp.entityType) + '</span>' : '') + '</td>' +
+                '<td class="num">' + fmtAmount(lp.commitmentAmount, lp.currencyCode) + '</td>' +
+                '<td class="num">' + share(lp.commitmentAmount) + '</td></tr>').join('') +
+            '</tbody><tfoot><tr><td>Total' +
+            (footNote ? '<span class="lp-type">' + footNote + '</span>' : '') +
+            '</td><td class="num">' + (total === null ? '—' : fmtAmount(total, [...currencies][0])) + '</td><td class="num">' + (total ? '100.00%' : '—') + '</td></tr></tfoot>' +
+            '</table></div>';
+    }
+
+    function renderIdentitySection(fund) {
+        if (!fund.lpa) return '';
+        const f = fund.lpa.fund || {};
+        const gp = fund.lpa.generalPartner || {};
+        // Never parentheses: an amount in them reads as negative.
+        const gpCommitment = [
+            gp.commitmentPercentage != null && fmtPctSmart(gp.commitmentPercentage),
+            gp.commitmentAmount != null && fmtAmount(gp.commitmentAmount, fund.lpa.currencyCode),
+        ].filter(Boolean).join(' · ') || null;
+        // Unextracted rows are dropped, not shown as a bare em dash.
+        const rows = [
+            ['Legal name', f.name && esc(f.name)],
+            [capitalized(documentLabel(fund.lpa)) + ' date', f.lpaDate && esc(fmtDate(f.lpaDate))],
+            ['State of formation', f.stateOfFormation && esc(f.stateOfFormation)],
+            ['General partner', gp.name && esc(gp.name) + (gp.entityType ? ' (' + esc(gp.entityType) + ')' : '')],
+            ['GP state of formation', gp.stateOfFormation && esc(gp.stateOfFormation)],
+            ['GP commitment', gpCommitment],
+            ['Fund purpose', f.fundPurpose && esc(f.fundPurpose)],
+        ].filter(([, v]) => v);
+        if (!rows.length) return '';
+        return '<div class="drawer-section"><h3 class="drawer-section-title">Fund identity</h3><div class="kv-table">' +
+            rows.map(([k, v]) => '<div class="kv-key">' + esc(k) + '</div><div class="kv-value">' + v + '</div>').join('') +
+            '</div></div>';
+    }
+
+    function openDetailsPanel(fundName, opts) {
+        const moveFocus = !opts || opts.focus !== false;
+        const fund = DATA.funds.find(f => f.fundName === fundName);
+        if (!fund) return;
+        SELECTED_FUND = fundName;
+
+        document.getElementById('fund-panel-title').textContent = fundName;
+        const sub = [badgeHtml(fund.lpaStatus) + (similarNameTag(fund) ? ' ' + similarNameTag(fund) : '')];
+        const lpaFund = fund.lpa && fund.lpa.fund;
+        if (lpaFund && lpaFund.lpaDate) sub.push('<span>' + capitalized(documentLabel(fund.lpa)) + ' dated ' + esc(fmtDate(lpaFund.lpaDate)) + '</span>');
+        if (lpaFund && lpaFund.stateOfFormation) sub.push('<span>' + esc(lpaFund.stateOfFormation) + '</span>');
+        if (fund.documentId) sub.push(documentLink(fund.documentId, 'View ' + documentLabel(fund.lpa) + ' ↗'));
+        const url = fundUrl(fund);
+        if (url) sub.push('<a class="carta-link" href="' + escAttr(url) + '" data-external>Open in Carta ↗</a>');
+        document.getElementById('fund-panel-sub').innerHTML = sub.join('<span aria-hidden="true">·</span>');
+
+        document.getElementById('fund-panel-body').innerHTML =
+            renderTermsSection(fund) + renderSideLettersSection(fund) + renderLpSection(fund) + renderIdentitySection(fund) +
+            '<p class="drawer-caveat">Extracted from the LPA and side letter documents. Confirm against the source before acting on any figure.</p>';
+
+        const panel = document.getElementById('fund-panel');
+        panel.scrollTop = 0;
+        panel.hidden = false;
+        document.getElementById('panel-scrim').hidden = false;
+        document.getElementById('shell').classList.add('has-panel');
+
+        document.querySelectorAll('#fund-tbody tr[data-fund-name]').forEach(tr => {
+            const on = tr.dataset.fundName === fundName;
+            tr.classList.toggle('is-selected', on);
+            const btn = tr.querySelector('.fund-btn');
+            if (btn) btn.setAttribute('aria-expanded', String(on));
+            if (on) tr.scrollIntoView({ block: 'nearest' });
+        });
+        syncPanelNav();
+        const title = document.getElementById('fund-panel-title');
+        if (moveFocus && title.focus) title.focus({ preventScroll: true });
+    }
+
+    function closeDetailsPanel() {
+        if (!SELECTED_FUND) return;
+        const fundName = SELECTED_FUND;
+        SELECTED_FUND = null;
+        document.getElementById('fund-panel').hidden = true;
+        document.getElementById('panel-scrim').hidden = true;
+        document.getElementById('shell').classList.remove('has-panel');
+        let returnTo = null;
+        document.querySelectorAll('#fund-tbody tr[data-fund-name]').forEach(tr => {
+            tr.classList.remove('is-selected');
+            const btn = tr.querySelector('.fund-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+            if (tr.dataset.fundName === fundName) returnTo = btn;
+        });
+        // Back to the row that was open, so keyboard users land where they were.
+        if (returnTo && returnTo.focus) returnTo.focus();
+    }
+
+    function stepPanel(delta) {
+        const i = VISIBLE.findIndex(f => f.fundName === SELECTED_FUND);
+        if (i < 0) return;
+        const next = VISIBLE[i + delta];
+        if (next) openDetailsPanel(next.fundName, { focus: false });
+    }
+
+    function syncPanelNav() {
+        const i = VISIBLE.findIndex(f => f.fundName === SELECTED_FUND);
+        document.getElementById('panel-prev').disabled = i <= 0;
+        document.getElementById('panel-next').disabled = i < 0 || i >= VISIBLE.length - 1;
+        document.getElementById('panel-pos').textContent = i < 0 ? '' : (i + 1) + ' of ' + VISIBLE.length;
+    }
+
+    // ---------- Footer ----------
+    function renderPageFooter() {
+        document.getElementById('page-footer').innerHTML =
+            'To add an LPA, drop it into this chat, or ' +
+            '<a class="carta-link" href="' + escAttr(docsUrl()) + '" data-external>view or upload LPA documents in Carta ↗</a>';
+    }
+
+    // ---------- Wiring ----------
+    // Delegated, so every listener survives the innerHTML re-renders that
+    // filter, search and sort perform.
+    document.getElementById('summary-tiles').addEventListener('click', e => {
+        const tile = e.target.closest('[data-filter]');
+        if (tile) setFilter(ACTIVE_FILTER === tile.dataset.filter ? 'all' : tile.dataset.filter);
+    });
+    document.getElementById('filter-select').addEventListener('change', e => setFilter(e.target.value));
+    document.getElementById('search-input').addEventListener('input', e => setSearch(e.target.value));
+    document.getElementById('fund-thead').addEventListener('click', e => {
+        const btn = e.target.closest('[data-sort]');
+        if (!btn) return;
+        const key = btn.dataset.sort;
+        // Numbers open high-to-low (the usual question is "who charges most");
+        // names open A–Z. A third click returns to the default order.
+        const first = key === 'name' ? 'asc' : 'desc';
+        if (!SORT || SORT.key !== key) SORT = { key, dir: first };
+        else if (SORT.dir === first) SORT = { key, dir: first === 'asc' ? 'desc' : 'asc' };
+        else SORT = null;
+        renderFundTable();
+    });
+    document.getElementById('fund-tbody').addEventListener('click', e => {
+        const row = e.target.closest('tr[data-fund-name]');
+        if (row) openDetailsPanel(row.dataset.fundName);
+    });
+    document.getElementById('panel-prev').addEventListener('click', () => stepPanel(-1));
+    document.getElementById('panel-next').addEventListener('click', () => stepPanel(1));
+    document.getElementById('panel-close').addEventListener('click', closeDetailsPanel);
+    document.getElementById('panel-scrim').addEventListener('click', closeDetailsPanel);
+    document.addEventListener('click', e => {
+        const link = e.target.closest && e.target.closest('a[data-external]');
+        if (!link) return;
+        e.preventDefault();
+        openExternal(link.getAttribute('href'));
+    });
+    document.addEventListener('keydown', e => {
+        if (!SELECTED_FUND) return;
+        if (e.key === 'Escape') { closeDetailsPanel(); return; }
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        // Arrows step between funds unless the reader is typing or scrolling the panel body.
+        const active = document.activeElement;
+        if (active && (['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName) ||
+            document.getElementById('fund-panel-body').contains(active))) return;
+        e.preventDefault();
+        stepPanel(e.key === 'ArrowDown' ? 1 : -1);
+    });
+
+    // ---------- Init ----------
+    // Nothing renders synchronously: the page opens on the shimmer and bootstrap
+    // swaps in the content once Carta answers.
+    bootstrap();
+  </script>
+</body>
+</html>
