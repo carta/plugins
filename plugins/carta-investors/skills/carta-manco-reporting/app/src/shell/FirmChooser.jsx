@@ -1,8 +1,11 @@
 // Shown instead of the auto-load screen when useLoadFirm.js can't open a firm with no extra
 // click. Who sees this, and who additionally gets search: DEPLOY.md's "Which firm opens".
+// Card grid (not ChooserPage's own ChooserButton rows) to match carta-fund-modeling's
+// FundChooser — the two apps' "pick a firm" screens should read as the same page.
 import { useEffect, useState } from "react";
-import { ChooserPage, ChooserButton } from "./ChooserPage.jsx";
-import { FS, INK, FAINT, LINE, PAPER } from "../ui/theme.js";
+import { ChooserPage } from "./ChooserPage.jsx";
+import { FirmMark } from "../ui/components.jsx";
+import { FS, INK, FAINT, LINE, PAPER, BLUE } from "../ui/theme.js";
 
 const SEARCH_DELAY_MS = 300;
 
@@ -31,7 +34,7 @@ export default function FirmChooser({ isStaff, firms, onPick }) {
   }, [q, canSearch]);
 
   return (
-    <ChooserPage title="Choose a firm"
+    <ChooserPage title="Carta ManCo Reporting"
       subtitle="Pick which firm's ManCo microapp to open.">
       {canSearch && (
         <input type="search" data-testid="firm-search" value={query} onChange={(e) => setQuery(e.target.value)}
@@ -46,11 +49,16 @@ export default function FirmChooser({ isStaff, firms, onPick }) {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
         {list.map((f) => (
-          <ChooserButton key={f.slug} data-testid={`firm-${f.slug}`} onClick={() => onPick(f.slug)}>
-            {f.name}
-          </ChooserButton>
+          <button key={f.slug} data-testid={`firm-${f.slug}`} onClick={() => onPick(f.slug)}
+            className="firm-card"
+            style={{ textAlign: "left", cursor: "pointer", padding: "20px 20px 18px",
+              display: "flex", flexDirection: "column", gap: 14, fontFamily: "inherit" }}>
+            <FirmMark name={f.name} />
+            <div style={{ fontSize: FS.h3, fontWeight: 500, color: INK, lineHeight: 1.2 }}>{f.name}</div>
+            <span style={{ fontSize: FS.value, fontWeight: 600, color: BLUE }}>Open workspace →</span>
+          </button>
         ))}
       </div>
     </ChooserPage>

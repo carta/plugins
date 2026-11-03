@@ -434,6 +434,12 @@ export const GLOBAL_CSS = `
   .panel { background: ${SIDE}; border: 1px solid ${LINE}; border-radius: ${RADIUS}px; box-shadow: none; }
   .panel:hover { box-shadow: var(--shadow-hover); }
 
+  /* FirmChooser's pick-a-firm cards — a transform/border-color hover beyond plain
+     .card's shadow-only treatment, matching carta-fund-modeling's own FundChooser
+     cards. Needs real :hover (can't be done inline), so it lives here next to .card. */
+  .firm-card { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: ${RADIUS}px; transition: border-color .15s, transform .15s, box-shadow .15s; }
+  .firm-card:hover { border-color: ${BLUE}; transform: translateY(-2px); box-shadow: ${SHADOW_HOVER}; }
+
   /* Floating slot for the sticky-header clone (BudgetActualsOutline.jsx's
      useStickyHeader, ported from carta-fund-modeling's ui/table.jsx). The
      clone itself is real React markup portaled to document.body, not a

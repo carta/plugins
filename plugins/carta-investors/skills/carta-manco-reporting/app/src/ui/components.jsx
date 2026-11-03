@@ -19,6 +19,20 @@ export function CartaLogo({ size = 30, style }) {
   );
 }
 
+// Monochrome initial tile for a firm card (FirmChooser) — same shape as
+// carta-fund-modeling's own `Mark`, but keyed off the firm's name alone: ManCo's
+// /api/firms has no branding pipeline (no logo, no mark text) to draw a real logo from.
+export function FirmMark({ name, size = 42, style }) {
+  const initial = (name || "").trim().charAt(0).toUpperCase() || "·";
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" style={{ display: "block", ...style }} aria-hidden>
+      <rect width="64" height="64" rx="3" style={{ fill: INK }} />
+      <text x="32" y="43" textAnchor="middle" fontFamily={sans.fontFamily}
+        fontSize={32} fontWeight="700" letterSpacing="-1" style={{ fill: PAPER }}>{initial}</text>
+    </svg>
+  );
+}
+
 /** Ink's real dark tooltip chip, matching `carta-fund-modeling`'s own
  *  `InfoTip`. Uses flat `brand-black`/`brand-white`, not
  *  `surface-darkgray-default` — that token is wrapped in
