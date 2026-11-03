@@ -1,7 +1,7 @@
 ---
 name: carta-manco-reporting
 description: >-
-  Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under any verb (spin up, open, launch, build, create, run), firm named or not — P&L drill-down, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. ALSO fires on a short follow-up that continues a Budget vs Actuals view already open, even with no firm named again — "refresh Budget vs Actuals for the refreshed actuals", "pull up Budget vs Actuals", "refresh the ManCo budget app". DISAMBIGUATION: "build" means render this dashboard, not draft a budget. NOT FOR: drafting or editing a budget, or a generic ManCo ask naming no firm and no visual surface (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch → skill-dev:build-micro-app.
+  Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report ask under any verb (spin up, open, launch, build, create, run), firm named or not, or a ManCo financials ask naming a firm — ManCo P&L drill-down by account or fund, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. ALSO a short follow-up only while a ManCo Budget vs Actuals dashboard is open (e.g. "refresh Budget vs Actuals"); a budget-workbook follow-up with no dashboard open → carta-manco. DISAMBIGUATION: "build" means render this dashboard, not draft a budget. NOT FOR: drafting or editing a budget, or a generic ManCo ask naming no firm and no visual surface (→ carta-manco); a named consolidated P&L, balance sheet or trial balance (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch → skill-dev:build-micro-app.
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
 version: 0.6.4
 # `version` gates delivery of app/src: each user runs their own copy, and a change
@@ -131,7 +131,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.14.0</carta-plugin>
+<carta-plugin>carta-investors:7.14.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -158,7 +158,7 @@ Fire on:
 - "management company report for `<firm>`" / "ManCo report for `<firm>`"
 - "how is `<firm>`'s management company doing" / "how's `<firm>`'s ManCo performing"
 - "what are `<firm>`'s management company expenses this year"
-- "management company P&L for `<firm>`" / "`<firm>`'s ManCo P&L for `<year>`"
+- "ManCo P&L drill-down dashboard for `<firm>`" / "`<firm>`'s ManCo P&L for `<year>`"
 - "management fee income for `<firm>`" / "fee income by fund"
 - "show me the ManCo data for `<firm>`"
 - "do ManCo reporting for `<firm>`" / "run ManCo reporting"
@@ -291,17 +291,24 @@ datadir build runs silently. Speak only at:
   already states — and stay silent whenever that combination is found; no
   question here about a mapping file
 - Step 4.6 ([budget-unresolved.md](references/budget-unresolved.md)) — a
-  mapping-file ask, but only when `nativeMapping.needsMappingFile` is
-  true: the native mapping above covered under half the budget's lines.
-  Silent otherwise. **Hard gate: this ask fires only after Step 4 has
-  actually run and returned `nativeMapping`** — never before Step 4, and
-  never from a guess at whether the native mapping will fall short. There
-  is nothing to evaluate `needsMappingFile` against until Step 4 has built
-  the datadir.
+  mapping-file ask, due only when none of its skip conditions hold: no
+  `--coa-mapping` passed this run, no mapping or decline already recorded
+  in `.coa-mapping-ref.json`, and `nativeMapping.needsMappingFile` true
+  (the native mapping covered under half the budget's lines). Silent
+  otherwise. **Folded into Step 4.7's confirm-all question as a fourth
+  option, combined or alone following that same skip list, whenever
+  Current mapping has a row to confirm — asked on its own, before Step
+  4.7, only when Current mapping is empty** (nothing to attach the option
+  to). **Hard gate: this ask, combined or alone, fires only after Step 4
+  has actually run and returned `nativeMapping`** — never before Step 4,
+  and never from a guess at whether the native mapping will fall short.
+  There is nothing to evaluate `needsMappingFile` against until Step 4 has
+  built the datadir.
 - Step 4.7 ([budget-unresolved.md](references/budget-unresolved.md)) — the
   mapping table, whenever the build left budget lines with
-  no Carta account to resolve against. Confirm the confident rows first,
-  then work through the rest — the two never share one turn — and
+  no Carta account to resolve against. Confirm the confident rows first —
+  its own question carries Step 4.6's mapping-file option too, when that
+  applies — then work through the rest — the two never share one turn — and
   **before the URL**: an unmapped line renders its budget against no
   actual, which reads as an account nobody spent from rather than one
   nobody matched. Every other question in this skill waits until the

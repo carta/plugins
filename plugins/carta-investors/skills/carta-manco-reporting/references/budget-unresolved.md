@@ -31,7 +31,17 @@ true when those two together cover under half the budget's lines — thin
 enough that Step 4.7's per-row table isn't really fixing the gap, it's
 asking about most of the budget one line at a time.
 
-When it's true, ask once, via a single `AskUserQuestion`, stating the
+**When it's true and Step 4.7's Current mapping will have at least one
+row, don't ask this as its own round.** Fold it into Step 4.7's
+confirm-all question as a fourth option instead — see "Current mapping's
+question carries the mapping-file ask too" there. The two conditions
+read the same `nativeMapping` coverage and neither needs the other's
+answer first, so combining them costs the operator nothing and saves a
+full round trip before the URL.
+
+Ask it here, on its own, only when **Current mapping is empty** — nothing
+native matched or proposed at all, so there is no confirm-all question to
+attach the option to. Ask once, via a single `AskUserQuestion`, stating the
 coverage so the ask isn't a bare request:
 
 > **Do you have a Carta GL-to-budget-category mapping for this workbook?**
@@ -56,8 +66,10 @@ Options:
 
 Record the answer in `.coa-mapping-ref.json` (`{"declined": true}` for the
 second option) so this isn't asked again for this firm. Either way, go on
-to Step 4.7 next — a mapping file changes how many rows have a `proposed`
-value, not whether the gate itself runs.
+to Step 4.7's **Needs your input** next, in this same turn if a mapping
+file wasn't supplied — Current mapping was empty, so there's nothing to
+confirm first. A supplied mapping file re-runs Step 4 before either table
+is built, so both reflect it from the start.
 
 ## Step 4.7 — Resolve budget lines that found no actuals
 
@@ -319,6 +331,41 @@ operator` (see "Recording answers" below).
 differs every time (e.g. "3 is the fee account", "2 is budget-only") and
 can't be buttoned. **"Decide later"** — records nothing; the table
 returns next run.
+
+#### Current mapping's question carries the mapping-file ask too
+
+**When Step 4.6's ask is due (see its skip list)**, add a fourth option to
+this same question instead of asking Step 4.6 first as its own round: the
+two read the same `nativeMapping` coverage, and neither needs the other's
+answer before it can be asked. Extend the question's prose to explain the
+offer, so the combined ask still says why a mapping file is on the table:
+
+> **Confirm the `<N>` mappings above?**
+> Matched against your Carta chart of accounts — some read straight off an
+> exact name, some off your workbook's own formulas; either way, tell me
+> if anything should change. **Nothing here is locked in — you can always
+> come back and change a mapping later, this run or a future one.** I
+> matched `<resolved + proposed>` of `<lines>` budget line(s) this way; a
+> Carta GL-to-budget-category mapping file would resolve the rest by name
+> and department/tag correspondence, if you have one.
+
+Fourth option, **"I have a mapping file to apply instead"** — collect it
+per [budget-workbook.md's Asking for a
+file](budget-workbook.md#asking-for-a-file), parse it exactly as 2.75e
+does (including `--carta-accounts-from` if the sheet names accounts by
+text), **re-parse every `pnl-outline` sheet** the same way 2.75e's own
+note describes, re-run Step 4, then print fresh **Current mapping** and
+**Needs your input** tables from the rebuilt coverage and ask about them
+as this same gate would otherwise — the tables already shown were
+provisional, computed before the file was in play. Record
+`.coa-mapping-ref.json` the same way Step 4.6 would have.
+
+**Add this fourth option only when Step 4.6's ask is due** — none of its
+skip conditions hold (no `--coa-mapping` this run, no mapping or decline
+in `.coa-mapping-ref.json`, `needsMappingFile` true). Offering it counts
+as asking: an answer of "Yes, confirm all" or "No — a few need changing"
+records `{"declined": true}` in `.coa-mapping-ref.json`, the same as Step
+4.6's second option; "Decide later" records nothing.
 
 **Wait for that answer before doing anything else.** Do not print
 **Needs your input** in the same turn, and do not call its
