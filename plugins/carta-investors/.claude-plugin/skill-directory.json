@@ -5,7 +5,7 @@
     "order": 20,
     "whatsNew": false,
     "prompts": [
-      "Produce an annual general meeting deck to show our investors"
+      "Produce an **annual general meeting deck** to show our investors"
     ]
   },
   "carta-brand-extraction": {
@@ -13,7 +13,7 @@
     "name": "Brand board",
     "order": 30,
     "prompts": [
-      "Build a brand board for {{FIRM}} from our website"
+      "Build a **brand board** for {{FIRM}} from our website"
     ],
     "whatsNewCopy": {
       "headline": "Turn your firm's website into a ready-to-use brand board",
@@ -25,7 +25,7 @@
     "name": "Form ADV",
     "order": 10,
     "prompts": [
-      "Prepare our Form ADV: Regulatory AUM and Schedule D by fund"
+      "Prepare our **Form ADV**: Regulatory AUM and Schedule D by fund"
     ],
     "whatsNewCopy": {
       "headline": "Prepare Form ADV regulatory AUM and Schedule D",
@@ -37,8 +37,8 @@
     "name": "Consolidated financial reports",
     "order": 10,
     "prompts": [
-      "Show me my firm's balance sheet as of this month",
-      "Show me my firm's P&L as of this month"
+      "Show me my firm's **balance sheet** as of this month",
+      "Show me my firm's **P&L** as of this month"
     ],
     "whatsNewCopy": {
       "headline": "Build a firm-wide P&L, balance sheet and trial balance",
@@ -60,7 +60,7 @@
     "name": "Co-investor lookup",
     "order": 30,
     "prompts": [
-      "Build a co-investor report showing who has co-invested in my portfolio companies"
+      "Build a **co-investor report** showing who has co-invested in my portfolio companies"
     ],
     "whatsNewCopy": {
       "headline": "See who invests alongside you across your portfolio",
@@ -72,8 +72,8 @@
     "name": "Portfolio data collection",
     "order": 70,
     "prompts": [
-      "Set up data collection for {{FIRM}}'s portfolio companies",
-      "Which portfolio companies have not sent their numbers this quarter?"
+      "**Set up data collection** for {{FIRM}}'s portfolio companies",
+      "Which portfolio companies **have not sent their numbers** this quarter?"
     ],
     "whatsNewCopy": {
       "headline": "Collect financials and KPIs from every portfolio company",
@@ -86,7 +86,7 @@
     "order": 10,
     "whatsNew": false,
     "prompts": [
-      "Use my firm's tear sheet template and generate tear sheets for this quarter"
+      "Use my firm's tear sheet template and **generate tear sheets** for this quarter"
     ]
   },
   "carta-explore-data": {
@@ -94,7 +94,7 @@
     "name": "Ask about your fund data",
     "order": 20,
     "prompts": [
-      "What is the NAV of each of my funds as of the latest quarter?"
+      "What is the **NAV** of each of my funds as of the latest quarter?"
     ],
     "whatsNewCopy": {
       "headline": "Ask about NAV, IRR or ownership in plain English",
@@ -106,8 +106,8 @@
     "name": "Fund admin requests",
     "order": 10,
     "prompts": [
-      "Ask my fund admin team to [describe the task]",
-      "What requests do I have open with Carta?"
+      "**Ask my fund admin team** to [describe the task]",
+      "What **requests do I have open** with Carta?"
     ],
     "whatsNewCopy": {
       "headline": "Hand any task to your Carta Fund Admin team",
@@ -120,7 +120,7 @@
     "order": 10,
     "requires": "tactyc",
     "prompts": [
-      "What is my funds' TVPI projected at fund close?"
+      "What is my funds' **TVPI projected** at fund close?"
     ],
     "whatsNewCopy": {
       "headline": "Check projected TVPI and IRR at fund close",
@@ -133,7 +133,7 @@
     "order": 20,
     "tag": "App",
     "prompts": [
-      "Spin up the fund modeling app for {{FIRM}}"
+      "Spin up the **fund modeling app** for {{FIRM}}"
     ]
   },
   "carta-fund-performance": null,
@@ -143,8 +143,8 @@
     "name": "Answer cash reconciliation questions",
     "order": 15,
     "prompts": [
-      "What transactions does Carta need me to explain?",
-      "Draft answers for my uncategorized cash transactions"
+      "What **transactions** does Carta need me to explain?",
+      "Draft answers for my **uncategorized cash transactions**"
     ],
     "whatsNewCopy": {
       "headline": "Draft answers for every unreconciled bank transaction",
@@ -170,9 +170,9 @@
     "name": "Budgeting & actuals",
     "order": 10,
     "prompts": [
-      "Compare YTD actuals against the budget",
-      "Build what-if scenarios over our budget",
-      "Build a fund/ManCo budget in Excel from Carta prior-year actuals"
+      "Compare YTD **actuals against the budget**",
+      "Build **what-if scenarios** over our budget",
+      "Build a fund/ManCo **budget in Excel** from Carta prior-year actuals"
     ],
     "whatsNewCopy": {
       "headline": "Plan next year's ManCo budget from last year's actuals",
@@ -185,7 +185,7 @@
     "order": 20,
     "tag": "App",
     "prompts": [
-      "Spin up the ManCo dashboard for {{FIRM}}"
+      "Spin up the **ManCo dashboard** for {{FIRM}}"
     ]
   },
   "carta-portfolio-analytics-app": {
@@ -194,7 +194,7 @@
     "order": 50,
     "tag": "App",
     "prompts": [
-      "Spin up the portfolio analytics app for {{FIRM}}"
+      "Spin up the **portfolio analytics app** for {{FIRM}}"
     ]
   },
   "carta-portfolio-valuations": {
@@ -202,8 +202,8 @@
     "name": "Portfolio valuations",
     "order": 20,
     "prompts": [
-      "Work on {{FIRM}}'s portfolio valuations for this quarter",
-      "Which of {{FIRM}}'s portfolio companies need new valuations?"
+      "Work on {{FIRM}}'s **portfolio valuations** for this quarter",
+      "Which of {{FIRM}}'s portfolio companies **need new valuations**?"
     ],
     "whatsNewCopy": {
       "headline": "Start this quarter's valuations across many companies at once",
@@ -216,7 +216,7 @@
     "name": "SPA coverage audit",
     "order": 60,
     "prompts": [
-      "Build an SPA coverage audit report showing which of our investments are missing an executed SPA"
+      "Build an **SPA coverage audit report** showing which of our investments are missing an executed SPA"
     ],
     "whatsNewCopy": {
       "headline": "Find investments missing a signed stock purchase agreement",
@@ -228,9 +228,9 @@
     "name": "NDA insights dashboard",
     "order": 65,
     "prompts": [
-      "Build an NDA insights dashboard for {{FIRM}}",
-      "Which counterparties can't we solicit or contact right now, and when do those restrictions end?",
-      "Which of our NDAs expire in the next two years?"
+      "Build an **NDA insights dashboard** for {{FIRM}}",
+      "Which counterparties **can't we solicit or contact** right now, and when do those restrictions end?",
+      "Which of our **NDAs expire** in the next two years?"
     ],
     "whatsNewCopy": {
       "headline": "See every NDA's restrictions, expiries and counterparties",
@@ -242,7 +242,7 @@
     "name": "Waterfall modeling",
     "order": 80,
     "prompts": [
-      "Who gets paid, and how much, if [portfolio company] exits at $[amount]?"
+      "Who gets paid, and how much, if **[portfolio company]** exits at **$[amount]**?"
     ],
     "whatsNewCopy": {
       "headline": "Model who gets paid, and how much, at exit",
@@ -255,8 +255,8 @@
     "name": "Upload a firm document",
     "order": 20,
     "prompts": [
-      "Upload [file path] to {{FIRM}}'s Documents page",
-      "Add this side letter to our firm documents in Carta"
+      "**Upload** [file path] to {{FIRM}}'s Documents page",
+      "Add this **side letter** to our firm documents in Carta"
     ],
     "whatsNewCopy": {
       "headline": "Upload files straight to your firm's Carta Documents page",
@@ -268,8 +268,8 @@
     "name": "Download a firm document",
     "order": 21,
     "prompts": [
-      "Get me the LPA from {{FIRM}}'s Documents page",
-      "Download our audit engagement letter from Carta"
+      "Get me the **LPA** from {{FIRM}}'s Documents page",
+      "Download our **audit engagement letter** from Carta"
     ],
     "whatsNewCopy": {
       "headline": "Fetch any LPA, side letter or notice from Carta",

@@ -1,7 +1,8 @@
 // Replaces the baked Skill Directory with the published list from plugin:list:skills, so a
 // skill that ships after the build still appears without a rebuild.
 // Depends on core.js (carta-home.app.js): _mcp(), mcpAvailable(), tryParse(),
-// _mcpResultCandidates(), renderDirectory(), DIR_CATEGORIES, BAKED_SKILL_DIRECTORY;
+// _mcpResultCandidates(), DIR_CATEGORIES, BAKED_SKILL_DIRECTORY; renderDirectory() from
+// directory-views.js;
 // PLUGIN from version-check.js; and wnRefresh() from whats-new.js, so What's new re-picks
 // its skill against the published list.
 
@@ -73,6 +74,7 @@ async function loadPublishedDirectory() {
     const entries = normalizeDirectoryEntries(extractDirectoryPayload(res)?.skills, BAKED_SKILL_DIRECTORY);
     if (!entries || JSON.stringify(entries) === JSON.stringify(_directorySkills)) return;
     _directorySkills = entries;
+    _directorySource = "published";
     wnRefresh();
     // The directory tab paints from _directorySkills when it opens, so there is nothing
     // to redraw until then.

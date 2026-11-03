@@ -1,7 +1,7 @@
 // ── What's new: a carousel of featured microapps and recently launched skills ──
 // Depends on core.js (carta-home.app.js): _mcp(), _mcpResultCandidates(), readProductFlag(),
 // escHtml(), writeClipboard(), trackHome(), trackPrompt(), PROMPT_SOURCE, prefersReducedMotion(),
-// onFirstView(), _directorySkills, APP_TAG_TIP, COPIED_TIP_MS, PROMPT_COPIED_TIP; on carta-home.config.js:
+// onFirstView(), _directorySkills, APP_TAG_TIP, COPIED_TIP_MS, PROMPT_COPIED_TIP, APP_COPIED_TIP; on carta-home.config.js:
 // WHATS_NEW_MICROAPPS, WHATS_NEW_SKILL_OUTPUTS.
 
 // A skill prompt qualifies when its goLiveDate is within the last WHATS_NEW_WINDOW_DAYS
@@ -149,7 +149,7 @@ function showcaseMicroapps(profile, organizationPk = _wn.organizationPk) {
     return {
       ...m, kind: "microapp", locked,
       href: locked ? unlockHref(m, cartaAppHost(p.environment), organizationPk) : null,
-      copyText: "/" + m.skill, copyLabel: "/" + m.skill, copiedTip: "Copied. Paste into the chat in the Claude Code tab.",
+      copyText: "/" + m.skill, copyLabel: "/" + m.skill, copiedTip: APP_COPIED_TIP,
     };
   });
   return [...items.filter(m => !m.locked), ...items.filter(m => m.locked)];

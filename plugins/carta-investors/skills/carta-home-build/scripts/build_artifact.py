@@ -110,6 +110,7 @@ APP_JS_PARTS = [
     "app/capital-activity.js",
     "app/version-check.js",
     "app/live-content.js",
+    "app/directory-views.js",
     "app/skill-directory.js",
     "app/whats-new.js",
     "app/segment-dashboards.js",

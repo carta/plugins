@@ -52,6 +52,12 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `firm-bulk-entity-update` | Not implemented yet. Will carry a firm's monthly change file for a deal group's firm-controlled entities through one cycle — ingest, resolve, review, write, true-up — instead of one entity at a time. Internal-only. |
 | `staff-ilevel-data-collection-import` | Carta staff only. Import a firm's iLevel KPI history from the warehouse into the same firm's Data Collection in a sandbox or test Carta, then check the figures ValTool reads. Chat-driven, with Carta's own financials page open in the browser pane. Never writes to production. Internal-only. |
 
+### KYC
+
+| Skill | Description |
+|-------|-------------|
+| `carta-kyc-fill-form` | Fill in your own Carta KYC form from your documents. Says what each open KYC task still needs, reads the passport, formation documents or ownership chart you share, saves the answers you confirm, and tells you what to upload or add in the form yourself before you check and submit it there. Claude never uploads or submits for you. Needs an open KYC task on Carta. |
+
 ### Budgeting (Excel)
 
 Skills that produce accountant-ready Excel workbooks. They run inside **Claude for Excel** (output lands in the open workbook) or **Claude Code / Cowork** (output lands in a local `.xlsx` file).

@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.14.6</carta-plugin>
+<carta-plugin>carta-investors:7.15.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -87,8 +87,9 @@ own sidebar tile.
   the build bakes them in as the first paint, and once the browser is idle the page asks
   carta-mcp (`plugin:list:skills`) for the published copy, so a skill that ships later
   appears without a rebuild. A row tagged `"tag": "App"` is a micro app: it shows a
-  **Microapp** pill (its hover tooltip says what a microapp is) and a line saying it launches in Claude Code, since the app is a local
-  React app that a Cowork chat cannot start. See `docs/skill-directory.md` for the entry
+  **Microapp** pill (its hover tooltip says what a microapp is) and, in an expanded card, a line saying the prompt works in Claude Code only, since the app is a local
+  React app that a Cowork chat cannot start. The tab opens on two columns of category cards; a card's
+  View more link expands it in place. Clicking a prompt row copies it; `**term**` marks in a prompt set key words in bold and are stripped for copy and tracking. See `docs/skill-directory.md` for the entry
   format; CI fails a published skill that has neither an entry nor an explicit `null`.
   **Entitlement-gated:** `fetchUserEnrichment()` calls `get_current_user`, logs the full
   payload to the debug console (visible to the LLM client), and reads two product flags:
@@ -227,8 +228,9 @@ need the full file in context. Edit the small source file for what you're changi
 |------|---------------|-------------|
 | `resources/carta-home.config.js` | `DIR_CATEGORIES` (id, name, tagline, optional `requires`), `NEWS_TAG`; `DASHBOARDS` launcher registry; `WHATS_NEW_MICROAPPS` featured microapps; `WHATS_NEW_SKILL_OUTPUTS` output kind per skill and per category | change which categories show, a category's entitlement gate, which Contentful tag feeds Plugin news, which cards launch a standalone dashboard, which microapps What's new features, or which output kind a new skill's preview shows |
 | `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"`), `requires`, `whatsNew` (`false` keeps the skill out of What's new) and `whatsNewCopy` (the headline and body What's new shows for the skill); `null` opts a skill out | add or change a skill's row or example prompts — no rebuild needed once published |
+| `resources/app/directory-views.js` | Skill directory tab: expandable category cards, prompt copy and the directory's tracking ids | change how the directory looks or tracks |
 | `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`) when idle, validates it, and re-renders over the baked list | change how the published list is merged or when it loads |
-| `resources/carta-home.app.js` | shared/core runtime logic (`_mcp`, format helpers, `fetchLiveData` bootstrap, SOI, Fund Performance, Skill Directory, tour) | change behavior / data fetching for anything not yet split into its own file below |
+| `resources/carta-home.app.js` | shared/core runtime logic (`_mcp`, format helpers, `fetchLiveData` bootstrap, SOI, Fund Performance, the directory's data and `directoryCategories()`, tour) | change behavior / data fetching for anything not yet split into its own file below |
 | `resources/app/capital-activity.js` | Capital activity cards + detail overlay (fetch/render/dismiss) | change the capital call / distribution cards or their detail modal |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |

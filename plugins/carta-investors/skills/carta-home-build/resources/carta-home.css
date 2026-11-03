@@ -419,10 +419,10 @@
       transition: opacity .2s, transform .3s cubic-bezier(.34, 1.56, .64, 1);
     }
     .cap-copied-tip { right: 0; bottom: calc(100% + 4px); transform: translateY(0); }
-    .cap-box.copied .cap-copied-tip { opacity: 1; transform: translateY(-8px); }
+    .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip { opacity: 1; transform: translateY(-8px); }
     @media (prefers-reduced-motion: reduce) {
       .cap-copied-tip, .wn-copied-tip { transition: none; }
-      .cap-box.copied .cap-copied-tip { transform: none; }
+      .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip { transform: none; }
       .cap-copy:active { transform: none; }
       .cap-box:hover:not(:focus-within) .cap-card-text::after { animation: none; }
     }
@@ -661,38 +661,44 @@
     /* The Directory heading uses .section-label directly (see template) — no
        .dir-header / .dir-title / .dir-count rules needed. */
 
-    .dir-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 40px;
-    }
-    .dir-cat-card {
+    .dir-root { margin-bottom: 40px; }
+    .dir-link { background: none; border: none; padding: 0; font: inherit; font-size: 12px; cursor: pointer; color: var(--ink-color-global-link-default); }
+    .dir-link:hover { text-decoration: underline; }
+    .dir-link:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 2px; }
+
+    /* Category cards: two independent columns, each card its own height. A card has no hover
+       colour of its own, so the hover on a prompt row stands out. */
+    .dir-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+    .dir-mcol { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+    .dir-tile {
       background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
       border: 1px solid var(--ink-color-global-border-subtle);
       box-shadow: var(--ink-elevation-global-shadow-small);
       padding: 20px 24px;
     }
-    .dir-cat-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 10px;
-    }
-    .dir-cat-name { font-size: 16px; font-weight: 600; color: var(--ink-color-global-text-default); }
-    .dir-cat-tagline {
-      font-size: 12px; color: var(--ink-color-global-text-subtle);
-      padding-bottom: 12px;
-      /* Ink's divider pair is base -> border-subtle, strong -> border-default.
-         base is tuned for the default dark surface (#121212); this card sits on
-         the elevated --carta-surface-card-elevated surface (#2C3030), against which subtle
-         (#2D2D2D) is invisible. Take the strong step in dark only, so light mode
-         keeps the same faint #DEDFDF hairline. */
-      border-bottom: 1px solid light-dark(var(--ink-color-global-border-subtle), var(--ink-color-global-border-default));
-      margin-bottom: 14px;
-    }
-    .dir-skill-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-    .dir-skill-name { font-size: 13px; font-weight: 500; color: var(--ink-color-global-text-default); margin-bottom: 3px; }
-    .dir-skill-prompt { display: flex; align-items: flex-start; gap: 5px; }
-    .dir-skill-prompt-text { flex: 1; font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.45; }
+    .dir-tile-hd { display: flex; align-items: center; gap: 14px; margin-bottom: 2px; }
+    .dir-cat-name { flex: 1; margin: 0; font-size: 16px; font-weight: 600; color: var(--ink-color-global-text-default); }
+    .dir-tile-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-subtle); }
+    .dir-tile-tagline { margin: 0 0 8px; font-size: 12px; line-height: 1.45; color: var(--ink-color-global-text-subtle); }
+    .dir-tile-ideas { display: flex; flex-direction: column; }
+    .dir-idea { padding: 6px 0 0; }
+    .dir-idea-name { font-size: 12px; font-weight: 500; color: var(--ink-color-global-text-subtle); }
+    /* The divider runs from card edge to edge: the negative margin undoes the card's padding.
+       On the dark elevated card surface border-subtle vanishes, so dark takes the next step up. */
+    .dir-tile-ft { margin: 8px -24px 0; padding: 10px 24px 0; border-top: 1px solid light-dark(var(--ink-color-global-border-subtle), var(--ink-color-global-border-default)); }
+
+    /* A prompt row copies on click or Enter/Space. */
+    .dir-skill-prompt { display: flex; align-items: flex-start; gap: 5px; margin: 0 -8px; padding: 2px 8px; cursor: pointer; border-radius: var(--ink-size-global-radius-subtle); transition: background 0.12s; }
+    .dir-skill-prompt:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+    .dir-skill-prompt:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 0; }
+    .dir-skill-prompt-text { flex: 1; font-size: 14px; line-height: 1.45; color: var(--ink-color-global-text-default); }
+    .dir-term { font-weight: 600; }
+    .dir-copy { position: relative; flex-shrink: 0; display: flex; align-items: center; padding: 4px 6px; color: var(--ink-color-global-text-subtle); transition: color 0.12s; }
+    .dir-skill-prompt:hover .dir-copy { color: var(--ink-color-global-text-default); }
+    .dir-copy.copied { color: var(--ink-color-global-feedback-positive-strong); }
+    .dir-copy .cap-copied-tip { z-index: 20; }
+    .dir-skill-note { font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.45; padding-top: 2px; }
+
     .dir-skill-tag {
       display: inline-block; vertical-align: 1px; margin-left: 4px; padding: 1px 8px;
       font-size: 11px; font-weight: 500; line-height: 16px;
@@ -719,18 +725,17 @@
       content: ""; position: absolute; top: 100%; left: 16px;
       border: 4px solid transparent; border-top-color: var(--ink-color-global-brand-black);
     }
-    .dir-cat-card:nth-child(even) .dir-skill-tip { left: auto; right: 0; }
-    .dir-cat-card:nth-child(even) .dir-skill-tip::after { left: auto; right: 16px; }
+    .dir-mcol:last-child .dir-skill-tip { left: auto; right: 0; }
+    .dir-mcol:last-child .dir-skill-tip::after { left: auto; right: 16px; }
     .dir-skill-tag:hover .dir-skill-tip,
     .dir-skill-tag:focus-visible .dir-skill-tip { opacity: 1; }
-    .dir-skill-note { font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.45; }
-    .dir-copy-btn {
-      flex-shrink: 0; background: none; border: none; padding: 1px 2px; cursor: pointer;
-      color: var(--ink-color-global-text-subtle); display: flex; align-items: center;
-      transition: color 0.12s;
+
+    /* One column: the two masonry columns dissolve and the cards line up by `order`, so they read
+       in category order instead of left column first. */
+    @media (max-width: 760px) {
+      .dir-tiles { display: flex; flex-direction: column; gap: 24px; }
+      .dir-mcol { display: contents; }
     }
-    .dir-copy-btn:hover { color: var(--ink-color-global-text-default); }
-    .dir-copy-btn.copied { color: var(--ink-color-global-text-subtle); }
 
     /* ── Capital activity pinned card ── */
     :root {

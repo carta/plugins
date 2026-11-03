@@ -1111,6 +1111,8 @@ function refreshPromptFirm() {
 const COPIED_TIP_MS = 2200;
 // What a copied prompt's confirmation says, on the prompt cards and in What's new.
 const PROMPT_COPIED_TIP = "Copied. Paste into chat.";
+// The same, for a microapp prompt, which only runs in Claude Code.
+const APP_COPIED_TIP = "Copied. Paste into the chat in the Claude Code tab.";
 
 function capCopy(btn) {
   // The tag carries the suggested prompt, its blanks filled as they stand now, never the
@@ -1157,6 +1159,7 @@ const BAKED_SKILL_DIRECTORY = {{SKILL_DIRECTORY_JSON}};
 let _directorySkills = BAKED_SKILL_DIRECTORY;
 let _userEntitlements = {};  // product flags (manco, tactyc); true/false/null-unknown
 let _enrichmentDone = false; // flips true once get_current_user resolves/fails/times out
+let _directorySource = "baked"; // "published" once app/skill-directory.js swaps in the live list
 let _dirTabOpened = false;   // has the user opened the Skill directory tab this session
 // Collect every plausible "actual payload" object out of a callTool result: `payload`,
 // `structuredContent`, content[].text as a JSON string, or a {result:"<json>"} wrapper.
@@ -1331,22 +1334,7 @@ function switchTab(id) {
 const APP_TAG = 'App';
 const APP_TAG_LABEL = 'Microapp';
 const APP_TAG_TIP = 'Microapps are interactive apps built for a specific job and loaded with your Carta data. Build one with a Carta-provided skill in Claude Code, then customize it with Claude to fit how you work.';
-const APP_LAUNCH_NOTE = 'Launches in Claude Code — paste this prompt there.';
-
-function dirCopyPrompt(btn) {
-  const text = btn.dataset.prompt || '';
-  // The id names the section, e.g. ".portfolio".
-  const section = btn.dataset.section ? "." + btn.dataset.section : "";
-  trackPrompt("CartaHome.Directory.Copy" + section, text, PROMPT_SOURCE.STATIC,
-    { skill: btn.dataset.skill, rank: Number(btn.dataset.rank) });
-  const copiedLabel = btn.dataset.copiedLabel || 'Copied!';
-  const feedback = () => {
-    btn.textContent = copiedLabel;
-    btn.classList.add('copied');
-    setTimeout(() => { btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'; btn.classList.remove('copied'); }, 2000);
-  };
-  writeClipboard(text, feedback);
-}
+const APP_LAUNCH_NOTE = 'Prompt works in Claude Code only. Paste it there.';
 
 // Each category in DIR_CATEGORIES order, holding its entries sorted by `order`. An entry
 // naming no known category is dropped, and a category left empty is hidden.
@@ -1357,60 +1345,6 @@ function directoryCategories(entries) {
       .filter(e => e.category === cat.id)
       .sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name)),
   })).filter(cat => cat.skills.length);
-}
-
-function renderDirectorySkill(s, firm) {
-  const isApp = s.tag === APP_TAG;
-  const prompts = s.prompts.map((p, rank) => {
-    const text = escHtml(p.replace(/\{\{FIRM\}\}/g, firm));
-    const copiedLabel = isApp ? 'Copied — open Claude Code' : 'Copied!';
-    return `<div class="dir-skill-prompt">
-              <span class="dir-skill-prompt-text">"${text}"</span>
-              <button class="dir-copy-btn" data-prompt="${text}" data-skill="${escHtml(s.skill)}" data-section="${escHtml(s.category)}" data-rank="${rank}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
-            </div>`;
-  }).join('');
-  const tipId = `dir-tip-${escHtml(s.skill)}`;
-  const tag = isApp
-    ? ` <span class="dir-skill-tag" tabindex="0" aria-describedby="${tipId}">${APP_TAG_LABEL}<span class="dir-skill-tip" role="tooltip" id="${tipId}">${APP_TAG_TIP}</span></span>`
-    : '';
-  return `
-          <li class="dir-skill-item">
-            <div class="dir-skill-name">${escHtml(s.name)}${tag}</div>
-            ${prompts}
-            ${isApp ? `<div class="dir-skill-note">${APP_LAUNCH_NOTE}</div>` : ''}
-          </li>`;
-}
-
-function renderDirectory() {
-  const firm = _firmDisplayName;
-  const grid = document.getElementById('dir-grid');
-  if (!grid) return;
-  // First-render guard: while get_current_user is still in flight, show a brief
-  // personalizing state instead of the unfiltered full list — markEnrichmentDone()
-  // re-renders this with the role filter applied. (Skipped with no MCP, e.g. local
-  // preview, where enrichment can't run and we just show everything.)
-  if (!_enrichmentDone && _mcpLive !== false) {
-    grid.innerHTML = '<div style="grid-column:1/-1;padding:24px 0;color:var(--ink-color-global-text-subtle);font-size:13px;">Personalizing your directory…</div>';
-    return;
-  }
-  // Gates categories and skills alike: drop either only on an explicit false, so an
-  // unknown flag still shows it. A category left with no skills drops out too.
-  const entitled = x => !x.requires || _userEntitlements[x.requires] !== false;
-  const cats = directoryCategories(_directorySkills.filter(entitled))
-    .filter(entitled);
-  grid.innerHTML = cats.map(cat => `
-    <div class="dir-cat-card">
-      <div class="dir-cat-header">
-        <div>
-          <span class="dir-cat-name">${escHtml(cat.name)}</span>
-        </div>
-      </div>
-      <div class="dir-cat-tagline">${escHtml(cat.tagline)}</div>
-      <ul class="dir-skill-list">
-        ${cat.skills.map(s => renderDirectorySkill(s, firm)).join('')}
-      </ul>
-    </div>
-  `).join('');
 }
 
 // ── Guided Tour ──
