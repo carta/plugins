@@ -105,7 +105,7 @@
     ],
     "whatsNewCopy": {
       "headline": "Fix, cancel or uncancel issued equity",
-      "body": "Edits, cancels or reverses the cancellation of an issued security on your Carta cap table. Shows a preview of every change before anything saves."
+      "body": "Edits, cancels, uncancels or undoes the termination of an issued security on your Carta cap table. Shows a preview of every change before saving."
     }
   },
   "carta-market-benchmarks": {

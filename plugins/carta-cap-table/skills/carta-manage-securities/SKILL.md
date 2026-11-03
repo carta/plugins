@@ -2,9 +2,9 @@
 name: carta-manage-securities
 description: >-
   Edit or cancel an issued security, with a preview before anything changes. Covers
-  fixing, amending, cancelling, partly cancelling or uncancelling a certificate, option
-  grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or warrant. Not for terminating a person
-  (cancelling everything they hold).
+  fixing, amending, cancelling, partly cancelling, uncancelling or undoing the termination
+  of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or warrant. Not for
+  terminating a person (cancelling everything they hold).
 owner: carta-cap-table maintainers (#cap-table-eng)
 model: inherit
 allowed-tools:
@@ -33,11 +33,11 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.8</carta-plugin>
 
 # Manage securities
 
-Edit, cancel, partly cancel or uncancel an issued security. Carta checks each change in a
+Edit, cancel, partly cancel or uncancel an issued security, or undo its termination. Carta checks each change in a
 **preview** and saves it as a plan; nothing changes until the user approves and you apply it. To
 issue new equity, use `carta-issuance`. To terminate a person (cancel or exercise everything they
 hold), send the user to the termination flow in the Carta app.
@@ -50,6 +50,7 @@ hold), send the user to the termination flow in the Carta app.
 | Cancel a whole security | `cap_table__compute__cancel_security_preview` |
 | Cancel part of an option grant or CBU | `cap_table__compute__partial_cancel_security_preview` |
 | Reverse a cancellation | `cap_table__compute__reverse_cancel_security_preview` |
+| Undo a termination | `cap_table__compute__undo_termination_preview` |
 
 `security_type` is one of `certificate`, `option_grant`, `convertible_note`, `rsu`, `rsa`, `sar`,
 `cbu`, `piu` or `warrant`. A `CN-` or `SAFE-` label is a `convertible_note` and an `ES-` label is
@@ -95,7 +96,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 
 1. **Bootstrap.** Call it once per change, after any earlier apply, with `company`,
    `security_type` and `label` (a list), `security` (ids) or `holder`. To reverse a
-   cancellation, send `label` or `security`: `holder` finds only securities held now. For an
+   cancellation or undo a termination, send `label` or `security`: `holder` finds only
+   securities held now. For an
    edit, always send `look_first: true`, so the Change page opens before the first preview
    ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)).
 2. **Read the bootstrap.**
@@ -116,6 +118,7 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    - **Partial cancel:** `security`, `effective_date` and `quantity`. The last tranches go first.
    - **Reverse cancel:** `security` and `reason`. `notes` is required when the reason is
      `Other - describe below`.
+   - **Undo termination:** `security` only.
 4. **Preview.** Every change goes through the preview in [§ Actions](#actions), never
    `cap_table__mutate__modify_issuable`, which keeps no Change page. Send this pass's
    `thread_id` (see [§ Several changes](#several-changes)). A rework is one new preview on
@@ -142,8 +145,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 ## Several changes
 
 One approval applies one change: one action, one reason, one security type, and at most
-`limits.max_securities` securities for an edit. Cancels, partial cancels and reverse cancels take
-one security each. Run each change as its own pass through steps 1 to 8, and say the split
+`limits.max_securities` securities for an edit. Cancels, partial cancels, reverse cancels and undone
+terminations take one security each. Run each change as its own pass through steps 1 to 8, and say the split
 first: *"These are two changes. I'll apply them one at a time, starting with CS-1."* Each pass
 opens its own page with its own bootstrap and sends that pass's `thread_id`, never an earlier
 pass's.
