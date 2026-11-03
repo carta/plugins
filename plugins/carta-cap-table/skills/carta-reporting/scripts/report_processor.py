@@ -42,7 +42,10 @@ Per-sheet dict example:
 
 Filter:
   {"column": "Vested %", "op": ">", "value": 0.5}
-  ops: > < >= <= = != contains
+  {"column": "Share Class", "op": "in", "value": ["Class A", "Class B"]}
+  ops: > < >= <= = != contains in
+  `in` takes a list of values and keeps a row that `=` would keep for any one of them; every
+  other op takes one value.
 
 Sort:
   {"column": "Grant Date", "direction": "asc"}   # direction: asc | desc
@@ -163,7 +166,8 @@ def download(url):
 # ---------------------------------------------------------------------------
 
 ORDERING_OPS = (">", "<", ">=", "<=")
-VALID_FILTER_OPS = ORDERING_OPS + ("=", "!=", "contains")
+LIST_OP = "in"
+VALID_FILTER_OPS = ORDERING_OPS + ("=", "!=", "contains", LIST_OP)
 NUMERIC_TYPES = ("money", "decimal", "percentage", "integer")
 ORDERED_TYPES = NUMERIC_TYPES + ("date",)
 
@@ -171,6 +175,52 @@ ORDERED_TYPES = NUMERIC_TYPES + ("date",)
 def unknown_columns(spec, names):
     """Sorted names a filter or sort spec asks for that are not in `names`: those entries do nothing."""
     return sorted({e["column"] for e in spec or [] if "column" in e and e["column"] not in names})
+
+
+def _equals_values(f):
+    """The values a filter keeps rows equal to: the list of `in`, the one value of `=`, none for any other op."""
+    if f["op"] == LIST_OP:
+        return f["value"]
+    return [f["value"]] if f["op"] == "=" else []
+
+
+def _keeps(val, op, thr, ctype):
+    """Whether a cell passes one filter. `in` passes when `=` passes for any value of its list."""
+    if op == LIST_OP:
+        return any(_keeps(val, "=", one, ctype) for one in thr)
+    keep = True
+    try:
+        if ctype in NUMERIC_TYPES:
+            parse = _numeric_parser(ctype)
+            v, t = parse(val), parse(thr)
+            if v is None or t is None:
+                keep = False
+            elif op == ">":        keep = v > t
+            elif op == "<":        keep = v < t
+            elif op == ">=":       keep = v >= t
+            elif op == "<=":       keep = v <= t
+            elif op == "=":        keep = v == t
+            elif op == "!=":       keep = v != t
+            elif op == "contains": keep = str(thr).lower() in str(val).lower()
+        elif ctype == "date":
+            v, t = _parse_date(val), _parse_date(thr)
+            if v is None or t is None:
+                keep = False
+            elif op == ">":        keep = v > t
+            elif op == "<":        keep = v < t
+            elif op == ">=":       keep = v >= t
+            elif op == "<=":       keep = v <= t
+            elif op == "=":        keep = v == t
+            elif op == "!=":       keep = v != t
+            elif op == "contains": keep = str(thr).lower() in str(val or "").lower()
+        else:
+            vs, ts = str(val or "").lower(), str(thr).lower()
+            if op == "contains":   keep = ts in vs
+            elif op == "=":        keep = vs == ts
+            elif op == "!=":       keep = vs != ts
+    except (ValueError, TypeError):
+        keep = False
+    return keep
 
 
 def _make_filter_predicate(columns, filters):
@@ -200,6 +250,13 @@ def _make_filter_predicate(columns, filters):
             "Note equality is '=', not '=='."
         )
 
+    for f in filters:
+        takes_list = f["op"] == LIST_OP
+        if takes_list != isinstance(f["value"], list) or (takes_list and not f["value"]):
+            raise ValueError(
+                f"Filter {f!r}: '{LIST_OP}' takes a list of one or more values, and no other op takes a list."
+            )
+
     # A filter on a column the sheet does not have cannot be evaluated. Report it
     # rather than dropping it, so the caller can surface the typo.
     unknown_filter_columns = unknown_columns(filters, idx_map)
@@ -209,44 +266,9 @@ def _make_filter_predicate(columns, filters):
             col_name = f["column"]
             if col_name not in idx_map:
                 continue
-            idx   = idx_map[col_name]
-            val   = row[idx] if idx < len(row) else None
-            op    = f["op"]
-            thr   = f["value"]
-            ctype = type_map.get(col_name, "string")
-            keep  = True
-            try:
-                if ctype in NUMERIC_TYPES:
-                    parse = _numeric_parser(ctype)
-                    v, t = parse(val), parse(thr)
-                    if v is None or t is None:
-                        keep = False
-                    elif op == ">":        keep = v > t
-                    elif op == "<":        keep = v < t
-                    elif op == ">=":       keep = v >= t
-                    elif op == "<=":       keep = v <= t
-                    elif op == "=":        keep = v == t
-                    elif op == "!=":       keep = v != t
-                    elif op == "contains": keep = str(thr).lower() in str(val).lower()
-                elif ctype == "date":
-                    v, t = _parse_date(val), _parse_date(thr)
-                    if v is None or t is None:
-                        keep = False
-                    elif op == ">":        keep = v > t
-                    elif op == "<":        keep = v < t
-                    elif op == ">=":       keep = v >= t
-                    elif op == "<=":       keep = v <= t
-                    elif op == "=":        keep = v == t
-                    elif op == "!=":       keep = v != t
-                    elif op == "contains": keep = str(thr).lower() in str(val or "").lower()
-                else:
-                    vs, ts = str(val or "").lower(), str(thr).lower()
-                    if op == "contains":   keep = ts in vs
-                    elif op == "=":        keep = vs == ts
-                    elif op == "!=":       keep = vs != ts
-            except (ValueError, TypeError):
-                keep = False
-            if not keep:
+            idx = idx_map[col_name]
+            val = row[idx] if idx < len(row) else None
+            if not _keeps(val, f["op"], f["value"], type_map.get(col_name, "string")):
                 return False
         return True
 
@@ -769,12 +791,12 @@ def main():
         # Automatically drop rows where all numeric/value columns are null or zero.
         # This removes placeholder security-type rows (e.g. Options, RSAs) that
         # Carta emits even when the company has never issued that security type.
-        # A filter asking for zero on a numeric column (`= 0`) wants the all-zero rows: they are
-        # an answer, not placeholders, so the drop is skipped.
+        # A filter asking for zero on a numeric column (`= 0`, or `in` with a 0 in its list) wants the
+        # all-zero rows: they are an answer, not placeholders, so the drop is skipped.
         numeric_parsers = {c["name"]: _numeric_parser(c["type"]) for c in cols if c.get("type") in NUMERIC_TYPES}
-        asks_for_zero = any(f["op"] == "=" and f["column"] in numeric_parsers
-                            and numeric_parsers[f["column"]](f["value"]) == 0
-                            for f in filters or [])
+        asks_for_zero = any(numeric_parsers[f["column"]](value) == 0
+                            for f in filters or [] if f["column"] in numeric_parsers
+                            for value in _equals_values(f))
         nonempty = rows if asks_for_zero else drop_empty_rows(cols, rows)
         if len(nonempty) < len(rows):
             kept_set     = {id(r) for r in nonempty}

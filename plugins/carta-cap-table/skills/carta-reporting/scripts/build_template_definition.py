@@ -61,7 +61,9 @@ MAX_NAME = 255
 MAX_SHEETS = 10
 MAX_COLUMNS = 200
 MAX_AFFIX = 31  # a prefix or suffix `from.value`
-FILTER_OPS = (">", "<", ">=", "<=", "=", "!=", "contains")
+LIST_OP = "in"
+FILTER_OPS = (">", "<", ">=", "<=", "=", "!=", "contains", LIST_OP)
+MAX_FILTER_VALUES = 100  # the values of one `in` filter
 SORT_DIRECTIONS = ("asc", "desc")
 
 # Create params that every run sets for itself. They are not part of what a template stores.
@@ -109,8 +111,8 @@ def _unreproducible_filters(config):
 
     A template cannot keep a `label_overrides` rename, and report_processor filters on the
     relabelled text. A rename replaces whole cells only, so it changes a filter's rows only when
-    a `contains` text is inside a raw value or label, or another operator's value equals one
-    (ignoring letter case, as report_processor does)."""
+    a `contains` text is inside a raw value or label, or another operator's value, or any
+    value of an `in` list, equals one (ignoring letter case, as report_processor does)."""
     overrides = config.get("label_overrides")
     if not overrides:
         return []
@@ -122,17 +124,19 @@ def _unreproducible_filters(config):
     for item in filters:
         if not isinstance(item, dict):
             continue
-        text = str(item.get("value")).lower()
         op = item.get("op")
-        for raw, label in overrides.items():
-            names = (str(raw).lower(), str(label).lower())
-            if text and any(text in name if op == "contains" else text == name for name in names):
-                reasons.append(
-                    f'The filter on "{item.get("column")}" uses "{item.get("value")}", a renamed value '
-                    f'("{raw}" is shown as "{label}"), and a template can\'t keep that rename. '
-                    "Filter on another column to save it."
-                )
-                break
+        value = item.get("value")
+        for one in value if op == LIST_OP and isinstance(value, list) else [value]:
+            text = str(one).lower()
+            for raw, label in overrides.items():
+                names = (str(raw).lower(), str(label).lower())
+                if text and any(text in name if op == "contains" else text == name for name in names):
+                    reasons.append(
+                        f'The filter on "{item.get("column")}" uses "{one}", a renamed value '
+                        f'("{raw}" is shown as "{label}"), and a template can\'t keep that rename. '
+                        "Filter on another column to save it."
+                    )
+                    break
     return reasons
 
 
@@ -282,7 +286,17 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, reasons)
             )
             continue
         value = item["value"]
-        if not isinstance(value, (str, int, float, bool)):
+        if item["op"] == LIST_OP:
+            if not isinstance(value, list) or not 1 <= len(value) <= MAX_FILTER_VALUES:
+                reasons.append(
+                    f'A filter on "{item["column"]}" in "{sheet_name}" uses "{LIST_OP}", '
+                    f"which takes a list of 1 to {MAX_FILTER_VALUES} values."
+                )
+                continue
+            values = value
+        else:
+            values = [value]
+        if not all(isinstance(one, (str, int, float, bool)) for one in values):
             reasons.append(f'A filter on "{item["column"]}" in "{sheet_name}" compares to a value that is not text, a number or true/false.')
             continue
         key = filter_or_sort_key(item["column"], "filter")

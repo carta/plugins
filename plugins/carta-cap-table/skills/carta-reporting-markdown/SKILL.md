@@ -15,7 +15,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.13</carta-plugin>
 
 # Transform Configuration
 
@@ -130,8 +130,12 @@ Translate user requests to filter objects:
 | "grant date after 2024-01-01" | `{"column": "Grant Date", "op": ">", "value": "2024-01-01"}` |
 | "name contains Smith" | `{"column": "Stakeholder Name", "op": "contains", "value": "Smith"}` |
 | "ownership above 5%" | `{"column": "Fully Diluted %", "op": ">", "value": 0.05}` |
+| "only Class A and Class B" | `{"column": "Share Class", "op": "in", "value": ["Class A", "Class B"]}` |
 
-Supported ops: `>` `<` `>=` `<=` `=` `!=` `contains`
+Supported ops: `>` `<` `>=` `<=` `=` `!=` `contains` `in`
+
+`in` takes a list and keeps a row that `=` would keep for any one of the values; every other op
+takes one value. "Not one of" is a `!=` filter per value.
 
 Pass percentage values as decimals when the column type is `percentage` (e.g. 50% → `0.5`).
 

@@ -198,7 +198,8 @@ call_tool({"name": "reporting__create__report_template", "arguments": { corporat
   #   type it does not take yet (unsupported_report_type, its reason names the types it takes). No as-of
   #   date, formulas or aggregations.
   #   At most 10 sheets with distinct tab names and at most 200 columns per sheet; op is one of
-  #   > < >= <= = != contains; direction is asc or desc.
+  #   > < >= <= = != contains in; `in` takes a list of 1 to 100 values and every other op one value;
+  #   direction is asc or desc.
   # Failures are tool errors, never an empty result:
   #   "Carta did not save this custom report" — not available for this user or company; nothing was saved.
   #   "…the user can't run this report here" — their access does not cover this report type; nothing was saved.

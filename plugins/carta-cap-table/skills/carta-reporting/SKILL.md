@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.13</carta-plugin>
 
 # Custom Reports
 
@@ -585,7 +585,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `status: error` | Report generation failed. If single report: regenerate once sequentially. If parallel reports: retry failed ones one at a time (sequential — parallel retries cause load failures). If still failing after retry: skip and continue. | "I wasn't able to generate the [Report Name] report — continuing with the rest." |
 | `status: error` and `_scope_<corporation_id>` has `is_limited_admin: true` | The status carries no reason, but the most common cause for a scoped account is that no share class in its scope has data for this report. Retry once, then stop — a second failure will not clear. | "I couldn't generate the **{Report Type}** report. Your access covers {share class names}, and this report may have nothing there. Want me to try {alternative from `results`} instead?" |
 | `status: not_found` | Report expired. The 4b agent writes `report not found` as the error. | Silent: the main thread recreates that report once with the same params and dispatches a fresh download agent (4d swap step); the new pk replaces `user_report_pk` for the rest of the session. Only if that also fails, use the "didn't finish" wording there. |
-| `empty_rows_dropped` > 0 | Rows whose numeric columns are all zero or blank were dropped (placeholder security types Carta emits for types never issued). Not applied to a sheet with a filter asking for zero on a numeric column (op `=`, value 0, e.g. `Shares = 0`): the all-zero rows it matched are the answer and stay. Any other numeric filter (e.g. `Shares < 1000`) still drops them. | "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets) |
+| `empty_rows_dropped` > 0 | Rows whose numeric columns are all zero or blank were dropped (placeholder security types Carta emits for types never issued). Not applied to a sheet with a filter asking for zero on a numeric column (op `=` with value 0, e.g. `Shares = 0`, or op `in` with a 0 in its list): the all-zero rows it matched are the answer and stay. Any other numeric filter (e.g. `Shares < 1000`) still drops them. | "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets) |
 | `filtered_row_count` = 0 | No rows matched the filters | Full-report build: "No rows matched those filters." Offer to loosen the filter or try a different date. Preview build: do not relay; run the full-report wait first. |
 | `original_row_count` > ~1,000 rows | Large dataset | "This report has a lot of rows — want to narrow it down by date range, report type, or a specific person?" |
 | `401` / session expired | Auth expired | "It looks like your Carta session expired — reconnect and try again." |
@@ -640,8 +640,14 @@ UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/s
 | `=` | equals | all types (string match is case-insensitive) |
 | `!=` | not equals | all types |
 | `contains` | substring match | all types (case-insensitive) |
+| `in` | equals any one of a list: `"value": ["Class A", "Class B"]` | all types (a row passes when `=` would pass it for any listed value) |
 
-**Equality is `=`, not `==`. `==` is not a valid op** — nor are `eq`, `in`, `startswith`,
+`in` is the only op that takes a list, and it takes nothing else: a list under any other op,
+or a single value under `in`, raises an error. Use it for "only these classes / types /
+holders". A listed value no row has simply matches nothing. "Not one of" is a `!=` filter per
+value.
+
+**Equality is `=`, not `==`. `==` is not a valid op** — nor are `eq`, `startswith`,
 or any SQL/pandas operator. Anything outside the table above raises an error and the
 report does not run.
 
@@ -659,8 +665,8 @@ sort on a `formulas` column (formulas run after the sort), unless a `group_by` a
 `running_sum` and `delta` over a money column are money, in the currency of the source cells.
 A summary's totals row is `{"_t": [cells]}`, like a source totals row, and its "Total" label sits in
 the first visible (not `hidden`) column with no aggregation (no label when every such column has one).
-A sheet with a filter asking for zero on a numeric column (op `=`, value 0) keeps its all-zero rows
-(no `empty_rows_dropped`); other numeric filters still drop them.
+A sheet with a filter asking for zero on a numeric column (op `=` with value 0, or op `in` with a 0
+in its list) keeps its all-zero rows (no `empty_rows_dropped`); other numeric filters still drop them.
 
 `label_overrides` — optional dict mapping raw string cell values to display names. Applied to all string-typed columns across every sheet. Use to replace Carta's internal security type codes with the corporation's configured equity language names (e.g. `{"CBU": "Phantom Units"}`). Matching is exact and case-sensitive.
 `sheets` leaves out the data-quality sheets "Data Warnings" and "Defective Securities" unless it names them. Named, they ignore the global `columns`, `filters`, `sort`, `formulas` and `aggregations` and take only their own per-sheet entry.
