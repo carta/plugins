@@ -7,8 +7,10 @@ import { pullChanged, REPORT_ACTIONS } from "./useReports.js";
 // is in (`enabled`), and again when the tab comes back into view (resurfaceDue: a burst of
 // tab switches starts one run), so a new one shows
 // up on its own. The Worker throttles these runs too (`auto`), so reloads and several open
-// tabs don't each ask Carta. Hosted only: a local pull runs a headless Claude session, which the
-// user starts on purpose with "Load shared reports".
+// tabs don't each ask Carta. Hosted only (App.jsx enables it on `hostedApp`): a local
+// dashboard's shared reports load from the skill's own session (Step 5.4, right after
+// launch), and its sidebar's "Load shared reports" runs a headless Claude session on
+// request.
 //
 // `onPulled(result)` runs only when the pull changed something. A failed run stays quiet —
 // the sidebar's "Load shared reports" is still there to retry, and says why.

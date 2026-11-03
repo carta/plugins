@@ -3,7 +3,7 @@ name: carta-manco-reporting
 description: >-
   Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under any verb (spin up, open, launch, build, create, run), firm named or not — P&L drill-down, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. ALSO fires on a short follow-up that continues a Budget vs Actuals view already open, even with no firm named again — "refresh Budget vs Actuals for the refreshed actuals", "pull up Budget vs Actuals", "refresh the ManCo budget app". DISAMBIGUATION: "build" means render this dashboard, not draft a budget. NOT FOR: drafting or editing a budget, or a generic ManCo ask naming no firm and no visual surface (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch → skill-dev:build-micro-app.
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
-version: 0.6.3
+version: 0.6.4
 # `version` gates delivery of app/src: each user runs their own copy, and a change
 # reaches it only when this number goes up. Bump it in every PR that changes a file
 # under app/src outside __tests__ — patch merges silently, minor/major asks the user
@@ -131,7 +131,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.25</carta-plugin>
+<carta-plugin>carta-investors:7.12.26</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -216,6 +216,7 @@ every invocation regardless.
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
 | 5.2 | when this run has a Carta MCP and the build's own sweep recorded that the `claude` CLI couldn't reach Carta | Push the owner's reports to the hosted app from this session | [serve-and-update.md](references/serve-and-update.md) |
 | 5.3 | when this firm's Budget vs Actuals is backed by an imported workbook | Offer the hosted app's link to this firm's report | [serve-and-update.md](references/serve-and-update.md) |
+| 5.4 | when this run has a Carta MCP, once Steps 5.2 and 5.3 have both returned | Load reports shared with you | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
 | 7 | only when the operator asks for a budget in the hosted app that the automatic sync didn't deliver to the audience they want (their own session, or colleagues), and the hosted Import budget button is enabled | Export the workbook budget as a bundle to upload | [serve-and-update.md](references/serve-and-update.md) |
 
@@ -318,6 +319,8 @@ datadir build runs silently. Speak only at:
 - Step 5 — the dashboard URL, its orientation line, and — only when the
   build reported gaps — one line counting where the report and the
   client's own workbook differ (5c)
+- Step 5.4 — one line, only when it loaded a new or changed shared report, or
+  couldn't. Silent otherwise
 - Step 6 — the offer to update, on a re-invocation
 - Any hard error (MCP unauth, no data, port range exhausted)
 
@@ -419,9 +422,11 @@ one is marked changed when a re-import or a mapping answer moves its figures. Wh
 asks to share a budget, point them at the controls beside **Export**; don't edit
 `reports.json` by hand.
 Read [report-sharing.md](references/report-sharing.md) (this skill's own `references/`)
-when a share fails or someone asks how sharing works. When someone asks to **load the
-reports shared with them** (the app suggests that prompt when its own load can't reach
-Carta), follow that file's "Loading shared reports from chat" steps.
+when a share fails or someone asks how sharing works. Reports shared with the user also
+load automatically right after the dashboard launches (Step 5.4), following that file's
+"Loading shared reports from chat" steps; someone can still ask to **load the reports
+shared with them** at any other time (the app suggests that prompt when its own load can't
+reach Carta) and the same steps apply.
 
 ## Errors and deferred work
 

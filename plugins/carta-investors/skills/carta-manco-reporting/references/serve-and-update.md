@@ -484,6 +484,50 @@ several reports can have this step wait out the whole sweep before push_one even
   app when this call didn't push it there. Never retry it in this run.
 
 
+## Step 5.4 — Load reports shared with you
+
+**SILENT unless something changed or failed.** Run it only when this run has a Carta MCP
+(`<SERVER>`); skip it on a cache-only reopen. Run this after the URL is out, once Step 5.2
+**and** Step 5.3 have both returned (when either ran at all) — on every invocation, warm
+reopen included, since a report can be shared with you between runs.
+
+Dispatch **one** fresh-context sub-agent (Agent tool, `subagent_type: general-purpose`,
+which inherits this session's whole tool surface, its Carta connector included) with the
+brief below, filling in `<SERVER>`, `<UV_BIN>` and `<dashboard_dir>` verbatim, and wait for
+it to finish before going on to Step 6. A payload is up to 256 KB, so it stays out of this
+conversation.
+
+`import_shared_reports.py import` merges what's pulled, then rebuilds the dashboard — even
+when nothing changed — and that rebuild spawns its own detached own-sync sweep
+(`build_manco_datadir._spawn_sync_sweep`), truncating `own_sync.log` as it starts. Step
+5.2's `--plan` and Step 5.3's `push_one` both wait on that sweep's lock, so this step runs
+only after both have returned: starting its rebuild any earlier would make either one wait
+out a second sweep. After this step, `own_sync.log` holds that new sweep's record, not Step
+4's. A pulled report is stored with `state: "shared-in"`, which `own_sync`'s push path
+already treats as read-only, so the sweep this step's own rebuild starts never re-pushes it
+as the owner's own.
+
+Sub-agent brief:
+
+> Follow [report-sharing.md](report-sharing.md)'s "Loading shared reports from chat" steps
+> 1-4, using server `<SERVER>`, `<UV_BIN>` and data dir `<dashboard_dir>`. Read-only Carta
+> calls only — `fa__get__budget_reports` and `fa__get__budget_report`, each at most once
+> per report — and never edit a response before writing it to `pulled.json`, and never
+> write outside `<dashboard_dir>`. When step 5 would
+> say sharing isn't turned on for you yet, answer exactly `not_enabled` instead of saying so.
+> On any other failure, stop after one try — never retry, never vary the call, never fall
+> back to another command — and answer exactly `failed: <the error's first line>`.
+> Otherwise, after step 4's `import` prints its counts, answer exactly one line: `pulled
+> added=<N> updated=<N> removed=<N> skipped=<N>`.
+
+- **`not_enabled`**, or **`pulled added=0 updated=0 ...`** — nothing changed; say nothing.
+- **`pulled added=<N> updated=<M> ...`** with `N` or `M` above 0 — one line, after Step 5.3's
+  link (if any) and before Step 6's menu: *"Loaded `<N+M>` reports shared with you — they're
+  in the Budget vs Actuals sidebar (reload the tab if it's already open)."*
+- **`failed: <reason>`** — one line: *"Couldn't load reports shared with you yet (`<reason>`)
+  — use **Load shared reports** in the sidebar to retry."* Never retry it in this run.
+
+
 ## Step 5.5 — Offer to open the account rows up
 
 **The workbook is the anchor.** A budget already broken out one way is

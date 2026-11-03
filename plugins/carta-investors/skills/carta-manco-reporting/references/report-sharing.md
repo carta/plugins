@@ -154,8 +154,11 @@ only. Its figures are never adjusted.
 
 The app's **Load shared reports** runs through a background Claude session. When that can't
 reach Carta, the app suggests a prompt ("Load the budget reports shared with me into my …
-ManCo reporting dashboard") that runs the same load from the user's own session. Do it with
-these steps, in order, and nothing else. Do not search for the script; its path is below.
+ManCo reporting dashboard") that runs the same load from the user's own session. The skill's
+own Step 5.4 ([serve-and-update.md](serve-and-update.md)) also runs steps 1-4 below on its
+own, right after the dashboard launches, and reports this section's step 5 outcome back to
+the skill — so a shared report usually shows up before anyone asks. Do it with these steps,
+in order, and nothing else. Do not search for the script; its path is below.
 
 1. Find the dashboard directory the usual way (`manco_paths.py resolve`), then get the entity:
 
