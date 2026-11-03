@@ -94,6 +94,7 @@ Every row spells the full id, prefix included.
 | `MancoReporting.Nav.LoadSharedReports` | click | Sidebar → "Load shared reports" (or "Check for new shared reports"). |
 | `MancoReporting.Nav.ShowHiddenReports` | click | Sidebar → "Show N hidden" under "Shared with you". |
 | `MancoReporting.Nav.AutoLoadSharedReportsFailed` | render | The hosted app's own check for new shared reports (on open, or when the tab came back) failed. Nothing shown to the user; "Load shared reports" still retries. |
+| `MancoReporting.Nav.SwitchFirm` | click | Sidebar → "Switch firm". Hosted only; shown to everyone except a non-staff user who holds exactly one firm (`pinnedFirm()`, `state/firmAccess.js`). |
 
 ### Dashboard
 

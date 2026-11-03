@@ -1,6 +1,7 @@
 import { Zap, BarChart3, Table, LayoutGrid } from "lucide-react";
-import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, FS, SIDENAV_STRIPE } from "../ui/theme.js";
+import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, FS, BLUE, SIDENAV_STRIPE } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
+import { CartaLogo } from "../ui/components.jsx";
 import { DownloadIcon, EyeIcon, PlusIcon, UnsharedDot, UsersIcon } from "../reports/icons.jsx";
 import { BVA, CUSTOM_REPORTING } from "./reportNav.js";
 
@@ -38,25 +39,27 @@ function NavIcon({ name, active }) {
   );
 }
 
-// Left-side vertical nav: firm mark/name, nav items (optional NavIcon per
-// item), then an as-of line pinned to the bottom via a flex spacer — same
-// layout carta-fund-modeling uses for its own DataStatus.
-export default function Sidebar({ initials, firmName, route, items, onNavigate, asOf, lastPostedDate, footerAction, shared }) {
+// Left-side vertical nav: Carta mark, firm name (+ "Switch firm" when `canSwitchFirm` — see
+// App.jsx's own comment for exactly who that is), nav items (optional NavIcon per item), then
+// an as-of line pinned to the bottom via a flex spacer — same layout carta-fund-modeling uses
+// for its own DataStatus.
+export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, items, onNavigate, asOf, lastPostedDate, footerAction, shared }) {
   // A shared report's route starts with `parentSlug`, but its row is drawn under the item
   // `afterSlug` names — that item is the one that reads as active.
   const sharedActive = !!shared?.items.some(i => sharedItemRoute(shared.parentSlug, i) === route);
   return (
     <aside style={styles.wrap}>
       <div style={styles.brand}>
-        {initials ? (
-          <div style={styles.firmMark} aria-hidden="true">{initials}</div>
-        ) : (
-          <div style={{ ...styles.firmMark, background: LINE, color: FAINT }} aria-hidden="true">
-            &nbsp;
+        <CartaLogo size={28} style={{ flex: "none", marginTop: 2 }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={styles.firmName} title={firmName || ""}>
+            {firmName || "Loading…"}
           </div>
-        )}
-        <div style={styles.firmName} title={firmName || ""}>
-          {firmName || "Loading…"}
+          {canSwitchFirm && (
+            <button type="button" onClick={onChooseFirm} data-testid="switch-firm" style={styles.switchFirm}>
+              Switch firm
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,26 +251,26 @@ const styles = {
     minWidth: 0,
     padding: "0 8px 12px",
   },
-  firmMark: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-    background: INK,
-    color: PAPER,
-    fontSize: FS.bodyLg,
-    fontWeight: 600, // Ink's type scale never exceeds weight 600
-    letterSpacing: "0.02em",
-    flexShrink: 0,
-  },
   firmName: {
     fontSize: FS.h3,
     fontWeight: 500,
     color: INK,
     lineHeight: 1.2,
     wordBreak: "break-word",
+  },
+  // Matches carta-fund-modeling's own sidebar "Switch firm" link: chromeless inline text,
+  // underlined so it reads as a link rather than a caption.
+  switchFirm: {
+    ...sans,
+    display: "block",
+    border: "none",
+    background: "none",
+    padding: 0,
+    marginTop: 2,
+    fontSize: FS.small,
+    color: BLUE,
+    textDecoration: "underline",
+    cursor: "pointer",
   },
   nav: {
     display: "flex",

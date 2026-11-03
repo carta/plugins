@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deepLinkFirmSlug, setFirmParam } from "./firmParam.js";
+import { fetchFirmAccess, pinnedFirm } from "./firmAccess.js";
 
 // Status shown while waiting for the first real step; App.jsx uses it as the fallback
 // for the same wait.
@@ -13,24 +14,6 @@ export const NO_MANCO_ENTITY = "no_manco_entity";
 // below): the firm lists more than one ManCo entity and resolveMancoEntity couldn't pick one
 // on its own. App.jsx renders MancoEntityChooser for it via `mancoChoice`.
 export const MULTIPLE_MANCO_ENTITIES = "multiple_manco_entities";
-
-// The one firm a resolved, non-staff user may open with no extra click. `isStaff` must be
-// the literal false Carta returned, not merely falsy: null (unknown or the lookup failed)
-// must never auto-open a firm, same as carta-fund-modeling's FirmAccess.pinnedFirm.
-function pinnedFirm(isStaff, firms) {
-  return isStaff === false && firms.length === 1 ? firms[0]?.slug ?? null : null;
-}
-
-// The chooser's own data: who the signed-in user is and which firms they hold. Shared by the
-// resolution effect and reopenChooser so the two can't drift on the fallbacks or the shape
-// FirmChooser expects.
-async function fetchChooser(signal) {
-  const [me, firms] = await Promise.all([
-    fetch("/api/me", { signal }).then((r) => r.json()).catch(() => ({ isStaff: null })),
-    fetch("/api/firms", { signal }).then((r) => r.json()).catch(() => []),
-  ]);
-  return { isStaff: me?.isStaff ?? null, firms: Array.isArray(firms) ? firms : [] };
-}
 
 // Drives /api/load-firm's SSE progress stream when the hosted app has no cached snapshot
 // for this firm yet. Mirrors carta-portfolio-analytics-app's useKpi.js: the effect's own
@@ -164,7 +147,7 @@ export default function useLoadFirm(trigger, onDone) {
         const cfg = await fetch("/api/app-config", { signal: controller.signal }).then((r) => r.json());
         let slug = cfg?.defaultFirm || deepLinkFirmSlug();
         if (!slug) {
-          const resolved = await fetchChooser(controller.signal);
+          const resolved = await fetchFirmAccess(controller.signal);
           slug = pinnedFirm(resolved.isStaff, resolved.firms);
           if (!slug) {
             if (liveRef.current && !controller.signal.aborted) setChooser(resolved);
@@ -216,12 +199,18 @@ export default function useLoadFirm(trigger, onDone) {
     setErrorCode(null);
     const owner = controllerRef.current;
     try {
-      const resolved = await fetchChooser();
+      const resolved = await fetchFirmAccess();
       if (liveRef.current && controllerRef.current === owner) setChooser(resolved);
     } catch (e) {
       if (liveRef.current && controllerRef.current === owner) setLoadError(e?.message || String(e));
     }
   }, []);
+
+  // Closes a chooser reopenChooser (or the "Switch firm" link that calls it) put on screen,
+  // with no pick and no load started — the user already has a loaded firm to go back to.
+  // Starts no controller of its own: there is nothing to abort or replace, since reopening
+  // the chooser never touched controllerRef in the first place.
+  const closeChooser = useCallback(() => setChooser(null), []);
 
   // MancoEntityChooser's onPick: resumes the load mancoChoice paused, on the same slug, now
   // naming which ManCo entity to use. Same controller-replacement rule as choose() — the
@@ -237,5 +226,5 @@ export default function useLoadFirm(trigger, onDone) {
     runLoad(slug, controllerRef.current, entityId);
   }, [runLoad, mancoChoice]);
 
-  return { loadStatus, loadError, errorCode, chooser, choose, reopenChooser, mancoChoice, chooseMancoEntity };
+  return { loadStatus, loadError, errorCode, chooser, choose, closeChooser, reopenChooser, mancoChoice, chooseMancoEntity };
 }

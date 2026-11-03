@@ -9,7 +9,7 @@ import { FS, INK, FAINT, LINE, PAPER, BLUE } from "../ui/theme.js";
 
 const SEARCH_DELAY_MS = 300;
 
-export default function FirmChooser({ isStaff, firms, onPick }) {
+export default function FirmChooser({ isStaff, firms, onPick, onCancel }) {
   // Only a confirmed non-staff user is limited to their own held firms with no way to look
   // further — the same resolved-false check pinnedFirm (useLoadFirm.js) uses for auto-select.
   // `null` (isStaff unknown, or the lookup failed) gets search too: search goes through
@@ -34,7 +34,7 @@ export default function FirmChooser({ isStaff, firms, onPick }) {
   }, [q, canSearch]);
 
   return (
-    <ChooserPage title="Carta ManCo Reporting"
+    <ChooserPage title="Carta ManCo Reporting" onCancel={onCancel}
       subtitle="Pick which firm's ManCo microapp to open.">
       {canSearch && (
         <input type="search" data-testid="firm-search" value={query} onChange={(e) => setQuery(e.target.value)}

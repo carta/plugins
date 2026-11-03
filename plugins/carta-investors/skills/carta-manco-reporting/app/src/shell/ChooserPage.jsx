@@ -2,12 +2,22 @@
 // logo, title, subtitle and scrollable column are one visual language; a change to either
 // belongs here once, not in both files.
 import { CartaLogo } from "../ui/components.jsx";
-import { FS, INK, FAINT, LINE, PAPER, FULL_PAGE_COVER } from "../ui/theme.js";
+import { sans, BLUE, FS, INK, FAINT, LINE, PAPER, FULL_PAGE_COVER } from "../ui/theme.js";
 
-export function ChooserPage({ title, subtitle, children }) {
+// `onCancel`, when given, is a way back to whatever was on screen before this chooser
+// opened — only the "Switch firm" case has one; the first-load chooser and the no-ManCo
+// screen have nowhere to go back to, so they leave it out.
+export function ChooserPage({ title, subtitle, onCancel, children }) {
   return (
     <div style={{ ...FULL_PAGE_COVER, display: "flex", justifyContent: "center", overflowY: "auto" }}>
-      <div style={{ width: "100%", maxWidth: 560, padding: "88px 28px 56px" }}>
+      <div style={{ width: "100%", maxWidth: 560, padding: "88px 28px 56px", position: "relative" }}>
+        {onCancel && (
+          <button type="button" onClick={onCancel} data-testid="chooser-cancel"
+            style={{ ...sans, position: "absolute", top: 28, right: 28, border: "none", background: "none", padding: 0,
+              fontSize: FS.body, color: BLUE, textDecoration: "underline", cursor: "pointer" }}>
+            Cancel
+          </button>
+        )}
         <CartaLogo size={32} style={{ marginBottom: 20 }} />
         <div style={{ fontSize: FS.h2, fontWeight: 500, marginBottom: 6 }}>{title}</div>
         <div style={{ fontSize: FS.bodyLg, color: FAINT, marginBottom: 24 }}>{subtitle}</div>

@@ -34,6 +34,7 @@ import ShareStatus, { pulledMessage } from "./reports/ShareStatus.jsx";
 import { setDisplayCurrency } from "./charts/chartTheme.js";
 import { assignCategoricalColors, assignExpenseCategoryColors } from "./ui/categoricalColors.js";
 import { displayFirmName } from "./ui/firmName.js";
+import { fetchFirmAccess, pinnedFirm } from "./state/firmAccess.js";
 import { trackClick, trackRender } from "./analytics.js";
 
 // This server only ever hosts one firm — the URL's firm segment is cosmetic,
@@ -351,7 +352,7 @@ export default function App() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const loadRetriedRef = useRef(false);
   const loadTrigger = notReady ? loadAttempt + 1 : 0;
-  const { loadStatus, loadError, errorCode, chooser, choose, reopenChooser, mancoChoice, chooseMancoEntity } = useLoadFirm(loadTrigger, async () => {
+  const { loadStatus, loadError, errorCode, chooser, choose, closeChooser, reopenChooser, mancoChoice, chooseMancoEntity } = useLoadFirm(loadTrigger, async () => {
     const stillNotReady = await fetchData();
     reportsApi.reload();
     if (!stillNotReady) {
@@ -370,6 +371,50 @@ export default function App() {
   useEffect(() => {
     if (loadError) setSnapshotError(loadError);
   }, [loadError, setSnapshotError]);
+
+  // Whether the sidebar offers "Switch firm" once one is loaded: only the hosted app ever
+  // shows more than one firm's worth of nav (the local dev server always serves the one
+  // firm it was started for), and to everyone except a non-staff user confirmed to hold
+  // exactly one firm — pinnedFirm()'s rule (state/firmAccess.js), the same one
+  // useLoadFirm.js uses to decide who skips the chooser. That means Carta staff (who
+  // typically hold none of their own) and a user whose /api/me lookup failed both see it
+  // too — there is no firm to pin them to either way. Resolved independently of the firm
+  // load itself (a deep link or an auto-picked firm never fetches /api/me + /api/firms on
+  // their own) but gated on a snapshot actually landing: nothing in the sidebar (including
+  // this link) shows before then, so there's nothing to gain from the round trip while the
+  // firm is still loading, failed, or has no ManCo entity. `hasSnapshot` (not `snapshot`
+  // itself) keeps this from re-running on every later snapshot refresh.
+  const [canSwitchFirm, setCanSwitchFirm] = useState(false);
+  const hasSnapshot = !!snapshot;
+  useEffect(() => {
+    if (!hostedApp || !hasSnapshot) return undefined;
+    let live = true;
+    const controller = new AbortController();
+    fetchFirmAccess(controller.signal)
+      .then(({ isStaff, firms }) => { if (live) setCanSwitchFirm(!pinnedFirm(isStaff, firms)); })
+      .catch(() => { if (live) setCanSwitchFirm(true); });
+    return () => { live = false; controller.abort(); };
+  }, [hostedApp, hasSnapshot]);
+
+  // Reopens the chooser over the whole page, same as the no-ManCo-entity screen's own
+  // "Choose a different firm" — but from a fully loaded dashboard, where `chooser` alone
+  // wouldn't trigger the full-page guard below (see its own comment).
+  const onChooseFirm = useCallback(() => { trackClick("MancoReporting.Nav.SwitchFirm"); reopenChooser(); }, [reopenChooser]);
+
+  // Picking a firm from a chooser opened over an already-loaded dashboard (the "Switch
+  // firm" case) must not reuse `choose`: `choose` only ever ran before this page had
+  // loaded anything, so nothing in App's state — snapshot, accounts, reports, drilldown —
+  // belonged to another firm while it ran. Reusing it here would leave all of that (and
+  // every `?firm=`-scoped request a background effect makes) pointed at two different
+  // firms until the new load's `onDone` finally replaces `snapshot`, with no guarantee
+  // that finishes rather than erroring. A full navigation starts this page over from
+  // nothing: useLoadFirm's own deep-link resolution reads the new `?firm=` with no old
+  // firm's state left to leak, and a firm whose snapshot is already cached server-side
+  // loads instantly from it. `choose` stays the right call for the two chooser paths that
+  // run before any snapshot exists — the first-load chooser and the no-ManCo-entity screen.
+  const pickFirm = snapshot
+    ? (slug) => window.location.assign(`/?firm=${encodeURIComponent(slug)}`)
+    : choose;
 
   // Tab title names the firm, mirroring carta-fund-modeling. No iframe here,
   // so document.title is set directly instead of posted to an outer shell.
@@ -471,8 +516,9 @@ export default function App() {
   }, [snapshot, firmHasBudget]);
 
   const sidebarProps = {
-    initials: firmInitials(snapshot?.firmName),
     firmName: displayFirmName(snapshot?.firmName),
+    canSwitchFirm,
+    onChooseFirm,
     route: activeRoute,
     items: navItems,
     onNavigate: navigate,
@@ -526,12 +572,19 @@ export default function App() {
   // apply to this firm. Covering the whole page instead reads as one loading state
   // rather than a part-loaded shell. The local dev server has no such placeholder
   // problem (there's always exactly one firm, already known), so it keeps the sidebar.
-  if (hostedApp && !error && (notReady || !snapshot)) {
+  // `chooser` also covers the sidebar's own "Switch firm" link, opened over an
+  // already-loaded dashboard (`snapshot` non-null): that's why `chooser` has to be in
+  // this condition on its own, not covered already by `notReady || !snapshot`.
+  // `loadStatus`/`mancoChoice` stay out of it: `pickFirm` (above) never starts an in-page
+  // load once a snapshot exists, so neither can be set while this guard would otherwise
+  // read "already loaded" and show the old firm's dashboard underneath.
+  if (hostedApp && !error && (notReady || !snapshot || chooser)) {
     if (chooser) {
       return (
         <>
           <style>{GLOBAL_CSS}</style>
-          <FirmChooser isStaff={chooser.isStaff} firms={chooser.firms} onPick={choose} />
+          <FirmChooser isStaff={chooser.isStaff} firms={chooser.firms} onPick={pickFirm}
+            onCancel={snapshot ? closeChooser : undefined} />
         </>
       );
     }
@@ -728,16 +781,4 @@ function drillAccountForMonthFor(snapshot, accountsData, drilldown) {
 function topCategoryNamesFor(accountsData) {
   const cats = accountsData?.monthly_categories?.categories || [];
   return cats.filter(c => c.name !== "Other").map(c => c.name);
-}
-
-// Firm initials for the sidebar mark. Strip common legal-entity suffixes so
-// the mark reads as the brand rather than the entity type. Splits on spaces
-// AND hyphens (so "North-star Capital" produces N + s + C). Capped at 3
-// characters — same as carta-fund-modeling's own Mark — so the badge stays a
-// square instead of stretching into a rectangle for a 4+-word firm name.
-function firmInitials(firmName) {
-  if (!firmName) return "";
-  const cleaned = displayFirmName(firmName);
-  const tokens = cleaned.split(/[\s-]+/).filter(Boolean);
-  return tokens.slice(0, 3).map(t => t.charAt(0)).join("");
 }
