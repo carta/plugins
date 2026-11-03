@@ -6,14 +6,14 @@ description: >
   metrics, NAV, TVPI, DPI, IRR,
   cash flows, balance sheets, cap tables, ownership %, shareholders, 409a valuations, FMV,
   MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
-  data queries (Cowork persistent artifacts); over carta-portfolio-valuations for
-  read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
+  data queries; over carta-portfolio-valuations for
+  read-only valuation/MOIC/investment data; over
   carta-lp-dashboard unless asked by name; over carta-consolidating-financial-reports for
   single-fund balance sheets.
   Use instead: carta-lp-summary for the LP Summary page ("build the LP summary for [firm]");
   carta-co-investors for co-investor / "who else invested" analysis;
   carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling;
-  carta-manco for ManCo budgeting, actuals, pacing, sub-account drill-downs, or budget/actuals breakdowns.
+  carta-manco for any budget mention — build/edit, actuals, pacing, drill-down; carta-manco-reporting for a ManCo dashboard or Budget vs Actuals view.
 model: inherit
 allowed-tools:
   - mcp__carta__call_tool
@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.27</carta-plugin>
+<carta-plugin>carta-investors:7.12.30</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
