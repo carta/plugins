@@ -1,9 +1,9 @@
 ---
 name: carta-lp-dashboard
 description: >-
-  Opens the user's own Carta LP portfolio dashboard (NAV, capital activity, TVPI/DPI/RVPI).
-  LP users only, when they explicitly ask for their LP dashboard or LP portfolio. Not for
-  GP/firm users or ambiguous queries; use carta-explore-data.
+  Opens an LP's own Carta dashboard (NAV, TVPI/DPI) and finds or zips their documents (K-1s,
+  notices, statements, PCAPs, subscription docs, side letters). Only when an LP explicitly asks.
+  Not for GP/firm users or vague queries; use carta-explore-data.
 version: 1.0.1
 model: inherit
 allowed-tools:
@@ -16,6 +16,8 @@ allowed-tools:
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
@@ -24,16 +26,31 @@ allowed-tools:
   - ToolSearch
   # Local execution — the find locates the script on remote plugin mounts
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-dashboard/scripts/render_artifact.py" *)
+  - Bash(pwd)
+  - Read
+  - Write
+  # Documents zip download (desktop / CLI only)
+  - Bash(unzip -l *)
   # Interaction
   - AskUserQuestion
+trigger-phrases:
+  - "get my lp docs tutorial"
+  - "show me the get my lp docs tutorial"
+  - "walk me through get my lp docs"
+  - "getting started with get my lp docs"
+  - "documents tutorial"
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.15.2</carta-plugin>
+<carta-plugin>carta-investors:7.16.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 # LP Dashboard Skill
+
+## Documents requests
+
+If you were dispatched with `lp-dashboard`, skip this section. If you were dispatched with `lp-documents`, or were invoked with no argument and the user asks for their own documents — a K-1, a capital call or distribution notice, a statement, a PCAP, a subscription agreement, a side letter, "my documents", a zip of them, or the documents tutorial — read `${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-dashboard/references/lp-documents.md` (this skill's own `references/`; read it by that exact path, don't search for it) and follow it instead of the steps below. Everything else on this page is the dashboard.
 
 This skill publishes or redeploys a persistent live artifact that fetches the LP's portfolio from Carta via `claude.use("mcp")` each time it is opened — no data is embedded. The page loads three sections through the `call_tool` gateway tool: summary, timeseries and quarterly.
 

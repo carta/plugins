@@ -1,50 +1,3 @@
----
-name: carta-lp-documents
-description: >-
-  Find the user's own LP documents — K-1s, capital call and distribution notices, financial statements, PCAPs, subscription agreements, side letters. LP only: not for a GP or fund manager, or Carta staff, looking up a firm's LPAs and side letters, or the documents its funds sent their LPs.
-version: 1.0.1
-model: inherit
-allowed-tools:
-  # The only source for a connector's name
-  - list_connectors
-  # The connector check's observed call.
-  - mcp__carta__welcome
-  - mcp__claude_ai_Carta__welcome
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
-  # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
-  - mcp__carta__call_tool
-  - mcp__carta__read_tool
-  - mcp__claude_ai_carta__call_tool
-  - mcp__claude_ai_carta__read_tool
-  - mcp__claude_ai_Carta__call_tool
-  - mcp__claude_ai_Carta__read_tool
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
-  # Publish (ToolSearch loads a deferred Artifact)
-  - Artifact
-  - ToolSearch
-  # Local execution — the find locates the render script on remote plugin mounts
-  - Bash(pwd)
-  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-dashboard/scripts/render_artifact.py" *)
-  - Read
-  - Write
-  # Zip download (desktop / CLI only)
-  - Bash(unzip -l *)
-  # Interaction
-  - AskUserQuestion
-trigger-phrases:
-  - "get my lp docs tutorial"
-  - "show me the get my lp docs tutorial"
-  - "walk me through get my lp docs"
-  - "getting started with get my lp docs"
-  - "documents tutorial"
----
-
-<!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.15.2</carta-plugin>
-
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
-
 # Get My LP Docs
 
 ---
@@ -88,7 +41,7 @@ This skill is for limited partners looking at **their own** documents. A GP or f
 ## Instrumentation
 
 Every Carta call this skill makes — `welcome`, `read_tool`, `call_tool` — carries
-`"_instrumentation_v2": {"skills": ["carta-investors:carta-lp-documents"]}` as a top-level argument,
+`"_instrumentation_v2": {"skills": ["carta-investors:carta-lp-dashboard"]}` as a top-level argument,
 beside `name` and `arguments`. If a call is rejected because it did not include `_instrumentation_v2`,
 send the same call again with it, without telling the user. That rejection is not a failure of the
 Carta call: the rules under "Stop and retry rules" below do not apply to it.

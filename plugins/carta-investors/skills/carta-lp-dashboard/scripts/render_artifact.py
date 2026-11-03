@@ -34,7 +34,7 @@ CHART_JS = _PLUGIN_ROOT / "vendor" / "chart.umd.min.js"
 CHART_MARKER = re.compile(r"/\*\s*__LP_DASHBOARD_CHART_JS__\s*\*/")
 # The template's tab buttons are the one list of tabs; the first is the default.
 TABS = tuple(re.findall(r'id="tab-(\w+)"', TEMPLATE.read_text(encoding="utf-8")))
-DOCS_TEMPLATE = _PLUGIN_ROOT / "skills" / "carta-lp-documents" / "references" / "lp-docs-artifact-template.html"
+DOCS_TEMPLATE = _PLUGIN_ROOT / "skills" / "carta-lp-dashboard" / "references" / "lp-docs-artifact-template.html"
 DOCS_MARKUP_MARKER = "<!-- __LP_DOCS_TEMPLATE__ -->"
 DOCS_SCRIPT_MARKER = "/* __LP_DOCS_SCRIPT__ */"
 # How the LP Documents page's script ends: starting its first load.

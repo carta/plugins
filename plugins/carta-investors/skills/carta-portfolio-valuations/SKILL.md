@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.15.2</carta-plugin>
+<carta-plugin>carta-investors:7.16.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -225,7 +225,7 @@ any further `portfolio_valuations` call this session.
 
 The closing line is an offer, so honour it if the user takes it up: fund
 performance, NAV and TVPI go to `carta-explore-data`; LP documents to
-`carta-lp-documents`. Those domains are gated separately and generally do
+`carta-lp-dashboard`. Those domains are gated separately and generally do
 work for a caller without valuations. Route on request — don't
 pre-emptively start one.
 

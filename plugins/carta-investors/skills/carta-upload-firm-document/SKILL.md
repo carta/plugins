@@ -1,7 +1,7 @@
 ---
 name: carta-upload-firm-document
 description: >-
-  Upload one or more files from your computer to your firm's Documents page in Carta. Carta classifies each document after it lands. Confirms the firm and files once before anything is written. TRIGGER: "upload this document", "upload these documents", "upload this document to {firm}", "upload this to Carta", "add this PDF to our firm documents", "put this NDA on our documents page", "save this side letter to Carta", "file this engagement letter in Carta", "upload a document to my firm". NOT FOR: downloading a document already on the firm's Documents page (use carta-download-firm-document); finding documents shared with LPs (use carta-gp-lp-documents or carta-lp-documents); sending a file to your Fund Admin team as part of a request (use carta-fund-admin-requests); passports, driver's licenses or other identity documents, which go through KYC, not the Documents page.
+  Upload one or more files from your computer to your firm's Documents page in Carta. Carta classifies each document after it lands. Confirms the firm and files once before anything is written. TRIGGER: "upload this document", "upload these documents", "upload this document to {firm}", "upload this to Carta", "add this PDF to our firm documents", "put this NDA on our documents page", "save this side letter to Carta", "file this engagement letter in Carta", "upload a document to my firm". NOT FOR: downloading a document already on the firm's Documents page (use carta-download-firm-document); finding documents shared with LPs (use carta-gp-lp-documents or carta-lp-dashboard); sending a file to your Fund Admin team as part of a request (use carta-fund-admin-requests); passports, driver's licenses or other identity documents, which go through KYC, not the Documents page.
 version: 0.1.0
 model: inherit
 allowed-tools:
@@ -27,7 +27,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.15.2</carta-plugin>
+<carta-plugin>carta-investors:7.16.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

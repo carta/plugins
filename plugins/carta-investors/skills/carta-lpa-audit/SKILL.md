@@ -1,7 +1,7 @@
 ---
 name: carta-lpa-audit
 description: >-
-  See every LPA and side letter across a firm's funds, with the terms they state, in one table: management fee, carry, hurdle, fund term and investment period per fund, and each fund's side letters, LP roster and GP in a side panel. Flags funds with a missing LPA, partial data or a name mismatch, and side letters that match no fund. Reads the terms Carta extracted from the firm's own documents. For a GP, fund manager or Carta staff looking at a firm's funds. TRIGGER: "show me all my LPAs and side letters", "LPAs and side letters for {firm}", "what are the terms in our LPAs", "compare fees and carry across my funds", "which funds are missing an LPA", "what side letters have our funds granted", "LPA audit for {firm}". NOT FOR: an LP's own documents (use carta-lp-documents); documents a fund shared with its LPs (use carta-gp-lp-documents); downloading one file (use carta-download-firm-document).
+  See every LPA and side letter across a firm's funds, with the terms they state, in one table: management fee, carry, hurdle, fund term and investment period per fund, and each fund's side letters, LP roster and GP in a side panel. Flags funds with a missing LPA, partial data or a name mismatch, and side letters that match no fund. Reads the terms Carta extracted from the firm's own documents. For a GP, fund manager or Carta staff looking at a firm's funds. TRIGGER: "show me all my LPAs and side letters", "LPAs and side letters for {firm}", "what are the terms in our LPAs", "compare fees and carry across my funds", "which funds are missing an LPA", "what side letters have our funds granted", "LPA audit for {firm}". NOT FOR: an LP's own documents (use carta-lp-dashboard); documents a fund shared with its LPs (use carta-gp-lp-documents); downloading one file (use carta-download-firm-document).
 version: 0.5.0
 model: sonnet
 allowed-tools:
@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.15.2</carta-plugin>
+<carta-plugin>carta-investors:7.16.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
 
