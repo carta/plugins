@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.26</carta-plugin>
+<carta-plugin>carta-investors:7.12.27</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -171,7 +171,7 @@ Every firm gets the first two; a Fund Admin firm adds LP summary
 | `prompt` | **the contract** — copied into chat when no URL was baked in |
 | `label` | the launcher's visible text |
 | `buildSkill` | build-time only: candidates Step 5 fans out to, in preference order. Optional. |
-| `requires` | build-time only: the `get_current_user` flag that must be `true` for Step 5 to build it. Optional. |
+| `requires` | build-time only: the `get_current_user` flag that must be `true` for Step 5 to build it. Optional. For `has_fund_admin`, a firm also counts when the flag is absent and the profile is staff with `fund_admin_access: true` (the rule `readProductFlag` applies at runtime). |
 
 **`prompt` is the contract, and `buildSkill` follows it.** The same sentence routes to
 whichever skill owns that dashboard, and `buildSkill` names it so the build-time fan-out
@@ -542,8 +542,8 @@ still detects whichever firm is active when a viewer opens it.
 **This build runs twice.** On this pass, every entry with a `buildSkill` takes
 `--dashboard-building <key>` and nothing else — including one whose artifact Step 2
 already found. Step 5 rebuilds that artifact too, so linking to it now would point at the
-page this run is about to replace. Drop `--dashboard-building lp` for a firm whose
-`get_current_user` profile lacks `has_fund_admin`: Step 5 skips it and the card is hidden. Step 6 runs the same command again with the URLs Step 5
+page this run is about to replace. Drop `--dashboard-building lp` for a firm that does not count as Fund Administration
+(the `requires` rule above): Step 5 skips it and the card is hidden. Step 6 runs the same command again with the URLs Step 5
 returns, and the cards become launchers.
 
 **An existing URL is not a reason to skip Step 5.** Every entry with a `buildSkill` is
@@ -641,8 +641,8 @@ live by now with its cards marked as building, and this is what fills them in. S
 starter pack unbuilt and every dashboard on whatever version it was last published from.
 
 For each `DASHBOARDS` entry in `resources/carta-home.config.js` that has a `buildSkill`
-and that was not kept as it is, skip it when it names a `requires` flag that the user's
-`get_current_user` profile does not carry as `true` — that firm never sees the card. Otherwise work down its candidates in order and invoke the **first one that resolves**, keeping the
+and that was not kept as it is, skip it when the firm does not meet its `requires` rule
+(the `requires` row of the field table) — that firm never sees the card. Otherwise work down its candidates in order and invoke the **first one that resolves**, keeping the
 artifact URL it returns, keyed by the entry's `key`. A candidate that is not installed is
 not a failure — move to the next one. Once a candidate returns a URL, stop; do not invoke
 the rest, or the same dashboard is published twice.

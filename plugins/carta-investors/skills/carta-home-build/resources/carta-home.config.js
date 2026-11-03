@@ -35,8 +35,9 @@ const DASHBOARDS = [
     footerId: 'lp-card-footer',
     prompt: 'Show me a summary of our LPs',
     buildSkill: ['carta-lp-summary'],
-    // Step 5 builds it only for a firm whose get_current_user flag is true; the card
-    // shows on the same condition (app/segment-dashboards.js).
+    // Step 5 builds it only for a Fund Admin firm: get_current_user has_fund_admin is
+    // true, or absent on a staff profile with fund_admin_access: true (readProductFlag in
+    // carta-home.app.js). The card shows on the same condition (app/segment-dashboards.js).
     requires: 'has_fund_admin',
   },
 ];

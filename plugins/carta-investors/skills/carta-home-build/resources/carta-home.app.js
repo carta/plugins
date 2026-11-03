@@ -1204,9 +1204,14 @@ function extractContextsPayload(res) {
 // either spelling. Anything that isn't a real boolean — key absent, null, a staff
 // account whose enrichment was stripped — returns null meaning "unknown", which the
 // directory filter treats as "show", never as "deny".
+// A Carta staff profile omits has_fund_admin on purpose (it would describe the staff
+// member's own account) and reports fund_admin_access: true instead, so for staff that
+// answers has_fund_admin — otherwise the LP Summary card and What's new stay hidden.
 function readProductFlag(profile, key) {
   const v = profile[key] !== undefined ? profile[key] : profile[key.toUpperCase()];
-  return typeof v === "boolean" ? v : null;
+  if (typeof v === "boolean") return v;
+  if (key === "has_fund_admin" && profile.is_staff === true && profile.fund_admin_access === true) return true;
+  return null;
 }
 
 async function fetchUserEnrichment() {
