@@ -27,7 +27,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.10</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -54,6 +54,7 @@ Call `read_tool` with one command. One call answers most questions.
 | Share certificates | `cap_table__list__certificates` | `search`, `ordering`, `page_size` |
 | RSUs, SARs, CBUs | `cap_table__list__rsus`, `cap_table__list__sars`, `cap_table__list__cbus` | `search`, `detail` |
 | SAFEs, convertible notes | `cap_table__list__safes`, `cap_table__list__convertible_notes` | |
+| What one holder owns, every type | `cap_table__list__securities` | `type` (one per call), `holder` |
 | Option plans and pool | `cap_table__get__option_plans` | |
 | Rights and preferences | `cap_table__get__rights_and_preferences` | |
 
@@ -61,6 +62,12 @@ Call `read_tool` with one command. One call answers most questions.
 read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <corporation_id>, "ordering": "-quantity", "detail": "minimal", "page_size": 20}})
 ```
 
+- For what one holder owns, `cap_table__list__securities` with `holder` (one call per `type`)
+  returns the securities the holder still holds. Make the call for every type first, then
+  answer with the held securities of all types. If any response's `next_actions` offers
+  securities left out (cancelled, expired, forfeited and the like), say how many the holder
+  has across all types and call `AskUserQuestion` once whether to list them. On yes, call
+  each offered action. Never count them in what the holder owns.
 - For counts and totals, use `detail: "summary"` where the command has it.
 - For "largest" or "top N", use `ordering`, `page_size` and `detail: "minimal"`. Never
   page through every row to sort or count: large companies time out.
