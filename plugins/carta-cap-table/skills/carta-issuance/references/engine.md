@@ -131,8 +131,8 @@ no tool ending in `read_tool` / `call_tool` / `list_accounts` / `welcome` exists
 genuinely gone: say so and stop. Everything else that looks like an answer is not one
 ([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
-One call, the complete set for the run. `view_remote` is there for Carta's companion
-instructions; `cap_table__get__draft_set_companion` matches only when Carta offers the
+One call, the complete set for the run. `view_remote` is there for the
+[companion surface](companion-surface.md); `cap_table__get__draft_set_companion` matches only when Carta offers the
 companion, so no match is the normal case, never a connection signal.
 **`read_tool` and `call_tool` are loaded here, up front**, so Phase 2 never has to load them after the user confirms — that would be serial latency at the worst
 possible moment.
@@ -281,10 +281,10 @@ Ordering is the whole point. A traced run resolved a company, swept 24 candidate
 ahead of a check that invalidated all of them. The stop costs one call and it is knowable
 first, so take it first. Everything the gate reads, Phase 0.5 reuses; it is not an extra fetch.
 
-**Then read the response for `companion.instructions`.** When it is there and no hard stop
-fired, follow them ([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)), unless the
-user chose the surface or the run resumes a draft set: the one change of surface after
-selection.
+**Then read the response for `companion.available`.** When it is `true` and no hard stop
+fired, take the companion row ([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)) and
+read [companion-surface.md](companion-surface.md), unless the user chose the surface or the run
+resumes a draft set: the one change of surface after selection.
 
 ### Companion probe (artifact host)
 
@@ -294,7 +294,7 @@ Step 1's `ToolSearch`, Step 3's `list_accounts(search="<name>")` (skip it when y
 hold a bare `corporation_id`), then Step 4's `issuance_init` with
 [Phase 0.5's arguments](#phase-05--configure-the-issuance). No stakeholder probes and no
 question: anything short of one exact name match and a response carrying
-`companion.instructions` — no match, several, an error, a hard stop — goes straight to the
+`companion.available: true` — no match, several, an error, a hard stop — goes straight to the
 build, unmentioned. The page resolves the company and shows its own hard stops.
 
 ---
