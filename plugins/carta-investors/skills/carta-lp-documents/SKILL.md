@@ -1,7 +1,7 @@
 ---
 name: carta-lp-documents
 description: >-
-  Find the user's own LP documents — K-1s, capital call and distribution notices, financial statements, PCAPs, subscription agreements, side letters. LP only; not for a GP or fund manager pulling the documents their fund sent its LPs.
+  Find the user's own LP documents — K-1s, capital call and distribution notices, financial statements, PCAPs, subscription agreements, side letters. LP only: not for a GP or fund manager, or Carta staff, looking up a firm's LPAs and side letters, or the documents its funds sent their LPs.
 version: 1.0.1
 model: inherit
 allowed-tools:
@@ -41,7 +41,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.12.24</carta-plugin>
+<carta-plugin>carta-investors:7.12.25</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
