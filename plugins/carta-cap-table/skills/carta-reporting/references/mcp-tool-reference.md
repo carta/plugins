@@ -20,6 +20,8 @@ required params (Step 3) or filter IDs — it is not part of the always-loaded S
 #   reporting__create__report_template call_tool corporation_id, name, definition, visibility (optional)
 #   reporting__list__report_templates read_tool  corporation_id
 #   reporting__get__report_template read_tool    corporation_id, template_id
+#   reporting__create__report_template_run call_tool corporation_id, template_id, as_of_date (optional)
+#   reporting__get__report_template_run read_tool    corporation_id, template_id, run_id
 
 call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json" }})
   → { user_report_pk }
@@ -178,8 +180,8 @@ read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk
                        # than twice.
 
 # Custom reports (the tools say "report template") — keep a report in Carta to run again at a new as-of date.
-# Offered only when reporting__list__report_templates succeeds for the company (see "Save as a custom report" in SKILL.md).
-# Every one of the three answers "Custom reports aren't enabled for this company." when they are off: do not retry.
+# Offered only when reporting__list__report_templates succeeds for the company ("Save as a custom report" and step 2b in SKILL.md).
+# Every one of the five answers "Custom reports aren't enabled for this company." when they are off: do not retry.
 
 call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, definition, visibility }})
   → { id, display_name, report_type, visibility, version, message }
@@ -214,4 +216,16 @@ read_tool({"name": "reporting__list__report_templates", "arguments": { corporati
 
 read_tool({"name": "reporting__get__report_template", "arguments": { corporation_id, template_id }})
   → { id, display_name, report_type, visibility, origin, current_version: { version, schema_version, created, definition } }
+
+call_tool({"name": "reporting__create__report_template_run", "arguments": { corporation_id, template_id, as_of_date }})
+  → { id, template_id, version, as_of_date, status: "queued", ... }
+  # Runs the custom report's current version at as_of_date (YYYY-MM-DD; never after today). Offered by step 2b.
+  # Needs the write permission: scope_required is handled as for reporting__create__report.
+
+read_tool({"name": "reporting__get__report_template_run", "arguments": { corporation_id, template_id, run_id }})
+  → { id, status, outcome, error, as_of_date, download_url, absent_columns, notice }
+  # status: queued | running | succeeded | failed. Poll every 3 s while queued or running; stop after 10 minutes.
+  # outcome: ok | withheld (succeeded) or unknown_column | unmatched_sheet | port_error (failed).
+  # download_url is set only when succeeded: a short-lived signed link; report_files.py downloads it.
+  # notice is present only when outcome is withheld: show it to the user as written.
 ```

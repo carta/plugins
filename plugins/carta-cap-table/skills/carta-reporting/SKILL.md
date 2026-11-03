@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.15</carta-plugin>
 
 # Custom Reports
 
@@ -112,7 +112,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 **Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
 
-**Report tool contract:** `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/mcp-tool-reference.md` lists the only params each `reporting__*` tool accepts (its PARAM CONTRACT) — send nothing else, even an optional param that a `params_schema` lists (e.g. `include_drafts`, `with_formula_enabled`), and no `corporation_id` on `report_status`. `reporting__create__report` always goes through `call_tool`. If `create__report` or `search__report_types` returns `scope_required`, do not call it again yet: ask the user whether to grant Carta the permission the error names, and if they agree call `<_carta_prefix>request_permissions` (a top-level connector tool, not a `call_tool` name; no arguments) once, show them the authorization link it returns verbatim, and retry the call once after they say they have authorized. When the full and preview creates both return it, ask and call `request_permissions` once, then retry both. Only the main thread runs this: a subagent that gets `scope_required` returns it without retrying. If they decline or it is still refused, tell them in plain words that their Carta connection needs that permission, then stop.
+**Report tool contract:** `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/mcp-tool-reference.md` lists the only params each `reporting__*` tool accepts (its PARAM CONTRACT) — send nothing else, even an optional param that a `params_schema` lists (e.g. `include_drafts`, `with_formula_enabled`), and no `corporation_id` on `report_status`. `reporting__create__report` always goes through `call_tool`. If `create__report`, `search__report_types` or `create__report_template_run` returns `scope_required`, do not call it again yet: ask the user whether to grant Carta the permission the error names, and if they agree call `<_carta_prefix>request_permissions` (a top-level connector tool, not a `call_tool` name; no arguments) once, show them the authorization link it returns verbatim, and retry the call once after they say they have authorized. When the full and preview creates both return it, ask and call `request_permissions` once, then retry both. Only the main thread runs this: a subagent that gets `scope_required` returns it without retrying. If they decline or it is still refused, tell them in plain words that their Carta connection needs that permission, then stop.
 
 **Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The only exceptions are the two reconnect retries, each after the user says "ready": the FAIL outcome in step 0b and a failed access check in step 0c. Each re-runs this discovery and replaces `_tool_results`.
 
@@ -214,6 +214,8 @@ Run each script only in the one-line form shown below, as its own command: write
 
    **When `is_limited_admin` is true, drop `intermediate_cap` and `transactions_ledger` from any `reports` value you send** to `cap_table_summary_report` — see the reference file. Sending them yields a workbook with the sheet missing rather than an error.
 
+1c. **Check saved custom reports (silent)** — for a one-company request, run the check in "Save as a custom report" now (it lists the company's custom reports once and keeps them for step 2b). Skip it for several companies. Say nothing about it either way.
+
 2. **Find the right report type** — call `read_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `results` from the response (`{count, results}`), ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
 
    **Supported report types** (support `export_format: "json"`):
@@ -242,7 +244,7 @@ Run each script only in the one-line form shown below, as its own command: write
    **2a. In MARKDOWN mode, still make the `reporting__search__report_types` call — skip only the
    ranking dialogue.** The response is the one place a share-class-scoped admin's narrower
    catalogue appears, so every matched type must be confirmed against `results`. Take the top
-   runnable result without asking, then continue to "Collect report details".
+   runnable result without asking, then continue to step 2b.
 
    **If the report the user needs is not runnable here, never send `reporting__create__report` a
    type outside `results`, and do not fall back to the list above.** Never retry a type search did
@@ -255,6 +257,43 @@ Run each script only in the one-line form shown below, as its own command: write
      `runs_through_api_report: false` — can't be run from here. Say: "The **{Report Type}** report
      can be run from the Reports page in Carta. The closest report I can run here is
      **{closest runnable name from `results`}** — would you like that instead?"
+
+2b. **Offer a saved custom report that fits** — only when `_templates_available_<corporation_id>` is `true` (see "Save as a custom report" for the check) and the request is for one company. Otherwise skip this step and say nothing about custom reports.
+
+   A custom report in `_templates_<corporation_id>` fits when its `report_type` is the one type step 2 chose; when the answer needs several types, none fits. When none fits, continue to step 3 without a word. When some fit, **call the `AskUserQuestion` tool** before collecting details: "You have a saved custom report for this report. Run it, or build a new report?" List up to three fitting custom reports by `display_name`, newest `last_modified` first, plus "Build a new report" as the last option. A custom report runs exactly as saved: say so when the user asked for columns or filters of their own.
+
+   If they pick a custom report:
+   - **As-of date:** the date the user asked for, or today when they named none. Never a date after today.
+   - **Start the run:** `call_tool({"name": "reporting__create__report_template_run", "arguments": { corporation_id, template_id, as_of_date }})` → a run with its `id`. Say "Running **{display_name}** as of {date}…".
+   - **Wait for it in the background** — call the `Agent` tool with `run_in_background: true` and this prompt, substituting real values:
+
+     ```
+     Poll a Carta custom report run and download its workbook. Do not interact with the user. Do not output anything. Do not use isolation — this agent must write into the working directory, and it only writes download files under the git-ignored `carta-reporting/` folder.
+
+     corporation_id: <corp_id>
+     template_id:    <template_id>
+     run_id:         <run_id>
+     carta_prefix:   <_carta_prefix>
+     output_path:    carta-reporting/template-run-<run_id>.xlsx
+     The main thread treats the file's existence as "ready". Only `report_files.py` writes output_path, atomically, and it also creates the git-ignored `carta-reporting/` folder. Never write or move that file any other way.
+
+     Steps:
+     0. Every error below is written with this one-line command, `--message` being the quoted error text: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" error --out <output_path> --message "<error text>"`
+     1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_template_run", "arguments": { corporation_id: <corp_id>, template_id: <template_id>, run_id: <run_id> }})` every 3 s, up to 200 attempts (10 minutes), while `status` is "queued" or "running".
+        - "succeeded" → proceed to step 2.
+        - "failed" → write the error "run failed" and stop.
+        - Any other answer, a tool error, or 200 attempts without a final status → write the error "run unknown" and stop.
+     2. Run, as one command: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" download --url "<download_url from the run>" --out <output_path>`
+        If it exits non-zero it has already written the error "download failed" to output_path; stop.
+     ```
+
+   - **When the background agent finishes**, run `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" wait --path "carta-reporting/template-run-<run_id>.xlsx" --attempts 1` and answer once, as below. Do not start the run again, whatever it prints.
+     - `{"ready": true, "error": null, "path": <absolute path>}`: call `read_tool` on `reporting__get__report_template_run` once more for `notice` and `absent_columns`, then say "**{display_name}** as of {date} is ready: [template-run-<run_id>.xlsx](computer://<the printed path>)." (a clickable link, as the Excel export gives it). When the run has a `notice`, add it as written (Carta sends one when some data is hidden by the user's permissions). If that call fails, add "I couldn't check whether some data is hidden by your permissions." When `absent_columns` is not empty, add "{N} columns had no data at this date." Then offer to build a new report from it here.
+     - `"error": "run failed"`: call `read_tool` on `reporting__get__report_template_run` once more and say "The **{display_name}** run failed: {the run's `error`}." Offer to build the report here instead.
+     - Any other `error`, or `{"ready": false}`: "I couldn't get the result of **{display_name}**. It may still finish in Run Reports in Carta."
+   - Stop here: do not run steps 3–6 for this request.
+
+   If they pick "Build a new report", or the run cannot start (any error from `reporting__create__report_template_run` other than `scope_required`, which the rule under "Report tool contract" handles), continue to step 3 as if no custom report existed; on an error, first say "I couldn't run that custom report, so I'll build the report instead."
 
 3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `Read` path) and look up the matched report type in its **REQUIRED params by report_type** table (or the `required` list of its `params_schema`). **Every param listed for that report type is required.** What you may send is set only by the reference's PARAM CONTRACT. If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
 
@@ -345,7 +384,7 @@ Run each script only in the one-line form shown below, as its own command: write
    1. `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" wait --path "carta-reporting/carta_preview_<pk_preview>.json" --attempts 6`
    2. Only if it printed `{"ready": false}`: emit the mid-wait check-in below, then run `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" wait --path "carta-reporting/carta_preview_<pk_preview>.json" --attempts 6`.
 
-   The result is `{"ready": true, "error": <text or null>}` or `{"ready": false}`:
+   The result is `{"ready": true, "error": <text or null>, "path": <absolute path>}` or `{"ready": false}`:
    - **Preview succeeded** (`ready` with `error` null) → use the preview file as the data source. The preview holds partial data, so add `["Status", "Preview — full report loading"]` to the artifact's `metaRows` and do not present its row count as final. If `build_report_page.py` exits with "No rows matched" on a build that used any preview file, treat it as **Preview failed** and run the full-report wait: the partial data says nothing about the final result.
    - **Preview failed** (`error` set, or `ready: false` after both waits) → switch to the full-report fallback: the **full-report wait**: run `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" wait --path "carta-reporting/carta_report_<pk>.json" --attempts 20`, and while it prints `{"ready": false}` run it again, up to 3 calls in total. Do not raise `--attempts`: one call past about 2 minutes exceeds the Bash tool timeout. One call can give up while the 4b agent is still polling or downloading. `ready` with `error` null means the file is the data source; anything else is a failed full report (see the swap step).
 
@@ -502,11 +541,11 @@ A report built here can be kept in Carta as a custom report: one report's sheets
 
 A custom report holds **one report type**. It cannot keep rows from two report types lined up, formulas, summary or group totals, a date window such as "the last 12 months" (a date filter keeps the exact date it had), or anything that did not come from the report itself. Step 2 tells the user what the saved custom report would and would not keep, and waits for their choice: never save something different from what the user saw without saying so.
 
-**Check once per company, before that company's first customization checkpoint is shown:** whether custom reports are on is decided per company, so a listed tool says nothing. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})`. Set `_templates_available_<corporation_id>` to `true` only when the call succeeds; on any failure (custom reports not enabled for the company, not found, no permission, or anything else), set it to `false` and do not retry. When it is `false`, never offer a custom report and never mention one. If the user asks for one anyway, say "I can't save this report as a custom report for this company right now." and stop.
+**Check once per company, as soon as step 1 has found it (one company only; skip it for a multi-company request):** whether custom reports are on is decided per company, so a listed tool says nothing. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})`. Set `_templates_available_<corporation_id>` to `true` only when the call succeeds, and keep the custom reports it lists as `_templates_<corporation_id>` for step 2b; on any failure (custom reports not enabled for the company, not found, no permission, or anything else), set it to `false` and do not retry. When it is `false`, never offer a custom report and never mention one. If the user asks for one anyway, say "I can't save this report as a custom report for this company right now." and stop.
 
 **Run this when the user says "save this as a custom report" or "save this as a template" (or accepts the offer in the checkpoint), in either output mode:**
 
-0. **Decide availability first.** If `_templates_available_<corporation_id>` is not set for this company (in MARKDOWN mode the check above never ran), run that check now, and stop as it says when it is `false`.
+0. **Decide availability first.** If `_templates_available_<corporation_id>` is not set for this company, run that check now, and stop as it says when it is `false`.
 
 1. **One company, full report only.** If the report covers more than one company, say a custom report is saved for one company's report at a time and stop. If only a preview of the data came in, say the custom report can be saved once the full report has loaded, and stop. The data file for the save is the full report's `carta-reporting/carta_report_<pk>.json`.
 
@@ -548,7 +587,7 @@ A custom report holds **one report type**. It cannot keep rows from two report t
    - **It exits 1 and prints `{"refused": [...]}`:** nothing is saved. Tell the user why in plain words, one line per reason, and offer to change the report so it can be saved (for example, drop the formula, or pick another column for the column or filter a reason names). Do not retry the same input.
    - **`dropped_params` is not empty:** step 2 already told the user; after the save, say again that the custom report does not keep those filters (name each one the report used: people, plans, securities, share classes or issue dates), so every run covers all of them.
 
-6. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the custom report's `id`; say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." When step 2 found differences, add what the saved custom report keeps and what it does not, in one or two sentences (for example "It keeps the {Report Type} sheets with the columns, filters and sort you saw, and none of {what was left out}."). Never show the id.
+6. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the custom report's `id`: put `{ id, display_name, report_type, last_modified: now }` at the front of `_templates_<corporation_id>`, so step 2b offers it on the next request, then say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." When step 2 found differences, add what the saved custom report keeps and what it does not, in one or two sentences (for example "It keeps the {Report Type} sheets with the columns, filters and sort you saw, and none of {what was left out}."). Never show the id.
 
 **When the save does not go through, always tell the user; never drop a save silently. The report on screen is unchanged.**
 
@@ -559,7 +598,7 @@ A custom report holds **one report type**. It cannot keep rows from two report t
 | A list of problems with the definition | Say each problem in plain words (the column or filter and what is wrong) and that nothing was saved. For a report type Carta does not take yet, say which report types it does take, as its reason names them. For an `unknown_sheet` problem on a sheet saved by its own name, say that its name comes from the company's data (a share class, a plan) or its terms, so a custom report cannot find it by name on another date; offer to merge it with the sheets that share the same start or end of name, which a custom report can save. |
 | Custom reports aren't enabled for this company, or Carta did not save it | "I couldn't save this as a custom report in Carta. Your report is still here." Do not retry. |
 | They can't run this report here | "I couldn't save this as a custom report: your access doesn't let you run this report at this company. Your report is still here." Do not retry. |
-| Any other failure, or no answer | Say the save may not have gone through. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})` once to check; report whether a custom report with that name is there. Never save the same custom report twice. |
+| Any other failure, or no answer | Say the save may not have gone through. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})` once to check; replace `_templates_<corporation_id>` with the custom reports it lists, and report whether a custom report with that name is there. Never save the same custom report twice. |
 
 ---
 

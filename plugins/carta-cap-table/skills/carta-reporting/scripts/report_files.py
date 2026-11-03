@@ -13,7 +13,8 @@ Usage (each prints one JSON object):
     report_files.py error --out <path> --message <text>
         Writes {"error": "<text>"} to <path> the same way.
     report_files.py wait --path <file> [--attempts N] [--interval S]
-        Blocks until <file> exists. Prints {"ready": true, "error": <the file's "error" or null>},
+        Blocks until <file> exists. Prints {"ready": true, "error": <the file's "error" or null>,
+        "path": <its absolute path>},
         or {"ready": false} after N checks (default 12) spaced S seconds apart (default 5).
 
 The folder holding --out is created with a `.gitignore` of `*` when missing, so report data is
@@ -97,7 +98,7 @@ def cmd_wait(args):
     path = Path(args.path)
     for attempt in range(args.attempts):
         if path.exists():
-            print(json.dumps({"ready": True, "error": _error_in(path)}))
+            print(json.dumps({"ready": True, "error": _error_in(path), "path": str(path.resolve())}))
             return 0
         if attempt < args.attempts - 1:
             time.sleep(args.interval)
