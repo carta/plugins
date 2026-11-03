@@ -14,18 +14,47 @@ export function deepLinkFirmSlug() {
   return new URL(window.location.href).searchParams.get("firm") || null;
 }
 
+/** The firm uuid named by this page's own ?firmUuid=, or null — set alongside ?firm= when a
+ * same-named-firm pick needs to stay pinned across a reload (see useLoadFirm.js's choose()). */
+export function deepLinkFirmUuid() {
+  if (typeof window === "undefined") return null;
+  return new URL(window.location.href).searchParams.get("firmUuid") || null;
+}
+
 // Writes `slug` as this page's ?firm=, with no history entry — the same page, now naming a
 // firm — so a later retry or a reload resolves to it instead of re-showing the chooser.
-export function setFirmParam(slug) {
+// firmUuid, when given, is written alongside it as ?firmUuid= so a reload of an ambiguous slug
+// (one two Carta firms share) resolves straight back to the firm the user actually picked
+// instead of showing the chooser again.
+export function setFirmParam(slug, firmUuid) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
   url.searchParams.set("firm", slug);
+  if (firmUuid) url.searchParams.set("firmUuid", firmUuid);
+  else url.searchParams.delete("firmUuid");
   window.history.replaceState(window.history.state, "", url);
 }
 
-/** `path`, with this page's ?firm= appended when it names one; `path` unchanged otherwise. */
+/** `path`, with this page's ?firm= (and ?firmUuid=, when this page has one) appended; `path`
+ * unchanged when there is no ?firm= to carry. Every firm-scoped request needs both: a route
+ * with no chooser UI (resolveRouteFirm, server/worker.js) must see the same pin the page
+ * itself resolved to, or an ambiguous slug it can't ask the user about reads as not yet ready
+ * instead of denied. */
 export function withFirmParam(path) {
   const slug = deepLinkFirmSlug();
   if (!slug) return path;
-  return `${path}${path.includes("?") ? "&" : "?"}firm=${encodeURIComponent(slug)}`;
+  const firmUuid = deepLinkFirmUuid();
+  let out = `${path}${path.includes("?") ? "&" : "?"}firm=${encodeURIComponent(slug)}`;
+  if (firmUuid) out += `&firmUuid=${encodeURIComponent(firmUuid)}`;
+  return out;
+}
+
+/** The href for this page naming `slug` (and `firmUuid`, when given) — same param names
+ * setFirmParam writes, for a caller that navigates with a full page load instead of patching
+ * history in place (App.jsx's "Switch firm" from an already-loaded dashboard). */
+export function firmHref(slug, firmUuid) {
+  const url = new URL("/", typeof window === "undefined" ? "https://example.com" : window.location.origin);
+  url.searchParams.set("firm", slug);
+  if (firmUuid) url.searchParams.set("firmUuid", firmUuid);
+  return `${url.pathname}${url.search}`;
 }

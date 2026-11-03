@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deepLinkFirmSlug, setFirmParam } from "./firmParam.js";
+import { deepLinkFirmSlug, deepLinkFirmUuid, setFirmParam } from "./firmParam.js";
 import { fetchFirmAccess, pinnedFirm } from "./firmAccess.js";
 
 // Status shown while waiting for the first real step; App.jsx uses it as the fallback
@@ -37,6 +37,13 @@ export default function useLoadFirm(trigger, onDone) {
   // `chooser` (which firm to load), this is a mid-load fork of the one load already running,
   // so it carries the slug the pick needs to resume — see chooseMancoEntity below.
   const [mancoChoice, setMancoChoice] = useState(null);
+  // handleLoadFirm's "ambiguous_firm" response: { slug, firms }, read by App.jsx to show
+  // FirmDisambiguator when a name match (search pick or a deep-linked/shared ?firm=) resolves
+  // to more than one Carta firm. Unlike `mancoChoice` this isn't a mid-stream pause — the
+  // server answers it before the SSE stream even opens, since nothing about a firm can start
+  // until the client says which one it means — but it resumes the same way, carrying the slug
+  // the pick needs to retry with a firmUuid.
+  const [firmChoice, setFirmChoice] = useState(null);
   // onDone is re-created every render in App.jsx (it closes over fetchData/reportsApi);
   // a ref lets the effect read the latest one without re-running on every render.
   const onDoneRef = useRef(onDone);
@@ -53,17 +60,30 @@ export default function useLoadFirm(trigger, onDone) {
   const controllerRef = useRef(null);
   const liveRef = useRef(false);
 
-  const runLoad = useCallback(async (slug, controller, entityId) => {
+  const runLoad = useCallback(async (slug, controller, entityId, firmUuid) => {
     setLoadStatus(LOAD_FIRM_LABEL);
     setErrorCode(null);
     setMancoChoice(null);
+    setFirmChoice(null);
     try {
       const resp = await fetch("/api/load-firm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entityId ? { slug, entityId } : { slug }),
+        body: JSON.stringify({ slug, ...(entityId ? { entityId } : {}), ...(firmUuid ? { firmUuid } : {}) }),
         signal: controller.signal,
       });
+      if (resp.status === 300) {
+        // handleLoadFirm's "ambiguous_firm" answer: not a refusal, a pause the same shape as
+        // multiple_manco_entities below but sent before the stream opens — see firmChoice's
+        // own comment.
+        let body = null;
+        try { body = await resp.json(); } catch { /* no JSON body */ }
+        if (body?.error === "ambiguous_firm") {
+          setLoadStatus(null);
+          setFirmChoice({ slug, firms: body.firms || [] });
+          return;
+        }
+      }
       if (!resp.ok) {
         // handleLoadFirm answers a refusal (403 forbiddenFirm, 400, 401) with a JSON body
         // naming why, same as every other route — show that, not a bare status code, when
@@ -141,6 +161,7 @@ export default function useLoadFirm(trigger, onDone) {
     setErrorCode(null);
     setChooser(null);
     setMancoChoice(null);
+    setFirmChoice(null);
 
     (async () => {
       try {
@@ -155,7 +176,7 @@ export default function useLoadFirm(trigger, onDone) {
           }
         }
         if (!slug || !liveRef.current || controller.signal.aborted) return;
-        await runLoad(slug, controller);
+        await runLoad(slug, controller, null, deepLinkFirmUuid());
       } catch (e) {
         if (liveRef.current && !controller.signal.aborted) setLoadError(e?.message || String(e));
       }
@@ -164,24 +185,32 @@ export default function useLoadFirm(trigger, onDone) {
     return () => { liveRef.current = false; controller.abort(); };
   }, [trigger, runLoad]);
 
-  // The chooser's onPick (from the auto-select path's own chooser, or from the one
-  // reopenChooser shows after an error): writes the pick into ?firm= first, so a page
-  // reload resolves straight back to it instead of showing the chooser again. Runs the load
-  // on controllerRef's controller, replacing it first if it is missing or already aborted:
-  // the resolution effect's own cleanup aborts that controller the moment an error (e.g. no
-  // ManCo entity) drops `notReady`, which tears down the effect well before the user has
-  // had a chance to pick from the chooser this very error put on screen — reusing that
-  // aborted controller would fail every such pick with an AbortError. If a resurface
-  // refetch does restart the effect before this load finishes, that run's own
-  // `controllerRef.current?.abort()` supersedes it, so only one load is ever allowed to
-  // report anything.
-  const choose = useCallback((slug) => {
-    setFirmParam(slug);
-    setChooser(null);
+  // Every chooser's onPick resumes a load on controllerRef's controller, replacing it first if
+  // it is missing or already aborted: the resolution effect's own cleanup aborts that
+  // controller the moment an error (e.g. no ManCo entity) drops `notReady`, which tears down
+  // the effect well before the user has had a chance to pick from the chooser this very error
+  // put on screen — reusing that aborted controller would fail every such pick with an
+  // AbortError. If a resurface refetch does restart the effect before this load finishes, that
+  // run's own `controllerRef.current?.abort()` supersedes it, so only one load is ever allowed
+  // to report anything.
+  const resumeLoad = useCallback((slug, entityId, firmUuid) => {
     liveRef.current = true;
     if (!controllerRef.current || controllerRef.current.signal.aborted) controllerRef.current = new AbortController();
-    runLoad(slug, controllerRef.current);
+    runLoad(slug, controllerRef.current, entityId, firmUuid);
   }, [runLoad]);
+
+  // The chooser's onPick (from the auto-select path's own chooser, or from the one
+  // reopenChooser shows after an error): writes the pick into ?firm= first, so a page
+  // reload resolves straight back to it instead of showing the chooser again. firmUuid pins a
+  // specific pick when the firm-chooser's own search result already names one of several
+  // Carta firms sharing a slug (FirmChooser.jsx shows each candidate's Carta ID for exactly
+  // this reason) — passing it here means the load resolves straight to that firm instead of
+  // bouncing back through FirmDisambiguator.
+  const choose = useCallback((slug, firmUuid) => {
+    setFirmParam(slug, firmUuid);
+    setChooser(null);
+    resumeLoad(slug, null, firmUuid);
+  }, [resumeLoad]);
 
   // The way back from an error (e.g. the loaded firm has no ManCo entity): drops the error
   // and fetches a fresh chooser, the same data the resolution effect would have fetched had
@@ -213,18 +242,30 @@ export default function useLoadFirm(trigger, onDone) {
   const closeChooser = useCallback(() => setChooser(null), []);
 
   // MancoEntityChooser's onPick: resumes the load mancoChoice paused, on the same slug, now
-  // naming which ManCo entity to use. Same controller-replacement rule as choose() — the
-  // resolution effect's cleanup may already have aborted controllerRef by the time the user
-  // clicks, since the paused load itself already finished the stream (see the `msg.entities`
-  // branch in runLoad) well before this pick happens.
+  // naming which ManCo entity to use. The paused load itself already finished the stream (see
+  // the `msg.entities` branch in runLoad) well before this pick happens, which is why
+  // resumeLoad's controller-replacement matters here too.
   const chooseMancoEntity = useCallback((entityId) => {
     if (!mancoChoice) return;
     const { slug } = mancoChoice;
     setMancoChoice(null);
-    liveRef.current = true;
-    if (!controllerRef.current || controllerRef.current.signal.aborted) controllerRef.current = new AbortController();
-    runLoad(slug, controllerRef.current, entityId);
-  }, [runLoad, mancoChoice]);
+    resumeLoad(slug, entityId);
+  }, [resumeLoad, mancoChoice]);
 
-  return { loadStatus, loadError, errorCode, chooser, choose, closeChooser, reopenChooser, mancoChoice, chooseMancoEntity };
+  // FirmDisambiguator's onPick: resumes the load firmChoice paused, on the same slug, now
+  // naming which of the same-named firms to use — and, like choose() above, writes the pin
+  // into ?firmUuid= so a reload resolves straight back to it instead of showing the chooser
+  // again.
+  const chooseFirm = useCallback((firmUuid) => {
+    if (!firmChoice) return;
+    const { slug } = firmChoice;
+    setFirmChoice(null);
+    setFirmParam(slug, firmUuid);
+    resumeLoad(slug, null, firmUuid);
+  }, [resumeLoad, firmChoice]);
+
+  return {
+    loadStatus, loadError, errorCode, chooser, choose, closeChooser, reopenChooser,
+    mancoChoice, chooseMancoEntity, firmChoice, chooseFirm,
+  };
 }

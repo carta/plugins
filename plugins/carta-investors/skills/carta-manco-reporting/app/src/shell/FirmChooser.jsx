@@ -4,6 +4,7 @@
 // FundChooser — the two apps' "pick a firm" screens should read as the same page.
 import { useEffect, useState } from "react";
 import { ChooserPage } from "./ChooserPage.jsx";
+import { cartaIdLabel } from "./cartaIdLabel.js";
 import { FirmMark } from "../ui/components.jsx";
 import { FS, INK, FAINT, LINE, PAPER, BLUE, inkNum } from "../ui/theme.js";
 
@@ -69,16 +70,18 @@ export default function FirmChooser({ isStaff, firms, onPick, onCancel }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
         {list.map((f) => (
-          <button key={f.slug} data-testid={`firm-${f.slug}`} onClick={() => onPick(f.slug)}
+          <button key={f.firmUuid || f.slug} data-testid={`firm-${f.slug}`} onClick={() => onPick(f.slug, f.firmUuid)}
             className="firm-card"
             style={{ textAlign: "left", cursor: "pointer", padding: "20px 20px 18px",
               display: "flex", flexDirection: "column", gap: 14, fontFamily: "inherit" }}>
             <FirmMark name={f.name} />
             <div>
               <div style={{ fontSize: FS.h3, fontWeight: 500, color: INK, lineHeight: 1.2 }}>{f.name}</div>
-              {f.firmId && (
+              {cartaIdLabel(f) && (
+                // No eligibility pre-filter narrows this list (see handleFirms' own comment), so
+                // two results can share a name — the Carta ID is what tells them apart.
                 <div data-testid={`firm-facts-${f.slug}`} style={{ ...inkNum, fontSize: FS.small, color: FAINT, marginTop: 6 }}>
-                  Carta ID {f.firmId}
+                  {cartaIdLabel(f)}
                 </div>
               )}
             </div>

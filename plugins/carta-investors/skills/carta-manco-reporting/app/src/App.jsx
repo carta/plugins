@@ -21,10 +21,11 @@ import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
 import useAutoPull from "./state/useAutoPull.js";
 import { resurfaceDue } from "./state/resurface.js";
 import useLoadFirm, { LOAD_FIRM_LABEL, NO_MANCO_ENTITY } from "./state/useLoadFirm.js";
-import { withFirmParam } from "./state/firmParam.js";
+import { firmHref, withFirmParam } from "./state/firmParam.js";
 import { loadFirmStepProgress } from "./state/loadFirmSteps.js";
 import LoadingScreen from "./ui/LoadingScreen.jsx";
 import FirmChooser from "./shell/FirmChooser.jsx";
+import FirmDisambiguator from "./shell/FirmDisambiguator.jsx";
 import MancoEntityChooser from "./shell/MancoEntityChooser.jsx";
 import NoMancoEntity from "./shell/NoMancoEntity.jsx";
 import { useHostedApp } from "./shell/hostedApp.js";
@@ -352,7 +353,10 @@ export default function App() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const loadRetriedRef = useRef(false);
   const loadTrigger = notReady ? loadAttempt + 1 : 0;
-  const { loadStatus, loadError, errorCode, chooser, choose, closeChooser, reopenChooser, mancoChoice, chooseMancoEntity } = useLoadFirm(loadTrigger, async () => {
+  const {
+    loadStatus, loadError, errorCode, chooser, choose, closeChooser, reopenChooser,
+    mancoChoice, chooseMancoEntity, firmChoice, chooseFirm,
+  } = useLoadFirm(loadTrigger, async () => {
     const stillNotReady = await fetchData();
     reportsApi.reload();
     if (!stillNotReady) {
@@ -413,7 +417,7 @@ export default function App() {
   // loads instantly from it. `choose` stays the right call for the two chooser paths that
   // run before any snapshot exists — the first-load chooser and the no-ManCo-entity screen.
   const pickFirm = snapshot
-    ? (slug) => window.location.assign(`/?firm=${encodeURIComponent(slug)}`)
+    ? (slug, firmUuid) => window.location.assign(firmHref(slug, firmUuid))
     : choose;
 
   // Tab title names the firm, mirroring carta-fund-modeling. No iframe here,
@@ -575,9 +579,9 @@ export default function App() {
   // `chooser` also covers the sidebar's own "Switch firm" link, opened over an
   // already-loaded dashboard (`snapshot` non-null): that's why `chooser` has to be in
   // this condition on its own, not covered already by `notReady || !snapshot`.
-  // `loadStatus`/`mancoChoice` stay out of it: `pickFirm` (above) never starts an in-page
-  // load once a snapshot exists, so neither can be set while this guard would otherwise
-  // read "already loaded" and show the old firm's dashboard underneath.
+  // `loadStatus`/`mancoChoice`/`firmChoice` stay out of it: `pickFirm` (above) never starts an
+  // in-page load once a snapshot exists, so none of them can be set while this guard would
+  // otherwise read "already loaded" and show the old firm's dashboard underneath.
   if (hostedApp && !error && (notReady || !snapshot || chooser)) {
     if (chooser) {
       return (
@@ -593,6 +597,14 @@ export default function App() {
         <>
           <style>{GLOBAL_CSS}</style>
           <MancoEntityChooser entities={mancoChoice.entities} onPick={chooseMancoEntity} />
+        </>
+      );
+    }
+    if (firmChoice) {
+      return (
+        <>
+          <style>{GLOBAL_CSS}</style>
+          <FirmDisambiguator firms={firmChoice.firms} onPick={chooseFirm} />
         </>
       );
     }
