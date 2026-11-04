@@ -233,6 +233,8 @@ call_tool({"name": "<breakpoint_allocations_command with all ':' replaced by '__
 
 - `<active grouping>` — whichever grouping is currently active (`BY_HOLDER`, or `BY_TYPE` after
   `"Group results by security type"`).
+- `execution_id` — in a batch (`SKILL.md` §Running several scenarios at once), drill each run's
+  breakpoints with that run's own `execution_id`.
 - Page `1 … total_pages` and accumulate `allocations` per breakpoint.
 - Return to the menu after.
 
