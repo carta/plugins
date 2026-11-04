@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.2</carta-plugin>
+<carta-plugin>carta-crm:1.20.3</carta-plugin>
 
 ## Overview
 
@@ -155,6 +155,11 @@ One confident match proceeds. **Several plausible matches go to `AskUserQuestion
 silently take the first result, which is how a `.co.uk` company or a similarly-named portfolio
 company becomes the wrong target.
 
+**The route graph covers only companies saved in this organization's CRM.** Each match carries
+a `source`. Prefer a match with `source: "crm"`. A match with `source: "external"` is a real
+company that nobody has saved yet, and `get_company_angles` returns no routes for it. Do not run
+the fetch plan on an external match: go to "When the company is not in the CRM" below.
+
 **At most 2 resolution attempts.** After the second, stop and ask the user for the domain.
 Do **not**:
 
@@ -230,8 +235,50 @@ connects to three targets, they are one ask, so say that once instead of offerin
 options that are all the same conversation. Show at most **4 routes total** — one recommended
 plus 3 alternates.
 
-**If every route is Tier C, or `paths` is empty:** say so in two lines and stop. Do not pad
+**If every route is Tier C:** say so in two lines and stop. If `paths` is empty, see "Why the
+graph came back empty" below. Do not pad
 the map with strangers who happen to share an employer.
+
+### Why the graph came back empty
+
+An empty `paths` carries `emptyReason`. Tell the user the reason in one plain sentence. Never
+call it a network, graph, domain or server problem: each reason below is a normal answer.
+
+| `emptyReason` | Say | Then |
+|---|---|---|
+| `domain_not_found` | "<domain> is not linked to a company in your CRM." | Only when Step 1 confirmed a `source: "external"` match, go to "When the company is not in the CRM" instead of saying this. Otherwise stop. |
+| `company_not_found` | "The CRM could not load the record for <Company>." | Stop. Ask the user to check the company in the CRM. |
+| `contact_pool_above_threshold` | "Your contact network is too large for this search to run in full." | Stop. Do not retry: the same call stops at the same point. |
+| `no_shared_employers` | "Nobody in your CRM has worked at the same company as anyone at <Company>." | Stop. |
+| `only_unreachable_paths` | "There are shared employers, but each route goes through someone not saved in your CRM." | Stop. |
+
+**Call `get_company_angles` at most twice per company:** once, and once more only after you
+add the company below. Do not retry with `www.`, a different suffix or a guessed domain.
+
+### When the company is not in the CRM
+
+This section runs only for a `source: "external"` match the user confirmed in Step 1. A domain
+the user typed, or a `source: "crm"` match, never leads here: there is no name to take, or the
+record already exists.
+
+Show what's about to happen and ask once:
+> **Add <Company> to your CRM?** <company name> (<domain>), from the company search.
+> The whole team will see this record. Then I'll search for routes.
+
+Use `AskUserQuestion` with options `"Add company"` / `"Cancel"`. Continue only on
+`"Add company"`. Anything else: stop and tell the user nothing was changed.
+
+```
+crm_call_tool({
+  "name": "crm:create_company",
+  "arguments": { "name": "<company name>", "fields": { "website": "https://<domain>" } }
+})
+```
+
+Take the name and the domain from the `find_company` match the user confirmed. Then run the
+fetch plan once. If this second call returns `domain_not_found`, say "<Company> is saved, but
+its routes are not ready yet. Try again later." and stop: never add it again. Any other empty
+result: report its `emptyReason` from the table above and stop.
 
 ## Step 4 — Draft the ask
 
