@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.17</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.18</carta-plugin>
 
 # Manage securities
 
@@ -53,9 +53,14 @@ hold), send the user to the termination flow in the Carta app.
 | Undo a termination | `cap_table__compute__undo_termination_preview` |
 
 `security_type` is one of `certificate`, `option_grant`, `convertible_note`, `rsu`, `rsa`, `sar`,
-`cbu`, `piu` or `warrant`. A `CN-` or `SAFE-` label is a `convertible_note` and an `ES-` label is
-an `option_grant`. For any other label, take the type from the user's words ("RSU", "warrant",
-"units", "shares"); when they do not say, ask once with `AskUserQuestion`. Never guess.
+`cbu`, `piu` or `warrant`. Take it from the user's words first: "RSU" or "restricted stock unit" is
+`rsu`, "RSA" or "restricted stock award" is `rsa`, and "warrant", "SAR", "CBU" or "PIU" is that
+type. With no type word, a `CN-` or `SAFE-` label is a `convertible_note`, an `RSU-` label is an
+`rsu` and an `ES-` label is an `option_grant`. RSUs, SARs and CBUs also use `ES-` labels. When the
+type came only from an `ES-` label and the bootstrap answers `not_found`, ask once whether it is an
+RSU, SAR or CBU, then call the bootstrap again with that type. When the user named the type, quote
+the `not_found` and stop. For any other label, when the words do not say, ask once with
+`AskUserQuestion`. Never guess.
 
 ## Hard rules
 
@@ -94,8 +99,9 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 
 ## Flow
 
-1. **Bootstrap.** Call it once per change, after any earlier apply, with `company`,
-   `security_type` and `label` (a list), `security` (ids) or `holder`. To reverse a
+1. **Bootstrap.** Call it once per change (twice only for the `ES-` retry in [§ Actions](#actions)),
+   after any earlier apply, with `company`, `security_type` and `label` (a list), `security`
+   (ids) or `holder`. To reverse a
    cancellation or undo a termination, send `label` or `security`: `holder` finds only
    securities held now. For an
    edit, always send `look_first: true`, so the Change page opens before the first preview
