@@ -63,7 +63,6 @@
       "body": "Reads every SAFE and note on your Carta cap table and works out each one's conversion shares at your round price, caps and discounts included."
     }
   },
-  "carta-discover-commands": null,
   "carta-grant-vesting": {
     "category": "equity",
     "name": "Vesting progress",
@@ -79,8 +78,6 @@
     }
   },
   "carta-hmrc-limits": null,
-  "carta-interaction-reference": null,
-  "carta-interaction-reference-core": null,
   "carta-issuance": {
     "category": "issuance",
     "name": "Issue equity",
