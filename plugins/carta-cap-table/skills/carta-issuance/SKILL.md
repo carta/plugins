@@ -6,13 +6,13 @@ description: >-
   Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest units
   (PIUs), to draft shares, grants or units, or to resume issuing from a draft set. USE
   WHEN the user says "issue", "grant", "draft", "award", "give equity", "give shares",
-  "give stock", "create a certificate", "create a grant", "issue a profits interest",
-  "issue PIUs", "grant profits interest units", "set up an option grant", "issue equity
-  to a named person", or names any specific security type above. Also USE WHEN the user
-  points at a spreadsheet, CSV, Carta import template, or a grant/award document as the
-  source of the issuance ("issue the grants in this file", "here's our import
+  "give stock", "create a certificate", "create a grant", "issue PIUs", "set up an option
+  grant", "issue equity to a named person", or names any specific security type above.
+  Also USE WHEN the user points at a spreadsheet, CSV, Carta import template, or a
+  grant/award document as the source of the issuance ("issue the grants in this file", "here's our import
   template"). Also USE WHEN asked for help issuing with nothing attached ("help me issue
-  options in Carta", "can I issue grant awards?").
+  options in Carta", "can I issue grant awards?"). To edit or cancel an issued security,
+  use carta-manage-securities.
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -61,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # Issue Securities
 
@@ -389,7 +389,7 @@ closing line. `documents` gives each attached file's `status`: name any that isn
 |---|---|---|
 | *not found* | not finished. The normal state | Answer whatever they asked. Not an error, never reported as one |
 | `issued` | **the page is done**. `pending_board` counts option grants held for a board consent: drafts, not issued | Close per [issue-and-close.md § On success](references/issue-and-close.md#on-success): signatories were notified to sign; once they sign, securities go to stakeholders. With `pending_board`, add that those grants await board approval and the page links to the consent in Carta. **Never call `issue_securities` or send a consent** — that issues twice |
-| `draft` | saved, not validated, not issued | Say the draft is saved and they can return to it, and **stop**. A saved draft isn't an approval to issue |
+| `draft` | saved, not validated, not issued | Report it per [issue-and-close.md § Say what is live](references/issue-and-close.md#say-what-is-live-after-every-write), then **stop**. A saved draft isn't an approval to issue |
 | `needs_claude` | the page tried and couldn't finish | Read `reason`: `duplicates` → [mutate-recovery.md § Duplicate resolution](references/mutate-recovery.md#duplicate-resolution); `unknown_outcome` → **read the set's state before any write**, rows may already be issued; `partly_issued` → some rows are issued: read the set's state, never issue it again; `rows_removed` → the named `rows` were deleted from their document set and not saved back: have the user retry or re-save them; `nothing_issued` → [mutate-recovery.md](references/mutate-recovery.md) |
 
 ### When something is wrong
@@ -441,6 +441,16 @@ mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments
 Then read [references/issue-and-close.md](references/issue-and-close.md) for the response
 branches, what to say per holder, and the closing lines. On a rejection a re-call can't
 clear, read [references/mutate-recovery.md](references/mutate-recovery.md).
+
+## Say what is live after every write
+
+On every surface, follow
+[issue-and-close.md § Say what is live](references/issue-and-close.md#say-what-is-live-after-every-write).
+
+## Error Handling
+
+On any error, read
+[mutate-recovery.md § Errors on any call](references/mutate-recovery.md#errors-on-any-call).
 
 ## Hard rules
 

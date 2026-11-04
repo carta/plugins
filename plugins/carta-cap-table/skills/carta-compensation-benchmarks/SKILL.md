@@ -1,6 +1,6 @@
 ---
 name: carta-compensation-benchmarks
-description: >
+description: >-
   See market pay for a role: salary, equity and total cash. Retrieves Carta Total
   Compensation (CTC) market benchmarks for the role. Output to chat or CSV. Market
   benchmarks are triggered by queries like: "sales benchmarks", "comp benchmarks",
@@ -9,7 +9,7 @@ description: >
   for [role]", "p25/p50/p75 for [role]". Do NOT use for job classification or role
   mapping — use carta-compensation-rolematcher for that. Do NOT use for "how is OUR
   company positioned vs market", "who at our company is below market", or "our internal
-  pay bands vs benchmarks" — those are roster-level positioning, use
+  pay bands or employees' salaries vs benchmarks" — those are roster-level positioning, use
   carta-compensation-scorecard. Do NOT use for fund performance benchmarks (use
   carta-fund-performance) or portfolio structural metrics like SAFE terms and option
   pool sizes (use carta-market-benchmarks).
@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # Benchmark Query
 

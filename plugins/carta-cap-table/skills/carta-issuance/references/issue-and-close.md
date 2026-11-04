@@ -202,7 +202,7 @@ issue, the issue date in long form (`Month D, YYYY`).
 | Issued, grant (uniform) | *"N \<so_type\> option grants issued on \<company\> — \<issue date\>. Open \<company\>'s securities ledger in Carta — link text *\<company\>'s securities ledger*, href `\<BASE_URL\>/\<VIEW_URL_PATH\>` — to see the new grants, or find them under the \<plan name\> plan."* |
 | Issued, grant (mixed) | as above, but *"N option grants (X ISOs, Y NSOs) issued on …"* |
 | Issued, PIU | *"N \<unit class\> profits interest units issued on \<company\> — \<issue date\>. Open \<company\>'s profits interest ledger in Carta — link text *\<company\>'s profits interest ledger*, href `\<BASE_URL\>/\<VIEW_URL_PATH\>` — to see the new units."* |
-| Saved as draft | *"N \<security type\> drafts saved on \<company\> — finish in the Drafts UI — link text *Drafts UI*, href `\<BASE_URL\>/drafts/\<security_type\>/\<CORP_ID\>/draft/?draftSetPk=\<draft_set_id\>`."* |
+| Saved as draft | *"N \<security type\> drafts saved on \<company\>. Nothing is issued yet. Finish in the Drafts UI — link text *Drafts UI*, href `\<BASE_URL\>/drafts/\<security_type\>/\<CORP_ID\>/draft/?draftSetPk=\<draft_set_id\>`."* |
 | Canceled, **a real draft set exists** | *"Issuance canceled on \<company\> — the draft set is still there if you want to come back to it: [Drafts UI](…same URL…)."* |
 | Canceled, **no real draft set** | *"Issuance canceled on \<company\> — nothing was saved to Carta."* (no link — there is nothing to open) |
 
@@ -218,3 +218,19 @@ path is the literal mutate value (`certificate`, `option_grant` or `piu`).
 
 To **correct** or cancel an issued security afterward, that's
 `carta-manage-securities`.
+
+## Say what is live after every write
+
+After each save or issue, on every surface, tell the user in plain words:
+
+- **What changed in Carta.** For example: "Saved 3 option grant drafts" or "Issued 3 option grants".
+- **What is still a draft.** A draft is not on the cap table. After a save only, say "Nothing is
+  issued yet."
+- **Who Carta notified, after an issue only.** Name only the people in the issue result
+  ([§ On success](#on-success)) or in `issue_summary.sentence` once `issue_state` is `done`.
+  After a save, Carta has notified nobody: say nothing about notifications.
+- **The next step, after a save only.** On the chat surface, say one line: "When you are ready,
+  say 'issue them'." The [confirmation gate](../SKILL.md#hard-rules) still applies. On the
+  artifact surface, or the companion surface on a pane host where the page opened, tell the
+  user to issue with the page's Issue button. Elsewhere on the companion surface, say 'When you
+  are ready, say "issue them"', as on chat.

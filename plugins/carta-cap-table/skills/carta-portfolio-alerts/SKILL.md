@@ -6,18 +6,18 @@ description: >-
   otherwise at risk. Surfaces what needs attention now, not what the data looks like in
   general.
 when_to_use: >-
-  Use when asked which companies have an expiring item (409As, agreements,
-  exercise windows), what is maturing in the next N months across the
-  portfolio (convertible notes, debt instruments), which companies are
-  running low on something (option pool below a threshold, runway), which
-  SAFEs are approaching their valuation-cap trigger or expiring before
-  conversion across the portfolio, which 83(b) elections are not filed or
-  have a filing deadline coming up, how much Rule 701 room a company has
-  left, or to run a portfolio health audit or
-  red-flag scan. For raw multi-company data without a risk or
-  time or threshold lens, prefer a portfolio data-query skill. For
-  statistical norms across the portfolio, prefer a portfolio-benchmarks
-  skill.
+  Use when asked what needs attention today across the portfolio or the cap tables,
+  for portfolio alerts, risks or a red-flag scan, to run a portfolio health check or
+  audit, which companies have an expiring item (409As, agreements, exercise windows),
+  what is maturing in the next N months across the portfolio (convertible notes, debt
+  instruments), which companies are running low on something (option pool below a
+  threshold, runway), which SAFEs are approaching their valuation-cap trigger or
+  expiring before conversion, which 83(b) elections are not filed or have a deadline
+  coming up (an 83(b) watch for one company too), or how much Rule 701 room a company
+  has left. Not for fund items such as capital calls, pending terminations, or warrant
+  expirations. For raw multi-company data without a risk or time or threshold lens,
+  prefer a portfolio data-query skill. For statistical norms across the portfolio,
+  prefer a portfolio-benchmarks skill.
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -48,13 +48,13 @@ Scan multiple companies for red flags and compute severity classifications (crit
 
 ## Prerequisites
 
-No inputs required — this skill loops the full portfolio. Call `list_accounts` to get all `corporation_pk` accounts automatically.
+No inputs required — this skill loops the full portfolio. For a full-portfolio scan, call `list_accounts` to get all `corporation_pk` accounts automatically. If the user names one company, skip `list_accounts` and scan only that company: send its name in each read's company parameter (`corporation_id`, or `company` for the 83(b) and Rule 701 reads). On a company error, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`; read it by that path, do not search for it).
 
 ## Data Retrieval
 
 ### Portfolio Enumeration
 
-Call `list_accounts` to get all portfolio companies. Filter to accounts where `id` starts with `corporation_pk:`. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, ask the user to narrow scope.
+For a full-portfolio scan, call `list_accounts` to get all portfolio companies. Filter to accounts where `id` starts with `corporation_pk:`. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, ask the user to narrow scope.
 
 ### Per-Company Commands
 
@@ -85,7 +85,7 @@ From Rule 701: `within_limit`, `from_date`, `to_date`; each test's `type`, `resu
 
 ### Step 1 — Get Portfolio
 
-Call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 numeric corporation IDs.
+For a full-portfolio scan, call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 numeric corporation IDs.
 
 ### Step 2 — Fetch Data for All Companies (parallel)
 
@@ -206,10 +206,17 @@ Healthy (7): Alpha, Zeta, Eta, Theta, Iota, Kappa, Lambda
 | Beta Inc | 409A Expired | Critical | Expired Jan 14, 2025 | Order new 409A |
 | Acme Corp | 409A Expiring | Warning | Expires Apr 24, 2025 (37 days) | Schedule valuation |
 
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| A call fails for one company (403, `role_required` or any other error) | List that company as "not scanned" with the reason. Do not retry it, and carry on with the rest. |
+| 403, `role_required` or access denied on every company | Say the user's role can't see cap table data for these companies. Stop. |
+| Response too large | Do not send `detail: "full"` or `raw`. The default summary has every field this skill uses. |
+| Asked about a check this scan does not run (warrant expiry, terminations, capital calls) | Say which checks the scan runs. Do not show other data as an alert. |
+
 ## Caveats
 
 - Portfolio data reflects point-in-time API calls, not a single atomic snapshot
-- Companies with restricted permissions may have incomplete data
 - Rate limit: maximum 20 companies per invocation — ask the user to narrow scope if more than 20
-- Some companies may error (permissions, incomplete setup) — skip gracefully and note which failed
 - Always show the scan date and count: "Scanned 12 companies on Mar 18, 2025"

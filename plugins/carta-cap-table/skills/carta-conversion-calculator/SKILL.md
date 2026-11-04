@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -175,6 +175,15 @@ Post-conversion fully diluted: 11,986,747
 ```
 
 > ⚠️ **Claude's analysis** — computed from cap table data, not from a saved Carta model. Verify with counsel before relying on these numbers.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| No SAFE or note matches a label (`not_found`) | Match the label in the Step 1 rows. If no row matches, ask the user with `AskUserQuestion` which instrument they mean. |
+| Response too large on another read (for example pro forma models) | Use only the three reads in Step 1. Page the convertible notes with `next`. |
+| 403, `role_required` or access denied | Say the user's role can't see this company's SAFEs and notes. Do not retry. |
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Caveats
 

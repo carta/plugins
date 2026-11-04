@@ -23,7 +23,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # Excel Export
 
@@ -126,6 +126,23 @@ UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-e
 - **Run another report** — for a different company or report type
 - **Customize this export** — adjust filters, columns, or formulas
 - **Change the date range or filters** — re-run with different parameters
+
+## Gates
+
+**Required inputs**: `user_report_pk`, `corporation_id` and the column list, from the calling skill or the `Generate Carta Excel —` payload. Without a payload or a report in this session, ask for the payload as "Column source" says.
+
+**AI computation**: No — the scripts format Carta report data. Totals are Excel formulas from `aggregations`.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| `report_status` or `download_url` returns `not_found` | The report expired or belongs to another session. Follow the retry rule in "Running the export", then say the report is not available and offer to build it again with carta-reporting. |
+| A script does not run (for example `uv` not found, or the Bash call is blocked) | Do not write the file with another library. Say the Excel file cannot be built here. Show the data as a table, or give the presigned `download_url` and say it expires. |
+| `excel_exporter.py` stops with `as_of_date must be in YYYY-MM-DD format` | Run it once more with `--as-of-date` as `YYYY-MM-DD`. |
+| `unknown_param` or `invalid_argument` on a `cap_table__*` command | This skill reads only the report file. Do not pull rows with other commands: build the report with carta-reporting. |
+| 403, `role_required` or access denied | Say the user's role cannot run Carta reports for this company. Do not retry and do not look for the data elsewhere. |
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Carta Excel Formatting Conventions
 

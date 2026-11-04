@@ -5,8 +5,11 @@ description: >-
   Carta's rules for every cap table answer, and the commands for a single fact or a
   short answer: one stakeholder, the largest grants or holders, totals of grants,
   certificates, RSUs, SARs, CBUs, SAFEs, convertible notes or option plans, and rights
-  and preferences. Load for such a read, or when no other carta-cap-table skill matches.
-  For every row of a list, a table, a report or a file, use carta-reporting.
+  and preferences. Use when asked "who owns the most", "what percentage of the company
+  do I own", "how many shares does [name] hold", "how many options are outstanding",
+  "how many options are left in the pool", "what is the fully diluted share count", or
+  when no other carta-cap-table skill matches. For every row of a list, a table, a
+  report or a file, use carta-reporting.
 user-invocable: false
 model: inherit
 allowed-tools:
@@ -27,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -78,8 +81,9 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
 - To compare the user's spreadsheet, HR export or register with Carta, call `read_tool`
   with `cap_table__compute__reconciliation` once per security type with the rows. Do not
   page through holders to compare them yourself.
-- Vesting of one grant, valuations (409A, FMV), round history, issuance and changes to
-  securities have their own skills. Load the matching skill.
+- Vesting of one grant, valuations (409A, FMV), round history and issuance have their own
+  skills. Load the matching skill. To edit or cancel an issued security, load
+  carta-manage-securities: it shows a preview before any change.
 
 ## Answer rules
 
@@ -93,11 +97,6 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
 - Say which figures you computed. A figure you added, divided, modelled or projected is
   Claude's analysis, not Carta data: label it, and never mix it into Carta figures
   without the label.
-- Before you fetch data or compute figures that Carta has not saved (pro forma, dilution,
-  conversion, projections), call `AskUserQuestion` (never plain text) with: "No saved Carta
-  model matches these terms. I can compute [X] using AI — this would be Claude's analysis,
-  not Carta data. Would you like me to proceed?" If the user says no, stop: no output, no
-  fallback.
 - When the response has `meta.web_url`, or a row has `_links.web_url`, link the entity
   name to it as it is. Never build or edit a Carta URL.
 - Use Carta's terms: stakeholder, share class, option grant, 409A valuation. Never show
@@ -109,6 +108,16 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
 - Show only the data the user asked for. Never show one customer's data to another.
 - Start with the answer. In a long answer, repeat the short answer in the last line: a
   terminal shows only the last lines.
+
+## Gates
+
+**Required inputs**: none before the first read. The company comes from "Find the company".
+
+**AI computation**: only for figures that Carta has not saved (pro forma, dilution,
+conversion, projections). Before you fetch data or compute them, call `AskUserQuestion`
+(never plain text) with: "No saved Carta model matches these terms. I can compute [X] using
+AI — this would be Claude's analysis, not Carta data. Would you like me to proceed?" If the
+user says no, stop: no output, no fallback.
 
 ## Ask well
 

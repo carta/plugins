@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -195,6 +195,14 @@ currency *and* a single `valuation_type`; if the series spans more than one, giv
 line for each or omit the trend entirely.
 
 If multiple share classes exist, group by share class name in the table.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| 403, `role_required` or access denied | Say the user's role can't see this company's valuations. Do not retry, and do not call the fallback command. |
+| Response too large on a grants, notes or data warehouse read | This skill needs only the valuations command. For a list of grants or notes, use carta-reporting. |
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Caveats
 

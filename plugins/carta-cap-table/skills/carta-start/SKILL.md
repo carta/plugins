@@ -1,12 +1,13 @@
 ---
 name: carta-start
-description: >
+description: >-
   Get started: see what Claude can do with your cap table. Use when the user says "get
-  started", "what can you do with Carta", "what can Claude do with my cap table", or
-  "show me what you can do": it shows their company, what their role can do and three
-  prompts to try, then sets up their Carta Home. Not for a direct build, rebuild or open
-  of Carta Home: that is carta-captable-home-build. Not for a fund firm: use the
-  carta-investors skills.
+  started", "what can you do with Carta", "what can Claude do with my cap table", "what
+  can I do with my cap table in Carta", "what data can I access in Carta", "what can I
+  do as an admin", or "show me what you can do": it shows their company, what their
+  role can do and three prompts to try, then sets up their Carta Home. Not for a direct
+  build, rebuild or open of Carta Home: that is carta-captable-home-build. Not for a
+  fund firm: use the carta-investors skills.
 model: sonnet
 allowed-tools:
   # The plugin's Artifact gate and this skill's prompts.
@@ -24,7 +25,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # Carta start
 
@@ -56,16 +57,8 @@ Make one call. Do not call `list_accounts` first. Pass no company unless the use
 read_tool({"name": "cap_table__get__company", "arguments": {}})
 ```
 
-When the user named a company: `"arguments": {"company": "<company name>"}`.
-
-- **`ambiguous` error**: the user has more than one company. Ask with `AskUserQuestion`,
-  one option per entry in `did_you_mean`, then call again with
-  `"arguments": {"company": <id>}`.
-- **Error that says the company is missing**: the user has no cap table company on this
-  Carta connection. Run Step 5, then say so in one line and ask for the company name as
-  Carta shows it. Do not list what Claude can do. That reply is the end of this skill.
-- **Any other error**: run Step 5, then say that Carta did not answer. That reply is the
-  end of this skill.
+When the user named a company: `"arguments": {"company": "<company name>"}`. On an
+error, see Error Handling.
 
 Read these fields of the result:
 
@@ -112,3 +105,19 @@ build Carta Home for the company from Step 3.
 Call `skill_checkpoint` with `skill_name="carta-cap-table:carta-start"` and
 `checkpoint_label="skill_finished"` once, before your last reply or the hand-off to
 carta-captable-home-build. Say nothing about it, and never add a summary of what you did.
+
+## Gates
+
+**Required inputs**: none. The company comes from `cap_table__get__company`; ask only on a
+company error the Error Handling table sends to `AskUserQuestion`.
+
+**AI computation**: No — this skill shows Carta data and fixed prompts.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| `Missing required params` on `corporation_id`, or a `not_found` with no `did_you_mean` | Carta found no cap table company for the user, or none matching the name they gave. Run Step 5, say which in one line, and ask for the company name as Carta shows it. Do not list what Claude can do. That reply is the end of this skill. |
+| `ambiguous`, or `not_found` with companies in `did_you_mean` | Ask with `AskUserQuestion` as in *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`, then call again. |
+| 403, `role_required`, `scope_required` or access denied | Run Step 5, then say the user's Carta access can't read this company's cap table. Do not retry. That reply is the end of this skill. |
+| Any other error | Run Step 5, then say that Carta did not answer. That reply is the end of this skill. |

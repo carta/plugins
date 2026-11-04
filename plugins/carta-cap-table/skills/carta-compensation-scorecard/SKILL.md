@@ -1,18 +1,17 @@
 ---
 name: carta-compensation-scorecard
-description: >
-  See how your employees' pay compares to market. This is the Carta Total Compensation
-  scorecard for a corporation. Two lenses: corporation-level rollup (band distribution —
-  what % of employees are below / at / above market) and per-employee scorecard (each
-  employee's compa-ratio + percentile + market band). Triggered by queries like:
-  "scorecard", "how is our comp positioned", "who's below market", "which employees are
-  below P50", "show me the roster", "are we paying market", "comp posture", "employee
-  compa-ratios", "is [employee] underpaid", "pay adjustment analysis", "our internal pay
-  bands vs benchmarks", "score these employees". Operates on the corporation's
-  already-ingested CTC roster (HRIS-synced employees). Do NOT use for market-rate
-  lookups for a role (use carta-compensation-benchmarks). Do NOT use for job
-  classification (use carta-compensation-rolematcher). Do NOT use for fund performance
-  scorecards or portfolio-level metrics.
+description: >-
+  See how your employees' pay compares to market: the Carta Total Compensation scorecard,
+  as a company rollup (what % of employees are below, at or above
+  market) or a per-employee table (compa-ratio, percentile, market band). Use when the
+  user compares their own employees' pay or equity to market or Carta benchmarks, e.g.
+  "scorecard", "how is our comp positioned", "are we paying market", "who's below
+  market", "which employees are below P50", "is [employee] underpaid", "compare our
+  employees' pay to benchmarks", "our salaries vs Carta benchmarks by level", "gap to
+  p50", "pressure-test our pay bands", "our internal pay bands vs benchmarks", "pay
+  adjustment analysis". Outside Claude Code, also use it for a dashboard of employee pay
+  vs market. Do NOT use for a role's market rate (use carta-compensation-benchmarks), job
+  classification (use carta-compensation-rolematcher), or fund performance scorecards.
 version: 0.1.0
 model: sonnet
 allowed-tools:
@@ -33,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # CTC Scorecard
 
@@ -108,6 +107,11 @@ The corp-level band distribution is derived from the employee endpoint (matching
 - *"Which engineers are below market?"* (job-filtered roster)
 - *"Show me the compa-ratios for our managers"* (leader-filtered)
 - *"List employees at market"* (band-filtered)
+- *"Compare our employees' salaries to Carta benchmarks by level"* (the word "benchmarks" does not send it to `carta-compensation-benchmarks`: the user's own employees are the subject)
+
+### Dashboard asks outside Claude Code
+
+A request for an interactive pay dashboard of the user's employees comes here when the host is not Claude Code. Give the rollup and the per-employee table in chat. Say once that the live, filterable console (`carta-compensation-app`) needs Claude Code.
 
 ### Ambiguous
 

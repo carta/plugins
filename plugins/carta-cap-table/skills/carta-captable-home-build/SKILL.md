@@ -1,6 +1,6 @@
 ---
 name: carta-captable-home-build
-description: >
+description: >-
   Build or open a live dashboard for one company's cap table, published as "Carta Home -
   {company}". Use when the user asks to "build cap table home", "rebuild cap table
   home", "deploy cap table home", "set up cap table home", or asks to build, rebuild,
@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -292,7 +292,7 @@ alongside the other plugin-wide references. They are *not* under this skill's ow
 
 This is a live artifact: the rendered HTML calls Carta at runtime through `claude.use("mcp")`, so it needs both.
 
-**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `list_accounts`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). This is the connector's mandated bootstrap and it is what makes the grant honest: publish without one observed call and the platform warns that the page is "published against an unobserved interface". It does **not** verify the display name — nothing in this session can — so the name still comes from `list_connectors`. If either call errors, tell the user Carta isn't responding and stop — do not publish. If both succeed, say nothing about them.
+**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `list_accounts`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). This is the connector's mandated bootstrap and it is what makes the grant honest: publish without one observed call and the platform warns that the page is "published against an unobserved interface". It does **not** verify the display name — nothing in this session can — so the name still comes from `list_connectors`. If either call errors, see Error Handling. If both succeed, say nothing about them.
 
 **One connector answers the company and gets baked in — they must be the same one.**
 The page hard-codes two values that only work as a pair: the corporation pk, resolved
@@ -516,6 +516,22 @@ change, update the sketch and the text together and bump the date.
 | The company itself | none at runtime — baked in at build time. The **skill** resolves it once with `list_accounts` in Step 0 (see there) |
 
 `cap_table:get:cap_table_summary` does not exist ("Unknown command") — never reference it.
+
+## Gates
+
+**Required inputs**: the company and the Carta connector. Step 0b resolves the company and
+asks with `AskUserQuestion` when there is more than one. Step 0 takes the connector name
+from `list_connectors` and asks when more than one Carta entry is connected.
+
+**AI computation**: No — the page shows live Carta data. Publishing changes nothing in Carta.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| `welcome` or `list_accounts` errors in Step 0 | Tell the user Carta isn't responding and stop. Do not publish. |
+| `build_artifact.py` exits with an error | Fix the argument it names (a still-prefixed `corporation_pk:` id is the usual one) and run it once more. If it fails again, show the error and stop. |
+| A card fails with `scope_required`, 403 or "response too large" | The card keeps its fallback state. Do not rebuild for it. |
 
 ## Notes
 

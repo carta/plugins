@@ -1,17 +1,16 @@
 ---
 name: carta-compensation-app
-description: >
-  Open an interactive pay dashboard you can filter and explore. Serves one corporation's
-  Carta Total Compensation (CTC) data as a live React console on localhost, with job
-  area filters, peer groups and the scorecard. CLAUDE CODE ONLY; it serves a local web
-  app. Use it when the ask is to run an app, launch a console, or explore the data live,
-  rather than to be told a figure. Invoke with a corporation name or id, e.g. "launch a
-  comp dashboard for Acme". Its Benchmarks and Scorecard tabs are surfaces inside the
-  app, not separately routable. Route by deliverable, not subject — an answer, CSV or
-  figure to quote belongs to a sibling even when the wording overlaps: use
-  carta-compensation-benchmarks for a role's market rate, and
-  carta-compensation-scorecard for roster positioning, compa-ratios or who is below
-  market. So "what are our comp benchmarks" is a sibling even though it names them,
+description: >-
+  Open an interactive pay dashboard you can filter and explore, in Claude Code only.
+  Serves one corporation's Carta Total Compensation (CTC) data as a live React console on
+  localhost, with job area filters, peer groups and the scorecard. Use it when the ask is
+  to run an app, launch a console, build an interactive comp dashboard, or explore pay
+  data live (filter by team, level or location), e.g. "launch a comp dashboard for Acme",
+  "build an interactive dashboard of our pay vs market". Outside Claude Code it cannot
+  run: use carta-compensation-scorecard (employee pay vs market) or
+  carta-compensation-benchmarks (a role's market rate), and say the live console needs
+  Claude Code. Route by deliverable: an answer, CSV or figure to quote belongs to a
+  sibling even when the wording overlaps. So "what are our comp benchmarks" is a sibling,
   while "open our comp benchmarks so I can filter them" is this skill. NOT for a single
   role lookup. READ-ONLY.
 argument-hint: "<corporation name or numeric corporation id — required>"
@@ -45,6 +44,8 @@ allowed-tools:
   - Read
   - Write
   - AskUserQuestion
+  - Skill(carta-cap-table:carta-compensation-scorecard)
+  - Skill(carta-cap-table:carta-compensation-benchmarks)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_paths.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" *)
@@ -61,7 +62,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -91,14 +92,17 @@ This skill runs local scripts (`uv run …`) and serves a React app from `127.0.
 browser reachable at localhost, so every step below fails — and it fails at the *first* Bash call,
 after the user has already waited, with a permission error that does not explain why.
 
-**If `Bash` is not available in this session, stop before Step 0 and route instead:**
+**If `Bash` is not available in this session, stop before Step 0 and give the closest answer:**
 
-> "The CTC console runs a local web app, so it only works in Claude Code. For the same data
-> here I can use **carta-compensation-benchmarks** (market rates for a role) or
-> **carta-compensation-scorecard** (your roster and compa-ratios) — which would you like?"
+1. Say in one sentence that the live console runs a local web app, so it needs Claude Code.
+2. Invoke the sibling skill that fits the ask, with the Skill tool:
+   - The user's own employees' pay against market → `carta-compensation-scorecard`.
+   - Market pay for one or more roles → `carta-compensation-benchmarks`. Where the host has
+     the `Artifact` tool, that skill publishes a filterable panel.
+3. If the ask fits neither, ask with `AskUserQuestion` which of the two to use.
 
-Do not attempt a partial run, and do not fall back to summarising benchmark data in chat yourself:
-those two skills already do it properly, with the attribution and PII rules this one does not carry.
+Do not attempt a partial run, and do not summarise benchmark data in chat yourself:
+those two skills carry the attribution and PII rules this one does not.
 
 ## Launch order — cache-first, MCP-minimal
 Building needs a full MCP sweep; **launching a warm cache needs exactly one call.** Resolve the

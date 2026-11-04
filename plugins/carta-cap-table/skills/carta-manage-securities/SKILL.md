@@ -2,9 +2,15 @@
 name: carta-manage-securities
 description: >-
   Edit or cancel an issued security, with a preview before anything changes. Covers
-  fixing, amending, cancelling, partly cancelling, uncancelling or undoing the termination
-  of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or warrant. Not for
-  terminating a person (cancelling everything they hold).
+  fixing, correcting, amending, cancelling, partly cancelling, uncancelling or undoing the
+  termination of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or
+  warrant. Not for terminating a person (cancelling everything they hold).
+when_to_use: >-
+  Use when the user asks to change a security that is already on the cap table, often to
+  match the signed documents: "fix the dates in Carta to match the paperwork", "change the
+  issue date", "update the cost basis", "change the legend", "fix the exercise price",
+  "fix the SAFE's cap or discount", "correct CS-12", "cancel ES-12", "cancel part of this
+  grant". To issue new equity, use carta-issuance.
 owner: carta-cap-table maintainers (#cap-table-eng)
 model: inherit
 allowed-tools:
@@ -33,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # Manage securities
 
@@ -61,6 +67,16 @@ type came only from an `ES-` label and the bootstrap answers `not_found`, ask on
 RSU, SAR or CBU, then call the bootstrap again with that type. When the user named the type, quote
 the `not_found` and stop. For any other label, when the words do not say, ask once with
 `AskUserQuestion`. Never guess.
+
+## Gates
+
+**Required inputs**: the company, the security (label, id or holder) and the action. Each
+action's own inputs are in [§ Flow](#flow) step 3. Ask only for what is missing.
+
+**AI computation**: No. Carta computes every before and after value in the preview. You choose
+only the `reason` and write the note from the user's words, and you show both.
+
+**Confirmation**: see [Hard rule 1](#hard-rules).
 
 ## Hard rules
 
@@ -147,6 +163,17 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
      Then say the job is still running in Carta.
    - `plan_stale`: say the security changed in Carta after the preview, and offer a new one.
    - `plan_expired`: preview again, then ask for approval again.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
+| 403, `role_required` or access denied | Say the user's role on this company cannot make this change. Do not retry. |
+| `scope_required` | Ask the user to grant access as its `fix` says. Call again only after they confirm. |
+| Bootstrap `not_found` on `label` | Send `label` as a list, one label per item. If it still fails, find the id with `cap_table__list__securities` and send `security`. |
+| Bootstrap "Unknown field in `fields`" | `fields` picks bootstrap sections, not the fields to edit. Leave it out. |
+| Preview `unknown_param` or `reason_why` too long | Do what its `fix` says (for example `notes` → `note`, `reason_why` at most 140 characters), then preview again once. |
 
 ## Several changes
 

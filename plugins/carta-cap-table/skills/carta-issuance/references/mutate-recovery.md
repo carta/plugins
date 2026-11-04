@@ -96,3 +96,16 @@ If the error names required fields, drop into [Error recovery](#error-recovery).
 
 > *"This account can draft but not issue. Have someone with Full access on \<company\> run the
 > issue step."*
+
+---
+
+## Errors on any call
+
+| Situation | What to do |
+|---|---|
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
+| 403, `role_required` or access denied | Say the user's role on this company cannot draft or issue. Do not retry. On `issue_securities`, use [§ 403](#403). |
+| "Nothing was saved" with `Unknown draft field` | For a type out of scope (see [§ Resolve `security_type`](../SKILL.md#resolve-security_type)), route to the Drafts UI. Else rename each field as the message says and save again with the same `draft_set_id`. |
+| "Draft set not found" | The set is deleted or the id is wrong. Call `cap_table:list:draft_sets` with `security_type` once and ask which set. Never start a new set without telling the user. |
+| "requires security_type" | Send `security_type` (`certificate`, `option_grant` or `piu`) and call again once. |
+| "response too large" on `issuance_init` or `load_drafts` | Do not change the call to retry. Say Carta could not load it for this company, and send the user to the Drafts page in Carta. |

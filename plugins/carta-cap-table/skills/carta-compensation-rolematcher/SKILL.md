@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # CTC RoleMatcher
 
@@ -32,6 +32,12 @@ Map any job title or description to the Carta Total Compensation benchmark taxon
 - An HR team member wants to classify a list of roles for compensation benchmarking
 - Someone pastes a CSV or numbered list of job titles for batch classification
 - A user asks "how would this role be benchmarked?" or "what level is a [title]?"
+
+## Gates
+
+**Required inputs**: a job title or job description, or a list of them. This skill takes no company and makes no Carta call.
+
+**AI computation**: Yes. The classification is your judgment against the taxonomy below. Always give the confidence and the reasoning.
 
 ## Instructions
 
@@ -549,6 +555,12 @@ When a downstream skill (e.g. `carta-compensation-benchmarks`) needs to call the
 | Unknown | `UNKNOWN` |
 
 **Confidence:** not passed to the API. The display values `High` / `Medium` / `Low` correspond to the internal `HIGH` / `MEDIUM` / `LOW` tiers used in this skill.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| Job area or level is `Unknown` | Ask for the missing signal: job area, seniority, or IC or manager. Do not guess. |
 
 ## What next?
 

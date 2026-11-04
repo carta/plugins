@@ -9,10 +9,17 @@ description: >-
   any request starting with "Generate Carta Excel —" (the artifact prompt bar payload).
   For a single fact or a short answer (one holder's ownership, the largest grants, one
   stakeholder), use carta-cap-table. Defers to specialized skills for: SAFE/note
-  conversion math, voting rights, issuance, modifying issuables, per-stakeholder vesting
-  detail (use carta-grant-vesting for "How much has [name] vested?"), and round history
-  lookup (use carta-round-history for "What was our Series B round?"). Not for
-  cross-portfolio data.
+  conversion math, voting rights, issuance, editing or cancelling a security
+  (carta-manage-securities), per-stakeholder vesting detail (use carta-grant-vesting for
+  "How much has [name] vested?"), and round history lookup (use carta-round-history for
+  "What was our Series B round?"). Not for cross-portfolio data.
+when_to_use: >-
+  Use when asked to show, pull, list or export many rows of one company's
+  cap table: "show me the full cap table", "pull the current fully diluted
+  cap table", "export the cap table to Excel", "list every shareholder with
+  5% or more", "make an Excel file of all our SAFEs", "all grants with
+  vesting and terminations", "build me a custom report", or "what reports
+  can I run".
 model: sonnet
 allowed-tools:
   - ToolSearch
@@ -52,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 # Custom Reports
 
@@ -803,7 +810,8 @@ This applies whether the result is rendered as a live artifact or a markdown tab
 
 ---
 
-## Best Effort
+## Gates
 
-- **Authoritative**: report data comes directly from Carta. Business logic values (fully diluted ownership, liquidation proceeds, conversion amounts, IRR, etc.) must always come from a Carta report — never from Claude's calculations.
-- **Claude-computed**: filtering, column selection, sorting, mechanical formulas (% of total, running sum, ratio, delta), and aggregations are performed by `report_processor.py` and should be treated as best-effort analysis, not official Carta output.
+**Required inputs**: none before the first read. Step 1 finds the company and step 2 finds the report type from the user's words.
+
+**AI computation**: No for report data: it comes directly from Carta. Business logic values (fully diluted ownership, liquidation proceeds, conversion amounts, IRR, etc.) must always come from a Carta report, never from Claude's calculations. Filters, column picks, sorts, mechanical formulas (% of total, running sum, ratio, delta) and aggregations run in `report_processor.py`: treat them as best-effort analysis, not official Carta output.

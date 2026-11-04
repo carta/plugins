@@ -1,19 +1,21 @@
 ---
 name: carta-market-benchmarks
 description: >-
-  Compare deal terms across your portfolio, like SAFE caps and pool sizes. Computes
-  market benchmarks across portfolio companies: median, average, typical and range.
-  Returns aggregate numbers and percentiles, not raw per-company listings.
+  Compare deal terms across your own portfolio companies, like SAFE caps and pool
+  sizes. Computes portfolio benchmarks from the companies you can see in Carta:
+  median, average, typical and range. Returns aggregate numbers and percentiles, not
+  raw per-company listings.
 when_to_use: >-
-  Use when asked what's typical for a metric, what's normal at a given
-  stage, what the median value is, what the average comes out to, how
-  something compares to the market, what range a metric falls in across
-  the portfolio, or how a specific deal's terms stack up against portfolio
-  norms. Covers option pool sizing, SAFE valuation caps, SAFE discount
-  rates, round sizes by stage, and similar structural metrics. For raw
-  cross-company data tables without computed statistics, prefer a
-  multi-company raw-data skill. For time-based risk detection across
-  companies, prefer a portfolio-alerts skill.
+  Use when asked what's typical for a metric across the portfolio, what's normal at a
+  given stage, what the median value is, what the average comes out to, what range a
+  metric falls in across the portfolio, or how a specific deal's terms stack up
+  against portfolio norms. Covers option pool sizing, SAFE valuation caps, SAFE
+  discount rates, round sizes by stage, and similar structural metrics. Not for
+  Carta-wide market or peer data (how a valuation compares to other companies at the
+  same stage), fund performance benchmarks by vintage (TVPI, DPI, IRR, MOIC), or pay
+  benchmarks: for pay, prefer a compensation-benchmarks skill. For raw cross-company
+  data tables without computed statistics, prefer a multi-company raw-data skill. For
+  time-based risk detection across companies, prefer a portfolio-alerts skill.
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -34,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -121,8 +123,6 @@ Then from the results:
 - Last priced round = the row with the latest `closing_date` whose `cash_raised_by_currency` is not empty
 - Its size = that row's `cash_raised_by_currency` amount. Benchmark round sizes within one currency only (the most common one across the portfolio), and name the companies left out because they raised in another currency — never add or compare amounts across currencies
 
-**If a call fails for one company** (403, access denied, or any other error): count that company as "no data" for that metric and carry on with the rest. Do not retry it, and do not look for another tool to fill the gap. List the skipped companies in the caveats.
-
 ### Step 3 — Compute Summary Statistics
 
 For each metric, compute across companies that have data:
@@ -181,6 +181,16 @@ Before you fetch data or compute, call `AskUserQuestion` (never plain text) with
 | Median | $5,000,000 |
 | Range  | $500K – $30M |
 | Companies with priced rounds | 10 |
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| A call fails for one company (403, `role_required` or any other error) | Count that company as "no data" for that metric and carry on. Do not retry it, and do not look for another tool to fill the gap. List the skipped companies in the caveats. |
+| 403, `role_required` or access denied on every company | Say the user's role can't see cap table data for these companies. Stop. |
+| `list_accounts` returns one company | Say a portfolio benchmark needs more than one company. Show that company's own values only. |
+| Response too large | Do not send `detail: "full"` or `raw`. The default summary has every field this skill uses. |
+| The user asks for Carta-wide market data, peer companies, or fund returns by vintage | Say this skill compares only the user's own portfolio companies, and offer that. For pay, use carta-compensation-benchmarks. Never present portfolio numbers as market data. |
 
 ## Caveats
 

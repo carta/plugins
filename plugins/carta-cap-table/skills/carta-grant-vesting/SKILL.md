@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -196,6 +196,15 @@ Flag anything time-sensitive:
 - **RSU settlement window** (RSUs only): if `eligible_for_settlement` exceeds `settled`, note how many shares are awaiting settlement and flag if a `termination_date` is imminent — RSUs typically have a hard window to settle after termination.
 
 Then show the formatted table from the tool.
+
+## Error Handling
+
+| Situation | What to do |
+|---|---|
+| No stakeholder or grant matches the name (`not_found`, or no row in all four list commands) | Ask the user with `AskUserQuestion` for the name as Carta shows it. Never pick a person by guess. |
+| Response too large on a list command | Call it again with `search` (the holder name) and `"detail": "minimal"`. |
+| 403, `role_required` or access denied | Say the user's role can't see this grant's vesting. Do not retry. |
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Caveats
 

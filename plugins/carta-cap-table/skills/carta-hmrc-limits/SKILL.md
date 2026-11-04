@@ -26,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -126,13 +126,13 @@ actionable group.
 Round to whole pounds. These are statutory thresholds, so do not present a figure as more
 precise than the source.
 
-## If the call fails
+## Error Handling
 
-- **403** — the company does not have the HMRC limits feature enabled, or this user lacks
-  the company tax data permission. Both are expected for non-UK companies and for users
-  without tax access. Say which company was refused and suggest they check with an
-  administrator; do not retry.
-- **400 on `status`** — an invalid status value. The four valid ones are listed above.
+| Situation | What to do |
+|---|---|
+| 403, `role_required` or access denied | The company does not have the HMRC limits feature, or the user lacks the company tax data permission. Both are expected for non-UK companies. Say which company was refused and suggest they check with an administrator. Do not retry. |
+| 400 on `status` | The status value is not valid. Use one of the four values above. |
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Related Skills
 
