@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.14</carta-plugin>
+<carta-plugin>carta-investors:7.19.16</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -291,7 +291,8 @@ not inside a fund-data dashboard.
   `carta-workhub.app.js` opens `claude://claude.ai/new?q=<prompt>` and also tries to put the
   prompt on the clipboard, for when the link handler does not fire; the toast says whether the
   copy worked. On a tracker cell, a small ↗ beside the button keeps the cell's Carta link; a
-  queue card with an opening has no Carta link of its own, and is marked **Claude ↗**.
+  queue card with an opening has no Carta link of its own, and is marked **Copy**, because
+  its prompt is copied to the clipboard.
 
   carta-mcp decides how each task opens: `workhubTaskApps` in the tracker file asks `search_tools`
   about `fa__list__workhub-task-app` once, and only when that ranks it first reads it through

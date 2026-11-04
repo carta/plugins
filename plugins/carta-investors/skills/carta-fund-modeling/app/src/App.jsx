@@ -4,7 +4,7 @@ import { computeFundStates, firmRollup, isPooledScope, isLiveFamilyScope, scopeF
 import { scenarioFirmFigures } from "./model/report.js";
 import { effectiveExitHorizons } from "./model/reprice.js";
 import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, PINNED_Z } from "./ui/theme.js";
-import { Btn, ScenarioMarker, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, H3, landBelowPinnedBars, SideNavButton, icon } from "./ui/components.jsx";
+import { Btn, ScenarioMarker, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, H3, landBelowPinnedBars, SideNavButton, SignOutIcon, icon } from "./ui/components.jsx";
 import { fmtAsOf, setDisplayCurrency } from "./ui/format.js";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import useShare from "./state/useShare.js";
@@ -29,6 +29,7 @@ import { warn, WarnToast, BASELINE_LOCKED_MSG } from "./ui/warn.jsx";
 import { parseRoute, navigate, subscribeNav } from "./route.js";
 import { fmContext } from "./pinpoint/fmContext.js";
 import { postToOuter, onFromOuter } from "./bridge-client.js";
+import { signOut } from "./sign-out.js";
 import { trackClick, trackRender } from "./analytics.js";
 
 // Ink icons, drawn with the Lucide glyph Ink's kit maps each one to (Ink name → Lucide name
@@ -284,6 +285,14 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
     }
   }, [tab, fundScope, snapshot]);
 
+  // "idle" | "busy" | "failed". A success reloads the page, so there is no state for it.
+  const [signOutState, setSignOutState] = useState("idle");
+  const onSignOut = () => {
+    setSignOutState("busy");
+    signOut().catch(() => setSignOutState("failed"));
+  };
+  const signOutLabel = signOutState === "failed" ? "Sign out failed, retry" : signOutState === "busy" ? "Signing out…" : "Sign out";
+
   if (!fundStates) {
     return (
       <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" }}>
@@ -433,6 +442,9 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
           <SideNavButton onClick={() => postToOuter("toggle-chat")} data-testid="chat-toggle" icon={ChatIcon}
             label={chatOpen ? "Close chat" : "Ask Claude"} aria-label={chatToggleLabel} aria-expanded={chatOpen} />
         )}
+        {features.signOut && (
+          <SideNavButton onClick={onSignOut} disabled={signOutState === "busy"} data-testid="sign-out" icon={SignOutIcon} label={signOutLabel} />
+        )}
       </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px 0" }} />
       <div style={{ padding: "9px 9px 0" }}>
@@ -469,6 +481,10 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
         {features.updateData && <UpdateDataButton features={features} firm={firm} />}
         {themeToggle}
         {chatToggle}
+        {features.signOut && (
+          <Btn kind="link" onClick={onSignOut} disabled={signOutState === "busy"} data-testid="sign-out"
+            style={{ fontSize: FS.small, textDecoration: "underline" }}>{signOutLabel}</Btn>
+        )}
       </div>
       <div style={{ display: "flex", gap: 4, overflowX: "auto" }}>
         {TABS.map(([id, label]) => (

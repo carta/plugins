@@ -945,6 +945,7 @@ const _farMore = {};          // 'tab:display group id' → true once expanded
 const FAR_LIST_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M21 9H3"/><path d="M21 15H3"/></svg>';
 const FAR_BOARD_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>';
 const FAR_OUT_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l6-6M5 4h5v5"/></svg>';
+const FAR_COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
 
 function farSetSort(value) {
   _farSort = value;
@@ -1153,10 +1154,12 @@ function farItemShell(r, cls) {
   return { el, external: false };
 }
 
-// Marks a card that leaves the page: Carta in a new tab, or a new Claude chat.
+// Marks a card that leaves the page: a new Claude chat, whose prompt is also copied to the
+// clipboard, or Carta in a new tab.
 function farOutLabel(r, external) {
-  const name = r.app ? 'Claude' : (external ? 'Carta' : null);
-  return name ? `<span class="far-item-out">${name} ${FAR_OUT_ICON}</span>` : '';
+  if (r.app) return `<span class="far-item-out">Copy ${FAR_COPY_ICON}</span>`;
+  if (external) return `<span class="far-item-out">Carta ${FAR_OUT_ICON}</span>`;
+  return '';
 }
 
 function farCard(r, withTime) {

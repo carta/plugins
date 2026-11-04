@@ -90,6 +90,7 @@ export const AlertCircleIcon = icon(["M12 21a9 9 0 100-18 9 9 0 000 18z", "M12 8
 export const PrintIcon = icon(["M6 9V3h12v6", "M6 17H4a2 2 0 01-2-2v-4a2 2 0 012-2h16a2 2 0 012 2v4a2 2 0 01-2 2h-2", "M6 13h12v8H6z"]);
 export const SunIcon = icon(["M12 17a5 5 0 100-10 5 5 0 000 10z", "M12 1v2", "M12 21v2", "M4.2 4.2l1.4 1.4", "M18.4 18.4l1.4 1.4", "M1 12h2", "M21 12h2", "M4.2 19.8l1.4-1.4", "M18.4 5.6l1.4-1.4"]);
 export const MoonIcon = icon(["M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"]);
+export const SignOutIcon = icon(["M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4", "M16 17l5-5-5-5", "M21 12H9"]);
 export const SwitchIcon = icon(["M16 3l4 4-4 4", "M20 7H8a4 4 0 00-4 4v1", "M8 21l-4-4 4-4", "M4 17h12a4 4 0 004-4v-1"]);
 // Chat rail toggle — a single-stroke speech bubble with a tail, matching the
 // stroked-outline weight of the other topbar glyphs (no fill, no emoji).
