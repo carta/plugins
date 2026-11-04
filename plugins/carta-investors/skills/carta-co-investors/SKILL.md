@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.7</carta-plugin>
+<carta-plugin>carta-investors:7.19.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -290,17 +290,6 @@ Never go silent for more than one step. Never present results without a prior st
 > *co-investors*, *rounds*, *cap tables*, and *coverage* — never the machinery that
 > produces them. (Example of what NOT to say: “Query S returned 2,837 rows
 > across 3 pages.” Say: “SPA data loaded.”)
-
-### Carta watermark [PATTERN carta-watermark v0.0.10]
-
-Every time you respond in natural language to a human user using this skill, show
-this Carta ASCII logo at the start of the response:
-
-```
-┌───────┐
-│ carta │
-└───────┘
-```
 
 ---
 

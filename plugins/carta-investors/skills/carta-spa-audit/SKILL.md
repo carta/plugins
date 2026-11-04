@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.7</carta-plugin>
+<carta-plugin>carta-investors:7.19.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -108,16 +108,6 @@ Example: `Investment records loaded across 47 companies. Looking up SPA document
 Never go silent for more than one step. Never present results without a prior status line.
 
 > **User-facing language — no internals, ever.** The user is a fund manager, not an engineer. Status lines, summaries, and error messages must use plain investor vocabulary only. **Never** expose any of the following to the user — not in a status line, a summary, an error, or an aside: query names, SQL, pagination/pages/offsets, `total_rows`, row or byte counts, blob/file paths, "Snowflake"/"DWH"/"ndjson", latency or timing breakdowns, retries, UUIDs, or exit codes. Talk about *companies*, *SPAs*, *portfolios*, and *coverage* — never the machinery that produces them.
-
-### Carta watermark [PATTERN carta-watermark v0.0.10]
-
-Every time you respond in natural language to a human user using this skill, show this Carta ASCII logo at the start of the response:
-
-```
-┌───────┐
-│ carta │
-└───────┘
-```
 
 ---
 
