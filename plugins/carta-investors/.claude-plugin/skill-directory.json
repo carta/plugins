@@ -33,6 +33,7 @@
     }
   },
   "carta-kyc-fill-form": null,
+  "carta-partner-rollforward": null,
   "carta-consolidating-financial-reports": {
     "category": "fund-accounting",
     "name": "Consolidated financial reports",

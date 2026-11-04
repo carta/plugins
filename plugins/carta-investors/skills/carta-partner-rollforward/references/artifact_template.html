@@ -1,0 +1,2149 @@
+<!DOCTYPE html>
+<!-- This block carries CONFIG — the Carta connector display name, the firm, the resolved
+     table names. Rows are fetched live when the artifact opens. The MCP allowlist is
+     passed as `capabilities.mcp` on the Artifact publish.
+
+     The placeholder token is shared with the other carta-investors artifacts so that
+     scripts/render_artifact.py renders this template unchanged.
+
+     IMPORTANT: before substituting the placeholder below, escape the JSON with JSON unicode escapes:
+     < -> \u003c   > -> \u003e   & -> \u0026   ' -> \u0027
+     Use \uXXXX (NOT HTML entities). A raw </script> in any string value (a firm name)
+     would close this block early and inject HTML (stored XSS). -->
+
+<script type="application/json" id="rollforward-data">__LOAN_DATA__</script>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partner Rollforward</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- EB Garamond stands in for SangBleu Versailles, Carta's brand serif, which is not
+       licensed for distribution outside Carta environments. Same choice as carta-soi. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=EB+Garamond:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink-color-global-text-default:                light-dark(#1A1A1A, #EDEDED);
+      --ink-color-global-text-subtle:                 light-dark(#656B6B, #A7AAAA);
+      --ink-color-global-surface-background-default:  light-dark(#FFFFFF, rgb(18 18 18));
+      --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+      --ink-color-global-border-subtle:               light-dark(#DEDFDF, #2D2D2D);
+      --ink-color-global-border-default:              light-dark(#A7AAAA, #656B6B);
+      --ink-button-background-color-primary-base-default: light-dark(#1A1A1A, #FFFFFF);
+      --ink-button-text-color-primary:                light-dark(#FFFFFF, #1A1A1A);
+      --ink-color-global-link-default:                light-dark(#285DA3, #8BABD6);
+      --ink-color-global-feedback-info-subtle:        light-dark(#EAF0F8, #122948);
+      --ink-color-global-feedback-info-strong:        light-dark(#285DA3, #2C67B5);
+      --ink-color-global-feedback-warning-subtle:     light-dark(#FFF4DB, #3A2D08);
+      --ink-color-global-feedback-positive-strong:    light-dark(#1F7A4D, #6CC596);
+      --ink-color-global-feedback-negative-strong:    light-dark(#B3261E, #F2988F);
+      --ink-font-global-family-prominent:             "SangBleu Versailles", "EB Garamond", Georgia, serif;
+      --row-hover: color-mix(in srgb, var(--ink-button-background-color-primary-base-default) 16%, var(--ink-color-global-surface-background-default));
+      --space-s: 8px; --space-m: 16px; --space-l: 24px; --space-xl: 32px;
+    }
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"]  { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      background: var(--ink-color-global-surface-background-default);
+      color: var(--ink-color-global-text-default);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      font-size: 14px; margin: 0;
+    }
+    .page { margin: 0 auto; max-width: 1500px; padding: var(--space-xl) var(--space-l); }
+    .logo { color: var(--ink-color-global-text-default); display: block; }
+    h1 {
+      font-family: var(--ink-font-global-family-prominent);
+      font-size: 28px; font-weight: 400; line-height: 48px; margin: var(--space-m) 0 0;
+    }
+    h2 { font-size: 18px; font-weight: 500; margin: var(--space-l) 0 var(--space-s); }
+    .scope, .hint { color: var(--ink-color-global-text-subtle); margin: 0 0 var(--space-m); }
+    .hint { font-size: 12px; margin: var(--space-s) 0; }
+    .tabs { border-bottom: 1px solid var(--ink-color-global-border-subtle); display: flex; gap: var(--space-m); margin: 0 0 var(--space-m); }
+    .tab {
+      background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink-color-global-text-subtle);
+      cursor: pointer; font: inherit; padding: 10px 4px;
+    }
+    .tab[aria-selected="true"] { border-bottom-color: var(--ink-button-background-color-primary-base-default); color: var(--ink-color-global-text-default); font-weight: 600; }
+    .controls { align-items: flex-end; display: flex; flex-wrap: wrap; gap: var(--space-m); margin: 0 0 var(--space-m); }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field > label, .field > span { color: var(--ink-color-global-text-subtle); font-size: 12px; }
+    select, input[type="month"], button.btn, summary.btn {
+      background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-default);
+      border-radius: 4px; color: inherit; font: inherit; min-height: 36px; padding: 6px 10px;
+    }
+    button.btn, summary.btn { cursor: pointer; list-style: none; }
+    button.btn.primary { background: var(--ink-button-background-color-primary-base-default); color: var(--ink-button-text-color-primary); }
+    details.menu { position: relative; }
+    .field.actions { flex-direction: row; gap: var(--space-s); }
+    /* The page fills the window and only the area under the tabs and filters scrolls, so they
+       stay in place; the table's header row and first column stick inside that one scroll area,
+       like a spreadsheet. On a phone or a very short window the page scrolls as a whole instead
+       and each table scrolls in its own box, so the filters never cover the table. */
+    .page { display: flex; flex-direction: column; height: 100vh; }
+    #app { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+    .toolbar { background: var(--ink-color-global-surface-background-default); position: relative; z-index: 10; }
+    .scroller { flex: 1; min-height: 0; overflow: auto; }
+    /* A short window gives the table the logo's height. */
+    @media (max-height: 800px) {
+      .logo { display: none; }
+      h1 { font-size: 24px; line-height: 32px; margin-top: 0; }
+      .scope { margin-bottom: var(--space-s); }
+    }
+    @media (max-width: 640px), (max-height: 520px) {
+      .page { display: block; height: auto; }
+      #app { display: block; }
+      .scroller { overflow: visible; }
+      .scroller .tablewrap { max-height: 75vh; min-width: 0; overflow: auto; width: auto; }
+    }
+    /* The fund picker: families with their funds indented beneath, a search box, and ticks
+       staged until Apply — the SOI artifact's multi-select, hand-copied. */
+    .combo-trigger { position: relative; }
+    .combo-panel {
+      background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-default);
+      border-radius: 4px; box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.12); left: 0; margin-top: 4px; min-width: 320px;
+      position: absolute; top: 100%; z-index: 20;
+    }
+    .combo-search-wrap { border-bottom: 1px solid var(--ink-color-global-border-subtle); padding: 8px; }
+    .combo-search {
+      background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-default);
+      border-radius: 4px; color: inherit; font: inherit; padding: 6px 10px; width: 100%;
+    }
+    .combo-list { list-style: none; margin: 0; max-height: 300px; overflow: auto; padding: 4px 0; }
+    .combo-option label { align-items: center; cursor: pointer; display: flex; gap: 8px; padding: 6px 12px; }
+    .combo-option label:hover { background: var(--ink-color-global-surface-background-underlay); }
+    .combo-option.is-all { border-bottom: 1px solid var(--ink-color-global-border-subtle); font-weight: 500; margin-bottom: 2px; }
+    .combo-option.is-family { font-weight: 600; }
+    /* Indent the whole member row, checkbox included, so members read as part of the family above. */
+    .combo-option.is-member label { padding-left: 40px; }
+    .combo-meta { color: var(--ink-color-global-text-subtle); font-size: 12px; font-weight: 400; margin-left: auto; }
+    .combo-empty { color: var(--ink-color-global-text-subtle); font-size: 12px; padding: 10px 12px; }
+    .combo-footer {
+      align-items: center; border-top: 1px solid var(--ink-color-global-border-subtle); display: flex;
+      gap: var(--space-s); justify-content: space-between; padding: 8px;
+    }
+    .combo-clear-all { background: none; border: 0; color: var(--ink-color-global-text-default); cursor: pointer; font: inherit; padding: 6px 4px; text-decoration: underline; }
+    .combo-clear-all:disabled, button.btn:disabled { cursor: default; opacity: 0.45; }
+    tr.group td, tr.group td.l:first-child {
+      background: var(--ink-color-global-surface-background-default); border-top: 2px solid var(--ink-color-global-border-default);
+      box-shadow: none; font-weight: 600; padding-top: 14px;
+    }
+    tr.group .tie-line { margin-left: var(--space-s); }
+    .sort-header { background: none; border: 0; color: inherit; cursor: pointer; font: inherit; padding: 0; text-align: left; }
+    .sort-arrow { color: var(--ink-color-global-text-subtle); font-size: 12px; margin-left: 4px; }
+    /* The fund and investor pickers share one width, with the caret drawn just inside
+       the right edge instead of where the platform puts it. */
+    .picker { display: inline-block; position: relative; width: 240px; }
+    .field > span.picker { color: inherit; font-size: inherit; }
+    .picker select, .picker > summary.btn, .picker > .combo-trigger {
+      -webkit-appearance: none; appearance: none; display: block; overflow: hidden; padding-right: 30px;
+      text-align: left; text-overflow: ellipsis; white-space: nowrap; width: 100%;
+    }
+    .picker > summary::-webkit-details-marker { display: none; }
+    span.picker::after, details.picker > summary::after, .picker > .combo-trigger::after {
+      border: 5px solid transparent; border-bottom: 0; border-top-color: var(--ink-color-global-text-subtle);
+      content: ''; pointer-events: none; position: absolute; right: 12px; top: 16px;
+    }
+    details.menu .pop {
+      background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-default);
+      border-radius: 4px; box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.12); max-height: 320px; min-width: 260px;
+      overflow: auto; padding: var(--space-s); position: absolute; z-index: 5;
+    }
+    .pop label { align-items: center; display: flex; gap: 8px; padding: 4px 2px; }
+    .banner { background: var(--ink-color-global-feedback-info-subtle); border-radius: 4px; margin: 0 0 var(--space-m); padding: 10px 14px; }
+    .banner.warn { background: var(--ink-color-global-feedback-warning-subtle); }
+    #status { color: var(--ink-color-global-text-subtle); margin: var(--space-s) 0; }
+    #error { color: var(--ink-color-global-feedback-negative-strong); margin: var(--space-m) 0; }
+    .tablewrap { border: 1px solid var(--ink-color-global-border-subtle); border-radius: 4px; margin: 0 0 var(--space-l); width: max-content; min-width: 100%; }
+    table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; }
+    th, td { border-bottom: 1px solid var(--ink-color-global-border-subtle); padding: 8px 12px; white-space: nowrap; }
+    th { background: var(--ink-color-global-surface-background-underlay); font-weight: 600; position: sticky; top: 0; text-align: right; }
+    td.num { text-align: right; }
+    th.l, td.l { text-align: left; }
+    /* A frozen first column, as in a spreadsheet: opaque, so columns scrolled beneath it are hidden. */
+    /* Columns sized by sizeColumns: fixed widths, overflow ends in "…" with the full text on hover,
+       and a drag handle on each header's right edge. Heading rows wrap instead. */
+    table.sized { table-layout: fixed; }
+    table.sized th, table.sized td { overflow: hidden; text-overflow: ellipsis; }
+    table.sized tr.group td { overflow: visible; white-space: normal; }
+    .col-resize { cursor: col-resize; height: 100%; position: absolute; right: 0; top: 0; touch-action: none; width: 6px; }
+    .col-resize:hover { background: var(--ink-color-global-border-default); }
+    /* A header with a definition: its text, then a small info icon. Only the icon opens the tip
+       (never the resize handle), and the tip is one fixed-position box so no scroll container clips it. */
+    .hd { align-items: center; display: flex; gap: 4px; justify-content: flex-end; min-width: 0; }
+    th.l .hd { justify-content: flex-start; }
+    .hd-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .info {
+      align-items: center; background: none; border: 1px solid var(--ink-color-global-text-subtle); border-radius: 50%;
+      color: var(--ink-color-global-text-subtle); cursor: help; display: inline-flex; flex: none; font: italic 600 10px/1 Georgia, serif;
+      height: 14px; justify-content: center; padding: 0; width: 14px;
+    }
+    .info::before { content: 'i'; }
+    .info:hover, .info:focus-visible { border-color: var(--ink-color-global-text-default); color: var(--ink-color-global-text-default); }
+    .info:focus-visible { outline: 2px solid var(--ink-color-global-link-default); outline-offset: 2px; }
+    #tip {
+      background: var(--ink-button-background-color-primary-base-default); border-radius: 4px; box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.24);
+      color: var(--ink-button-text-color-primary); font-size: 12px; font-weight: 400; line-height: 1.4; max-width: 280px;
+      padding: 8px 10px; pointer-events: none; position: fixed; text-align: left; white-space: normal; z-index: 30;
+    }
+    #tip b { display: block; font-weight: 600; margin-bottom: 2px; }
+    td.l:first-child, th.l:first-child {
+      background: var(--ink-color-global-surface-background-default);
+      box-shadow: inset -1px 0 0 var(--ink-color-global-border-subtle);
+      left: 0; position: sticky; z-index: 1;
+    }
+    th { z-index: 2; }
+    th.l:first-child { background: var(--ink-color-global-surface-background-underlay); z-index: 3; }
+    tr.fund td, tr.fund td.l:first-child { background: var(--ink-color-global-surface-background-underlay); cursor: pointer; font-weight: 600; }
+    tr.fund:hover td, tr.fund:hover td.l:first-child, tr.partner:hover td { background: var(--row-hover); }
+    tr.total td { border-top: 2px solid var(--ink-color-global-border-default); font-weight: 600; }
+    td.neg { color: var(--ink-color-global-feedback-negative-strong); }
+    th.carry, td.carry { box-shadow: inset 2px 0 0 var(--ink-color-global-feedback-info-strong); }
+    td.tie, .tie-line { font-weight: 600; }
+    td.tie.ok, .tie-line.ok { color: var(--ink-color-global-feedback-positive-strong); }
+    td.tie.gap, .tie-line.gap { color: var(--ink-color-global-feedback-negative-strong); }
+    td.na { color: var(--ink-color-global-text-subtle); }
+    .tie-line { margin: 0 0 4px; }
+    .empty { color: var(--ink-color-global-text-subtle); padding: var(--space-l); }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <svg class="logo" width="64" height="32" viewBox="0 0 64 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Carta">
+      <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
+      <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
+    </svg>
+    <h1>Partner Rollforward</h1>
+    <p class="scope" id="scope"></p>
+
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="error" role="alert" hidden></div>
+
+    <div id="app" hidden>
+      <div class="toolbar" id="toolbar">
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" data-view="rollforward">Rollforward</button>
+        <button class="tab" role="tab" data-view="walk">Monthly capital walk</button>
+        <button class="tab" role="tab" data-view="statement">LP statement</button>
+        <button class="tab" role="tab" data-view="call">Capital call</button>
+      </div>
+
+      <div class="controls" id="controls">
+        <div class="field"><span id="funds-caption">Funds</span>
+          <div class="combo picker" id="funds-combo">
+            <button type="button" class="btn combo-trigger" id="funds-label" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="funds-caption funds-label">All funds</button>
+            <div class="combo-panel" id="funds-panel" hidden>
+              <div class="combo-search-wrap"><input type="text" class="combo-search" id="funds-search" placeholder="Search funds or families" aria-label="Search funds or families" autocomplete="off"></div>
+              <ul class="combo-list" id="funds-list" role="listbox" aria-multiselectable="true" aria-label="Funds"></ul>
+              <div class="combo-footer"><button type="button" class="combo-clear-all" id="funds-clear">Clear all</button><button type="button" class="btn primary" id="funds-apply">Apply</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="field" data-for="walk statement"><label for="investor">Investor</label><span class="picker"><select id="investor"></select></span></div>
+        <div class="field"><label for="start">From</label><input type="month" id="start"></div>
+        <div class="field"><label for="end">To</label><input type="month" id="end"></div>
+        <div class="field" data-for="rollforward"><label for="mode">View by</label>
+          <select id="mode"><option value="$">$ amount</option><option value="%">% of fund</option></select></div>
+        <div class="field" data-for="rollforward"><label for="compare">Compare to</label><select id="compare"></select></div>
+        <div class="field" data-for="rollforward walk">
+          <details class="menu"><summary class="btn">Select columns</summary><div class="pop" id="cols-pop"></div></details></div>
+        <div class="field actions">
+          <button class="btn" id="export" hidden>Export CSV</button>
+          <button class="btn" id="export-pdf" hidden>Export PDF</button></div>
+      </div>
+      </div>
+
+      <div class="scroller" id="scroller">
+        <div id="notes"></div>
+        <div id="out"></div>
+        <p class="hint" id="footnote"></p>
+      </div>
+    </div>
+  </main>
+  <div id="tip" aria-hidden="true" hidden></div>
+
+  <script>
+    // <rf-core>
+    // Pure ledger arithmetic. No DOM and no CONFIG here, so the tests load this block alone.
+    //
+    // Months are 'YYYY-MM' strings: they sort lexicographically, which is the only
+    // comparison the arithmetic needs. A period is whole months, `start` through `end`
+    // inclusive; the beginning balance is everything posted before `start`.
+
+    // Posted to the ledger but not part of the capital account: receivables, payables and
+    // deferrals. Measured against Carta's own month-end NAV on 60 funds that carry them,
+    // leaving these out reproduces the NAV on all 60; counting them reproduces it on 32.
+    const MEMO_BUCKETS = new Set([
+      'Capital call receivable', 'Deferred capital call', 'Distribution Payable',
+      'Late interest receivable', 'Late interest payable',
+      'Partner loan receivable', 'Partner loan payable',
+    ]);
+    const CONTRIBUTION_BUCKETS = ['Capital contribution', 'Capital contributions - rolled'];
+    const CALL_RECEIVABLE_BUCKET = 'Capital call receivable';
+    const DEFERRED_CALL_BUCKET = 'Deferred capital call';
+    const CARRY_BUCKET = 'Carried interest accrued';
+
+    // The order the in-app tab reads left to right; anything else sorts after, by name.
+    const BUCKET_ORDER = [
+      'Capital contribution', 'Capital contributions - rolled', 'Contributions outside commitment',
+      'Syndication costs', 'Management fees', 'Management fee offset', 'Management fee waiver',
+      'Other operating expenses', 'Net operating income (loss)', 'Interest income',
+      'Net realized gain (loss)', 'Unrealized gain (loss)', 'Deemed gain',
+      'Carried interest accrued', 'Carried interest earned',
+      'Distribution', 'Recallable distribution', 'In kind distribution',
+      'Distribution - Carried interest', 'In kind distribution - Carried interest',
+      'Transfers', 'Cashless offset', 'Contingent loss allocation', 'Other',
+    ];
+
+    // Column names the Rollforward uses that are not buckets.
+    const TIE_LABEL = 'Ties to Carta NAV';
+    const COMMITMENT_PCT_LABEL = 'Commitment percentage';
+    const ENDING_PCT_LABEL = 'Ending balance percentage';
+
+    // One plain-English definition per column a fund finance reader could misread, keyed by the
+    // column's name (a bucket, or one of the labels above). A column with no entry shows no tip,
+    // so a new bucket still renders. Definitions are added only once confirmed against how Carta's
+    // own Partner Rollforward uses the term.
+    const COLUMN_HELP = {
+      [TIE_LABEL]: "Whether this ending balance equals Carta's own month-end NAV for the same month. When it differs, the gap is the absolute difference, summed over partners for a fund.",
+      'Contributions outside commitment': "Capital contributed that does not count against the partner's commitment, so it does not reduce their unfunded commitment.",
+      'In kind distribution': 'A distribution paid in securities or other assets instead of cash.',
+      [COMMITMENT_PCT_LABEL]: "The partner's commitment as a share of the fund's total commitment.",
+      [ENDING_PCT_LABEL]: "The partner's ending balance as a share of the fund's total ending balance. Shows a dash when the fund's ending balance is zero or negative.",
+    };
+
+    function columnHelp(name) {
+      return Object.prototype.hasOwnProperty.call(COLUMN_HELP, name) ? COLUMN_HELP[name] : '';
+    }
+
+    // A partner's share of a fund total. Blank (null) unless the total is positive: a zero total
+    // has no shares to divide, and a negative one would print shares that mean nothing.
+    function shareOf(value, total) {
+      return total > 0 ? value / total : null;
+    }
+
+    // The fraction a percentage column (commitment_pct or ending_pct) shows for a row: a partner's
+    // share of its fund's total `t`, or, for a total row, the total's share of itself. Every
+    // screen cell and CSV cell of those columns reads it from here.
+    function pctValue(k, p, t, isTotal) {
+      const field = k === 'commitment_pct' ? 'commitment' : 'ending';
+      return shareOf(isTotal ? t[field] : (p[field] || 0), t[field]);
+    }
+
+    function isMemoBucket(name) { return MEMO_BUCKETS.has(name); }
+
+    function sortBuckets(names) {
+      const rank = n => { const i = BUCKET_ORDER.indexOf(n); return i === -1 ? BUCKET_ORDER.length : i; };
+      return Array.from(names).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+    }
+
+    function shiftMonth(ym, delta) {
+      const [y, m] = ym.split('-').map(Number);
+      const t = y * 12 + (m - 1) + delta;
+      return Math.floor(t / 12) + '-' + String((t % 12) + 1).padStart(2, '0');
+    }
+
+    function monthsBetween(start, end) {
+      const out = [];
+      for (let m = start; m <= end; m = shiftMonth(m, 1)) out.push(m);
+      return out;
+    }
+
+    // A period that starts in January and is not one month or one quarter reads as year to
+    // date. The same-length window before it (Apr–Dec for a Jan–Sep period) compares nothing
+    // anyone reports on, so a year-to-date period only compares to the same months last year.
+    function isYearToDate(start, end) {
+      const len = monthsBetween(start, end).length;
+      return start.slice(5) === '01' && len !== 1 && len !== 3;
+    }
+
+    function comparisonOptions(start, end) {
+      return isYearToDate(start, end) ? ['none', 'year'] : ['none', 'previous', 'year'];
+    }
+
+    function resolveComparison(kind, start, end) {
+      return comparisonOptions(start, end).includes(kind) ? kind : 'year';
+    }
+
+    // 'previous': the same number of months directly before `start`.
+    // 'year': the same months twelve months earlier.
+    function comparisonWindow(start, end, kind) {
+      if (kind === 'year') return { start: shiftMonth(start, -12), end: shiftMonth(end, -12) };
+      const len = monthsBetween(start, end).length;
+      return { start: shiftMonth(start, -len), end: shiftMonth(start, -1) };
+    }
+
+    function sum(values) { return values.reduce((a, b) => a + b, 0); }
+
+    // rows: one fund's ledger lines {partner_id, bucket, month, amount}. Returns a Map of
+    // partner_id -> { beginning, flows: {bucket: amount}, memo: {bucket: amount}, ending }.
+    function rollforward(rows, start, end) {
+      const out = new Map();
+      for (const r of rows) {
+        if (r.month > end) continue;
+        let p = out.get(r.partner_id);
+        if (!p) { p = { beginning: 0, flows: {}, memo: {}, ending: 0 }; out.set(r.partner_id, p); }
+        const memo = isMemoBucket(r.bucket);
+        if (r.month < start) {
+          if (!memo) p.beginning += r.amount;
+        } else {
+          const into = memo ? p.memo : p.flows;
+          into[r.bucket] = (into[r.bucket] || 0) + r.amount;
+        }
+      }
+      for (const p of out.values()) p.ending = p.beginning + sum(Object.values(p.flows));
+      return out;
+    }
+
+    // Month by month for the given partner records (or every partner when partnerIds is null).
+    function walk(rows, partnerIds, start, end) {
+      const only = partnerIds == null ? null : new Set(partnerIds);
+      const scoped = rows.filter(r => only === null || only.has(r.partner_id));
+      let running = sum(scoped.filter(r => r.month < start && !isMemoBucket(r.bucket)).map(r => r.amount));
+      return monthsBetween(start, end).map(month => {
+        const flows = {};
+        for (const r of scoped) {
+          if (r.month === month && !isMemoBucket(r.bucket)) flows[r.bucket] = (flows[r.bucket] || 0) + r.amount;
+        }
+        const beginning = running;
+        running = beginning + sum(Object.values(flows));
+        return { month, beginning, flows, ending: running };
+      });
+    }
+
+    // Funded, unfunded and called-but-unpaid, rolled from `start` to `end`. Unfunded is the
+    // commitment less capital contributed within it; contributions outside the commitment
+    // do not reduce it.
+    function capitalCall(rows, commitments, start, end) {
+      const out = new Map();
+      const get = id => {
+        let p = out.get(id);
+        if (!p) { p = { fundedBegin: 0, contributed: 0, fundedEnd: 0, receivable: 0, deferred: 0 }; out.set(id, p); }
+        return p;
+      };
+      // A partner admitted at a close but not yet called has a commitment and no ledger lines.
+      for (const id of commitments.keys()) get(id);
+      for (const r of rows) {
+        if (r.month > end) continue;
+        const p = get(r.partner_id);
+        if (CONTRIBUTION_BUCKETS.includes(r.bucket)) {
+          if (r.month < start) p.fundedBegin += r.amount; else p.contributed += r.amount;
+        } else if (r.bucket === CALL_RECEIVABLE_BUCKET) p.receivable += r.amount;
+        else if (r.bucket === DEFERRED_CALL_BUCKET) p.deferred += r.amount;
+      }
+      for (const [id, p] of out) {
+        p.fundedEnd = p.fundedBegin + p.contributed;
+        p.commitment = commitments.has(id) ? commitments.get(id) : null;
+        p.unfundedBegin = p.commitment === null ? null : Math.max(0, p.commitment - p.fundedBegin);
+        p.unfundedEnd = p.commitment === null ? null : Math.max(0, p.commitment - p.fundedEnd);
+      }
+      return out;
+    }
+
+    // The commitment in force at `end`, falling back to the partner's current commitment only for
+    // partners Carta has no month-end commitment history for. A partner whose first commitment
+    // comes after `end` was not admitted yet, so today's figure must not be read back onto them.
+    // A zero current commitment is no commitment: funds keep empty partner records (old ids with
+    // no ledger lines and no NAV history), and the in-app tab does not list them.
+    function commitmentsWithFallback(navRows, currentCommitments, end) {
+      const out = commitmentsAt(navRows, end);
+      const hasHistory = new Set(navRows.filter(r => r.commitment != null).map(r => r.partner_id));
+      for (const [id, current] of currentCommitments) {
+        if (!out.has(id) && !hasHistory.has(id) && current > 0) out.set(id, current);
+      }
+      return out;
+    }
+
+    // The rollforward plus a zero balance for every partner who holds a commitment but has no
+    // ledger lines yet (admitted at a close, not yet called). `rf` itself is left alone so the
+    // NAV tie-out compares ledger partners only.
+    function withCommitmentHolders(rf, commitments) {
+      const out = new Map(rf);
+      for (const id of commitments.keys()) {
+        if (!out.has(id)) out.set(id, { beginning: 0, flows: {}, memo: {}, ending: 0 });
+      }
+      return out;
+    }
+
+    // The last full calendar quarter: the latest quarter ending at or before both the last month
+    // with data and last month. Never before the first month with data; a fund younger than one
+    // quarter opens on everything it has.
+    function defaultPeriod(firstMonth, lastMonth, thisMonth) {
+      const lastComplete = shiftMonth(thisMonth, -1);
+      const latest = lastMonth && lastMonth < lastComplete ? lastMonth : lastComplete;
+      const month = Number(latest.slice(5));
+      const quarterEnd = shiftMonth(latest, -(month % 3));
+      const quarterStart = shiftMonth(quarterEnd, -2);
+      if (firstMonth && quarterEnd < firstMonth) {
+        return { start: firstMonth, end: latest < firstMonth ? firstMonth : latest };
+      }
+      return { start: firstMonth && quarterStart < firstMonth ? firstMonth : quarterStart, end: quarterEnd };
+    }
+
+    // navRows: {partner_id, month, commitment, ending_nav}. The commitment in force at
+    // `end` is the latest row at or before it.
+    function commitmentsAt(navRows, end) {
+      const latest = new Map();
+      for (const r of navRows) {
+        if (r.month > end || r.commitment == null) continue;
+        const seen = latest.get(r.partner_id);
+        if (!seen || r.month >= seen.month) latest.set(r.partner_id, r);
+      }
+      return new Map(Array.from(latest, ([id, r]) => [id, r.commitment]));
+    }
+
+    // Compares the ledger's ending balance with Carta's own month-end NAV for the same month.
+    // `comparable` is false when the fund's NAV table has no row for that month, so a missing
+    // month never reads as a tie. `partners` holds each partner's own tie: ending balance
+    // against that partner's ENDING_TOTAL_NAV, a missing row counting as zero, so a partner
+    // with a balance and no NAV row differs and one with neither ties.
+    function reconcile(rf, navRows, end) {
+      const nav = new Map();
+      for (const r of navRows) if (r.month === end && r.ending_nav != null) nav.set(r.partner_id, r.ending_nav);
+      const partners = new Map();
+      if (nav.size === 0) return { comparable: false, ok: false, gap: 0, partners };
+      let gap = 0;
+      for (const id of new Set([...rf.keys(), ...nav.keys()])) {
+        const ledger = rf.has(id) ? rf.get(id).ending : 0;
+        const own = Math.abs(ledger - (nav.get(id) || 0));
+        partners.set(id, { comparable: true, ok: own < 1, gap: own });
+        gap += own;
+      }
+      return { comparable: true, ok: gap < 1, gap, partners };
+    }
+
+    // The one tie every view shows: a fund's whole ledger against all its NAV rows, read
+    // per partner with partnerTie.
+    function fundReconcile(rows, navRows, start, end) {
+      return reconcile(rollforward(rows, start, end), navRows, end);
+    }
+
+    function partnerTie(recon, id) {
+      if (!recon.comparable) return recon;
+      return recon.partners.get(id) || { comparable: true, ok: true, gap: 0 };
+    }
+
+    function tieState(tie) {
+      if (!tie.comparable) return 'na';
+      return tie.ok ? 'ok' : 'gap';
+    }
+
+    // The fund picker reads newest first (vintage date, else first month with ledger activity).
+    // 'name' sorts it A–Z.
+    function orderFunds(list, sort) {
+      const byName = (a, b) => String(a.fund_name).localeCompare(String(b.fund_name));
+      if (sort === 'name') return list.slice().sort(byName);
+      return list.slice().sort((a, b) => String(b.recency || '').localeCompare(String(a.recency || '')) || byName(a, b));
+    }
+
+    // Partners within a fund, all in its one currency: largest commitment first through the same
+    // comparator as fund rows and investors.
+    function orderPartners(list, sort) {
+      return orderAcrossCurrencies(list, sort, [], p => p.name);
+    }
+
+    // Currencies in the order the tables list them: the most funds first, ties A–Z, funds with no
+    // reported currency last. Counting funds ranks them without comparing amounts across currencies.
+    function currencyOrder(list) {
+      const counts = new Map();
+      for (const f of list) { const code = f.currency_code || ''; counts.set(code, (counts.get(code) || 0) + 1); }
+      return Array.from(counts.keys())
+        .sort((a, b) => (a === '') - (b === '') || counts.get(b) - counts.get(a) || a.localeCompare(b));
+    }
+
+    function currencyRank(order) {
+      return code => { const i = order.indexOf(code || ''); return i === -1 ? order.length : i; };
+    }
+
+    // Fund rows and investors, which can be in different currencies: each currency together in
+    // `order`, largest commitment first within it, so amounts are only compared within one currency.
+    function orderAcrossCurrencies(list, sort, order, nameOf) {
+      const byName = (a, b) => String(nameOf(a)).localeCompare(String(nameOf(b)));
+      if (sort === 'name') return list.slice().sort(byName);
+      const rank = currencyRank(order);
+      const size = x => (x.commitment == null ? -Infinity : x.commitment);
+      return list.slice().sort((a, b) => rank(a.currency_code) - rank(b.currency_code) || size(b) - size(a) || byName(a, b));
+    }
+
+    // One total row per currency, never added across them. A table in one currency reads "Total";
+    // otherwise each names its currency by symbol, or by code where two currencies share a symbol.
+    function currencyTotalLabels(codes, symbolOf) {
+      if (codes.length === 1) return new Map([[codes[0], 'Total']]);
+      const symbols = codes.map(code => (code ? symbolOf(code) : ''));
+      return new Map(codes.map((code, i) => {
+        const shared = symbols.filter(s => s === symbols[i]).length > 1;
+        return [code, 'Total (' + (!code ? 'no currency' : shared ? code : symbols[i]) + ')'];
+      }));
+    }
+
+    // The running total a fund adds into: its own currency's, never another's.
+    function currencyTotalFor(totals, fund, init) {
+      const code = fund.currency_code || '';
+      if (!totals.has(code)) totals.set(code, init());
+      return totals.get(code);
+    }
+
+    // How an amount shows its currency, decided by the firm's primary currency (the one with the most
+    // funds): a USD firm writes its own dollars as $ and every other currency as its code (EUR 1,200.00);
+    // any other firm writes dollars as USD and every other currency, its own included, with its standard
+    // en-US symbol (€, £, R$, CA$, A$), which is its code where no symbol is unique to it (SGD, SEK).
+    // No two currencies share a mark. Amounts are formatted in one fixed locale, so no viewer's region
+    // changes them (an en-CA browser would otherwise print US$).
+    const AMOUNT_LOCALE = 'en-US';
+    const AMOUNT_OPTIONS = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+    const amountFormats = new Map();
+
+    function amountFormat(options) {
+      const key = JSON.stringify(options);
+      if (!amountFormats.has(key)) amountFormats.set(key, new Intl.NumberFormat(AMOUNT_LOCALE, options));
+      return amountFormats.get(key);
+    }
+
+    function currencyDisplay(code, primary) {
+      return (code === 'USD') !== (primary === 'USD') ? 'code' : 'symbol';
+    }
+
+    const currencyOptions = (code, primary) => ({ ...AMOUNT_OPTIONS, style: 'currency', currency: code, currencyDisplay: currencyDisplay(code, primary) });
+
+    // A fund with no reported currency prints a bare figure, never dollars.
+    function formatAmount(n, code, primary) {
+      if (n === null || n === undefined || isNaN(n)) return '—';
+      n = cents(n);
+      if (!code) return amountFormat(AMOUNT_OPTIONS).format(n);
+      try { return amountFormat(currencyOptions(code, primary)).format(n); } catch (_) { return amountFormat(AMOUNT_OPTIONS).format(n) + ' ' + code; }
+    }
+
+    // What formatAmount puts in front of a figure in this currency ('$', 'EUR', '€'), for the total rows' labels.
+    function currencyMark(code, primary) {
+      try {
+        const part = amountFormat(currencyOptions(code, primary)).formatToParts(0).find(p => p.type === 'currency');
+        return part ? part.value : code;
+      } catch (_) { return code; }
+    }
+
+    function formatPercent(n) {
+      if (n === null || n === undefined || isNaN(n)) return '—';
+      return amountFormat({ style: 'percent', ...AMOUNT_OPTIONS }).format(n);
+    }
+
+    // Column widths for one table: a dragged width saved for a column's key wins; otherwise its
+    // natural width, the first (name) column at most NAME_COLUMN_MAX.
+    const NAME_COLUMN_MAX = 320;
+
+    function columnWidths(naturals, keys, saved) {
+      return naturals.map((natural, i) => (keys[i] in saved ? saved[keys[i]] : i === 0 ? Math.min(natural, NAME_COLUMN_MAX) : natural));
+    }
+
+    // The fund picker's list: families and standalone funds in fund order, a family placed by its
+    // first (newest) member. A family of one fund has nothing to group and reads as that fund.
+    // Returns [{ kind: 'family', id, name, members: [fund] } | { kind: 'fund', fund }].
+    function fundPickerEntries(funds, sort) {
+      const entries = [];
+      const families = new Map();
+      for (const f of orderFunds(funds, sort)) {
+        if (f.family_id == null) { entries.push({ kind: 'fund', fund: f }); continue; }
+        const id = String(f.family_id);
+        if (!families.has(id)) {
+          const family = { kind: 'family', id, name: f.family_name || 'Fund family ' + id, members: [] };
+          families.set(id, family);
+          entries.push(family);
+        }
+        families.get(id).members.push(f);
+      }
+      const flat = entries.map(e => (e.kind === 'family' && e.members.length === 1 ? { kind: 'fund', fund: e.members[0] } : e));
+      if (sort !== 'name') return flat;
+      const label = e => (e.kind === 'family' ? e.name : e.fund.fund_name);
+      return flat.sort((a, b) => label(a).localeCompare(label(b)));
+    }
+
+    // A family that matches keeps all its funds; a fund that matches keeps its family's row,
+    // so a match never shows as a family with nothing under it or a fund with no family.
+    function filterPickerEntries(entries, query) {
+      const q = String(query || '').trim().toLowerCase();
+      if (!q) return entries;
+      const hit = text => String(text).toLowerCase().includes(q);
+      const out = [];
+      for (const e of entries) {
+        if (e.kind === 'fund') { if (hit(e.fund.fund_name)) out.push(e); continue; }
+        if (hit(e.name)) { out.push(e); continue; }
+        const members = e.members.filter(f => hit(f.fund_name));
+        if (members.length) out.push({ ...e, members });
+      }
+      return out;
+    }
+
+    // Ticking a family ticks every fund in it; unticking it, when all are ticked, clears them.
+    function toggleFamily(selected, memberIds) {
+      const out = new Set(selected);
+      const all = memberIds.every(id => out.has(id));
+      for (const id of memberIds) all ? out.delete(id) : out.add(id);
+      return out;
+    }
+
+    function familyState(selected, memberIds) {
+      const n = memberIds.filter(id => selected.has(id)).length;
+      return n === 0 ? 'none' : n === memberIds.length ? 'all' : 'some';
+    }
+
+    // The picker stages ticks until Apply. Every fund ticked is stored as the empty set, the
+    // same "all funds" the report opens on; nothing ticked has nothing to show and cannot apply.
+    function pickerSelection(pending, allIds) {
+      return allIds.every(id => pending.has(id)) ? new Set() : new Set(pending);
+    }
+
+    function canApplyPicker(pending, selected, allIds) {
+      if (pending.size === 0) return false;
+      const next = pickerSelection(pending, allIds);
+      return next.size !== selected.size || Array.from(next).some(id => !selected.has(id));
+    }
+
+    // An empty selection is every fund. A selection that is exactly one family reads as it.
+    function pickerLabel(entries, selected) {
+      if (selected.size === 0) return 'All funds';
+      const family = entries.find(e => e.kind === 'family' && e.members.length === selected.size &&
+        e.members.every(f => selected.has(f.fund_uuid)));
+      if (family) return family.name;
+      if (selected.size === 1) {
+        const id = Array.from(selected)[0];
+        for (const e of entries) {
+          const funds = e.kind === 'family' ? e.members : [e.fund];
+          const hit = funds.find(f => f.fund_uuid === id);
+          if (hit) return hit.fund_name;
+        }
+      }
+      return selected.size + ' funds';
+    }
+
+    // The partner records worth listing: a commitment in force or any ledger line. Funds keep
+    // empty records (old ids with neither), which would otherwise list an investor twice.
+    function listedPartnerIds(partnerIds, ledgerRows, commitments) {
+      const withLedger = new Set(ledgerRows.map(r => r.partner_id));
+      return Array.from(partnerIds).filter(id => withLedger.has(id) || commitments.get(id) > 0);
+    }
+
+    // One option per investor across the given partner records. An investor is a
+    // PARTNER_ENTITY_ID, never a name: different investors share names, and one investor holds
+    // records in several funds. A record with no entity id stands alone. Two investors with the
+    // same name are told apart by the funds they hold.
+    // records: [{fund_uuid, fund_name, currency_code, partner_id, entity_id, name, commitment}]
+    // order: the currencies in table order (currencyOrder).
+    function investorOptions(records, sort, order) {
+      const rank = currencyRank(order);
+      const byKey = new Map();
+      for (const r of records) {
+        const key = r.entity_id == null ? 'record:' + r.fund_uuid + ':' + r.partner_id : 'entity:' + r.entity_id;
+        const code = r.currency_code || '';
+        let o = byKey.get(key);
+        if (!o) { o = { key, name: r.name, currency_code: code, commitment: null, members: [], funds: [] }; byKey.set(key, o); }
+        o.members.push({ fund_uuid: r.fund_uuid, partner_id: r.partner_id });
+        // An investor sorts under the first of its currencies in `order`, by its largest single
+        // commitment in that currency: commitments in different currencies are never compared or added.
+        if (rank(code) < rank(o.currency_code)) { o.currency_code = code; o.commitment = r.commitment; }
+        else if (code === o.currency_code && r.commitment != null && (o.commitment == null || r.commitment > o.commitment)) o.commitment = r.commitment;
+        if (!o.funds.includes(r.fund_name)) o.funds.push(r.fund_name);
+      }
+      const options = orderAcrossCurrencies(Array.from(byKey.values()), sort, order, o => o.name);
+      const nameCount = new Map();
+      for (const o of options) nameCount.set(o.name, (nameCount.get(o.name) || 0) + 1);
+      const labels = new Map();
+      for (const o of options) {
+        let label = nameCount.get(o.name) > 1 ? o.name + ' · ' + o.funds.join(', ') : o.name;
+        const seen = labels.get(label) || 0;
+        labels.set(label, seen + 1);
+        if (seen) label += ' (' + (seen + 1) + ')';
+        o.label = label;
+      }
+      return options;
+    }
+
+    // The columns every view shows: each bucket the firm's ledger uses, across every loaded
+    // fund and every month, so the columns never change with the funds or period picked.
+    // Memo buckets only when asked. rowsByFund: Map(fund_uuid -> ledger rows).
+    function firmBuckets(rowsByFund, includeMemo) {
+      const names = new Set();
+      for (const rows of rowsByFund.values()) {
+        for (const r of rows) if (includeMemo || !isMemoBucket(r.bucket)) names.add(r.bucket);
+      }
+      return sortBuckets(names);
+    }
+
+    // Ledger sums are added in floating point, so a bucket that nets to zero can come out as
+    // -0.0000000001; at cent precision that is zero, not a negative.
+    function cents(n) { return Math.round(n * 100) / 100 || 0; }
+
+    function csvCell(v) {
+      const s = v == null ? '' : String(v).replace(/^-(0(\.0+)?%?)$/, '$1');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+
+    function toCsv(headers, rows) {
+      return [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\n');
+    }
+
+    // Excel reads a CSV without a byte-order mark in the system code page, which turns the
+    // headers' "—" into "â€”"; the mark makes it read UTF-8.
+    function csvFile(headers, rows) {
+      return '\uFEFF' + toCsv(headers, rows);
+    }
+
+    // The query tool's first line, e.g. `total_rows: 13,380 | offset: 500 | limit: 500 |
+    // format: markdown | next_offset: 1000`. Counts are digit-grouped with commas, and
+    // `next_offset` is present only while more pages remain.
+    function pageHeader(text) {
+      const first = (text || '').split(/\r?\n/)[0] || '';
+      if (!first.startsWith('total_rows:')) return { total: null, nextOffset: null };
+      const field = key => {
+        const match = first.match(new RegExp('\\b' + key + ':\\s*([\\d,]+)'));
+        return match ? parseInt(match[1].replace(/,/g, ''), 10) : null;
+      };
+      return { total: field('total_rows'), nextOffset: field('next_offset') };
+    }
+
+    // 'Sep 30, 2026' for '2026-09': the close of that month, which is when a balance is struck.
+    function monthEndLabel(ym) {
+      const [y, m] = ym.split('-').map(Number);
+      return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+        .format(new Date(Date.UTC(y, m, 0)));
+    }
+
+    // ── PDF ──
+    // A minimal PDF writer for the capital account statement. The viewer's downloads capability
+    // saves a string, so the whole file is kept ASCII: text uses the standard Helvetica fonts in
+    // WinAnsi encoding, with every byte above 126 written as an octal escape (so "Société" is
+    // real text), and a run of text WinAnsi cannot encode (Chinese, Cyrillic, Arabic…) is placed
+    // as a grayscale picture of the text in ASCIIHex, rendered by the page's own canvas.
+
+    const WINANSI_EXTRA = {
+      '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87, 'ˆ': 0x88, '‰': 0x89,
+      'Š': 0x8A, '‹': 0x8B, 'Œ': 0x8C, 'Ž': 0x8E, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95,
+      '–': 0x96, '—': 0x97, '˜': 0x98, '™': 0x99, 'š': 0x9A, '›': 0x9B, 'œ': 0x9C, 'ž': 0x9E, 'Ÿ': 0x9F,
+    };
+
+    function winAnsiCode(ch) {
+      const c = ch.codePointAt(0);
+      if ((c >= 32 && c <= 126) || (c >= 160 && c <= 255)) return c;
+      return WINANSI_EXTRA[ch] === undefined ? null : WINANSI_EXTRA[ch];
+    }
+
+    // Intl formats some locales' amounts with a narrow no-break space or a true minus sign,
+    // neither of which WinAnsi has; both have exact WinAnsi stand-ins.
+    function pdfNormalize(text) {
+      return String(text == null ? '' : text).replace(/[\u202F\u2009]/g, ' ').replace(/\u2212/g, '-').replace(/\s+/g, ' ');
+    }
+
+    function isWinAnsi(text) {
+      return Array.from(text).every(ch => winAnsiCode(ch) !== null);
+    }
+
+    function pdfString(text) {
+      return Array.from(text).map(ch => {
+        const c = winAnsiCode(ch);
+        if (c === null) return '?';
+        if (ch === '(' || ch === ')' || ch === '\\') return '\\' + ch;
+        return c < 32 || c > 126 ? '\\' + c.toString(8).padStart(3, '0') : ch;
+      }).join('');
+    }
+
+    // Glyph widths (1/1000 em) of Helvetica and Helvetica-Bold for codes 32–126, from the
+    // standard font metrics; other codes use the digit width. Used to right-align amounts.
+    const HELVETICA_WIDTHS = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+    const HELVETICA_BOLD_WIDTHS = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+
+    function pdfTextWidth(text, size, bold) {
+      const table = bold ? HELVETICA_BOLD_WIDTHS : HELVETICA_WIDTHS;
+      let units = 0;
+      for (const ch of text) {
+        const c = winAnsiCode(ch);
+        units += c !== null && c >= 32 && c <= 126 ? table[c - 32] : 556;
+      }
+      return units * size / 1000;
+    }
+
+    const pdfNum = n => String(Math.round(n * 100) / 100);
+
+    // pages: [{ items }], each item one of
+    //   { type: 'text', text, x, y, size, bold, gray, align }   (text already WinAnsi-safe)
+    //   { type: 'image', x, y, w, h, align, px: { width, height, hex } }
+    //   { type: 'line', x1, y1, x2, y2 }
+    // `align: 'right'` makes x the right edge. Letter size, origin bottom left, units in points.
+    function pdfDocument(pages) {
+      const objects = [];
+      const add = body => { objects.push(body); return objects.length; };
+      const catalog = add('');
+      const pagesId = add('');
+      const regular = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+      const bold = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+      const kids = [];
+      for (const page of pages) {
+        const images = [];
+        const ops = [];
+        for (const it of page.items) {
+          if (it.type === 'text') {
+            const x = it.align === 'right' ? it.x - pdfTextWidth(it.text, it.size, it.bold) : it.x;
+            ops.push(`${it.gray ? '0.4' : '0'} g BT /${it.bold ? 'F2' : 'F1'} ${pdfNum(it.size)} Tf ${pdfNum(x)} ${pdfNum(it.y)} Td (${pdfString(it.text)}) Tj ET`);
+          } else if (it.type === 'image') {
+            const id = add(`<< /Type /XObject /Subtype /Image /Width ${it.px.width} /Height ${it.px.height} /ColorSpace /DeviceGray ` +
+              `/BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${it.px.hex.length + 1} >>\nstream\n${it.px.hex}>\nendstream`);
+            images.push(id);
+            const x = it.align === 'right' ? it.x - it.w : it.x;
+            ops.push(`q ${pdfNum(it.w)} 0 0 ${pdfNum(it.h)} ${pdfNum(x)} ${pdfNum(it.y)} cm /Im${images.length} Do Q`);
+          } else if (it.type === 'line') {
+            ops.push(`0.6 G 0.5 w ${pdfNum(it.x1)} ${pdfNum(it.y1)} m ${pdfNum(it.x2)} ${pdfNum(it.y2)} l S`);
+          }
+        }
+        const content = ops.join('\n');
+        const contentId = add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+        const xobjects = images.length ? ` /XObject << ${images.map((id, i) => `/Im${i + 1} ${id} 0 R`).join(' ')} >>` : '';
+        kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] ` +
+          `/Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >>${xobjects} >> /Contents ${contentId} 0 R >>`));
+      }
+      objects[catalog - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+      objects[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map(k => k + ' 0 R').join(' ')}] /Count ${kids.length} >>`;
+      let out = '%PDF-1.4\n';
+      const offsets = objects.map((body, i) => { const at = out.length; out += `${i + 1} 0 obj\n${body}\nendobj\n`; return at; });
+      const xref = out.length;
+      out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n` + offsets.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+      return out + `trailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    }
+
+    const PDF_UNDRAWABLE = '[characters this PDF cannot show - see the report]';
+
+    // Lays out capital account statements, one section (an investor's record in one fund, so a
+    // record per partner class) per page. `rasterize(text, size, bold)` returns { width, height, hex, ptWidth, ptHeight } for
+    // text WinAnsi cannot encode, or null when the viewer cannot draw it; then a visible
+    // placeholder stands in, never a garbled name.
+    // doc: { title, firm, note, footer, sections: [{ facts: [[label, value]], amountHeader,
+    //        lines: [{ label, amount, kind: 'total' | 'heading' | 'memo' | undefined }] }] }
+    function statementPdfPages(doc, rasterize) {
+      const LEFT = 54, RIGHT = 558, VALUE_X = 180, BOTTOM = 72;
+      const pages = [];
+      let items, y;
+      const put = (text, x, at, size, opts) => {
+        const o = opts || {};
+        const s = pdfNormalize(text);
+        if (isWinAnsi(s)) { items.push({ type: 'text', text: s, x, y: at, size, bold: !!o.bold, gray: !!o.gray, align: o.align }); return; }
+        const px = rasterize ? rasterize(s, size, !!o.bold) : null;
+        if (px) items.push({ type: 'image', x, y: at - size * 0.25, w: px.ptWidth, h: px.ptHeight, align: o.align, px });
+        else items.push({ type: 'text', text: PDF_UNDRAWABLE, x, y: at, size, bold: !!o.bold, gray: true, align: o.align });
+      };
+      const rule = at => items.push({ type: 'line', x1: LEFT, y1: at, x2: RIGHT, y2: at });
+      const newPage = (title, amountHeader) => {
+        items = [];
+        pages.push({ items });
+        put(title, LEFT, 740, 18, { bold: true });
+        put(doc.firm, LEFT, 720, 11);
+        put(doc.note, LEFT, 706, 9, { gray: true });
+        y = 680;
+        if (amountHeader) tableHeader(amountHeader);
+      };
+      const tableHeader = amountHeader => {
+        put('Item', LEFT, y, 10, { bold: true });
+        put(amountHeader, RIGHT, y, 10, { bold: true, align: 'right' });
+        rule(y - 5);
+        y -= 20;
+      };
+      for (const section of doc.sections) {
+        newPage(doc.title);
+        for (const [label, value] of section.facts) {
+          put(label, LEFT, y, 9, { gray: true });
+          put(value, VALUE_X, y, 10);
+          y -= 15;
+        }
+        y -= 12;
+        tableHeader(section.amountHeader);
+        for (const line of section.lines) {
+          if (y < BOTTOM) newPage(doc.title + ' (continued)', section.amountHeader);
+          if (line.kind === 'total') { rule(y + 11); }
+          if (line.kind === 'heading') { y -= 6; put(line.label, LEFT, y, 9, { bold: true, gray: true }); y -= 15; continue; }
+          put(line.label, line.kind === 'memo' ? LEFT + 12 : LEFT, y, 10, { bold: line.kind === 'total' });
+          put(line.amount, RIGHT, y, 10, { bold: line.kind === 'total', align: 'right' });
+          y -= 15;
+        }
+      }
+      pages.forEach((page, i) => {
+        items = page.items;
+        put(doc.footer + ' · Page ' + (i + 1) + ' of ' + pages.length, LEFT, 40, 8, { gray: true });
+      });
+      return pages;
+    }
+    // </rf-core>
+  </script>
+
+  <script>
+    const CONFIG = JSON.parse(document.getElementById('rollforward-data').textContent);
+    const CARTA_MCP_SERVER = CONFIG.mcp_server;
+    const CALL_TOOL = 'call_tool';
+    const WELCOME_TOOL = 'welcome';
+    const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-partner-rollforward'], from_ui: true };
+
+    // Config values land in SQL, so only plain identifiers are accepted.
+    const IDENT = /^[A-Za-z0-9_.]+$/;
+    function table(name) {
+      const value = CONFIG.tables && CONFIG.tables[name];
+      if (typeof value !== 'string' || !IDENT.test(value)) throw new Error('the table name for ' + name + ' is missing or invalid');
+      return value;
+    }
+
+    // Pinned in the context AND in the SQL, then verified on every page: the context is
+    // per-user state that another tab can rewrite mid-load, and a page of another firm's
+    // partners under this firm's heading is the failure this guards against.
+    const FIRM_CONTEXT_ID = typeof CONFIG.firm_context_id === 'string' && CONFIG.firm_context_id ? CONFIG.firm_context_id : null;
+    const FIRM_ROW_ID = typeof CONFIG.firm_warehouse_id === 'string' && CONFIG.firm_warehouse_id ? CONFIG.firm_warehouse_id : null;
+
+    function firmPin(alias) {
+      if (!FIRM_ROW_ID) return '';
+      return ` AND ${alias}.FIRM_ID = '${String(FIRM_ROW_ID).replace(/'/g, "''")}'`;
+    }
+
+    function assertFirm(rows) {
+      if (!FIRM_ROW_ID || !rows || rows.length === 0) return rows;
+      const foreign = rows.filter(r => r.firm_id != null && String(r.firm_id) !== FIRM_ROW_ID);
+      if (foreign.length) {
+        throw new Error('the warehouse returned ' + foreign.length + ' row(s) belonging to another firm — the Carta ' +
+                        'session changed firms while this report was loading. Reload to fetch this firm again.');
+      }
+      return rows;
+    }
+
+    let _mcpNsPromise = null;
+    function mcpNamespace() {
+      if (!_mcpNsPromise) {
+        _mcpNsPromise = (async () => {
+          for (let i = 0; i < 5; i++) {
+            try {
+              const mcp = await Promise.resolve(window.claude?.use?.('mcp') ?? null);
+              if (mcp) return mcp;
+            } catch (_) {}
+            if (i < 4) await new Promise(r => setTimeout(r, 500));
+          }
+          return null;
+        })();
+      }
+      return _mcpNsPromise;
+    }
+
+    async function callCartaTool(tool, args) {
+      const mcp = await mcpNamespace();
+      if (!mcp) throw new Error('this report reads live data and no Carta connector is available in this view');
+      try {
+        return await mcp.callTool(CARTA_MCP_SERVER, tool, { ...args, _instrumentation_v2: INSTRUMENTATION_V2 });
+      } catch (err) {
+        if (err && err.code === 'tool_error') {
+          return { isError: true, code: err.code, result: err.result, content: [{ type: 'text', text: err.message || 'tool error' }] };
+        }
+        throw err;
+      }
+    }
+
+    let welcomeCalled = false;
+    let welcomeRetried = false;
+
+    function status(text) {
+      const el = document.getElementById('status');
+      el.textContent = text || '';
+      el.hidden = !text;
+    }
+
+    function fail(err) {
+      status('');
+      const el = document.getElementById('error');
+      el.textContent = 'Could not load the partner rollforward: ' + (err && err.message ? err.message : String(err));
+      el.hidden = false;
+    }
+
+    const TRANSIENT = /no reply|timed? ?out|timeout|econnreset|network|socket|temporarily|503|502|504|gateway/i;
+    const RETRIES = 2;
+    const BACKOFF_MS = [700, 2100];
+
+    async function withRetry(run, label) {
+      for (let attempt = 0; ; attempt++) {
+        try { return await run(); } catch (err) {
+          if (attempt >= RETRIES || !TRANSIENT.test((err && err.message) || String(err || ''))) throw err;
+          status(`${label} — connection dropped, retrying (${attempt + 1} of ${RETRIES})…`);
+          await new Promise(r => setTimeout(r, BACKOFF_MS[attempt] || BACKOFF_MS[BACKOFF_MS.length - 1]));
+        }
+      }
+    }
+
+    async function callMcp(args) {
+      const first = await callCartaTool(CALL_TOOL, args);
+      if (!first || !first.isError) return first;
+      if (!/welcome/i.test(errorText(first)) || welcomeRetried) return first;
+      welcomeRetried = true;
+      status('Reconnecting to Carta…');
+      const welcomed = await callCartaTool(WELCOME_TOOL, {});
+      if (welcomed && welcomed.isError) throw new Error('could not start a Carta session');
+      return await callCartaTool(CALL_TOOL, args);
+    }
+
+    // A wrapped command's error text is in the outer content and, through the gateway, in
+    // `result.result.content` too; callCartaTool replaces the outer text with a generic message.
+    function errorText(result) {
+      const text = (r) => (r && r.content && r.content[0] && r.content[0].text) || '';
+      return [text(result), text(result && result.result)].filter(Boolean).join(' ');
+    }
+
+    function unwrap(result) {
+      if (typeof result === 'string') return result;
+      if (!result || typeof result !== 'object') throw new Error('unexpected response shape');
+      if (result.isError) throw new Error(errorText(result) || 'query failed');
+      if (result.content && result.content[0] && typeof result.content[0].text === 'string') return result.content[0].text;
+      if (typeof result.payload === 'string') return result.payload;
+      if (result.payload && typeof result.payload.result === 'string') return result.payload.result;
+      if (result.structuredContent && typeof result.structuredContent.result === 'string') return result.structuredContent.result;
+      throw new Error('no table in the response');
+    }
+
+    // Names can contain a literal ' | ' (the markdown separator); fold overflow into the
+    // first free-text column so the row survives with that name garbled rather than lost.
+    const TEXT_COLUMNS = ['fund_name', 'family_name', 'partner_name', 'partner_class', 'entity_type', 'bucket'];
+
+    function reconcileOverflow(cells, headers) {
+      if (cells.length === headers.length) return cells;
+      const overflow = cells.length - headers.length;
+      if (overflow <= 0) return null;
+      const textIdx = headers.findIndex(h => TEXT_COLUMNS.indexOf(h) !== -1);
+      if (textIdx === -1) return null;
+      const merged = cells.slice(0, textIdx)
+        .concat([cells.slice(textIdx, textIdx + overflow + 1).join(' | ')])
+        .concat(cells.slice(textIdx + overflow + 1));
+      return merged.length === headers.length ? merged : null;
+    }
+
+    function coerce(raw) {
+      const flat = typeof raw === 'string' ? raw.trim().toUpperCase() : raw;
+      if (flat === 'NULL' || flat === '') return null;
+      if (flat === 'TRUE') return true;
+      if (flat === 'FALSE') return false;
+      if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(raw)) {
+        const n = parseFloat(raw);
+        if (Number.isFinite(n)) return n;
+      }
+      return raw;
+    }
+
+    function parseTable(text) {
+      if (!text || typeof text !== 'string') return { rows: [], skipped: 0 };
+      const lines = text.split(/\r?\n/).map(l => l.trimEnd()).filter(l => l.length > 0);
+      if (lines.length === 0) return { rows: [], skipped: 0 };
+      const head = lines[0].startsWith('total_rows:') ? 1 : 0;
+      if (head >= lines.length) return { rows: [], skipped: 0 };
+      const headers = lines[head].split(' | ').map(h => h.trim().toLowerCase());
+      let start = head + 1;
+      if (lines.length > start && /^[\s\-|]+$/.test(lines[start])) start++;
+      const rows = [];
+      let skipped = 0;
+      for (let i = start; i < lines.length; i++) {
+        const cells = reconcileOverflow(lines[i].split(' | ').map(c => c.trim()), headers);
+        if (!cells) { skipped++; continue; }
+        const row = {};
+        headers.forEach((h, j) => { row[h] = coerce(cells[j]); });
+        rows.push(row);
+      }
+      return { rows, skipped };
+    }
+
+    // A query is read a page at a time. The tool refuses a page over its 200 KiB inline ceiling
+    // with a `too_large` error (and one over its page cap with "too much data"), so a refused page
+    // is retried at the same offset with fewer rows and the smaller size is kept.
+    const PAGE_LIMIT = 10000;
+    const TOO_LARGE_ERROR = /too much data|"code"\s*:\s*"too_large"/i;
+    const FITTING_ROWS = /limit param to about (\d+)/i;
+    const LOAD_CONCURRENCY = 4;
+
+    // The next page size after a refusal: the row count the tool says fits, and never more
+    // than half the size just refused. Null when the error is not a size refusal or one row
+    // is already too large.
+    function shrunkLimit(message, sent) {
+      if (!TOO_LARGE_ERROR.test(message) || sent <= 1) return null;
+      const fits = message.match(FITTING_ROWS);
+      return Math.max(1, Math.min(fits ? parseInt(fits[1], 10) : sent, Math.floor(sent / 2)));
+    }
+
+    async function queryOnce(sql, opts) {
+      const args = { sql, format: 'markdown' };
+      if (opts && opts.limit !== undefined) args.limit = opts.limit;
+      if (opts && opts.offset !== undefined) args.offset = opts.offset;
+      const text = unwrap(await callMcp({
+        name: 'dwh__execute__query',
+        arguments: args,
+      }));
+      const parsed = parseTable(text);
+      return { rows: parsed.rows, skipped: parsed.skipped, header: pageHeader(text) };
+    }
+
+    const query = (sql, opts) => withRetry(() => queryOnce(sql, opts), (opts && opts.label) || 'Loading');
+
+    // Every row of a query. Each SQL ends in an ORDER BY over all its columns: the tool applies
+    // it to every page, so pages neither repeat nor skip rows. A page count that does not add up
+    // to the tool's total_rows fails the load instead of showing a silent subset.
+    async function queryAll(sql, label) {
+      const rows = [];
+      let skipped = 0, limit = PAGE_LIMIT, offset = 0, total = null;
+      for (;;) {
+        let page;
+        try {
+          page = await query(sql, { limit, offset, label });
+        } catch (err) {
+          const smaller = shrunkLimit((err && err.message) || '', limit);
+          if (smaller === null) throw err;
+          limit = smaller;
+          continue;
+        }
+        assertFirm(page.rows);
+        rows.push(...page.rows);
+        skipped += page.skipped;
+        total = page.header.total;
+        const next = page.header.nextOffset;
+        if (next === null) break;
+        if (next <= offset) throw new Error(`${label}: the query tool did not advance past row ${offset}`);
+        offset = next;
+      }
+      if (total !== null && rows.length + skipped !== total) {
+        throw new Error(`${label}: read ${rows.length + skipped} of ${total} rows`);
+      }
+      return { rows, skipped };
+    }
+
+    async function forEachLimited(items, limit, run) {
+      let next = 0;
+      const worker = async () => { while (next < items.length) await run(items[next++]); };
+      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    }
+
+    // ── queries ──
+    // Every statement is read-only and keyed by fund UUID, so one load serves every view
+    // and every filter; switching funds or periods re-queries nothing.
+    function fundsSql() {
+      return `SELECT f.FUND_UUID AS fund_uuid, f.FUND_NAME AS fund_name, f.FUND_FAMILY_ID AS family_id,
+                     f.FUND_FAMILY_NAME AS family_name, f.REPORTING_CURRENCY AS currency_code, f.VINTAGE_DATE AS vintage_date,
+                     f.FIRM_ID AS firm_id
+              FROM ${table('funds')} f
+              WHERE f.FUND_UUID IN (SELECT a.FUND_UUID FROM ${table('allocations')} a WHERE TRUE${firmPin('a')})${firmPin('f')}
+              ORDER BY fund_uuid, fund_name, family_id, family_name, currency_code, vintage_date, firm_id`;
+    }
+
+    // Each per-fund table: its alias and its fund column.
+    const FUND_SCOPE = {
+      partners: { alias: 'p', fund: 'FUND_UUID' },
+      allocations: { alias: 'a', fund: 'FUND_UUID' },
+      nav: { alias: 'n', fund: 'FUND_ID' },
+    };
+
+    const sqlString = value => `'${String(value).replace(/'/g, "''")}'`;
+
+    function fundScope(kind, fundUuid) {
+      const s = FUND_SCOPE[kind];
+      return ` AND ${s.alias}.${s.fund} = ${sqlString(fundUuid)}`;
+    }
+
+    function partnersSql(fundUuid) {
+      return `SELECT p.FUND_UUID AS fund_uuid, p.PARTNER_ID AS partner_id, p.PARTNER_NAME AS partner_name,
+                     p.PARTNER_CLASS_NAME AS partner_class, p.PARTNER_ENTITY_TYPE AS entity_type,
+                     p.IS_LIMITED_PARTNER AS is_lp, p.IS_GENERAL_PARTNER AS is_gp,
+                     p.TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS commitment_current, p.PARTNER_ENTITY_ID AS entity_id,
+                     p.FIRM_ID AS firm_id
+              FROM ${table('partners')} p
+              WHERE TRUE${firmPin('p')}${fundScope('partners', fundUuid)}
+              ORDER BY fund_uuid, partner_id, partner_name, partner_class, entity_type, is_lp, is_gp, commitment_current, entity_id, firm_id`;
+    }
+
+    // Month grain: a period is whole months, and the monthly roll keeps the row count
+    // proportional to partners × buckets × months instead of every journal line.
+    function allocationsSql(fundUuid) {
+      return `SELECT a.FUND_UUID AS fund_uuid, a.PARTNER_ID AS partner_id, a.ALLOCATION_BUCKET_NAME AS bucket,
+                     TO_CHAR(DATE_TRUNC('month', a.EFFECTIVE_DATE), 'YYYY-MM') AS month,
+                     SUM(a.ACTUAL_AMOUNT) AS amount, a.FIRM_ID AS firm_id
+              FROM ${table('allocations')} a
+              WHERE TRUE${firmPin('a')}${fundScope('allocations', fundUuid)}
+              GROUP BY a.FUND_UUID, a.PARTNER_ID, a.ALLOCATION_BUCKET_NAME, DATE_TRUNC('month', a.EFFECTIVE_DATE), a.FIRM_ID
+              ORDER BY fund_uuid, partner_id, bucket, month, amount, firm_id`;
+    }
+
+    function navSql(fundUuid) {
+      return `SELECT n.FUND_ID AS fund_uuid, n.PARTNER_ID AS partner_id, TO_CHAR(n.MONTH_END_DATE, 'YYYY-MM') AS month,
+                     n.CUMULATIVE_TOTAL_COMMITMENT AS commitment, n.ENDING_TOTAL_NAV AS ending_nav, n.FIRM_ID AS firm_id
+              FROM ${table('nav')} n
+              WHERE TRUE${firmPin('n')}${fundScope('nav', fundUuid)}
+              ORDER BY fund_uuid, partner_id, month, commitment, ending_nav, firm_id`;
+    }
+
+    // ── state ──
+    let funds = [];                       // [{fund_uuid, fund_name, family_id, family_name, currency_code, vintage_date, recency}]
+    const partnersByFund = new Map();     // fund_uuid -> Map(partner_id -> partner row)
+    const ledgerByFund = new Map();       // fund_uuid -> [{partner_id, bucket, month, amount}]
+    const navByFund = new Map();          // fund_uuid -> [{partner_id, month, commitment, ending_nav}]
+    const firstMonthByFund = new Map();   // fund_uuid -> first month with ledger activity
+    let dataMonths = { min: null, max: null };
+    let loadNotes = [];
+    let currencyRanking = [];             // the firm's currencies in table order (currencyOrder)
+
+    const state = {
+      view: 'rollforward', selected: new Set(), start: '', end: '', mode: '$', compare: 'none',
+      sort: 'size', hidden: new Set(), includeMemo: false, investor: '', investorAuto: false, expanded: new Set(), expandAll: null,
+      widths: {},   // view -> column key -> dragged width (px)
+    };
+    let lastExport = { headers: [], rows: [] };
+    let lastStatements = [];
+
+    const COMPARE_LABELS = { none: 'None', previous: 'Previous period', year: 'Same period last year' };
+
+    const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const esc = s => (s == null ? '' : String(s)).replace(/[&<>"']/g, c => HTML_ESCAPES[c]);
+
+    // The currency always comes from the fund; how it shows follows the firm's primary currency.
+    const primaryCurrency = () => currencyRanking[0] || '';
+    const money = (n, code) => formatAmount(n, code, primaryCurrency());
+    const percent = formatPercent;
+    function monthLabel(ym) {
+      const [y, m] = ym.split('-').map(Number);
+      return new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, 1)));
+    }
+    const periodLabel = () => `${monthLabel(state.start)} – ${monthLabel(state.end)}`;
+    // A period's beginning is the close of the month before From; its ending, the close of To.
+    const beginningDate = () => monthEndLabel(shiftMonth(state.start, -1));
+    const endingDate = (end = state.end) => monthEndLabel(end);
+    const beginningLabel = () => 'Beginning balance at ' + beginningDate();
+    const endingLabel = (end = state.end) => 'Ending balance at ' + endingDate(end);
+
+    // ── derived scope ──
+    // The selected funds in table order, each with its total commitment in force at the end month.
+    function scopedFunds() {
+      const list = funds.filter(f => state.selected.size === 0 || state.selected.has(f.fund_uuid))
+        .map(f => ({ ...f, commitment: sum(Array.from(effectiveCommitments(f.fund_uuid, state.end).values())) }));
+      return orderAcrossCurrencies(list, state.sort, currencyRanking, f => f.fund_name);
+    }
+
+    // Running totals per currency (code -> total), returned in the firm's currency order with labels.
+    function currencyTotals(totals) {
+      const rank = currencyRank(currencyRanking);
+      const codes = Array.from(totals.keys()).sort((a, b) => rank(a) - rank(b));
+      const labels = currencyTotalLabels(codes, code => currencyMark(code, primaryCurrency()));
+      return codes.map(code => ({ code, label: labels.get(code), total: totals.get(code) }));
+    }
+
+    function partnerInfo(fundId, partnerId) {
+      const p = (partnersByFund.get(fundId) || new Map()).get(partnerId);
+      return {
+        name: p && p.partner_name ? p.partner_name : 'Partner ' + partnerId,
+        cls: (p && p.partner_class) || '',
+        type: p ? (p.is_gp ? 'General partner' : p.is_lp ? 'Limited partner' : (p.entity_type || '')) : '',
+      };
+    }
+
+    // The one place a partner's commitment is decided: Carta's month-end commitment in force at
+    // `end`, else the partner's current commitment. Every view reads it from here.
+    function effectiveCommitments(fundId, end) {
+      const current = new Map(Array.from(partnersByFund.get(fundId) || [], ([id, p]) => [id, p.commitment_current]));
+      return commitmentsWithFallback(navByFund.get(fundId) || [], current, end);
+    }
+
+    function activeRecords(fund) {
+      const partners = partnersByFund.get(fund.fund_uuid) || new Map();
+      const commitments = effectiveCommitments(fund.fund_uuid, '9999-12');
+      return listedPartnerIds(partners.keys(), ledgerByFund.get(fund.fund_uuid) || [], commitments).map(id => ({
+        fund_uuid: fund.fund_uuid, fund_name: fund.fund_name, currency_code: fund.currency_code, partner_id: id, entity_id: partners.get(id).entity_id,
+        name: partnerInfo(fund.fund_uuid, id).name, commitment: commitments.has(id) ? commitments.get(id) : null,
+      }));
+    }
+
+    const investorChoices = () => investorOptions(scopedFunds().flatMap(activeRecords), state.sort, currencyRanking);
+
+    function chosenInvestor() {
+      return state.investor ? investorChoices().find(o => o.key === state.investor) || null : null;
+    }
+
+    // One investor can hold two records in a fund (two classes); each is shown on its own.
+    function recordLabel(fundId, partnerId) {
+      const info = partnerInfo(fundId, partnerId);
+      return info.name + (info.cls ? ' · ' + info.cls : '');
+    }
+
+    const TIE_MARKS = { na: '', ok: '✓ ', gap: '✗ ' };
+
+    function tieCell(tie, code) {
+      const kind = tieState(tie);
+      if (kind === 'na') return `<td class="l tie" title="Carta has no month-end NAV for ${esc(monthLabel(state.end))}">—</td>`;
+      return kind === 'ok'
+        ? `<td class="l tie ok" title="Ending balance equals Carta's month-end NAV">${TIE_MARKS.ok}Yes</td>`
+        : `<td class="l tie gap" title="Ending balance differs from Carta's month-end NAV by this much (absolute, summed over partners for a fund)">${TIE_MARKS.gap}Differs by ${esc(money(tie.gap, code))}</td>`;
+    }
+
+    function tieExport(tie) {
+      return { na: '', ok: 'Yes', gap: 'No, differs by ' + tie.gap.toFixed(2) }[tieState(tie)];
+    }
+
+    function tieSentence(tie, code) {
+      return {
+        na: 'No Carta NAV for ' + monthLabel(state.end),
+        ok: 'Ties to Carta NAV at ' + endingDate(),
+        gap: 'Differs from Carta NAV by ' + money(tie.gap, code),
+      }[tieState(tie)];
+    }
+
+    // The records the chosen investor holds in the selected funds, in fund order.
+    function investorRecords(investor) {
+      return scopedFunds().flatMap(fund => investor.members
+        .filter(m => m.fund_uuid === fund.fund_uuid).map(m => ({ fund, partner_id: m.partner_id })));
+    }
+
+    // Plain header text with a sort arrow: ↓ is by currency then largest commitment first, A→Z by name.
+    function sortHeader() {
+      const byName = state.sort === 'name';
+      const order = byName ? 'Sorted A to Z' : 'Sorted by currency, then largest commitment first';
+      return `<button class="sort-header" data-sort aria-label="Fund / investor. ${order}; click to change" title="${order}; click to change">` +
+        `Fund / investor<span class="sort-arrow" aria-hidden="true">${byName ? 'A→Z' : '↓'}</span></button>`;
+    }
+
+    // ── rollforward view ──
+    function rollforwardModel(fund, start, end) {
+      const rows = ledgerByFund.get(fund.fund_uuid) || [];
+      const rf = rollforward(rows, start, end);
+      const commitments = effectiveCommitments(fund.fund_uuid, end);
+      const partners = [];
+      for (const [id, p] of withCommitmentHolders(rf, commitments)) {
+        const info = partnerInfo(fund.fund_uuid, id);
+        const commitment = commitments.has(id) ? commitments.get(id) : null;
+        if (commitment == null && p.beginning === 0 && p.ending === 0 && Object.keys(p.flows).length === 0) continue;
+        partners.push({ id, ...info, commitment, ...p });
+      }
+      return { fund, rf, partners: orderPartners(partners, state.sort), recon: fundReconcile(rows, navByFund.get(fund.fund_uuid) || [], start, end) };
+    }
+
+    function totalsRow(partners, buckets) {
+      const t = { commitment: sum(partners.map(p => p.commitment || 0)), beginning: sum(partners.map(p => p.beginning)),
+                  ending: sum(partners.map(p => p.ending)), flows: {} };
+      for (const b of buckets) t.flows[b] = sum(partners.map(p => p.flows[b] || p.memo[b] || 0));
+      return t;
+    }
+
+    function cellValue(value, columnTotal, code) {
+      if (state.mode === '%') return columnTotal ? percent(value / columnTotal) : '—';
+      return money(value, code);
+    }
+
+    // The one place a view's hideable columns are decided, for the renderers and the Select
+    // columns menu alike. `key` is what the rollforward's cell switch reads ('b:<bucket>' for a
+    // bucket); `hide` is the name `state.hidden` holds, shared by the rollforward and the walk.
+    // The walk never shows memo items; the rollforward shows them on request.
+    function viewColumns(view) {
+      const rf = view === 'rollforward';
+      const column = (key, label, hide = key) => ({ key, hide, label, help: columnHelp(label) });
+      const partner = rf ? [column('commitment', 'Commitment'), column('commitment_pct', COMMITMENT_PCT_LABEL), column('type', 'Partner type'),
+        column('class', 'Partner class'), column('beginning', beginningLabel())] : [];
+      const buckets = firmBuckets(ledgerByFund, rf && state.includeMemo).map(b => column('b:' + b, b, b));
+      return [...partner, ...buckets, ...(rf ? [column('ending', endingLabel(), 'ending'), column('ending_pct', ENDING_PCT_LABEL)] : [])];
+    }
+
+    const visibleColumns = view => viewColumns(view).filter(c => !state.hidden.has(c.hide));
+
+    // A column header's content: its label, plus an info icon when the column has a definition.
+    // The definition rides in the icon (not a title attribute) so sizeColumns leaves it alone.
+    function headerInner(label, help) {
+      if (!help) return esc(label);
+      return `<span class="hd"><span class="hd-text">${esc(label)}</span>` +
+        `<button type="button" class="info" data-term="${esc(label)}" data-help="${esc(help)}" aria-label="${esc(label + ': ' + help)}"></button></span>`;
+    }
+
+    // A heading row inside a view's single table, spanning every column.
+    function groupRow(html, width) {
+      return `<tr class="group"><td class="l" colspan="${width}">${html}</td></tr>`;
+    }
+
+    function numCell(text, raw, extra) {
+      return `<td class="num${cents(raw) < 0 ? ' neg' : ''}${extra ? ' ' + extra : ''}">${text}</td>`;
+    }
+
+    // The comparison window, or null. It is unavailable for a fund whose ledger starts after it.
+    function comparison() {
+      const kind = resolveComparison(state.compare, state.start, state.end);
+      if (kind === 'none') return null;
+      const window = comparisonWindow(state.start, state.end, kind);
+      return { ...window, kind, header: `${endingLabel(window.end)} (${COMPARE_LABELS[kind].toLowerCase()})` };
+    }
+
+    function comparisonAvailable(fund, window) {
+      const first = firstMonthByFund.get(fund.fund_uuid);
+      return Boolean(first) && first <= window.end;
+    }
+
+    const NOT_AVAILABLE = '<td class="num na" title="The fund had no ledger activity by the end of this period">Not available</td>';
+
+    function renderRollforward(out) {
+      const list = scopedFunds();
+      if (!list.length) return emptyState(out);
+      const prior = comparison();
+      const exportRows = [];
+      // Totals cover every bucket the view has, hidden or not; only the shown ones are drawn.
+      const buckets = viewColumns('rollforward').filter(c => c.key.startsWith('b:')).map(c => c.hide);
+      const exported = visibleColumns('rollforward').map(c => [c.key, c.label, c.help]);
+      // View by % already reads the Ending balance column as each partner's share of the fund's
+      // ending balance, so the percentage column is only drawn in $; the CSV is always in $ and keeps it.
+      const shown = state.mode === '%' ? exported.filter(([k]) => k !== 'ending_pct') : exported;
+      const priorHeaders = prior ? [prior.header] : [];
+      const exportHeaders = ['Fund', 'Investor', 'Currency', TIE_LABEL, ...exported.map(([, l]) => l), ...priorHeaders];
+      let html = `<div class="tablewrap"><table><thead><tr><th class="l" data-col="name">${sortHeader()}</th><th class="l" data-col="tie">${headerInner(TIE_LABEL, columnHelp(TIE_LABEL))}</th>` +
+        [...shown, ...(prior ? [['prior', prior.header]] : [])].map(([k, h, help]) => `<th data-col="${esc(k)}" class="${h === CARRY_BUCKET ? 'carry' : ''}">${headerInner(h, help)}</th>`).join('') +
+        `</tr></thead><tbody>`;
+
+      const totals = new Map();
+      list.map(f => rollforwardModel(f, state.start, state.end)).forEach(m => {
+        const code = m.fund.currency_code || '';
+        const grand = currencyTotalFor(totals, m.fund, () => ({ commitment: 0, beginning: 0, ending: 0, flows: {}, prior: 0, priorFunds: 0 }));
+        const t = totalsRow(m.partners, buckets);
+        const open = state.expandAll !== null ? state.expandAll : (state.expanded.has(m.fund.fund_uuid) || list.length === 1);
+        const available = prior && comparisonAvailable(m.fund, prior);
+        const priorRf = available ? rollforward(ledgerByFund.get(m.fund.fund_uuid) || [], prior.start, prior.end) : null;
+        const priorTotal = priorRf ? sum(Array.from(priorRf.values()).map(x => x.ending)) : null;
+        grand.commitment += t.commitment; grand.beginning += t.beginning; grand.ending += t.ending;
+        buckets.forEach(b => { grand.flows[b] = (grand.flows[b] || 0) + t.flows[b]; });
+        if (priorRf) { grand.prior += priorTotal; grand.priorFunds++; }
+
+        html += `<tr class="fund" data-fund="${esc(m.fund.fund_uuid)}"><td class="l" title="${esc(m.fund.fund_name)}"><span aria-hidden="true">${open ? '▾' : '▸'}</span> ${esc(m.fund.fund_name)}${m.fund.family_name ? ` <span class="hint">· ${esc(m.fund.family_name)}</span>` : ''}</td>` +
+          tieCell(m.recon, code);
+        for (const [k] of shown) {
+          if (k === 'commitment') html += numCell(cellValue(t.commitment, t.commitment, code), t.commitment);
+          else if (k === 'commitment_pct' || k === 'ending_pct') html += '<td class="num">' + percent(pctValue(k, null, t, true)) + '</td>';
+          else if (k === 'type' || k === 'class') html += '<td></td>';
+          else if (k === 'beginning') html += numCell(cellValue(t.beginning, t.beginning, code), t.beginning);
+          else if (k === 'ending') html += numCell(cellValue(t.ending, t.ending, code), t.ending);
+          else { const b = k.slice(2); html += numCell(cellValue(t.flows[b], t.flows[b], code), t.flows[b], b === CARRY_BUCKET ? 'carry' : ''); }
+        }
+        if (prior) html += priorRf ? numCell(money(priorTotal, code), priorTotal) : NOT_AVAILABLE;
+        html += '</tr>';
+        exportRows.push([m.fund.fund_name, '(fund total)', code, tieExport(m.recon), ...exported.map(([k]) => exportValue(k, null, t, code, true)),
+          ...(prior ? [priorRf ? priorTotal.toFixed(2) : ''] : [])]);
+
+        // A partner with no ledger lines by the end of the comparison window was not admitted yet.
+        const priorOf = p => (priorRf && priorRf.has(p.id) ? priorRf.get(p.id).ending : null);
+        // The export carries every partner, expanded on screen or not, like the in-app export.
+        m.partners.forEach(p => {
+          exportRows.push([m.fund.fund_name, p.name, code, tieExport(partnerTie(m.recon, p.id)), ...exported.map(([k]) => exportValue(k, p, t, code, false)),
+            ...(prior ? [priorOf(p) == null ? '' : priorOf(p).toFixed(2)] : [])]);
+        });
+        if (open) {
+          m.partners.forEach(p => {
+            html += `<tr class="partner"><td class="l" style="padding-left:32px" title="${esc(p.name)}">${esc(p.name)}</td>` + tieCell(partnerTie(m.recon, p.id), code);
+            for (const [k] of shown) {
+              if (k === 'commitment') html += numCell(cellValue(p.commitment || 0, t.commitment, code), p.commitment || 0);
+              else if (k === 'commitment_pct' || k === 'ending_pct') html += '<td class="num">' + percent(pctValue(k, p, t, false)) + '</td>';
+              else if (k === 'type') html += `<td class="l">${esc(p.type)}</td>`;
+              else if (k === 'class') html += `<td class="l">${esc(p.cls)}</td>`;
+              else if (k === 'beginning') html += numCell(cellValue(p.beginning, t.beginning, code), p.beginning);
+              else if (k === 'ending') html += numCell(cellValue(p.ending, t.ending, code), p.ending);
+              else { const b = k.slice(2); const v = p.flows[b] || p.memo[b] || 0; html += numCell(cellValue(v, t.flows[b], code), v, b === CARRY_BUCKET ? 'carry' : ''); }
+            }
+            if (prior) html += !priorRf ? NOT_AVAILABLE : priorOf(p) == null ? '<td class="num">—</td>' : numCell(money(priorOf(p), code), priorOf(p));
+            html += '</tr>';
+          });
+        }
+      });
+
+      if (list.length > 1) {
+        for (const { code, label, total: grand } of currencyTotals(totals)) {
+          html += `<tr class="total"><td class="l">${esc(label)}</td><td></td>`;
+          for (const [k] of shown) {
+            if (k === 'commitment') html += numCell(cellValue(grand.commitment, grand.commitment, code), grand.commitment);
+            else if (k === 'beginning') html += numCell(cellValue(grand.beginning, grand.beginning, code), grand.beginning);
+            else if (k === 'ending') html += numCell(cellValue(grand.ending, grand.ending, code), grand.ending);
+            else if (k === 'commitment_pct' || k === 'ending_pct') html += '<td class="num">' + percent(pctValue(k, null, grand, true)) + '</td>';
+            else if (k.startsWith('b:')) { const b = k.slice(2); html += numCell(cellValue(grand.flows[b], grand.flows[b], code), grand.flows[b], b === CARRY_BUCKET ? 'carry' : ''); }
+            else html += '<td></td>';
+          }
+          if (prior) html += grand.priorFunds ? numCell(money(grand.prior, code), grand.prior) : NOT_AVAILABLE;
+          html += '</tr>';
+          exportRows.push([label, '', code, '', ...exported.map(([k]) => exportValue(k, null, grand, code, true)),
+            ...(prior ? [grand.priorFunds ? grand.prior.toFixed(2) : ''] : [])]);
+        }
+      }
+      html += '</tbody></table></div>';
+      lastExport = { headers: exportHeaders, rows: exportRows };
+      out.innerHTML = html;
+      const notes = ['Click a fund to expand its partners. Ties to Carta NAV compares each ending balance with Carta\'s own month-end NAV.'];
+      if (prior) {
+        notes.push(prior.kind === 'year'
+          ? 'Same period last year moves both months back twelve; only the ending balance is compared.'
+          : 'Previous period is the same number of months directly before; only the ending balance is compared.');
+      }
+      if (isYearToDate(state.start, state.end)) notes.push('A year-to-date period compares to the same period last year.');
+      notes.push('Memo items (receivables, payables, deferrals) sit outside the capital account.');
+      document.getElementById('footnote').textContent = notes.join(' ');
+    }
+
+    function exportValue(k, p, t, code, isTotal) {
+      const src = isTotal ? t : p;
+      if (k === 'commitment') return (isTotal ? t.commitment : (p.commitment || 0)).toFixed(2);
+      if (k === 'commitment_pct' || k === 'ending_pct') {
+        const pct = pctValue(k, p, t, isTotal);
+        return pct == null ? '' : (pct * 100).toFixed(2) + '%';
+      }
+      if (k === 'type') return isTotal ? '' : p.type;
+      if (k === 'class') return isTotal ? '' : p.cls;
+      if (k === 'beginning') return src.beginning.toFixed(2);
+      if (k === 'ending') return src.ending.toFixed(2);
+      const b = k.slice(2);
+      return (isTotal ? t.flows[b] : (p.flows[b] || p.memo[b] || 0)).toFixed(2);
+    }
+
+    // ── monthly walk ──
+    // One group per selected fund for all partners, or per record of the chosen investor.
+    function walkTables() {
+      const investor = chosenInvestor();
+      if (!investor) return scopedFunds().map(fund => ({ fund, ids: null, label: 'All investors' }));
+      return investorRecords(investor).map(r => ({ fund: r.fund, ids: [r.partner_id], label: recordLabel(r.fund.fund_uuid, r.partner_id) }));
+    }
+
+    function renderWalk(out) {
+      if (!scopedFunds().length) return emptyState(out);
+      const sections = walkTables().map(t => ({
+        ...t, code: t.fund.currency_code || '', rows: walk(ledgerByFund.get(t.fund.fund_uuid) || [], t.ids, state.start, state.end),
+      }));
+      if (!sections.length) return noRecords(out);
+      const cols = visibleColumns('walk');
+      const buckets = cols.map(c => c.hide);
+      const headers = ['Month', 'Beginning balance', ...buckets, 'Ending balance'];
+      const exportRows = [];
+      const keys = ['month', 'beginning', ...cols.map(c => c.key), 'ending'];
+      let html = `<div class="tablewrap"><table><thead><tr>${headers.map((h, i) => `<th data-col="${esc(keys[i])}" class="${i === 0 ? 'l' : ''}${h === CARRY_BUCKET ? ' carry' : ''}">${headerInner(h, columnHelp(h))}</th>`).join('')}</tr></thead><tbody>`;
+      for (const s of sections) {
+        const { code, rows } = s;
+        const tot = buckets.map(b => sum(rows.map(r => r.flows[b] || 0)));
+        const first = rows[0];
+        const last = rows[rows.length - 1];
+        html += groupRow(`${esc(s.fund.fund_name)} — ${esc(s.label)}${code ? ' · ' + esc(code) : ''}`, headers.length) +
+          rows.map(r => `<tr><td class="l">${esc(monthLabel(r.month))}</td>${numCell(money(r.beginning, code), r.beginning)}` +
+            buckets.map(b => numCell(money(r.flows[b] || 0, code), r.flows[b] || 0, b === CARRY_BUCKET ? 'carry' : '')).join('') +
+            numCell(money(r.ending, code), r.ending) + '</tr>').join('') +
+          `<tr class="total"><td class="l">Period total</td>${numCell(money(first ? first.beginning : 0, code), first ? first.beginning : 0)}` +
+          tot.map((v, i) => numCell(money(v, code), v, buckets[i] === CARRY_BUCKET ? 'carry' : '')).join('') +
+          `${numCell(money(last ? last.ending : 0, code), last ? last.ending : 0)}</tr>`;
+        const lead = [s.fund.fund_name, s.label, code];
+        rows.forEach(r => exportRows.push([...lead, r.month, r.beginning.toFixed(2), ...buckets.map(b => (r.flows[b] || 0).toFixed(2)), r.ending.toFixed(2)]));
+        exportRows.push([...lead, 'Period total', (first ? first.beginning : 0).toFixed(2), ...tot.map(v => v.toFixed(2)), (last ? last.ending : 0).toFixed(2)]);
+      }
+      out.innerHTML = html + '</tbody></table></div>';
+      lastExport = { headers: ['Fund', 'Investor', 'Currency', ...headers], rows: exportRows };
+      document.getElementById('footnote').textContent = 'Every fund shows the same columns: one per item the firm uses, zero where a fund had none. Carried interest accrued has a blue edge. Pick an investor above, or leave it on "All investors" for each fund as a whole.';
+    }
+
+    // ── LP statement (capital account statement, audit confirmation) ──
+    // One section per record the chosen investor holds in the selected funds.
+    function statementSections() {
+      const investor = chosenInvestor();
+      if (!investor) return [];
+      const months = monthsBetween(state.start, state.end);
+      const recons = new Map();
+      const fundRecon = fund => {
+        if (!recons.has(fund.fund_uuid)) {
+          recons.set(fund.fund_uuid, fundReconcile(ledgerByFund.get(fund.fund_uuid) || [], navByFund.get(fund.fund_uuid) || [], state.start, state.end));
+        }
+        return recons.get(fund.fund_uuid);
+      };
+      return investorRecords(investor).map(({ fund, partner_id: pid }) => {
+        const rows = (ledgerByFund.get(fund.fund_uuid) || []).filter(r => r.partner_id === pid);
+        const rf = rollforward(rows, state.start, state.end).get(pid) || { beginning: 0, flows: {}, memo: {}, ending: 0 };
+        // Every bucket, whatever Select columns hides elsewhere: the statement (and its PDF) is an
+        // audit confirmation whose lines must add up from beginning to ending balance.
+        const buckets = firmBuckets(ledgerByFund, true);
+        const byMonth = b => months.map(mo => sum(rows.filter(r => r.bucket === b && r.month === mo).map(r => r.amount)));
+        return {
+          fund, pid, rf, months, info: partnerInfo(fund.fund_uuid, pid), code: fund.currency_code || '',
+          commitment: effectiveCommitments(fund.fund_uuid, state.end).get(pid),
+          lines: buckets.map(b => ({ bucket: b, memo: isMemoBucket(b), byMonth: byMonth(b) })),
+          tie: partnerTie(fundRecon(fund), pid),
+        };
+      });
+    }
+
+    function renderStatement(out) {
+      if (!scopedFunds().length) return emptyState(out);
+      const sections = statementSections();
+      lastStatements = sections;
+      if (!sections.length) return noRecords(out);
+      const months = monthsBetween(state.start, state.end);
+      const width = months.length + 2;
+      const blank = months.map(() => '<td></td>').join('');
+      const exportRows = [];
+      let html = `<div class="tablewrap"><table><thead><tr><th class="l" data-col="item">Item</th>${months.map(mo => `<th data-col="${mo}">${esc(monthLabel(mo))}</th>`).join('')}<th data-col="total">Period total</th></tr></thead><tbody>`;
+      for (const s of sections) {
+        const { code, rf, info } = s;
+        const tie = tieState(s.tie);
+        html += groupRow(`${esc(info.name)} — ${esc(s.fund.fund_name)}` +
+            ` <span class="hint">${esc(info.type)}${info.cls ? ' · ' + esc(info.cls) : ''} · Commitment ${esc(money(s.commitment, code))}${code ? ' · ' + esc(code) : ''}</span>` +
+            ` <span class="tie-line ${tie}">${TIE_MARKS[tie]}${esc(tieSentence(s.tie, code))}</span>`, width) +
+          `<tr class="total"><td class="l">${esc(beginningLabel())}</td>${blank}${numCell(money(rf.beginning, code), rf.beginning)}</tr>` +
+          s.lines.map(l => `<tr><td class="l">${esc(l.bucket)}${l.memo ? ' <span class="hint">(memo — not in the balance)</span>' : ''}</td>` +
+            l.byMonth.map(v => numCell(money(v, code), v)).join('') +
+            numCell(money(sum(l.byMonth), code), sum(l.byMonth), l.bucket === CARRY_BUCKET ? 'carry' : '') + '</tr>').join('') +
+          `<tr class="total"><td class="l">${esc(endingLabel())}</td>${blank}${numCell(money(rf.ending, code), rf.ending)}</tr>`;
+        const lead = [s.fund.fund_name, recordLabel(s.fund.fund_uuid, s.pid), code];
+        exportRows.push([...lead, beginningLabel(), ...months.map(() => ''), rf.beginning.toFixed(2)],
+          ...s.lines.map(l => [...lead, l.bucket, ...l.byMonth.map(x => x.toFixed(2)), sum(l.byMonth).toFixed(2)]),
+          [...lead, endingLabel(), ...months.map(() => ''), rf.ending.toFixed(2)]);
+      }
+      out.innerHTML = html + '</tbody></table></div>';
+      lastExport = { headers: ['Fund', 'Investor', 'Currency', 'Item', ...months, 'Period total'], rows: exportRows };
+      document.getElementById('footnote').textContent = `Every line is an allocation bucket from the fund ledger, by month; every record lists every item the firm uses, zero where it had none. Period ${periodLabel()}. Memo buckets are listed for completeness and are not part of the ending balance. Export PDF saves one statement page per partner record.`;
+    }
+
+    function statementPdfDoc(sections) {
+      const generated = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date());
+      return {
+        title: 'Capital account statement',
+        firm: CONFIG.firm_name || '',
+        note: 'Unaudited. Prepared from the fund ledger in Carta.',
+        footer: `Generated ${generated} from Carta`,
+        sections: sections.map(s => {
+          const { code, rf, info } = s;
+          const amount = v => money(v, code);
+          const flows = s.lines.filter(l => !l.memo);
+          const memo = s.lines.filter(l => l.memo);
+          return {
+            facts: [
+              ['Investor', info.name], ['Fund', s.fund.fund_name],
+              ['Partner type', [info.type, info.cls].filter(Boolean).join(' · ') || '—'],
+              ['Period', periodLabel()], ['As of', endingDate()],
+              ['Currency', code || 'Not reported'], ['Commitment', amount(s.commitment)],
+              ['Carta NAV', tieSentence(s.tie, code)],
+            ],
+            amountHeader: code ? 'Amount (' + code + ')' : 'Amount',
+            lines: [
+              { label: beginningLabel(), amount: amount(rf.beginning), kind: 'total' },
+              ...flows.map(l => ({ label: l.bucket, amount: amount(sum(l.byMonth)) })),
+              { label: endingLabel(), amount: amount(rf.ending), kind: 'total' },
+              ...(memo.length ? [{ label: 'Memo items (not part of the balance)', kind: 'heading' }] : []),
+              ...memo.map(l => ({ label: l.bucket, amount: amount(sum(l.byMonth)), kind: 'memo' })),
+            ],
+          };
+        }),
+      };
+    }
+
+    // Draws text the PDF's standard fonts cannot encode, so a name in any script still reads
+    // correctly. Four device pixels per point keeps it sharp when printed.
+    function rasterizeText(text, size, bold) {
+      const SCALE = 4;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext && canvas.getContext('2d');
+      if (!ctx) return null;
+      const font = `${bold ? 'bold ' : ''}${size * SCALE}px Helvetica, Arial, sans-serif`;
+      ctx.font = font;
+      canvas.width = Math.max(1, Math.ceil(ctx.measureText(text).width) + 2);
+      canvas.height = Math.ceil(size * 1.25 * SCALE);
+      ctx.font = font;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#000';
+      ctx.fillText(text, 1, size * SCALE);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const hex = [];
+      for (let i = 0; i < data.length; i += 4) hex.push((((data[i] + data[i + 1] + data[i + 2]) / 3) | 0).toString(16).padStart(2, '0'));
+      return { width: canvas.width, height: canvas.height, hex: hex.join(''), ptWidth: canvas.width / SCALE, ptHeight: canvas.height / SCALE };
+    }
+
+    // ── capital call ──
+    function renderCall(out) {
+      const list = scopedFunds();
+      if (!list.length) return emptyState(out);
+      const before = beginningDate();
+      const after = endingDate();
+      let html = '';
+      const exportRows = [];
+      const headers = ['Fund / investor', 'Commitment at ' + after, 'Funded at ' + before, 'Contributions ' + periodLabel(), 'Funded at ' + after, '% funded',
+        'Unfunded at ' + before, 'Unfunded at ' + after, 'Called, not yet received at ' + after, 'Deferred capital call at ' + after];
+      html += '<div class="tablewrap"><table><thead><tr>' +
+        `<th class="l" data-col="0">${sortHeader()}</th>` + headers.slice(1).map((h, i) => `<th data-col="${i + 1}">${esc(h)}</th>`).join('') + '</tr></thead><tbody>';
+      const totals = new Map();
+      list.forEach(fund => {
+        const code = fund.currency_code || '';
+        const grand = currencyTotalFor(totals, fund, () => Array(8).fill(0));
+        const rows = ledgerByFund.get(fund.fund_uuid) || [];
+        const commitments = effectiveCommitments(fund.fund_uuid, state.end);
+        const cc = capitalCall(rows, commitments, state.start, state.end);
+        const partners = orderPartners(Array.from(cc, ([id, p]) => ({ id, ...partnerInfo(fund.fund_uuid, id), ...p }))
+          .filter(p => p.commitment != null || p.fundedEnd !== 0), state.sort);
+        const t = (k) => sum(partners.map(p => p[k] || 0));
+        const tot = [t('commitment'), t('fundedBegin'), t('contributed'), t('fundedEnd'), t('commitment') ? t('fundedEnd') / t('commitment') : null,
+          t('unfundedBegin'), t('unfundedEnd'), t('receivable'), t('deferred')];
+        const open = state.expandAll !== null ? state.expandAll : (state.expanded.has(fund.fund_uuid) || list.length === 1);
+        const cells = v => v.map((x, i) => i === 4 ? `<td class="num">${percent(x)}</td>` : numCell(money(x, code), x)).join('');
+        html += `<tr class="fund" data-fund="${esc(fund.fund_uuid)}"><td class="l" title="${esc(fund.fund_name)}"><span aria-hidden="true">${open ? '▾' : '▸'}</span> ${esc(fund.fund_name)}</td>${cells(tot)}</tr>`;
+        exportRows.push([fund.fund_name, '(fund total)', code, ...tot.map((x, i) => i === 4 ? (x == null ? '' : (x * 100).toFixed(2) + '%') : x.toFixed(2))]);
+        tot.forEach((x, i) => { if (i !== 4) grand[i < 4 ? i : i - 1] += x; });
+        partners.forEach(p => {
+          const v = [p.commitment, p.fundedBegin, p.contributed, p.fundedEnd, p.commitment ? p.fundedEnd / p.commitment : null,
+            p.unfundedBegin, p.unfundedEnd, p.receivable, p.deferred];
+          const label = recordLabel(fund.fund_uuid, p.id);
+          if (open) html += `<tr class="partner"><td class="l" style="padding-left:32px" title="${esc(label)}">${esc(label)}</td>${cells(v)}</tr>`;
+          exportRows.push([fund.fund_name, label, code, ...v.map((x, i) => x == null ? '' : i === 4 ? (x * 100).toFixed(2) + '%' : x.toFixed(2))]);
+        });
+      });
+      if (list.length > 1) {
+        for (const { code, label, total: grand } of currencyTotals(totals)) {
+          const g = [...grand.slice(0, 4), grand[0] ? grand[3] / grand[0] : null, ...grand.slice(4)];
+          html += `<tr class="total"><td class="l">${esc(label)}</td>${g.map((x, i) => i === 4 ? `<td class="num">${percent(x)}</td>` : numCell(money(x, code), x)).join('')}</tr>`;
+          exportRows.push([label, '', code, ...g.map((x, i) => i === 4 ? (x == null ? '' : (x * 100).toFixed(2) + '%') : x.toFixed(2))]);
+        }
+      }
+      out.innerHTML = html + '</tbody></table></div>';
+      // The export splits the first column into Fund and Investor and adds Currency, as the rollforward export does.
+      lastExport = { headers: ['Fund', 'Investor', 'Currency', ...headers.slice(1)], rows: exportRows };
+      document.getElementById('footnote').textContent =
+        `Beginning is the close of the month before "From" (${before}); ending is the close of the "To" month (${after}). Unfunded = commitment less capital contributed within it; contributions outside the commitment do not reduce it. Commitment is the one in force at ${after}.`;
+    }
+
+    function emptyState(out) {
+      out.innerHTML = '<div class="empty">No funds match this filter.</div>';
+      lastExport = { headers: [], rows: [] };
+    }
+
+    function noRecords(out) {
+      out.innerHTML = '<div class="empty">This investor has no partner records in the selected funds.</div>';
+      lastExport = { headers: [], rows: [] };
+    }
+
+    // ── controls ──
+    const $ = id => document.getElementById(id);
+
+    function syncControls() {
+      for (const tab of document.querySelectorAll('.tab')) tab.setAttribute('aria-selected', String(tab.dataset.view === state.view));
+      for (const f of document.querySelectorAll('[data-for]')) f.hidden = !f.dataset.for.split(' ').includes(state.view);
+      $('start').value = state.start; $('end').value = state.end;
+      $('mode').value = state.mode;
+
+      if (state.compare !== 'none') state.compare = resolveComparison(state.compare, state.start, state.end);
+      $('compare').innerHTML = comparisonOptions(state.start, state.end)
+        .map(k => `<option value="${k}"${k === state.compare ? ' selected' : ''}>${COMPARE_LABELS[k]}</option>`).join('');
+
+      $('funds-label').textContent = pickerLabel(fundPickerEntries(funds, state.sort), state.selected);
+
+      // A statement is always for one investor, so it opens on the largest; the walk can show everyone.
+      const investors = investorChoices();
+      if (state.investor && !investors.some(o => o.key === state.investor)) state.investor = '';
+      // The statement's own pick is not carried to the walk, which opens on every investor.
+      if (state.view !== 'statement' && state.investorAuto) { state.investor = ''; state.investorAuto = false; }
+      if (state.view === 'statement' && !state.investor && investors.length) { state.investor = investors[0].key; state.investorAuto = true; }
+      $('investor').innerHTML = (state.view === 'statement' ? '' : '<option value="">All investors</option>') +
+        investors.map(o => `<option value="${esc(o.key)}"${o.key === state.investor ? ' selected' : ''}>${esc(o.label)}</option>`).join('');
+
+      $('cols-pop').innerHTML = viewColumns(state.view)
+        .map(c => `<label><input type="checkbox" data-col="${esc(c.hide)}"${state.hidden.has(c.hide) ? '' : ' checked'}> ${esc(c.label)}${isMemoBucket(c.label) ? ' (memo)' : ''}</label>`).join('') +
+        (state.view === 'rollforward' ? `<label><input type="checkbox" id="memo-toggle"${state.includeMemo ? ' checked' : ''}> Show memo items (receivables, payables, deferrals)</label>` : '');
+      syncExportButtons();
+    }
+
+    function syncExportButtons() {
+      $('export').hidden = !downloads;
+      $('export-pdf').hidden = !downloads || state.view !== 'statement';
+    }
+
+    // ── fund picker ──
+    // Ticks are staged in `picker.pending` while the panel is open; Apply makes them the
+    // selection, and closing any other way discards them.
+    const picker = { pending: null, query: '' };
+    const allFundIds = () => funds.map(f => f.fund_uuid);
+
+    function openPicker() {
+      picker.pending = state.selected.size === 0 ? new Set(allFundIds()) : new Set(state.selected);
+      picker.query = '';
+      $('funds-search').value = '';
+      $('funds-panel').hidden = false;
+      $('funds-label').setAttribute('aria-expanded', 'true');
+      renderPicker();
+      $('funds-search').focus();
+    }
+
+    function closePicker() {
+      picker.pending = null;
+      $('funds-panel').hidden = true;
+      $('funds-label').setAttribute('aria-expanded', 'false');
+    }
+
+    function applyPicker() {
+      if (!picker.pending || !canApplyPicker(picker.pending, state.selected, allFundIds())) return;
+      state.selected = pickerSelection(picker.pending, allFundIds());
+      state.expandAll = null;
+      closePicker();
+      render();
+    }
+
+    function checkbox(attrs, label, kind, meta) {
+      return `<li class="combo-option${kind ? ' ' + kind : ''}" role="option"><label><input type="checkbox" ${attrs}> ` +
+        `<span>${esc(label)}</span>${meta ? `<span class="combo-meta">${esc(meta)}</span>` : ''}</label></li>`;
+    }
+
+    function renderPicker() {
+      const pending = picker.pending;
+      const entries = fundPickerEntries(funds, state.sort);
+      const visible = filterPickerEntries(entries, picker.query);
+      const allIds = allFundIds();
+      const rows = [];
+      if (!picker.query) rows.push(checkbox(`data-all data-state="${familyState(pending, allIds)}"`, 'All funds', 'is-all'));
+      for (const e of visible) {
+        if (e.kind === 'fund') { rows.push(checkbox(`data-fund="${esc(e.fund.fund_uuid)}"${pending.has(e.fund.fund_uuid) ? ' checked' : ''}`, e.fund.fund_name)); continue; }
+        const family = entries.find(x => x.kind === 'family' && x.id === e.id);
+        const ids = family.members.map(f => f.fund_uuid);
+        rows.push(checkbox(`data-family="${esc(e.id)}" data-state="${familyState(pending, ids)}"`, e.name, 'is-family', 'Fund family · ' + ids.length + ' funds'));
+        for (const f of e.members) rows.push(checkbox(`data-fund="${esc(f.fund_uuid)}"${pending.has(f.fund_uuid) ? ' checked' : ''}`, f.fund_name, 'is-member'));
+      }
+      $('funds-list').innerHTML = rows.length > (picker.query ? 0 : 1) ? rows.join('')
+        : `<li class="combo-empty">No funds match “${esc(picker.query)}”.</li>`;
+      // A partly ticked family (or "All funds") shows a half-filled box, which only JS can set.
+      for (const box of $('funds-list').querySelectorAll('input[data-state]')) {
+        box.checked = box.dataset.state === 'all';
+        box.indeterminate = box.dataset.state === 'some';
+      }
+      $('funds-clear').disabled = pending.size === 0;
+      $('funds-apply').disabled = !canApplyPicker(pending, state.selected, allIds);
+      $('funds-apply').textContent = pending.size ? `Apply (${pending.size})` : 'Apply';
+    }
+
+    function togglePickerBox(box) {
+      const entries = fundPickerEntries(funds, state.sort);
+      if (box.dataset.all !== undefined) picker.pending = toggleFamily(picker.pending, allFundIds());
+      else if (box.dataset.family) {
+        const family = entries.find(e => e.kind === 'family' && e.id === box.dataset.family);
+        picker.pending = toggleFamily(picker.pending, family.members.map(f => f.fund_uuid));
+      } else if (box.dataset.fund) {
+        box.checked ? picker.pending.add(box.dataset.fund) : picker.pending.delete(box.dataset.fund);
+      }
+      renderPicker();
+    }
+
+    // ── header definitions ──
+    // One tip box, fixed to the window so the table's scroll area and sticky cells never clip it.
+    // It opens from an info icon on hover, keyboard focus or a tap, and closes on Escape or scroll.
+    const TIP_MARGIN = 8;
+
+    function showTip(icon) {
+      const tip = $('tip');
+      tip.innerHTML = '<b></b><span></span>';
+      tip.firstChild.textContent = icon.dataset.term;
+      tip.lastChild.textContent = icon.dataset.help;
+      tip.hidden = false;
+      const at = icon.getBoundingClientRect();
+      const width = tip.offsetWidth;
+      const height = tip.offsetHeight;
+      const left = Math.min(Math.max(TIP_MARGIN, at.left + at.width / 2 - width / 2), window.innerWidth - width - TIP_MARGIN);
+      const below = at.bottom + TIP_MARGIN;
+      tip.style.left = left + 'px';
+      tip.style.top = (below + height > window.innerHeight - TIP_MARGIN ? Math.max(TIP_MARGIN, at.top - TIP_MARGIN - height) : below) + 'px';
+    }
+
+    function hideTip() { $('tip').hidden = true; }
+
+    // ── column widths ──
+    // Widths come from columnWidths; a long name ends in "…" with the full name on hover. A dragged
+    // width lasts per tab until a double-click on the column's edge resets it.
+    const COLUMN_MIN = 48;
+
+    function sizeColumns(table, view) {
+      const heads = Array.from(table.tHead.rows[0].cells);
+      const saved = state.widths[view] || (state.widths[view] = {});
+      const widths = columnWidths(heads.map(th => Math.ceil(th.getBoundingClientRect().width)), heads.map(th => th.dataset.col), saved);
+      table.insertAdjacentHTML('afterbegin', '<colgroup>' + widths.map(w => `<col style="width:${w}px">`).join('') + '</colgroup>');
+      table.style.width = sum(widths) + 'px';
+      table.classList.add('sized');
+      heads.forEach((th, i) => {
+        if (!th.querySelector('[title], .info')) th.title = th.textContent.trim();
+        th.insertAdjacentHTML('beforeend', `<span class="col-resize" data-resize="${i}" title="Drag to resize; double-click to reset"></span>`);
+      });
+      for (const row of table.tBodies[0].rows) {
+        if (row.cells[0] && !row.cells[0].title) row.cells[0].title = row.cells[0].textContent.trim();
+      }
+    }
+
+    function startColumnResize(e, handle) {
+      e.preventDefault();
+      const table = handle.closest('table');
+      const col = table.querySelectorAll('col')[Number(handle.dataset.resize)];
+      const key = handle.parentElement.dataset.col;
+      const view = state.view;
+      const startX = e.clientX;
+      const startWidth = parseFloat(col.style.width);
+      const startTable = parseFloat(table.style.width);
+      const move = ev => {
+        const width = Math.max(COLUMN_MIN, Math.round(startWidth + ev.clientX - startX));
+        col.style.width = width + 'px';
+        table.style.width = (startTable - startWidth + width) + 'px';
+        state.widths[view][key] = width;
+      };
+      const stop = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', stop); };
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', stop);
+    }
+
+    function render() {
+      syncControls();
+      hideTip();
+      const out = $('out');
+      lastStatements = [];
+      if (state.start > state.end) { out.innerHTML = '<div class="empty">The start month is after the end month.</div>'; lastExport = { headers: [], rows: [] }; return; }
+      ({ rollforward: renderRollforward, walk: renderWalk, statement: renderStatement, call: renderCall })[state.view](out);
+      const table = out.querySelector('table');
+      if (table) sizeColumns(table, state.view);
+      const notes = [];
+      if (new Set(scopedFunds().map(f => f.currency_code || '')).size > 1) {
+        notes.push('<div class="banner warn">These funds report in more than one currency, so totals are shown per currency and never added across them.</div>');
+      }
+      for (const n of loadNotes) notes.push(`<div class="banner warn">${esc(n)}</div>`);
+      $('notes').innerHTML = notes.join('');
+    }
+
+    function wire() {
+      $('tabs').addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) { state.view = t.dataset.view; render(); } });
+      $('funds-label').addEventListener('click', () => (picker.pending ? closePicker() : openPicker()));
+      $('funds-search').addEventListener('input', e => { picker.query = e.target.value; renderPicker(); });
+      $('funds-list').addEventListener('change', e => { if (e.target.matches('input[type="checkbox"]')) togglePickerBox(e.target); });
+      $('funds-clear').addEventListener('click', () => { picker.pending = new Set(); renderPicker(); });
+      $('funds-apply').addEventListener('click', applyPicker);
+      document.addEventListener('click', e => { if (picker.pending && !$('funds-combo').contains(e.target)) closePicker(); });
+      document.addEventListener('keydown', e => {
+        if (!picker.pending) return;
+        if (e.key === 'Escape') { closePicker(); $('funds-label').focus(); }
+        else if (e.key === 'Enter' && e.target === $('funds-search')) applyPicker();
+      });
+      $('investor').addEventListener('change', e => { state.investor = e.target.value; state.investorAuto = false; render(); });
+      $('start').addEventListener('change', e => { if (e.target.value) { state.start = e.target.value; render(); } });
+      $('end').addEventListener('change', e => { if (e.target.value) { state.end = e.target.value; render(); } });
+      $('mode').addEventListener('change', e => { state.mode = e.target.value; render(); });
+      $('compare').addEventListener('change', e => { state.compare = e.target.value; render(); });
+      $('cols-pop').addEventListener('change', e => {
+        if (e.target.id === 'memo-toggle') state.includeMemo = e.target.checked;
+        else if (e.target.dataset.col) { e.target.checked ? state.hidden.delete(e.target.dataset.col) : state.hidden.add(e.target.dataset.col); }
+        render();
+        document.querySelector('#cols-pop').closest('details').open = true;
+      });
+      const withInfo = show => e => { const icon = e.target.closest('.info'); if (icon) show(icon); };
+      $('out').addEventListener('mouseover', withInfo(showTip));
+      $('out').addEventListener('mouseout', withInfo(hideTip));
+      $('out').addEventListener('focusin', withInfo(showTip));
+      $('out').addEventListener('focusout', withInfo(hideTip));
+      $('out').addEventListener('click', withInfo(showTip));
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
+      document.addEventListener('scroll', hideTip, true);
+      $('out').addEventListener('pointerdown', e => { const handle = e.target.closest('.col-resize'); if (handle) startColumnResize(e, handle); });
+      $('out').addEventListener('dblclick', e => {
+        const handle = e.target.closest('.col-resize');
+        if (handle) { delete state.widths[state.view][handle.parentElement.dataset.col]; render(); }
+      });
+      $('out').addEventListener('click', e => {
+        if (e.target.closest('.col-resize')) return;
+        if (e.target.closest('[data-sort]')) { state.sort = state.sort === 'name' ? 'size' : 'name'; render(); return; }
+        const row = e.target.closest('tr.fund');
+        if (!row) return;
+        state.expandAll = null;
+        const id = row.dataset.fund;
+        state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+        render();
+      });
+      $('export').addEventListener('click', () => {
+        if (lastExport.headers.length) saveFile('partner-rollforward-' + state.view + '.csv', csvFile(lastExport.headers, lastExport.rows));
+      });
+      $('export-pdf').addEventListener('click', () => {
+        if (lastStatements.length) saveFile('capital-account-statement.pdf', pdfDocument(statementPdfPages(statementPdfDoc(lastStatements), rasterizeText)));
+      });
+      // The viewer saves files only through its downloads capability; without it there is no export.
+      Promise.resolve(window.claude?.use?.('downloads') ?? null).catch(() => null).then(d => { downloads = d; syncExportButtons(); });
+    }
+
+    let downloads = null;
+    const SAVE_UNAVAILABLE = new Set(['unavailable', 'not_granted', 'capability_disabled', 'capability_removed']);
+
+    async function saveFile(filename, data) {
+      if (!downloads) return;
+      try {
+        await downloads.save({ filename, data });
+      } catch (err) {
+        const code = err && err.code;
+        if (code === 'declined') return;
+        if (SAVE_UNAVAILABLE.has(code)) { downloads = null; syncExportButtons(); }
+        status(code === 'rate_limited' ? 'A save is already waiting for you to confirm.' : 'Could not export from this view.');
+        setTimeout(() => status(''), 4000);
+      }
+    }
+
+    async function ensureSession() {
+      if (!welcomeCalled) {
+        try {
+          const res = await callCartaTool(WELCOME_TOOL, {});
+          if (!res || !res.isError) welcomeCalled = true;
+        } catch (err) { console.warn('welcome failed: ' + (err && err.message ? err.message : err)); }
+      }
+      if (!FIRM_CONTEXT_ID) return;
+      try {
+        const ctx = await callCartaTool('set_context', { firm_id: FIRM_CONTEXT_ID });
+        if (ctx && ctx.isError) console.warn('could not pin the firm context; rows may be another firm\'s');
+      } catch (err) { console.warn('could not pin the firm context: ' + (err && err.message ? err.message : err)); }
+    }
+
+    function index(rows, into, keep) {
+      for (const r of rows) {
+        if (!into.has(r.fund_uuid)) into.set(r.fund_uuid, []);
+        into.get(r.fund_uuid).push(keep(r));
+      }
+    }
+
+    function currentMonth() {
+      const now = new Date();
+      return now.getUTCFullYear() + '-' + String(now.getUTCMonth() + 1).padStart(2, '0');
+    }
+
+    async function init() {
+      $('scope').textContent = CONFIG.firm_name ? CONFIG.firm_name + ' · all funds' : '';
+      status('Connecting to Carta…');
+      if (!(await mcpNamespace())) { fail(new Error('this report reads live data, and no Carta connector is available in this view')); return; }
+      await ensureSession();
+      try {
+        status('Loading funds…');
+        const fundRes = await queryAll(fundsSql(), 'Loading funds');
+        funds = fundRes.rows;
+        if (!funds.length) { fail(new Error('no funds with partner activity were found for this firm')); return; }
+        currencyRanking = currencyOrder(funds);
+
+        let dropped = fundRes.skipped;
+        let loaded = 0;
+        await forEachLimited(funds, LOAD_CONCURRENCY, async fund => {
+          const label = `Loading ${fund.fund_name}`;
+          const [partnerRes, navRes, ledgerRes] = await Promise.all([
+            queryAll(partnersSql(fund.fund_uuid), label),
+            queryAll(navSql(fund.fund_uuid), label),
+            queryAll(allocationsSql(fund.fund_uuid), label),
+          ]);
+          const partners = new Map();
+          for (const p of partnerRes.rows) partners.set(p.partner_id, p);
+          partnersByFund.set(fund.fund_uuid, partners);
+          index(navRes.rows, navByFund, r => ({ partner_id: r.partner_id, month: r.month, commitment: r.commitment, ending_nav: r.ending_nav }));
+          index(ledgerRes.rows, ledgerByFund, r => ({ partner_id: r.partner_id, bucket: r.bucket, month: r.month, amount: Number(r.amount) || 0 }));
+          dropped += partnerRes.skipped + navRes.skipped + ledgerRes.skipped;
+          status(`Loaded ${++loaded} of ${funds.length} funds…`);
+        });
+        for (const [fundId, rows] of ledgerByFund) for (const r of rows) {
+          if (!dataMonths.min || r.month < dataMonths.min) dataMonths.min = r.month;
+          if (!dataMonths.max || r.month > dataMonths.max) dataMonths.max = r.month;
+          if (!firstMonthByFund.has(fundId) || r.month < firstMonthByFund.get(fundId)) firstMonthByFund.set(fundId, r.month);
+        }
+        // Funds are ordered here, after the ledger is read: newest vintage first, a fund
+        // with no vintage date by its first month of ledger activity.
+        for (const f of funds) {
+          const first = firstMonthByFund.get(f.fund_uuid);
+          f.recency = f.vintage_date ? String(f.vintage_date).slice(0, 10) : first ? first + '-01' : '';
+        }
+        if (dropped) loadNotes.push(dropped + ' row(s) could not be read and were left out, so some balances may not tie out.');
+        Object.assign(state, defaultPeriod(dataMonths.min, dataMonths.max, currentMonth()));
+        status('');
+        $('app').hidden = false;
+        wire();
+        render();
+        // Natural widths are measured from the rendered text, so measure again once the web font is in.
+        if (document.fonts) document.fonts.ready.then(render);
+      } catch (err) { fail(err); }
+    }
+
+    init();
+  </script>
+</body>
+</html>
