@@ -5,10 +5,10 @@ apply and the closing are in [SKILL.md § Flow](../SKILL.md#flow).
 
 ## The Change page
 
-Carta keeps an edit as a **thread** of previews: each preview is the next **revision**. When the
-Change page is on for the user, the bootstrap carries `companion` with `available: true`, and each
-preview result leads with `companion_url` and `how_to_reply`, sometimes after `next_step`. The
-page shows the latest revision, read-only. Every change happens in chat; the page follows.
+Carta keeps an edit as a **thread** of previews: each preview is the next **revision**. For a type
+the page serves, the bootstrap carries `companion` with `available: true`, and each preview result
+leads with `companion_url` and `how_to_reply`, sometimes after `next_step`. The page shows the
+latest revision, read-only. Every change happens in chat; the page follows.
 
 - Show each preview as in [SKILL.md § Flow](../SKILL.md#flow) step 5. Never build the page's
   address.
@@ -20,8 +20,8 @@ page shows the latest revision, read-only. Every change happens in chat; the pag
 ## Open the page first
 
 Every edit's first bootstrap sends `look_first: true`, whatever the user said, so the page is up
-before the first preview. With the Change page on, the result leads with `next_step`,
-`companion_url` and `how_to_reply`, and carries `thread_id`. Follow `next_step`, post the link,
+before the first preview. The result leads with `next_step`, `companion_url` and `how_to_reply`,
+and carries `thread_id`. Follow `next_step`, post the link,
 then:
 
 - **The user named the field and the value:** go on to the preview with that `thread_id`. The
