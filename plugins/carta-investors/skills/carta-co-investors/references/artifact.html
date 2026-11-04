@@ -730,10 +730,13 @@
     // and the smaller size is kept for the rest of the query. It returns every row
     // of the query or rejects: a query needing more than MAX_PAGES pages, or any
     // page that fails, fails the load, and no call for that query starts after that.
-    async function fetchAllRows(buildSql, label) {
+    // `onProgress(loaded, total)` hears the running row count after every page.
+    async function fetchAllRows(buildSql, label, onProgress = () => {}) {
       const sql = buildSql();
       let limit = PAGE_LIMIT;
       let failed = false;
+      let loaded = 0;
+      let total = null;
 
       async function fetchPage(offset, count) {
         for (;;) {
@@ -773,14 +776,22 @@
           if (page.rows.length === 0) throw new Error(label + ': empty page at offset ' + offset);
           rows.push(...page.rows);
           offset += page.rows.length;
+          loaded += page.rows.length;
+          onProgress(loaded, total);
         }
         return rows;
       }
 
       const first = await fetchPage(0, Infinity);
-      if (first.nextOffset === null) return first.rows;
+      loaded = first.rows.length;
+      if (first.nextOffset === null) {
+        onProgress(loaded, loaded);
+        return first.rows;
+      }
       if (first.rows.length === 0) throw new Error(label + ': empty first page with more rows pending');
       if (first.totalRows === null) throw new Error(label + ': next_offset without total_rows');
+      total = first.totalRows;
+      onProgress(loaded, total);
 
       const ranges = [];
       for (let start = first.nextOffset; start < first.totalRows; start += limit) {

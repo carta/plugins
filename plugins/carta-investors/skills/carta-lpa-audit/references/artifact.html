@@ -316,7 +316,9 @@
     @media (max-width: 599px) { .c-fund { width: 190px; min-width: 190px; } }
 
     .fund-table tbody tr { cursor: pointer; }
-    .fund-table tbody tr:hover > * { background: light-dark(#F8F8F8, #1E1E1E); }
+    .fund-table tbody tr:hover > * {
+      background: color-mix(in srgb, var(--ink-color-global-surface-background-underlay) 50%, var(--ink-color-global-surface-background-default));
+    }
     .fund-table tbody tr.is-selected > * { background: var(--ink-color-global-surface-background-underlay); }
     .fund-table tbody tr.is-selected > .c-fund {
       box-shadow: inset 3px 0 0 var(--ink-color-global-border-active), 1px 0 0 var(--ink-color-global-border-subtle);
@@ -358,7 +360,7 @@
     }
     .bucket-badge.unexecuted {
       background: var(--ink-color-global-feedback-warning-subtle);
-      color: light-dark(#705010, #F8D648);
+      color: var(--ink-color-global-text-default);
     }
     .bucket-badge.missing {
       background: var(--ink-color-global-feedback-negative-subtle);
@@ -369,7 +371,7 @@
       color: var(--ink-color-global-feedback-info-strong);
     }
     .bucket-badge.none {
-      background: light-dark(#EEF0F2, #2A2D31);
+      background: var(--ink-color-global-surface-background-underlay);
       color: var(--ink-color-global-text-subtle);
     }
 
@@ -596,7 +598,7 @@
       margin-bottom: 8px;
       background: linear-gradient(90deg,
         var(--ink-color-global-surface-background-underlay) 25%,
-        light-dark(#E8E8E8, #3A3A3A) 37%,
+        color-mix(in srgb, var(--ink-color-global-surface-background-underlay) 70%, var(--ink-color-global-border-default)) 37%,
         var(--ink-color-global-surface-background-underlay) 63%);
       background-size: 400% 100%;
       animation: shimmer 1.4s ease-in-out infinite;
@@ -627,6 +629,8 @@
       margin: 0 0 6px;
       line-height: 1.5;
     }
+    #error-actions:empty { display: none; }
+    #error-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; }
     #error-detail {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 11px;
@@ -656,6 +660,7 @@
       <div id="error-state">
         <h2 id="error-title">Couldn't load your fund terms</h2>
         <p id="error-message"></p>
+        <p id="error-actions"></p>
         <p id="error-detail"></p>
       </div>
 
@@ -779,16 +784,36 @@
       document.getElementById('content-area').style.display = 'block';
     }
 
+    const CARTA_SUPPORT_URL = 'https://support.carta.com/kb/guide/en/how-to-get-support-with-carta-help-T8DEfuxhi9/Steps/3724508';
+
     // `detail` carries the underlying error text. It is shown in a de-emphasized
     // monospace line rather than hidden in the console: when a viewer reports "it
     // won't load", the message they can copy is the whole diagnosis.
-    function showError(message, detail) {
+    // `links` ([{ label, url }]) are the next steps the viewer can open from the error.
+    function showError(message, detail, links = []) {
       document.getElementById('loading-state').style.display = 'none';
       document.getElementById('content-area').style.display = 'none';
       const el = document.getElementById('error-state');
       el.style.display = 'block';
       document.getElementById('error-message').textContent = message;
       document.getElementById('error-detail').textContent = detail || '';
+      document.getElementById('error-actions').innerHTML = links.map(link =>
+        '<a class="carta-link" href="' + escAttr(link.url) + '" data-external>' + esc(link.label) + ' ↗</a>'
+      ).join('');
+    }
+
+    // Loading copy for the parallel queries: a percentage once every query has
+    // reported its row total, so the figure never moves backwards.
+    function loadProgress(labels, baseMessage) {
+      const seen = new Map();
+      return label => (loaded, total) => {
+        seen.set(label, { loaded, total });
+        const parts = labels.map(l => seen.get(l));
+        if (parts.some(p => !p || p.total === null)) return;
+        const all = parts.reduce((sum, p) => sum + p.total, 0);
+        const done = parts.reduce((sum, p) => sum + p.loaded, 0);
+        setLoadingStatus(all ? baseMessage + ' ' + Math.floor(100 * done / all) + '%' : baseMessage);
+      };
     }
 
     // ── Carta MCP plumbing ────────────────────────────────────────────────────
@@ -991,10 +1016,13 @@
     // and the smaller size is kept for the rest of the query. It returns every row
     // of the query or rejects: a query needing more than MAX_PAGES pages, or any
     // page that fails, fails the load, and no call for that query starts after that.
-    async function fetchAllRows(buildSql, label) {
+    // `onProgress(loaded, total)` hears the running row count after every page.
+    async function fetchAllRows(buildSql, label, onProgress = () => {}) {
       const sql = buildSql();
       let limit = PAGE_LIMIT;
       let failed = false;
+      let loaded = 0;
+      let total = null;
 
       async function fetchPage(offset, count) {
         for (;;) {
@@ -1034,14 +1062,22 @@
           if (page.rows.length === 0) throw new Error(label + ': empty page at offset ' + offset);
           rows.push(...page.rows);
           offset += page.rows.length;
+          loaded += page.rows.length;
+          onProgress(loaded, total);
         }
         return rows;
       }
 
       const first = await fetchPage(0, Infinity);
-      if (first.nextOffset === null) return first.rows;
+      loaded = first.rows.length;
+      if (first.nextOffset === null) {
+        onProgress(loaded, loaded);
+        return first.rows;
+      }
       if (first.rows.length === 0) throw new Error(label + ': empty first page with more rows pending');
       if (first.totalRows === null) throw new Error(label + ': next_offset without total_rows');
+      total = first.totalRows;
+      onProgress(loaded, total);
 
       const ranges = [];
       for (let start = first.nextOffset; start < first.totalRows; start += limit) {
@@ -2451,7 +2487,7 @@
     // ("Summit", "Northstar"): a document sharing only that word could be any of the family.
     const FAMILY_WORD_MIN_NAMES = 3;
 
-    // The distinctive words of a manager or fund name ("Activate" in "Activate Venture Partners").
+    // The distinctive words of a manager or fund name ("Acme" in "Acme Venture Partners").
     // A fund number ("III") is never one: it ties Acme Fund III to every manager's Fund III.
     function brandWords(name) {
       return new Set(fundTokens(name || '').filter(w =>
@@ -2757,25 +2793,29 @@
       } catch (error) {
         showError(
           'You may not have access to ' + FIRM_NAME + ' in Carta, or your session has expired. ' +
-          'Try reloading; if it keeps happening, contact your Carta representative.',
-          error.message
+          'Reconnect the Carta connector, then reload. If it keeps happening, contact Carta Support.',
+          error.message,
+          [{ label: 'Contact Carta Support', url: CARTA_SUPPORT_URL }]
         );
         return;
       }
 
       let lpaRows, oaRows, slRows;
       try {
-        setLoadingStatus('Loading LPAs and side letters from Carta…');
+        const loadingMessage = 'Loading LPAs and side letters from Carta…';
+        setLoadingStatus(loadingMessage);
+        const progress = loadProgress(['Query T', 'Query O', 'Query L'], loadingMessage);
         [lpaRows, oaRows, slRows] = await Promise.all([
-          fetchAllRows(buildLpaRowsSql, 'Query T'),
-          fetchAllRows(buildOperatingAgreementRowsSql, 'Query O'),
-          fetchAllRows(buildSideLetterRowsSql, 'Query L'),
+          fetchAllRows(buildLpaRowsSql, 'Query T', progress('Query T')),
+          fetchAllRows(buildOperatingAgreementRowsSql, 'Query O', progress('Query O')),
+          fetchAllRows(buildSideLetterRowsSql, 'Query L', progress('Query L')),
         ]);
       } catch (error) {
         showError(
           "Couldn't load your LPA data just now. Try reloading in a moment. " +
-          'If it keeps happening, contact your Carta representative.',
-          error.message
+          'If it keeps happening, contact Carta Support.',
+          error.message,
+          [{ label: 'Contact Carta Support', url: CARTA_SUPPORT_URL }]
         );
         return;
       }

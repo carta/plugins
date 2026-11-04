@@ -1796,7 +1796,7 @@ _FAMILY_WORD_MIN_NAMES = 3
 
 
 def _brand_words(name: str | None) -> set[str]:
-    """The distinctive words of a manager or fund name ("Activate" in "Activate Venture Partners").
+    """The distinctive words of a manager or fund name ("Acme" in "Acme Venture Partners").
 
     A fund number ("III") is never one: it ties Acme Fund III to every manager's Fund III.
     """
