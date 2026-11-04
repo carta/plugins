@@ -39,7 +39,7 @@ version: 1.0.0
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.1</carta-plugin>
+<carta-plugin>carta-crm:1.20.2</carta-plugin>
 
 # Carta CRM Home — publish
 

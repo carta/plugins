@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.1</carta-plugin>
+<carta-plugin>carta-crm:1.20.2</carta-plugin>
 
 ## Overview
 
@@ -300,7 +300,7 @@ The `DATA` shape is documented by the example in the file. Rules for filling it:
   - `relationStrength` — `"HIGH"` / `"MEDIUM"` / `"LOW"` from the matching row in the
     `get_company_relations` response (the row whose `contact.email` matches the connector).
     This is already fetched in wave 3; copy the `strength` field from that row. Null if wave
-    3 did not run. Shown in the "Ask for intro" gutter as "Strong link" / "Medium link" /
+    3 did not run. Shown under the "Ask for intro" arrow, after "Knows <target first name>", as "Strong link" / "Medium link" /
     "Light link" so the user can judge the quality of the route at a glance.
   - `addedBy` — the `createdBy` or `addedBy` display name from the `fetch_contact_by_id`
     record, if the CRM exposes it. Null otherwise. Answers "who saved this contact?" —
@@ -371,7 +371,7 @@ no MCP tool exposes them today:
   or team under our colleague's name — not from a signature, not from an email address, not
   inferred from the deal. Their card carries the name and the flag, nothing else.
 - **Shared employment between our person and the connector.** The angles graph only computes
-  the connector-to-target edge. The left-hand hop is `Ask for intro` and nothing more.
+  the connector-to-target edge. The left-hand hop carries only `Ask for intro`, the target's name and the relation strength.
 - **A company-wide interaction rollup.** You can resolve the last interaction with a *person*,
   so the banner names that person ("emailed Tom Reid 12 days ago"), never the company.
 

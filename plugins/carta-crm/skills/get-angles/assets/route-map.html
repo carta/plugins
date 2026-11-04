@@ -249,35 +249,22 @@
       }
       .arrow-v .arrow-head { width: 8px; height: 7px; }
 
-      /* Gutters. The arrow spans the cell at the vertical midpoint and the label
-         block sits over it carrying the board's own fill, so the line breaks
-         around the text however many lines it runs to. Centring the block on the
-         same 50% keeps both hops level with each other. */
+      /* Gutters. One unbroken arrow runs across the cell at the vertical
+         midpoint. The hop name sits above it and the reason for the hop sits
+         below it. Both blocks hang off the same midpoint, so the arrows of the
+         two hops stay level with each other whatever each label holds. */
       .link { position: relative; min-width: 0; }
       .link-line {
         position: absolute; top: 50%; left: 0; right: 0;
         margin-top: -4px;
       }
-      /* A fixed share of the gutter, NOT shrink-to-fit: sized to its text, each
-         label leaves a different amount of arrow either side of it, and the two
-         hops came out with visibly unequal arms. A share keeps them identical and
-         still scales with the column. Not left:0/right:0 either -- stretched edge
-         to edge this paints over the whole arrow instead of breaking it. */
-      .link-stack {
-        position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        /* border-box so the share below includes the side padding -- on
-           content-box the padding is added outside it and the arms shrink by
-           36px without anything in the value saying so. */
-        box-sizing: border-box;
-        width: 73%;
-        display: flex; flex-direction: column; align-items: center; gap: 3px;
-        /* Side padding is the gap between the words and the arrow tips. Held at
-           12px rather than 18: every pixel here is taken off both arms, and at
-           18px the arrows read as dashes rather than as a route. */
-        padding: 4px 12px;
-        background: var(--ink-color-global-surface-lightgray-default);
+      .link-above, .link-below {
+        position: absolute; left: 0; right: 0;
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        padding: 0 4px;
       }
+      .link-above { bottom: calc(50% + 6px); }
+      .link-below { top: calc(50% + 6px); }
       .link-title {
         font-size: 12px; line-height: 17px; font-weight: 600;
         text-align: center; overflow-wrap: anywhere;
@@ -289,20 +276,9 @@
         font-size: 11px; line-height: 16px; text-align: center;
         color: var(--ink-color-global-text-subtle); overflow-wrap: anywhere;
       }
-      /* Separates the title from the evidence under it, so a hop with no evidence
-         gets none. Ink rule 7 would normally forbid a decorative separator;
-         keeping it here is a deliberate exception, at the reviewer's request. */
-      .link-dots {
-        display: flex; gap: 4px; justify-content: center;
-        padding: 2px 0 3px;
-      }
-      .link-dots span {
-        width: 3px; height: 3px; border-radius: 999px;
-        background: var(--ink-color-global-text-subtle);
-      }
       /* An employer name stays whole. As an inline-block it moves to the next
          line as a unit when the line is tight -- so the hop wraps as
-         "Overlap at / Goldman Sachs" rather than splitting the company name --
+         "Worked at / Goldman Sachs" rather than splitting the company name --
          and only breaks internally when the name alone cannot fit. */
       .keep-whole { display: inline-block; overflow-wrap: anywhere; }
       .link-mark { margin-top: 3px; }
@@ -351,7 +327,6 @@
         .lanes-direct { grid-template-columns: 1fr minmax(88px, .7fr) 1fr; }
         .avatar, .avatar-img { width: 32px; height: 32px; }
         .avatar { font-size: 12px; }
-        .link-stack { padding: 4px 8px; }
         .link-title { font-size: 11px; line-height: 15px; }
         .link-detail { font-size: 10px; line-height: 14px; }
         .card-flag { font-size: 10px; }
@@ -401,15 +376,12 @@
            to point down at the colleague who follows it. */
         .you-wrap { order: -1; flex-direction: column-reverse; }
         .you-arrow { transform: rotate(180deg); height: 20px; }
-        /* Static, so it no longer masks a line that does not run behind it -- and
-           centred by margin, since dropping the transform also drops the centring
-           the absolute position was doing. Without this the label sits hard left
-           of an arrow that is still centred. */
-        .link-stack {
-          position: static; transform: none;
-          width: max-content; margin: 0 auto;
-          background: transparent; max-width: 100%;
-        }
+        /* In one column the arrow points down, so the blocks join the flow:
+           hop name, arrow, reason. */
+        .link { display: flex; flex-direction: column; align-items: center; }
+        .link-above, .link-below { position: static; padding: 0; }
+        .link-above { order: -1; margin-bottom: 6px; }
+        .link-below { margin-top: -2px; }
       }
 
       /* Alternates. Native details/summary so expand is keyboard-accessible
@@ -876,20 +848,17 @@
         return box;
       }
 
-      // One gutter: the arrow, and the label block that breaks it.
+      // One gutter: the hop name above an unbroken arrow, and the reason for
+      // the hop below it.
       function link(title, details, mark) {
         const box = el("div", "link");
         box.appendChild(arrow("link-line"));
-        const stack = el("div", "link-stack");
-        stack.appendChild(el("div", "link-title", title));
+        const above = el("div", "link-above");
+        above.appendChild(el("div", "link-title", title));
+        box.appendChild(above);
 
-        if (details.length || (mark && mark.name)) {
-          const dots = el("div", "link-dots");
-          dots.setAttribute("aria-hidden", "true");
-          [ 0, 1, 2 ].forEach(function () { dots.appendChild(el("span")); });
-          stack.appendChild(dots);
-        }
-
+        if (!details.length && !(mark && mark.name)) return box;
+        const below = el("div", "link-below");
         details.forEach(function (d) {
           const row = el("div", "link-detail");
           if (typeof d === "string") {
@@ -899,14 +868,14 @@
             row.appendChild(document.createTextNode(d.lead + " "));
             row.appendChild(el("span", "keep-whole", d.name));
           }
-          stack.appendChild(row);
+          below.appendChild(row);
         });
         if (mark && mark.name) {
           const wrap = el("div", "link-mark");
           wrap.appendChild(companyMark(mark.name, mark.logoUrl));
-          stack.appendChild(wrap);
+          below.appendChild(wrap);
         }
-        box.appendChild(stack);
+        box.appendChild(below);
         return box;
       }
 
@@ -921,7 +890,7 @@
       function employerHop(route, title) {
         return link(title, [
           route.employer
-            ? { lead: "Overlap at", name: route.employer }
+            ? { lead: "Worked at", name: route.employer }
             : "Shared employer not on record",
           route.overlapYears || "Dates not on record"
         ], { name: route.employer, logoUrl: route.employerLogoUrl });
@@ -977,6 +946,8 @@
         // tells the user whether this is a genuine working relationship or a
         // one-off coffee three years ago, without requiring a second CRM call.
         const leftDetails = [];
+        const targetFirst = String(route.target.name || "").split(" ")[0];
+        if (targetFirst) leftDetails.push("Knows " + targetFirst);
         if (route.connector.relationStrength) {
           const s = route.connector.relationStrength;
           leftDetails.push(s === "HIGH" ? "Strong link" : s === "MEDIUM" ? "Medium link" : "Light link");
