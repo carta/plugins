@@ -58,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.16</carta-plugin>
+<carta-plugin>carta-investors:7.19.17</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -95,6 +95,8 @@ neither, so ask as usual.
 - **Hosted** → reply with the link, then end the turn: "Open **https://analytics.carta.cloud** in your
   browser, sign in with Carta, and pick your firm." Do **not** ask for a firm, scan caches, touch the MCP or
   launch `serve.py`.
+  A firm with more than 60,000 KPI rows loads only its latest years there (7, 5, 4, then at least 3),
+  and the sidebar says "History from <date>". For the full history of such a firm, offer the local build.
 - **Local** → continue with the firm check below and Step 0.
 
 ## No demo data — an Investment Firm Account is required

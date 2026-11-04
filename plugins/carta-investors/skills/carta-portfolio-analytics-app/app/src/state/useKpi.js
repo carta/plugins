@@ -11,6 +11,9 @@ export default function useKpi(firm) {
   // re-fetch rebuilds it; serve.py re-reads kpi.json on every request.
   const [attempt, setAttempt] = useState(0);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
+  // The firm query whose stream Cloudflare cut off: its retry asks for the shortest history.
+  const [floorFor, setFloorFor] = useState(null);
+  const floor = floorFor === q;
 
   useEffect(() => {
     let live = true;
@@ -23,7 +26,8 @@ export default function useKpi(firm) {
 
     (async () => {
       try {
-        const res = await fetch(`/api/report/kpi.json${q}`, {
+        const url = `/api/report/kpi.json${q}${floor ? `${q ? "&" : "?"}history=floor` : ""}`;
+        const res = await fetch(url, {
           headers: { Accept: "text/event-stream" },
           signal: controller.signal,
         });
@@ -45,8 +49,20 @@ export default function useKpi(firm) {
         // Cloudflare kills a Worker over its CPU limit mid-stream: the body just
         // ends, with no `complete` or `error` frame.
         let finished = false;
+        const cutOff = () => {
+          setStep(null);
+          if (floor) setError("stream_ended");
+          else setFloorFor(q);
+        };
+        let read;
         while (true) {
-          const { done, value } = await reader.read();
+          try {
+            read = await reader.read();
+          } catch (e) {
+            if (live) cutOff();
+            return;
+          }
+          const { done, value } = read;
           if (done) break;
           buf += dec.decode(value, { stream: true });
           const lines = buf.split("\n");
@@ -69,17 +85,14 @@ export default function useKpi(firm) {
             }
           }
         }
-        if (live && !finished) {
-          setStep(null);
-          setError("stream_ended");
-        }
+        if (live && !finished) cutOff();
       } catch (e) {
         if (live) setError(String(e));
       }
     })();
 
     return () => { live = false; controller.abort(); };
-  }, [q, attempt]);
+  }, [q, attempt, floor]);
 
   return { data, error, step, reload };
 }

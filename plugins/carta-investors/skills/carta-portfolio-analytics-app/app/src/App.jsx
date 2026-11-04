@@ -210,7 +210,9 @@ function DataStatusLine({ source }) {
         ? `Data fetched ${fmtRelative(oldestFetch)} from Carta Fund Admin & Data Collection`
         : `Data as of ${fmtAsOf(source?.asOf)} from Carta Data Collection`}
       {source?.since && (
-        <div data-tip={`Only KPI history from ${source.since} onwards was fetched. Re-run the skill and choose "Everything" to widen it.`}
+        <div data-tip={source.sinceReason === "size"
+          ? `This firm's full KPI history is too large for the hosted app, so KPIs from ${fmtAsOf(source.since)} onward are shown.`
+          : `Only KPI history from ${source.since} onwards was fetched. Re-run the skill and choose "Everything" to widen it.`}
           style={{ marginTop: 3, cursor: "help" }}>
           History from {fmtAsOf(source.since)} ⓘ
         </div>
