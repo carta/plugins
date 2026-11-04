@@ -232,6 +232,10 @@ function appParamsFrom(paramMap, source) {
   return params;
 }
 
+// The tool that renders an app opening's view, as carta-mcp names it: a view in a newer shell
+// refuses view_remote. An opening from a carta-mcp that does not name one is for view_remote.
+const frtViewTool = (opening) => opening.tool || "view_remote";
+
 // The first of the entry's openings whose params the row fills: its companion page before
 // its app. A row that stands for one package (`pkg`) fills package_params, and an opening
 // without them is not for it. An entity row over a single package (`onePackage`) fills an
@@ -251,8 +255,11 @@ function taskOpeningFor(entry, source, pkg, onePackage) {
     const thenParams = opening.then ? fill(opening.then) : null;
     return Object.assign(
       { kind: opening.kind, target: opening.target, params },
+      opening.tool ? { tool: opening.tool } : {},
       skill ? { skill } : {},
-      thenParams ? { then: { target: opening.then.target, params: thenParams } } : {},
+      thenParams
+        ? { then: Object.assign({ target: opening.then.target, params: thenParams }, opening.then.tool ? { tool: opening.then.tool } : {}) }
+        : {},
     );
   }
   return null;
@@ -297,11 +304,11 @@ function frtAppPrompt(app, firm) {
   if (app.kind === "companion") {
     const using = app.skill ? ` with the ${app.skill} skill` : "";
     const then = app.then
-      ? `, then call view_remote with name "${app.then.target}" and params ${JSON.stringify(app.then.params)}`
+      ? `, then call ${frtViewTool(app.then)} with name "${app.then.target}" and params ${JSON.stringify(app.then.params)}`
       : "";
     return `Open the Carta ${app.label} companion page for ${app.entity}${where}${using}: call read_tool with name "${mcpToolName(app.target)}" and arguments ${params}, then open its companion_url beside this chat as its next_step says${then}.`;
   }
-  return `Open the Carta ${app.label} app for ${app.entity}${where}: call view_remote with name "${app.target}" and params ${params}.`;
+  return `Open the Carta ${app.label} app for ${app.entity}${where}: call ${frtViewTool(app)} with name "${app.target}" and params ${params}.`;
 }
 
 function frtIsExpandable(row) {

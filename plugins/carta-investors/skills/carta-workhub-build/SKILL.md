@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.4</carta-plugin>
+<carta-plugin>carta-investors:7.19.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -275,9 +275,11 @@ not inside a fund-data dashboard.
   chat** instead of Carta, prefilled with a prompt that names the page or app, the entity, the
   firm and the exact call; the GP sends it. A companion opening has Claude call the read with
   `read_tool` and open the `companion_url` it returns in the browser pane beside the chat, as the
-  read's `next_step` says, and then call `view_remote` on the app carta-mcp names to open after
+  read's `next_step` says, and then call the app carta-mcp names to open after
   the page (the opening's `then`, set for the management fee review's decision app) when the row
-  fills its params; an app opening has Claude call `view_remote`. A companion page with
+  fills its params; an app opening has Claude call it too. Each app names its own `tool`
+  (`view_remote`, or `view_remote_next` for a view in the ext-apps 2.x shell, which `view_remote`
+  refuses); an opening without one is for `view_remote`. A companion page with
   a skill of its own in `COMPANION_SKILLS` (`carta-workhub.config.js`, by column or template)
   has the prompt name that skill too, so Claude drives the page with its commands and rules: the
   Financial Report column's package pages name `carta-investors:financial-package-companion`,
@@ -307,7 +309,7 @@ not inside a fund-data dashboard.
   it needs), so a viewer it refuses keeps every Carta link. A capital activity review with no
   opening keeps the in-page review panel. A new page or app is one entry in carta-mcp's
   registry, not a change here, and needs nothing new in the publish grant: the read or
-  `view_remote` is called by Claude in the chat, never by the artifact. The early paint waits
+  the view's tool is called by Claude in the chat, never by the artifact. The early paint waits
   for this read too, since it decides what each card does.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.

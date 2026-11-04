@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.4</carta-plugin>
+<carta-plugin>carta-investors:7.19.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -172,7 +172,7 @@ Every firm gets the first two; a Fund Admin firm adds LP summary
 | `prompt` | **the contract** — copied into chat when no URL was baked in |
 | `label` | the launcher's visible text |
 | `buildSkill` | build-time only: candidates Step 5 fans out to, in preference order. Optional. |
-| `requires` | build-time only: the `get_current_user` flag that must be `true` for Step 5 to build it. Optional. For `has_fund_admin`, a firm also counts when the flag is absent and the profile is staff with `fund_admin_access: true` (the rule `readProductFlag` applies at runtime). |
+| `requires` | build-time only: the `get_current_user` flag that must be `true` for Step 5 to build it. Optional. `has_fund_admin` counts when it is `true`, or when the key is absent and the profile has both `is_staff: true` and `fund_admin_access: true` (the rule `readProductFlag` applies at runtime). Read these off the `get_current_user` payload kept in Step 1. When that payload is missing or does not say, treat the firm as Fund Administration and build it: a card left on "Preparing" is better than a card that silently falls back to a paste prompt. |
 
 **`prompt` is the contract, and `buildSkill` follows it.** The same sentence routes to
 whichever skill owns that dashboard, and `buildSkill` names it so the build-time fan-out
