@@ -359,16 +359,24 @@ def delete(bridge: Any, store: report_store.ReportStore, data_dir: Path, report_
     return {"status": "ok"}
 
 
-def list_reports(bridge: Any, ctx: Dict[str, Any], emit: Emit) -> Optional[List[Dict[str, Any]]]:
-    """fa:get:budget_reports' listing for `ctx`'s entity, or None when the answer isn't
-    trustworthy enough to act on: a flaky call can come back as `{}`, and trusting that
-    as "nothing is shared/synced" would prune every report a caller already has. The one
-    place both pull() (shared-in reports) and own_sync.reconcile_names (own-synced
-    reports' names) apply this same guard, so the rule never drifts between the two."""
-    listing = bridge.call("fa__get__budget_reports", {"fund_uuid": ctx["fund_uuid"]}, emit)
+def trusted_reports(listing: Any) -> Optional[List[Dict[str, Any]]]:
+    """`listing` (an already-parsed fa:get:budget_reports response)'s `reports` array, or
+    None when it isn't trustworthy enough to act on: a flaky call can come back as `{}`, and
+    trusting that as "nothing is shared/synced" would prune every report a caller already
+    has, or — own_sync's session plan — let a stale local name resend over a hosted rename.
+    The one place
+    every reader of a budget_reports listing applies this guard, whether it came from a live
+    bridge call (list_reports, below) or a session's own saved answer
+    (own_sync._read_mirrors), so the rule never drifts between them."""
     if isinstance(listing, dict) and isinstance(listing.get("reports"), list):
         return listing["reports"]
     return None
+
+
+def list_reports(bridge: Any, ctx: Dict[str, Any], emit: Emit) -> Optional[List[Dict[str, Any]]]:
+    """fa:get:budget_reports' listing for `ctx`'s entity, or None when it isn't trustworthy
+    (trusted_reports, above)."""
+    return trusted_reports(bridge.call("fa__get__budget_reports", {"fund_uuid": ctx["fund_uuid"]}, emit))
 
 
 def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emit) -> Dict[str, Any]:

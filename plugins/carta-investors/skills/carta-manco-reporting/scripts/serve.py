@@ -365,9 +365,11 @@ def _startup_claude_probe():
     """Resolve and print the claude CLI's status once at launch, in the background so
     a slow `claude auth status` never delays the printed dashboard URL. Once sharing
     is confirmed available, also settles every own-synced report's name against
-    Carta right away — own_sync.sweep() does the same before every build's push, but
-    this brings a rename made on the hosted app while the dashboard was closed onto
-    it at launch, without waiting on the next build's sweep to get around to it."""
+    Carta right away — own_sync.sweep() does the same, but that only runs for a
+    build made without --no-sync-sweep; for a dashboard built the normal way, this
+    is what brings a rename made on the hosted app while the dashboard was closed
+    onto it at launch, without waiting for the skill's next invocation to reconcile
+    it."""
     ok = _refresh_claude_status()
     with _claude_lock:
         bin_path, reason = CLAUDE_BIN, _CLAUDE_STATUS["reason"]

@@ -2035,6 +2035,10 @@ def build_argv(args):
         argv += ["--as-of-year", str(args.as_of_year)]
     if getattr(args, "carta_environment", None):
         argv += ["--carta-environment", str(args.carta_environment)]
+    if getattr(args, "no_sync_sweep", False):
+        # Carried into the replay so a rebuild() (serve.py's own, or Step 5.4's
+        # post-import one) keeps skipping the sweep too.
+        argv += ["--no-sync-sweep"]
     return argv
 
 
@@ -5488,7 +5492,7 @@ def _spawn_sync_sweep(dashboard_dir):
     never fails the build — no known user id yet, no usable Claude CLI, no
     Carta connector that CLI can reach, or nothing changed all exit 0. Why is
     written to <dashboard_dir>/own_sync.log, and to own_sync_status.json under
-    own_sync._record_blocked's rule, read by own_sync.py --plan. A report that fails to push is
+    own_sync._record_blocked's rule, diagnostic only. A report that fails to push is
     skipped and noted in <dashboard_dir>/own_sync.log rather than raised, so a
     maintainer can see why one report never shows up on the hosted microapp
     without that detail vanishing into a detached process nobody reads. This
@@ -6521,7 +6525,8 @@ def build(args):
     print(f"Fund-fee years: {fee_labels}", file=sys.stderr)
     print(f"Wrote: {dashboard}/snapshot.json + accounts.json", file=sys.stderr)
 
-    _spawn_sync_sweep(dashboard)
+    if not getattr(args, "no_sync_sweep", False):
+        _spawn_sync_sweep(dashboard)
 
 
 def main():
@@ -6545,7 +6550,13 @@ def main():
     # Not type=int: a malformed id must degrade to "no user", not fail the build.
     p.add_argument("--user-id", default=None,
                    help="the operator's Carta user pk (get_current_user), saved as <dashboard-dir>/.user-id "
-                        "so the post-build sync to the hosted app knows whose reports these are")
+                        "so whatever pushes this dashboard's own reports to the hosted app next — the "
+                        "session itself, or own_sync.py's own sweep for a build made without "
+                        "--no-sync-sweep — knows whose reports these are")
+    p.add_argument("--no-sync-sweep", action="store_true",
+                   help="skip the detached claude-CLI own-sync sweep this build would otherwise spawn — "
+                        "the skill pushes each report itself, through its own Carta connector, right "
+                        "after Step 5's URL (serve-and-update.md Step 5.2)")
     args = p.parse_args()
     if not args.as_of_year:
         args.as_of_year = int(args.as_of.split("-")[0])

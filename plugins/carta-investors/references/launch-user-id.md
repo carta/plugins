@@ -4,8 +4,10 @@ A local launch of a dashboard server (`serve.py`) takes `--user-id <pk>` so its 
 person. `pk` is the integer Carta user id in the `get_current_user` result. `serve.py` saves it as
 `.user-id` and reuses the saved id on later launches that omit the flag.
 
-A build also reads `.user-id` on its own — `carta-manco-reporting`'s `own_sync.py` sweeps a dashboard's
-own reports to Carta right after every build, under whoever `.user-id` names at that moment. So `.user-id`
+A build also reads `.user-id` on its own — `carta-manco-reporting`'s own build (Step 4) always passes
+`--no-sync-sweep` and pushes a dashboard's own reports to Carta from the session itself right after every
+build (serve-and-update.md Step 5.2), under whoever `.user-id` names at that moment; a build made without
+that flag instead has `own_sync.py`'s own detached sweep do the same push. Either way, `.user-id`
 must hold the *current* run's operator by the time the build script runs, not just by the time `serve.py`
 next launches — a stale id from a previous operator's run would push this run's reports under their name
 instead.

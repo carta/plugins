@@ -12,8 +12,8 @@ All from the report controls beside **Export**, and none of it needs Claude in t
 
 | Action | What happens |
 |---|---|
-| Rename | Local and hosted. A local rename also reaches your own synced copy in the hosted app (own_sync.py) when the report is one of your own. A rename made on the hosted app comes back here only for a report this dashboard syncs to the hosted app (own_sync.py), at the next rebuild or at this dashboard's next launch; a rename of a hosted copy, an uploaded budget or Carta's own budget stays on the hosted app. |
-| Duplicate | Local and hosted. Holds its own copy of the budget and keeps the report's budget mapping. |
+| Rename | Local, immediately. For a report this dashboard syncs to the hosted app (own_sync.py), your own synced copy there catches up at the skill's next invocation (Step 5.2's push) — a rebuild the app itself triggers pushes nothing, since it runs with `--no-sync-sweep`. A rename made on the hosted app reaches here the same way: at the skill's next invocation, or sooner if `serve.py`'s own background reconcile runs at this dashboard's next launch (needs the `claude` CLI signed in); a rename of a hosted copy, an uploaded budget or Carta's own budget stays on the hosted app. |
+| Duplicate | Local, immediately; the copy reaches the hosted app the same way, at the skill's next invocation. Holds its own copy of the budget and keeps the report's budget mapping. |
 | Hide | Local and hosted. Hidden reports come back from the sidebar's **Show N hidden**. |
 | Share | Only the people you add (where a new share starts), or everyone who can view the entity's accounting. People are picked from that same list, which the dashboard saves for a day in `.shareable-users.json` (**Refresh** under the list asks Carta again; a recipient Carta refuses clears it). |
 | Update | Sends the owner's later changes. Until then recipients keep the version they have. When the report has no share (sharing was stopped, maybe in another tab), nothing is sent: the app is told the shared copy was deleted and asks whether to share it as new or keep it private. A share reaches everyone only when the Share dialog sends an explicit choice of everyone. |
@@ -57,16 +57,23 @@ person's own Carta connector, so Carta checks their permissions. The payload is 
 canonical model (`scripts/shapes/canonical.py`, `SCHEMA_VERSION = 1`), checked before it
 is sent (`scripts/report_payload.py`) and again by Carta.
 
+In-app Share, above, always goes through this `claude`-CLI bridge. `--no-sync-sweep`
+(serve-and-update.md Step 4) skips the *own-sync* sweep below only — a separate path to
+Carta that mirrors your own reports privately, with no effect on Share.
+
 - The connector is picked from the cache's Carta environment. A non-production cache never
   uses a production connector.
 - `--share-mcp-server <name>` (or `MANCO_SHARE_MCP_SERVER`) pins one connector, for example
   a test connector. The startup banner prints which connectors sharing will use. The pin is
   also recorded to `<dashboard_dir>/.share-mcp-server` (`manco_paths.write_share_mcp_server`),
-  so `own_sync.py`'s detached post-build sweep — which runs in its own process, with no access
-  to `serve.py`'s flags — pushes and retires own-sync mirrors through that same connector. A
-  live `serve.py` re-reads this file on every `_get_bridge()` call and rebuilds its own cached
-  Bridge whenever the pin has moved since that Bridge was built, so a relaunch that changes or
-  clears the pin takes effect on the running daemon too, not just on sweeps spawned after it.
+  so `own_sync.py`'s sweep — which runs in its own process, with no access to `serve.py`'s
+  flags, whenever something builds without `--no-sync-sweep` — pushes and retires own-sync
+  mirrors through that same connector. This pin has no effect on Step 5.2's session push:
+  that runs over the Claude session's own Carta connector (`<SERVER>`), never the `claude`
+  CLI's. A live `serve.py` re-reads this file on every `_get_bridge()` call and rebuilds its
+  own cached Bridge whenever the pin has moved since that Bridge was built, so a relaunch
+  that changes or clears the pin takes effect on the running daemon too, not just on sweeps
+  spawned after it.
 - The `claude` binary the bridge starts is found by `scripts/preflight_claude.py`
   (Step 0.5): `--claude-bin` (or `MANCO_CLAUDE_BIN`) pins one explicitly; otherwise PATH,
   the usual install locations, and the launching Claude Code session's own binary
@@ -80,42 +87,59 @@ is sent (`scripts/report_payload.py`) and again by Carta.
   `checking` (no probe has landed yet, `reason` is `null`), `available`, or
   `unavailable`; once a probe has run, `reason` is `ok`, `not_installed`, or
   `not_logged_in`.
-- After every build, `own_sync.py`'s sweep mirrors the owner's own reports to Carta for the
-  hosted app. Until the operator's user id file, a working `claude` CLI and a Carta connector
+- The skill always pushes the owner's own reports to Carta for the hosted app itself,
+  through this session's own Carta connector, right after every build — Step 5.2
+  ([serve-and-update.md](serve-and-update.md)), via `own_sync.py --plan`. The same
+  `plan_push` that a sweep (below) would use builds what the session sends, so the two
+  never differ. `--plan` plans a push for every report that's new or changed,
+  unconditionally — there is no `claude` CLI to wait on or defer to, since Step 4 always
+  builds with `--no-sync-sweep`.
+  - `--plan --mirrors <file>` reconciles first: `<file>` holds a `fa:get:budget_reports`
+    `call_tool` result the session's own sub-agent fetched over its Carta connector
+    (own_sync.py has none) and wrote exactly as the tool call returned it, read this way
+    since planning and pushing run in separate processes. `own_sync.py` unwraps it
+    (`share_bridge.unwrap`, the same way a live bridge call unwraps its own capture) and
+    checks it the same way `list_reports` checks a live listing
+    (`share_ops.trusted_reports`), then `reconcile_names_from_listing` settles every
+    own-synced report's name against it before anything is planned — without this, a plan
+    built after a rename made on the hosted app would resend the pre-rename name and
+    silently overwrite it. The file is read once and deleted, so a later `--plan --mirrors`
+    reusing a leftover path reconciles against nothing rather than a listing that could now
+    be stale.
+  - `--plan` (`--mirrors` omitted) drops any earlier plans and writes, per push due,
+    `<dashboard_dir>/.own-sync-plan/<report_id>.arguments.json` (the call's exact
+    `arguments`) and `<report_id>.plan.json` (what `--record` stamps), and prints
+    `{"pushes": [{"report_id", "name", "command", "arguments_file"}]}`. Without a user id it
+    exits 3 and prints `{"error": "no_user_id"}`.
+  - `--plan --recreate <report_id>` plans one report as a create, after Carta answered its
+    update with `not_found` or `not_owner`, and replaces only that report's plan.
+  - `--lookup <report_id>` is a plain local read of the report's own-sync uuid as last
+    recorded — no Carta call, no lock — for Step 5.3 once Step 5.2's push has already
+    returned. Prints `null` for an unknown report id, or while a plan for this report is
+    still on disk (a push this run hasn't recorded yet, whether it's still in flight or it
+    failed) — never a uuid a failed push left stale.
+- `own_sync.py`'s **sweep** (`own_sync.py` with no flags) mirrors the owner's own reports to
+  Carta through a headless `claude` session, the same way Share does. It runs only when
+  something calls `build_manco_datadir.py` *without* `--no-sync-sweep` — never from this
+  skill's own Step 4, which always passes it; see [serve-and-update.md](serve-and-update.md)'s
+  Step 4. Until the operator's user id file, a working `claude` CLI and a Carta connector
   that CLI can reach are all in place, it pushes nothing and writes why to
   `<dashboard_dir>/own_sync.log`. `own_sync_status.json` holds
   `{"blocked_by": <reason or null>[, "due": [report ids]]}` under one rule
   (`own_sync._record_blocked`): `no_user_id` whenever no user id is saved, for every report;
   `not_installed`, `not_logged_in` or `unreachable` only while some of the owner's reports have
   a push due, with `due` naming them; otherwise `null`, including after any push, a sweep's or
-  a session's `--record`. `own_sync.py --plan` reads it under the sweep lock to decide whether
-  a session push (Step 5.2) is due.
-  `unreachable` is the usual case for a dashboard built in the Claude desktop app: its
-  Carta connector isn't available to the `claude` CLI.
-- A Claude session with its own Carta connector makes those pushes itself through
-  `own_sync.py`. The same `plan_push` builds what the sweep sends, so the two never differ.
-  - `--plan` waits for any running sweep (a sweep holds the lock for its whole run, the
-    `claude` CLI check included), then reads the status it wrote. Where the CLI reaches
-    Carta, that can mean waiting out a whole sweep's pushes. Unless that is a `claude`
-    CLI reason (`unreachable`, `not_installed`, `not_logged_in`), it drops any earlier plans
-    and prints `{"pushes": []}`: a sweep that reached Carta pushed the reports itself, and a
-    second create would leave a stray mirror. Otherwise it drops earlier plans and writes,
-    per push due,
-    `<dashboard_dir>/.own-sync-plan/<report_id>.arguments.json` (the call's exact `arguments`)
-    and `<report_id>.plan.json` (what `--record` stamps), and prints
-    `{"pushes": [{"report_id", "name", "command", "arguments_file"}]}`. Without a user id it
-    exits 3 and prints `{"error": "no_user_id"}`.
-  - `--plan --recreate <report_id>` plans one report as a create, after Carta answered its
-    update with `not_found` or `not_owner`. The CLI gate doesn't apply, and it replaces only
-    that report's plan.
-  - While a plan exists, carta-investors' `scripts/hooks/guard-own-sync-push.js` (a
-    PreToolUse hook on the Carta connector's `call_tool`) refuses a budget-report create or
-    update that belongs to it but differs from its arguments file. The bridge's own relay
-    session is exempt (`share_bridge.BRIDGE_ENV`): it checks its calls itself.
-  - `--record <report_id> --uuid <uuid>` reads the `.plan.json` the latest `--plan` wrote,
-    stamps the push, drops that plan, clears `blocked_by`, and prints
-    `{"recorded": <bool>, "delete_uuid": <uuid or null>}`. `delete_uuid` names a mirror the
-    session must delete, when the report was removed while its push was in flight.
+  a session's `--record`. This status is diagnostic only — `own_sync.py --plan` (the session's
+  own call) never reads it.
+- While any plan exists, carta-investors' `scripts/hooks/guard-own-sync-push.js` (a
+  PreToolUse hook on the Carta connector's `call_tool`) refuses a budget-report create or
+  update that belongs to it but differs from its arguments file. The bridge's own relay
+  session is exempt (`share_bridge.BRIDGE_ENV`): it checks its calls itself.
+- `--record <report_id> --uuid <uuid>` reads the `.plan.json` the latest `--plan` wrote,
+  stamps the push, drops that plan, clears `blocked_by`, and prints
+  `{"recorded": <bool>, "delete_uuid": <uuid or null>}`. `delete_uuid` names a mirror the
+  session must delete, when the report was removed while its push was in flight. Used by
+  Step 5.2's sub-agent after every successful push.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.
@@ -137,6 +161,20 @@ is sent (`scripts/report_payload.py`) and again by Carta.
 
 When Carta hasn't turned the budget-report commands on for someone, the app says sharing
 isn't available yet.
+
+## Same-named reports in "Shared with you"
+
+The hosted app's own listing is entity-wide, not scoped to what was shared with you.
+`opPull` skips every report you own (`is_owner`), so none of yours shows under "Shared with
+you" — Carta's own-sync comment in `server/reportShare.js` (right above `opPull`) states
+this rule. Another user's own-sync mirror is not yours, so it does: it imports into "Shared
+with you" as `shared_<slug>`, then `-2`, `-3`, … for each further report with the exact same
+name. Those can be mistaken for your own report, especially right after you've just pushed
+one from a common workbook sheet name such as "Opex Budget by Bucket." Your own report only
+ever shows under Budget vs Actuals, because Carta marks your own-sync mirror `is_owner` with
+`shared_with` set to exactly your own user id (`isOwnSyncMirror`) — a shape a deliberate
+Share never produces (sharing with only yourself is refused) — so there's no ambiguity about
+which section a report belongs in, even when two names collide.
 
 ## When something goes wrong
 

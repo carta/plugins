@@ -129,14 +129,24 @@ Run the build script:
   --manco-name "<MANCO_NAME>" --manco-uuid "<MANCO_UUID>" --manco-carta-id <MANCO_CARTA_ID> \
   --manco-entity-id <MANCO_ENTITY_ID> \
   --raw-dir "<raw_dir>" --dashboard-dir "<dashboard_dir>" \
-  --as-of "<AS_OF>" --carta-environment "<CARTA_ENVIRONMENT>" --user-id <USER_PK>
+  --as-of "<AS_OF>" --carta-environment "<CARTA_ENVIRONMENT>" --user-id <USER_PK> \
+  --no-sync-sweep
 ```
 
 `<USER_PK>` is `pk` from `get_current_user`, fetched per
 `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Build path; the plugin's `references/`,
-not this skill's). The script saves it as `<dashboard_dir>/.user-id` before the post-build sync
-to the hosted app reads it. Leave the flag out only when this run has no Carta MCP; never pass a
+not this skill's). The script saves it as `<dashboard_dir>/.user-id` before Step 5.2's own
+push reads it. Leave the flag out only when this run has no Carta MCP; never pass a
 placeholder.
+
+**Always pass `--no-sync-sweep`.** A build without it spawns a detached `claude`-CLI
+own-sync sweep — it errors for an operator with no working `claude` CLI (or one signed
+out), and even where it works it is a second, separate path to the same Carta connector
+this session already has. `--no-sync-sweep` skips that sweep only: Step 5.2, right after
+the URL, pushes every owned report itself, through this session's own connector, with no
+`claude` CLI and no detached process. In-app Share ([report-sharing.md](report-sharing.md))
+goes through the `claude` CLI bridge regardless — a separate path to Carta from own-sync,
+which `--no-sync-sweep` leaves untouched.
 
 `<CARTA_ENVIRONMENT>` is `"production"` or `"nonprod"`, classified in Step 1
 (from `<SERVER>`'s name) or carried from Step 0.2's cache probe on a WARM
@@ -380,55 +390,66 @@ Step 6 is where the unresolved ones get resolved.
 
 ## Step 5.2 — Push to the hosted app from this session
 
-**SILENT.** Run it only when this run has a Carta MCP (`<SERVER>`); skip it on a
-cache-only reopen. It runs after the URL is out. `--plan` first waits for the build's own
-sweep (it holds a lock for its whole run), then reads the status that sweep wrote, and
-plans nothing unless the `claude` CLI couldn't reach Carta (`unreachable`, `not_installed`
-or `not_logged_in`): a sweep that could has pushed the reports itself. That gate covers a
-plain `--plan` only; the `--recreate` in the brief always plans its one create.
+**SILENT on success.** Run it whenever this run has a Carta MCP (`<SERVER>`) — every
+invocation — right after the URL is out; skip it only on a cache-only reopen with no MCP at
+all. Step 4 always builds with `--no-sync-sweep`, so no sweep ever runs for a dashboard
+built this way, and `own_sync.py --plan` plans a push for every owned report that is new or
+changed unconditionally, without waiting on or deferring to one.
 
-The build's own sweep pushes the owner's reports to the hosted app through the `claude`
-CLI. Where that CLI can't reach Carta (a dashboard built in the Claude desktop app, whose
-Carta connector isn't available to it), this session pushes them itself. Run this with the
-Bash tool's `timeout: 600000`: where the CLI does reach Carta, it waits out that whole sweep.
+Planning also needs to settle any rename made on the hosted app onto the local report
+first — otherwise a plan built after a rename would resend the pre-rename name and silently
+overwrite it (`own_sync.reconcile_names` already protects the sweep from exactly this; a
+session push needs the same protection, via `--mirrors` below). That needs a live
+Carta listing, which only the sub-agent's connector can make — so the whole thing, listing
+included, runs inside the sub-agent's brief, not as a separate command here.
+
+First, get this dashboard's fund_uuid — a local read, no Carta call:
 
 ```bash
-<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --plan
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/import_shared_reports.py" context --data-dir "<dashboard_dir>"
 ```
 
-- Exit 3 (`{"error": "no_user_id"}`) or `{"pushes": []}`: nothing to do. Go on.
-- The command times out: the build's sweep is still pushing through the CLI, so there is
-  nothing to do either. Go on, without retrying it or saying anything.
-- Otherwise dispatch **one** fresh-context sub-agent (Agent tool, `subagent_type:
-  general-purpose`, which inherits this session's tools, its Carta connector included) with
-  the brief below,
-  filling in `<SERVER>`, `<UV_BIN>`, `<dashboard_dir>` and the `pushes` list verbatim. A
-  payload is up to 256 KB, so it stays out of this conversation. Don't wait to tell the
-  user anything.
+It prints `{"fund_uuid": "<fund_uuid>"}`. Then dispatch **one** fresh-context sub-agent
+(Agent tool, `subagent_type: general-purpose`, which inherits this session's tools, its
+Carta connector included) with the brief below, filling in `<SERVER>`, `<UV_BIN>`,
+`<dashboard_dir>` and `<fund_uuid>` verbatim. Don't wait to tell the user anything before it
+returns.
 
 Sub-agent brief:
 
-> Push each report below to Carta exactly as planned. For each `{report_id, command, arguments_file}`:
-> 1. Read `arguments_file`. Call `mcp__<SERVER>__call_tool` with `name` = `command` and
->    `arguments` = that file's JSON object, unchanged: no field added, dropped or retyped,
->    and never as a quoted string. A hook compares the call to the file and refuses any
->    difference.
-> 2. On success, run `<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --record <report_id> --uuid <the response's report.uuid>`.
+> 1. Call `mcp__<SERVER>__call_tool` with `name` = `fa__get__budget_reports` and
+>    `arguments` = `{"fund_uuid": "<fund_uuid>"}`. Write the response unchanged to
+>    `<dashboard_dir>/.own-sync-mirrors.json`.
+> 2. Run `<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --plan --mirrors "<dashboard_dir>/.own-sync-mirrors.json"`,
+>    with the Bash tool's `timeout: 600000`. It waits for this dashboard's own-sync lock to
+>    be free — held by a sweep (only from a build made without `--no-sync-sweep`) or another
+>    `--plan`, neither expected here — then settles any hosted rename onto the local report,
+>    then prints `{"pushes": [...]}`. Exit 3
+>    (`{"error": "no_user_id"}`) or `{"pushes": []}`: nothing to push — answer exactly
+>    `nothing_to_push` and stop; don't call Carta again. If the command times out, answer
+>    exactly `failed: own-sync lock held too long` and stop.
+> 3. For each `{report_id, command, arguments_file}` the plan named: read `arguments_file`.
+>    Call `mcp__<SERVER>__call_tool` with `name` = `command` and `arguments` = that file's
+>    JSON object, unchanged: no field added, dropped or retyped, and never as a quoted
+>    string. A hook compares the call to the file and refuses any difference.
+> 4. On success, run `<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --record <report_id> --uuid <the response's report.uuid>`.
 >    If it prints a `delete_uuid`, call `mcp__<SERVER>__call_tool` with `name` =
->    `fa__delete__budget_report` and `arguments` = `{"fund_uuid": <the plan's fund_uuid>, "report_uuid": <delete_uuid>}`.
-> 3. If a `fa__mutate__budget_report` call answers not found or not the owner, run the
->    same script with `--plan --recreate <report_id>` and push the one create it prints,
->    once.
+>    `fa__delete__budget_report` and `arguments` = `{"fund_uuid": "<fund_uuid>", "report_uuid": <delete_uuid>}`.
+> 5. If a `fa__mutate__budget_report` call answers not found or not the owner, run the
+>    same script with `--plan --recreate <report_id>` (no `--mirrors`: a recreate always
+>    plans, never defers) and push the one create it prints, once.
 >
 > You get at most **2** push calls (create or update) per report, the recreate included. A
 > refused or failed push does not earn a third: not with the arguments rewritten, not
 > through another tool, not by splitting the payload. Then skip that report and go on. The
 > `fa__delete__budget_report` call for a `delete_uuid` is not a push: always make it, once,
-> whatever the push count. Never call Carta for anything but the commands above. Finish with one line per report, `pushed` or
-> `needs_human: <report_id>: <the error's first line>`.
+> whatever the push count. Never call Carta for anything but the commands above. Finish with
+> one line per report pushed, `pushed` or `needs_human: <report_id>: <the error's first
+> line>`, or exactly `nothing_to_push` if step 2 applied.
 
-If the sub-agent returns any `needs_human:` line, tell the user in one sentence which
-report isn't on the hosted app yet and the reason, and go on. Never retry it in this run.
+If the sub-agent answers `nothing_to_push` or `failed: own-sync lock held too long`, go on
+silently. If it returns any `needs_human:` line, tell the user in one sentence which report
+isn't on the hosted app yet and the reason, and go on. Never retry it in this run.
 
 
 ## Step 5.3 — Offer the hosted app's link to this firm's report
@@ -440,21 +461,17 @@ mirror and so nothing own_sync could ever push. `<REPORT_ID>` is the workbook re
 whatever the workbook's own file name or declared `id` names otherwise. Skip entirely for
 a firm using Carta's own budget.
 
-Run this after Step 5.2 has returned (when 5.2 ran at all), once the URL is out, with the
-Bash tool's `timeout: 600000`. `own_sync.push_one` first waits for any sweep already
-running on this dashboard — it shares the sweep's lock, the same way Step 5.2's `--plan`
-does — so the usual wait is however long Step 4's detached sweep takes: a dashboard with
-several reports can have this step wait out the whole sweep before push_one even starts:
+Run this only after Step 5.2 has returned (when 5.2 ran at all) — this step never pushes
+anything itself, it only reads back what Step 5.2 just did (or an earlier run did). A plain
+local read: no Carta call, no lock, no timeout needed.
 
 ```bash
-<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --push-one "<REPORT_ID>"
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --lookup "<REPORT_ID>"
 ```
 
-- **The command times out:** the build's sweep is still pushing. Offer no link, say
-  nothing, and don't retry it in this run.
-
-- **`{"uuid": "<uuid>"}`** — build the hosted link and offer it, after 5c's gap line (if
-  any) and before Step 6's menu:
+- **`{"uuid": "<uuid>"}`** — build the hosted link and offer it, as the **last** output of
+  this run before Step 6's menu — after 5c's gap line (if any) and Step 5.2's `needs_human`
+  line (if any):
 
   ```bash
   <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url --dashboard-dir "<dashboard_dir>" "<uuid>"
@@ -472,18 +489,9 @@ several reports can have this step wait out the whole sweep before push_one even
   link from any other uuid (a local report id, a remembered one from an earlier turn) —
   only from this call's own `"uuid"`.
 
-- **`{"uuid": null}`** — the report is read-only or hasn't been built yet. There's nothing
-  to offer; say nothing.
-
-- **`{"error": "no_user_id"}`**, **`{"error": "not_installed"}`**, **`{"error":
-  "not_logged_in"}`** — a push was due (the common no-op path above skips the `claude` CLI
-  check entirely) but couldn't be attempted. Say nothing — the detached sweep's own log
-  carries the detail, and repeating it here on every budget import would be noise.
-
-- **`{"error": "unreachable"}`** or **`{"error": "push_failed", "detail": ...}`** — one
-  line, naming the reason: *"Couldn't get your report onto the hosted app yet (`<reason or
-  detail>`) — it'll catch up on the next build."* Never claim the report is on the hosted
-  app when this call didn't push it there. Never retry it in this run.
+- **`{"uuid": null}`** — the report is read-only, hasn't been built yet, or Step 5.2's push
+  for it failed (its `needs_human` line, just printed, already said why). There's nothing to
+  offer; say nothing further.
 
 
 ## Step 5.4 — Load reports shared with you
@@ -500,14 +508,12 @@ it to finish before going on to Step 6. A payload is up to 256 KB, so it stays o
 conversation.
 
 `import_shared_reports.py import` merges what's pulled, then rebuilds the dashboard — even
-when nothing changed — and that rebuild spawns its own detached own-sync sweep
-(`build_manco_datadir._spawn_sync_sweep`), truncating `own_sync.log` as it starts. Step
-5.2's `--plan` and Step 5.3's `push_one` both wait on that sweep's lock, so this step runs
-only after both have returned: starting its rebuild any earlier would make either one wait
-out a second sweep. After this step, `own_sync.log` holds that new sweep's record, not Step
-4's. A pulled report is stored with `state: "shared-in"`, which `own_sync`'s push path
-already treats as read-only, so the sweep this step's own rebuild starts never re-pushes it
-as the owner's own.
+when nothing changed. That rebuild replays the build's own recorded argv
+(`.build-args.json`), `--no-sync-sweep` included, so it spawns no `claude`-CLI sweep either
+— there is nothing for Step 5.2's `--plan` or Step 5.3's `--lookup` to wait on or race
+against. This step runs after both have returned, so its messages never interleave with
+theirs. A pulled report is stored with `state: "shared-in"`, which `own_sync`'s push path
+treats as read-only, so nothing this step's rebuild does re-pushes it as the owner's own.
 
 Sub-agent brief:
 
@@ -736,13 +742,12 @@ the operator has nothing left to change.
 
 ## Step 7 — Export the budget for the hosted app
 
-**Usually not needed for your own view.** The build's own sweep (or Step 5.2, when the
-`claude` CLI couldn't reach Carta) mirrors every workbook budget you own to Carta privately,
-so it shows only in your own hosted session. Colleagues see it only through Share or a
-firm-wide upload from this step. Reach for this step only when the sync didn't deliver what
-the operator asks for: this budget isn't in their own hosted session (no sync path could
-run, Step 5.2 reported `needs_human` for it, or the build's sweep skipped its push; see
-`<dashboard_dir>/own_sync.log`), or they want colleagues to see it without sharing it.
+**Usually not needed for your own view.** Step 5.2 mirrors every workbook budget you own to
+Carta privately, from this session, right after every build — so it shows only in your own
+hosted session. Colleagues see it only through Share or a firm-wide upload from this step.
+Reach for this step only when the sync didn't deliver what the operator asks for: this
+budget isn't in their own hosted session (no Carta MCP this run, or Step 5.2 reported
+`needs_human` for it), or they want colleagues to see it without sharing it.
 
 **Even then, check the hosted button exists before exporting anything.** The hosted app's
 **Import budget** control is gated by `IMPORT_BUDGET_ENABLED` in

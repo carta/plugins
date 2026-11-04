@@ -24,8 +24,8 @@ Subcommands:
                               args), never the cache-dir slug, which names a directory, not
                               a firm. firm_name is slugged the way the hosted Worker does
                               (hosted_firm_slug, NOT this module's own slugify). report_id
-                              is a report's own-sync uuid, own_sync.push_one's or
-                              push_if_changed's "uuid" result
+                              is a report's own-sync uuid, as own_sync.py --record last
+                              recorded it (own_sync.py --lookup reads the same value back)
 
 snapshot_age_days is the age of the last datadir rebuild (Step 4), which runs
 on every invocation. raw_age_days is the age of the last actual DWH fetch
@@ -135,10 +135,11 @@ def hosted_url(firm_name, firm_uuid, report_id, tab=BVA_TAB):
     — a dashboard predating the field, or one `read_firm_identity` found no accounts.json
     for.
 
-    `report_id` is this dashboard's own-sync uuid for the report, as own_sync.push_one or
-    push_if_changed last recorded it — not a live check that the mirror still exists on
-    the hosted app, just the uuid this dashboard has on record for it. A report that has
-    never been pushed has no uuid and so nothing to link to."""
+    `report_id` is this dashboard's own-sync uuid for the report, as own_sync.py's
+    `--record` (the session push's own stamp) or `push_if_changed` (the sweep's) last
+    recorded it — not a live check that the mirror still exists on the hosted app, just the
+    uuid this dashboard has on record for it. A report that has never been pushed has no
+    uuid and so nothing to link to."""
     slug = hosted_firm_slug(firm_name)
     path = "{}/firm/{}/{}/{}".format(
         HOSTED_APP_URL, urllib.parse.quote(slug, safe=""),
@@ -257,9 +258,10 @@ def own_sync_status_file(dashboard_dir):
 
 
 def write_own_sync_status(dashboard_dir, blocked_by, due=None):
-    """Write own_sync_status.json for own_sync.py --plan: `blocked_by` (one of
-    own_sync's BLOCKED_* reasons, or None) and, when given, `due`, the report ids it
-    applies to. own_sync._record_blocked holds the rule for what is written when."""
+    """Write own_sync_status.json, diagnostic only (own_sync.py's --plan never reads it):
+    `blocked_by` (one of own_sync's BLOCKED_* reasons, or None) and, when given, `due`, the
+    report ids it applies to. own_sync._record_blocked holds the rule for what is written
+    when."""
     status = {"blocked_by": blocked_by}
     if due is not None:
         status["due"] = list(due)

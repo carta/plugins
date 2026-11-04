@@ -2,9 +2,9 @@
 /**
  * PreToolUse Hook: carta-manco-reporting's own-sync pushes go out exactly as planned
  *
- * When the `claude` CLI can't reach Carta, a Claude session pushes a dashboard's reports
- * to the hosted app itself, copying each call's `arguments` from the file
- * `own_sync.py --plan` wrote (<dashboard>/.own-sync-plan/<report_id>.arguments.json).
+ * A Claude session pushes a dashboard's own reports to the hosted app itself, through its
+ * own Carta connector, right after every build — copying each call's `arguments` from the
+ * file `own_sync.py --plan` wrote (<dashboard>/.own-sync-plan/<report_id>.arguments.json).
  * A payload is up to 256 KB of amounts, and Carta checks only its shape, so a mistyped
  * number would reach the hosted app. This denies a budget_report create or update that
  * belongs to a plan but differs from it, the check share_bridge.py makes on its own

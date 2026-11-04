@@ -85,14 +85,12 @@ from share_bridge import ShareError
 Emit = Callable[[str], None]
 
 # Why a sweep couldn't reach Carta, recorded in own_sync_status.json
-# (manco_paths.write_own_sync_status) for --plan. preflight_claude's own reasons are
-# recorded as they are.
+# (manco_paths.write_own_sync_status) for diagnosis — --plan never reads it.
+# preflight_claude's own reasons are recorded as they are.
 BLOCKED_NO_USER_ID = "no_user_id"
 BLOCKED_NOT_INSTALLED = preflight_claude.REASON_NOT_INSTALLED
 BLOCKED_NOT_LOGGED_IN = preflight_claude.REASON_NOT_LOGGED_IN
 BLOCKED_UNREACHABLE = share_bridge.UNREACHABLE
-# The reasons a session can push past: its own Carta connector doesn't need the CLI's.
-CLI_BLOCKED = (BLOCKED_NOT_INSTALLED, BLOCKED_NOT_LOGGED_IN, BLOCKED_UNREACHABLE)
 
 
 def _is_unreachable(e: BaseException) -> bool:
@@ -328,22 +326,59 @@ def _reconcile_one_name(store: report_store.ReportStore, report: Dict[str, Any],
     # leave it; push_if_changed resends it since pushed_name no longer matches.
 
 
+def _reconcile_from_doc(store: report_store.ReportStore, doc: Dict[str, Any],
+                         mirrors: List[Dict[str, Any]]) -> None:
+    """Settle every own-synced, editable report in `doc` against its current name in
+    `mirrors` (a `fa:get:budget_reports` listing's `reports` array). Never touches a report
+    shared with you (read-only) or a report's own `shared` link — only `own_sync`. Shared by
+    reconcile_names and reconcile_names_from_listing, which differ only in when each loads
+    `doc` relative to fetching `mirrors` — see their own docstrings."""
+    by_uuid = {m.get("uuid"): m for m in mirrors if isinstance(m, dict) and m.get("uuid")}
+    for report in doc["reports"]:
+        try:
+            if report_store.ReportStore.metadata(report)["read_only"]:
+                continue
+            uuid = report_store.ReportStore.own_sync_uuid(report)
+            mirror = by_uuid.get(uuid) if uuid else None
+            if mirror is not None:
+                _reconcile_one_name(store, report, mirror)
+        except Exception as e:
+            print("[own_sync] name reconcile for %r skipped: %r" % (report.get("id"), e), file=sys.stderr)
+
+
+def reconcile_names_from_listing(store: report_store.ReportStore, mirrors: List[Dict[str, Any]]) -> None:
+    """Bring a rename made on the hosted app onto the local report, without waiting for
+    the next push: settles every own-synced, editable report's name against `mirrors` (a
+    `fa:get:budget_reports` listing's `reports` array, already fetched by the caller).
+
+    Loads reports.json here, after `mirrors` was already fetched — the one ordering
+    reconcile_names (below) avoids, because its single process can hold the listing and the
+    load together. A session push can't: the listing runs over a session's own Carta
+    connector (own_sync.py has none), in a sub-agent, written to a file, and read back by a
+    separate `--plan --mirrors` process — there is no way to load reports.json before a
+    listing call made somewhere else entirely. The race that ordering guards
+    against in reconcile_names — a concurrent push elsewhere recording a new `pushed_name`
+    while the listing was still in flight — is narrower here, not eliminated: best-effort
+    against another writer racing the exact gap between the sub-agent's listing and this
+    call, not a guarantee against it. `store.apply_synced_name` still refuses to write
+    unless the local name and `pushed_name` it's given are still what's on disk at write
+    time, so a *local* rename or push landing after this function's own load is never
+    overwritten — only a mirror listing that was already stale when it was taken is a risk
+    this function can't fully close.
+    """
+    _reconcile_from_doc(store, store.load(), mirrors)
+
+
 def reconcile_names(store: report_store.ReportStore, data_dir: Path, bridge: Any,
                      emit: Emit = lambda message: None) -> None:
-    """Bring a rename made on the hosted app onto the local report, without waiting for
-    the next push: settles every own-synced, editable report's name against its current
-    name in Carta. Never touches a report shared with you (read-only) or a report's own
-    `shared` link — only `own_sync`.
-
-    Two guards protect this against two different races, each against the one it alone
-    prevents:
-
-    reports.json is snapshotted (store.load()) *before* the slow Carta listing call, not
-    after, so the three-way comparison in _reconcile_one_name is always made against the
-    same state the listing was fetched against. Without that, a push landing elsewhere
-    while this listing is still in flight — recording a new pushed_name while the listing
-    still carries the old mirror name — would read as "only the mirror changed" once
-    compared against a fresh reports.json a load taken after the listing would see instead.
+    """The sweep's own way of settling a hosted rename onto the local report: unlike
+    reconcile_names_from_listing (above), this loads reports.json *before* fetching the
+    listing, not after — one process holds both, so the three-way comparison in
+    _reconcile_one_name is always made against the same state the listing was fetched
+    against. Without that, a push landing elsewhere while this listing is still in flight —
+    recording a new pushed_name while the listing still carries the old mirror name — would
+    read as "only the mirror changed" once compared against a fresh reports.json a load
+    taken after the listing would see instead.
 
     store.apply_synced_name is also given the exact local name and pushed_name the snapshot
     held, and writes only if both are still what's on disk right when it runs. This is what
@@ -367,17 +402,7 @@ def reconcile_names(store: report_store.ReportStore, data_dir: Path, bridge: Any
         return
     if reports is None:
         return
-    by_uuid = {m.get("uuid"): m for m in reports if isinstance(m, dict) and m.get("uuid")}
-    for report in doc["reports"]:
-        try:
-            if report_store.ReportStore.metadata(report)["read_only"]:
-                continue
-            uuid = report_store.ReportStore.own_sync_uuid(report)
-            mirror = by_uuid.get(uuid) if uuid else None
-            if mirror is not None:
-                _reconcile_one_name(store, report, mirror)
-        except Exception as e:
-            print("[own_sync] name reconcile for %r skipped: %r" % (report.get("id"), e), file=sys.stderr)
+    _reconcile_from_doc(store, doc, reports)
 
 
 def sweep(data_dir: Path, user_id: int, bridge: Any) -> None:
@@ -429,9 +454,8 @@ def _due_plans(store: report_store.ReportStore, data_dir: Path, report_ids: List
 
 
 def _record_blocked(data_dir: Path, reason: str, detail: str, user_id: Optional[int] = None) -> None:
-    """Log why a sweep couldn't reach Carta, and record it in own_sync_status.json for
-    --plan (the one rule for that file): a session push reads it under the sweep lock to
-    decide whether it has pushes to make.
+    """Log why a sweep couldn't reach Carta, and record it in own_sync_status.json (the one
+    rule for that file) — diagnostic only; `--plan` never reads it.
 
     - `no_user_id` (no `user_id` here) is recorded for every report.
     - Any other reason is recorded with `due`, the reports that still have a push due; with
@@ -473,11 +497,11 @@ def _heartbeat(lock_path: Path, interval: float, stop: threading.Event) -> None:
 
 
 def _sweep_lock(data_dir: Path) -> "report_store._FileLock":
-    """The one lock that serializes a dashboard's sweeps and --plan. A sweep holds it for its
-    whole run, the `claude` CLI probe included, so --plan reads the status that sweep wrote. An abandoned lock
-    frees itself once it goes stale, so there's nothing a finite wait would gain over the
-    lock's own staleness check: wait as long as it takes for the holder to either finish
-    or stop refreshing it."""
+    """The one lock that serializes a dashboard's sweeps and --plan, so neither ever writes
+    reports.json at the same time as the other. A sweep holds it for its whole run, the
+    `claude` CLI probe included. An abandoned lock frees itself once it goes stale, so
+    there's nothing a finite wait would gain over the lock's own staleness check: wait as
+    long as it takes for the holder to either finish or stop refreshing it."""
     return report_store._FileLock(manco_paths.own_sync_lock_file(data_dir), timeout=float("inf"),
                                   stale_after=_SWEEP_LOCK_STALE_AFTER, observe_stale=True)
 
@@ -516,10 +540,27 @@ def record_session_push(data_dir: Path, report_id: str, pushed_uuid: str) -> Dic
     return {"recorded": result is not None, "delete_uuid": orphaned[0] if orphaned else None}
 
 
+def _read_mirrors(path: str) -> Optional[List[Dict[str, Any]]]:
+    """`--mirrors FILE`'s `reports` array, or `None` when the file is missing or the listing
+    isn't trustworthy (`share_ops.trusted_reports`) — a malformed or flaky listing is treated
+    as "nothing to reconcile against", never as "every report was deleted".
+
+    The file holds a `call_tool` result for `fa__get__budget_reports` exactly as the
+    sub-agent's tool call returned it — double-wrapped as `{"result": "<json>"}`, the shape
+    every `call_tool` answer arrives in — so it goes through the same `share_bridge.unwrap`
+    a live `Bridge.call` applies to its own capture, before the same trust guard
+    `share_ops.list_reports` uses."""
+    try:
+        text = Path(path).read_text()
+    except OSError:
+        return None
+    return share_ops.trusted_reports(share_bridge.unwrap(text))
+
+
 def main(argv: Optional[list] = None) -> int:
-    """Entry point for the detached sweep build_manco_datadir.py spawns after
-    every build: push every report whose payload differs from its last push,
-    or that has never been pushed, without making the build itself wait on it.
+    """With no flags: entry point for the detached sweep build_manco_datadir.py spawns when
+    it runs without `--no-sync-sweep` — push every report whose payload differs from its
+    last push, or that has never been pushed, without making the build itself wait on it.
 
     Exits 0 having pushed nothing when there's no operator id to sync as yet (the
     plugin-level ${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md hasn't run
@@ -527,26 +568,40 @@ def main(argv: Optional[list] = None) -> int:
     both are "try again next build", not failures. Why goes to the log, and to the
     status file under own_sync._record_blocked's rule.
 
-    `--push-one` is this same push, for one report, run synchronously instead of
-    detached — see push_one's docstring.
+    `--plan` (with `--mirrors` or `--recreate`), `--record` and `--lookup` are the skill's
+    own session-push side of this, documented on `_plan`, `record_session_push` and this
+    function's own `--lookup` branch, below.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--plan", action="store_true",
-                        help="write the pushes still due for a Claude session to make itself, once "
-                             "any running sweep has finished; prints them as JSON")
+                        help="write the pushes this session should make itself, once this "
+                             "dashboard's own-sync lock is free (held by a sweep — only for a "
+                             "build made without --no-sync-sweep — or another --plan, whichever "
+                             "got there first); prints them as JSON. Always plans a push for "
+                             "every report with one due")
     parser.add_argument("--recreate", metavar="REPORT_ID",
                         help="with --plan: plan a fresh create for this report, after Carta answered "
                              "its update with not_found or not_owner")
+    parser.add_argument("--mirrors", metavar="FILE",
+                        help="with --plan: a fa:get:budget_reports call_tool result for this entity, "
+                             "fetched by the caller over its own Carta connector and written here "
+                             "exactly as the tool call returned it — settles a rename made on the "
+                             "hosted app onto the local report before anything is planned, so the "
+                             "plan never resends a stale name over it. Read once and deleted; a "
+                             "second --plan with the same path finds nothing there and reconciles "
+                             "nothing, rather than replaying a listing that may now be stale")
     parser.add_argument("--record", metavar="REPORT_ID",
                         help="stamp a push a Claude session made from this report's plan")
     parser.add_argument("--uuid", help="with --record: the report uuid Carta answered with")
-    parser.add_argument("--push-one", metavar="REPORT_ID",
-                        help="push this one report synchronously and print {\"uuid\"} (this "
-                             "dashboard's own-sync mirror, as last recorded locally — not a "
-                             "live check) or {\"error\"} (plus \"detail\" for push_failed) "
-                             "as JSON, without running the rest of the sweep; exits 3 on "
-                             "{\"error\"}, same as --plan")
+    parser.add_argument("--lookup", metavar="REPORT_ID",
+                        help="print {\"uuid\": <this report's own-sync uuid as last recorded "
+                             "locally, or null>} — null for an unknown report id, or while a "
+                             "plan for this report is still on disk (a push this run that "
+                             "hasn't been recorded yet, succeeded or not), never a uuid a "
+                             "failed push left stale. A plain local read, no Carta call, no "
+                             "lock, always exits 0; for Step 5.3 once Step 5.2's push has "
+                             "already returned")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).expanduser()
 
@@ -556,17 +611,24 @@ def main(argv: Optional[list] = None) -> int:
         print(json.dumps(record_session_push(data_dir, args.record, args.uuid)))
         return 0
 
+    if args.lookup:
+        print(json.dumps({"uuid": _lookup_uuid(data_dir, args.lookup)}))
+        return 0
+
     user_id = manco_paths.read_user_id(data_dir)
     if args.plan:
         if user_id is None:
             print(json.dumps({"error": BLOCKED_NO_USER_ID}))
             return 3
-        return _plan(data_dir, user_id, args.recreate)
-
-    if args.push_one:
-        result = _locked(data_dir, lambda: push_one(data_dir, user_id, args.push_one))
-        print(json.dumps(result))
-        return 3 if "error" in result else 0
+        mirrors = None
+        if args.mirrors:
+            try:
+                mirrors = _read_mirrors(args.mirrors)
+            finally:
+                # Read once: a listing this old by the next --plan could be stale, and
+                # reconciling against it could undo a rename that happened since.
+                Path(args.mirrors).unlink(missing_ok=True)
+        return _plan(data_dir, user_id, args.recreate, mirrors=mirrors)
 
     _locked(data_dir, lambda: _sweep_under_lock(data_dir, user_id))
     return 0
@@ -574,8 +636,8 @@ def main(argv: Optional[list] = None) -> int:
 
 def _locked(data_dir: Path, fn: Callable[[], Any]) -> Any:
     """Run `fn` holding the cross-process sweep lock, with a heartbeat thread refreshing it
-    for as long as `fn` runs — shared by the full sweep and a single-report push, so the
-    two never race over the same report. Returns whatever `fn` returns."""
+    for as long as `fn` runs, so a long sweep's lock never looks abandoned while it still
+    runs. Returns whatever `fn` returns."""
     lock_path = manco_paths.own_sync_lock_file(data_dir)
     with _sweep_lock(data_dir):
         # The heartbeat runs for exactly as long as this process holds the lock.
@@ -592,38 +654,44 @@ def _locked(data_dir: Path, fn: Callable[[], Any]) -> Any:
             heartbeat.join()
 
 
-def _plan(data_dir: Path, user_id: int, recreate: Optional[str]) -> int:
-    """--plan: print the pushes a session should make, under the sweep lock so the status it
-    reads is the one the build's sweep wrote, not an earlier sweep's."""
+def _plan(data_dir: Path, user_id: int, recreate: Optional[str],
+         mirrors: Optional[List[Dict[str, Any]]] = None) -> int:
+    """--plan: print the pushes this session should make, under the own-sync lock so it
+    never runs alongside a sweep (a build made without build_manco_datadir.py's
+    --no-sync-sweep) or another --plan mutating reports.json at the same time. Plans a push
+    for every report with one due, unconditionally — build_manco_datadir.py's
+    --no-sync-sweep means no detached sweep ever runs for a dashboard built this way, so
+    there is no `claude`-CLI attempt to wait on or defer to.
+
+    `mirrors`, when given, settles every own-synced report's name against it
+    (reconcile_names_from_listing) before anything is planned — a plan built from a stale
+    local name would silently resend it and overwrite a rename made on the hosted app since
+    the last push.
+
+    After any plan with `recreate=None`, the only plans on disk are the ones just printed: a
+    plan left behind keeps the push guard checking calls against it."""
     with _sweep_lock(data_dir):
-        # A plain --plan starts a session push run only once the sweep has tried Carta through
-        # the CLI and failed: a sweep that can reach Carta pushes these reports itself, and two
-        # creates leave a second mirror live with nothing local claiming it. A --recreate follows
-        # this session's own refused update, so it always plans its one create.
-        # After any plain --plan, the only plans on disk are the ones it printed: a plan left
-        # behind keeps the push guard checking calls against it.
-        status = manco_paths.read_own_sync_status(data_dir) or {}
-        pushes: List[Dict[str, Any]] = []
+        if mirrors is not None:
+            reconcile_names_from_listing(report_store.ReportStore(data_dir), mirrors)
         if recreate is None:
             shutil.rmtree(manco_paths.own_sync_plan_dir(data_dir), ignore_errors=True)
-        if recreate is not None or status.get("blocked_by") in CLI_BLOCKED:
-            pushes = write_plans(data_dir, user_id, recreate)
+        pushes = write_plans(data_dir, user_id, recreate)
     print(json.dumps({"pushes": pushes}))
     return 0
 
 
 def _cli_bridge(data_dir: Path, claude_bin: str) -> share_bridge.Bridge:
-    """The one way this dashboard's sync paths — the sweep and a single-report push alike —
-    reach Carta through the `claude` CLI: the same environment, the same `.share-mcp-server`
-    pin and the same probed binary, so the two never talk to different connectors."""
+    """How the sweep reaches Carta through the `claude` CLI: the same environment, the same
+    `.share-mcp-server` pin and the same probed binary Share's own bridge uses, so the two
+    never talk to different connectors."""
     return share_bridge.Bridge(str(data_dir), manco_paths.read_carta_environment(data_dir),
                                override=manco_paths.read_share_mcp_server(data_dir),
                                claude_bin=claude_bin)
 
 
 def _sweep_under_lock(data_dir: Path, user_id: Optional[int]) -> None:
-    """The sweep proper, with the sweep lock held from before the CLI probe on, so every
-    status it writes lands before a waiting --plan reads it."""
+    """The sweep proper, with the sweep lock held from before the CLI probe on, so it never
+    runs alongside a --plan writing reports.json at the same time."""
     if user_id is None:
         _record_blocked(data_dir, BLOCKED_NO_USER_ID,
                         "no %s yet, so there's no Carta user to sync as"
@@ -644,72 +712,30 @@ def _sweep_under_lock(data_dir: Path, user_id: Optional[int]) -> None:
 
 def _recorded_uuid(store: report_store.ReportStore, report_id: str) -> Optional[str]:
     """The own-sync uuid `report_id` has on record locally right now, or `None` if it has
-    never been pushed — the one lookup push_one's "nothing more to do" exits share, so a
-    change to it (or to what counts as "recorded") only needs making once."""
+    never been pushed — the one lookup `_lookup_uuid` (below) builds on, so a change to it
+    (or to what counts as "recorded") only needs making once."""
     doc = store.load()
     report = report_store.ReportStore.find(doc, report_id)
     return report_store.ReportStore.own_sync_uuid(report)
 
 
-def push_one(data_dir: Path, user_id: Optional[int], report_id: str) -> Dict[str, Any]:
-    """Push `report_id` alone, synchronously — for a caller that wants its own-sync uuid
-    right away, such as the import flow's end-of-workflow hosted-app offer, rather than
-    waiting on the detached post-build sweep. Call under `_locked` (main() does), the same
-    cross-process lock the full sweep holds, so a push made this way never races the
-    detached sweep over the same report.
-
-    When nothing is due — the report is already synced and unchanged, read-only, or
-    unbuilt, the common case since the detached sweep usually gets there first — this
-    returns the report's own-sync uuid straight from reports.json, without probing for a
-    `claude` CLI or reaching Carta at all: a report with nothing to push needs neither, so
-    a signed-out or missing CLI must not hide a uuid this dashboard already has on record.
-    Otherwise it pushes through the same `claude` CLI bridge the detached sweep uses.
-
-    Returns `{"uuid": <uuid or None>}` once the attempt has settled. Either way the uuid is
-    this dashboard's own-sync mirror as recorded locally — just now, if a push was due and
-    it succeeded, or from an earlier push otherwise — never a live check that the mirror
-    still exists on the hosted app. `None` means the report has never been pushed (no prior
-    push to fall back on).
-
-    Returns `{"error": <reason>}` when a push was due but couldn't even be attempted
-    (`no_user_id`, or a `claude` CLI preflight reason), or Carta refused it outright:
-    `"unreachable"`, or `"push_failed"` with a `"detail"` message — also returned when the
-    report vanished locally (another process's `own_sync.forget`, which doesn't take this
-    lock) while being planned or pushed.
-    """
-    if user_id is None:
-        return {"error": BLOCKED_NO_USER_ID}
-
-    store = report_store.ReportStore(data_dir)
+def _lookup_uuid(data_dir: Path, report_id: str) -> Optional[str]:
+    """What `--lookup` prints: `report_id`'s own-sync uuid as last recorded locally, or
+    `None` when there is nothing safe to offer — the report doesn't exist
+    (`report_store.ReportEditError`), or a plan for it is still on disk
+    (`manco_paths.own_sync_plan_files`). A plan on disk means this run's `--plan` found a
+    push due for this report and `--record` hasn't cleared it yet: the push may
+    still be in flight, or it may have failed and was never recorded. Either way, the uuid
+    `_recorded_uuid` would answer is from an *earlier* push, not this run's — offering it
+    would claim the report is on the hosted app the moment this run's own attempt may have
+    just failed to put it there."""
+    plan_file, _ = manco_paths.own_sync_plan_files(data_dir, report_id)
+    if plan_file.exists():
+        return None
     try:
-        plan = plan_push(store, data_dir, report_id, user_id)
-        if plan is None:
-            return {"uuid": _recorded_uuid(store, report_id)}
-    except ShareError as e:
-        if _is_unreachable(e):
-            return {"error": BLOCKED_UNREACHABLE}
-        return {"error": "push_failed", "detail": str(e)}
-    except report_store.ReportEditError as e:
-        return {"error": "push_failed", "detail": str(e)}
-
-    probed = preflight_claude.probe()
-    if probed["reason"] != preflight_claude.REASON_OK:
-        return {"error": probed["reason"]}
-
-    bridge = _cli_bridge(data_dir, probed["bin"])
-    try:
-        result = push_if_changed(bridge, store, data_dir, report_id, user_id, lambda message: None)
-        if result is not None:
-            return {"uuid": result["own_sync"]["uuid"]}
-        return {"uuid": _recorded_uuid(store, report_id)}
-    except ShareError as e:
-        if _is_unreachable(e):
-            return {"error": BLOCKED_UNREACHABLE}
-        return {"error": "push_failed", "detail": str(e)}
-    except report_store.ReportEditError as e:
-        return {"error": "push_failed", "detail": str(e)}
-    finally:
-        bridge.close()
+        return _recorded_uuid(report_store.ReportStore(data_dir), report_id)
+    except report_store.ReportEditError:
+        return None
 
 
 if __name__ == "__main__":
