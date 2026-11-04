@@ -76,6 +76,15 @@ def lp_docs_config(server: str, title: str) -> dict:
     return {"server": server, "title": title, "generated": datetime.date.today().isoformat()}
 
 
+def fill_placeholders(content: str, values: dict) -> str:
+    """Replace every key of `values` in `content` with its value, in one pass.
+
+    One pass, so a value that spells a placeholder (a firm named "{{FIRM_UUID}} Partners")
+    is never substituted again.
+    """
+    return re.sub("|".join(re.escape(p) for p in values), lambda m: values[m.group(0)], content)
+
+
 def check_path_under_cwd(p: Path, label: str):
     """Resolve p, or return None if it escapes CWD.
 

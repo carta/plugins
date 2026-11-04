@@ -55,7 +55,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 
 | Skill | Description |
 |-------|-------------|
-| `carta-kyc-fill-form` | Fill in your own Carta KYC form from your documents. Says what each open KYC task still needs, reads the passport, formation documents or ownership chart you share, saves the answers you confirm, and, in Claude Code or Cowork, uploads the documents you approve. It tells you what is left to upload or add in the form yourself before you check and submit it there. Claude never submits for you. Needs an open KYC task on Carta. |
+| `carta-kyc-fill-form` | Fill in your own Carta KYC form from your documents. Says what each open KYC task still needs, reads the passport, formation documents or ownership chart you share, saves the answers you confirm, and, in Claude Code or Cowork, uploads the documents you approve. It tells you what is left to upload or add in the form yourself before you check and submit it there. Claude never submits for you. Needs an open KYC task on Carta. Internal-only. |
 
 ### Budgeting (Excel)
 
