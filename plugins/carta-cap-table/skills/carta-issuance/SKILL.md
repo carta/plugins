@@ -61,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
 
 # Issue Securities
 
@@ -244,7 +244,8 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-artifact/scripts/bu
 - `--seed` takes a **path**, never an inline blob. Omit it entirely when the prompt named
   nobody and no terms; the page then opens with one blank recipient row.
 - Seed keys: `stakeholders` (names verbatim), `quantity`, `quantity_basis`, `issue_date`, `terms`, `source`,
-  and `rows` from the import sub-skill. An unknown key fails the build.
+  and `rows` from the import sub-skill. An unknown key fails the build. Seed `issue_date` only
+  when the user named a date other than today: the page takes today from Carta.
 - **`terms` carries every term the document or prompt states**, in its words; the page
   matches names to Carta's lists and asks only for what matches nothing:
   `{"option_plan": "<plan name>", "grant_type": "<ISO|NSO|…>", "exercise_price": "<price>", "board_approval_date": "<YYYY-MM-DD>", "vesting": {"text": "<the schedule's words>", "months": <total>, "cliff_months": <cliff>}, "term_years": <years>}`.

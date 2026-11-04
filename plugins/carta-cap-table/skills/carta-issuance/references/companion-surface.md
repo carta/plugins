@@ -56,7 +56,8 @@ The steps below say "the type's" where these differ.
 
 1. `list_accounts(search="<company name>")`.
 2. `cap_table:get:issuance_init` with `corporation_id`, `security_type`, `stakeholder_names`,
-   `include_bootstrap: true` and `issue_date` when known. Don't repeat it if its result brought
+   `include_bootstrap: true` and `issue_date` only when the user named a date other than today
+   ([engine.md § Voice & defaults](engine.md#voice--defaults)). Don't repeat it if its result brought
    you here.
 3. Apply the type's account gate.
 

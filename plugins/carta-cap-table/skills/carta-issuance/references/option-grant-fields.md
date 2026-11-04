@@ -27,7 +27,10 @@ holds a value before review, and a `None` or empty is a skill bug.
     "issue_date_relationship": <stakeholder.event_relationship>,  # always
     "so_type":                 <user/picklist>,                   # always
     "quantity":                <user>,                            # always
-    "exercise_price":          <user or "0" for ZEPO>,            # always except ZEPO
+    "exercise_price":          <user or "0" for ZEPO>,            # always except ZEPO; a "0" on
+                                                                   # any other type goes back to
+                                                                   # the user before the save
+                                                                   # (engine.md § Phase 1)
     "currency":                <autofill per so_type>,            # always
     "needs_board_approval":    <bool>,                            # always — true=pending, false=approved
     "board_approval_date":     <user, YYYY-MM-DD>,                # omit when needs_board_approval=true

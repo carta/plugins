@@ -90,6 +90,11 @@ The incidents behind these rules — including the ones that look redundant — 
   (today's date, the plan's grant term, an autofill rule), stamp it and surface it tagged.
   Never ask twice. The full table is
   [chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask).
+- **Today is Carta's date, never the session clock.** Every issue date or board approval date
+  that means "today" is `knowns_seed.today_iso` from the `issuance_init` response. The clock
+  can be a day ahead of Carta, and Carta refuses a future issue date. When the user names no
+  date or says "today", send no `issue_date` to `issuance_init` or to a page seed, and take the
+  date from the response.
 - **Show the full text of legally binding values** (e.g. the legend body), not just the
   template name.
 - **Dates display as `MM/DD/YYYY`** everywhere the user sees them. Payload formats follow
@@ -338,7 +343,7 @@ the collect itself; this section owns what has to be true before it runs.
 mcp__carta__read_tool({"name": "cap_table__get__issuance_init", "arguments": {
   "corporation_id": <corporation_id>, "security_type": "<option_grant|certificate|piu>",
   "stakeholder_names": ["<each person the prompt named>"],
-  "include_bootstrap": true, "issue_date": "<YYYY-MM-DD>"}})
+  "include_bootstrap": true, "issue_date": "<YYYY-MM-DD the user named, else omit>"}})
 ```
 
 - **`stakeholder_names`** resolves the people the prompt named alongside the reference data, in
@@ -358,13 +363,13 @@ mcp__carta__read_tool({"name": "cap_table__get__issuance_init", "arguments": {
 - **`include_bootstrap: true`** adds [`blockers`](#blockers--act-on-them-first),
   `blockers_summary` and a `knowns_seed` to the same response for no extra round trip. The seed
   carries what the server could derive — the corporation's legal name, the issuer's LLC flag and
-  threshold noun, currency and its candidates, the active FMV rows with their source, and
-  `jurisdiction_evidence.signals`. It deliberately does **not** carry a jurisdiction verdict.
-- **`issue_date`** is what lets the grant-expiration check run at all. Pass it whenever the run
-  knows the date; without it that check downgrades to an `informational` entry carrying each
-  plan's derived expiry, and a grant whose expiry lands before its issue date reaches the server
-  and is rejected there instead. An unparseable date is **refused, not ignored** — send
-  `YYYY-MM-DD` or omit the key.
+  threshold noun, currency and its candidates, the active FMV rows with their source,
+  `today_iso` (Carta's date), and `jurisdiction_evidence.signals`. It deliberately does **not** carry a jurisdiction verdict.
+- **`issue_date`** runs the server's grant-expiration check. Pass it when the user named a date
+  other than today. For today, omit it ([Voice & defaults](#voice--defaults)) and run the check
+  yourself, as the `grant_expiration.unchecked_no_issue_date` row in
+  [Blockers](#blockers--act-on-them-first) says. An unparseable date is **refused, not
+  ignored** — send `YYYY-MM-DD` or omit the key.
 
 **The sections it returns, per type** — each with the same `{count, results}` shape as its
 standalone command:
@@ -477,7 +482,7 @@ The keys:
 |---|---|---|
 | `option_plan.none_selectable` | `hard_stop` | No plan this grant could issue from — every one expired, or none with shares available |
 | `grant_expiration.before_issue_date` | `hard_stop` | The plan-derived expiry lands before the issue date, so the server rejects the grant |
-| `grant_expiration.unchecked_no_issue_date` | `informational` | No `issue_date` was passed, so the check above could not run; carries each plan's derived expiry instead |
+| `grant_expiration.unchecked_no_issue_date` | `informational` | No `issue_date` was passed, so the server did not run the check above; carries each plan's derived expiry instead. Compare each expiry with `knowns_seed.today_iso`: an expiry before it is the `before_issue_date` hard stop |
 | `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from |
 | `valuation.multiple_active_same_class` | `needs_decision` | An HMRC report's AMV and UMV are both live — the admin picks; leave the exercise price unanswered until they do |
 | `jurisdiction.unresolved_conflict` | `needs_decision` | Competing signals and **deliberately no verdict** |

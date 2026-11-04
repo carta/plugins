@@ -2,7 +2,8 @@
 name: carta-reporting
 description: >-
   Build a custom cap table report as a table, Excel file or interactive page. Covers
-  filtered, sorted or multi-column tables of grants, stakeholders, securities, SAFEs,
+  filtered, sorted or multi-column tables of grants, vesting schedules of all grants
+  ("show me vesting schedules" with no person named), stakeholders, securities, SAFEs,
   convertible notes, preferred holders, liquidation seniority, and rights & preferences
   for one company, delivered as an interactive artifact, markdown or Excel. Also handles
   any request starting with "Generate Carta Excel —" (the artifact prompt bar payload).
@@ -51,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
 
 # Custom Reports
 

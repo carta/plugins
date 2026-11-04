@@ -13,16 +13,22 @@ customer consents to defaults too). All date columns in `MM/DD/YYYY`.
 The chat review has no header bar or KPI strip to carry batch-level values, and no earlier
 screen the user can go back to, so it keeps the **full** list below.
 
+**Use each name below as its label, word for word.** Render one column per name, or a
+two-column `Field | Value` table with one row per name. A tag goes in the value cell, never in
+a third column.
+
 - **Certificate — always (13):** Stakeholder · Type · Email · Relationship · Share class
   (prefix) · Quantity · Price/share · Board approval · Issue date · Rule 144 date · Build
-  legend (body text — full body in a fenced block if long) · Exemption · Currency.
+  legend · Exemption · Currency. Build legend holds the legend's body text; put a long body
+  in full in a fenced block below the table.
 - **Option grant — always (16):** Stakeholder · Type · Email · Relationship · Plan · Option
   type · Quantity · Exercise price · Currency · Board approval · Issue date · Vesting schedule
   · Exercise periods · Grant expiration · Exemption · Documents.
 - **PIU — always (13):** Holder · Type · Email · Relationship · Unit class (prefix) · Equity
-  plan (or *"Direct from unit class"*) · Quantity · `<Threshold|Hurdle>` value ·
-  `<Threshold|Hurdle>` value type · Board approval · Issue date · Exemption · Currency. **No
-  price column of any kind** — a PIU has neither an exercise price nor a price per share.
+  plan · Quantity · `<Threshold|Hurdle>` value · `<Threshold|Hurdle>` value type · Board
+  approval · Issue date · Exemption · Currency. With no plan, the Equity plan value is
+  *"Direct from unit class"*. **No price column of any kind** — a PIU has neither an exercise
+  price nor a price per share.
 
 **Conditional columns** (render only when the trigger fires): Rule 144 reason (when
 `rule_144_date` ≠ `issue_date`); Dividend accrual start date (share class `dividend =

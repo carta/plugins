@@ -15,7 +15,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
 
 # Transform Configuration
 
@@ -70,25 +70,29 @@ Grouping heuristics (apply in order; unmatched → "Other"):
 
 ## Customization Checkpoint
 
-One `AskUserQuestion` covering columns, filters, sort, and format. Content adapts based on what the original prompt already specified.
+One `AskUserQuestion` covering columns, filters, sort, and format. Content adapts based on what the original prompt already specified. Always ask it before the output preview or an Excel export, also when the prompt asks to download or export the report. Ask it with the `AskUserQuestion` tool, not as a plain-text question.
 
 **When the prompt specified details:**
 
-> Here's what I'll apply based on your request:
+> **Question:** I'll apply these settings from your request:
 > - **Columns:** Stakeholder Name, Grant Date, Shares Issued, Vested %
 > - **Filter:** Vested % > 50%
 > - **Sort:** Grant Date descending
 >
-> Reply **Continue with these settings** to proceed, or adjust anything. You can also add: formula columns (% of total, running sum, ratio, delta), or aggregations (totals row, group-by).
+> You can also add formula columns (% of total, running sum, ratio, delta) or aggregations (totals row, group-by).
+>
+> **Options:** `Continue with these settings` · `Adjust columns, filters or sort`
 
 **When the prompt was vague:**
 
-> What would you like to customize? Reply **all columns, no filters** to get the full dataset as-is, or specify any of:
+> **Question:** What would you like to customize? You can set any of:
 > - **Columns** — which to include
 > - **Filters** — e.g. "Vested % > 50", "Grant Date after 2024-01-01", "Name contains Smith"
 > - **Sort** — e.g. "Grant Date newest first", "Shares Issued descending"
 > - **Formulas** — % of total, running sum, ratio (A ÷ B), delta (row-over-row change)
 > - **Aggregations** — totals row or group-by rollup
+>
+> **Options:** `All columns, no filters` · `Customize`
 
 ### Column name validation
 
@@ -111,8 +115,9 @@ Apply this check to: explicit column selections, filter column names, sort colum
 
 Always pre-select key identifier columns (Stakeholder Name, Grant ID, or equivalent) plus any columns explicitly named in the prompt. State what's pre-selected in the checkpoint:
 
-> **Columns pre-selected:** 1 — Stakeholder Name, 2 — Grant ID, 6 — Exercise Price
-> Reply **all** for all 28 columns, add by number (e.g. **+8, 12, 13**), enter a keyword to filter (e.g. **vesting**), or confirm the pre-selection with **yes**.
+> **Question:** Columns pre-selected: 1 — Stakeholder Name, 2 — Grant ID, 6 — Exercise Price. To add columns, type their numbers (e.g. **+8, 12, 13**) or a keyword (e.g. **vesting**).
+>
+> **Options:** `Keep the pre-selection` · `All 28 columns`
 
 If the user replies with a keyword, call `AskUserQuestion` once more showing only matching columns and ask them to confirm or add more by number. This is the only case where a second checkpoint question is allowed.
 

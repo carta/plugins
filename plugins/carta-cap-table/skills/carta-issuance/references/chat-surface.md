@@ -77,7 +77,8 @@ host rule about prose between tool calls, because the review is not narration of
 **is** the gate. A confirm that reaches the user first means they approved an irreversible
 issuance without seeing the terms, and printing the review afterwards cannot repair an answer
 already given. If you are about to call `AskUserQuestion` and the review is not on screen,
-print it first.
+print it first. Print it as your own message text, never inside the question or an option:
+the confirm stays short and names only the choice.
 
 Columns, conditional and optional fields, the per-value default explanations, the `ZEPO` and
 pending-board-approval renderings, and the compressed format for identical-term batches are in
@@ -135,6 +136,9 @@ belongs in the §1 batch here.
 | PIU threshold value / type | **never defaulted** — terms of the grant | — |
 | Exemption / currency | the `so_type` autofill ([payload-reference.md](payload-reference.md#so_type-auto-fill-rules)) | `(autofill — <so_type> rule)` |
 | Rule 144 date | **not a default.** The form asks it as a two-way choice — the issue date, or a different one — so in chat it goes in the §1 batch. Picking the issue date needs no difference reason; a different date makes `rule_144_difference_reason` required ([certificate-fields.md](certificate-fields.md#rule-144-difference-reason)) | — |
+
+**Today is Carta's date**, never the session clock: see
+[engine.md § Voice & defaults](engine.md#voice--defaults).
 
 **Two or more classes are never ranked, and neither are two live valuations on one class.**
 Which class a security sits in changes the holder's tax position, and an HMRC report's AMV and

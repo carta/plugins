@@ -27,7 +27,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.19</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -83,9 +83,9 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
 
 ## Answer rules
 
-- Give the as-of date of every Carta figure: `meta.as_of` when the response has it, else
-  the record's own date (for example a valuation's effective date), else today's date as
-  the date of the read.
+- Give the as-of date of every Carta figure, in the words "as of <date>": `meta.as_of` when
+  the response has it, else the record's own date (for example a valuation's effective
+  date), else today's date as the date of the read.
 - Give the unit and currency of every amount: "$12,400", "1,200 shares". Read the
   currency from each row. Never assume USD and never add amounts in different currencies.
 - Never round without saying so. Never fill in a missing value: if Carta has no figure,
