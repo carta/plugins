@@ -16,11 +16,15 @@ Subcommands:
                               (the skill launches a localhost server + browser,
                               which only works in a local Claude Code session —
                               not Cowork or a Claude Code cloud session)
-  hosted-url <firm_name> <report_id> [--tab TAB]
-                            → the hosted app's deep link to one report, with firm_name
-                              slugged the way the hosted Worker does (hosted_firm_slug,
-                              NOT this module's own slugify) — the report_id is a
-                              report's own-sync uuid, own_sync.push_one's or
+  hosted-url --dashboard-dir <dir> <report_id> [--tab TAB]
+                            → the hosted app's deep link to one report. firm_name and
+                              firm_uuid are read straight from <dir>'s own snapshot.json
+                              and accounts.json — the firm name and uuid Step 4's build
+                              recorded for this dashboard (its own --firm-name/--firm-uuid
+                              args), never the cache-dir slug, which names a directory, not
+                              a firm. firm_name is slugged the way the hosted Worker does
+                              (hosted_firm_slug, NOT this module's own slugify). report_id
+                              is a report's own-sync uuid, own_sync.push_one's or
                               push_if_changed's "uuid" result
 
 snapshot_age_days is the age of the last datadir rebuild (Step 4), which runs
@@ -117,19 +121,32 @@ def hosted_firm_slug(name):
     return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-") or "unknown"
 
 
-def hosted_url(firm_name, report_id, tab=BVA_TAB):
+def hosted_url(firm_name, firm_uuid, report_id, tab=BVA_TAB):
     """The hosted app's deep link to one report: the same `/firm/<slug>/<tab>/<reportId>`
     shape app/src/shell/route.js's parseRoute() reads client-side, with `firm_name` slugged
     the way the hosted Worker itself does (hosted_firm_slug, above) — never this module's
     own cache-dir slugify(), which can produce a different slug for the same name.
 
+    Carries `firm` (the slug) as a query string alongside the path, plus `firmUuid` when
+    `firm_uuid` is given, so the hosted app can confirm the firm by uuid rather than by slug
+    alone — two firms can collide on `hosted_firm_slug` (it drops accents and most
+    punctuation) and the uuid is unambiguous. Mirrors app/src/state/firmParam.js's own
+    `firmHref`/`withFirmParam`: `firmUuid` is omitted, never sent empty, when there is none
+    — a dashboard predating the field, or one `read_firm_identity` found no accounts.json
+    for.
+
     `report_id` is this dashboard's own-sync uuid for the report, as own_sync.push_one or
     push_if_changed last recorded it — not a live check that the mirror still exists on
     the hosted app, just the uuid this dashboard has on record for it. A report that has
     never been pushed has no uuid and so nothing to link to."""
-    return "{}/firm/{}/{}/{}".format(
-        HOSTED_APP_URL, urllib.parse.quote(hosted_firm_slug(firm_name), safe=""),
+    slug = hosted_firm_slug(firm_name)
+    path = "{}/firm/{}/{}/{}".format(
+        HOSTED_APP_URL, urllib.parse.quote(slug, safe=""),
         urllib.parse.quote(tab, safe=""), urllib.parse.quote(report_id, safe=""))
+    params = {"firm": slug}
+    if firm_uuid:
+        params["firmUuid"] = firm_uuid
+    return "{}?{}".format(path, urllib.parse.urlencode(params))
 
 
 def cache_root():
@@ -400,6 +417,32 @@ def cmd_resolve(args):
     }, indent=2))
 
 
+def _read_json(path):
+    """`path` parsed as JSON, or `{}` when it's missing or not valid JSON — the one place
+    every reader of snapshot.json/accounts.json goes through, so a dashboard dir from an
+    interrupted build or an older version of this script degrades the same way everywhere
+    instead of each caller re-deciding what counts as "absent"."""
+    try:
+        return json.loads(pathlib.Path(path).read_text())
+    except Exception:
+        return {}
+
+
+def read_firm_identity(dashboard_dir):
+    """The firm name and uuid Step 4's build recorded for this dashboard — its own
+    `--firm-name`/`--firm-uuid` args, written to snapshot.json's `firmName` and
+    accounts.json's `firm_uuid` — never this module's own cache-dir slug, which names a
+    directory, not a firm. Used by hosted_url's CLI to get this dashboard's own firm
+    identity.
+
+    Returns (firm_name, firm_uuid), either `None` when its file is missing, unparsable, or
+    predates the field."""
+    dashboard_dir = pathlib.Path(dashboard_dir)
+    snap = _read_json(dashboard_dir / "snapshot.json")
+    accts = _read_json(dashboard_dir / "accounts.json")
+    return snap.get("firmName"), accts.get("firm_uuid")
+
+
 def cmd_list(_args):
     root = cache_root()
     if not root.exists():
@@ -412,29 +455,16 @@ def cmd_list(_args):
         for manco_dir in sorted(firm_dir.iterdir()):
             if not manco_dir.is_dir():
                 continue
-            snap = manco_dir / "snapshot.json"
-            firm_name = manco_name = None
-            if snap.exists():
-                try:
-                    d = json.loads(snap.read_text())
-                    firm_name  = d.get("firmName")
-                    manco_name = d.get("entityLabel")
-                except Exception:
-                    pass
-            accts = manco_dir / "accounts.json"
-            firm_uuid = firm_carta_id = manco_uuid = manco_carta_id = manco_entity_id = None
-            carta_environment = None
-            if accts.exists():
-                try:
-                    d = json.loads(accts.read_text())
-                    firm_uuid          = d.get("firm_uuid")
-                    firm_carta_id      = d.get("firm_carta_id")
-                    manco_uuid         = d.get("manco_uuid")
-                    manco_carta_id     = d.get("manco_carta_id")
-                    manco_entity_id    = d.get("manco_entity_id")
-                    carta_environment  = d.get("carta_environment")
-                except Exception:
-                    pass
+            snap = _read_json(manco_dir / "snapshot.json")
+            accts = _read_json(manco_dir / "accounts.json")
+            firm_name          = snap.get("firmName")
+            manco_name         = snap.get("entityLabel")
+            firm_uuid          = accts.get("firm_uuid")
+            firm_carta_id      = accts.get("firm_carta_id")
+            manco_uuid         = accts.get("manco_uuid")
+            manco_carta_id     = accts.get("manco_carta_id")
+            manco_entity_id    = accts.get("manco_entity_id")
+            carta_environment  = accts.get("carta_environment")
             items.append({
                 "firm_slug":         firm_dir.name,
                 "manco_slug":        manco_dir.name,
@@ -539,7 +569,11 @@ def cmd_detect_surface(_args):
 
 
 def cmd_hosted_url(args):
-    print(json.dumps({"url": hosted_url(args.firm_name, args.report_id, args.tab)}))
+    firm_name, firm_uuid = read_firm_identity(args.dashboard_dir)
+    if not firm_name:
+        raise SystemExit("hosted-url: %s has no firm name on record yet (no snapshot.json, "
+                          "or a build that predates it) — nothing to build a link against" % args.dashboard_dir)
+    print(json.dumps({"url": hosted_url(firm_name, firm_uuid, args.report_id, args.tab)}))
 
 
 def main():
@@ -560,7 +594,9 @@ def main():
     sub.add_parser("detect-surface", help="classify local vs sandboxed runtime surface").set_defaults(fn=cmd_detect_surface)
 
     u = sub.add_parser("hosted-url", help="build the hosted app's deep link to one report")
-    u.add_argument("firm_name")
+    u.add_argument("--dashboard-dir", required=True,
+                   help="firm_name and firm_uuid are read from here (snapshot.json, accounts.json) "
+                        "— the values Step 4's build recorded for this dashboard")
     u.add_argument("report_id")
     u.add_argument("--tab", default=BVA_TAB)
     u.set_defaults(fn=cmd_hosted_url)

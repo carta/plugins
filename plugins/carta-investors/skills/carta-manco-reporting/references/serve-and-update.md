@@ -457,13 +457,15 @@ several reports can have this step wait out the whole sweep before push_one even
   any) and before Step 6's menu:
 
   ```bash
-  <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url "<FIRM_NAME>" "<uuid>"
+  <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url --dashboard-dir "<dashboard_dir>" "<uuid>"
   ```
 
-  `<FIRM_NAME>` is the firm name already resolved earlier in this run (Step 0/1) — never
-  the local cache slug (`manco_paths.slugify`), which can differ from the slug the hosted
-  app itself routes on (`hosted_url` slugs the name the hosted app's own way internally).
-  Offer the printed `url` on one line, e.g. *"Also on the hosted app: `<url>`"*. The uuid
+  `hosted-url` reads the firm's name and uuid straight from `<dashboard_dir>`'s own
+  snapshot.json/accounts.json — the values Step 4's build recorded for this dashboard
+  (its `--firm-name`/`--firm-uuid` args). Never pass or compose a firm name by hand here;
+  the local cache slug (`manco_paths.slugify`) in particular can differ from the slug the
+  hosted app itself routes on. Offer the printed `url` on one line, e.g. *"Also on the
+  hosted app: `<url>`"*. The uuid
   is this dashboard's own-sync mirror as recorded locally, just now or from an earlier
   push — not a live check that the mirror still exists on the hosted app (it could have
   been deleted there, or from another checkout, since the last push). Do not build this
