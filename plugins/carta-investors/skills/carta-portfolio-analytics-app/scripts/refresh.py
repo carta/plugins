@@ -78,7 +78,7 @@ PAGE_LIMIT = 10000
 RESPONSE_MODE = "blob"
 FALLBACK_RESPONSE_MODE = "inline"
 _BLOB_REJECT_RE = re.compile(r"-32602|invalid_union|expected text|Unsupported response_mode", re.I)
-# A dropped MCP connection mid-query (seen on QED: "The socket connection was closed
+# A dropped MCP connection mid-query (seen on a large firm: "The socket connection was closed
 # unexpectedly" on page 2). Retried once; a query error is never retried.
 _TRANSIENT_RE = re.compile(r"socket|connection (?:was )?(?:closed|reset)|ECONNRESET|EPIPE|"
                            r"timed? ?out|\b50[234]\b|fetch failed|network", re.I)
@@ -439,7 +439,7 @@ def _fetch_single_stem(session, script_dir, raw_dir, call_box, stem, since, emit
                        companies_file=None, since_override=None):
     """Fetch one stem, re-fetching once if its pages failed the integrity check: the
     warehouse tables refresh every few minutes, and a refresh that lands mid-fetch
-    shifts every later OFFSET page (seen on QED: 554 rows duplicated, 554 missed)."""
+    shifts every later OFFSET page (seen on a large firm: 554 rows duplicated, 554 missed)."""
     try:
         _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit,
                          companies_file, since_override)
