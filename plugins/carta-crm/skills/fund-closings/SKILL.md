@@ -23,12 +23,15 @@ allowed-tools:
   - mcp__claude_ai_Carta__crm_call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
+  - mcp__carta__crm_view_tool
+  - mcp__claude_ai_Carta__crm_view_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_view_tool
 version: 1.0.0
 model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.19.3</carta-plugin>
+<carta-plugin>carta-crm:1.20.1</carta-plugin>
 
 ## Overview
 
@@ -43,6 +46,7 @@ to fill gaps CRM leaves (see Combining with Fund Admin), which needs Edit Partne
 | Is closings / the data room set up? Where is the ledger? | `crm:get_fund_closings_status` | `crm_read_tool` |
 | How far has each LP got? KYC, risk rating, commitments | `crm:get_fund_closing_prospect_statuses` | `crm_read_tool` |
 | Send subscription documents to an LP | `crm:send_fundraising_subscription_docs` | `crm_call_tool` |
+| Who was invited to and joined the data room (card, or text when the view is off) | `crm:get_fund_data_room_summary` | `crm_view_tool` (text: `crm_read_tool`) |
 | Invite an LP to the data room | `crm:send_fundraising_data_room_invite` | `crm_call_tool` |
 | Find the fund's Carta id when the fund field has none | `fa__list__entities` | `read_tool` |
 | Fill a gap CRM leaves in the LP list (Fund Admin closing contacts) | `fa__list__closing_contacts` | `read_tool` |
@@ -88,7 +92,7 @@ crm_read_tool({
 - `isSetUp: false` can also mean the user cannot read the fund in Fund Admin. Say closings are
   not set up **or not readable by you**, never that the fund has no closing.
 - Check `isSetUp` and `closingsLedgerUrl` separately: the URL can be empty when `isSetUp` is
-  true. Report the data room state from the response, not from another tool.
+  true. Report whether the data room is set up from this response.
 - `isSetUp: false`, or `fund_admin_closings_fund_not_found` from the call below, when the id came
   from the fund field: check the id **once** with the Fund Admin lookup in Step 1. A different
   `carta_id` → rerun the call with it. Only then report not set up or not found. One lookup, no
@@ -134,6 +138,35 @@ retry it: answer from CRM and say the Fund Admin view was not available. A looku
 another reason, such as a response that is too large, is not a refusal: say what failed and
 answer from CRM. Never send through Fund Admin;
 sends go through the CRM tools below.
+
+## Show the data room card
+
+For a question about who was invited to or joined a fund's data room, show the card. When the
+question also asks whether closings are set up, run Step 2 first and show the card after it. The
+card is read-only: it never sends anything, and an invite still goes through Step 3 and its
+confirmation.
+
+```
+crm_view_tool({
+  "name": "crm:get_fund_data_room_summary",
+  "arguments": { "fundCartaId": <fund_carta_id> }
+})
+```
+
+Use the Carta fund id from Step 1. Make this view call once and never retry it. Then, by its
+answer:
+
+- It returns normally: you never see the view, so a card that did not mount looks the same as one
+  that did. Never say it rendered. For the card, say only: "If nothing appeared above, ask me
+  for a text summary." Still give the Step 2 answer when the question asked about setup. When the
+  user asks for that summary, make the text call below.
+- It says the tool has no view: the card is off for this organization. Make the text call, and do
+  not say the line above. The text call is the same tool and arguments through `crm_read_tool`
+  (`crm_call_tool` if the read tool is refused). Summarize what it returns, for example: invited,
+  joined, not joined yet, last joined, last file opened and by which LP, and the link. Report every
+  field the tool returns. Say "joined" for an LP who accepted the invite.
+- Either call says the tool is not found: answer from `crm:get_fund_closings_status` and
+  `crm:get_fund_closing_prospect_statuses` (Step 2).
 
 ## Step 3 — Send subscription docs or a data room invite
 
@@ -215,4 +248,4 @@ delivered. Say who is being invited, and that delivery can be checked in Fund Ad
 
 Lead with the answer: set up or not, data room yes or no, how many LPs at each stage. Then a
 table of LPs with contact state, KYC status and commitment, at most six columns. Do not show
-ids; link the closings ledger URL when there is one.
+ids; link the closings ledger URL when there is one. After a view call that returned normally, do not repeat the data room summary as text.
