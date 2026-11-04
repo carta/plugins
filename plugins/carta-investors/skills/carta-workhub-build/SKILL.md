@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.16.2</carta-plugin>
+<carta-plugin>carta-investors:7.16.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -421,6 +421,9 @@ via `.forgejo/scripts/validate-artifact-version-bump.py`.
 In short, for anyone outside Carta reading this: any change under `resources/` needs the
 `version` in `skill-versions.json` raised in the same change, or users keep the old build with no
 notice.
+
+A page shows no update banner for 7 days after it is built: a fresh build is already the newest
+the user can get.
 
 Patch is the default and raises no banner. Minor and major interrupt every user, so they
 demand a fresh headline written for the person reading it. This skill's frontmatter carries no

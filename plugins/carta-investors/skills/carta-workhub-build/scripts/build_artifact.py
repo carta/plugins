@@ -36,6 +36,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 _LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
@@ -124,6 +125,7 @@ def build(mcp_server, ccr_fund_uuid="", ccr_activity_id="", frt_seed_period=""):
     }
     version = read_skill_version(SKILL_DIR)
     values["{{ARTIFACT_VERSION}}"] = version
+    values["{{BUILT_AT}}"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     for placeholder in PARTS["placeholders"]:
         if placeholder not in values:
             sys.exit("ERROR: no value for {} (listed in artifact_parts.json)".format(placeholder))

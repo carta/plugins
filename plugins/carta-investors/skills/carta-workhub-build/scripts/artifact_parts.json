@@ -22,6 +22,7 @@
     "{{CCR_ACTIVITY_ID}}",
     "{{FRT_SEED_PERIOD}}",
     "{{BUILD_ID}}",
-    "{{ARTIFACT_VERSION}}"
+    "{{ARTIFACT_VERSION}}",
+    "{{BUILT_AT}}"
   ]
 }
