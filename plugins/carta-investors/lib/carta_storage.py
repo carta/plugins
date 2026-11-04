@@ -6,13 +6,20 @@ from __future__ import annotations
 import re
 from urllib.parse import SplitResult, unquote
 
-# Fund-admin's document buckets (helm values: prod and sandbox, prod-eu, and the
-# demo/test default). Only these, not any *.amazonaws.com host: anyone can own a
-# bucket or an API Gateway endpoint there.
+# Only these, not any *.amazonaws.com host: anyone can own a bucket or an API
+# Gateway endpoint there.
 CARTA_BUCKETS = frozenset({
+    # Fund-admin's document buckets (helm values: prod and sandbox, prod-eu, and
+    # the demo/test default).
     "investor-service-prod",
     "investor-service-eu-west-1-prod",
     "investor-service-demo",
+    # Carta Document Service, where kyc-service's KYC form uploads land
+    # (terraform: production, sandbox, and the test and demo dev buckets).
+    "carta-cds-prod",
+    "cds-sandbox",
+    "carta-cds-dev-test",
+    "carta-cds-dev-demo",
 })
 S3_HOST = re.compile(r"^(?:(?P<bucket>[a-z0-9.-]+)\.)?s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$")
 

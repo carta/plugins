@@ -2,8 +2,8 @@
 name: carta-kyc-fill-form
 description: >-
   Fill in your own Carta KYC form from your documents: says what each open KYC task needs,
-  saves the answers you confirm, and lists what to upload and submit in the form yourself.
-  Use for a KYC form, identity verification or KYC task on Carta.
+  saves the answers and uploads the documents you confirm, and leaves submitting to you. Use
+  for a KYC form, identity verification or KYC task on Carta.
 version: 0.1.0
 model: inherit
 allowed-tools:
@@ -15,10 +15,12 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - AskUserQuestion
   - Read
+  - Bash(ls -l *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.18.0</carta-plugin>
+<carta-plugin>carta-investors:7.19.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -42,8 +44,10 @@ everything only the form can (Step 2) and submits each form themselves.
 
 - **Never submit the form.** No command here submits it. Saving answers only fills it in;
   the user checks the form and presses Submit themselves.
-- **Documents are uploaded by the user, in the form.** Read a shared document to take its
-  answers, but never attach it: tell the user which document to upload, for which party.
+- **Upload only what the user shared, after asking.** In Claude Code or Cowork, upload a
+  document the user gave you as a file on their computer, once they confirm it (Step 7). In
+  claude.ai chat there is no `Bash`, so every document is the user's to upload in the form:
+  tell them which one, for which party. Never upload a file the user did not give you.
 - **Show before you save.** Every answer goes to the user in a table first. Save only
   what they confirm, and save their correction instead when they give one.
 - **Only what a document or the user states.** Never guess, infer or fill a value from
@@ -60,8 +64,9 @@ everything only the form can (Step 2) and submits each form themselves.
   the user says they have finished in the form, and ask them to reload it before they edit it
   again.
 - **The form has the last word.** It runs checks nothing here can, such as a proof of address
-  dated within the last six months. Before the user uploads a time-limited document, tell them
-  its date and that the form may refuse one that is too old.
+  dated within the last six months, and an upload from here skips them. Before anyone uploads a
+  time-limited document, tell the user its date and that a reviewer may refuse one that is too
+  old.
 
 ## Step 1 — Open the tasks page and say what each task needs
 
@@ -115,10 +120,14 @@ Sort every item into one of two groups, and say both to the user, and that the s
 waits for Step 9:
 
 - **Claude can fill it:** a field `kyc__mutate__answers` takes (Step 6), on a party already on
-  the form (it has an `entityId` here), and a member's ownership in `ownershipShortfalls`.
-- **Only the form can fill it:** every document (the user uploads it); a person or entity a
-  `rosterShortfalls` role still needs, or one in `roleMismatches` (the user adds, removes or
-  changes it in the form); and the sections Step 6 leaves to the form.
+  the form (it has an `entityId` here), and a member's ownership in `ownershipShortfalls`. With
+  `Bash` (Claude Code or Cowork), also a document for such a party that the user shares as a
+  file (Step 7), unless it is already on the Step 9 list: a document declined, refused or
+  failed in this session is left for the form and never asked about or sent again.
+- **Only the form can fill it:** every document in claude.ai chat, and any the user does not
+  share as a file; a person or entity a `rosterShortfalls` role still needs, or one in
+  `roleMismatches` (the user adds, removes or changes it in the form); and the sections Step 6
+  leaves to the form.
 
 A roster shortfall is for the user to fix in the form at Step 9. If they then ask you to fill
 the new party, read this again for its `entityId` once they say they have finished in the
@@ -153,6 +162,10 @@ Ask the user for the documents that answer what Claude can fill: an ID for each 
 formation documents and an ownership chart for an entity. Read each one they share with
 `Read`, and note what it states against each `fieldId`, per party, keeping which document each
 answer came from.
+
+With `Bash` (Claude Code or Cowork), ask for them as files on the user's computer, so the ones
+the form asks for can be uploaded too (Step 7). Keep each file's path with what you read from
+it.
 
 ## Step 5 — Propose the answers
 
@@ -193,15 +206,100 @@ Not answered here, only in the form: tax reporting (`taxReportingDetails`), FATC
 The result names the `saved_fields`, never their values. A refusal names what went wrong;
 fix the shape it points at and try once more, then leave that field for the user.
 
-## Step 7 — Note what to upload
+## Step 7 — Upload the documents the user shared
 
-Add each document Step 2 lists to the Step 9 list, by its `label` and the party it belongs to,
-with any time-limited warning the Rules ask for. Do not send the user to upload it yet.
+For each document Step 2 lists, by its `label` and party:
+
+- The user gave it as a file on their computer, and you have `Bash` → upload it as below.
+- Otherwise (claude.ai chat, a document shown only as a picture in the chat, or none shared) →
+  add it to the Step 9 list, with any time-limited warning the Rules ask for. Do not send the
+  user to upload it yet.
+
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}`
+> variable, or a "not found" when you run the send script, means the skill loaded before this
+> session's computer link was ready. Invoke this skill once more with the Skill tool and use the
+> paths that copy gives. If they're still unreplaced, put the document on the Step 9 list. Don't
+> search the disk for them.
+
+### 7a — Check the file and ask
+
+Check the file once, without opening it again:
+
+```bash
+ls -l "<file_path>"
+```
+
+In Cowork, a file the user attached has a path under `/sessions/<session_id>/mnt/uploads/`;
+use that path here and in 7c. Missing, unreadable or a directory → ask for the right path once,
+else put it on the Step 9 list.
+
+Then ask once per document in this session, naming the file, the requirement and the party:
+
+> **Upload `<file_name>` as <label> for <party name>?** It goes on your KYC form for
+> <fund or entity name>, where Carta's compliance team reviews it. You can remove it in the
+> form before you submit.
+
+Add the time-limited warning the Rules ask for, when it applies. Use `AskUserQuestion` with
+options `Upload this document` / `Don't upload`. Continue only on `Upload this document`. On
+anything else, upload nothing and put the document on the Step 9 list.
+
+### 7b — Get an upload link
+
+```
+call_tool({"name": "kyc__create__document_upload_link",
+           "arguments": {"evaluation_id": "<evaluation_reference_id>"}})
+```
+
+Returns `url`, `fields` and `upload_id`. Get it only when you are about to send this file, and
+once: never fetch links ahead for later files.
+
+### 7c — Send the file
+
+Run this on one line, exactly as written: `allowed-tools` matches the command text, so any other
+form makes the user approve every file. `<fields_json>` is 7b's `fields` object as JSON,
+unchanged. Single-quote every value; a value containing `'` is written `'\''`.
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" '<url>' '<fields_json>' '<file_path>'
+```
+
+The script checks that `url` is Carta's document storage and that the file exists, and prints
+one JSON line:
+
+- `{"status": 204}` or any other `2xx` → sent. Go to 7d.
+- `{"status": 403}` → the link most likely expired. Get **one** fresh link (7b) and send once
+  more. That and 7d's resend are the only retries: at most two sends per document.
+- Any other status, a second failure, `{"error": "connection"}` or `{"error": "refused", …}` →
+  nothing is attached. Put the document on the Step 9 list, say it could not be uploaded, and go
+  on. Do not change the command and try again, and do not try another way to upload.
+
+### 7d — Attach it to the form
+
+```
+call_tool({"name": "kyc__create__document",
+           "arguments": {"evaluation_id": "<evaluation_reference_id>",
+                         "upload_id": "<upload_id from 7b>", "file_name": "<file_name>",
+                         "file_type": "<fileType from Step 2>"}})
+```
+
+Add `"entity_id"` for a supporting party's document, exactly as in Step 6: without it the
+document lands on the investor. Add `"field_id"` for a document the firm wrote itself
+(`FILE_TYPE_OTHER`). When `anyOf` lists several types, send the one this file is.
+
+Tell the user it was uploaded, for which party.
+
+A refusal that says kyc-service "attached no document" cannot tell two causes apart: the file
+did not reach storage (an expired link, a failed send), or its format is not accepted. When this
+document has been sent only once, get one fresh link (7b), send it again (7c) and attach again.
+If it was already sent twice, or the attach is refused again, upload nothing more: put it on the
+Step 9 list and tell the user the form may need a clear PDF or image of it. Any other refusal,
+put the document on the Step 9 list.
 
 ## Step 8 — Go round again
 
-Read the task's completion again (Step 2) and tell the user what Claude can still fill. Repeat
-Steps 4–7 until nothing is left that Claude can fill, or the user stops. Then move to their next
+Read the task's completion again (Step 2) and tell the user what Claude can still fill or
+upload. Repeat Steps 4–7 until nothing is left that Claude can fill or upload, or the user
+stops. Then move to their next
 unfinished task (Step 1).
 
 ## Step 9 — The user finishes and submits each form themselves
@@ -211,9 +309,9 @@ saving. Tell the user to reload its form from their KYC tasks page (the `compani
 Step 1), then check every answer, do what is left and submit it there. The form runs its own checks and may still ask
 for something. Summarise per task:
 
-- what was saved, per party,
+- what was saved and which documents were uploaded, per party,
 - what the user still has to do in the form: everything Step 2 puts under "Only the form can
-  fill it", with the documents Step 7 noted and their warnings.
+  fill it", and the documents on the Step 9 list with their warnings.
 
 Never say a KYC is done or submitted: it is filled in, waiting for the user to finish and
 submit it in the form.
@@ -227,6 +325,7 @@ submit it in the form.
 | several roles (Step 3) | ask again with `relation_type` |
 | no access | the user cannot open this evaluation; stop |
 | refused these answers | a value's shape is wrong, or the form can no longer be edited; check the shape table, else stop |
+| attached no document (Step 7d) | after one send, get a fresh link and send once more; refused again, put it on the Step 9 list and say the form may need a clear PDF or image (Step 7d) |
 | sign-in not accepted | ask the user to reconnect Carta |
 | anything this table does not resolve, or a refusal that comes back after the fix | file feedback (below), then tell the user what you could not do |
 
@@ -265,7 +364,7 @@ call_tool({"name": "kyc__create__feedback",
 | --- | --- |
 | `requestType` | `bug`, or `feature_request` when the user needs something this skill cannot do |
 | `source` | `claude` when you file it on your own, `user` when the user asked to give feedback |
-| `step` | where it got stuck: `list_tasks` (Step 1), `read_completion` (Steps 2 and 8), `read_form_configuration` (Step 3), `read_documents` (Step 4), `propose_answers` (Step 5), `save_answers` (Step 6), `finish_in_form` (Step 9), else `other` |
+| `step` | where it got stuck: `list_tasks` (Step 1), `read_completion` (Steps 2 and 8), `read_form_configuration` (Step 3), `read_documents` (Step 4), `propose_answers` (Step 5), `save_answers` (Step 6), `upload_documents` (Step 7), `finish_in_form` (Step 9), else `other` |
 | `problem` | `command_error`, `wrong_or_unusable_result`, `too_slow`, `cannot_do`, `unclear_instructions`, `user_unhappy` or `other` |
 | `command`, `errorCode` | the `kyc:` command involved and the error's code (an HTTP status or gRPC code name), when there is one |
 | `requestBody` | what went wrong, in up to 500 characters of general terms |
