@@ -1114,7 +1114,7 @@
     // RAW_JSON is pruned in SQL to the paths buildLpas/buildSideLetters read,
     // leaves kept verbatim (citation envelopes included), rooted at
     // COALESCE(RAW_JSON:extraction, RAW_JSON). The whole document pushed a
-    // firm's response past the connector's 16 MB cap (ML-4715). Reading a new
+    // firm's response past the connector's 16 MB cap. Reading a new
     // RAW_JSON path means adding it to the OBJECT_CONSTRUCT here and in
     // SKILL.md, or it reads null everywhere; see SKILL.md Caveats.
 
