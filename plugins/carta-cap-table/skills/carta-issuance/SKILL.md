@@ -61,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.20</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.22</carta-plugin>
 
 # Issue Securities
 
@@ -432,8 +432,7 @@ mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments
 `call_tool` takes `name` + `arguments`; the wire name carries **double underscores** —
 `cap_table:mutate:issue_securities` is the prose form, never the argument.
 
-**No `drafts` key** — the draft set already holds the rows the user approved
-([hard rule 6](#hard-rules)).
+**No `drafts` key** ([hard rule 6](#hard-rules)).
 
 **Don't call `validate_drafts` again first.** The surface already validated, and
 `issue_securities` re-validates server-side before writing.
