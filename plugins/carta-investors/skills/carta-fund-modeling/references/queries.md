@@ -391,6 +391,15 @@ row here and its fields are `null`; a firm with no families has an empty file. O
 SQL: the `fund_families` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem fund_families`).
 → `snapshot.funds[].familyId` / `familyName`.
 
+## 21. Investment tags (optional) → `INVESTMENT_TAGS` → `company.tags`
+The firm's own tags on each investment (Industry, Country, Partner…), one row per company across all funds.
+Firm-context, no IN-list: the table has no fund column and is row-scoped by `set_context`. Each row's `tags_json`
+is `{category: [values]}`; a company is found by the same key it is built from (`entity_link_id`, else
+`general_ledger_issuer_id`) and a company with several rows has them merged. Data only: the app does not show
+tags; they sit on each company so the MCP server can read them. Optional: a firm with no tags has no `tags` key.
+SQL: the `investment_tags` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem investment_tags`).
+→ `portfolio.json` `slices[].companies[].tags` `{ <category>: [<value>, …] }`.
+
 ## 14. Portfolio-company financials (attempt-required) → `COMPANY_FINANCIALS`
 Carta **Data Collection** financials (revenue / ARR / KPIs reported *by the portfolio company*) come from the
 **base `COMPANY_FINANCIALS`** table (the legacy `COMPANY_FINANCIALS_LATEST` view is deprecated/empty). This is a

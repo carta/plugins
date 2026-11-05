@@ -347,6 +347,17 @@
         "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid, issuer_id ORDER BY performance_quarter_end_date DESC)=1"
       ]
     },
+    "investment_tags": {
+      "id_param": null,
+      "wave": 1,
+      "limit": 10000,
+      "format": "ndjson",
+      "sql": [
+        "SELECT entity_link_id, general_ledger_issuer_id, tags_json",
+        "FROM FUND_ADMIN.INVESTMENT_TAGS",
+        "ORDER BY ALL"
+      ]
+    },
     "ownership": {
       "id_param": "fund_uuids",
       "wave": 1,

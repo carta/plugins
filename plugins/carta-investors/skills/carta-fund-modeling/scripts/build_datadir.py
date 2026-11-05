@@ -55,6 +55,9 @@ lowercased name, so extra columns are harmless. Logical files (stem.md|psv|tsv|t
                              vintage_year, fund_count, moic, tvpi_*/net_irr_*/dpi_*/moic_*
     deal_irr       optional  TEMPORAL_DEAL_IRR latest/issuer (§10): fund_uuid,
                              issuer_name, deal_irr
+    investment_tags optional INVESTMENT_TAGS (firm-wide, one row per company):
+                             entity_link_id, general_ledger_issuer_id, tags_json
+                             ({category: [values]}) -> company.tags
     financing      optional  FINANCING_HISTORY latest/corp (§11): investment_name,
                              round, post_money_valuation, round_date|closing_date|raised_date
     partners       optional  PARTNER_DATA per LP (§9): partner_name, partner_country,
@@ -122,7 +125,8 @@ def parse_table(path):
                     obj = json.loads(s)
                 except ValueError:
                     continue
-                rows.append({str(k).lower(): ("" if v is None else str(v)) for k, v in obj.items()})
+                rows.append({str(k).lower(): ("" if v is None else json.dumps(v) if isinstance(v, (dict, list)) else str(v))
+                             for k, v in obj.items()})
                 continue
             cells = [c.strip() for c in line.split("|")]
             if all(set(c) <= set("-: ") and c for c in cells):
@@ -743,6 +747,31 @@ def build(rawdir, out, meta):
     for r in parse_table(find(rawdir, "deal_irr")):
         irr_map[(col(r, "fund_uuid"), col(r, "issuer", "issuer_name"))] = numn(col(r, "irr", "deal_irr"))
 
+    # ---- investment tags: the firm's own tags per company, {category: [values]} ----
+    # Optional and data-only: the app does not show them; they ride on each company in portfolio.json so the
+    # MCP server can read them. Keyed like company_key — entity_link_id, else the
+    # general_ledger_issuer_id — and merged when a company has several tag rows.
+    tags_by_company = collections.defaultdict(dict)
+    for r in parse_table(find(rawdir, "investment_tags")):
+        ck = company_key(r)
+        if ck is None:
+            continue
+        try:
+            tag_json = json.loads(col(r, "tags_json") or "{}")
+        except ValueError:
+            continue
+        if not isinstance(tag_json, dict):
+            continue
+        for category, values in tag_json.items():
+            values = values if isinstance(values, list) else [values]
+            for v in values:
+                v = "" if v is None else str(v).strip()
+                if not v:
+                    continue
+                seen = tags_by_company[ck[0]].setdefault(str(category), [])
+                if v not in seen:
+                    seen.append(v)
+
     # ---- financing: latest round per company (by CORPORATION_ID -> corpUuid) ----
     # Keyed by CORPORATION_ID directly — no name/fka-dba matching. A company is
     # joined to its round via its own corpUuid (below), resolved from the
@@ -992,6 +1021,8 @@ def build(rawdir, out, meta):
         lr = fin_by_corp.get(corp_uuid) if corp_uuid else None
         if lr:
             comp["lastRound"] = lr
+        if tags_by_company.get(cid):
+            comp["tags"] = tags_by_company[cid]
         logo = logos_by_corp.get(corp_uuid) if corp_uuid else None
         if logo:
             comp["logoDataUri"] = logo
@@ -1602,6 +1633,7 @@ STEM_CONTRACT = [
     # has none (a missing/empty file must NOT gate the build); when absent, carry falls
     # back to the flat carryRate default and pref/catch-up disable.
     ("waterfall",     False,  ["fund_id", "carry_rate"]),
+    ("investment_tags", False, ["entity_link_id", "general_ledger_issuer_id", "tags_json"]),
     # fund_families: Fund Admin's family per fund. Optional — a firm that has not set up families has none.
     ("fund_families", False,  ["fund_uuid", "fund_family_id"]),
     # Optional: they only feed Fund Construction's past-fund and market-range helpers, hidden without them.
