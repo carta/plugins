@@ -143,7 +143,7 @@ export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, 
         )}
       </nav>
 
-      <span style={{ flex: 1, minHeight: 10 }} />
+      <span style={{ flex: "0 0 10px" }} />
 
       {/* One footer block so the wordmark and as-of line keep their own
           tight 5px gap regardless of the rail's own (near-zero) gap. */}
@@ -289,10 +289,17 @@ const styles = {
     textDecoration: "underline",
     cursor: "pointer",
   },
+  // Grows to fill the space between brand and footer, and scrolls its own
+  // content — the rail itself is `position: fixed` (viewport-height), so with
+  // no overflow here a long item list (many custom reports, many shared
+  // reports) just clips past the fixed box with no way to reach it.
   nav: {
     display: "flex",
     flexDirection: "column",
     gap: 2,
+    flex: "1 1 auto",
+    minHeight: 0,
+    overflowY: "auto",
   },
   // Active color/box-shadow (Ink SideNav inset-stripe) live in the shared
   // `.navitem.active` CSS class — inline styles would always outrank it.
