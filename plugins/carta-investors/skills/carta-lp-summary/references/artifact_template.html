@@ -1043,9 +1043,23 @@
     }
 
     // ── LP profile ──
+    // One spelling per country, so a firm that tagged "USA", "United States" and "United States of
+    // America" gets one geography row. Keys are lower case with dots dropped and spaces collapsed;
+    // only spellings of the same country are here (Cayman Islands stays apart from the UK, England
+    // from the UK). A value not listed keeps its own spelling.
+    const COUNTRY_ALIASES = new Map([
+      ['United States', ['us', 'usa', 'united states', 'united states of america', 'united sates', 'unites states']],
+      ['United Kingdom', ['uk', 'united kingdom']],
+      ['Cayman Islands', ['cayman', 'cayman island', 'cayman islands']],
+      ['British Virgin Islands', ['bvi', 'british virgin islands', 'virgin islands (british)']],
+      ['United Arab Emirates', ['uae', 'united arab emirates']],
+      ['South Korea', ['korea', 'south korea', 'korea, south']],
+      ['Netherlands', ['netherlands', 'the netherlands']],
+    ].flatMap(([name, keys]) => keys.map(k => [k, name])));
+    const countryKey = value => String(value).replace(/\./g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const canonicalCountry = value => COUNTRY_ALIASES.get(countryKey(value)) || String(value).replace(/\s+/g, ' ').trim();
     // One US rule for the page: an LP's location and exposure by geography both read it.
-    const US_NAMES = new Set(['us', 'usa', 'u.s.', 'u.s.a.', 'united states', 'united states of america']);
-    const isUS = country => US_NAMES.has(String(country).trim().toLowerCase());
+    const isUS = country => canonicalCountry(country) === 'United States';
     // Commitment dates before this are placeholders in the source, not real first commitments.
     const EARLIEST_REAL_COMMITMENT = '1900-01-01';
 
@@ -1363,7 +1377,7 @@
       if (geo.source.kind === 'tags') {
         const t = geo.tags.get(company.issuer_id) || {};
         const value = geo.source.categories.map(k => t[k]).find(v => v && String(v).trim());
-        return value ? String(value).trim() : UNKNOWN_GEOGRAPHY;
+        return value ? canonicalCountry(value) : UNKNOWN_GEOGRAPHY;
       }
       const country = geo.hq.get(company.issuer_id);
       if (!country || !String(country).trim()) return UNKNOWN_GEOGRAPHY;
@@ -1592,12 +1606,6 @@
     const PDF_POWERED_BY = { w: 83, h: 15, inset: 20 };
     const PDF_EXPOSURE_TOP = 10;
     const PDF_INK = [26, 26, 26], PDF_SUBTLE = [101, 107, 107], PDF_RULE = [222, 223, 223], PDF_WASH = [233, 234, 234];
-    // Wire pills, the page's AA-safe pairs: [background, text].
-    const PDF_PILL = {
-      Confirmed: [[227, 243, 234], [31, 107, 69]], Unverified: [[255, 252, 237], [112, 80, 16]],
-      Stale: [[255, 240, 224], [138, 75, 18]], Missing: [[255, 238, 239], [168, 32, 32]],
-      Restricted: [[241, 241, 241], [101, 107, 107]],
-    };
 
     // ── firm branding (PDF export only) ──
     const BRAND_LOGO = /^data:image\/(png|jpe?g|webp|gif|svg\+xml)[;,]/i;
@@ -1667,7 +1675,6 @@
       const groups = currencyGroups(fam.records);
       const pf = familyProfile(fam.records);
       const asOf = asOfSummary(fam.records);
-      const wire = familyWire(fam.records.map(r => r.wire));
       const c = fam.contact;
       return {
         name: fam.name,
@@ -1675,7 +1682,6 @@
         earlier: asOf.earlier.length ? 'Some funds valued earlier: ' + asOf.earlier.map(e => e.fund + ' (' + dateLabel(e.date) + ')').join(', ') : '',
         identity: pf,
         contact: { name: (c && c.name) || '—', email: (c && c.email) || '—' },
-        wire: { state: wire.worst, detail: fam.records.length > 1 && wire.text && wire.worst !== 'Restricted' ? wire.text : '' },
         mixed: groups.size > 1,
         bands: figures(fam.records).lines.map(l => {
           const irr = xirr(lpFlows(groups.get(l.code) || []));
@@ -1691,7 +1697,7 @@
           return {
             fund: r.fund_short, vintage: r.vintage_year == null ? '—' : String(r.vintage_year),
             committed: moneyExact(f.committed, f.code), unfunded: moneyExact(f.unfunded, f.code),
-            tvpi: multiple(f.tvpi), irr: irrText(irr), irrNegative: irr != null && irr < 0, wire: r.wire.state,
+            tvpi: multiple(f.tvpi), irr: irrText(irr), irrNegative: irr != null && irr < 0,
           };
         }),
         exposure: Array.from(groups, ([code, rs]) => {
@@ -1715,8 +1721,8 @@
 
     // Draws each model on its own pages of a jsPDF document, then the footer on every page.
     //   meta: {firm, generated, brand?}; brand (a branded export): {firmName, logo: {data, w, h}
-    //   or null, accent, accentText, fontFamily or null, poweredBy: {data} or null}. Wire pills,
-    //   body and table text are never branded.
+    //   or null, accent, accentText, fontFamily or null, poweredBy: {data} or null}. Body and
+    //   table text are never branded.
     function drawProfiles(doc, models, meta) {
       const brand = meta.brand || null;
       const accent = brand && brand.accent ? brand.accent : null;
@@ -1739,15 +1745,6 @@
       const bar = (x, yy, width, fraction) => {
         doc.setFillColor(...PDF_WASH); doc.roundedRect(x, yy, width, 5, 2.5, 2.5, 'F');
         if (fraction > 0) { doc.setFillColor(...(accent || PDF_INK)); doc.roundedRect(x, yy, Math.max(5, width * fraction), 5, 2.5, 2.5, 'F'); }
-      };
-      const pill = (state, x, baseline) => {
-        const [bg, fg] = PDF_PILL[state] || PDF_PILL.Restricted;
-        font(7.5, 'bold', fg);
-        const w = doc.getTextWidth(pdfText(state)) + 12;
-        doc.setFillColor(...bg); doc.setDrawColor(...fg); doc.setLineWidth(0.5);
-        doc.roundedRect(x, baseline - 8.5, w, 12, 6, 6, 'FD');
-        text(state, x + 6, baseline);
-        return w;
       };
       const newPage = () => {
         doc.addPage();
@@ -1786,12 +1783,12 @@
         if (m.earlier) { font(9, 'normal', PDF_SUBTLE); for (const line of doc.splitTextToSize(pdfText(m.earlier), W)) { text(line, M, y); y += 12; } }
       }
 
-      // Labelled pairs in two columns: the profile on the left, contact and wire on the right.
+      // Labelled pairs in two columns: the profile on the left, the contact on the right.
       function identity(m) {
         const right = M + W / 2, label = 92;
         const pair = (x, yy, name, value, width) => {
           font(9.5, 'normal', PDF_SUBTLE); text(name, x, yy);
-          if (value != null) { font(9.5, 'normal'); text(fit(value, width - label), x + label, yy); }
+          font(9.5, 'normal'); text(fit(value, width - label), x + label, yy);
         };
         y += 14;
         pair(M, y, 'Investor type', m.identity.investorType, W / 2);
@@ -1801,9 +1798,6 @@
         pair(right, y, 'Email', m.contact.email, W / 2);
         y += 15;
         pair(M, y, 'LP since', m.identity.lpSince, W / 2);
-        pair(right, y, 'Wire instructions', null, W / 2);
-        const w = pill(m.wire.state, right + label, y);
-        if (m.wire.detail) { font(9, 'normal', PDF_SUBTLE); text(fit(m.wire.detail, W / 2 - label - w - 8), right + label + w + 8, y); }
         y += 4;
       }
 
@@ -1838,7 +1832,7 @@
 
       // Every fund, no truncation; the header repeats on each page the table runs onto.
       function positions(m) {
-        const cols = [['Fund', 140, 'left'], ['Vintage', 44, 'left'], ['Committed', 84, 'right'], ['Unfunded', 84, 'right'], ['Net TVPI', 50, 'right'], ['Net IRR', 52, 'right'], ['Wire', 62, 'left']];
+        const cols = [['Fund', 202, 'left'], ['Vintage', 44, 'left'], ['Committed', 84, 'right'], ['Unfunded', 84, 'right'], ['Net TVPI', 50, 'right'], ['Net IRR', 52, 'right']];
         const xs = []; cols.reduce((x, c) => { xs.push(x); return x + c[1]; }, M);
         const cellX = i => (cols[i][2] === 'right' ? xs[i] + cols[i][1] - 8 : xs[i]);
         const head = () => {
@@ -1858,7 +1852,6 @@
           text(p.unfunded, cellX(3), y, { align: 'right' });
           text(p.tvpi, cellX(4), y, { align: 'right' });
           font(9.5, 'normal', p.irrNegative ? [163, 48, 29] : PDF_INK); text(p.irr, cellX(5), y, { align: 'right' });
-          pill(p.wire, cellX(6), y);
           y += 6; rule(y, PDF_WASH); y += 14;
         }
       }

@@ -24,6 +24,5 @@ separate browser the user isn't looking at.
 A skill that uses this gate lists all thirteen tools and `ToolSearch` in its own `allowed-tools`, because frontmatter
 cannot include a file.
 
-`carta-valuations-workflow` (its probe adds `find` and `computer`), `fa-tax`'s `tax-agent-companion.md` and
-`carta-cap-table`'s `references/open-the-companion-page.md` (Claude in Chrome step only) keep their own copies
-of this detection; change them with this file.
+`fa-tax`'s `tax-agent-companion.md` and `carta-cap-table`'s `references/open-the-companion-page.md` (Claude in
+Chrome step only) keep their own copies of this detection; change them with this file.

@@ -10,16 +10,19 @@ allowed-tools:
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__skill_checkpoint
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__get_current_user
   - mcp__carta__list_contexts
+  - mcp__carta__skill_checkpoint
   # Cowork
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Bash(ls -l *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-download-firm-document/scripts/save_to_downloads.py" *)
   - Read
@@ -27,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.3</carta-plugin>
+<carta-plugin>carta-investors:7.25.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -66,6 +69,10 @@ one only for a document the user chose, at most 20 per run (the run's cap).
 
 Call `welcome`, then `get_current_user`. Keep `base_url` for links and
 `is_staff` for Gate 1.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-download-firm-document", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the MCP server name you called `welcome` on in this session.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (another document, a fresh link, the next page) does not checkpoint again.
 
 Then decide **save mode** or **link mode** for the whole run, before asking the
 user anything, and without telling the user about it. With Bash, run once:
@@ -318,12 +325,16 @@ Then offer:
 
 Offer these after the last report of the run, not after each document.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-download-firm-document", checkpoint_label="skill_finished")` once, with this menu. A file saved, a link given, and a failed save that gave the link instead all count: the user has the document.
+
 Link option 2 to the filtered page link (Gate 2, every match) with no
 filters; leave option 2 out when there is no `carta_id`.
 
 ---
 
 ## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-download-firm-document", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a cancel at a confirm, no matching document, no access and a disabled command. `skill_finished` means a document or its link reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a fresh link, a search again, a save that falls back to the link) do not checkpoint.
 
 | Situation | Response |
 |---|---|

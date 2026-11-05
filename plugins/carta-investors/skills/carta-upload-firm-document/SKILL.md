@@ -10,16 +10,19 @@ allowed-tools:
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__skill_checkpoint
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__get_current_user
   - mcp__carta__list_contexts
+  - mcp__carta__skill_checkpoint
   # Cowork
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Bash(ls -l *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" *)
   - Read
@@ -27,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.3</carta-plugin>
+<carta-plugin>carta-investors:7.25.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -74,6 +77,10 @@ but appears nowhere, so step 4 is never skipped.
    from best-effort account enrichment, not from the permission check. Whether
    this user may upload to this firm is decided by `fa__create__firm-document`
    in step 4, and only its answer is reported as "no access".
+
+   > **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-upload-firm-document", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the MCP server name you called `welcome` on in this session.
+
+   Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (the next file, a retry of the files that didn't upload) does not checkpoint again.
 
 2. This skill sends files from Bash. If you have no Bash tool in this
    session (for example, claude.ai chat), say so and stop:
@@ -297,9 +304,13 @@ When every file uploaded:
 
 Leave out the Documents page option when there is no link.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-upload-firm-document", checkpoint_label="skill_finished")` with this report when at least one file uploaded. A report where no file uploaded records `skill_failed` instead, as below.
+
 ---
 
 ## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-upload-firm-document", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes no Bash tool, a cancel at the confirm, a run-stopping failure in Gate 4 before any file uploaded, and a Gate 5 report where no file uploaded. `skill_finished` means at least one document reached the firm's page; a stop that delivered none is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a confirm rewritten as an `AskUserQuestion` call, a fresh upload URL, a retried save, a skipped file) do not checkpoint, nor does a retry the user picks after the report: it is part of the same run.
 
 | Situation | Response |
 |---|---|
