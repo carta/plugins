@@ -48,6 +48,11 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `deal-group-wf-health` | Read-only dashboard of waterfall health across a firm's deal groups (pass any firm/org id) — model assignment (stranded/none), ownership-link defects, orphaned models, and whether recent runs reached every entity. Internal-only. |
 | `carta-deal-group-redactor` | Redact a deal group's entity map in Carta's view by chatting — group, rename or hide entities, hide ownership %, add a title and footer — then export the PDF from the view. Internal-only. |
 | `carta-deal-group-audit-log` | Export one Excel audit log of security changes across every company in a deal group for a date range, covering the companies the firm holds through its funds that granted it detailed cap table and company viewer access. Internal-only. |
+| `carta-start-audit` | Open a fund audit engagement: pick the fund and audit year once and see how many documents sit in each of the seven audit areas. Internal-only. |
+| `carta-audit-readiness` | Check whether a fund's audit documents are complete and ready, area by area. Lists only; never downloads. Internal-only. |
+| `carta-download-audit-documents` | Download a fund's audit documents as one zip per audit area, across several funds at once, with a searchable contents page. Internal-only. |
+| `carta-new-audit-documents` | Report which audit documents are new, changed or gone since the last check of the same fund, year and area. Internal-only. |
+| `carta-build-audit-home` | Build, rebuild or open Carta Audit Home, a live page listing every fund an auditor can audit with readiness by area, what's new and downloads. Internal-only. |
 | `firm-bulk-entity-update` | Not implemented yet. Will carry a firm's monthly change file for a deal group's firm-controlled entities through one cycle — ingest, resolve, review, write, true-up — instead of one entity at a time. Internal-only. |
 | `staff-ilevel-data-collection-import` | Carta staff only. Import a firm's iLevel KPI history from the warehouse into the same firm's Data Collection in a sandbox or test Carta, then check the figures ValTool reads. Chat-driven, with Carta's own financials page open in the browser pane. Never writes to production. Internal-only. |
 

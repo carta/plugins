@@ -1,7 +1,7 @@
 ---
 name: carta-download-firm-document
 description: >-
-  Download a document from your firm's Documents page in Carta (LPA, NDA, side letter, engagement letter, capital call notice, and so on). Finds the document by title, type, fund, company, investor or date, confirms which one when several match (or, when you ask for every match such as "all NDAs from last month", gathers the matches and confirms the batch), then saves it to your Downloads folder once you confirm (Claude Code), or gives a short-lived download link (Cowork, claude.ai). Never reads the file. TRIGGER: "download the LPA from our documents", "get me the NDA from {firm}'s documents page", "send me a link to our engagement letter in Carta", "download a document from my firm", "find and download the side letter we uploaded", "I need the {document} from Carta's Documents page". NOT FOR: documents shared with LPs or an LP's own documents (use carta-gp-lp-documents or carta-lp-dashboard); uploading a file to Carta (use carta-upload-firm-document); tear sheets (use carta-download-tearsheet).
+  Download a document from your firm's Documents page in Carta (LPA, NDA, side letter, engagement letter, capital call notice, and so on). Finds the document by title, type, fund, company, investor or date, confirms which one when several match (or, when you ask for every match such as "all NDAs from last month", gathers the matches and confirms the batch), then saves it to your Downloads folder once you confirm (Claude Code), or gives a short-lived download link (Cowork, claude.ai). Never reads the file. TRIGGER: "download the LPA from our documents", "get me the NDA from {firm}'s documents page", "send me a link to our engagement letter in Carta", "download a document from my firm", "find and download the side letter we uploaded". NOT FOR: audit documents (use carta-download-audit-documents); documents shared with LPs or an LP's own documents (use carta-gp-lp-documents or carta-lp-dashboard); uploading a file to Carta (use carta-upload-firm-document); tear sheets (use carta-download-tearsheet).
 version: 0.1.0
 model: inherit
 allowed-tools:
@@ -27,7 +27,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.22.7</carta-plugin>
+<carta-plugin>carta-investors:7.22.8</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
