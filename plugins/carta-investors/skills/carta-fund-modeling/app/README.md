@@ -9,9 +9,10 @@ service worker transpiles the JSX in-browser. There is no build step for source 
 file in `src/`, refresh, done.
 
 **Do NOT run `npm run build` after editing source** — there is no build step for source edits.
-`npm run build` rebuilds only the vendored ESM bundles (`../dist/vendor/react.esm.js`,
-`../dist/vendor/sucrase.esm.js`), so it is needed **only to update deps** (a React or Sucrase
-version bump), never per edit.
+`npm run build` rebuilds the vendored ESM bundles (`../dist/vendor/react.esm.js`,
+`../dist/vendor/sucrase.esm.js`) and the Claude MCP App panel bundle (`dist-panel/panel.js`,
+gitignored, never committed), so it is needed **only to update deps** (a React or Sucrase
+version bump) or to produce the panel bundle, never per edit.
 
 ## Layout
 
@@ -35,6 +36,6 @@ npm run dev
 
 npm test          # model unit tests (vitest)
 
-# Only after bumping React/Sucrase: rebuild ../dist/vendor and commit it.
+# Only after bumping React/Sucrase: rebuild ../dist/vendor and commit it (dist-panel/ is not committed).
 npm run build
 ```

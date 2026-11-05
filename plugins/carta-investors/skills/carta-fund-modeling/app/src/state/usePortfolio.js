@@ -8,8 +8,11 @@ import { setTrackingFirm } from "../analytics.js";
 import useEtagAutosave from "./useEtagAutosave.js";
 import { runFirmLoad } from "./firmLoad.js";
 
+/** The query string the portfolio and snapshot routes take for `firm`. */
+export const portfolioQuery = (firm) => (firm ? `?firm=${encodeURIComponent(firm)}` : "");
+
 export default function usePortfolio(firm, { onLockedEdit } = {}) {
-  const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";
+  const q = portfolioQuery(firm);
   const [snapshot, setSnapshot] = useState(null);
   const [doc, setDoc] = useState(null);
   const paused = useRef(false); // chat-turn soft lock: holds every autosave PUT
@@ -132,6 +135,7 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
 
   // ---- slice operations ----
   const selectSlice = useCallback((id) => mutateDoc((d) => ({ ...d, activeSliceId: id })), [mutateDoc]);
+  const sliceIds = useCallback(() => (docRef.current?.slices || []).map((s) => s.id), []);
 
   const createSlice = useCallback(
     (name, { fromId, color } = {}) =>
@@ -231,6 +235,7 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     doc,
     slice, // {id, name, locked, assumptions, companies}
     selectSlice,
+    sliceIds,
     createSlice,
     renameSlice,
     forkSlice,

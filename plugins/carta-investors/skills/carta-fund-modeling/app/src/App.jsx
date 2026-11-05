@@ -140,7 +140,7 @@ function DataStatus({ asOf }) {
 }
 
 export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
-  const { snapshot, doc, slice, selectSlice, createSlice, renameSlice, forkSlice, deleteSlice, hideShared, showHidden, unshareSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
+  const { snapshot, doc, slice, selectSlice, sliceIds, createSlice, renameSlice, forkSlice, deleteSlice, hideShared, showHidden, unshareSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
     usePortfolio(firm, { onLockedEdit: () => warn(BASELINE_LOCKED_MSG) });
   const share = useShare();
   // the scenarios opened in this firm, newest first — the sidebar menu shows the latest
@@ -203,11 +203,12 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   // Chat-turn soft lock registry — the outer shell (via bridge-client.js) pauses
   // autosave for the duration of a chat turn and resumes + reloads once it ends,
   // so an in-flight Claude edit and the user's own scenario edits can't race.
+  // The Claude panel's entry (panel.jsx) also reads the scenario IDs and selects one.
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.__fmPortfolioCtl = { pauseAutosave, resumeAutosave, reload, flush };
+      window.__fmPortfolioCtl = { pauseAutosave, resumeAutosave, reload, flush, selectSlice, sliceIds };
     }
-  }, [pauseAutosave, resumeAutosave, reload, flush]);
+  }, [pauseAutosave, resumeAutosave, reload, flush, selectSlice, sliceIds]);
   // Mirrors the outer shell's chat rail state so the topbar toggle can label
   // itself "Ask Claude" vs "Close chat panel". The rail starts closed (the shell
   // persists the user's choice), and re-posts on every iframe load, so this

@@ -4,7 +4,9 @@ import { findAndMark } from "./pinpoint/findAndMark.js";
 import { setInspectMode } from "./pinpoint/inspect.js";
 
 export function postToOuter(type, payload) {
-  // parent is the outer shell; restrict the target origin to our own.
+  // parent is the outer shell; restrict the target origin to our own. An opaque-origin document
+  // (a sandboxed MCP App panel) has no same-origin shell, and "null" is no valid target, so do nothing.
+  if (window.location.origin === "null") return;
   window.parent.postMessage({ source: "fm-app", type, payload }, window.location.origin);
 }
 

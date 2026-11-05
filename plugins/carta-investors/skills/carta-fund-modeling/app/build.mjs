@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Builds the fund-modeling skill's webapp/ vendor bundles. The app source (app/src) is
 // served directly and transpiled in-browser, so it is NOT copied here — this only
-// emits ../webapp/vendor/*.esm.js. Run from app/: npm run build.
+// emits ../webapp/vendor/*.esm.js, plus the Claude MCP App panel bundle app/dist-panel/panel.js
+// (gitignored, outside the deployed webapp/ assets). Run from app/: npm run build.
 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve, relative } from "node:path";
@@ -91,6 +92,20 @@ async function verifyReactBundle() {
   console.log(`  verified ${OUT.react} (${REACT_REQUIRED_EXPORTS.length} exports) ✓`);
 }
 
+// Single-file bundle for the Claude MCP App panel (src/panel.jsx). Unlike the in-browser
+// transpile above, a panel has no server to fetch source from, so everything ships as one file.
+async function buildPanel() {
+  await esbuild({
+    ...COMMON,
+    entryPoints: [resolve(APP, "src/panel.jsx")],
+    outfile: resolve(APP, "dist-panel/panel.js"),
+    format: "iife",
+    jsx: "automatic",
+    loader: { ".js": "jsx" },
+  });
+  console.log("  bundled dist-panel/panel.js ✓");
+}
+
 (async () => {
   // Remove only the files this script writes: webapp/vendor/ also holds hand-maintained
   // files (the tracker bundle, README.md) that a whole-folder clean would delete.
@@ -101,6 +116,7 @@ async function verifyReactBundle() {
 
   console.log("build: bundling vendor ESM…");
   await buildVendors();
+  await buildPanel();
 
   console.log("build: done ✓");
   console.log(`  webapp: ${relative(process.cwd(), WEBAPP)}`);
