@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.19</carta-plugin>
+<carta-plugin>carta-investors:7.19.24</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
 
@@ -127,7 +127,7 @@ Never go silent for more than one step. Never present results without a prior st
 - **Carta MCP connection** — `list_contexts` and `list_accounts` available; the firm to audit is the one the request names or links, or the user's only firm; Step 1 asks when it can't tell.
 - **Firm's fund entities** — the skill needs the firm's own fund vehicle names (via `fa__list__entities`) to scope the LPA audit. A firm with zero fund entities will hit the empty state.
 - **LPAs uploaded and extracted** — the firm has LPAs (and optionally side letters) in Carta's Document Intelligence pipeline. Without any extractions, every fund lands in No documents.
-- **Mode A needs Cowork.** Live Artifacts only render there. Claude Desktop and the Claude Code CLI get Mode B, which is a full text answer, not a degraded one.
+- **Mode A needs the `Artifact` tool**; without it, Mode B gives a full text answer, not a degraded one.
 
 ## Accessibility
 
@@ -217,7 +217,7 @@ Tell the user: `Firm context loaded: <firm_name>. Fetching LPAs and side letters
 
 **The ONLY legitimate reasons to fall back to Mode B:**
 
-1. **Mode A execution actually fails** — Step A1's gate finds no `Artifact` tool (this session is not Cowork — a genuine, structural reason, not a judgment call about the environment), or `render-artifact.py` exits non-zero on a validation error (a missing plugin file is handled by the note at the top). Do not preemptively route based on "this might not work" — attempt Mode A, and only when a specific error surfaces, fall back with a plain-English explanation of what went wrong.
+1. **Mode A execution actually fails** — Step A1's first check still finds no `Artifact` tool after loading it (a genuine, structural reason, not a judgment call about the environment), or `render-artifact.py` exits non-zero on a validation error (a missing plugin file is handled by the note at the top). Do not preemptively route based on "this might not work" — attempt Mode A, and only when a specific error surfaces, fall back with a plain-English explanation of what went wrong.
 2. **The user explicitly asks for text-only AFTER seeing the artifact** — e.g. "the artifact didn't open, can I get this as a text table?"
 
 **If Mode A does fail, tell the user what failed before falling back.** Example: `"I couldn't build the fund-terms view just now — I'll give you the terms as text instead."` Never silently downgrade, and never describe scripts, plugins, paths, or sandboxes while doing it.
@@ -244,7 +244,7 @@ Run both checks, and stay quiet about them when they pass:
 
 Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`, alongside the other plugin-wide references. They are *not* under this skill's own `references/`. Read them by that exact path; don't search for them.
 
-If the `Artifact` tool is missing, this session is not Cowork: go to Mode B and tell the user plainly *"I'll give you the fund terms as text."* Say nothing about artifacts, Cowork, or sandboxes.
+This skill has its own text answer, so a failed first check does not stop it and its stop message is not shown. If `Artifact` is still missing once that check has tried to load it, go to Mode B and open with one plain sentence: *"The interactive fund-terms view needs an up-to-date Claude Code or Cowork with Artifacts turned on for your organization, so here are the fund terms as text."* Say nothing about checks, modes, or sandboxes.
 
 Store the `name` the connector gate resolves as `<CARTA_MCP_SERVER>`. Step A2 passes it to the render script and Step A3 puts it in the `capabilities.mcp` grant. It is one string; there is nothing to derive and nothing to keep in sync.
 
@@ -336,7 +336,9 @@ Keep `title` and `favicon` stable across redeploys, and restate the whole `capab
 
 ### Step A4: Confirm
 
-> Your fund-terms view for **<Firm Name>** is loading in the Cowork sidebar.
+> Your fund-terms view for **<Firm Name>** is ready: [Open <Firm Name> — LPA coverage audit](<url the publish returned>)
+
+Fill the link with the `url` the publish call returned. The side panel does not always open by itself, and this link is how the user reaches the page when it stays closed, so never say the page is loading or open in the sidebar.
 
 Then a 3–5 bullet summary of what it shows — one sortable table of every fund's terms, coverage gaps (missing, partial, name-mismatch or no-documents LPA, series governed by a parent agreement, side-letters-without-LPA) as badges and summary tiles that filter the table, click any row for its side panel (economic terms, side letters, LP roster, fund identity) and step between funds with ↑/↓, plus search. Keep it brief; the customer can see the artifact. Skip the bullets on re-invocation if you've already shown them.
 
@@ -806,7 +808,7 @@ AskUserQuestion(
 | A fund shows Missing, Name mismatch or No documents but the user insists its LPA is uploaded | Its extraction is likely in the unbackfilled `'fund_admin'` residue (see Caveats) | "That LPA is uploaded but hasn't been linked to your firm in our extraction records yet, so it isn't showing here. [Contact Carta Support](https://support.carta.com/kb/guide/en/how-to-get-support-with-carta-help-T8DEfuxhi9/Steps/3724508) to have it re-processed." |
 | `render-artifact.py` exits non-zero | Bad UUID, non-numeric Carta ID, malformed base URL, unusable connector name, output or fund-names file outside CWD, or missing/empty fund-names file | Tell the user in plain words what failed, then fall back to Mode B. Never hand-write the artifact HTML. |
 | `render-artifact.py` reports a missing template or placeholders | The plugin's files are broken | Follow the note at the top of this skill: one stop message, no Mode B. |
-| No `Artifact` tool (Step A1 gate) | This session is not Cowork | Go to Mode B. Tell the user "I'll give you the fund terms as text" — nothing about Cowork, artifacts, or sandboxes. |
+| No `Artifact` tool, even after Step A1 tried to load it | Artifacts are off or Claude is out of date | Go to Mode B, opening with Step A1's sentence on why the answer is text. |
 | Artifact publishes but renders an error | The page's own bootstrap() hit a required-query failure | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. |
 | Series shows 'Governed by parent agreement' | The series' own agreement is not on file but its parent LLC's is; the parent's carry, fee and hurdle belong to specific series, so none are shown on the others | Not a gap in the match. To show terms for the series, drop the agreement or schedule that names it into this chat, or upload it in Carta. |
 | Fund shows as 'Name mismatch' or 'Missing' despite an LPA existing | The LPA's extracted fund name has a word the fund's Carta name lacks (or vice versa), or it tied between two sibling funds (`possibleLpaNames`) | Suggest running Mode B drill-down with the fund name as it appears in the LPA. Never re-attribute a sibling vehicle's LPA (e.g. a Holdings or GP entity's) to the fund by hand. |

@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.19</carta-plugin>
+<carta-plugin>carta-investors:7.19.24</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -51,7 +51,7 @@ allowed-tools:
 
 # Schedule of Investments (SOI) Live Artifact
 
-Render a firm's Schedule of Investments as a persistent, refreshable Live Artifact in the Cowork sidebar. There is one artifact per firm; the dropdown in the header lets users switch between every fund they have access to in that firm. The artifact queries the Carta data warehouse on load and on each fund switch, so the data is always current. Re-invoking the skill for the same firm rebuilds the artifact with the freshly-enumerated fund list — newly-added funds appear automatically.
+Render a firm's Schedule of Investments as a persistent, refreshable Live Artifact in Cowork. There is one artifact per firm; the dropdown in the header lets users switch between every fund they have access to in that firm. The artifact queries the Carta data warehouse on load and on each fund switch, so the data is always current. Re-invoking the skill for the same firm rebuilds the artifact with the freshly-enumerated fund list — newly-added funds appear automatically.
 
 ## When to Use
 
@@ -306,17 +306,19 @@ Pick the branch from the `name_status` value captured in Step 2.
 
 **`name_status == "named_and_found"`** — the user named a fund and we found it:
 
-> The Schedule of Investments for **<Fund Name>** is now loading in your Cowork sidebar. Use the **Fund** dropdown in the header to switch between any of the **<N>** funds in **<Firm Name>** you have access to.
+> The Schedule of Investments for **<Fund Name>** is ready: [Open the Schedule of Investments](<url the publish returned>). Use the **Fund** dropdown in the header to switch between any of the **<N>** funds in **<Firm Name>** you have access to.
 
 **`name_status == "named_but_missing"`** — the user named a fund we couldn't find; initial selection fell back to the firm-wide view:
 
-> I couldn't find a fund named **<named_term>** in **<Firm Name>**. I've loaded the Schedule of Investments artifact with the **<N>** funds you do have access to — use the **Fund** dropdown in the header to pick the one you meant.
+> I couldn't find a fund named **<named_term>** in **<Firm Name>**. I've loaded the Schedule of Investments with the **<N>** funds you do have access to: [Open the Schedule of Investments](<url the publish returned>). Use the **Fund** dropdown in the header to pick the one you meant.
 
 `<named_term>` is the value captured in Step 2.
 
 **`name_status == "unnamed"`** — the user asked for the firm's SOIs without naming a specific fund:
 
-> The Schedule of Investments artifact for **<Firm Name>** is now loading in your Cowork sidebar with all **<N>** funds you have access to. Use the **Fund** dropdown in the header to switch between them.
+> The Schedule of Investments for **<Firm Name>** is ready with all **<N>** funds you have access to: [Open the Schedule of Investments](<url the publish returned>). Use the **Fund** dropdown in the header to switch between them.
+
+Every branch fills its link with the `url` the publish call returned. The side panel does not always open by itself, and this link is how the user reaches the page when it stays closed, so never say the page is loading or open in the sidebar.
 
 **Churned funds (Step 2)** — if one of these applies, add its sentence straight after the branch sentence. `<N>` in every branch counts the funds actually in the dropdown, after churned ones were dropped.
 

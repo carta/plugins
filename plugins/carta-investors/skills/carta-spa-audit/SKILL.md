@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.19</carta-plugin>
+<carta-plugin>carta-investors:7.19.24</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -115,7 +115,7 @@ Never go silent for more than one step. Never present results without a prior st
 
 - **Carta MCP connection** — `list_contexts` and `read_tool` tools available; user has an active session for at least one investment firm.
 - **SPA documents uploaded** — the firm has Stock Purchase Agreements in Carta's Document Intelligence; without them, all equity companies land in bucket 1 (missing SPA).
-- **Mode A needs Cowork.** Live Artifacts only render there. Claude Desktop and the Claude Code CLI get Mode B, which is a full text answer, not a degraded one.
+- **Mode A needs the `Artifact` tool**; without it, Mode B gives a full text answer, not a degraded one.
 
 ## Accessibility
 
@@ -225,7 +225,7 @@ Tell the user: `Firm context loaded: <firm_name>. Fetching investment records an
 Route to **text-only (Mode B)** only when:
 - The user explicitly asks for text: "text only", "no file", "quick summary" or "just tell me".
 - The user asks to drill into one specific named company (any phrasing) → run Mode B Step B0 cache check + drill-down only.
-- Step A1's gate finds no `Artifact` tool — this session is not Cowork. Tell the user plainly *"I'll give you the audit as text."*
+- Step A1's first check still finds no `Artifact` tool after loading it.
 
 ---
 
@@ -249,7 +249,7 @@ Run both checks, and stay quiet about them when they pass:
 
 Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`, alongside the other plugin-wide references. They are *not* under this skill's own `references/`. Read them by that exact path; don't search for them.
 
-If the `Artifact` tool is missing, this session is not Cowork: go to Mode B and tell the user plainly *"I'll give you the audit as text."* Say nothing about artifacts, Cowork, or sandboxes.
+This skill has its own text answer, so a failed first check does not stop it and its stop message is not shown. If `Artifact` is still missing once that check has tried to load it, go to Mode B and open with one plain sentence: *"The interactive SPA audit needs an up-to-date Claude Code or Cowork with Artifacts turned on for your organization, so here is the audit as text."* Say nothing about checks, modes, or sandboxes.
 
 Store the `name` the connector gate resolves as `<CARTA_MCP_SERVER>`. Step A2 passes it to the render script and Step A3 puts it in the `capabilities.mcp` grant. It is one string; there is nothing to derive and nothing to keep in sync.
 
@@ -324,7 +324,9 @@ Keep `title` and `favicon` stable across redeploys, and restate the whole `capab
 
 ### Step A4: Confirm
 
-> Your SPA coverage audit for **<Firm Name>** is loading in the Cowork sidebar.
+> Your SPA coverage audit for **<Firm Name>** is ready: [Open <Firm Name> — SPA coverage audit](<url the publish returned>)
+
+Fill the link with the `url` the publish call returned. The side panel does not always open by itself, and this link is how the user reaches the page when it stays closed, so never say the page is loading or open in the sidebar.
 
 Then a 3–5 bullet summary of what it shows — the four-bucket audit (missing, unexecuted, executed, no SPA needed) ranked by cost basis, a coverage stat contrasting count vs. cost-basis coverage, click any company with an SPA on file to see the document and purchaser breakdown in a drawer, fund and geography filters, live/exited tabs. Keep it brief; the customer can see the artifact. Skip the bullets on re-invocation if you've already shown them.
 
@@ -655,7 +657,7 @@ AskUserQuestion(
 | Drill-down returns 0 rows | Company name didn't match any SPA issuer name | "No SPA found matching '[name]'. Check the spelling or confirm the SPA is uploaded in Carta." |
 | Company shows as 'Missing SPA' despite having one on file | Company was renamed after investment — fuzzy match can't bridge historical name changes | "This may be a company rename. Try the drill-down with the old company name to locate the SPA manually." |
 | `render-artifact.py` exits non-zero | Bad UUID, non-numeric Carta ID, malformed base URL, unusable connector name, output outside CWD, or a missing template/placeholder | Surface the script's stderr and stop. Never hand-write the artifact HTML. |
-| No `Artifact` tool (Step A1 gate) | This session is not Cowork | Go to Mode B. Tell the user "I'll give you the audit as text" — nothing about Cowork, artifacts, or sandboxes. |
+| No `Artifact` tool, even after Step A1 tried to load it | Artifacts are off or Claude is out of date | Go to Mode B, opening with Step A1's sentence on why the answer is text. |
 | Artifact publishes but renders an error | The page's own bootstrap() hit a required-query failure or found 0 audit rows | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. A "too large" error is not a reason to change the page: it already sizes its own requests and retries smaller ones. Re-run Step A2 and A3 with the script's template unchanged. If the error returns, say the audit couldn't load and stop. |
 
 ---

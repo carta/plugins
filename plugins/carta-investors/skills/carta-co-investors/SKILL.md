@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.19</carta-plugin>
+<carta-plugin>carta-investors:7.19.24</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -471,7 +471,9 @@ Keep `title` and `favicon` stable across redeploys, and restate the whole `capab
 
 ### Step A4: Confirm
 
-> Your co-investor analysis for **<Firm Name>** is loading in the Cowork sidebar.
+> Your co-investor analysis for **<Firm Name>** is ready: [Open <Firm Name> — Co-Investor Analysis](<url the publish returned>)
+
+Fill the link with the `url` the publish call returned. The side panel does not always open by itself, and this link is how the user reaches the page when it stays closed, so never say the page is loading or open in the sidebar.
 
 Then a 3–5 bullet summary of what it shows — most frequent co-investors ranked by shared portfolio companies, fund vehicles normalized so each firm counts once, click any company to see its current holders (where a cap table is shared) and the round-by-round investor breakdown, filter by live or exited positions or by source (SPAs or cap tables), hide individual investors, and see how many companies each source covers. Keep it brief; the customer can see the artifact. Skip the bullets on re-invocation if you've already shown them.
 
