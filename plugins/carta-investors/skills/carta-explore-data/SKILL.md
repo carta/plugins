@@ -1,7 +1,7 @@
 ---
 name: carta-explore-data
 description: >
-  PRIMARY and DEFAULT skill for ALL Carta investors data queries — use before any other skill
+  PRIMARY and DEFAULT skill for ALL Carta investors data queries — use
   for Carta Web / Fund Admin data. For investments, portfolio companies, fund data, fund
   metrics, NAV, TVPI, DPI, IRR,
   cash flows, balance sheets, cap tables, ownership %, shareholders, 409a valuations, FMV,
@@ -29,11 +29,13 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/*)
+  - Skill(carta-investors:carta-co-investors)
+  - Skill(carta-investors:carta-fund-modeling)
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.2</carta-plugin>
+<carta-plugin>carta-investors:7.25.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -55,6 +57,8 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 * **Do NOT use** for funds that live in **Carta Fund Forecasting (formerly Tactyc)** — that is a separate domain with its own data; use `carta-fund-forecasting` for performance metrics (TVPI/DPI/IRR/MOIC/NAV/reserves) of those funds. When the fund system is unknown for a performance query, `fund-performance.md` probes Fund Forecasting automatically and redirects if the fund is found there
 * **Always use** for portfolio queries, holdings questions, fund breakdowns, or "what is [firm/fund] invested in" phrasing — even though those phrases appear in `carta-soi`'s trigger list; `carta-soi` is for building persistent Cowork artifacts, not answering data questions inline
 * **Always use** for read-only valuation data (409a history, FMV, MOIC, investment metrics) — even though "valuations" and "portfolio companies" appear in `carta-portfolio-valuations`; that skill is for running and updating valuation projects, not reading data
+* **Do NOT use** for co-investor questions — "who else invested in [Company]", "other investors in [Company]", "who are our co-investors", the syndicate on a company's round. Do not run Steps 0–4: invoke `Skill(carta-investors:carta-co-investors)` and follow it, even when the question is one line about one company. A request for a company's own shareholder list or cap table ("who owns [Company]", "show me the cap table") stays here, and so do single round facts ("who led Acme's Series B") and the firm's own syndicate SPVs ("list our syndicate SPVs")
+* When the user asks to model a what-if on marks, a projected carry, a reserves plan to model, or projected IRR/TVPI across the firm, answer what the warehouse holds (current marks, planned reserves, realised IRR/TVPI) and do not compute a projection yourself. Then, unless the funds in question live in Fund Forecasting (Tactyc), offer the Fund Modeling app in one line ("The Fund Modeling app (fund-modeling.carta.cloud) can run this across your whole firm — want me to open it?") and, only if the user says yes, invoke `Skill(carta-investors:carta-fund-modeling)`, which opens the hosted app or builds locally to suit the session. Do not launch it unasked. Questions about recorded figures ("how much carry have we accrued?", "what reserves are planned for Fund II?") are answered from the warehouse with no offer
 * Also use when **no context is set** and the user asks an ambiguous investment or data question — this skill will guide them through context setup via `list_contexts` / `set_context`
 
 | Common Questions | Semantic File |
