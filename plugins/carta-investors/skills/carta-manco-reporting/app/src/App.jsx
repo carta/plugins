@@ -36,6 +36,7 @@ import { setDisplayCurrency } from "./charts/chartTheme.js";
 import { assignCategoricalColors, assignExpenseCategoryColors } from "./ui/categoricalColors.js";
 import { displayFirmName } from "./ui/firmName.js";
 import { fetchFirmAccess, pinnedFirm } from "./state/firmAccess.js";
+import { signOut } from "./sign-out.js";
 import { trackClick, trackRender } from "./analytics.js";
 
 // This server only ever hosts one firm — the URL's firm segment is cosmetic,
@@ -388,14 +389,22 @@ export default function App() {
   // this link) shows before then, so there's nothing to gain from the round trip while the
   // firm is still loading, failed, or has no ManCo entity. `hasSnapshot` (not `snapshot`
   // itself) keeps this from re-running on every later snapshot refresh.
+  // The same round trip also names who is signed in, for the sidebar's own "Signed in as"
+  // line — `userName` stays null on the local dev server (no sign-in there) and while the
+  // lookup is still in flight or failed, both of which the line below renders as nothing.
   const [canSwitchFirm, setCanSwitchFirm] = useState(false);
+  const [userName, setUserName] = useState(null);
   const hasSnapshot = !!snapshot;
   useEffect(() => {
     if (!hostedApp || !hasSnapshot) return undefined;
     let live = true;
     const controller = new AbortController();
     fetchFirmAccess(controller.signal)
-      .then(({ isStaff, firms }) => { if (live) setCanSwitchFirm(!pinnedFirm(isStaff, firms)); })
+      .then(({ isStaff, firms, userName: name }) => {
+        if (!live) return;
+        setCanSwitchFirm(!pinnedFirm(isStaff, firms));
+        setUserName(name);
+      })
       .catch(() => { if (live) setCanSwitchFirm(true); });
     return () => { live = false; controller.abort(); };
   }, [hostedApp, hasSnapshot]);
@@ -404,6 +413,18 @@ export default function App() {
   // "Choose a different firm" — but from a fully loaded dashboard, where `chooser` alone
   // wouldn't trigger the full-page guard below (see its own comment).
   const onChooseFirm = useCallback(() => { trackClick("MancoReporting.Nav.SwitchFirm"); reopenChooser(); }, [reopenChooser]);
+
+  // Sign out, hosted-only (signOut() calls /auth/logout, which only the Worker serves) —
+  // ported from carta-fund-modeling's own sign-out state machine. signOut() reloads the
+  // outermost same-origin window itself on success, so there is no "done" state to reach:
+  // only a retriable failure needs showing.
+  const [signOutState, setSignOutState] = useState("idle");
+  const onSignOut = useCallback(() => {
+    trackClick("MancoReporting.Nav.SignOut");
+    setSignOutState("busy");
+    signOut().catch(() => setSignOutState("failed"));
+  }, []);
+  const signOutLabel = signOutState === "failed" ? "Sign out failed, retry" : signOutState === "busy" ? "Signing out…" : "Sign out";
 
   // Picking a firm from a chooser opened over an already-loaded dashboard (the "Switch
   // firm" case) must not reuse `choose`: `choose` only ever ran before this page had
@@ -522,7 +543,12 @@ export default function App() {
   const sidebarProps = {
     firmName: displayFirmName(snapshot?.firmName),
     canSwitchFirm,
+    userName,
     onChooseFirm,
+    // /auth/logout is hosted-only — the local dev server never signs anyone in to sign out of.
+    onSignOut: hostedApp ? onSignOut : null,
+    signOutLabel,
+    signOutBusy: signOutState === "busy",
     route: activeRoute,
     items: navItems,
     onNavigate: navigate,

@@ -43,7 +43,7 @@ function NavIcon({ name, active }) {
 // App.jsx's own comment for exactly who that is), nav items (optional NavIcon per item), then
 // an as-of line pinned to the bottom via a flex spacer — same layout carta-fund-modeling uses
 // for its own DataStatus.
-export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, items, onNavigate, asOf, lastPostedDate, footerAction, shared }) {
+export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, items, onNavigate, asOf, lastPostedDate, footerAction, shared, userName, onSignOut, signOutLabel, signOutBusy }) {
   // A shared report's route starts with `parentSlug`, but its row is drawn under the item
   // `afterSlug` names — that item is the one that reads as active.
   const sharedActive = !!shared?.items.some(i => sharedItemRoute(shared.parentSlug, i) === route);
@@ -149,6 +149,18 @@ export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, 
           tight 5px gap regardless of the rail's own (near-zero) gap. */}
       <div style={styles.footer}>
         {footerAction}
+        {/* userName is unset on the local dev server (no sign-in there) and while /api/me is
+            still resolving or failed — nothing to show either way, so the row is omitted
+            rather than left blank. onSignOut is unset on the local dev server too (App.jsx's
+            own hostedApp gate: there is no Worker session there to end), independently of
+            whether a name resolved — a failed /api/me lookup still leaves a real session to
+            sign out of. */}
+        {userName && <div style={styles.dataStatus} title={userName}>Signed in as {userName}</div>}
+        {onSignOut && (
+          <button type="button" onClick={onSignOut} disabled={signOutBusy} data-testid="sign-out" style={styles.signOut}>
+            {signOutLabel}
+          </button>
+        )}
         <div style={styles.wordmark}>Carta Management Company Reporting</div>
         <div style={styles.dataStatus}>Data as of {formatAsOf(asOf)}</div>
         {/* Only when the ManCo's books stop earlier than the fetch date —
@@ -381,5 +393,18 @@ const styles = {
     fontSize: FS.small,
     color: FAINT,
     lineHeight: 1.4,
+  },
+  // A footer-weight link: same shape as switchFirm's, muted (FAINT, not BLUE) so it reads as
+  // a quiet account action rather than competing with the nav above it.
+  signOut: {
+    ...sans,
+    display: "block",
+    border: "none",
+    background: "none",
+    padding: 0,
+    fontSize: FS.small,
+    color: FAINT,
+    textDecoration: "underline",
+    cursor: "pointer",
   },
 };

@@ -6,10 +6,10 @@
 // The chooser's own data: who the signed-in user is and which firms they hold.
 export async function fetchFirmAccess(signal) {
   const [me, firms] = await Promise.all([
-    fetch("/api/me", { signal }).then((r) => r.json()).catch(() => ({ isStaff: null })),
+    fetch("/api/me", { signal }).then((r) => r.json()).catch(() => ({ isStaff: null, userName: null })),
     fetch("/api/firms", { signal }).then((r) => r.json()).catch(() => []),
   ]);
-  return { isStaff: me?.isStaff ?? null, firms: Array.isArray(firms) ? firms : [] };
+  return { isStaff: me?.isStaff ?? null, userName: me?.userName ?? null, firms: Array.isArray(firms) ? firms : [] };
 }
 
 // The one firm a resolved, non-staff user may open with no extra click — and the only case
