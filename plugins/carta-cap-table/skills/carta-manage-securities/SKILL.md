@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.25</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.27</carta-plugin>
 
 # Manage securities
 
@@ -60,13 +60,19 @@ hold), send the user to the termination flow in the Carta app.
 
 `security_type` is one of `certificate`, `option_grant`, `convertible_note`, `rsu`, `rsa`, `sar`,
 `cbu`, `piu` or `warrant`. Take it from the user's words first: "RSU" or "restricted stock unit" is
-`rsu`, "RSA" or "restricted stock award" is `rsa`, and "warrant", "SAR", "CBU" or "PIU" is that
-type. With no type word, a `CN-` or `SAFE-` label is a `convertible_note`, an `RSU-` label is an
-`rsu` and an `ES-` label is an `option_grant`. RSUs, SARs and CBUs also use `ES-` labels. When the
-type came only from an `ES-` label and the bootstrap answers `not_found`, ask once whether it is an
-RSU, SAR or CBU, then call the bootstrap again with that type. When the user named the type, quote
-the `not_found` and stop. For any other label, when the words do not say, ask once with
-`AskUserQuestion`. Never guess.
+`rsu`, "RSA" or "restricted stock award" is `rsa`, "SAR", "UAR" or "stock appreciation right" is
+`sar`, "CBU", "cash bonus unit" or "phantom equity" is `cbu`, "PIU", "profits interest" or
+"incentive unit" is `piu`, and "warrant" is `warrant`. "Units" alone is not a type word. With no
+type word, a `CN-` or `SAFE-` label is a `convertible_note`, an `RSU-` label is an `rsu`, a `PIU-`
+label is a `piu`, a `SAR-` or `UAR-` label is a `sar`, a `CBU-` label is a `cbu` and an `ES-` label
+is an `option_grant`. A prefix is only a first guess, not a type the user named: `CBU-3` starts as
+`cbu`. Other types share these prefixes: `ES-` (RSU, SAR, CBU), `SAR-` (CBU), `UAR-` (PIU, CBU) and
+`CBU-` (PIU, certificate). When the type came only from a prefix and the bootstrap answers
+`not_found`, ask once which type it is, with the types listed for that prefix, then call the
+bootstrap again with that type. For a prefix with no other types listed (`CN-`, `SAFE-`, `RSU-`,
+`PIU-`), or when the user named the type, quote the `not_found` and stop.
+When neither a type word nor one of these prefixes gives the type (for example `CC-5`, or only a
+holder), ask once with `AskUserQuestion`. Never guess.
 
 ## Gates
 
@@ -115,7 +121,7 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 
 ## Flow
 
-1. **Bootstrap.** Call it once per change (twice only for the `ES-` retry in [§ Actions](#actions)),
+1. **Bootstrap.** Call it once per change (twice only for the label retry in [§ Actions](#actions)),
    after any earlier apply, with `company`, `security_type` and `label` (a list), `security`
    (ids) or `holder`. To reverse a
    cancellation or undo a termination, send `label` or `security`: `holder` finds only
@@ -171,7 +177,7 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 | Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 | 403, `role_required` or access denied | Say the user's role on this company cannot make this change. Do not retry. |
 | `scope_required` | Ask the user to grant access as its `fix` says. Call again only after they confirm. |
-| Bootstrap `not_found` on `label` | Send `label` as a list, one label per item. If it still fails, find the id with `cap_table__list__securities` and send `security`. |
+| Bootstrap `not_found` on `label` | Make sure `label` is a list, one label per item. Then follow [§ Actions](#actions). |
 | Bootstrap "Unknown field in `fields`" | `fields` picks bootstrap sections, not the fields to edit. Leave it out. |
 | Preview `unknown_param` or `reason_why` too long | Do what its `fix` says (for example `notes` → `note`, `reason_why` at most 140 characters), then preview again once. |
 

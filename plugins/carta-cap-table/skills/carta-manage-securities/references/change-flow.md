@@ -38,6 +38,8 @@ Offer only the fields in `sections.form` with `eligible: true`. Send each one un
 
 - **`current`:** the value now. It is `value`, or `by_security` when the securities differ.
 - **Values:** use what the user said, and never guess one.
+- **A field that is not in `sections.form`**, such as a SAR's base price: make no preview. Say that
+  Carta's edit form does not offer this field, so this skill cannot change it.
 
 **No field named:**
 - When you have a `show_widget` tool and you are not in Claude Code, show the eligible fields as
