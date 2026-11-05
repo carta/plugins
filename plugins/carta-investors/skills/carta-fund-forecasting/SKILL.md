@@ -1,7 +1,7 @@
 ---
 name: carta-fund-forecasting
-description: >-
-  Fund Forecasting (Tactyc) read-only analytics — fund performance and per-investment metrics for funds IN FUND FORECASTING (Tactyc) ONLY. A SEPARATE domain from Carta Web / Fund Admin, with its own funds and data — use carta-explore-data for those (data-warehouse, cap-table, accounting) queries. Metrics: TVPI, DPI, RVPI, gross/net IRR, MOIC, NAV, unrealized FMV, realized proceeds, committed/contributed/called capital, planned reserves, management fees & expenses, waterfall tiers and net proceeds to LP/GP, and per-company MOIC/IRR/FMV/ownership %/holding period/round events. Also route here for the Fund Forecasting app URL (fund-forecasting.app.carta.com) or 'Tactyc'. If the user hasn't said which system the fund is in, ask first — don't assume Fund Forecasting. Reports existing data only — no scenarios, no build/edit. NOT the interactive 'fund modeling' micro-app / firm-level scenario console (reprice companies, exit & IRR scenarios, reserves planning) — use carta-fund-modeling (Fund Admin data, not Tactyc).
+description: >
+  Fund Forecasting (Tactyc) read-only analytics — fund performance and per-investment metrics for funds IN FUND FORECASTING (Tactyc) ONLY. A SEPARATE domain from Carta Web / Fund Admin, with its own funds and data — use carta-explore-data for those queries. Metrics: TVPI, DPI, RVPI, gross/net IRR, MOIC, NAV, unrealized FMV, realized proceeds, committed/contributed/called capital, planned reserves, fees & expenses, waterfall tiers, and per-company MOIC/IRR/FMV/ownership/round events. Route here whenever the user names Fund Forecasting or Tactyc, as a request or a plain statement ("narratives are updated in Fund Forecasting", "did the forecasts land in Tactyc"), and for the app URL (fund-forecasting.app.carta.com). If the user hasn't said which system the fund is in, ask first. Reports existing data only — no scenarios, no build/edit. NOT the fund modeling app (reprice companies, exit/IRR scenarios, reserves planning) — use carta-fund-modeling. NOT peer comparison — use carta-fund-performance.
 model: sonnet
 allowed-tools:
   # Carta MCP — production server entry names (registers as `carta`; `carta-prod` is the explicit prod variant)
@@ -26,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.0</carta-plugin>
+<carta-plugin>carta-investors:7.25.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

@@ -3,14 +3,18 @@ name: carta-co-investors
 description: >
   Interactive co-investor report from Carta SPA and cap table data with
   clickable portfolio drill-downs. Use for co-investor analysis or asking who invested in a
-  specific portfolio company.
+  specific portfolio company — including a quick one-company answer ("who else is in [Company]").
   Trigger phrases: "co-investors", "coinvestors", "who are my co-investors",
-  "who else invested", "co-investors by stage/round", "co-investors on Aumni".
-  Use instead: carta-explore-data for general fund/investment/portfolio data —
+  "who else invested", "who else is in [Company]", "other investors in [Company]",
+  "who else is on the cap table", "syndicate on [Company]'s round",
+  "who syndicated [Company]'s round",
+  "co-investors by stage/round", "co-investors on Aumni".
+  Use instead: carta-explore-data for general fund/investment/portfolio data, single
+  round facts ("who led [Company]'s Series B") and the firm's own syndicate SPVs (listing entities) —
   this skill is specifically for co-investor ("who else invested alongside us")
   analysis. For SPA coverage (which investments are missing an SPA or an executed
   SPA), use carta-spa-audit — also when the same request asks for co-investors.
-version: 0.8.11
+version: 0.8.12
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -55,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.0</carta-plugin>
+<carta-plugin>carta-investors:7.25.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

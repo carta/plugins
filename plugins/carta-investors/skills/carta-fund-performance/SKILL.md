@@ -8,13 +8,14 @@ description: >
   Page triggers: "fund performance dashboard", "fund performance artifact",
   "build me a fund performance page", "standalone fund performance view".
   Chat triggers: "performance benchmark", "peer comparison", "fund percentile",
-  "IRR vs peers", "how does my fund stack up", "what percentile is our TVPI?".
+  "IRR vs peers", "how does my fund stack up", "what percentile is our TVPI?",
+  "compare the fund to funds of the same vintage", "compare to similar funds".
   A request for benchmarks specifically follows references/benchmarks.md.
   Do NOT use for cap table market benchmarks (option pool sizes, SAFE terms) — use
   carta-market-benchmarks in carta-cap-table. Do NOT use for NAV or general fund
   financial queries — use carta-explore-data. Do NOT use for the full Carta Home
   surface — use carta-home-build.
-version: 1.1.0
+version: 1.1.1
 model: inherit
 allowed-tools:
   - Read
@@ -46,7 +47,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.0</carta-plugin>
+<carta-plugin>carta-investors:7.25.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

@@ -3,11 +3,15 @@ name: carta-waterfall-modeling
 description: >
   Run a waterfall (allocation) against a portfolio company in the investor firm
   context. TRIGGER, "run a waterfall", "create an allocation", "exit scenario", "sensitivity analysis",
-  "exit distribution", "who gets paid if...". Firm context only; access is controlled server-side.
-  Use instead: carta-explore-data for read-only fund/investment/valuation data —
-  this skill MODELS exit waterfalls/allocations (who gets paid on exit), it does
-  not pull existing data.
-version: 0.3.0
+  "exit distribution", "who gets paid if...", "what would we get if [Company] sold for $X",
+  "payouts at an acquisition price", "what if [Company] is marked up to $X", "Carta's waterfall
+  feature", "exit waterfall skill", "waterfall for [Company] in Excel". Firm context only; access is
+  controlled server-side. This skill MODELS a portfolio company's exit waterfall (who gets paid on exit).
+  It is NOT for a fund's own distribution or quarterly-reporting waterfall (carry, preferred return, LP/GP
+  split): use carta-explore-data to read its stored outputs. "What happens to carry if X" hypotheticals on a
+  fund waterfall are not modeled here: use carta-fund-modeling (firm-level carry forecast across exit
+  scenarios). Use carta-explore-data for read-only fund/investment/valuation data.
+version: 0.3.1
 model: sonnet
 user-invocable: true
 allowed-tools:
@@ -38,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.0</carta-plugin>
+<carta-plugin>carta-investors:7.25.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

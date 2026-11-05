@@ -2,18 +2,15 @@
 name: carta-fund-modeling
 description: >
   Spin up an interactive local web console for FIRM-LEVEL scenario modeling over Carta Fund Admin data — a
-  React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES. Tabs: Overview
-  (fund-family rollup), Companies (per-company repricing, LP make-whole waterfall, carry banking,
-  partial sales), LP Returns and GP Economics (exit scenarios, XIRR, carry), Reserves
-  (dry-powder planning), Reports (power law, LP sensitivity, DPI/RVPI/TVPI glidepath, peer-cohort
-  benchmarks, pacing, concentration), and Plan New Fund (beta: model a NEW fund step by step —
-  sectors, allocations, fees, recycling, waterfall, LPs — into projected TVPI/DPI/IRR). Also hosted at
-  fund-modeling.carta.cloud. Invoke with a firm name, e.g. "fund modeling for Demo Capital" or "model
-  portfolio scenarios for a firm". Fund Admin only. NOT for reading existing Tactyc/Fund Forecasting funds —
-  use carta-fund-forecasting. NOT for single-exit waterfalls on one company. NOT read-only fund data queries —
-  use carta-explore-data.
+  React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES. Tabs: Overview, Companies
+  (repricing, LP make-whole waterfall, carry banking, partial sales), LP Returns and GP Economics (exit scenarios,
+  XIRR, carry), Reserves (dry-powder planning), Reports (power law, DPI/RVPI/TVPI glidepath, pacing), Plan New
+  Fund (beta). Also hosted at fund-modeling.carta.cloud. Invoke with a firm name, e.g. "fund modeling for Demo
+  Capital". Use for firm-wide scenarios: what-if on marks, reserves plan, carry forecast, projected IRR/TVPI,
+  "model our fund". Fund Admin only. NOT for funds in Fund Forecasting (Tactyc) — use carta-fund-forecasting. NOT single-company exit waterfalls. NOT a single current
+  number (IRR, TVPI, NAV) — use carta-explore-data. NOT peer comparison — use carta-fund-performance.
 argument-hint: "<firm name or Carta firm URL — required for a local build>"
-version: 1.0.0
+version: 1.0.1
 model: inherit
 allowed-tools:
   - mcp__carta__welcome
@@ -69,7 +66,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.0</carta-plugin>
+<carta-plugin>carta-investors:7.25.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, take its sandboxed branch instead of stopping — the hosted app needs no plugin files.
 
