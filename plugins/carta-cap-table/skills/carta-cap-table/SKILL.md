@@ -29,10 +29,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
   - Read
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.28</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.30</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -87,6 +88,17 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
 - Vesting of one grant, valuations (409A, FMV), round history and issuance have their own
   skills. Load the matching skill. To edit or cancel an issued security, load
   carta-manage-securities: it shows a preview before any change.
+- To write a company update or investor update, call `read_tool` with
+  `cap_table__compute__create_communication_preview`. Apply a plan only with the named
+  `cap_table__mutate__apply_plan` tool on the same Carta connector, never with `call_tool`:
+  load it with `ToolSearch(query: "+apply_plan")`, then send `company`, the latest preview's
+  `plan_id` and its `summary` unchanged. After the draft apply, give the user the draft's
+  `meta.web_url` to read. To send it, call `read_tool` with
+  `cap_table__compute__send_communication_preview`, show the summary and every email in
+  `side_effects`, ask with `AskUserQuestion`, then call the same named apply tool with the
+  send preview's `plan_id` and `summary`. The emails cannot be taken back. If the apply tool
+  is not there, say: "Carta's apply tool isn't available in this chat, so nothing was
+  changed. Reconnect Carta and ask again."
 
 ## Total, indirect or look-through ownership
 
