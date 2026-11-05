@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.18</carta-plugin>
+<carta-plugin>carta-investors:7.19.19</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -100,8 +100,18 @@ Run this before anything else, even if the description-level trigger already
 routed here — a skill already loaded earlier in the conversation can still
 receive a fresh valuations request without re-reading the description.
 
+**Send every startup `ToolSearch` in one message.** Each round of tool calls
+costs seconds of model time, far more than any of these calls. In the same
+message as the Excel probe, also send the preview probe from **Step 2.2a** and
+one `select:` search that loads the Carta tools Gate 1 and Step 1 need:
+`read_tool`, `list_contexts`, `list_accounts` and `set_context`. Take their full
+names from the Carta server listed in your deferred tools (the prefix differs
+by host), and skip any that are already loaded:
+
 ```
 ToolSearch({ query: "excel worksheet workbook", max_results: 3 })
+ToolSearch({ query: "select:mcp__Claude_Preview__preview_start,mcp__Claude_Browser__preview_start" })
+ToolSearch({ query: "select:<carta>__read_tool,<carta>__list_contexts,<carta>__list_accounts,<carta>__set_context" })
 ```
 
 - **If results include tools with "excel", "worksheet", or "workbook" in their
@@ -935,7 +945,13 @@ ready by the time the user answers the display format question in Step
 1. Call `list_contexts` to check for an active firm and get the firm name.
    (If `org_pk` is cached, `list_contexts` + `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", ...})` +
    `search_tools` all fire together — see above.)
-2. If `org_pk` is **not** cached, fire **all of the following** **in parallel**
+   - **The user gave a numeric firm ID** (e.g. "Krakatoa Ventures (firm id = 1)"):
+     find the firm whose `carta_id` equals that number, use the number as
+     `org_pk`, and **skip `list_accounts`**. A firm's `carta_id` is the same
+     integer as its `organization_pk`. The user has already chosen the firm, so
+     skip step 3's confirmation and go to step 4. If no firm has that
+     `carta_id` (or `carta_id` is null), fall back to step 2.
+2. If `org_pk` is **not** cached and wasn't given, fire **all of the following** **in parallel**
    once `list_contexts` returns:
    - `list_accounts` with `search: "<firm name>"` to resolve `org_pk`
      (integer ID from `organization_pk:<n>`). **Never call `list_accounts`
@@ -950,8 +966,9 @@ ready by the time the user answers the display format question in Step
 
 **Important**: The `list_contexts` `firm_id` is a UUID used for
 Snowflake — it is NOT the same as the integer org_pk needed by
-valuation commands. Always resolve org_pk from the `list_accounts`
-search result (`organization_pk:<n>`).
+valuation commands. Resolve org_pk from the `list_accounts`
+search result (`organization_pk:<n>`), or from the firm ID the user gave
+(step 1).
 
 **Session cache**: Once `org_pk` is resolved, hold it in context for the
 rest of the session. If this skill is re-entered (e.g. after a run
