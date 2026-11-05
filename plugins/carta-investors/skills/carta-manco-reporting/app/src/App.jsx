@@ -476,10 +476,12 @@ export default function App() {
     { slug: BVA,                 label: "Budget vs Actuals", icon: "company",
       hidden:   () => !firmHasBudget,
       children: budgetChildren },
-    // Your own saved custom reports, then the action that makes another. A report is
-    // cut from a budget, so the section goes wherever Budget vs Actuals does.
+    // Your own saved custom reports, then the action that makes another. A custom report
+    // draws straight from the ledger (canDerive needs only accountsData, not a budget), so
+    // a firm with no budget at all still sees this section once it has something to list —
+    // its own actuals-only reports, or "New custom report" while the ledger has loaded.
     { slug: CUSTOM_REPORTING,    label: "Custom Reporting",  icon: "customreport",
-      hidden:   () => !firmHasBudget || customReportChildren.length === 0,
+      hidden:   () => customReportChildren.length === 0,
       children: customReportChildren },
     // Actuals by GL account, no budget columns — stands in for Budget vs
     // Actuals only while this firm has nothing budgeted, in Carta or a
@@ -500,11 +502,11 @@ export default function App() {
     && (isDraftSlug(routeChild) || ownCustomReports.some(c => c.slug === routeChild));
   // A custom-reporting/<id> child opens only as a draft or a custom report; any other id
   // (a deleted report, a plain budget) counts as no child at all. One that opens does so
-  // whenever the firm has a budget, even before the section shows: with no saved report
-  // it waits on the ledger, and that page says so.
+  // whether or not this firm has a budget, even before the section shows: with no saved
+  // report it waits on the ledger, and that page says so.
   const customChildOpens = !!routeChild && (isDraftSlug(routeChild)
     || isCustomReportBudget(budgetsList.find(b => b.id === routeChild)));
-  const customPageOpens = routeParent === CUSTOM_REPORTING && customChildOpens && firmHasBudget;
+  const customPageOpens = routeParent === CUSTOM_REPORTING && customChildOpens;
   const activeParent = ownCustomUnderBva && validParents.has(CUSTOM_REPORTING) ? CUSTOM_REPORTING
     : validParents.has(routeParent) || customPageOpens ? routeParent : "dashboard";
   // A section opened with no child specified lands on its first page.

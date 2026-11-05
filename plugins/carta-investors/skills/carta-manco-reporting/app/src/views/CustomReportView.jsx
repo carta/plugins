@@ -30,7 +30,10 @@ function emptySavedState(snapshot, availableBudgets, seedBudgetId) {
   const source = availableBudgets.find(b => b.id === seedBudgetId) || availableBudgets[0] || null;
   return {
     label: "",
-    zones: { filters: [], columns: ["month"], rows: rowsFromSource(snapshot, source?.id), values: ["actual", "budget", "variance"] },
+    // No source budget to compare against (an actuals-only firm, with nothing to cut from)
+    // starts with Actual alone — Budget and Var $ would resolve to nothing but em dashes.
+    zones: { filters: [], columns: ["month"], rows: rowsFromSource(snapshot, source?.id),
+             values: source ? ["actual", "budget", "variance"] : ["actual"] },
     filterSelections: {},
     budgetId: source?.id || null,
     hiddenRows: [],
@@ -48,14 +51,6 @@ export default function CustomReportView({
     () => (isCustomReportBudget(budget) ? { ...budget.view.pivot, label: budget.label, id: budget.id, budgetId: budget.id } : null),
     [budget]);
   const report = budget ? reportFor(budget, reportsApi) : null;
-  // Saving sends derive (a new report) or edit (a saved one), so it needs a server that serves
-  // that action. Only a hosted-native copy edits here (origin === "copy", server/reportShare.js's
-  // editCustom refuses anything else): an own-sync mirror of a report synced from the local
-  // dashboard has its own distinct origin, "synced" (ownReportsFromBundle), and is edited there
-  // instead; one shared with you, never.
-  const canSave = !!reportsApi?.available && (savedReport
-    ? reportsApi.can(REPORT_ACTIONS.EDIT) && !!report?.editable && report?.origin === "copy"
-    : reportsApi.can(REPORT_ACTIONS.DERIVE));
   const allEntries = accountsData?.entries || [];
   // Every report can be a source — plain budgets first, then custom ones, which a new
   // report cuts down further. A saved report is never its own source here: it has
@@ -74,6 +69,17 @@ export default function CustomReportView({
   // vs Actuals page; "configure" shows the drag-and-drop field builder.
   const [mode, setMode] = useState(savedReport ? "report" : "configure");
   const [budgetId, setBudgetId] = useState(initial.budgetId || null);
+  // Saving sends derive (a new report) or edit (a saved one), so it needs a server that serves
+  // that action. Only a hosted-native copy edits here (origin === "copy", server/reportShare.js's
+  // editCustom refuses anything else): an own-sync mirror of a report synced from the local
+  // dashboard has its own distinct origin, "synced" (ownReportsFromBundle), and is edited there
+  // instead; one shared with you, never.
+  // A draft derives by cutting an existing stored report (server/reportShare.js's derive());
+  // with no budget at all there is nothing to cut from yet, so a sourceless draft (budgetId
+  // null) can be built and viewed but not saved.
+  const canSave = !!reportsApi?.available && (savedReport
+    ? reportsApi.can(REPORT_ACTIONS.EDIT) && !!report?.editable && report?.origin === "copy"
+    : reportsApi.can(REPORT_ACTIONS.DERIVE) && !!budgetId);
   // A saved report's figures are its own cut budget; the builder shows the source it cuts from.
   const lookupId = mode === "report" && savedReport ? savedReport.id : budgetId;
   const budgetLookup = useMemo(() => (lookupId ? buildBudgetLookup(snapshot, lookupId) : null),
@@ -352,7 +358,10 @@ export default function CustomReportView({
                 onChange={e => setReportName(e.target.value)}
                 style={styles.nameInput}
               />
-              <Btn small kind="primary" onClick={handleSave} disabled={!reportName.trim() || !canSave || saving}>
+              <Btn
+                small kind="primary" onClick={handleSave} disabled={!reportName.trim() || !canSave || saving}
+                title={!savedReport && !budgetId ? "Import a budget, or sync Carta's, to save this report." : undefined}
+              >
                 {savedReport ? "Save" : "Save report"}
               </Btn>
               <Btn small onClick={handleCancel} disabled={saving}>Cancel</Btn>
