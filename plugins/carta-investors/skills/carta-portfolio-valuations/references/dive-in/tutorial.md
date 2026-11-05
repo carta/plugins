@@ -71,8 +71,7 @@ After the batch, the follow-up menu lets you:
   analysis, allocation, audit notes, **finalize**).
 - **Ask about your portfolio** — which holdings are most overdue, how a
   new round affects a valuation, current status.
-- **Export** — download a tearsheet for a holding, or export the
-  portfolio SOI.
+- **Export** — export the portfolio SOI.
 
 Finalizing happens **per company** inside the drill-down, once its
 company value and holdings value are in place — there is no bulk

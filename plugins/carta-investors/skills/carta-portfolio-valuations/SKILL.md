@@ -51,7 +51,6 @@ allowed-tools:
   - mcp__Claude_Browser__javascript_tool
   - ToolSearch
   - Skill(carta-investors:carta-valuations-excel)
-  - Skill(carta-investors:carta-download-tearsheet)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/wait_for_run_request.py" *)
@@ -67,7 +66,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.24.3</carta-plugin>
+<carta-plugin>carta-investors:7.25.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -1211,7 +1210,6 @@ Render in plain text using this structure:
 - _(if new-events bucket non-empty)_ How does the new round for {first company in new-events bucket} affect our valuation?
 
 **📤 Export**
-- _(always)_ Download a tearsheet for any holding
 - _(always)_ Export portfolio SOI
 ```
 
@@ -1255,9 +1253,6 @@ Route based on the user's free-text reply or named action from Step 2.3:
   specific holdings) → answer using data already in context from Step 3.2.
   Fetch additional detail as needed. After answering, re-present Step 2.3's
   menu.
-
-- **Export — tearsheet** (e.g. "download tearsheet", "tearsheet for Acme")
-  → invoke `Skill(carta-investors:carta-download-tearsheet)`.
 
 - **Export — SOI** (e.g. "export SOI", "download SOI") → a schedule of
   investments isn't built here. Say so in one line and leave it there —

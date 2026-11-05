@@ -3,7 +3,7 @@
 List, download, and (for now) point the user at uploading the
 **supporting documents** on a candidate — e.g. the Excel workbook used
 to derive the company value. This is a distinct feature from Commentary
-(a text field on the valuation) and from tearsheet/SOI export
+(a text field on the valuation) and from SOI export
 (firm-level reports, not candidate attachments).
 
 > **There is no upload command yet.** List and download are reads and

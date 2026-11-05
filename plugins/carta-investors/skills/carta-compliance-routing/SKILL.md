@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.24.3</carta-plugin>
+<carta-plugin>carta-investors:7.25.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -131,7 +131,8 @@ If you genuinely cannot determine the intent, call `AskUserQuestion`:
 | Topic | Suggestion |
 |---|---|
 | Schedule of investments, fund holdings | `/carta-soi` |
-| LP quarterly reports, tear sheets, AGM decks | `carta-investors:carta-download-tearsheet`, `carta-investors:carta-agm-deck-builder` |
+| LP quarterly reports, AGM decks | `carta-investors:carta-agm-deck-builder` |
+| Tear sheets | `carta-investors:carta-explore-data` for a custom report; `carta-investors:carta-fund-forecasting` for funds in Fund Forecasting |
 | Fund financials, NAV, trial balance | Consolidating financials skills |
 | Performance benchmarks, IRR, TVPI, peer percentile | `/carta-fund-performance` |
 | Co-investor analysis | `carta-co-investors` |

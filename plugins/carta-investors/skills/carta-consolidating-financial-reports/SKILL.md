@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.24.3</carta-plugin>
+<carta-plugin>carta-investors:7.25.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -258,7 +258,7 @@ actually use. One sentence of plain-English context around it is fine.
 | "new budget", "create a budget", "build a budget", "pull our budget", "fetch the budget", "refresh actuals", "pull actuals", "pacing", "what-if", "budget scenario" | **Stop.** Tell the user: "Budgets, actuals, pacing, and what-if scenarios live in `carta-investors:carta-manco`." |
 | "SOI", "schedule of investments", "fund holdings", "co-investor", "performance benchmark", "peer comparison" | **Stop.** Tell the user: "Fund holdings, co-investor analysis, and performance benchmarks live in separate skills — try `carta-investors:carta-soi` for holdings, `carta-investors:carta-co-investors` for co-investors, and `carta-investors:carta-fund-performance` for performance benchmarks." |
 | "Form ADV", "Schedule D", "regulatory AUM", "Form PF", "SEC filing" | **Stop.** Tell the user: "Form ADV and regulatory filing data live in a separate skill set — try `carta-investors:carta-compliance-routing`." |
-| "tear sheet", "AGM deck", "LP deck", "K-1", "capital call notice", "distribution notice" | **Stop.** Tell the user: "Tear sheets and AGM decks have their own skills — try `carta-investors:carta-download-tearsheet` or `carta-investors:carta-agm-deck-builder`. For an investor's own K-1s and notices, say 'show me my LP documents'. Documents your fund sent to its LPs are managed in Carta directly." |
+| "tear sheet", "AGM deck", "LP deck", "K-1", "capital call notice", "distribution notice" | **Stop.** Tell the user: "AGM decks have their own skill — try `carta-investors:carta-agm-deck-builder`. For a tear sheet, ask for the figures as a report and I'll build it from your Carta data; for a fund in Fund Forecasting, ask about Fund Forecasting. For an investor's own K-1s and notices, say 'show me my LP documents'. Documents your fund sent to its LPs are managed in Carta directly." |
 | "cap table", "equity grants", "409A", "option pool" | **Stop.** Tell the user: "Cap table and equity administration live in Carta's cap table tools, not here." |
 
 If none of the rows above match, continue below.

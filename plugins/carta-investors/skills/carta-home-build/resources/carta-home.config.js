@@ -76,7 +76,7 @@ const DIR_CATEGORIES = [
   {
     id: 'lp-reporting',
     name: 'LP reporting',
-    tagline: 'Generate LP tear sheets and annual meeting decks for your investors.',
+    tagline: 'Build annual meeting decks for your investors.',
   },
   {
     id: 'compliance',

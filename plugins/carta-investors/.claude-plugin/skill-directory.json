@@ -82,15 +82,6 @@
       "body": "Opens a prefilled request form from your Carta portfolio roster, sends one-off or recurring requests, and shows who is overdue so you can chase them."
     }
   },
-  "carta-download-tearsheet": {
-    "category": "lp-reporting",
-    "name": "Tear sheet download",
-    "order": 10,
-    "whatsNew": false,
-    "prompts": [
-      "Use my firm's tear sheet template and **generate tear sheets** for this quarter"
-    ]
-  },
   "carta-explore-data": {
     "category": "fund-accounting",
     "name": "Ask about your fund data",

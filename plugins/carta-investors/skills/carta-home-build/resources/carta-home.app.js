@@ -112,7 +112,6 @@ function trackPrompt(elementId, prompt, source, meta) {
 const SKILLS = {
   soi:        { name: "Schedule of investments",      desc: "Full holdings with cost, marks and MOIC." },
   benchmarks: { name: "Fund performance",       desc: "Net IRR against peer-group percentiles." },
-  tearsheet:  { name: "Tear sheet download",          desc: "One-page tear sheet with metrics." },
   pnl:        { name: "Consolidated P&L",             desc: "Profit and loss across funds." },
   bs:         { name: "Consolidated balance sheet",   desc: "Assets, liabilities and equity across funds." },
 };
@@ -868,8 +867,8 @@ function copyPrompt(btn) {
 // skipped when a personalized prompt already covers the same subject.
 const CAP_STATIC_PAD = [
   {
-    text: "Use my firm's tear sheet template and generate tear sheets for [[QUARTER]]",
-    topics: ["tear sheet", "tearsheet"],
+    text: "Show Net IRR, TVPI and DPI for each fund as of [[QUARTER_END]]",
+    topics: ["tvpi", "net irr", "performance"],
   },
   {
     text: "Show me my firm's balance sheet as of [[QUARTER_END]]",
@@ -886,7 +885,7 @@ const CAP_STATIC_PAD = [
 ];
 
 // The day before the current quarter began: the end of the last finished quarter,
-// the one a tear sheet or balance sheet is usually run for.
+// the one a balance sheet or fund performance report is usually run for.
 function lastQuarterEnd(now) {
   return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 0);
 }
@@ -1385,7 +1384,7 @@ const TOUR_STEPS = [
   {
     id:    'tab-btn-directory',
     title: 'Skill directory',
-    desc:  'Skills and microapps your firm can use, like portfolio analytics, fund forecasting and tear sheets.',
+    desc:  'Skills and microapps your firm can use, like portfolio analytics, fund forecasting and fund performance.',
   },
 ];
 
