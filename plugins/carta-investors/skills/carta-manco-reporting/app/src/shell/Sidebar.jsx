@@ -149,24 +149,29 @@ export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, 
           tight 5px gap regardless of the rail's own (near-zero) gap. */}
       <div style={styles.footer}>
         {footerAction}
-        {/* userName is unset on the local dev server (no sign-in there) and while /api/me is
-            still resolving or failed — nothing to show either way, so the row is omitted
-            rather than left blank. onSignOut is unset on the local dev server too (App.jsx's
-            own hostedApp gate: there is no Worker session there to end), independently of
-            whether a name resolved — a failed /api/me lookup still leaves a real session to
-            sign out of. */}
-        {userName && <div style={styles.dataStatus} title={userName}>Signed in as {userName}</div>}
-        {onSignOut && (
-          <button type="button" onClick={onSignOut} disabled={signOutBusy} data-testid="sign-out" style={styles.signOut}>
-            {signOutLabel}
-          </button>
-        )}
         <div style={styles.wordmark}>Carta Management Company Reporting</div>
         <div style={styles.dataStatus}>Data as of {formatAsOf(asOf)}</div>
         {/* Only when the ManCo's books stop earlier than the fetch date —
             otherwise it repeats "Data as of" and says nothing new. */}
         {lastPostedDate && lastPostedDate !== asOf && (
           <div style={styles.dataStatus}>Books posted through {formatAsOf(lastPostedDate)}</div>
+        )}
+        {/* The footer's last row — userName and onSignOut are both unset on the local dev
+            server (no sign-in there), and independently of each other otherwise: a failed
+            /api/me lookup still leaves a real session to sign out of, so onSignOut can be set
+            with no name to show. The name always renders as its own div, even empty, so
+            justify-content: space-between still pins Sign out to the right with no name. */}
+        {(userName || onSignOut) && (
+          <div style={styles.signedInRow}>
+            <div style={{ ...styles.dataStatus, ...styles.signedInName }} title={userName || undefined}>
+              {userName ? `Signed in as ${userName}` : ""}
+            </div>
+            {onSignOut && (
+              <button type="button" onClick={onSignOut} disabled={signOutBusy} data-testid="sign-out" style={styles.signOut}>
+                {signOutLabel}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </aside>
@@ -394,11 +399,26 @@ const styles = {
     color: FAINT,
     lineHeight: 1.4,
   },
+  signedInRow: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  // The signed-in name on the left, truncated to one line so a long name never pushes
+  // Sign out off the 240px rail; the full name is in its title.
+  signedInName: {
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
   // A footer-weight link: same shape as switchFirm's, muted (FAINT, not BLUE) so it reads as
   // a quiet account action rather than competing with the nav above it.
   signOut: {
     ...sans,
     display: "block",
+    flexShrink: 0,
     border: "none",
     background: "none",
     padding: 0,
