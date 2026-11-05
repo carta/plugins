@@ -8,8 +8,10 @@ description: >-
   and preferences. Use when asked "who owns the most", "what percentage of the company
   do I own", "how many shares does [name] hold", "how many options are outstanding",
   "how many options are left in the pool", "what is the fully diluted share count", or
-  when no other carta-cap-table skill matches. For every row of a list, a table, a
-  report or a file, use carta-reporting.
+  when no other carta-cap-table skill matches. Also answers total, indirect or
+  look-through ownership through a holding entity (trust, Stichting, SPV, holdco or fund):
+  "direct and indirect holders", "who ultimately owns 25%", "beneficial owners". For
+  every row of a list, a table, a report or a file, use carta-reporting.
 user-invocable: false
 model: inherit
 allowed-tools:
@@ -30,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.22</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.25</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -60,6 +62,7 @@ Call `read_tool` with one command. One call answers most questions.
 | What one holder owns, every type | `cap_table__list__securities` | `type` (one per call), `holder` |
 | Option plans and pool | `cap_table__get__option_plans` | |
 | Rights and preferences | `cap_table__get__rights_and_preferences` | |
+| Total, indirect or look-through ownership through a holding entity | `cap_table__list__ownership`, once per entity | see "Total, indirect or look-through ownership" |
 
 ```
 read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <corporation_id>, "ordering": "-quantity", "detail": "minimal", "page_size": 20}})
@@ -84,6 +87,14 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
 - Vesting of one grant, valuations (409A, FMV), round history and issuance have their own
   skills. Load the matching skill. To edit or cancel an issued security, load
   carta-manage-securities: it shows a preview before any change.
+
+## Total, indirect or look-through ownership
+
+When the user asks for total, indirect, look-through, beneficial or ultimate ownership, for
+owners above a threshold such as 25% on a bank or KYC form, or for the holders behind a holding
+entity, follow `${CLAUDE_PLUGIN_ROOT}/references/look-through-ownership.md` (the plugin's own
+`references/`, not this skill's; read it by that path, do not search for it). Never answer from
+one cap table alone.
 
 ## Answer rules
 
@@ -114,8 +125,9 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
 **Required inputs**: none before the first read. The company comes from "Find the company".
 
 **AI computation**: only for figures that Carta has not saved (pro forma, dilution,
-conversion, projections). Before you fetch data or compute them, call `AskUserQuestion`
-(never plain text) with: "No saved Carta model matches these terms. I can compute [X] using
+conversion, projections). Total or indirect ownership through a holding entity is not
+gated: follow "Total, indirect or look-through ownership". For the others, before you fetch
+data or compute them, call `AskUserQuestion` (never plain text) with: "No saved Carta model matches these terms. I can compute [X] using
 AI — this would be Claude's analysis, not Carta data. Would you like me to proceed?" If the
 user says no, stop: no output, no fallback.
 

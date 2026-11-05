@@ -59,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.22</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.25</carta-plugin>
 
 # Custom Reports
 
@@ -97,6 +97,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - "Save this as a custom report" or "Save this as a template" (after a report is shown; see "Save as a custom report")
 - "What can I export from the cap table?"
 - "Compare my option grant spreadsheet with Carta" (see Reconciliation below)
+- "Show me the direct and indirect holders of [company]" or "total ownership by holder, including through holding entities" (see Total and indirect ownership below)
 - NOT: "What's [Alice]'s vesting schedule?" (use carta-grant-vesting instead)
 - NOT: "What was our Series B round?" (use carta-round-history instead)
 
@@ -116,6 +117,8 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 > - **Preview takes too long:** The skill automatically switches to the full report once it's ready.
 
 **Reconciliation:** when the user wants their own file (a spreadsheet, an HR export, a register) compared with Carta, do not build a report. Call `read_tool` with `cap_table__compute__reconciliation` once per security type, with `type` and the file's rows in `rows` (`holder`, plus `label` and the values to compare). When the file has more than 500 rows and a shell is available (Claude Code), upload it as a JSON list of the same objects with `cap_table__mutate__upload_url` (editors only) and send its key as `file_key`. Never split one file across calls: each call compares its rows with every Carta security of the type, so a split file reports false missing rows and partial totals. Show the counts, the totals and each issue; when `issues_complete` is false, say that only the first issues are shown.
+
+**Total and indirect ownership:** when the user asks for total, indirect, look-through, beneficial or ultimate ownership, or for the holders behind a holding entity, do not build a report: every report lists a holding entity as one line, so a report alone can never answer it. Find the company as step 1 says, then follow `${CLAUDE_PLUGIN_ROOT}/references/look-through-ownership.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it) and skip steps 2–6. Its answer is a calculated table, not report data, so show it as a markdown table in chat in both output modes.
 
 **Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
@@ -814,4 +817,4 @@ This applies whether the result is rendered as a live artifact or a markdown tab
 
 **Required inputs**: none before the first read. Step 1 finds the company and step 2 finds the report type from the user's words.
 
-**AI computation**: No for report data: it comes directly from Carta. Business logic values (fully diluted ownership, liquidation proceeds, conversion amounts, IRR, etc.) must always come from a Carta report, never from Claude's calculations. Filters, column picks, sorts, mechanical formulas (% of total, running sum, ratio, delta) and aggregations run in `report_processor.py`: treat them as best-effort analysis, not official Carta output.
+**AI computation**: No for report data: it comes directly from Carta. Business logic values (fully diluted ownership, liquidation proceeds, conversion amounts, IRR, etc.) must always come from a Carta report, never from Claude's calculations. Total or indirect ownership through a holding entity is the one exception: follow "Total and indirect ownership" above, and label Indirect % and Total % as Claude's analysis, not Carta data. Filters, column picks, sorts, mechanical formulas (% of total, running sum, ratio, delta) and aggregations run in `report_processor.py`: treat them as best-effort analysis, not official Carta output.
