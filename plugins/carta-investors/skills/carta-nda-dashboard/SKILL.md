@@ -16,14 +16,17 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Artifact
   - ToolSearch
   - AskUserQuestion
@@ -38,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.4</carta-plugin>
+<carta-plugin>carta-investors:7.25.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -67,6 +70,10 @@ own `references/`; read them by those paths and do not search for them.
 
 ### 1. Firm context and workspace
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-nda-dashboard", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the MCP server name you're using for `list_contexts` in this session.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a refresh, a follow-up question, a re-publish) does not checkpoint again.
+
 - **Set firm context first, every invocation, before any query.** Call `list_contexts`, then
   `set_context` to the firm. Context is dropped when a conversation is compacted or resumed,
   so never assume it carried over.
@@ -91,6 +98,8 @@ queries once more in one turn (`nda_data_model.md` rule 6); use only the second 
 
 A result comes back either inline or spilled to a file. Use a spilled file's path as is;
 `Write` an inline result to `<WORKDIR>/<dataset>.ndjson`.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-nda-dashboard", checkpoint_label="data_fetched")` once all six datasets are in hand.
 
 ### 3. Assemble the data
 
@@ -146,6 +155,12 @@ to open in a browser.
 Either way, close with two or three lines: total NDAs, how many expire in the next two years,
 how many counterparties are under an active restriction, and the answer to any specific
 question the user asked. The page is a snapshot; ask again to refresh it.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-nda-dashboard", checkpoint_label="skill_finished")` with those closing lines.
+
+## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, wherever in this skill it happens: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-nda-dashboard", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes Step 4's stops: data that could not be assembled, and a template that needs a fix. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Steps that recover and continue (a re-run of Step 3 after exit 1, the second set of queries after a zero-NDA `kpi`) do not checkpoint.
 
 ## Notes
 

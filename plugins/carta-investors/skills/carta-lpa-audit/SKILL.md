@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.4</carta-plugin>
+<carta-plugin>carta-investors:7.25.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
 
@@ -169,6 +169,10 @@ Open every invocation with:
 > "I'll pull the extracted LPA terms for every fund you manage — management fee, carry, hurdle, waterfall, term, side letters — into one table. Missing LPAs and partial extractions surface inline. Side letter economic provisions (fee and carry reductions, waivers, hurdle changes) are extracted and compared against each fund's own LPA."
 
 Then proceed immediately to Step 1.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the MCP server name you're using for `list_contexts` in this session.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-render, a follow-up question, a drill-down, a re-publish) does not checkpoint again.
 
 ---
 
@@ -352,6 +356,8 @@ Then a 3–5 bullet summary of what it shows — one sortable table of every fun
 
 > **Numbers live in the artifact, not in your reply.** Do not restate coverage counts, fund statuses, or fund names in chat — you have not seen them. The page queries Carta after your turn ends, so any figure you quote is invented.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_finished")` once the publish in Step A3 has succeeded. Mode A has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
+
 ---
 
 ## Mode B — Text fallback
@@ -495,6 +501,8 @@ Output (`carta-lpa-audit-data.json`) lands in `<WORKSPACE>` and doubles as the M
 Tell the user: `LPA data loaded. Building your coverage report…`
 
 ### Step B2: Present results
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="data_fetched")` once the LPA data is in hand, whether Step B1 fetched it or Step B0 read it from the cache.
 
 **BLUF lead:** One sentence with the coverage split before the fund sections.
 
@@ -641,6 +649,8 @@ AskUserQuestion(
 ```
 
 If the user picks "Drill into a fund," continue with the **Drill-down** section below. If they pick "Show only gaps," re-render Step B2 with only the Partial, Governed by a parent agreement, Name mismatch, Missing and No documents sections. If they pick "Compare a term," ask which term (mgmt fee, carry, hurdle, waterfall, term), then render a one-column table with fund name + that term for every extracted fund, applying Step B2's year rounding and term-check suffix to each value. If they pick "Ask a question about provisions," continue with Step B4.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_finished")` after showing the next-step question.
 
 ---
 
@@ -797,6 +807,8 @@ AskUserQuestion(
 ---
 
 ## Error handling
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a fall-through to Mode B, a fund that lands in No documents) do not checkpoint.
 
 | Symptom | Likely cause | What to tell the user |
 |---------|-------------|----------------------|
