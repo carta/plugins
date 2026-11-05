@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { fundLabel } from "../../ui/components.jsx";
-import { scenarioTable, scenarioRow, exitDateIrr, poolable, withBench } from "../../model/scenarios.js";
+import { scenarioTable, scenarioRow, exitDateIrr, poolable, withBench, impliedMultiple } from "../../model/scenarios.js";
 import { scenarioFund, isPooledScope, isFamilyScope, scopeFundIds, scopeName, ALL_FUNDS } from "../../model/funds.js";
 import { waterfallCfgFor, exitHorizonFor } from "../../model/reprice.js";
 import { FUND_WATERFALL_KEYS } from "../../model/slices.js";
@@ -12,10 +12,6 @@ import { FUND_WATERFALL_KEYS } from "../../model/slices.js";
 // JSX) — each view renders its own sections. Under a pooled scope (all funds, or a
 // family) it models the first fund in scope; the LP sensitivity grid pools the funds in
 // scope separately via `pooledEntries`.
-// Where a fund's marks land: the implied Net TVPI if today's repriced LP NAV (plus
-// anything already distributed) were ultimately delivered on total paid-in incl.
-// scheduled future calls.
-const impliedMultiple = (state, fund) => (state.lpNav + state.lpDistributed) / fund.paidInTotal;
 
 /** The funds the pooled LP sensitivity grid covers (those of `fundIds`: all funds, or a
  *  family's), each on its own exit horizon and current-marks multiple. Inclusion follows

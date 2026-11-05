@@ -24,7 +24,7 @@ export const FUND_WATERFALL_KEYS = ["carryRates", "preferredReturns", "catchupRa
 
 /** One company back to its Carta mark: parked (`includeInNav` off), whole stake held (no partial
  *  sales), and valuation mode unchosen so it reopens in its default mode. */
-function resetCompanyToCarta(c) {
+export function resetCompanyToCarta(c) {
   c.valuationB = c.defaultValuationB ?? null;
   c.markMultiple = 1;
   c.includeInNav = false;

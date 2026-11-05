@@ -21,6 +21,11 @@ import { grossProfitForLpProfit } from "./waterfall.js";
 
 export const SCENARIO_MULTIPLES = [1, 2, 3, 5, 7, 10];
 
+/** Where a fund's marks land: the implied net TVPI if today's repriced LP NAV (plus anything already distributed)
+ *  were ultimately delivered on total paid-in incl. scheduled future calls. `state` is a computeFundStates row,
+ *  `fund` its scenarioFund. */
+export const impliedMultiple = (state, fund) => (state.lpNav + state.lpDistributed) / fund.paidInTotal;
+
 export function scenarioRow(fund, m, cfg = 0.2) {
   const wf = typeof cfg === "number" ? { carryRate: cfg } : (cfg || {});
   const paidInTotal = fund.paidInTotal; // includes scheduled future calls

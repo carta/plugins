@@ -513,11 +513,11 @@ function repriceConfig(company, { totalFv, hasBasis, cartaMoic, cartaRef, update
     };
   }
   if (cartaMoic) {
-    const cur = (target.markMultiple ?? 1) * cartaMoic;
+    const cur = moicAtMark(target.markMultiple, cartaMoic);
     return {
       value: cur, min: 0, max: Math.max(60, Math.ceil(cartaMoic * 22)), step: 0.05,
       fmtVal: (x) => x.toFixed(2) + "×", resetValue: cartaMoic,
-      onChange: (m) => set({ markMultiple: m / cartaMoic }),
+      onChange: (m) => set({ markMultiple: markForMoic(m, cartaMoic) }),
       presets: sentimentPresets(cartaMoic),
     };
   }
@@ -538,6 +538,18 @@ function repriceConfig(company, { totalFv, hasBasis, cartaMoic, cartaRef, update
  * or archived). Shared by the Companies table and any other view that exposes
  * a per-company reprice slider (e.g. a sidebar scoped to a fund).
  */
+/** The company's MOIC at Carta's mark: its positions' fair value over their cost, or null with no cost. The MOIC
+ *  slider shows `markMultiple` times this. */
+export function cartaMoicOf(company) {
+  const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
+  const totalCost = company.positions.reduce((s, p) => s + (p.cost || 0), 0);
+  return totalCost > 0 ? totalFv / totalCost : null;
+}
+
+/** The MOIC the slider shows for a multiple of Carta's mark, and back. */
+export const moicAtMark = (markMultiple, cartaMoic) => (markMultiple ?? 1) * cartaMoic;
+export const markForMoic = (moic, cartaMoic) => moic / cartaMoic;
+
 export function companyRepriceState(company, updateCompany) {
   const live = company.includeInNav && !company.archived;
   let uplift = 0;
@@ -545,11 +557,10 @@ export function companyRepriceState(company, updateCompany) {
     uplift += positionReprice(company, p, { live }).uplift;
   }
   const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
-  const totalCost = company.positions.reduce((s, p) => s + (p.cost || 0), 0);
   const hasBasis = company.positions.some((p) => p.markBasisB);
   const canReprice = !company.realized && !company.defunct
     && (hasBasis || totalFv > 0 || pricesViaWaterfall(company));
-  const cartaMoic = totalCost > 0 ? totalFv / totalCost : null;
+  const cartaMoic = cartaMoicOf(company);
   const cartaRef = cartaReferenceB(company);
   const cfg = canReprice && !company.archived
     ? repriceConfig(company, { totalFv, hasBasis, cartaMoic, cartaRef, updateCompany })
@@ -575,11 +586,10 @@ export function companyRepriceState(company, updateCompany) {
  *  price sells at the mark, so the reset chip must sit where that lands. */
 export function saleRepriceConfig(company, sale, write) {
   const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
-  const totalCost = company.positions.reduce((s, p) => s + (p.cost || 0), 0);
   const args = {
     totalFv,
     hasBasis: company.positions.some((p) => p.markBasisB),
-    cartaMoic: totalCost > 0 ? totalFv / totalCost : null,
+    cartaMoic: cartaMoicOf(company),
     cartaRef: cartaReferenceB(company),
   };
   // A sale's price is read by the pricing engine, so it takes the PRICING mode's units, not the
