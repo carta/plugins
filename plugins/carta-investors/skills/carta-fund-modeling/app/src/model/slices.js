@@ -245,11 +245,13 @@ export function applyReserveDilution(body, fundIds, dilution) {
   return body;
 }
 
+/** The readable part of a scenario id: its name, lowercased, with runs of other characters as "-". */
+export function sliceSlug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
 export function sliceId(name) {
-  return (
-    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") +
-    "-" + Math.random().toString(36).slice(2, 6)
-  );
+  return sliceSlug(name) + "-" + Math.random().toString(36).slice(2, 6);
 }
 
 /** True if a slice's inputs differ from another's (valuations, toggles, assumptions). */
