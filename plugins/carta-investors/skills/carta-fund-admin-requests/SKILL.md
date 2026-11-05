@@ -12,6 +12,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__search_tools
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -19,6 +20,7 @@ allowed-tools:
   - mcp__carta_production__get_current_user
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
+  - mcp__carta_production__search_tools
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -26,17 +28,29 @@ allowed-tools:
   - mcp__carta__get_current_user
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  # Claude Desktop's browser pane, for the request's progress page
+  - mcp__remote-devices__Claude_Browser__preview_start
+  - mcp__remote-devices__Claude_Browser__navigate
+  - mcp__remote-devices__Claude_Browser__tabs_context
+  - mcp__Claude_Browser__preview_start
+  - mcp__Claude_Browser__navigate
+  - mcp__Claude_Browser__tabs_context
+  - mcp__ccd_view__show_pane
+  - enable__mcp__remote-devices__Claude_Browser
+  - ToolSearch
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.19.25</carta-plugin>
+<carta-plugin>carta-investors:7.19.26</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -53,13 +67,17 @@ Names are verbatim. `<SERVER>` is whichever Carta MCP server this session has.
 | Intent | Call |
 |---|---|
 | Send a new request | `call_tool({"name": "fa__create__fund-admin-message", "arguments": {"message": "<message>"}})` |
+| Check that file upload is available | `search_tools({"query": "fa__create__document-content"})` |
+| Upload a file the user attached | `call_tool({"name": "fa__create__document-content", "arguments": {"filename": "<file_name>", "content_base64": "<file_base64>"}})` |
 | Read a request + Carta's replies | `read_tool({"name": "fa__list__workflow-message", "arguments": {"workflow_id": <workflow_id>}})` |
 | Reply on an existing request | `call_tool({"name": "fa__create__workflow-message", "arguments": {"workflow_id": <workflow_id>, "message": "<message>"}})` |
-| List the firm's requests | `read_tool({"name": "fa__list__firm-workflow", "arguments": {"workflow_templates": ["request-generic"], "statuses": ["active"]}})` |
+| List the firm's requests | `read_tool({"name": "fa__list__firm-workflow", "arguments": {"workflow_templates": ["request-generic", "request-gp-interactive-agentic"], "statuses": ["active"]}})` |
 | List tasks waiting on the user | `read_tool({"name": "fa__list__gp-workhub-active-task", "arguments": {"pending_actor": "customer"}})` |
 
 None of these take a `firm_uuid` — they always act on the session's active firm.
 `fa__create__fund-admin-message` returns `{"workflow_id": <id>}`, the case number.
+Both send calls also take `"attachment_tokens": ["<token>"]`, the `token`s the
+uploads returned, at most 15. Leave it out when nothing is attached.
 
 ---
 
@@ -120,17 +138,41 @@ they see the exact text first, every time.
 
 1. **Draft it.** Write the message yourself from what the user said. Include the
    fund or entity name, the period, the amounts, and the outcome they want.
-   Detail is what lets the team act without coming back to ask.
-2. **Confirm.** Call the `AskUserQuestion` **tool** with the drafted message
-   quoted in full. Do not render the choices as a markdown list — a written list
-   is not a gate, and the send must block on a real user turn:
+   Detail is what lets the team act without coming back to ask. Name each file the
+   user attached and say what it is, so the team knows what to ask for if one does
+   not attach.
+2. **Check attachments**, only when the user attached files. Look up
+   `fa__create__document-content` with `search_tools`. Upload is available only
+   when it comes back first. Its help states the largest file it takes. Each file
+   within that limit will be attached, up to 15 per message: the first 15 that fit.
+   A file that is too large, every file past those 15, or any file when upload is
+   not available, stays described in the message only: tell the user the team will
+   ask for it.
+3. **Confirm.** Call the `AskUserQuestion` **tool** with the drafted message
+   quoted in full and the names of the files that will be attached (at most 15).
+   Do not render the choices as a markdown list — a written list is not a gate,
+   and the send must block on a real user turn:
    - **Send it** — send as drafted
    - **Edit first** — take their changes, redraft, confirm again
    - **Don't send** — stop, no message, no fallback
-3. **Send** on approval, then report:
+4. **Send** on approval. Upload first, right before the send, because an upload's
+   token expires after about 30 minutes. Call `fa__create__document-content` once
+   per file that will be attached and keep each result's `token`. Then send with
+   those tokens, never more than 15, as `attachment_tokens`. A failed upload never
+   holds the send: send without that file, and tell the user it did not attach and
+   the team will ask for it.
+5. **Open the progress page** when the result carries `companion_url`. Do what its
+   `next_step` says: it opens the page beside the chat. If it does not open, for
+   example because the browser pane is blocked, say so: the link as text in the
+   report is then how the user opens it. Never build that URL yourself.
+6. **Report:**
 
-   > Sent to your Carta team — case **<workflow_id>**. They'll pick it up and reply
-   > here. I'll check for a response whenever you ask.
+   > Sent to your Carta team — case **<workflow_id>**. You can follow its
+   > progress at <companion_url>. They'll pick it up and reply here. I'll check for
+   > a response whenever you ask.
+
+   Leave out the progress sentence when there is no `companion_url`. Name only the
+   files whose tokens were sent.
 
 Never estimate a turnaround. Never say "within 24 hours" or similar — you do not
 know the queue.
@@ -143,10 +185,13 @@ One call opens one case. Two unrelated asks are two calls, not one merged messag
 
 1. List open requests with `fa__list__firm-workflow`. It returns one page at a
    time: pass `after` = the previous `next` until `has_next` is false. Its rows
-   cover requests filed in Carta and through this assistant.
+   cover requests filed in Carta and through this assistant. Requests sent from
+   this assistant can carry the type `request-gp-interactive-agentic` instead of
+   `request-generic`, so always filter on both.
 2. List tasks waiting on the user with `fa__list__gp-workhub-active-task`, paged
-   the same way. Keep rows whose `workflow_template` is `request-generic`; their
-   `workflow_id`s are the requests that need the user.
+   the same way. Keep rows whose `workflow_template` is `request-generic` or
+   `request-gp-interactive-agentic`; their `workflow_id`s are the requests that
+   need the user.
 3. For the **Completed** count, list `fa__list__firm-workflow` with
    `"statuses": ["complete", "canceled"]`, paged the same way, and count the rows
    across all pages. Skip it when the user only asked what is open.
@@ -172,10 +217,11 @@ Render each group as its own table, `#` first so the user can open one by number
 |---|---|---|---|
 | 1 | [Split the Q3 capital call](<web_url>) | Ready for you | 2d |
 
-`request-generic` is a DM workflow, so it has **no subject**. Take the request
-label from `display_name` when it names a real job; when it is empty or one of
-fund-admin's fallback names (`Request`, `New request`, `Processing new request`,
-`Review request`, `Request completed`), read the opening message with
+`request-generic` and `request-gp-interactive-agentic` are DM workflows, so they
+have **no subject**. Take the request label from `display_name` when it names a
+real job; when it is empty or one of fund-admin's fallback names (`Request`,
+`New request`, `Processing new request`, `Review request`, `Request completed`),
+read the opening message with
 `fa__list__workflow-message` — only for the rows you show.
 Trim to one line. Link the label itself — never a separate "Open" or "View"
 column. Show **Tasks to complete** first, then **In progress**; collapse
@@ -215,9 +261,13 @@ State plainly whether the ball is with Carta or the user, then:
 Same confirmation as Flow 1, including the `AskUserQuestion` tool: draft, show the
 exact text, get an explicit yes, then `fa__create__workflow-message` on the same
 `workflow_id`. Read the thread first so the reply answers what was actually asked.
-Confirm with:
+Files the user attached go with the reply exactly as in Flow 1: check upload, name
+the files in the confirm, upload after the yes, and pass the tokens as
+`attachment_tokens`. Confirm with:
 
 > Reply sent on case **<workflow_id>**.
+
+Name only the files whose tokens were sent.
 
 Then offer **Back to queue**.
 
@@ -234,5 +284,5 @@ Then offer **Back to queue**.
 | No active firm in the session | Call `list_contexts`, then `set_context`; retry once |
 | `fa__create__fund-admin-message` returns no `workflow_id` | Say the request may not have been created and to check with their Carta team before resending — do **not** resend automatically, it would open a second case |
 | `workflow_id` not found | Wrong case number — ask them to confirm it |
-| User wants to attach a file | Not supported yet: describe the document in the message and say the team will ask for it |
+| A file can't be attached: upload not available, file too large, more than 15 files, or the upload failed | Describe the document in the message and say the team will ask for it. Never hold the send for it |
 | User is reporting a plugin bug | Not a Fund Admin request — call `fa:create:feedback` directly |
