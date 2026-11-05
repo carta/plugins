@@ -174,7 +174,7 @@ export const register: Register = on => {
     // Only the desktop app has a browser beside the chat; anywhere else the link is the answer.
     if (!(await $.session.surfaces()).includes('desktop')) return { text: `SOI review companion page: ${state.companion_url}` }
     // A prompt rather than a browser call: the browser tools are Claude's and load through ToolSearch.
-    // Queued from a timer, as a command.run hook may not submit while it holds the turn.
+    // Queued from a timer: a command handler may not submit while it holds the turn.
     const text = `Open ${state.companion_url} in your built-in browser beside the chat.`
     $.clock.after(0, () => void $.prompt.submit({ text }).catch(() => undefined))
     return { text: `Opening the SOI review companion page: ${state.companion_url}` }

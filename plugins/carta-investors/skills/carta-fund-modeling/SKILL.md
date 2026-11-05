@@ -56,7 +56,7 @@ allowed-tools:
   - mcp__claude-in-chrome__navigate
   - ToolSearch
   - Read
-  - Write
+  - Write(~/.cache/fund-modeling/raw/**)
   - AskUserQuestion
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/emit_stem_sql.py *)
@@ -66,7 +66,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.8</carta-plugin>
+<carta-plugin>carta-investors:7.25.10</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, take its sandboxed branch instead of stopping — the hosted app needs no plugin files.
 

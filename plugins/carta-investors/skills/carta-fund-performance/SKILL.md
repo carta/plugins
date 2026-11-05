@@ -40,14 +40,14 @@ allowed-tools:
   # them over (references/keep-customizations.md).
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/scripts/customizations.py" *)
   # Save the live page, and carry the user's changes into the rendered page in place.
-  - Write
-  - Edit
+  - Write(./fund-performance*.html)
+  - Edit(./fund-performance*.html)
   # Ask about a change that collides with the new version — only then.
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.8</carta-plugin>
+<carta-plugin>carta-investors:7.25.10</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

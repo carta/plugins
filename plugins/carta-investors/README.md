@@ -101,6 +101,13 @@ Other surfaces, such as Cowork, don't load it. It does nothing until Claude open
 **When it runs.** At session start it adds a `/soi-review` command and starts a 5-second timer. The
 timer only checks whether there is a review to read.
 
+**Hooks.** The module hooks five events. It changes none of what passes through them:
+- `session.start` adds the `/soi-review` command and starts the timer.
+- `tool.call` reads the result of `view_remote` calls, then returns every result as it came.
+- `prompt.submit` notes the time and passes the prompt on unchanged. It never reads the prompt text.
+- `command.run` answers `/soi-review` only; every other command is left alone.
+- `ui.render` draws the band above the prompt and keeps whatever else is in it.
+
 **What it reads.**
 - The result of each `view_remote` tool call. It looks for the Update Investments view and, if found,
   takes the review's `firm_uuid` and `soi_report_id`. It passes every other tool's result through untouched.
@@ -127,6 +134,13 @@ desktop app, a band above the prompt.
 **The one prompt it submits.** `/soi-review` shows the companion page link. On the desktop app only, it also
 submits the prompt `Open <companion page link> in your built-in browser beside the chat.`, which Claude acts
 on with its own browser tool. The prompt contains only that link, which comes from Carta's response.
+
+## Credentials
+
+The plugin does not read tokens, API keys or other credentials from your machine. Carta MCP calls go
+through the Carta connector, which you authorise in Claude. The fund-construction companion page signs
+you in through Carta's own sign-in page; its server keeps the OAuth tokens, never your machine.
+Elsewhere, "token" in the plugin's files means design tokens (colors and spacing) or parser tokens.
 
 ## Data & Privacy
 
