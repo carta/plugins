@@ -435,9 +435,15 @@ Sub-agent brief:
 > 4. On success, run `<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --record <report_id> --uuid <the response's report.uuid>`.
 >    If it prints a `delete_uuid`, call `mcp__<SERVER>__call_tool` with `name` =
 >    `fa__delete__budget_report` and `arguments` = `{"fund_uuid": "<fund_uuid>", "report_uuid": <delete_uuid>}`.
-> 5. If a `fa__mutate__budget_report` call answers not found or not the owner, run the
->    same script with `--plan --recreate <report_id>` (no `--mirrors`: a recreate always
->    plans, never defers) and push the one create it prints, once.
+> 5. If a `fa__mutate__budget_report` call answers **not found** — the hosted app's own
+>    Delete, most likely, deliberate, not a glitch — run `<UV_BIN> run
+>    "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir
+>    "<dashboard_dir>" --retire <report_id>` and push nothing more for this report: its
+>    own-sync link is retired locally (so a later run never recreates it just because the
+>    payload or name moved since), and there is nothing left to delete upstream either.
+> 6. If it answers **not the owner** instead, run the same script with `--plan --recreate
+>    <report_id>` (no `--mirrors`: a recreate always plans, never defers) and push the one
+>    create it prints, once.
 >
 > You get at most **2** push calls (create or update) per report, the recreate included. A
 > refused or failed push does not earn a third: not with the arguments rewritten, not
@@ -489,9 +495,10 @@ local read: no Carta call, no lock, no timeout needed.
   link from any other uuid (a local report id, a remembered one from an earlier turn) —
   only from this call's own `"uuid"`.
 
-- **`{"uuid": null}`** — the report is read-only, hasn't been built yet, or Step 5.2's push
-  for it failed (its `needs_human` line, just printed, already said why). There's nothing to
-  offer; say nothing further.
+- **`{"uuid": null}`** — the report is read-only, hasn't been built yet, its mirror was
+  deleted on the hosted app (Step 5.2's `--retire` branch), or Step 5.2's push for it failed
+  (its `needs_human` line, just printed, already said why). There's nothing to offer; say
+  nothing further.
 
 
 ## Step 5.4 — Load reports shared with you

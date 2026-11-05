@@ -112,12 +112,20 @@ Carta that mirrors your own reports privately, with no effect on Share.
     `{"pushes": [{"report_id", "name", "command", "arguments_file"}]}`. Without a user id it
     exits 3 and prints `{"error": "no_user_id"}`.
   - `--plan --recreate <report_id>` plans one report as a create, after Carta answered its
-    update with `not_found` or `not_owner`, and replaces only that report's plan.
+    update with `not_owner` (the link is no longer this user's to update), and replaces only
+    that report's plan.
+  - `--retire <report_id>` is the `not_found` counterpart: the hosted app's own Delete, most
+    likely, not `not_owner`'s "no longer mine" — there is no mirror left to recreate. Records
+    the report's own-sync as retired (`report_store.ReportStore.retire_own_sync`) and drops
+    its plan, making no Carta call at all: a later `--plan` never pushes this report again,
+    sweep or session alike, until an explicit `--recreate` starts it over. The local report
+    itself is untouched, just unsynced.
   - `--lookup <report_id>` is a plain local read of the report's own-sync uuid as last
     recorded — no Carta call, no lock — for Step 5.3 once Step 5.2's push has already
-    returned. Prints `null` for an unknown report id, or while a plan for this report is
-    still on disk (a push this run hasn't recorded yet, whether it's still in flight or it
-    failed) — never a uuid a failed push left stale.
+    returned. Prints `null` for an unknown report id, one whose own-sync was retired
+    (`--retire`, above), or while a plan for this report is still on disk (a push this run
+    hasn't recorded yet, whether it's still in flight or it failed) — never a uuid a failed
+    push or a retired link left stale.
 - `own_sync.py`'s **sweep** (`own_sync.py` with no flags) mirrors the owner's own reports to
   Carta through a headless `claude` session, the same way Share does. It runs only when
   something calls `build_manco_datadir.py` *without* `--no-sync-sweep` — never from this

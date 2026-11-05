@@ -643,6 +643,33 @@ class ReportStore:
             }
             return self.metadata(report)
 
+    def retire_own_sync(self, report_id: str) -> Optional[Dict[str, Any]]:
+        """Record that `report_id`'s own-sync mirror is gone from Carta for a reason other than
+        this dashboard's own forget() (the hosted app's own Delete, most likely). Called from a
+        mutate's `not_found` on either own_sync.py push path: the sweep's push_if_changed calls
+        this itself, and a Claude session's own push calls it through own_sync.retire_session_push
+        (`own_sync.py --retire`) — both instead of creating a fresh mirror.
+
+        This is the one place `retired` is set, and the uuid/fingerprint already on the report
+        are kept, not cleared, for two readers that still need the dead uuid: forget() (so a
+        later local removal still retires whatever upstream link remains, even a stale one) and
+        dismissed_uuids() (so a pull never re-imports this mirror as if someone else had shared
+        it). Everything else that reads `retired` itself must treat the report as unsynced
+        regardless of what uuid is still on it: own_sync.plan_push refuses to plan a push for it
+        at all, and own_sync._recorded_uuid refuses to answer its dead uuid to `--lookup`. The
+        local report itself is untouched and stays usable, just unsynced, until this user's own
+        `--recreate` starts it over.
+
+        Returns the report's metadata, or None when `report_id` no longer exists locally (nothing
+        to retire)."""
+        with self.transaction() as doc:
+            try:
+                report = self.find(doc, report_id)
+            except ReportEditError:
+                return None
+            report["own_sync"] = {**(report.get("own_sync") or {}), "retired": True}
+            return self.metadata(report)
+
     def apply_synced_name(self, report_id: str, name: str, *, expected_name: Optional[str],
                            expected_pushed_name: Optional[str]) -> Optional[Dict[str, Any]]:
         """Apply a name own_sync.reconcile_names found changed on the Carta mirror, the same

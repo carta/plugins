@@ -49,8 +49,10 @@ export default function CustomReportView({
     [budget]);
   const report = budget ? reportFor(budget, reportsApi) : null;
   // Saving sends derive (a new report) or edit (a saved one), so it needs a server that serves
-  // that action. Only the owner's copy edits here: one synced from the local dashboard is edited
-  // there (it reads as an uploaded budget on the hosted app); one shared with you, never.
+  // that action. Only a hosted-native copy edits here (origin === "copy", server/reportShare.js's
+  // editCustom refuses anything else): an own-sync mirror of a report synced from the local
+  // dashboard has its own distinct origin, "synced" (ownReportsFromBundle), and is edited there
+  // instead; one shared with you, never.
   const canSave = !!reportsApi?.available && (savedReport
     ? reportsApi.can(REPORT_ACTIONS.EDIT) && !!report?.editable && report?.origin === "copy"
     : reportsApi.can(REPORT_ACTIONS.DERIVE));

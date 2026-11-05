@@ -40,8 +40,11 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
   if (!report) return null;
   const own = ownShare(report);
   const dirty = !!own?.dirty;
-  // A report you are sharing can't go until you stop sharing it.
-  const canDelete = !own && (report.origin === "copy" || report.origin === "shared");
+  // A report you are sharing can't go until you stop sharing it. "synced" is an own-sync
+  // mirror of a local custom report (server/reportShare.js's ownReportsFromBundle) — deletable
+  // the same way a copy is, but kept a distinct origin so it never passes CustomReportView's
+  // copy-only canSave check.
+  const canDelete = !own && (report.origin === "copy" || report.origin === "shared" || report.origin === "synced");
 
   const act = (fn) => async (...args) => {
     setMenu(false);
@@ -102,7 +105,7 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
             {reportsApi.can(REPORT_ACTIONS.HIDE) && <MenuItem small onClick={hide}>Hide</MenuItem>}
             {canDelete && reportsApi.can(REPORT_ACTIONS.REMOVE) && (
               <MenuItem small onClick={() => { setMenu(false); setOpen("confirm-delete"); }} style={{ color: RED }}>
-                {report.origin === "shared" ? "Remove from my reports" : "Delete this copy"}
+                {report.origin === "shared" ? "Remove from my reports" : report.origin === "synced" ? "Delete this report" : "Delete this copy"}
               </MenuItem>
             )}
           </div>
@@ -159,6 +162,7 @@ function DeleteDialog({ report, reportsApi, onClose, onDeleted }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const removing = report.origin === "shared";
+  const synced = report.origin === "synced";
   const remove = async () => {
     trackClick("MancoReporting.ReportMenu.Delete");
     setBusy(true);
@@ -173,11 +177,13 @@ function DeleteDialog({ report, reportsApi, onClose, onDeleted }) {
   };
   return (
     <Modal
-      title={removing ? "Remove this report?" : "Delete this copy?"} onClose={onClose} busy={busy}
+      title={removing ? "Remove this report?" : synced ? "Delete this report?" : "Delete this copy?"} onClose={onClose} busy={busy}
       footer={<><Btn onClick={onClose} disabled={busy}>Cancel</Btn><Btn kind="danger" onClick={remove} disabled={busy}>{removing ? "Remove" : "Delete"}</Btn></>}
     >
       {removing
         ? "It leaves your reports for good; the person who shared it keeps theirs."
+        : synced
+        ? "This removes it from the hosted app for good. Your local dashboard keeps its own copy, unsynced."
         : "This removes your copy for good. It was never shared, so nobody else is affected."}
       {error && <p role="alert" style={S.error}>{error}</p>}
     </Modal>

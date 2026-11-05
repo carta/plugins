@@ -26,6 +26,18 @@ report_store.ReportStore.remove directly: `remove` alone only stops a local
 pull from re-importing the mirror, it never deletes it from Carta, so the
 hosted microapp would keep showing a report the user deleted locally.
 
+The other direction — deleting a mirror from the hosted app — is one-way: it
+never deletes the local report, only its own-sync link to Carta. Both push
+paths notice this the same way, on their own mutate getting `not_found`, and
+both retire the link (report_store.ReportStore.retire_own_sync) instead of
+creating a fresh mirror: the sweep's push_if_changed retires it itself; a
+Claude session's own push (references/serve-and-update.md's Step 5.2) calls
+`own_sync.py --retire <report_id>` (retire_session_push) to do the same. Either
+way, no later push — sweep or session — silently resurrects a report whose
+mirror someone just deleted deliberately, until an explicit `--recreate`
+starts it over. The local report itself stays, unsynced, until its own owner
+removes it there too.
+
 push_if_changed and forget each read before making a slow Carta call and only
 write afterward, so the two can race each other across threads (serve.py
 handles requests on threads) or across processes (a detached sweep, see
@@ -139,18 +151,25 @@ def plan_push(
     """What syncing `report_id` would send right now: {"command", "arguments", "payload",
     "name"}, with `payload` the canonical payload whose fingerprint a successful push
     records. None when nothing needs sending: the report is read-only (shared with you,
-    not yours to mirror), hasn't been built yet, or neither its payload nor its name moved
-    since the last push.
+    not yours to mirror), hasn't been built yet, its own-sync was retired (see below) and
+    `create` wasn't asked for, or neither its payload nor its name moved since the last push.
 
     A report already synced is updated in place; a rename alone sends just the name,
     never the payload or snapshot_basis. `create` plans a fresh create instead, for
-    when that update finds the link gone or no longer ours.
+    when that update finds the link no longer ours (`not_owner`, on either push path), or
+    for an explicit `--recreate` — the one way a retired report's own-sync starts again. Never
+    automatic: no push path — the sweep's push_if_changed or a session's own --retire, this
+    module's own doc for why both treat `not_found` the same way — resurrects a mirror the
+    hosted app deliberately deleted just because the local payload or name moved since.
 
     push_if_changed sends this through the `claude` CLI's bridge; a Claude session with its
     own Carta connector sends the same arguments itself (main()'s --plan and --record)."""
     doc = store.load()
     report = report_store.ReportStore.find(doc, report_id)
     if report_store.ReportStore.metadata(report)["read_only"]:
+        return None
+    sync = report.get("own_sync") or {}
+    if not create and sync.get("retired"):
         return None
     try:
         payload = store.read_share_payload(report_id)
@@ -165,7 +184,6 @@ def plan_push(
         except report_payload.PayloadError:
             pass  # the payload with variance attached is over a limit; push it without
     name = report["name"]
-    sync = report.get("own_sync") or {}
     payload_changed = sync.get("payload_fingerprint") != report_store.payload_fingerprint(payload)
     if not create and not payload_changed and sync.get("pushed_name") == name:
         return None
@@ -217,9 +235,17 @@ def push_if_changed(
         try:
             response = share_ops.envelope(bridge.call(share_ops.MUTATE_COMMAND, plan["arguments"], emit))
         except ShareError as e:
-            if e.code not in ("not_found", "not_owner"):
+            if e.code == "not_found":
+                # Someone else deleted this mirror — the hosted app's own Delete, most
+                # likely — deliberately, not by accident: never resurrect it just because the
+                # local payload or name moved since. report_store.ReportStore.retire_own_sync
+                # makes plan_push refuse every later push for this report; only an explicit
+                # --recreate pushes a fresh one again.
+                store.retire_own_sync(report_id)
+                return None
+            if e.code != "not_owner":
                 raise
-            # The link is gone or no longer ours to update; create a fresh one from the same
+            # The link is no longer ours to update; create a fresh one from the same
             # payload, even if the report was removed meanwhile (_record_push retires it).
             plan = _create_plan(share_ops.context(data_dir), plan["name"], plan["payload"], user_id)
     if response is None:
@@ -508,9 +534,11 @@ def _sweep_lock(data_dir: Path) -> "report_store._FileLock":
 
 def write_plans(data_dir: Path, user_id: int, recreate: Optional[str] = None) -> List[Dict[str, Any]]:
     """Write a plan for every report that needs pushing (or, with `recreate`, a fresh
-    create for that one report, after Carta answered its update with not_found or
-    not_owner) to manco_paths.own_sync_plan_dir, and return what a session needs to
-    make each call: report_id, name, command, arguments_file. _plan drops earlier plans."""
+    create for that one report, after Carta answered its update with `not_owner` — the link
+    is no longer this user's to update, not gone; `not_found` goes through `--retire`
+    instead, which plans nothing) to manco_paths.own_sync_plan_dir, and return what a session
+    needs to make each call: report_id, name, command, arguments_file. _plan drops earlier
+    plans."""
     store = report_store.ReportStore(data_dir)
     plan_dir = manco_paths.own_sync_plan_dir(data_dir)
     ids = [r["id"] for r in store.load()["reports"]] if recreate is None else [recreate]
@@ -538,6 +566,25 @@ def record_session_push(data_dir: Path, report_id: str, pushed_uuid: str) -> Dic
     plan_file.unlink()
     arguments_file.unlink(missing_ok=True)
     return {"recorded": result is not None, "delete_uuid": orphaned[0] if orphaned else None}
+
+
+def retire_session_push(data_dir: Path, report_id: str) -> Dict[str, Any]:
+    """A Claude session's own not_found, exactly as push_if_changed's (see its doc for why
+    `not_found` must never fall back to a create): retires `report_id`'s own-sync link
+    (report_store.ReportStore.retire_own_sync is the one place that happens, sweep or session
+    alike) and drops its plan, making no Carta call of its own — the mirror is already gone,
+    so there's nothing left for this process to delete upstream either.
+
+    Drops the plan files even when `retire_own_sync` finds no local report to retire (removed
+    locally while the push was in flight): guard-own-sync-push.js compares a later, unrelated
+    create/mutate call against every `.plan.json` still on disk, so a stale one left behind
+    here could still wrongly match (or wrongly fail to rule out) a call for a different
+    report."""
+    report_store.ReportStore(data_dir).retire_own_sync(report_id)
+    plan_file, arguments_file = manco_paths.own_sync_plan_files(data_dir, report_id)
+    plan_file.unlink(missing_ok=True)
+    arguments_file.unlink(missing_ok=True)
+    return {"retired": True}
 
 
 def _read_mirrors(path: str) -> Optional[List[Dict[str, Any]]]:
@@ -568,9 +615,10 @@ def main(argv: Optional[list] = None) -> int:
     both are "try again next build", not failures. Why goes to the log, and to the
     status file under own_sync._record_blocked's rule.
 
-    `--plan` (with `--mirrors` or `--recreate`), `--record` and `--lookup` are the skill's
-    own session-push side of this, documented on `_plan`, `record_session_push` and this
-    function's own `--lookup` branch, below.
+    `--plan` (with `--mirrors` or `--recreate`), `--record`, `--retire` and `--lookup` are the
+    skill's own session-push side of this, documented on `_plan`, `record_session_push`,
+    this function's own `--retire`/`--lookup` branches, and references/serve-and-update.md's
+    Step 5.2, below.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", required=True)
@@ -582,7 +630,16 @@ def main(argv: Optional[list] = None) -> int:
                              "every report with one due")
     parser.add_argument("--recreate", metavar="REPORT_ID",
                         help="with --plan: plan a fresh create for this report, after Carta answered "
-                             "its update with not_found or not_owner")
+                             "its update with not_owner — the link is no longer this user's to "
+                             "update. Not for not_found: use --retire instead, there is no mirror "
+                             "left to recreate")
+    parser.add_argument("--retire", metavar="REPORT_ID",
+                        help="stamp this report's own-sync as retired, after Carta answered its "
+                             "update with not_found — the hosted app's own Delete, most likely, "
+                             "deliberate, not a glitch. Drops this report's plan without making "
+                             "any Carta call; a later --plan never pushes this report again, "
+                             "sweep or session alike, until an explicit --recreate starts it "
+                             "over. Prints {\"retired\": true}")
     parser.add_argument("--mirrors", metavar="FILE",
                         help="with --plan: a fa:get:budget_reports call_tool result for this entity, "
                              "fetched by the caller over its own Carta connector and written here "
@@ -596,12 +653,13 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--uuid", help="with --record: the report uuid Carta answered with")
     parser.add_argument("--lookup", metavar="REPORT_ID",
                         help="print {\"uuid\": <this report's own-sync uuid as last recorded "
-                             "locally, or null>} — null for an unknown report id, or while a "
-                             "plan for this report is still on disk (a push this run that "
-                             "hasn't been recorded yet, succeeded or not), never a uuid a "
-                             "failed push left stale. A plain local read, no Carta call, no "
-                             "lock, always exits 0; for Step 5.3 once Step 5.2's push has "
-                             "already returned")
+                             "locally, or null>} — null for an unknown report id, one whose "
+                             "own-sync was retired (its mirror was deleted on the hosted app), "
+                             "or while a plan for this report is still on disk (a push this run "
+                             "that hasn't been recorded yet, succeeded or not), never a uuid a "
+                             "failed push or a retired link left stale. A plain local read, no "
+                             "Carta call, no lock, always exits 0; for Step 5.3 once Step 5.2's "
+                             "push has already returned")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).expanduser()
 
@@ -609,6 +667,10 @@ def main(argv: Optional[list] = None) -> int:
         if not args.uuid:
             parser.error("--record needs --uuid")
         print(json.dumps(record_session_push(data_dir, args.record, args.uuid)))
+        return 0
+
+    if args.retire:
+        print(json.dumps(retire_session_push(data_dir, args.retire)))
         return 0
 
     if args.lookup:
@@ -712,17 +774,22 @@ def _sweep_under_lock(data_dir: Path, user_id: Optional[int]) -> None:
 
 def _recorded_uuid(store: report_store.ReportStore, report_id: str) -> Optional[str]:
     """The own-sync uuid `report_id` has on record locally right now, or `None` if it has
-    never been pushed — the one lookup `_lookup_uuid` (below) builds on, so a change to it
-    (or to what counts as "recorded") only needs making once."""
+    never been pushed, or its own-sync was retired — report_store.ReportStore.retire_own_sync's
+    own doc names every caller and reader of `retired`, and why the dead uuid stays on the
+    report regardless. The one lookup `_lookup_uuid` (below) builds on, so a change to it (or
+    to what counts as "recorded") only needs making once."""
     doc = store.load()
     report = report_store.ReportStore.find(doc, report_id)
+    if (report.get("own_sync") or {}).get("retired"):
+        return None
     return report_store.ReportStore.own_sync_uuid(report)
 
 
 def _lookup_uuid(data_dir: Path, report_id: str) -> Optional[str]:
     """What `--lookup` prints: `report_id`'s own-sync uuid as last recorded locally, or
     `None` when there is nothing safe to offer — the report doesn't exist
-    (`report_store.ReportEditError`), or a plan for it is still on disk
+    (`report_store.ReportEditError`), its own-sync was retired (`_recorded_uuid`'s own doc:
+    the hosted app's own Delete, most likely), or a plan for it is still on disk
     (`manco_paths.own_sync_plan_files`). A plan on disk means this run's `--plan` found a
     push due for this report and `--record` hasn't cleared it yet: the push may
     still be in flight, or it may have failed and was never recorded. Either way, the uuid
