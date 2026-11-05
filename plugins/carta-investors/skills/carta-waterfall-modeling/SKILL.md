@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.10</carta-plugin>
+<carta-plugin>carta-investors:7.25.12</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -330,7 +330,7 @@ names); collect **required inputs first, then optional**. **Read
 [`references/inputs.md`](references/inputs.md) when you reach this step** — it holds the
 collection order & method, the per-`input_type` formatting table
 (DECIMAL/INTEGER/ISO_DATE/ENUM/STRING/NESTED_LIST), the ENUM label/value rules, the
-**`NESTED_LIST`** row inputs, and the **`EQUITY_VALUE`** special case (ask in plain
+**`NESTED_LIST`** row inputs, the firm's **saved inputs**, and the **`EQUITY_VALUE`** special case (ask in plain
 prose, **never** `AskUserQuestion`; never suggest a value). Build the `options` dict (each entry's `option` field → collected/mapped
 value), then go to Step 5.
 

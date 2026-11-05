@@ -51,6 +51,37 @@ defaults to `None`): collect these after all required inputs.
 - **The user already asked for one** — their request names something an optional's `label` or
   `description` covers (e.g. granting units from an authorized pool) → collect that optional
   directly, without the "Use defaults" prompt, then walk the rest as above.
+- **The firm saved inputs for this target** (§Saved inputs) → open with one `AskUserQuestion` —
+  "Use saved inputs" vs "Change one or more" — in place of the prompts above. Spell the "Use
+  saved inputs" label inline as for "Use defaults", with each saved value in place of the default
+  and each kept `NESTED_LIST` row by its `rows` entry's `label`. On "Change", loop through them one at a time,
+  with each saved value in place of the default.
+
+## Saved inputs
+
+When you reach the optional inputs, read the firm's saved inputs for the target once:
+
+```
+read_tool({"name": "waterfall_modeling__get__saved_inputs", "arguments": {
+  "owner_kind":  "FIRM",
+  "owner_id":    "<org_pk from Step 1>",
+  "target_kind": "<locked from Step 2>",
+  "target_id":   "<locked from Step 2>",
+  "include_required": false
+}})
+→ { options, saved_by, saved_at, dropped }
+```
+
+Any error, `404` included → no saved inputs; say nothing and collect the optionals as above. Use
+only the `options` keys whose `available_inputs` entry is not skipped above (no rows or
+`unavailable`), and within a `NESTED_LIST` only the rows still in its `rows` without a `locked_reason`;
+name each other saved row with the `dropped` line below. None left → no saved inputs.
+
+Before the prompt, print one line: _"Saved by {saved_by.name} on {saved_at as ISO date}."_ — or
+_"Saved on {saved_at as ISO date}."_ when `saved_by` or its `name` is null. Then one line per
+`dropped` row: _"**{label}** ({option's `label`}) is no longer available for this company, so this
+run goes without it."_ — or _"A saved {option's `label`} row is no longer available for this
+company, so this run goes without it."_ when `label` is null.
 
 ## Formatting by `input_type`
 
