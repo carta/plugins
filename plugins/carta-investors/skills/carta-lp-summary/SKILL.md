@@ -32,6 +32,9 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   # Branding checkpoints: website versus deck as the brand source.
   - mcp__carta__skill_checkpoint
+  - mcp__carta__read_tool
+  - mcp__claude_ai_Carta__read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Artifact
@@ -51,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.13</carta-plugin>
+<carta-plugin>carta-investors:7.27.0</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -188,7 +191,7 @@ Do **not** put these numbers in the artifact. It re-fetches on open.
             tags: "FUND_ADMIN.INVESTMENT_TAGS" } }
 ```
 
-The config may also carry a `brand` object for the PDF export, or `brand_declined` when the build's branding offer (5f) was turned down. Never write either by hand: `scripts/brand_assets.py` adds them (*Brand the LP profiles*, 5f) and 5b carries them forward.
+The config may also carry a `brand` object (the page theme and the PDF export), or `brand_declined` when the build's branding offer (5f) was turned down. Never write either by hand: `scripts/brand_assets.py` adds them (*Brand the LP profiles*, 5f) and 5b carries them forward.
 
 `firm_context_id` and `firm_warehouse_id` are both required: without either the page shows an error and loads no rows, rather than querying unpinned. Table names must be plain identifiers (letters, digits, `_`, `.`); the artifact refuses anything else because they are placed in SQL. `artifact_title` becomes the page's `<title>`; it travels in this file, never on the command line, so a firm name with quotes or `$` stays intact.
 
@@ -256,15 +259,15 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-summary/scripts/brand_assets.py" d
 - **Use a deck I'll drop in** → ask the user to drop the pitch deck or LP letter (PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF) in the chat, then follow steps 2–5 with the deck as the source. If no deck arrives, the user cancels at step 3, or no brand is applied, run the decline command above and stop.
 - **Not now** → run the decline command above and stop.
 
-## Brand the LP profiles (PDF export)
+## Brand the LP profiles
 
-The page itself stays Carta-styled; only Export's PDF can carry the firm's branding. The build offers it once, as a follow-up after the page is live (5f). With no brand on file, the Export dialog's Template list shows a dashed *Your firm* slot whose *Copy setup prompt* copies **"Brand my LP profiles with <firm_name>'s branding"** for the viewer to paste here. With a brand on file, the slot becomes the firm's template card (the default, remembered per viewer) beside *Carta · Standard layout* (the unbranded PDF).
+Once a brand is on file the page itself wears it: the firm's logo in place of the Carta mark (the eyebrow keeps "Powered by Carta") and its colours on the progress bars, and, for a brand set up from a brand board, its fonts too (a brand from `apply` leaves the page's fonts alone). Export's PDF carries the brand as well, as the firm's template card. The build offers it once, as a follow-up after the page is live (5f). With no brand on file, the page stays Carta-styled and the Export dialog's Template list shows a dashed *Your firm* slot whose *Copy setup prompt* copies **"Brand my LP profiles with <firm_name>'s branding"** for the viewer to paste here. With a brand on file, the slot becomes the firm's template card (the default, remembered per viewer) beside *Carta · Standard layout* (the unbranded PDF).
 
 When the user asks to brand their LP profiles, from their website or from a deck they drop in ("brand my LP profiles from this deck"), or says yes in 5f:
 1. Resolve the firm as in Steps 1–2 (without the intro: the page is not being built) and `$WORKDIR`, that firm's own folder, as in 5a (already done when you come from 5f). The page must already exist (`$WORKDIR/lp-summary-data.json`); if it does not, build it first (Steps 3–5, skipping 5f), then come back.
 
    A branding request on a page that already exists is not a build: it sends none of `skill_started`, `data_checked`, `skill_finished` or `skill_failed`, only the source checkpoint in step 2. When the page does not exist yet, the build it runs first is a build: send `skill_started` before Step 3, then that build's checkpoints as usual.
-2. Pick the source, then invoke `carta-investors:carta-brand-extraction` with it. The source is a pitch deck or LP letter the user attached (a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF), else the one chosen in 5f. With neither, as when the request is the Export dialog's pasted *Copy setup prompt*, ask once with `AskUserQuestion`: **"Where should the branding come from?"** — *Pull it from our website* / *Use a deck I'll drop in*. For the website, ask for the URL if you do not have it. This holds however the request arrives: never fetch the site, read the deck or choose colours yourself instead. **A logo file the user provides takes priority** over any extracted one, as in `carta-agm-deck-builder`. From its result pick one logo (a PNG/SVG, preferably on a transparent or white background), the **accent colour** (`#RRGGBB`) and the heading font family:
+2. Look for the firm's saved brand board first: `mcp__<SERVER>__read_tool(name="fa__get__brand_board")` once Step 2's `set_context` has run, the same board `carta-agm-deck-builder` reuses. A board found there is the source (say so in one line, and re-extract only if the user asks); an error or no board means there is none, so go on. It carries every brand colour by role and the firm's `@font-face` files; read its `typography` and pick the **heading font** and the **body font** (the families the firm's own site uses for headings and for text). Otherwise pick the source, then invoke `carta-investors:carta-brand-extraction` with it. The source is a pitch deck or LP letter the user attached (a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF), else the one chosen in 5f. With neither, as when the request is the Export dialog's pasted *Copy setup prompt*, ask once with `AskUserQuestion`: **"Where should the branding come from?"** — *Pull it from our website* / *Use a deck I'll drop in*. For the website, ask for the URL if you do not have it. This holds however the request arrives: never fetch the site, read the deck or choose colours yourself instead. **A logo file the user provides takes priority** over any extracted one, as in `carta-agm-deck-builder`. From its result pick one logo (a PNG/SVG, preferably on a transparent or white background), the **accent colour** (`#RRGGBB`) and the heading font family:
    - **Website:** its primary brand colour and heading font.
    - **PowerPoint:** the first accent candidate, its heading font, and the first logo candidate. These are exact.
    - **PDF:** the first accent candidate and logo candidate, no font. Tell the user the colour is a best guess from the PDF.
@@ -272,15 +275,21 @@ When the user asks to brand their LP profiles, from their website or from a deck
    When a deck gives no accent candidates, show the logo alone at step 3 and ask the user for the colour; with none, leave out `--accent`.
 
    Record which source was used, without a file name, firm or colour in it: `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lp-summary", checkpoint_label="brand_source_website")`, or `checkpoint_label="brand_source_deck"` for a deck. `<SERVER>` is the connector from Step 1. If the call fails, carry on.
-3. Show the user the logo and the accent colour and ask them to confirm (`AskUserQuestion`: *Use this branding* / *Use a different logo or colour* / *Cancel*). Do nothing more until they confirm.
+3. Show the user the logo, the colours and, for a brand board, the two fonts, and ask them to confirm (`AskUserQuestion`: *Use this branding* / *Use a different logo or colour* / *Cancel*). With fonts, say that these are the firm's own font files from its site and that the firm should be licensed to embed them in documents; a commercial typeface may not allow it. Do nothing more until they confirm.
 4. Embed the confirmed brand in the page config. The script writes it into the file itself — the logo as a `data:` URI (artifacts cannot load external images) and the display font only if its TTF downloads from Google Fonts — so neither the base64 nor the firm name passes through the shell:
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-summary/scripts/brand_assets.py" apply --config "$WORKDIR/lp-summary-data.json" --logo "<logo file path>" --accent "<#RRGGBB>" --font "<font family>"
    ```
    Use `--logo-url "<https URL>"` instead of `--logo` for an extracted logo you have not saved. Leave out `--font` when the font is not on Google Fonts. RC 1 prints why (not an image, over 1 MB, a malformed colour); fix it and run again. When the summary it prints carries a `note`, the font could not be embedded: tell the user the PDF uses the standard typeface.
+   With a brand board, use `apply-board` instead: it embeds the board's primary, secondary and text colours, the heading and body fonts (the board's files, or Google Fonts for a family the board has none for; a file that is not TrueType is converted for the PDF) and the logo:
+   ```bash
+   uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-summary/scripts/brand_assets.py" apply-board --config "$WORKDIR/lp-summary-data.json" --board "<brand board JSON file>" --heading-font "<heading family>" --body-font "<body family>" --logo "<logo file path>"
+   ```
+   When the user chose a different colour at step 3, add `--accent "<#RRGGBB>"`; it replaces the board's primary colour.
+   Write the board to a file under `$WORKDIR` first (the `brand_board` value as JSON), so its contents never pass through the shell. A `note` in the summary names a font left out or one the PDF cannot use; tell the user which text then keeps the standard typeface.
 5. Render and republish to the same page (5c and 5e); the brand rides in the config, and 5b carries it to every later rebuild, so it is extracted once.
 
-What the brand changes, in the PDF only and only when Branding is the firm: the firm's logo top-left in the header (max 32pt tall; the firm's name in text if the logo will not load); the accent on the LP name (only if it clears WCAG AA on white — otherwise it stays the text colour), the section rules and the called and exposure bars; the display font on the LP name and the document title only; a Powered by Carta lockup beside the page numbers. Body text and tables are never branded.
+What the brand changes. On the page: the heading and body fonts, from a brand board only (a family with no file on the board or on Google Fonts keeps the page's own), the firm's logo beside the eyebrow "Powered by Carta", and its accent on the progress bars (only where it reads as a graphic on white; dark mode keeps the page's colours) over a pale tint of its secondary colour. In the PDF, only when Branding is the firm: the firm's logo top-left in the header (max 32pt tall; the firm's name in text if the logo will not load); the accent on the LP name (only if it clears WCAG AA on white — otherwise it stays the text colour), the section rules and the called and exposure bars, the header band's last third in the secondary colour; the heading font on the LP name and the document title, the body font on everything else (Bold where the board has a Bold face), body text in the firm's text colour when it is dark enough to read (7:1 on white); a Powered by Carta lockup beside the page numbers. Table rules are never branded.
 
 ## How the numbers are built
 

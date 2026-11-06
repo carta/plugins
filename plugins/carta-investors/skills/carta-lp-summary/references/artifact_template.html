@@ -53,8 +53,10 @@
       --ink-button-font-color-primary-base:           light-dark(#FFFFFF, #1A1A1A);
       --ink-elevation-global-shadow-medium:           0 4px 20px 0 rgb(0 0 0 / 0.1);
       --ink-size-global-radius-subtle:                4px;
-      --ink-font-global-family-base:                  Inter, system-ui, sans-serif;
-      --ink-font-global-family-prominent:             "SangBleu Versailles", Georgia, serif;
+      --local-font-base-stack:                        Inter, system-ui, sans-serif;
+      --local-font-prominent-stack:                   "SangBleu Versailles", Georgia, serif;
+      --ink-font-global-family-base:                  var(--local-font-base-stack);
+      --ink-font-global-family-prominent:             var(--local-font-prominent-stack);
       /* Ink type scale (theme-with-ink tokens.css): every font size on the page is one of these. */
       --ink-font-global-size-small-1:                        12px;
       --ink-font-global-size-body-1:                         14px;
@@ -108,6 +110,9 @@
     .app { height: 100vh; display: flex; flex-direction: column; }
     .top { position: relative; z-index: 5; padding: 40px var(--local-page-x) 0; box-shadow: inset 0 -1px 0 var(--ink-color-global-border-subtle); background: var(--ink-color-global-surface-background-default); display: flex; flex-direction: column; gap: 16px; transition: padding var(--fold), gap var(--fold), box-shadow var(--fold); }
     .carta-logo { display: block; width: 64px; height: 32px; color: var(--ink-color-global-text-default); }
+    .is-branded #firm-name::after { content: ' · Powered by Carta'; }
+    /* The firm's own logo in the Carta mark's place once its brand is set up; a light plate keeps a dark logo readable in dark mode. */
+    .firm-logo { display: block; height: 32px; width: auto; max-width: 160px; object-fit: contain; padding: 2px 6px; border-radius: 4px; background: light-dark(transparent, #fff); }
     #update-banner-slot:empty { display: none; }
     .title-row { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; transition: margin var(--fold), gap var(--fold); }
     .title-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; }
@@ -1615,7 +1620,7 @@
     const PDF_EXPOSURE_TOP = 10;
     const PDF_INK = [26, 26, 26], PDF_SUBTLE = [101, 107, 107], PDF_RULE = [222, 223, 223], PDF_WASH = [233, 234, 234];
 
-    // ── firm branding (PDF export only) ──
+    // ── firm branding (the page and the PDF export) ──
     const BRAND_LOGO = /^data:image\/(png|jpe?g|webp|gif|svg\+xml)[;,]/i;
     const BRAND_FONT_FILE = /^data:[a-z0-9.+\/-]+;base64,[A-Za-z0-9+\/=]+$/i;
 
@@ -1631,22 +1636,85 @@
       return 1.05 / (L + 0.05);
     }
 
-    // The page data's brand ({firmName, logoDataUri, accentHex, displayFont?, displayFontTtf?}),
-    // checked: null without a firm name. The accent colours text only where it clears AA on
-    // white; otherwise just bars and rules. A display font needs its embedded TTF.
+    // The page data's brand ({firmName, logoDataUri, accentHex, secondaryHex?, inkHex?, displayFont?,
+    // displayFontTtf?, bodyFont?, bodyFontTtf?, bodyFontBoldTtf?, fontFamilies?: {heading?, body?},
+    // webFonts?}), checked: null without a firm name. The accent colours text only where it clears
+    // AA on white; otherwise just bars and rules. The PDF fonts need their embedded TTF. The page
+    // fonts are fontFamilies' families that have a face: a webFonts entry, or the PDF font's file
+    // (a title in the body's family draws from the body's file). Without fontFamilies the page
+    // keeps its own fonts.
+    const BRAND_FAMILY = /^[A-Za-z0-9 ]{1,40}$/;
+    const BRAND_MAX_WEB_FONTS = 4;
+    const BRAND_INK_CONTRAST = 7;
+    const BRAND_BAR_CONTRAST = 3;
+    const BRAND_TRACK_TINT = 0.8;
+
+    const brandFamily = value => (typeof value === 'string' && BRAND_FAMILY.test(value.trim()) ? value.trim() : null);
+    const brandFontFile = value => (typeof value === 'string' && BRAND_FONT_FILE.test(value) ? value : null);
+
+    function brandPdfFont(family, ttf) {
+      const name = brandFamily(family), file = brandFontFile(ttf);
+      return name && file ? { family: name, ttf: file } : null;
+    }
+
     function normalizeBrand(raw) {
       if (!raw || typeof raw !== 'object') return null;
       const firmName = typeof raw.firmName === 'string' ? raw.firmName.trim() : '';
       if (!firmName) return null;
       const accent = hexRgb(raw.accentHex);
-      const family = typeof raw.displayFont === 'string' && /^[A-Za-z0-9 ]{1,40}$/.test(raw.displayFont.trim()) ? raw.displayFont.trim() : null;
+      const ink = hexRgb(raw.inkHex);
+      const body = brandPdfFont(raw.bodyFont, raw.bodyFontTtf);
+      const boldTtf = brandFontFile(raw.bodyFontBoldTtf);
+      const display = brandPdfFont(raw.displayFont, raw.displayFontTtf || (raw.displayFont === raw.bodyFont ? raw.bodyFontTtf : null));
+      const families = raw.fontFamilies && typeof raw.fontFamilies === 'object' ? raw.fontFamilies : {};
+      const pageFonts = { heading: brandFamily(families.heading), body: brandFamily(families.body) };
+      const webFonts = (Array.isArray(raw.webFonts) ? raw.webFonts : []).filter(f => f && brandFamily(f.family)
+        && Number.isInteger(f.weight) && f.weight >= 100 && f.weight <= 900 && brandFontFile(f.uri))
+        .map(f => ({ family: f.family.trim(), weight: f.weight, uri: f.uri }));
+      const faceFiles = [];
+      if (pageFonts.heading && display && display.family === pageFonts.heading) faceFiles.push({ family: display.family, weight: 400, uri: display.ttf });
+      if (pageFonts.body && body && body.family === pageFonts.body) {
+        faceFiles.push({ family: body.family, weight: 400, uri: body.ttf });
+        if (boldTtf) faceFiles.push({ family: body.family, weight: 700, uri: boldTtf });
+      }
+      for (const f of faceFiles) if (!webFonts.some(w => w.family === f.family && w.weight === f.weight)) webFonts.push(f);
       return {
         firmName,
         logoDataUri: typeof raw.logoDataUri === 'string' && BRAND_LOGO.test(raw.logoDataUri) ? raw.logoDataUri : null,
         accent,
         accentText: !!accent && contrastOnWhite(accent) >= 4.5,
-        displayFont: family && typeof raw.displayFontTtf === 'string' && BRAND_FONT_FILE.test(raw.displayFontTtf) ? { family, ttf: raw.displayFontTtf } : null,
+        secondary: hexRgb(raw.secondaryHex),
+        ink: ink && contrastOnWhite(ink) >= BRAND_INK_CONTRAST ? ink : null,
+        displayFont: display,
+        bodyFont: body ? { ...body, boldTtf } : null,
+        pageFonts,
+        webFonts: webFonts.slice(0, BRAND_MAX_WEB_FONTS),
       };
+    }
+
+    const rgbCss = c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+    const tint = (c, k) => c.map(v => Math.round(v + (255 - v) * k));
+    const brandTrack = c => tint(c, BRAND_TRACK_TINT);
+
+    // The page's own look under the firm's brand: its fonts, and its colours on the progress bars
+    // (the accent where it reads as a graphic on white, the secondary's pale tint for the track).
+    // Dark mode keeps the page's own colours. '' when the brand has nothing to change.
+    function brandThemeCss(brand) {
+      if (!brand) return '';
+      const css = [];
+      for (const f of brand.webFonts) css.push('@font-face { font-family: "' + f.family + '"; font-weight: ' + f.weight + '; src: url("' + f.uri + '"); font-display: swap; }');
+      const has = family => !!family && brand.webFonts.some(f => f.family === family);
+      const vars = [];
+      if (has(brand.pageFonts.body)) vars.push('--ink-font-global-family-base: "' + brand.pageFonts.body + '", var(--local-font-base-stack);');
+      if (has(brand.pageFonts.heading)) vars.push('--ink-font-global-family-prominent: "' + brand.pageFonts.heading + '", var(--local-font-prominent-stack);');
+      if (vars.length) css.push(':root { ' + vars.join(' ') + ' }');
+      if (brand.accent && contrastOnWhite(brand.accent) >= BRAND_BAR_CONTRAST) {
+        css.push('.called-bar div div, .x-bar div, .bar-fill { background: light-dark(' + rgbCss(brand.accent) + ', var(--ink-color-global-text-default)); }');
+      }
+      if (brand.secondary) {
+        css.push('.called-bar div, .x-bar, .bar-track { background: light-dark(' + rgbCss(brandTrack(brand.secondary)) + ', var(--local-color-wash)); }');
+      }
+      return css.join('\n');
     }
 
     // What the dialog's "Copy setup prompt" copies for the viewer to paste in chat, what the tip
@@ -1729,18 +1797,24 @@
 
     // Draws each model on its own pages of a jsPDF document, then the footer on every page.
     //   meta: {firm, generated, brand?}; brand (a branded export): {firmName, logo: {data, w, h}
-    //   or null, accent, accentText, fontFamily or null, poweredBy: {data} or null}. Body and
-    //   table text are never branded.
+    //   or null, accent, accentText, secondary, ink, fontFamily or null (titles), bodyFamily or null
+    //   and bodyBold (everything else), poweredBy: {data} or null}.
     function drawProfiles(doc, models, meta) {
       const brand = meta.brand || null;
       const accent = brand && brand.accent ? brand.accent : null;
+      const ink = brand && brand.ink ? brand.ink : PDF_INK;
+      const track = brand && brand.secondary ? brandTrack(brand.secondary) : PDF_WASH;
       const titleFont = (size, color) => {
-        if (brand && brand.fontFamily) { doc.setFont(brand.fontFamily, 'normal'); doc.setFontSize(size); doc.setTextColor(...(color || PDF_INK)); }
+        if (brand && brand.fontFamily) { doc.setFont(brand.fontFamily, 'normal'); doc.setFontSize(size); doc.setTextColor(...(color || ink)); }
         else font(size, 'bold', color);
       };
       const M = PDF.margin, W = PDF.w - 2 * M, bottom = PDF.h - PDF.foot - 20;
       let y = M, current = null;
-      const font = (size, style, color) => { doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size); doc.setTextColor(...(color || PDF_INK)); };
+      const font = (size, style, color) => {
+        if (brand && brand.bodyFamily) doc.setFont(brand.bodyFamily, style === 'bold' && brand.bodyBold ? 'bold' : 'normal');
+        else doc.setFont('helvetica', style || 'normal');
+        doc.setFontSize(size); doc.setTextColor(...(color || ink));
+      };
       const text = (s, x, yy, opts) => doc.text(pdfText(s), x, yy, opts);
       const fit = (s, width) => {
         let t = pdfText(s);
@@ -1751,8 +1825,8 @@
       // Section rules and bars take the brand accent; row rules stay grey.
       const rule = (yy, color) => { doc.setDrawColor(...(color || accent || PDF_RULE)); doc.setLineWidth(0.75); doc.line(M, yy, M + W, yy); };
       const bar = (x, yy, width, fraction) => {
-        doc.setFillColor(...PDF_WASH); doc.roundedRect(x, yy, width, 5, 2.5, 2.5, 'F');
-        if (fraction > 0) { doc.setFillColor(...(accent || PDF_INK)); doc.roundedRect(x, yy, Math.max(5, width * fraction), 5, 2.5, 2.5, 'F'); }
+        doc.setFillColor(...track); doc.roundedRect(x, yy, width, 5, 2.5, 2.5, 'F');
+        if (fraction > 0) { doc.setFillColor(...(accent || ink)); doc.roundedRect(x, yy, Math.max(5, width * fraction), 5, 2.5, 2.5, 'F'); }
       };
       const newPage = () => {
         doc.addPage();
@@ -1773,7 +1847,10 @@
 
       // A branded header leads with the firm's logo (or, if it would not load, its name).
       function header(m) {
-        doc.setFillColor(...(accent || PDF_INK)); doc.rect(M, y, W, 3, 'F');
+        // A two-colour brand draws the band's last third in the secondary.
+        const split = brand && brand.secondary ? Math.round(W * 2 / 3) : W;
+        doc.setFillColor(...(accent || ink)); doc.rect(M, y, split, 3, 'F');
+        if (split < W) { doc.setFillColor(...brand.secondary); doc.rect(M + split, y, W - split, 3, 'F'); }
         y += 14;
         if (brand && brand.logo) {
           doc.addImage(brand.logo.data, 'PNG', M, y, brand.logo.w, brand.logo.h);
@@ -1784,7 +1861,7 @@
         } else y += 8;
         titleFont(9, PDF_SUBTLE); text(meta.firm + ' · LP Profile', M, y);
         y += 26;
-        titleFont(22, brand && brand.accentText ? accent : PDF_INK); text(fit(m.name, W), M, y);
+        titleFont(22, brand && brand.accentText ? accent : ink); text(fit(m.name, W), M, y);
         y += 18;
         font(10, 'normal', PDF_SUBTLE);
         if (m.asOf) { text(m.asOf, M, y); y += 14; }
@@ -1828,7 +1905,7 @@
           y += 24;
           const figs = (items, x, width) => items.forEach(([value, label, negative], i) => {
             const fx = x + i * (width / items.length);
-            font(11, 'bold', negative ? [163, 48, 29] : PDF_INK); text(value, fx, y);
+            font(11, 'bold', negative ? [163, 48, 29] : ink); text(value, fx, y);
             font(8.5, 'normal', PDF_SUBTLE); text(label, fx, y + 12);
           });
           figs([[b.called, 'Called · ' + b.calledPct + '%'], [b.unfunded, 'Unfunded']], M, col);
@@ -1859,7 +1936,7 @@
           text(p.committed, cellX(2), y, { align: 'right' });
           text(p.unfunded, cellX(3), y, { align: 'right' });
           text(p.tvpi, cellX(4), y, { align: 'right' });
-          font(9.5, 'normal', p.irrNegative ? [163, 48, 29] : PDF_INK); text(p.irr, cellX(5), y, { align: 'right' });
+          font(9.5, 'normal', p.irrNegative ? [163, 48, 29] : ink); text(p.irr, cellX(5), y, { align: 'right' });
           y += 6; rule(y, PDF_WASH); y += 14;
         }
       }
@@ -2968,10 +3045,11 @@
       }
       addImage(src, _type, x, y, w, h) { const img = this.images.get(src); if (this.on() && img) this.ctx.drawImage(img, x, y, w, h); }
       addFileToVFS(name, b64) { this.vfs = Object.assign(this.vfs || {}, { [name]: b64 }); }
-      addFont(file, family) {
+      addFont(file, family, style) {
         if (typeof FontFace !== 'function') throw new Error('no FontFace');
-        if (!previewFonts.has(family)) previewFonts.set(family, new FontFace(family, 'url(data:font/ttf;base64,' + this.vfs[file] + ')').load().then(f => document.fonts.add(f)).catch(() => {}));
-        this.fonts.push(previewFonts.get(family));
+        const key = family + ':' + (style || 'normal');
+        if (!previewFonts.has(key)) previewFonts.set(key, new FontFace(family, 'url(data:font/ttf;base64,' + this.vfs[file] + ')', { weight: style === 'bold' ? '700' : '400' }).load().then(f => document.fonts.add(f)).catch(() => {}));
+        this.fonts.push(previewFonts.get(key));
       }
       addPage() { this.pages += 1; this.page = this.pages; }
       setPage(p) { this.page = p; }
@@ -3521,8 +3599,29 @@
     }
 
     // ── export ──
-    // The firm's brand from the page data (the skill embeds it on request); export only.
+    // The firm's brand from the page data (the skill embeds it on request).
     const BRAND = normalizeBrand(CONFIG.brand);
+    // The brand's fonts and bar colours apply to the page itself, and its logo replaces the Carta
+    // mark (the eyebrow keeps Carta's credit).
+    function applyBrandToPage() {
+      const css = brandThemeCss(BRAND);
+      if (css) {
+        const style = document.createElement('style');
+        style.id = 'brand-theme';
+        style.textContent = css;
+        document.head.appendChild(style);
+      }
+      const mark = document.querySelector('.carta-logo');
+      if (BRAND && BRAND.logoDataUri && mark) {
+        const img = new Image();
+        img.className = 'firm-logo';
+        img.alt = BRAND.firmName;
+        img.src = BRAND.logoDataUri;
+        mark.replaceWith(img);
+        document.documentElement.classList.add('is-branded');
+      }
+    }
+    applyBrandToPage();
     const EXPORT_BRAND_KEY = 'cartaLpSummarySplit.exportBrand';
     // Powered by Carta (plugins/carta-investors/assets/powered_by_carta.svg), dark ink for a white page.
     const POWERED_BY_SVG = '<svg width="572" height="101" viewBox="0 0 572 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M370.228 0V100.61H571.448V0H370.228ZM567.423 96.5856H374.252V4.0244H567.423V96.5856ZM396.623 52.2674C396.623 42.1817 405.138 36.2615 412.777 36.2615C418.246 36.2615 423.347 38.3119 426.076 43.0367L420.967 45.9988C420.087 44.6697 418.883 43.5796 417.472 42.8341C416.057 42.0885 414.48 41.6995 412.878 41.7116C408.386 41.7116 403.042 45.2167 403.042 52.162C403.042 59.1074 408.151 62.6732 413.304 62.6732C416.888 62.6732 419.864 60.6756 421.628 57.5919L426.85 60.0029C423.894 65.3193 418.611 68.1517 412.477 68.1517C404.761 68.1436 396.623 62.2154 396.623 52.2633V52.2674ZM445.493 68.1517C449.738 68.1517 453.748 66.2796 455.816 63.5607V67.3008H462.125V37.0436H455.816V40.7918C453.85 38.0485 449.746 36.2615 445.493 36.2615C436.2 36.2615 429.701 43.0245 429.701 52.2066C429.701 61.3887 436.261 68.1517 445.493 68.1517ZM446.101 41.9993C451.932 41.9993 455.934 46.3472 455.934 52.2066C455.934 58.066 451.928 62.4139 446.101 62.4139C440.275 62.4139 436.139 58.0052 436.139 52.0851C436.139 46.1649 440.271 41.9993 446.101 41.9993ZM496.029 43.0488H489.481V37.0071H496.09V29.1217H502.59V37.0071H509.195V43.0488H502.59V67.2886H496.029V43.0488ZM527.315 68.1517C531.568 68.1517 535.578 66.2796 537.646 63.5607V67.3008H543.963V37.0436H537.646V40.7918C535.679 38.0485 531.576 36.2615 527.315 36.2615C518.03 36.2615 511.53 43.0245 511.53 52.2066C511.53 61.3887 518.086 68.1517 527.315 68.1517ZM527.931 41.9993C533.753 41.9993 537.767 46.3472 537.767 52.2066C537.767 58.066 533.753 62.4139 527.931 62.4139C522.108 62.4139 517.969 58.0052 517.969 52.0851C517.969 46.1649 522.1 41.9993 527.931 41.9993ZM476.409 67.2602H469.849V37.0031H475.858V42.6355C477.346 39.2885 479.58 37.1084 483.213 36.9261C483.963 36.9139 484.709 36.9261 485.459 37.0071L485.359 43.061C480.14 43.061 476.413 45.8569 476.413 53.6532V67.2643L476.409 67.2602Z" fill="#1A1A1A"/><path d="M0 67.2018V65.4679L2.60086 65.0633C4.62375 64.7743 4.97053 64.3119 4.97053 61.9422V28.6512C4.97053 26.2816 4.62375 25.8192 2.60086 25.5302L0 25.1256V23.3917H19.8243C28.3205 23.3917 37.4524 25.4146 37.4524 35.1245C37.4524 42.9849 30.0544 47.3774 19.8821 47.3774H10.9814V62C10.9814 64.3119 11.3282 64.7743 13.3511 64.9477L17.6858 65.3523V67.2018H0ZM10.9814 27.0907V44.8922H20.5179C26.76 44.8922 30.6323 42.0601 30.6323 35.2979C30.6323 28.5356 26.76 25.7036 20.5179 25.7036H13.8713C11.4438 25.7036 10.9814 25.877 10.9814 27.0907Z" fill="#1A1A1A"/><path d="M54.8109 67.8953C46.3725 67.8953 39.6681 61.8844 39.6681 52.5791C39.6681 43.2738 46.3725 37.263 54.8109 37.263C63.2492 37.263 69.9536 43.2738 69.9536 52.5791C69.9536 61.8844 63.2492 67.8953 54.8109 67.8953ZM54.8109 65.6412C59.6658 65.6412 64.0006 61.7111 64.0006 52.5791C64.0006 43.4472 59.6658 39.5171 54.8109 39.5171C49.9559 39.5171 45.6212 43.4472 45.6212 52.5791C45.6212 61.7111 49.9559 65.6412 54.8109 65.6412Z" fill="#1A1A1A"/><path d="M87.6815 67.8375L76.6423 42.2335C76.1221 41.0776 75.8331 40.6152 73.8102 40.1528L72.0763 39.7482V38.1877H86.41V39.7482L84.5604 40.1528C82.5376 40.6152 81.9596 41.0776 82.4798 42.2335L90.2823 60.6129L96.4088 46.6261L92.8832 38.1877H104.385V39.7482L102.535 40.1528C100.512 40.6152 99.9922 41.0776 100.455 42.2335L107.853 60.6129L115.655 42.2335C116.175 41.0776 115.771 40.6152 113.748 40.1528L111.898 39.7482V38.1877H122.995V39.7482L121.261 40.1528C119.239 40.6152 118.95 41.0776 118.429 42.2335L107.332 67.8375H105.252L97.7381 49.8627L89.7622 67.8375H87.6815Z" fill="#1A1A1A"/><path d="M139.946 67.8953C130.988 67.8953 125.15 61.4221 125.15 52.7525C125.15 43.0427 132.433 37.263 139.599 37.263C146.824 37.263 152.43 41.7711 153.644 49.9205H130.641C130.641 50.0939 130.641 50.2673 130.641 50.4407C130.641 59.0524 135.091 64.2541 141.911 64.2541C146.073 64.2541 150.465 62.6936 152.257 56.4515H154.106C152.488 64.0229 147.518 67.8953 139.946 67.8953ZM139.484 39.4015C135.265 39.4015 131.739 42.2335 130.872 47.6086H147.575C147.113 41.7133 143.818 39.4015 139.484 39.4015Z" fill="#1A1A1A"/><path d="M159.249 67.2018V65.6412L161.099 65.2367C163.122 64.7743 163.469 64.4275 163.469 63.156V42.8693C163.469 41.5977 163.122 41.251 161.099 40.7886L159.249 40.384V38.8235L168.67 37.4942V44.7188C170 39.806 174.045 37.4364 177.282 37.4364C179.594 37.4364 181.443 38.5345 181.443 40.9042C181.443 42.8115 179.998 44.083 178.265 44.083C175.837 44.083 175.201 41.7133 172.889 41.7133C170.924 41.7133 168.67 44.5454 168.67 48.2444V63.156C168.67 64.4275 169.017 64.8321 171.04 65.1211L174.045 65.5257V67.2018H159.249Z" fill="#1A1A1A"/><path d="M199.407 67.8953C190.448 67.8953 184.611 61.4221 184.611 52.7525C184.611 43.0427 191.893 37.263 199.06 37.263C206.285 37.263 211.891 41.7711 213.105 49.9205H190.102C190.102 50.0939 190.102 50.2673 190.102 50.4407C190.102 59.0524 194.552 64.2541 201.372 64.2541C205.533 64.2541 209.926 62.6936 211.718 56.4515H213.567C211.949 64.0229 206.978 67.8953 199.407 67.8953ZM198.945 39.4015C194.725 39.4015 191.2 42.2335 190.333 47.6086H207.036C206.574 41.7133 203.279 39.4015 198.945 39.4015Z" fill="#1A1A1A"/><path d="M232.581 67.8953C225.241 67.8953 218.884 62.1156 218.884 52.9837C218.884 43.794 225.415 37.263 233.911 37.263C237.494 37.263 239.806 38.7657 241.193 40.095V26.6861C241.193 25.4146 240.846 24.8944 238.823 24.6055L235.818 24.2009V22.6404L246.395 21.311V62.2312C246.395 63.5028 246.742 63.8495 248.765 64.3119L250.614 64.7165V66.277L241.193 67.4329V63.7339C240.153 64.8899 237.205 67.8953 232.581 67.8953ZM235.298 64.6587C238.246 64.6587 240.095 63.6184 241.193 62.6936V41.3666C239.517 40.3262 237.841 39.7482 235.356 39.7482C229.229 39.7482 224.663 44.372 224.663 51.9434C224.663 59.8038 229.171 64.6587 235.298 64.6587Z" fill="#1A1A1A"/><path d="M286.714 67.8953C283.131 67.8953 280.53 66.3926 279.143 65.0633L274.635 67.8375H274.23V26.6861C274.23 25.4146 273.883 25.0678 271.86 24.6055L270.011 24.2009V22.6404L279.432 21.311V41.4244C280.472 40.2684 283.42 37.263 288.043 37.263C295.384 37.263 301.741 43.0427 301.741 52.1746C301.741 61.3643 295.21 67.8953 286.714 67.8953ZM285.327 40.4996C282.379 40.4996 280.53 41.5399 279.432 42.4647V63.7917C281.108 64.8321 282.784 65.4101 285.269 65.4101C291.396 65.4101 295.962 60.7863 295.962 53.2149C295.962 45.3545 291.453 40.4996 285.327 40.4996Z" fill="#1A1A1A"/><path d="M311.899 81.8244C310.107 81.8244 309.067 80.495 309.067 79.1657C309.067 77.6052 310.223 76.2759 312.65 75.2933C314.789 74.4264 315.771 74.0218 316.812 71.6521L319.124 66.5082L308.662 42.2335C308.142 41.0776 307.853 40.6152 305.83 40.1528L304.096 39.7482V38.1877H318.43V39.7482L316.581 40.1528C314.558 40.6152 313.98 41.0776 314.5 42.2335L322.071 60.0927L330.105 42.2335C330.625 41.0776 330.221 40.6152 328.198 40.1528L326.348 39.7482V38.1877H337.445V39.7482L335.711 40.1528C333.688 40.6152 333.4 41.0776 332.879 42.2335L317.39 76.3915C315.482 80.6106 313.575 81.8244 311.899 81.8244Z" fill="#1A1A1A"/></svg>';
@@ -3564,24 +3663,34 @@
     }
 
     // What a branded PDF draws with for `brandKey` ('firm' or 'carta'), the choice an export
-    // read when it started. A display font that jsPDF cannot register is left out, so the
-    // title falls back to the standard face.
+    // read when it started. A font that jsPDF cannot register is left out, so that text falls
+    // back to the standard face.
     async function exportBrandAssets(doc, brandKey) {
       if (!BRAND || brandKey !== 'firm') return null;
       const [logo, poweredBy] = await Promise.all([
         BRAND.logoDataUri ? rasterize(BRAND.logoDataUri, PDF_LOGO_BOX) : Promise.resolve(null),
         rasterize('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(POWERED_BY_SVG), PDF_POWERED_BY),
       ]);
-      let fontFamily = null;
+      const addFont = (ttf, file, family, style) => {
+        doc.addFileToVFS(file, ttf.split(',')[1]);
+        doc.addFont(file, family, style);
+      };
+      let fontFamily = null, bodyFamily = null, bodyBold = false;
       if (BRAND.displayFont) {
         try {
-          doc.addFileToVFS('brand-display.ttf', BRAND.displayFont.ttf.split(',')[1]);
-          doc.addFont('brand-display.ttf', 'BrandDisplay', 'normal');
+          addFont(BRAND.displayFont.ttf, 'brand-display.ttf', 'BrandDisplay', 'normal');
           doc.setFont('BrandDisplay', 'normal');
           fontFamily = 'BrandDisplay';
         } catch (_) { fontFamily = null; }
       }
-      return { firmName: BRAND.firmName, logo, accent: BRAND.accent, accentText: BRAND.accentText, fontFamily, poweredBy };
+      if (BRAND.bodyFont) {
+        try {
+          addFont(BRAND.bodyFont.ttf, 'brand-body.ttf', 'BrandBody', 'normal');
+          bodyFamily = 'BrandBody';
+          if (BRAND.bodyFont.boldTtf) { addFont(BRAND.bodyFont.boldTtf, 'brand-body-bold.ttf', 'BrandBody', 'bold'); bodyBold = true; }
+        } catch (_) { bodyFamily = null; bodyBold = false; }
+      }
+      return { firmName: BRAND.firmName, logo, accent: BRAND.accent, accentText: BRAND.accentText, secondary: BRAND.secondary, ink: BRAND.ink, fontFamily, bodyFamily, bodyBold, poweredBy };
     }
     // The viewer saves files only through its downloads capability (granted on publish); where it
     // resolves to null, or turns out unavailable, export copies a table instead.
