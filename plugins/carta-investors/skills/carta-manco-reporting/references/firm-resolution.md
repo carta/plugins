@@ -1,15 +1,19 @@
-# Gate 0 and Step 0 — greeting, surface check, cache probe
+# Gate 0, Gate 1, and Step 0 — greeting, surface check, hosted-or-local, cache probe
 
-Four things run on **every** invocation, in this order: the greeting's
-opening line, the surface check, Step 0's argument capture and local cache
-probe, and the rest of the greeting. Leading with the opening line means the
-reader has an answer to "what is this going to do" on screen while the
-checks behind it run, rather than a silent pause before anything appears.
+On **every** invocation: the greeting's opening line and the surface check (Gate 0) — a
+sandboxed surface exits there, before any of the rest. On a **local surface**: Gate 1's
+hosted-or-local question next — a "Hosted" pick replies with the link and exits there too.
+Only once Gate 1 picks **"Local"** (the normal case) does Step 0's argument capture and local
+cache probe, and the rest of the greeting, run. Leading with the opening line means the
+reader has an answer to "what is this going to do" on screen while the checks behind it run,
+rather than a silent pause before anything appears.
 
 **Steps 1, 1.5, and 2 are the BUILD path and live in [firm-lookup.md](firm-lookup.md).**
-Read that file only when Step 0.2 classifies a **MISS**, or when
-`<FORCE_REFRESH>` was set. A warm or soft cache hit skips all three steps and
-goes straight to Step 2.5, so on those runs the BUILD path is never needed.
+Read that file only when Step 0.2 classifies a **MISS**, when `<FORCE_REFRESH>` was set, or
+when Gate 1's "Hosted, firm named" branch resolves a firm outside the BUILD path proper (its
+own paragraph says which pieces of Step 1 it borrows and which it skips). A warm or soft cache
+hit skips all three steps and goes straight to Step 2.5, so on those runs the BUILD path is
+never needed.
 
 Splitting them is deliberate: Step 0 is marked *always*, so anything beside it
 is re-read on every warm reopen — including the MCP firm lookup, the ManCo
@@ -44,6 +48,14 @@ paragraph, so the check starts without waiting on a round-trip — the reader
 gets the opening line at the same moment the check begins, not after it.
 
 ## Gate 0 — Surface check (runs right after the opening line)
+
+**There is no Bash tool in this session at all** (claude.ai chat, or another surface with
+none) → skip the uv prerequisite below and everything else in this gate — none of it can run
+without Bash. Go straight to the **`surface=sandboxed`** branch below, including its
+hosted-link hand-off, and treat its "Open the hosted app" step as the gate-file-unreadable
+case (that section's last sentence: skip opening, give the reply with the link). A Bash
+tool that IS present but whose `detect-surface` call fails ("No such file", a bad path) is a
+different case, covered further down where `detect-surface` is actually run.
 
 ### Prerequisite — ensure `uv` is installed
 
@@ -147,20 +159,24 @@ different installer, a different URL, or ask the user again how to proceed.
 
 **SILENT from here on** — zero further user-facing output in this step,
 unless the surface turns out to be sandboxed (below). The next allowed
-output is 0.3's continuation of the greeting. Do NOT output any text after
+output is Gate 1's question (on `"surface": "local"`) or 0.3's continuation
+of the greeting (once Gate 1 picks "Local"). Do NOT output any text after
 this check, including phrases like "Surface is local — safe to continue",
 "Checking local cache", "Now checking the local dashboard cache for…",
 "Surface is local, proceeding silently to Step 0.2's cache probe", or any
 other narration of what is happening — **announcing that you're about to
 be quiet is not the same as being quiet, and is exactly as forbidden as any
-other sentence here.** Between this check and 0.3, a tool call is the whole
-turn — issue it and say nothing, not even a single confirming word.
+other sentence here.** Between this check and Gate 1's question (or 0.3, once
+past Gate 1), a tool call is the whole turn — issue it and say nothing, not
+even a single confirming word.
 
-**If the command itself fails to run** — wrong path, missing file,
-permission denied, anything short of a `"surface": "..."` verdict — that is
-not a sandboxed result, and it's the same environment-failure case
-[errors.md](errors.md) covers for every other script this skill calls.
-Retry it once, silently, with no text before or after the retry — **the
+**If the Bash tool itself is present but the command fails** — wrong path,
+missing file, permission denied, anything short of a `"surface": "..."`
+verdict — that is not a sandboxed result (there's a Bash tool here to retry
+with; the no-Bash-tool case above, at the top of this gate, is the one that
+is), and it's the same environment-failure case [errors.md](errors.md)
+covers for every other script this skill calls. Retry it once, silently,
+with no text before or after the retry — **the
 identical command, byte for byte.** Do not vary it: no swapping in an
 explicit `CLAUDE_PLUGIN_ROOT=<value>` prefix, no substituting a hardcoded or
 derived absolute path in place of `${CLAUDE_PLUGIN_ROOT}`, no trying a
@@ -224,22 +240,113 @@ it:**
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" detect-surface
 ```
 - `"surface": "sandboxed"` → **stop immediately.** Do **not** scan caches, resolve a
-  firm, touch the MCP, or launch `serve.py`. The opening line already went out, so
-  reply with only this message (substance verbatim), then end the turn:
-  > This dashboard launches an interactive web app on your own machine — a local
-  > server plus your browser — so it only works when Claude Code is running
-  > locally. It looks like this session is running in the cloud. To use this
-  > dashboard, open a local Claude Code session (in Claude Desktop, switch from
-  > cloud to local), then re-run: "open the ManCo dashboard for \<firm\>".
+  firm, touch the MCP, or launch `serve.py`. **Open the hosted app** with the bare link
+  (see "Open the hosted app" below), then reply with this message (substance verbatim),
+  then end the turn:
+  > This session is running in the cloud, where the local build above can't reach your
+  > browser — but you don't need it. **Carta also hosts this dashboard** at
+  > **https://manco-reporting.carta.cloud** — sign in with Carta and pick your firm, with
+  > nothing to build.
+  >
+  > - **Key Metrics, Monthly P&L, and Management Fee Income** by fund
+  > - **Budget vs Actuals**, with journal-entry drill-downs
+  > - Carta's own budget shows there automatically. A budget imported from your own
+  >   workbook reaches the hosted app through this skill's local workflow.
+  >
+  > **→ Open it now: https://manco-reporting.carta.cloud**
+  >
+  > **Want to import your own budget workbook, or customize what's shown?** Open a local
+  > Claude Code session (in Claude Desktop, switch from cloud to local) and ask, "open the
+  > ManCo dashboard for `<firm>`".
 
-  This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to
-  launch anyway, and do **not** fall back to another surface or tool.
-- `"surface": "local"` (the normal case) → continue to **Step 0.1** silently. Do not
-  output any text — proceed directly to the cache probe with a tool call
-  and nothing else.
+  If the invocation named a firm, add one line to that reply, after the "Open it now" line:
+  "You asked about **\<firm\>** — pick it from the firm chooser when the app opens, or use
+  **Switch firm** if it opens a different one." (No deep link here: a sandboxed session does
+  not reliably have the MCP.)
+
+  This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to launch
+  anyway, and do **not** fall back to another surface or tool. (Opening the hosted link in
+  the in-app browser is not a fallback; it is part of this reply.)
+- `"surface": "local"` (the normal case) → continue to **Gate 1** silently. Do not
+  output any text — proceed directly with a tool call and nothing else.
 
 An explicit `MANCO_REPORTING_SURFACE=local|sandboxed` env var overrides both
 signals above (tests / unusual installs).
+
+### Open the hosted app
+
+**The bare link is `https://manco-reporting.carta.cloud`** (`manco_paths.py`'s
+`HOSTED_APP_URL`) — every "the bare link" below means this.
+
+Read `${CLAUDE_PLUGIN_ROOT}/references/gate-in-app-browser.md` (the plugin's own
+`references/`, not this skill's; do not search for it) and follow it to set
+`browser_family`, then its "Open a link" section to open the hosted link. If that file can't
+be read, skip opening and give the reply with the link — never stop. Either way, the link
+goes in the reply text itself: a terminal session has `browser_family: none`, so the reply is
+the only way the user reaches it.
+
+## Gate 1 — Hosted or local (local sessions only)
+
+Reached only on `"surface": "local"` — a sandboxed session never reaches here (Gate 0 already
+exited). This gate runs **before** Step 0.1 captures `<FIRM_NAME_INPUT>`/`<FIRM_ID_HINT>` and
+before Step 1 runs over MCP for the BUILD path proper — both still apply here exactly as Step
+0.1/Step 1 state them, just reached from this earlier point on a "hosted, firm named" pick,
+not only from a cache MISS. Carta hosts this dashboard at the bare link (see "Open the hosted
+app" above); the user signs in there and the hosted app's own firm chooser (or its `?firm=`
+query param — see [DEPLOY.md](../DEPLOY.md)'s "Which firm opens") picks the firm, so the
+hosted path needs no local cache. Ask **before Step 0.1** — before any cache scan or MCP call
+— with `AskUserQuestion`:
+
+> **Header:** "Where to run"
+> **Question:** "Open the hosted ManCo dashboard, or build it locally on this machine?"
+> - **"Open hosted app"** — Use it in your browser at manco-reporting.carta.cloud: sign in
+>   with Carta, nothing to install. Carta's own budget shows there automatically; a budget
+>   you import from your own workbook needs this skill's local workflow to reach it.
+> - **"Build locally"** — Run it on this computer from your firm's data, pulled through your
+>   Carta connection, with your own workbook budget imported and mapped against it.
+
+Skip the question when the invocation already chose one: "hosted" or "online" (or the bare
+hosted-app URL) → hosted; "local", "build", "refresh", or "fetch fresh" → local (0.1 already
+treats the last two as `<FORCE_REFRESH>`, which only makes sense against a local build). A
+pasted Carta firm URL/UUID chooses neither, so ask as usual.
+
+- **Hosted, no firm named** → **Open the hosted app** with the bare link, then reply with it
+  and end the turn: "Open **https://manco-reporting.carta.cloud** in your browser, sign in
+  with Carta, and pick your firm." Do **not** scan caches, touch the Carta MCP, or launch
+  `serve.py`.
+- **Hosted, firm named** (name, or a pasted Carta firm URL/UUID) → resolve the firm's
+  canonical name and uuid the same way Step 1 does ([firm-lookup.md](firm-lookup.md)),
+  capturing `<FIRM_NAME_INPUT>`/`<FIRM_ID_HINT>` as Step 0.1 does: identify `<SERVER>` by the
+  tool-list scan (never call `welcome`), then call
+  `mcp__<SERVER>__list_contexts(firm_name="<FIRM_NAME_INPUT>", _instrumentation_v2={...})` (or
+  `firm_id=`/`firm_uuid=` for a pasted URL/UUID) and apply Step 1's clean-match rule — but
+  **without `AskUserQuestion`** on an ambiguous or fuzzy result, and **never `set_context`**,
+  which would change the user's active firm for no reason here. If the match leaves no single
+  firm, or no Carta MCP is connected at all, fall back: **Open the hosted app** with the bare
+  link, then reply with it plus Gate 0's **Switch firm** line, naming the firm as typed, and
+  end the turn. Otherwise build the link:
+  ```bash
+  <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url --firm-name "<canonical name>" --firm-uuid "<firm_uuid>"
+  ```
+  Then check whether *this machine* has ever built this firm locally — a plain local read, no
+  MCP, using the same `list-dashboards` call Step 0.2 runs moments later for a local build,
+  matched by exact `firm_uuid`/`firm_carta_id` against the identity `list_contexts` just
+  returned (never a name-fuzz match: `<FIRM_NAME_INPUT>` can be a pasted URL/UUID here, which
+  a firm-name clean-match would never match against a cached `firm_name`):
+  ```bash
+  <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" list-dashboards
+  ```
+  No match on this firm's `firm_uuid`/`firm_carta_id` among the cached dashboards → this
+  machine has never pushed a workbook budget for this firm (a colleague's own-sync push,
+  upload, or share from elsewhere isn't ruled out — this is a local-only check, not a live
+  one): add one line to the reply, after the link: "This computer hasn't built **\<canonical
+  name\>**'s dashboard, so no workbook budget has gone to the hosted app from here; unless one
+  was added another way, it shows Carta's own budget." A match exists → say nothing extra.
+  **Open the hosted app** with the link just built, then reply with it (plus the budget-data
+  note when it applies) and end the turn: "Open **\<link\>** and sign in with Carta to open
+  **\<canonical name\>**." Do **not** launch `serve.py`, run Step 1's eligibility gate, or
+  fetch any Fund Admin data — this hand-off only resolves identity for a link.
+- **Local** → continue to **Step 0.1** silently.
 
 ## Step 0 — Capture firm, check the local cache, finish the greeting (cache-first — MCP only on a miss)
 

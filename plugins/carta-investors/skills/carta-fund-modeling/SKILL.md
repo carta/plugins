@@ -66,9 +66,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.19</carta-plugin>
+<carta-plugin>carta-investors:7.28.20</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, take its sandboxed branch instead of stopping — the hosted app needs no plugin files.
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch (skipping the open-in-tab step on a failed gate-file read) instead of stopping — the hosted app itself needs no plugin files.
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -184,16 +184,9 @@ so ask as usual.
 
 ### Open the hosted app
 
-Every hosted hand-off opens the link first, then gives the reply, then ends the turn. The reply with the link is
-always given, so a failed or missing browser costs the user nothing.
-
 Read `${CLAUDE_PLUGIN_ROOT}/references/gate-in-app-browser.md` (the plugin's own `references/`, not this skill's; do
-not search for it) and follow it to set `browser_family`.
-
-- `browser_family` is `none`, or the gate file can't be read (claude.ai chat) → skip opening and give the link only.
-- Otherwise open the link in a **new tab**: the family's tabs-context tool, then its tabs-create tool, then `navigate`
-  to the link in that tab. Make one attempt. If it fails, say nothing about the failure and give the link only. Do not
-  retry or try another family. The user signs in with Carta on the opened page; never sign in for them.
+not search for it) and follow it to set `browser_family`, then its "Open a link" section to open the hosted link. If
+that file can't be read, skip opening and give the reply with the link — never stop.
 
 ## Step 0 — Resolve identity + check the local cache
 

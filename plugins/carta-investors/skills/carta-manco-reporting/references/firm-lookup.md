@@ -7,10 +7,14 @@ routes here.
 
 > Steps referenced here that are documented elsewhere: **Gate 0 / Step 0** → [firm-resolution.md](firm-resolution.md); **Step 2.5 / Step 2.75** → [budget-ingest.md](budget-ingest.md); **Step 3** → [data-fetch.md](data-fetch.md).
 
-## Step 1 — Resolve firm via list_contexts (SILENT — BUILD path only)
+## Step 1 — Resolve firm via list_contexts (SILENT — BUILD path, and Gate 1's hosted-firm hand-off)
 
 Reached only when Step 0.2 classified a **MISS**, or `<FORCE_REFRESH>` was
-set. A WARM HIT and a soft hit both skip this step and Step 2 entirely —
+set — or when [firm-resolution.md](firm-resolution.md)'s **Gate 1** "Hosted, firm named"
+branch borrows this step's `list_contexts` call and clean-match rule for a
+link, outside the BUILD path proper (no `AskUserQuestion` on ambiguity, no
+`set_context`; its own paragraph says exactly what it borrows). A WARM HIT
+and a soft hit both skip this step and Step 2 entirely on the BUILD path —
 each already holds the firm and the entity from a previous build, and a
 soft hit differs only in that its DATA needs refreshing.
 

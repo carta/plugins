@@ -24,5 +24,24 @@ separate browser the user isn't looking at.
 A skill that uses this gate lists all thirteen tools and `ToolSearch` in its own `allowed-tools`, because frontmatter
 cannot include a file.
 
-`fa-tax`'s `tax-agent-companion.md` and `carta-cap-table`'s `references/open-the-companion-page.md` (Claude in
-Chrome step only) keep their own copies of this detection; change them with this file.
+`fa-tax`'s `tax-agent-companion.md` keeps its own copy of this detection; change it with this
+file. `carta-cap-table`'s `references/open-the-companion-page.md` (Claude in Chrome step
+only) copies both this detection and the "Open a link" steps below; change it with this file
+too. `carta-cap-table`'s `carta-issuance-companion/references/companion-run.md` copies the
+Claude in Chrome tool names and their order; change it with this file too.
+
+## Open a link
+
+Once `browser_family` is set, this is how a hosted hand-off opens a page for the user instead
+of only giving its link as text: open the link first, then give the reply, then end the turn
+— the reply with the link is always given, whether or not opening succeeded, so a failed or
+missing browser costs the user nothing. A caller that can't read this file at all (claude.ai
+chat is the surface where that happens) never reaches this section — its own "files can't be
+found" handling is what applies instead, and that handling must still give the reply with the
+link rather than stopping.
+
+- `browser_family` is `none` → skip opening and give the link only.
+- Otherwise open the link in a **new tab**: the family's tabs-context tool, then its
+  tabs-create tool, then `navigate` to the link in that tab. Make one attempt. If it fails,
+  say nothing about the failure and give the link only. Do not retry or try another family.
+  The user signs in (or otherwise authenticates) on the opened page; never do it for them.
