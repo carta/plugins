@@ -28,7 +28,7 @@ watchForOutsideChanges({
     const ctl = window.__fmPortfolioCtl;
     const before = ctl?.sliceIds?.() || [];
     await ctl?.flush?.();
-    await ctl?.reload?.();
+    await ctl?.reload?.({ keepSelection: true });
     const added = newScenarioId(before, await settledSliceIds(before));
     if (added) window.__fmPortfolioCtl?.selectSlice?.(added);
   },

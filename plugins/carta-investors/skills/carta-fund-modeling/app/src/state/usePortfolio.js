@@ -24,11 +24,13 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
   const onLockedEditRef = useRef(onLockedEdit);
   useEffect(() => { onLockedEditRef.current = onLockedEdit; }, [onLockedEdit]);
   // A 409 means another tab or a refresh script rewrote the file: drop the stale edit and reload.
-  const { schedule: persist, flush, reset, resume } = useEtagAutosave(`/api/portfolio${q}`, { encode: dehydrateDoc, onConflict: () => load(), paused });
+  const { schedule: persist, flush, reset, resume } = useEtagAutosave(`/api/portfolio${q}`, { encode: dehydrateDoc, onConflict: () => load({ keepSelection: true }), paused });
 
   /** Re-fetch from disk as the new truth, DROPPING any pending stale PUT —
-   *  callers that care about unsaved edits flush() first. */
-  const load = useCallback(async () => {
+   *  callers that care about unsaved edits flush() first. `keepSelection` leaves the scenario on
+   *  screen selected when the stored copy still has it, whatever the stored copy says is selected,
+   *  and saves that selection so the stored copy (which Claude's edits read) agrees with the screen. */
+  const load = useCallback(async ({ keepSelection } = {}) => {
     const read = () => Promise.all([
       fetch(`/api/snapshot${q}`).then((r) => r.json()),
       // A not_ready answer carries no ETag; keep the one held, which still matches the stored document.
@@ -54,8 +56,14 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     if (notReady(s, pr) || !s?.funds || !Array.isArray(pr?.slices)) return;
     setSnapshot(s);
     setTrackingFirm(s?.source?.firmId);
-    setDoc(hydrateDoc(pr));
-  }, [firm, q, reset, flush]);
+    const fresh = hydrateDoc(pr);
+    const shown = docRef.current?.activeSliceId;
+    if (keepSelection && shown && shown !== fresh.activeSliceId && fresh.slices.some((x) => x.id === shown)) {
+      fresh.activeSliceId = shown;
+      persist(fresh); // after reset(): saves against the ETag just read; held while paused, like any edit
+    }
+    setDoc(fresh);
+  }, [firm, q, reset, flush, persist]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { docRef.current = doc; }, [doc]);
 
