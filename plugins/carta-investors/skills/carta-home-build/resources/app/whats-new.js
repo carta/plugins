@@ -104,7 +104,7 @@ const WHATS_NEW_DERIVED_FLAGS = ["has_data_collection"];
 const isDerivedFlag = key => WHATS_NEW_DERIVED_FLAGS.includes(key);
 
 // The web app host for each Carta environment, matched by prefix so `preproduction` takes
-// the `preprod` row. Source: carta-valuations-workflow/references/deep-link.md, which takes
+// the `preprod` row. Source: plugins/carta-investors/references/app-host.md, which takes
 // them from `carta config list-envs`. Never get_current_user's `base_url`: that is the API
 // host (`https://test.carta.rocks` on test, the API gateway, with no web app behind it).
 // `local` is left out because it can be either the test web app or localhost.

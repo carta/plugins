@@ -26,6 +26,25 @@ allowed-tools:
   - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  # MCP App views: the Methods table (references/dive-in/methodology-edit-view.md), the
+  # financials view (references/dive-in/edit-financials-view.md) and the bulk picker
+  # (references/bulk/bulk-runner-view.md) open with view_remote.
+  - mcp__carta__view_remote
+  - mcp__claude_ai_Carta__view_remote
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
+  # The dashboard (references/dashboard-view.md) runs in the newer MCP App shell, which
+  # gives it its own app tools, so the server only opens it through view_remote_next.
+  - mcp__carta__view_remote_next
+  - mcp__claude_ai_Carta__view_remote_next
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_next
+  # Claude Desktop's widget tools, which control an open MCP App. The host adds them only after
+  # the turn that opened the dashboard, so Step 1 calls list_widget_tools on the next turn;
+  # the dashboard's app tools (refresh_page and the others the view registers) go through
+  # call_widget_tool.
+  - mcp__claude-device__list_widget_tools
+  - mcp__claude-device__call_widget_tool
+  - mcp__claude-device__set_widget_display_mode
+  - mcp__claude-device__widget_context_v0
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -35,25 +54,13 @@ allowed-tools:
   - mcp__carta__set_context
   - mcp__claude_ai_Carta__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
-  # Supplies the `environment` that deep-link.md Step 1 maps to the app host.
+  # Supplies the `environment` that app-host.md maps to the app host.
   - mcp__carta__get_current_user
   - mcp__claude_ai_Carta__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
-  - Artifact
   - mcp__visualize__read_me
   - mcp__visualize__show_widget
-  - mcp__Claude_Preview__preview_start
-  - mcp__Claude_Preview__preview_list
-  - mcp__Claude_Preview__preview_eval
-  - mcp__Claude_Browser__preview_start
-  - mcp__Claude_Browser__preview_list
-  - mcp__Claude_Browser__navigate
-  - mcp__Claude_Browser__javascript_tool
   - ToolSearch
-  - Skill(carta-investors:carta-valuations-excel)
-  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" *)
-  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" *)
-  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/wait_for_run_request.py" *)
   - Bash(sleep *)
   - Bash(mkdir *)
   - Bash(cat *)
@@ -66,84 +73,66 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.1</carta-plugin>
+<carta-plugin>carta-investors:7.28.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
-# Portfolio Valuations Skill
+# Portfolio Valuations Workflow Skill
 
 **Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
 
-Entry point for the portfolio valuations workflow. The skill is focused
-on the **bulk** experience:
+Entry point for the portfolio valuations workflow, paired with Carta's
+valuation pages. The chat does the work; the page shows it. This skill never builds an artifact or starts a local preview
+server.
 
 - **Bulk mode** — the bulk runner creates draft valuations across **one
   company or many** in a single pass via `create:bulk` (new drafts, and
   copy-from-previous for GPC). Driven by Steps 3–7 in
-  `references/bulk/bulk-runner.md`.
+  `references/bulk/bulk-runner.md` and the runner in
+  `references/md-table-runner.md`, whose selection screen is the
+  `portfolio_valuations:view:edit_bulk_val` picker view in
+  `references/bulk/bulk-runner-view.md` (approach recommended from each company's events,
+  value and allocation method per company, one valuation date).
 - **Dive into one** — open a single candidate, show a recap of where it
   stands, then route the user's free-text request directly to the
   relevant individual flow (cap table, financials, approaches, comps,
   GPC, allocation, finalize). No rigid wizard.
+- **The Carta page** — the dashboard MCP App shows Carta's valuations
+  dashboard beside the chat. Open the firm, company or valuation page in it
+  when the user asks to see one, and refresh it after every change. See **Page navigation** below. Where the MCP App can't be shown
+  (e.g. the terminal), the work carries on in chat.
 
 References live in `references/bulk/` (the bulk runner) and
 `references/dive-in/` (the individual single-valuation ability flows,
-reachable on dive-in). `references/deep-link.md` is shared.
-See [README.md](README.md) for a full catalog of reference files, templates, and scripts.
+reachable on dive-in). `references/deep-link.md` is shared: it builds the
+few Carta links the skill gives, and says which ids the MCP App takes.
+See [README.md](README.md) for a full catalog of reference files.
 
-## Gate 0: Redirect if the user is in Excel
+## Startup: load every tool in one message
 
-Run this before anything else, even if the description-level trigger already
-routed here — a skill already loaded earlier in the conversation can still
-receive a fresh valuations request without re-reading the description.
+**Before Gate 1, send every startup `ToolSearch` in one message.** Each round
+of tool calls costs seconds of model time, far more than any of these calls.
+In that one message, send:
 
-**Send every startup `ToolSearch` in one message.** Each round of tool calls
-costs seconds of model time, far more than any of these calls. In the same
-message as the Excel probe, also send the preview probe from **Step 2.2a** and
-one `select:` search that loads the Carta tools Gate 1 and Step 1 need:
-`read_tool`, `list_contexts`, `list_accounts` and `set_context`. Take their full
-names from the Carta server listed in your deferred tools (the prefix differs
-by host), and skip any that are already loaded:
+- one `select:` search that loads the Carta tools Gate 1 and Step 1 call:
+  `read_tool`, `list_contexts`, `list_accounts`, `set_context`,
+  `view_remote_next` (the dashboard's view tool) and `view_remote` (the other
+  views' tool). Take their full names from the Carta server listed in your
+  deferred tools (the prefix differs by host), and skip any that are already
+  loaded:
 
 ```
-ToolSearch({ query: "excel worksheet workbook", max_results: 3 })
-ToolSearch({ query: "select:mcp__Claude_Preview__preview_start,mcp__Claude_Browser__preview_start" })
-ToolSearch({ query: "select:<carta>__read_tool,<carta>__list_contexts,<carta>__list_accounts,<carta>__set_context" })
+ToolSearch({ query: "select:<carta>__read_tool,<carta>__list_contexts,<carta>__list_accounts,<carta>__set_context,<carta>__view_remote_next,<carta>__view_remote" })
 ```
 
-- **If results include tools with "excel", "worksheet", or "workbook" in their
-  name** (Claude for Excel is open) → `carta-valuations-excel` owns the
-  in-workbook experience end to end, so hand off to it **when it is
-  available**. Check your own available-skills listing for
-  `carta-investors:carta-valuations-excel`:
-  - **Listed** → invoke `Skill(carta-investors:carta-valuations-excel)` and
-    stop. Do not run the dashboard, bulk runner, or any dive-in flow here.
-  - **Not listed** → **continue with this skill** from Gate 1 below. Do not
-    stop, do not tell the user to install anything, and do not go looking for
-    the skill on disk — it is genuinely absent from this session, and a user
-    in a workbook still needs their valuations work done. Render everything
-    as plain markdown per **Step
-    2.2c** — in a workbook there is no preview panel and no `Artifact` tool,
-    so Step 2.2a will classify the session `env_mode: "inline"` on its own;
-    never offer the runner widget or
-    the preview panel here. The dive-in flows all work as written; the only
-    thing lost is the visual dashboard and runner.
-- **Otherwise** (chat / Cowork / Desktop, no workbook) → continue normally
-  below.
-
-This is a one-time check per invocation, not a per-step re-check. Once you're
-past Gate 0 and continuing here, later dive-in flows (e.g.
-`references/dive-in/backsolve/backsolve-excel.md`) still do their own
-narrower in-sheet-vs-file detection for their own purposes — that's unrelated
-to this top-level redirect.
+If every one of these is already loaded, skip the search.
 
 ## Gate 1: Access check — upsell when Portfolio Valuations isn't enabled
 
-**Run this once, on first invocation of the skill, before anything else
-except Gate 0.** One probe up front — never a check scattered through the
-individual flows. Every step after this may assume access is settled.
+**Run this once, on first invocation of the skill, right after the Startup message and before anything else.**
+One probe up front — never a check scattered through the individual flows. Every step after this may assume access is settled.
 
 A caller without Portfolio Valuations is stopped in one of **two** ways, and
 which one they hit depends on how their access is configured:
@@ -190,12 +179,8 @@ Show the upsell on **either** of these:
 
 **Anything else** — results, an empty list, a validation error, a timeout, a
 5xx, a network failure, a dropped connection → treat the caller as **having
-access**. Continue to Step 1 and never mention this gate.
-
-That last rule is deliberately the catch-all: only the two signals above
-trigger the upsell. A transient outage or a malformed request must never
-tell a paying customer to buy what they already own — when the signal is
-ambiguous, assume access and let the real error surface where it occurs.
+access**. Continue to Step 1 and never mention this gate. An outage must
+never tell a paying customer to buy what they already own.
 
 Cache the outcome for the session. Do not re-probe on re-entry, and do not
 re-check before individual calls. If a later call hits either signal after
@@ -220,16 +205,11 @@ Output it as written — do not reword, expand, or add a feature list:
 > Request a demo:
 > https://carta.com/demo/portfolio-valuations/?&utm_medium=product&utm_source=claude&utm_campaign=valuations-plugin-inq-ww-q3-26
 
-**Always print the bare URL on its own line after the message**, exactly as
-shown above. A markdown link is not clickable in a terminal, so the plain
-URL is the only way a Claude Code user can reach it — keep it even though it
-duplicates the inline link, which is what renders in chat and Cowork.
+Keep the bare URL on its own line after the message: a markdown link isn't
+clickable in a terminal. Keep both URLs exactly as written, unwrapped — the
+`utm_` parameters attribute the lead to this plugin.
 
-Keep both URLs exactly as written — the `utm_` parameters attribute the lead
-to this plugin, so a trimmed or rebuilt URL loses the attribution. Do not
-wrap, break, or shorten the bare URL; a line-wrapped URL won't copy cleanly.
-
-Then stop. Do not present the dashboard-or-company fork, and do not attempt
+Then stop. Do not present the *dashboard-on-screen* or *no-dashboard* fork, and do not attempt
 any further `portfolio_valuations` call this session.
 
 The closing line is an offer, so honour it if the user takes it up: fund
@@ -244,35 +224,26 @@ A valuation candidate is **complete** when all six items below hold.
 This checklist is the orchestrator's goal — every routing decision on
 dive-in and the entire bulk flow are organized around it.
 
+Candidate-scoped reads are written `get:<name>` below; each is
+`read_tool({"name": "portfolio_valuations__get__<name>", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.
+
 1. **Cap table data is present** — **`CORPORATION` only.**
-   `read_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-   returns share-class data (non-empty). A c-corp candidate stores its own
-   cap-table snapshot, so "is it present?" is a real property of the
-   candidate — an empty snapshot blocks allocation.
+   `get:cap_table_summary` returns share-class data (non-empty). A c-corp
+   candidate stores its own cap-table snapshot; an empty one blocks
+   allocation.
    - **`LLC_ISSUER` — not applicable.** An LLC's cap table is live issuer
-     data that is **not part of the candidate**, so there is nothing here
-     to be "present" or missing, and nothing for the user to populate.
-     Treat item 1 as N/A on the LLC path — never mark it ⏳ missing, and
-     never fetch the LLC cap table just to tick it off. What LLC
-     completeness actually depends on is **access** to that cap table,
-     which surfaces through item 5 (see below), not here.
-2. **Financials are filled in** — **only when the selected methodology
-   requires Financials** (see **Required inputs by methodology** below).
-   Filled in means `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-   returns at least one period with revenue/EBITDA populated, OR the user
-   has populated financials via the DWH path / manual entry. When no
-   selected methodology requires Financials, item 2 is N/A. Never mark it
-   ⏳ missing then.
-3. **Required approach inputs are in place.** Derive the selected
-   methodology from
-   `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
-   every approach with `isUsed: true`. Then:
-   - **Comparables**, when the mapping below requires them: filled in
-     means `read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-     returns at least one comp with `isGpc: true`.
-   - **GPC enabled** also needs
-     `read_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-     to return a non-empty multiples set.
+     data, not part of the candidate. Treat item 1 as N/A — never mark it
+     ⏳ missing, and never fetch the LLC cap table just to tick it off.
+     LLC completeness depends on **access** to that cap table, which
+     surfaces through item 5.
+2. **Financials are filled in** — only when the selected methodology
+   requires them (**Required inputs by methodology** below, which also
+   defines "filled in"). Otherwise N/A — never ⏳ missing.
+3. **Required approach inputs are in place.** The selected methodology is
+   every approach in `get:approaches` with `isUsed: true`. Then:
+   - **Comparables**, when the table below requires them, are filled in.
+   - **GPC enabled** also needs `get:gpc_multiples` to return a non-empty
+     multiples set.
    - **Custom Value enabled** (`otherIndicationOfValue.isUsed: true`) also
      needs `get:custom_value.company_value` to be non-zero.
    - No other methodology has an approach-specific input to check here.
@@ -280,26 +251,20 @@ dive-in and the entire bulk flow are organized around it.
      `get:approaches` → `approachValues.{key}.value` > 0. This is what the
      Step 2.5c checklist shows as each **Calculate {method}** / **Set … value**
      item.
-4. **Company value is positive** — `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`companyValue.amount` returns a
-   positive number. Zero or negative (e.g. a GPC draft with no comps, left
-   with only its debt adjustment) is not done.
-5. **Holdings value is positive** — `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`valueOfHoldings.amount`
-   returns a positive number. The field is `valueOfHoldings`, not
-   `holdingsValue`. The dashboard's `latestValuation.holdingsValue` is a
-   different response.
+4. **Company value is positive** — `get:valuation` →
+   `companyValue.amount` > 0. Zero or negative (e.g. a GPC draft with no
+   comps, left with only its debt adjustment) is not done.
+5. **Holdings value is positive** — `get:valuation` →
+   `valueOfHoldings.amount` > 0 (not `holdingsValue`, which is the
+   dashboard's field).
    - **On the LLC path this is where cap-table access bites.** An LLC's
-     holdings value comes from a **Niagara** allocation — run through
-     `references/dive-in/allocation.md`, which offers it whenever the
-     valuation's configuration reports it as supported — and that
-     allocation reads the LLC cap table. If the user lacks access to it,
-     the allocation fails, holdings value stays zero, and the candidate
-     cannot be completed. There is no cheap access flag on the dashboard
-     (`hasCorpCapTableAccess` is c-corp-only, with no LLC equivalent), so
-     **do not preflight it with an extra call** — that flow's own
-     eligibility check (`get:configuration`, before it prompts for
-     anything) reports the access problem. When it comes back
-     permission-denied, say so plainly rather than reporting a generic
-     failure or a zero holdings value:
+     holdings value comes from a **Niagara** allocation
+     (`references/dive-in/allocation.md`), which reads the LLC cap table.
+     Without access the allocation fails and the candidate can't be
+     completed. **Don't preflight access with an extra call** — the
+     dashboard has no LLC access flag, and allocation's own
+     `get:configuration` check reports it. When it comes back
+     permission-denied, say so plainly:
      > "You don't have access to **{company}**'s cap table, so the
      > allocation can't run. Contact the company to grant access, then we
      > can compute the holdings value."
@@ -309,13 +274,8 @@ dive-in and the entire bulk flow are organized around it.
 
 Items 2 and 3 above, the **Required inputs missing** column in
 `references/bulk/bulk-results.md`, and the **Inputs:** section of the
-valuation summary checklist (Step 2.5c) all read this one table. Keep them
-in step: change it here, never in a copy. The checklist lists both inputs
-every time and marks the ones this table requires `(Required)`. Its **Next
-steps:** section carries a **Calculate {method}** item per selected method
-and ends with **Run allocation** (Step 2.5c). Neither is a required input,
-so neither is in this table or in the results column; that table has its
-own Allocate column.
+Step 2.5c checklist all read this one table. Change it here, never in a
+copy.
 
 | Methodology (`get:approaches` key) | Required inputs |
 |---|---|
@@ -339,17 +299,16 @@ own Allocate column.
 
 ### How to use the goal
 
-The agent does not track checklist state in its head. It re-derives the
-state from the API on demand whenever it matters.
+**Trust the API, not the session.** Never track checklist state in your
+head: re-derive it from a fresh `get:valuation` / `get:approaches` before
+deciding what's done.
 
 In **bulk mode**, the bulk runner creates a draft for every company in
 one pass (`create:bulk`). Failures are isolated per-company.
 
 On **dive into one**:
-- **When entering a candidate**, silently call
-  `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and
-  `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-  to establish where the candidate is on the checklist.
+- **When entering a candidate**, silently call `get:valuation` and
+  `get:approaches` to establish where it is on the checklist.
 - **While the user is working on the valuation**, end every response with
   the **valuation summary checklist** (Step 2.5c), re-fetched each time.
   That is the always-on view of items 4 and 5 and the required inputs.
@@ -358,59 +317,34 @@ On **dive into one**:
   is a status line, not a suggestion, so it still renders.
 - **When the user explicitly asks** "what's left?", "am I done?",
   "what's next?", surface the checklist with simple status markers
-  (✅ done / ⏳ missing). Show only the candidate name and the six items
-  — do not surface command names or field names.
+  (✅ done / ⏳ missing). Show only the candidate name and the six items.
 - **When the user tries to skip ahead** to a step that isn't ready
   (e.g. "finalize this" while EV is zero), refuse gracefully and point
   at the gap.
-- **Never *offer* a step whose prerequisites aren't met.** When you
-  compose a next-step menu (a plain-text option list — see UX Rules),
-  only include options that are actually runnable right now. In
-  particular:
-  - **Do not offer "Finalize" until holdings value is positive** — i.e.
-    until allocation has run (item 5). Finalize requires both a positive
-    company value (item 4) AND a positive holdings value (item 5); if
-    either is zero or negative, finalize is **not** a valid next step, so leave it
-    off the menu entirely. Offer the missing prerequisite instead ("Run
-    allocation", "Set an approach and value").
-  - **Do not offer "Run allocation" while company value is zero** — set
-    an approach and capture a value first.
-  This is proactive gating: the reactive refusal above is the safety net
-  for when the user asks directly; this rule stops the premature option
-  from ever appearing in a menu you build.
-
-### Trust the API, not the session
-
-If the API state changes underneath you, trust the API. Re-derive the
-checklist from a fresh
-`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` /
-`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-call before deciding what's done.
+- **Never *offer* a step whose prerequisites aren't met.** A next-step
+  menu lists only options runnable right now:
+  - **No "Finalize" until company value (item 4) and holdings value
+    (item 5) are both positive** — offer the missing prerequisite instead
+    ("Run allocation", "Set an approach and value").
+  - **No "Run allocation" while company value is zero** — set an approach
+    and capture a value first.
 
 ## UX Rules
 
-- **Never use the `AskUserQuestion` tool** — it is not granted to this
-  skill (not in `allowed-tools`) and must not appear anywhere in these
-  reference files either. Every follow-up question, anywhere in this
-  skill, is asked **inline as plain text**: state the question, list
-  numbered options where relevant, and wait for the user's free-text
-  reply. This applies uniformly across every `env_mode` (`artifact`,
-  `preview-server` and `inline`) — none of them use `AskUserQuestion`.
-- When presenting the user with a **single question or choice set**, output
-  the options as plain text in the chat message.
-- When presenting the user with **multiple fields or a form** (more than
-  one question at once), use `show_widget` to render an elicitation form.
-- The prose examples below (shown as `> "..."`) are illustrative wording,
-  not the delivery mechanism.
-- Do not surface raw command names, API field names, HTTP status
-  codes, or numeric IDs in chat. Speak in business terms ("revenue",
-  "comps", "allocation", "company value", "holdings value").
+These apply in every reference file too; they aren't repeated there.
+
+- **Never use the `AskUserQuestion` tool** — it isn't granted to this
+  skill. Ask every follow-up **inline as plain text**: the question,
+  numbered options where relevant, then wait for a free-text reply.
+- For **multiple fields at once**, use `show_widget` to render an
+  elicitation form.
+- The prose examples (shown as `> "..."`) are illustrative wording.
+- Never surface raw command names, API field names, HTTP status codes, or
+  internal IDs (org_pk, corporationId, firm_id, project or candidate IDs)
+  in chat. Speak in business terms ("revenue", "comps", "allocation",
+  "company value", "holdings value").
 
 ## User-Facing Output Rules
-
-**Never display any internal IDs** (org_pk, corporationId, firm_id,
-project IDs, candidate IDs, etc.) to the user. These are backend
-identifiers used only when making API calls.
 
 **When a sub-flow reference exists for the user's intent, you MUST
 read the reference and follow it.** Do not paraphrase the concept from
@@ -424,14 +358,18 @@ self-check.
 
 **Creating more than one valuation at a time MUST go through
 `create:bulk`, never a per-company loop of `create:project` /
-`create:project_from_copy`.** This applies everywhere in this skill,
-not just the bulk-runner widget path — including `references/md-table-runner.md`'s
-text-based runner. Exactly **one** confirmed company is the only case
-where the single-company create call (`references/dive-in/create-val.md`)
-is correct. `create:bulk`'s `items` array already carries its own
-`methodology`/`copyFromPrevious` and `valuationDate` per entry, so there
-is no per-company configuration need that justifies looping individual
-creates for N>1 companies.
+`create:project_from_copy`** — text runner included. Only exactly **one**
+confirmed company uses `references/dive-in/create-val.md`. Each
+`create:bulk` item carries its own methodology, `copyFromPrevious` and
+`valuationDate`, so no per-company setting justifies a loop.
+
+## Currency default
+
+Format every amount in the currency the data names (`currencyCode`, a
+currency field on the row). Never assume or default to USD or `$`. When the
+data names none, show the bare number with no symbol. Do this silently: never
+add a note, legend line or caveat saying the currency is missing. Never total
+amounts that are in different currencies.
 
 ## Table values — render what the command returned
 
@@ -468,11 +406,6 @@ one of them is "a volatility percentage":
   candidate's standard-scenario regression, which can also diverge on
   identical comps.
 
-Users have reported getting "the wrong volatility" back — most often
-someone asking for one of the above and being handed a different one,
-usually because only a bare number was shown with nothing to indicate
-which dataset, entity, or statistic it came from.
-
 **The rule, wherever any of this skill's reference files displays a
 volatility number:**
 
@@ -484,20 +417,13 @@ volatility number:**
    (regression result, mean, median, a specific percentile, or a
    manual entry).
 2. **Show the full quartile/regression table, not just the single
-   number**, whenever there's a table available for that dataset —
-   even if the user only asked about one figure (e.g. "what's the
-   equity volatility?"). The full table is what lets the user see
-   where that number was picked from within the distribution, and
-   catches a source mix-up before it reaches a filing. A one-line
-   summary with no supporting table is only acceptable when the
-   underlying command genuinely returns a single scalar with nothing
-   else to show.
+   number**, whenever one is available — even if the user asked about
+   one figure. It shows where the number sits in the distribution and
+   catches a source mix-up. A bare number is fine only when the command
+   returns a single scalar.
 3. **Never default one dataset's value into another's without saying
-   so.** If a manual override is missing and a reference file's
-   guidance says to default to a value captured elsewhere in the
-   session, state plainly which dataset that default is borrowed from
-   before applying it — silent cross-dataset defaulting is exactly how
-   the wrong number reaches a user.
+   so.** When a reference file says to borrow a value captured
+   elsewhere, name the dataset it came from before applying it.
 
 ## Tool surface
 
@@ -528,13 +454,25 @@ the opposite: they are ignored when null, so naming only the approaches
 you are changing leaves every other approach's `isUsed` and `weight`
 untouched.
 
+### Param naming — non-negotiable
+
+Carta's MCP API uses different parameter names and casing across
+endpoints. **Do not pattern-match or guess.** Specifically, when calling
+`read_tool` or `call_tool`, the `name` value and `arguments` keys below are fixed:
+
+| `name` | Required `arguments` |
+|---|---|
+| `portfolio_valuations__list__portfolio_dashboard` | `organizationId` (NOT `organizationPk`), `page_size: 100` (always — never omit), `raw: false` (always — never omit). The formatted response strips null fields and is the shape this skill reads. Only switch to `raw: true` when the user explicitly asks for the raw API response. |
+| `portfolio_valuations__list__projects` | `ownerId`, `ownerKind: "FIRM"`, `targetId`, `targetKind: "CORPORATION"` (camelCase) |
+| `portfolio_valuations__get__llc_cap_table_summary` | `issuerId` (the LLC issuer id — the candidate's `target.id` from `list:projects`, == the dashboard `llcIssuerId`); optional `asOfDate` — a **full ISO-8601 timestamp** (`YYYY-MM-DDT00:00:00Z`), **never** a bare `YYYY-MM-DD`. Both camelCase — contrast the c-corp cap-table commands' snake_case `project_id` / `candidate_id`. |
+| `portfolio_valuations__get__configuration`, and the four Niagara commands (`compute__niagara_waterfall`, `get__niagara_waterfall`, `compute__niagara_opm`, `get__niagara_opm`) | `valuation_id` (snake_case) — the valuation's **integer** id, the `valuationId` on a `list:projects` candidate. These take it **alone**: no `ownerId`, no `project_id`, no `candidate_id`. Both `get__niagara_*` polls additionally require `groupingMethod` (camelCase, `BY_INTEREST_HOLDER` or `BY_INTEREST_TYPE`) and 400 without it. |
+
+Using a wrong name returns a validation error.
+
 ## Writes — save, then show what was saved
 
-Applies to **every** write in this skill — every `mutate:*` and
-`create:*` command, in **any** reference file (`set-approaches.md`,
-`financials-review.md`, `comps.md`, `gpc-analysis.md`,
-`allocation.md`, `backsolve.md`, `commentary.md`, etc.), not just one
-flow.
+Applies to **every** `mutate:*` and `create:*` call, in any reference
+file.
 
 **Do not ask the user to confirm a write before making it.** When the
 user asks to save, set, update, or enter a value, make the call. A
@@ -549,14 +487,40 @@ it without being interrupted first. One row or line per changed field:
 Build it from the write's response (or a re-fetch), not from what you
 sent. If the user spots a mistake, fix it with another write.
 
-**Numbers in that saved-values summary must be the full,
-non-abbreviated value — never write `$130.1M` when the underlying
-number is `$130,107,041.24`; show `$130,107,041.24`.** Abbreviated
-formatting (`$X.XM`, `$X.XB`) is fine everywhere else in this skill —
-dashboards, recaps, read-only tables — it is specifically the
-saved-values summary where the exact number must be spelled out,
-because rounding hides exactly the kind of mistake (an extra zero, a
-misplaced decimal) the user is checking for.
+**Then call `refresh_page`** straight after each successful write, per
+`references/dashboard-view.md` **Refresh it after a change**.
+
+**End the turn by offering to open the updated valuation.** When the user
+asked for an action on a specific valuation and the turn made at least one
+successful `mutate:*` call on it, close the reply with one plain-text
+question, after the saved-values summary:
+
+> Would you like me to take you to the updated **{company} {valuation label}** valuation page?
+
+`{valuation label}` is how the company page names it ("Q2 2026", or its
+date when it isn't a quarter end). On a yes, call the dashboard MCP App's
+`open_company` then `open_valuation` for it (`references/dashboard-view.md`
+**Open a page in it**). On a no, or any other reply, leave the view where it
+is and handle the reply.
+
+- **Once per turn**, even when the turn made several writes on the
+  valuation, and only as the turn's last line. A turn whose writes all
+  failed changed nothing and gets no question.
+- **Skip it when the valuation's page is already open in the view.** Before
+  asking, call the app tool `get_open_page` once; if it names this
+  valuation as the open page, don't ask.
+- **Skip it when the session holds no dashboard widget id** (**Page
+  navigation → App tools need the widget id**): there is no way to take
+  them there.
+- **Skip it for a create, a bulk run or a delete.** Those aren't an action
+  on an existing valuation's page: a new valuation shows up on whichever
+  page is open once `refresh_page` runs, and a deleted one has no page. A
+  finished allocation run gets the same offer (**Page navigation → After an
+  allocation**).
+
+**Numbers in that saved-values summary are the full value — `130,107,041.24`,
+never `130.1M`** — because rounding hides the extra zero or misplaced
+decimal the user is checking for. Abbreviations are fine everywhere else.
 
 ### Exceptions: finalize and delete always need an explicit yes
 
@@ -568,10 +532,101 @@ the user:
 - **Deleting a valuation** — `references/dive-in/ship.md`
   **Delete a valuation**.
 
-For these two, say what will happen, ask as plain text (no
-`AskUserQuestion` — see **UX Rules** above), and call the write only on
-an explicit yes. An earlier "finalize it" or "delete it" is the request,
+For these two, say what will happen, ask, and call the write only on an
+explicit yes. An earlier "finalize it" or "delete it" is the request,
 not the confirmation.
+
+---
+
+## Page navigation
+
+The page is the dashboard MCP App (`references/dashboard-view.md`): Carta's
+portfolio valuations dashboard, with its firm, company and valuation pages,
+shown beside the chat. The work happens in chat, and this section keeps the
+MCP App in step with it. Never link any of those pages, or the older
+valuation pages outside the dashboard (`references/deep-link.md` **Step
+2**): the MCP App is the way to them.
+
+### App tools need the widget id
+
+Every app tool (`open_portfolio`, `open_company`, `open_valuation`,
+`get_open_page`, `refresh_page`, `set_display_mode`) is called through
+`call_widget_tool` with the dashboard's widget id, so it runs only while the
+session holds that id (Step 1 **On the very next prompt, call
+`list_widget_tools` first**). The session holds none in the turn that opened
+the dashboard, in a host without the widget tools (the Code tab), or when the
+MCP App can't be used. Without the id:
+
+- Skip every offer to open a page.
+- Answer a direct request to see a page with one line saying where it is in
+  Carta's valuations dashboard, with no link, and carry on.
+- A write that succeeded before the id was held is refreshed late: once
+  `list_widget_tools` returns the id, the first `call_widget_tool` is one
+  `refresh_page` (`references/dashboard-view.md` **Refresh it after a
+  change**).
+
+### Which page to open
+
+**Move the view only when the user directly asks to see a page.** Nothing
+else moves it: not an action on a valuation (adding financials, setting an
+approach, running allocation, finalizing), not resolving or diving into a
+valuation, not a create, a bulk run or a delete. While the MCP App is open,
+open the page the user asks for through its app tools, per
+`references/dashboard-view.md` **Open a page in it**: the firm dashboard with
+`open_portfolio`, a company page with `open_company`, and a valuation page
+with `open_company` then `open_valuation`.
+
+| The user asks to see | Open |
+|---|---|
+| Their portfolio companies ("show my portfolio", "take me to all my companies", "back to the dashboard") | The firm dashboard |
+| A company, its dashboard or its historical valuations ("take me to Meetly", "show me Meetly's dashboard", "Meetly's valuation history") | The company page |
+| A specific valuation ("take me to Meetly's Q2 valuation", "show me that valuation", "yes" to the offer below) | The valuation page |
+
+Open the most specific page the request names: "show me Meetly's Q2
+valuation" opens that valuation's page, not the company page first.
+
+**After an action, offer instead of moving.** When the user asked for an
+action on a specific valuation and it succeeded, the turn ends by asking
+whether to open the updated valuation page (**Writes → End the turn by
+offering to open the updated valuation**; for an allocation run, **After an
+allocation**). Open it only on a yes. Where a flow points the user at a page
+to finish something there (a per-class DLOM, a status flip, a delete that
+failed), say which page and offer to take them there the same way; don't
+open it unasked. Every offer waits on the widget id (**App tools need the
+widget id**).
+
+### Refresh the page after a change
+
+Call `refresh_page` straight after each successful write, per
+`references/dashboard-view.md` **Refresh it after a change**.
+
+### After an allocation
+
+An allocation changes the holdings value, which the valuation page shows.
+Once the run's results are back (allocation.md Step 7, or a Niagara poll at
+`SUCCESS` in Step N4), call `refresh_page` once, per
+`references/dashboard-view.md` **Refresh it after a change**, and end the turn by
+offering to open the updated valuation page, exactly as **Writes → End the
+turn by offering to open the updated valuation** says. Don't move the view
+unasked. A run that failed changed nothing, so leave the view alone.
+
+### No dashboard links
+
+Never link a valuations dashboard page (`references/deep-link.md` **Step 2**).
+
+### When the user acts on the page
+
+The valuation pages have their own status actions, finalize included. A user can
+change a valuation there without telling you, so a status you read earlier
+may be stale:
+
+- Before any status-dependent step — finalize, delete, offering
+  **Finalize** in a menu, the Step 2.5d download notice, Fund Holdings Step
+  F2 — read the status from a fresh `get:valuation`, never from context.
+- When the user says they changed something on the page ("I finalized it on
+  the page", "I moved it back to draft"), re-read the valuation and
+  re-render the Step 2.5c checklist. Don't assume it's still a draft, and
+  don't move the view: the page already shows the change.
 
 ---
 
@@ -586,73 +641,65 @@ matched capability.
 
 ### Global interrupt: fund holdings request (any point in the flow)
 
-**This check runs on every user message, at every step, regardless of
-where the conversation currently is** — dashboard, bulk runner, dive-in
-recap, mid-comps-selection, mid-financials-review, wherever. It is not
-scoped to Step 2.4 or Step 2.5; those are just two common places the
-request tends to come from, and both now point back here.
-
-Trigger phrases: "show fund holdings", "fund breakdown", "fund holdings
-value", "fund level breakdown", or equivalent. On match, jump to
-**Fund Holdings (cross-flow capability)** below — do not keep processing
-whatever step you were on. Do **not** use `get:allocation` to answer
-this; it returns per-share-class allocation model output, not the
-fund-level holdings split.
+**Check every user message, at every step** — dashboard, bulk runner,
+dive-in, mid-flow. Trigger phrases: "show fund holdings", "fund
+breakdown", "fund holdings value", "fund level breakdown", or equivalent.
+On match, jump to **Fund Holdings (cross-flow capability)** below. Never
+answer it with `get:allocation`, which returns per-share-class allocation
+output, not the fund-level split.
 
 | The user's request… | Enter |
 |---|---|
 | **One** company named, or single-company drill-down ("show me MangoCart's valuations", "let's work on Acme today", "I want to pick comps myself", "review Acme's cap table", "let's go step by step on Acme", "update the EV for Acme") | **Dive into one** — after Step 1, go to **Step 2.5**: show the recap, then route the request. If the candidate isn't identified, ask which one. |
 | **Multiple** companies named ("review MangoCart and Acme") | **Bulk-create** with that pre-selected set — see *Multi-company entry* below. |
-| Generic / unscoped ("I want to work on my portfolio valuations", "let's work on valuations today", "work on portfolio valuations for {firm}") | **Ask which way in** — after Step 1, present the *dashboard-or-company fork* (below) and wait. Do **not** assume the dashboard. |
-| Review / status phrasing, scoped to reviewing the portfolio ("review my Q2 valuations", "which companies need new valuations") | **Review the dashboard** — after Step 1, go to **Step 2.2** (environment detection + the **Step 2.2b** format choice run **before** any render). Act from the rendered dashboard via **Step 2.3**. Do **not** jump straight into `references/bulk/bulk-runner.md` — that skips the format choice. |
+| Open-ended: generic / unscoped ("I want to work on my portfolio valuations", "let's work on valuations today", "work on portfolio valuations for {firm}"), review / status phrasing scoped to the portfolio ("review my Q2 valuations", "which companies need new valuations"), bare / help-ish (empty message, "help", "what can you do", "get started", "show me what you can do", bare `/carta-portfolio-valuations`), or ambiguous | After Step 1, present the *dashboard-on-screen* or *no-dashboard* fork (below, whichever matches what Step 1's open call did) and wait. Do **not** render the portfolio table or jump into `references/bulk/bulk-runner.md` until the user asks. |
 | Explicit bulk/multi-valuation **action** intent, no specific companies named ("run all my valuations", "batch valuations", "auto-run valuations", "let's do some bulk valuations", "I want to do a few bulk valuations", "do multiple valuations at once") | **Ask which way in** — after Step 1, present the *bulk-intent fork* (below) and wait. Do **not** jump straight to the dashboard or the runner. |
-| Bare / help-ish (empty message, "help", "what can you do", "get started", "show me what you can do", bare `/carta-portfolio-valuations`) | **Welcome** (below) — resolve the firm, print the menu, wait for the choice. Do not fetch or render the dashboard until the user asks. |
-| Ambiguous | Short & inscrutable → treat as bare entry (**Welcome**). Clear scope but unclear specifics → the *dashboard-or-company fork* (below), not a direct jump to the runner. |
 
-Resolve company-name matches against
-`read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
-only after Step 1 (firm selection) — the `org_pk` is needed.
+Resolve company-name matches against `list:portfolio_dashboard` (params
+in **Param naming**) only after Step 1 — it needs `org_pk`.
 
-**Dashboard-or-company fork (generic entry).** When the request is
-generic/unscoped — no company named and no "all" / time-period scope — do
-**not** assume the dashboard. After Step 1, present a single plain-text
-choice and wait (per **UX Rules** — no `AskUserQuestion`):
+For the **open-ended** row, the fork below is the only prompt: no separate
+firm line or menu before it. Step 1's open call always runs, so exactly one
+of the two applies.
+
+**No dashboard on screen (the dashboard MCP App couldn't be used).** After
+Step 1, set `intro_shown = true`, then ask and wait:
 
 > You're working in **{firm_name}**. Would you like to:
-> 1. **View your portfolio dashboard** — see every company, its latest valuation, status, and recent events.
-> 2. **Work on a specific company** — tell me which one and we'll dive in.
+> 1. **See the dashboard here** — I'll show every company, its latest valuation and status in chat.
+> 2. **Work on an existing valuation** — tell me which company and we'll go straight in.
 
 Route the reply:
-- **Dashboard** ("1", "dashboard", "view", "show me everything") → go to
-  **Step 2.2**; the render preference gate runs there **before** any data
-  is fetched (see Step 3.2's *Render preference gate*).
-- **Specific company** ("2", a company name, "I have one in mind") → go to
-  **Step 2.5 (dive into one)** for that company; if none was named, ask
-  which one.
+- **Dashboard** ("1", "dashboard", "show me everything") → **Step 2.2**.
+- **Existing valuation** ("2", a company name) → **Step 2.5 (dive into one)**
+  for that company; if none was named, ask which one.
+- **Bulk request** → the *bulk-intent fork*.
 
-**Bulk-intent fork (explicit bulk/multi-valuation action entry, no
-companies named).** After Step 1, ask inline as plain text (per **UX
-Rules** — no `AskUserQuestion`):
+**Dashboard on screen (the dashboard MCP App opened).** The dashboard Step 1
+showed is the portfolio view: don't render the table or call
+`list:portfolio_dashboard`. Don't say anything about a page having been
+opened. Set `intro_shown = true`, suggest bulk valuations, ask which company
+or valuation to work on, and wait:
+
+> Would you like to run a bulk valuation across several companies, or work on one company or valuation? Tell me which company or valuation you want to start with, or say "show it here" for the portfolio table in chat.
+
+"Show it here" (or any request for the table) → **Step 2.2**. A company name
+→ **Step 2.5**. A bulk request → the *bulk-intent fork*.
+
+The single-company, multi-company and bulk rows route as the table says in
+both cases.
+
+**Bulk-intent fork (bulk action, no companies named).** After Step 1,
+ask:
 
 > Would you like to:
 > 1. **See the bulk runner table** — review every company eligible for a valuation, then pick which to run.
 > 2. **Tell me which companies** — you already have specific ones in mind.
 
 Route the reply:
-- **Bulk runner table** ("1", "show me", "see the table") → using the
-  `env_mode` already established in Step 1, go
-  straight to the runner — **do not** render the full portfolio dashboard
-  first, this fork already replaces that step:
-  - **`env_mode: "artifact"` or `"preview-server"`**: ask the
-    same "Runner format" question used in Step 2.4 (**1. Runner widget** —
-    a quick plan you can bulk-create in one click, or open the full list
-    to customize / **2. Inline view** — text-based plan you confirm
-    before I run anything). Route **Runner widget** to the **Plan card**
-    section of `references/cowork-artifact.md`; route **Inline view** to
-    `references/md-table-runner.md`, Step 1.
-  - **`env_mode: "inline"`**: no question — read
-    `references/md-table-runner.md` inline and follow from Step 1
-    directly.
+- **Bulk runner table** ("1", "show me", "see the table") → go straight
+  to the runner, without rendering the dashboard first: read
+  `references/md-table-runner.md` and follow from Step 0.
 - **Already have companies in mind** ("2", "I know which ones", a company
   name) → if none were named yet, ask "Which companies?" in prose; once
   named, treat as **Multi-company entry** below (pre-selected set).
@@ -661,69 +708,25 @@ Route the reply:
 **immediately** (no `org_pk` dependency — in parallel with Step 1's API
 calls); carry the named set in as the pre-selected company list and start
 at **Step 4** once Step 1 completes (skip Step 3).
-- **`env_mode: "artifact"`**: follow the **Plan card** section of
-  `references/cowork-artifact.md` before loading the runner (it leads to
-  the Runner widget section for the customize path).
-- **`env_mode: "preview-server"`**: if `preview_server_render_pref`
-  is not yet set, ask once ("How would you like to run valuations?
-  **1. Widget** — a quick plan you can bulk-create in one click, or open
-  the full list to customize / **2. Inline view** — text-based plan you
-  confirm before I run anything") and store as `preview_server_render_pref`.
-  If `"widget"`, follow the **Plan card** section of
-  `references/cowork-artifact.md`; if `"markdown"`, read
-  `references/md-table-runner.md` inline and follow from Step 1.
-- **`env_mode: "inline"`**: no question — read
-  `references/md-table-runner.md` inline and follow from Step 1 directly.
 
 ### Silent entry signals (apply before routing, never surfaced)
 
-- **Display-format preference.** Scan the first message for an explicit
-  format signal and set `dashboard_render_pref` if present — Step 3.2's
-  render preference gate then skips its question:
-  - "inline", "in chat", "as text", "markdown", "no artifact", "text only" → `"markdown"`
-  - "artifact", "side panel", "as an artifact", "in the panel" → `"artifact"`
-  - No signal → leave unset; the gate asks at render time.
-
-  Silent — do not confirm the preference back, and do not let it change
-  the routing above.
-- **One-line intro (bulk-create paths only).** This line is specifically
-  about bulk-create defaults (roll-forward, per-company overrides) — it
-  must **only** fire on paths that actually lead toward creating drafts
-  across companies: **multiple companies named**, **review/status
-  phrasing** (dashboard entry, which can lead to bulk-create via Step
-  2.3's Act bucket), and the **bulk-intent fork** (both of its branches
-  lead to bulk-create — fire it once the fork is presented, no need to
-  hold it like the dashboard-or-company fork below). Emit it **once per
-  session**, gated on `intro_shown`, before the work:
+- **One-line intro (bulk-create paths only).** Fire it **once per
+  session** (gated on `intro_shown`), before the work, only on paths that
+  can lead to creating drafts across companies: **multiple companies
+  named** and the **bulk-intent fork** (when it's presented):
   > ⚡ I can create these as **drafts** — each defaults to a roll-forward of last period (refreshed multiples + the latest financials), and you can override any company before I start or finalize later.
 
-  **Do NOT emit it for a single company named** (dive-in, Step 2.5) —
-  that path works on one existing/specific candidate, never bulk-creates
-  anything, and "override any company" / "create these as drafts" makes
-  no sense there. Do not emit it for bare/help-ish entry either — the
-  Welcome block is shown instead (see below).
-
-  If `intro_shown` is unset, print the line and set `intro_shown = true`;
-  if already true, skip silently. On the generic *dashboard-or-company
-  fork*, hold this line until the user picks a direction, then apply it
-  only if they picked **dashboard** — skip it entirely if they picked a
-  specific company.
+  Never for a single named company (dive-in), or on the *dashboard-on-screen*
+  and *no-dashboard* forks (they set `intro_shown = true`).
 
 ---
 
 ## Fund Holdings (cross-flow capability)
 
-Reached from the **global interrupt** above — from any step, any mode,
-any point in the conversation. Fund holdings are only ever available for
-a **finalized (`status: FINAL`)** valuation; drafts have no committed
+Reached from the **global interrupt** above. Fund holdings exist only
+for a **finalized (`status: FINAL`)** valuation; drafts have no committed
 allocation to report against.
-
-**Never substitute `get:allocation` for this capability.** `get:allocation`
-returns per-share-class allocation model inputs/outputs for a single
-candidate — a different shape entirely from the fund-level holdings
-split this capability answers. If you've reached for `get:allocation` in
-response to a "fund holdings" request, stop and use the query below
-instead.
 
 ### Step F1: Resolve target company + valuation date
 
@@ -740,19 +743,17 @@ instead.
 
 ### Step F2: Check valuation status — gate on FINAL
 
-For the resolved company(ies), check `latestValuation.status` (from the
-dashboard data, or from `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-if you're mid dive-in and don't already have it in context):
+For the resolved company(ies), check the status: `latestValuation.status`
+from the dashboard data, or a fresh `get:valuation` mid dive-in:
 
 - **Status is `FINAL`** → proceed to **Step F3** with that company +
   valuation date.
 - **Status is `DRAFT`, or there is no valuation at all** → do **not**
   run the query. Tell the user plainly, e.g.:
   > Fund holdings can only be viewed for a **finalized** valuation — this one is still a draft.
-  Then list that company's finalized valuations (via
-  `read_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<org_pk>", "ownerKind": "FIRM", "targetId": "<corporation_id>", "targetKind": "CORPORATION"}})`,
-  filtering candidates where `status == "FINAL"`) and ask which one they'd
-  like to see:
+  Then list that company's finalized valuations (`list:projects`,
+  candidates with `status == "FINAL"`) and ask which one they'd like to
+  see:
   > Here are the finalized valuations for **{company}** — which would you like to see fund holdings for?
   > 1. {date 1}
   > 2. {date 2}
@@ -767,34 +768,19 @@ if you're mid dive-in and don't already have it in context):
 
 ### Step F3: Query and render
 
-`FUND_ADMIN.FUND_HOLDINGS_VALUE` is a general-purpose fund-holdings table
-— not a private implementation detail of this one flow. Treat this
-capability as **discoverable from any angle**, not only "company +
-finalized valuation date." A user may instead ask by fund ("show me
-Owl Ventures Opportunity Fund II's holdings"), by firm-wide rollup
-("show fund holdings across the portfolio"), by date range ("as of last
-quarter"), or by some other column entirely. Build the `WHERE` clause
-from whatever the user actually specified — do not force every request
-through a `TARGET_NAME` + `VALUATION_DATE` shape just because Step F1/F2
-resolved a specific company and date.
+`FUND_ADMIN.FUND_HOLDINGS_VALUE` answers fund-holdings questions from
+any angle — by company and date, by fund, firm-wide, or by date range.
+Build the `WHERE` clause from what the user actually asked.
 
-**Confirm the schema before hand-writing SQL** — don't assume the
-column list below is exhaustive or unchanged. Call
+**Confirm the schema before writing SQL:**
 `read_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "FUND_HOLDINGS_VALUE", "schema": "FUND_ADMIN"}})`
-(or `dwh__list__tables` first if you're unsure the table still lives in
-`FUND_ADMIN`) to confirm the live column set, especially if the user's
-ask references a column not listed here.
+(`dwh__list__tables` first if the table may have moved). Known columns:
+`VALUATION_DATE`, `TARGET_NAME`, `FUND_NAME`, `FUND_HOLDINGS_VALUE`,
+`FUND_INVESTED_CAPITAL`, `FUND_LEGAL_OWNERSHIP_PCT`, `FUND_MOIC`,
+`TOTAL_HOLDINGS_VALUE`, `SOURCE`, `ALLOCATION_METHODOLOGY`; select more
+when the question needs it.
 
-Known columns as of this writing: `VALUATION_DATE`, `TARGET_NAME`,
-`FUND_NAME`, `FUND_HOLDINGS_VALUE`, `FUND_INVESTED_CAPITAL`,
-`FUND_LEGAL_OWNERSHIP_PCT`, `FUND_MOIC`, `TOTAL_HOLDINGS_VALUE`,
-`SOURCE`, `ALLOCATION_METHODOLOGY`. `SELECT *` (or an explicit
-superset) rather than hand-trimming columns when the user's question
-implies fields beyond this list.
-
-Baseline shape — company + valuation-date scoped (the common case coming
-out of Step F1/F2), one clause per company joined with `OR` when there's
-more than one:
+Default shape (company + date, one clause per company joined with `OR`):
 
 ```sql
 SELECT
@@ -813,155 +799,55 @@ WHERE (<one clause per company: TARGET_NAME ILIKE '%{name}%' AND VALUATION_DATE 
 ORDER BY FUND_HOLDINGS_VALUE DESC
 ```
 
-Adapt the `WHERE` (and `SELECT`/`ORDER BY`) to the actual ask — e.g.
-`WHERE FUND_NAME ILIKE '%{fund}%'` for a fund-scoped request, no
-`WHERE` at all (just `SOURCE = 'PORTFOLIO_VALUATION'`, still filtered to
-`FINAL`-status valuations per Step F2) for a firm-wide rollup, or a
-`VALUATION_DATE BETWEEN` range for a date-range ask. The company+date
-shape above is a default, not a constraint.
+Other shapes: `FUND_NAME ILIKE '%{fund}%'` for a fund; just
+`SOURCE = 'PORTFOLIO_VALUATION'` (still FINAL-only per Step F2) firm-wide;
+`VALUATION_DATE BETWEEN` for a range.
 
-Call via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query>", "limit": 200}})`.
-For open-ended fund-holdings questions where you're unsure how to shape
-the SQL, `dwh__execute__question` (plain-English) is an acceptable
-fallback — it resolves schema and SQL itself.
+Call `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query>", "limit": 200}})`.
+For an open-ended question, `dwh__execute__question` (plain English) is an
+acceptable fallback.
 
 Display results as a markdown table with columns: **Company**, **Fund**,
 **Valuation Date**, **Holdings Value**, **Invested Capital**,
-**Ownership %**, **MOIC**, **Method**. Format currency with $M/B/K
-suffix; ownership % as `X.XX%`; MOIC as `X.Xx`; show `—` for any null
+**Ownership %**, **MOIC**, **Method**. Format amounts with an M/B/K
+suffix in the fund's currency when the schema check above shows the
+table carries one; otherwise show the bare number (see **Currency
+default**). Ownership % as `X.XX%`; MOIC as `X.Xx`; show `—` for any null
 field. If the query returns no rows, say: "There are no fund holdings
 for this valuation."
 
-After answering, return control to wherever the user was before the
-interrupt fired (re-present the dashboard menu, the dive-in recap, etc.)
-— do not force a new menu.
-
----
-
-## Welcome (bare entry only)
-
-Reached only when routing classified the entry as **bare / help-ish**.
-Skipped entirely on any direct-intent entry. This is a lean welcome — a
-high-level menu of the three things the skill does. Do **not** front-load
-any bulk-run detail, and do **not** fetch or render the dashboard; that
-happens only if the user asks (reply routing below).
-
-Resolve the firm first via **Step 1** — the MCP `welcome` / connection
-banner appears here. **Do not fire the speculative dashboard fetch**; the
-dashboard is loaded lazily only when the user picks it.
-
-Then print the single message below — the **only** prompt shown. Do not
-also emit a separate firm-confirmation line or a trailing "what would you
-like to do?"; the message covers both. Set `intro_shown = true` when this
-message is shown, so a later direct request in the same session does not
-re-emit the one-line intro.
-
-Substitute `{firm_name}`, and append ` (your only firm)` when the user
-has just one firm. Output verbatim:
-
-> 👋 Working in **{firm_name}**[ (your only firm)] — here's what I can help with:
->
-> 1. **Review your valuation dashboard** — see every portfolio company, their latest valuation, status, and recent events.
-> 2. **Bulk-create valuations** — run draft valuations across many companies in one pass.
-> 3. **Dive into a valuation** — open one company and work through it step by step.
->
-> Want to start by viewing your dashboard? Or tell me what you'd like to do.
-
-Edge cases (resolved during Step 1):
-- **Multiple firms, none active** — run Step 1's firm picker first, then
-  return here with the chosen firm.
-- **Zero firms** — output Step 2.1's zero-firms line and stop.
-
-**Route the user's reply** — the dashboard has **not** been fetched; load
-it only on the dashboard route:
-
-| Reply | Action |
-|---|---|
-| "yes", "sure", "show me", "1", "dashboard", "view it" | Go to **Step 3.2** to fetch and render the dashboard now. (Skip Step 2.1's greeting — the firm was already confirmed above.) |
-| "2", "bulk", "run all of them", "create valuations" | Enter bulk mode. Read `references/bulk/bulk-runner.md` inline and follow from Step 3. |
-| "3", "dive in", "{single company name}", "let's work on Acme" | Go to **Step 2.5 (dive into one)** for the named company. |
-| Anything else | Match on intent generously against the routes above. If still unclear, ask one short clarifying question. |
-
-Do **not** repeat the menu or re-confirm the firm once the user has chosen.
+Then return control to wherever the user was — don't force a new menu.
 
 ---
 
 ## Step 1: Firm selection (prerequisite — resolve before any capability)
 
-This is the one genuinely order-dependent gate: every capability needs
-`org_pk`, so resolve the firm first. Everything after this is
-intent-routed (see **Routing** above), not a linear sequence.
+Every capability needs `org_pk`, so resolve the firm first.
 
-**Environment detection (runs on every entry, before anything else).**
-Determine the runtime rendering capability — `env_mode` is one of
-`preview-server`, `artifact` or `inline` — using the `ToolSearch` probes in
-**Step 2.2a** below, and store the result as `env_mode`. The modes are named
-after the rendering tool that is present, not the Claude product the user is
-in: the Claude Code desktop app, the Claude Code CLI and Cowork are told
-apart only by which tools they expose. `env_mode: "preview-server"` means
-`mcp__Claude_Preview__preview_start` OR `mcp__Claude_Browser__preview_start`
-is present (see `preview_tool_family` in Step 2.2a), which is what makes the
-interactive preview panel available. Fire the ToolSearch probe
-in **Step 2.2a** in parallel with the speculative fetch and
-`list_contexts` below — it has no dependencies. This is silent and must
-never be skipped, because the dashboard render-preference gate (Step
-2.2b), the bulk-intent fork, and the runner widget-vs-inline choice all
-branch on `env_mode` regardless of which capability
-the user is entering. Every other reference in this skill that needs to
-know the environment reuses this cached `env_mode` —
-none of them re-detect it. (Deep-link rendering, `references/deep-link.md`
-Step 5, does **not** branch on `env_mode` — it always spells out the raw
-URL now; see that file.)
-
-**Speculative dashboard fetch (cold-start acceleration):** If `org_pk`
-is already cached from earlier in this session, fire
-`read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
-with the cached `organizationId` and `page_size: 100` **immediately, in parallel with `list_contexts`** —
-do not wait for firm confirmation first. Hold the result as
-`speculative_dashboard`. After `list_contexts` confirms the active firm
-is unchanged, use `speculative_dashboard` in Step 3.2 instead of
-fetching again. If `list_contexts` shows the firm changed (or the
-speculative call errored), discard `speculative_dashboard` and fetch
-fresh in Step 3.2 as normal. Also fire `search_tools` in this same
-parallel fan-out — it has no dependencies either.
-
-On a **first entry** (no cached `org_pk`), skip the speculative fetch
-and proceed with the normal sequence below.
-
-**Speculative preview schema pre-load — fires on every entry, cached
-`org_pk` or not**, immediately once `env_mode` is known (no dependency on
-`list_contexts` or `list_accounts`):
-- **`env_mode: "artifact"`**: skip — `Artifact` is a loaded tool, not a deferred one, so it has no schema to pre-load.
-- **`env_mode: "preview-server"`**: `ToolSearch(query: "select:mcp__Claude_Preview__preview_start,mcp__Claude_Browser__preview_start")`
-  — this is how `env_mode` and `preview_tool_family` get set; if
-  both come back empty (and neither is already loaded), there are no schemas to
-  pre-load and `env_mode` is not `preview-server`.
-
-This fires in parallel with everything else below so the schemas are
-ready by the time the user answers the display format question in Step
-2.2b — no extra round-trip at render time.
+**Never load the portfolio on entry.** `list:portfolio_dashboard` is slow,
+so the skill does not call it when it starts: not ahead of time, not in
+parallel with firm selection, and not to build the first reply. It runs only
+when the user asks to see the portfolio in chat, names a company to resolve,
+or starts a bulk run. Firm selection needs only `list_contexts`,
+`list_accounts` and `set_context`.
 
 1. Call `list_contexts` to check for an active firm and get the firm name.
-   (If `org_pk` is cached, `list_contexts` + `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", ...})` +
-   `search_tools` all fire together — see above.)
    - **The user gave a numeric firm ID** (e.g. "Krakatoa Ventures (firm id = 1)"):
      find the firm whose `carta_id` equals that number, use the number as
      `org_pk`, and **skip `list_accounts`**. A firm's `carta_id` is the same
      integer as its `organization_pk`. The user has already chosen the firm, so
      skip step 3's confirmation and go to step 4. If no firm has that
      `carta_id` (or `carta_id` is null), fall back to step 2.
-2. If `org_pk` is **not** cached and wasn't given, fire **all of the following** **in parallel**
-   once `list_contexts` returns:
-   - `list_accounts` with `search: "<firm name>"` to resolve `org_pk`
-     (integer ID from `organization_pk:<n>`). **Never call `list_accounts`
-     without the search filter** — the unfiltered response returns 200+
-     accounts.
-     (No `search_tools` sentinel — it cannot report on this domain at all.
-     Access was already settled by **Gate 1** before this step, and the
-     schema pre-load above already fired separately — do not repeat it here.)
+2. If `org_pk` is **not** cached and wasn't given, once `list_contexts` returns, call
+   `list_accounts` with `search: "<firm name>"` to resolve `org_pk`
+   (integer ID from `organization_pk:<n>`). **Never call `list_accounts`
+   without the search filter** — the unfiltered response returns 200+
+   accounts.
 3. If active firm exists, confirm by asking in plain text. If multiple
    firms and no active one, list them and ask the user to pick. If one firm, auto-select silently.
 4. Call `set_context` if the user picked a different firm.
+5. **Open the dashboard MCP App** — always, once the firm is settled. See
+   **Open the dashboard MCP App first** below.
 
 **Important**: The `list_contexts` `firm_id` is a UUID used for
 Snowflake — it is NOT the same as the integer org_pk needed by
@@ -969,13 +855,52 @@ valuation commands. Resolve org_pk from the `list_accounts`
 search result (`organization_pk:<n>`), or from the firm ID the user gave
 (step 1).
 
-**Session cache**: Once `org_pk` is resolved, hold it in context for the
-rest of the session. If this skill is re-entered (e.g. after a run
-completes and the user asks to do more), skip `list_accounts` and reuse
-the cached `org_pk` — `list_contexts` is still needed to confirm the
-active firm hasn't changed, but `list_accounts` is not.
+**Session cache**: hold `org_pk` for the session. On re-entry, still call
+`list_contexts` to confirm the active firm, but reuse the cached `org_pk`.
 
 If the user has no firms, surface plainly and stop.
+
+**Open the dashboard MCP App first.** The dashboard is an MCP App: Carta's
+dashboard page shown in the side panel on the right of the chat, not a link,
+not inline in a message and not a browser page.
+On every invocation, as soon as the firm is settled (after the user confirms
+it, when Step 1 asks) and before any table, recap or link, open it with:
+
+```
+view_remote_next({"name": "portfolio_valuations:view:dashboard",
+             "params": {"organizationId": <org_pk>}})
+```
+
+`references/dashboard-view.md` says what to do once it returns. The view moves
+itself to the side panel as it mounts, so don't move it.
+
+**On the very next prompt, call `list_widget_tools` first.** The host adds
+the tools that control an open MCP App only after the turn that opened it.
+So in the user's next message after each time
+`portfolio_valuations:view:dashboard` loads, **whatever that message says,
+your first call is `mcp__claude-device__list_widget_tools()`**. Load it with
+`ToolSearch(query: "select:mcp__claude-device__list_widget_tools,mcp__claude-device__call_widget_tool,mcp__claude-device__set_widget_display_mode")`
+if it isn't loaded. Its result gives the dashboard's widget id (the widget
+`view_remote_next` opened) and the app tools that widget lists. Keep that id
+for the session, and reach the dashboard's app tools
+(`references/dashboard-view.md`) through `call_widget_tool` with it. Then
+carry on with the user's message. Make the call silently. If
+`list_widget_tools` isn't available or fails (the Code tab has no such
+tools), say nothing and carry on without the id (**Page navigation → App
+tools need the widget id**).
+
+Make the open call
+even when the request names a company or valuation. Use `view_remote_next`, not `view_remote`: the server refuses to
+open the dashboard through `view_remote`. The **Startup** message loaded
+`view_remote_next`; if it still isn't loaded, load it first with
+`ToolSearch(query: "select:mcp__carta__view_remote_next,mcp__claude_ai_Carta__view_remote_next,mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_next")`
+and use whichever answers. When the MCP App opens, it is the way to the firm
+dashboard.
+
+**When the MCP App can't be used** — only in the cases
+`references/dashboard-view.md` **When the MCP App cannot be used** lists, and
+never without first trying the call above — carry on in chat with no link in
+its place: the *no-dashboard fork* (Routing) offers the portfolio table here.
 
 After firm selection, resolve any company-name matches captured during
 routing:
@@ -984,45 +909,27 @@ routing:
 - **Multiple matches (named in the user's message)** → read
   `references/bulk/bulk-runner.md` inline; carry the matched list
   in as the pre-selected company set and start at Step 4. Skip Step 3.
-- **No company named or no match** → read
-  `references/bulk/bulk-runner.md` inline and follow from Step 3.
+- **No company named** → the route the request matched in **Routing**.
+- **A name that matched no company** → say so and ask which company.
 
 ---
 
 ## Step 2: Dashboard entry
 
-Reached by **two paths**, both of which render the portfolio dashboard
-through the same gate so the experience is identical:
-
-1. **Bare/welcome entry** — the user chose to view the dashboard from
-   the Welcome reply routing. The firm was confirmed in the Welcome block.
-2. **General/time-period phrasing** (e.g. "work on portfolio valuations
-   for {firm}", "run all my valuations") — routed here from the routing
-   table. The firm was resolved in Step 1 and the one-line intro already
-   fired.
-
-On **both** paths, **skip the Step 2.1 greeting** and go to **Step 2.2 →
-Step 3.2** to fetch and render the portfolio. In interactive modes, Step
-2.2b asks the "Dashboard view" format choice (interactive dashboard vs.
-inline text table) **before** rendering. The dashboard was not
-pre-fetched — Step 3.2 fetches it now. From the rendered dashboard,
-Step 2.3's menu routes the user to the bulk runner (Act) or any other
-next step.
-
-Skipped entirely when the user named a specific company (→ dive-in) or
-multiple companies (→ bulk runner with a pre-selected set).
+Reached when the user picks the portfolio table from the *dashboard-on-screen*
+or *no-dashboard* fork. Go to **Step 2.2**, which fetches and renders it
+via **Step 3.2**; Step 2.3's menu routes from there.
 
 ### Step 2.1: Edge-case firm lines
 
-The Welcome block shows the normal merged firm + menu message, so the
-happy-path greeting is **not** used here. This block holds only the
-edge-case lines referenced from the Welcome block:
+Only these edge cases print a greeting; the normal case is the fork
+**Routing** presents after Step 1.
 
 - **Multiple firms, none active** (user must pick first):
   > 👋 **Portfolio Valuations**. Pick a firm to get started.
 
-  Then run Step 1's firm picker. After selection, return to the Welcome
-  block and print the merged firm + menu message with the chosen firm.
+  Then run Step 1's firm picker. After selection, carry on with the route the
+  request matched in **Routing**.
 
 - **Zero firms**:
   > 👋 **Portfolio Valuations** — you don't have any firms set up in Carta yet. Add one and come back.
@@ -1037,159 +944,9 @@ edge-case lines referenced from the Welcome block:
 
 ### Step 2.2: Render the dashboard
 
-Use the `env_mode` already established in Step 1 (see **Step 2.2a** for
-the detection rules themselves) to decide how to render the dashboard —
-do not re-detect it here. (Step 3.1's search_tools call was already
-fired in parallel during Step 1 — its result is in context.)
-
-### Step 2.2a: Environment detection
-
-**This runs once, in Step 1, on every entry — not here.** This section
-is the reusable rule set every other part of this skill points back to
-(deep-link rendering, the dashboard render-preference gate, the
-bulk-intent fork, the runner widget-vs-inline choice); it is documented
-here for reference, not as a step you re-run each time the dashboard is
-rendered.
-
-**Use `ToolSearch` as the primary probe — do not rely on passive context
-scanning.** The deferred-tools list is hundreds of names long; scanning it
-by eye is unreliable and is the root cause of false classifications.
-Instead, fire the probe as an active, deterministic tool call:
-
-```
-ToolSearch(query: "select:mcp__Claude_Preview__preview_start,mcp__Claude_Browser__preview_start")
-```
-
-**Two tool families answer for the same capability — probe for both, never
-just one.** The local-preview-panel tool has shipped under two different MCP
-server names across hosts/versions: `Claude_Preview` (older) and
-`Claude_Browser` (current, seen in Claude Code CLI sessions as of this
-writing). A host exposes at most one of the two — never assume which one, and
-never hardcode a single name in a probe or a downstream call. Whichever
-family answers, record it as `preview_tool_family` (`"claude_preview"` or
-`"claude_browser"`) and use *that* family's tool names for every subsequent
-preview call in this session (Step 2.2b, `references/desktop-preview.md`).
-Treating an absent `Claude_Preview` as "no preview panel" without also
-checking `Claude_Browser` is exactly the bug that silently downgrades a real
-Claude Code CLI session to the `artifact` path — the two paths produce
-visibly different "Get started" behavior (a working local server vs. a
-copy-to-chat panel that always fires), so misclassifying this is not cosmetic.
-
-`Artifact` needs no probe — it arrives as a loaded tool when present, so read it
-straight off the tool list.
-
-A non-empty ToolSearch response (the tool schema appears in the output)
-means the tool is present as a deferred tool in this session.
-
-Additionally check whether either tool is already loaded — a tool that was
-provided with its full JSON schema at conversation start (listed alongside
-`Read`, `Bash`, etc.) will NOT appear in ToolSearch results because it is
-not deferred. If it is already loaded it is equally present.
-
-A tool is **present** if ToolSearch returns its schema OR it is in the
-already-loaded list. A tool is **absent** only when ToolSearch returns empty
-for it AND it is not in the already-loaded list.
-
-There are exactly **three** mutually exclusive values for `env_mode`. They
-name the rendering capability, so there is no Desktop-vs-Terminal split: the
-Claude Code CLI (terminal) can now also expose the `Artifact` tool, so tool
-presence alone can no longer tell the Claude Code desktop app, the CLI and
-Cowork apart — don't try.
-
-**`preview-server`** (`env_mode: "preview-server"`) — `mcp__Claude_Preview__preview_start`
-OR `mcp__Claude_Browser__preview_start` is present (see `preview_tool_family`
-above). This takes priority over `Artifact` — classify as `preview-server`
-**regardless of whether `Artifact` is also present**; when both are
-available, always render through the preview panel, not the `Artifact`
-tool. This is what makes the interactive preview panel available.
-
-**`artifact`** (`env_mode: "artifact"`) — the `Artifact` tool is present and
-**neither** `mcp__Claude_Preview__preview_start` **nor**
-`mcp__Claude_Browser__preview_start` is present. (Known gap: a Claude Code
-CLI session with `Artifact` exposed and no preview panel at all is
-indistinguishable from Cowork by tool presence, and takes this path too.)
-
-**`inline`** (`env_mode: "inline"`) — none of the preview tools are present
-and `Artifact` is absent. Only classify as `inline` after the ToolSearch
-probe returns empty for **both** preview families AND neither appears in the
-already-loaded list, AND `Artifact` is not in the tool list.
-
----
-
-### Step 2.2b: Interactive mode (`artifact` or `preview-server`) — dashboard render preference
-
-This question is asked whenever an interactive rendering surface exists:
-`env_mode: "artifact"` or `env_mode: "preview-server"`.
-Ask it inline, as plain text (no `AskUserQuestion` — see UX Rules), before
-rendering. This question is asked **once per session** — once answered,
-`dashboard_render_pref` applies to every subsequent dashboard render
-without re-asking (unless the user explicitly requests a different
-format). `env_mode: "inline"` skips this gate
-entirely — go straight to **Step 2.2c**.
-
-**While waiting for the user's answer**, speculatively read the relevant reference in parallel — user think-time covers the file read entirely:
-- **`artifact`**: read `references/cowork-artifact.md`
-- **`preview-server`**: read `references/desktop-preview.md`
-
-Ask:
-
-> **How would you like to see your portfolio?**
-> 1. **Interactive dashboard** — a richer, clickable view that updates after each run. Takes a moment longer to load.
-> 2. **Inline view** — a quick text table, right here in the chat.
-
-Wait for the reply, then store it as `dashboard_render_pref` (`"artifact"`
-for the interactive dashboard, `"markdown"` for the inline view).
-
-**If "Interactive dashboard"**: Fire **both** of the following **in parallel**:
-- `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` fetch (Step 3.2 data load)
-- Pre-load the artifact tool schemas via `ToolSearch`:
-  - **`artifact`**: nothing to pre-load — `Artifact` is a loaded tool.
-  - **`preview-server`**: pre-load the tool names for
-    whichever `preview_tool_family` Step 2.2a recorded —
-    `ToolSearch(query: "select:mcp__Claude_Preview__preview_start,mcp__Claude_Preview__preview_list,mcp__Claude_Preview__preview_eval")`
-    when `"claude_preview"`, or
-    `ToolSearch(query: "select:mcp__Claude_Browser__preview_start,mcp__Claude_Browser__preview_list,mcp__Claude_Browser__navigate,mcp__Claude_Browser__javascript_tool")`
-    when `"claude_browser"`.
-
-The reference file is already in context — use it once both calls complete:
-- **`artifact`**: follow `references/cowork-artifact.md`
-- **`preview-server`**: follow `references/desktop-preview.md`
-
-**If "Inline view"**: Follow **Step 3.2** to render the grouped markdown table inline (same as `env_mode: "inline"`).
-
-When the user subsequently selects the bulk-create action (Step 2.4, or
-any bulk entry path), ask inline as plain text (no `AskUserQuestion`):
-
-> **How would you like to run valuations?**
-> 1. **Runner widget** — a quick plan you can bulk-create in one click, or open the full list to customize
-> 2. **Inline view** — text-based plan you confirm before I run anything
-
-**If "Runner widget"**: show the **Plan card** first (the method rule set + a
-valuation-date picker) — the user clicks **Create draft valuations** to
-bulk-create in one click, or **Adjust by company** to open the full runner list.
-The Plan card carries its own valuation-date picker, so **skip the Step 3 date
-question** for this path (the card collects the date).
-- **`artifact`**: follow `references/cowork-artifact.md` **Plan card** section
-  (which links onward to the **Runner widget** section for the customize path).
-- **`preview-server`**: follow `references/desktop-preview.md` — the `open_runner`
-  branch shows the Plan card (which links onward to the Runner widget section of
-  `references/cowork-artifact.md` for the customize path).
-
-**If "Inline view"**: read `references/md-table-runner.md` inline and
-follow from Step 1.
-
----
-
-### Step 2.2c: `inline` mode — render markdown table
-
-Reached when `env_mode: "inline"` —
-`Artifact` is absent, and neither `mcp__Claude_Preview__preview_start` nor
-`mcp__Claude_Browser__preview_start` is available.
-**Do NOT call any preview or artifact tools** (`mcp__Claude_Preview__*`, `mcp__Claude_Browser__preview_*`, `Artifact`, `build_artifact.py`), write dashboard response files, or ask for a display format preference — those paths are unavailable. Fall through directly to **Step 3.2** (data load + grouped markdown table). Render the greeting from 2.1 first, then the table from Step 3.2 below it.
-
-The table is the discovery surface — users see real company names and can type
-"1, 3, 7" or "take a closer look at Acme" without
-needing an example phrases list.
+Render the grouped markdown table from **Step 3.2** in chat, after the
+Step 2.1 line when one applies. Don't ask how the user wants to see it. No
+link under it.
 
 ### Step 2.3: Prompt the user
 
@@ -1231,18 +988,15 @@ Route based on the user's free-text reply or named action from Step 2.3:
   "run first valuations", "re-value stale", "bulk", "run them all",
   "do the ones that need it", bucket-scoped phrases like "just the
   drafts", "the no-val ones", named companies, row numbers) → start
-  the bulk runner immediately.
-  - **`env_mode: "artifact"`** (per the `env_mode` resolved in Step 1 — not a
-    fresh tool check; see Step 2.2a):
-    follow `references/cowork-artifact.md` **Plan card** section (it leads to
-    the **Runner widget** section for the customize path).
-  - **`env_mode: "preview-server"`**:
-    follow `references/desktop-preview.md` (the Plan card is shown first; it
-    leads to the Runner widget section for the customize path).
-  - **`env_mode: "inline"`**: read `references/md-table-runner.md`
-    inline and follow from Step 1.
-  Route via Step 3.3's intent routing table in
-  `references/bulk/bulk-runner.md` (read it inline).
+  the bulk runner immediately. Read `references/md-table-runner.md`
+  inline:
+  - An unscoped reply ("refresh", "bulk", "run them all", "do the ones
+    that need it") follows from Step 0, the picker view.
+  - A reply that names companies, a bucket or row numbers follows from
+    Step 1, so the scope the user gave reaches the plan without being
+    asked for again (the view opens with nothing ticked). Route it via
+    Step 3.3's intent routing table in `references/bulk/bulk-runner.md`
+    (read it inline).
 
 - **Act — dive into one** (e.g. "dig into", "take a closer look",
   "dive in", a single company name) → go to **Step 2.5 (dive into one)**
@@ -1259,12 +1013,8 @@ Route based on the user's free-text reply or named action from Step 2.3:
   don't assemble one by hand out of the dashboard data, and don't offer
   the valuation ledger as a substitute. Then re-present Step 2.3's menu.
 
-- **Fund holdings** (e.g. "show fund holdings", "fund breakdown", "fund holdings value", "fund level breakdown") →
-  Handled by the **global interrupt** (top of Routing) → **Fund Holdings (cross-flow capability)**.
-  The Final valuation bucket (already in context from Step 3.2) is the candidate list when the
-  user hasn't named a specific company.
-
-The bucket lists are already in context from Step 3.2's silent derivation.
+- **Fund holdings** → the **global interrupt** (Step F1 uses the Final
+  bucket when no company is named).
 
 ---
 
@@ -1272,42 +1022,42 @@ The bucket lists are already in context from Step 3.2's silent derivation.
 
 Reached from:
 - **Routing / firm selection** matched a single named company.
-- **The Welcome reply routing** routed "dive in" / a single company.
+- **The *dashboard-on-screen* or *no-dashboard* fork** routed a company name.
 - **Step 3.4** confirm resolved to exactly 1 company.
-- **Bulk run results** — the user clicked a row's next-step button ("Dive
-  into the {company} valuation and {step}") or typed "dive into {company}"
-  after a bulk run. Take the candidate context from that company's
+- **Bulk run results** — the user typed "dive into {company}" or "dive into
+  the {company} valuation and {step}" after a bulk run. Take the candidate context from that company's
   `bulk_results` entry, skip Step 2.5a's `list:projects` lookup, and after
   the recap start on the step. See `references/bulk/bulk-results.md` Step 3.
 
 There is **no mode picker** — do not ask "run autonomously vs. work on
 it myself." Show the recap, then answer what the user asks.
 
+**Company dashboard or history requests.** When the user asks for the
+company's dashboard or its historical valuations rather than one valuation
+("show me Meetly's dashboard", "Meetly's valuation history"), open the
+company page in the dashboard MCP App (**Page navigation**), and don't ask
+which valuation to work on. Resolve a
+valuation and go on to Step 2.5a only when they then pick one.
+
 ### Step 2.5a: Recap (where the candidate stands)
 
+Once the candidate is resolved, leave the view where it is: open its page
+only if the user asks to see it (**Page navigation → Which page to open**).
+After an action on it succeeds, the turn offers the page.
+
 Resolve the candidate context (`project_id`, `candidate_id`,
-`valuation_id`; if the company has multiple projects, list them via
-`read_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<org_pk>", "ownerKind": "FIRM", "targetId": "<corporation_id>", "targetKind": "CORPORATION"}})`
-and ask which one — match a row the user
-already named without re-asking).
+`valuation_id`) from `list:projects`. With several projects, ask which
+one, unless the user already named it.
 
 **Capture the target type.** The `list:projects` response carries a
 `target` object with `id` and `kind` per project. Hold the resolved
 project's `target.kind` (one of `CORPORATION`, `LLC_ISSUER`, `LLC_ENTITY`)
-and `target.id` in context — the cap-table flow (Step 2.5b →
-`references/dive-in/cap-table-review.md`) branches on `target.kind` to
-pick which cap table to read, and the LLC path uses `target.id` as the
-issuer id. **Allocation does not branch on it.** Which allocation
-methodologies a candidate can run comes from its own configuration
-(`references/dive-in/allocation.md` Gate 0), not from its target kind —
-don't use `target.kind`, `isLlc`, or `llcIssuerId` to decide what to
-offer or which allocation flow to enter.
+and `target.id` in context: `cap-table-review.md` branches on the kind,
+and the LLC path uses `target.id` as the issuer id. **Allocation does not
+branch on it** — `allocation.md` Gate 0 decides what to offer.
 
-**Stop here when `target.kind` is `LLC_ENTITY`.** That target kind is
-deprecated and no flow in this skill supports it. Handle it once, here —
-do not route the request onward and do not let it fall through to the
-cap-table or allocation branches below. Surface one plain line and return
-control:
+**Stop here when `target.kind` is `LLC_ENTITY`** (deprecated; no flow
+supports it). Don't route onward. Say one line and return control:
 
 > "**{company}** is an entity type we no longer support for valuations.
 > Open it in Carta if you need to look at it there."
@@ -1315,30 +1065,17 @@ control:
 Everything after this point assumes `target.kind` is `CORPORATION` or
 `LLC_ISSUER`.
 
-**When `list:projects` returns zero projects**, the holding simply has
-no valuation yet. Do not treat this as an error and do not dead-end the
-user. The response carries a generic gateway warning ("EMPTY RESPONSE …
-BEST EFFORT — flag this clearly to the user") that fires on every empty
-result; it does **not** apply here — never surface it, and never let it
-turn into a "this data may be incomplete" caveat on data that came from
-a different, fully-populated call. Fall back to the dashboard's
-`isLlc` / `llcIssuerId` for the
-target signal, and skip the `get:valuation` / `get:approaches` /
-`get:financials` calls
-below (there is no candidate to describe) — recap what you do know, then
-route the user's request as normal. Cap-table review in particular is
-**fully available for an LLC in this state**: it is an issuer-scoped
-live read that needs no candidate. Only genuinely candidate-scoped flows
-(financials, approaches, comps, GPC, allocation, finalize) require
-creating a valuation first — offer `create-val.md` for those.
+**When `list:projects` returns zero projects**, the holding has no
+valuation yet — not an error. Never surface the gateway's generic "EMPTY
+RESPONSE … BEST EFFORT" warning, here or as a caveat on other data. Use
+the dashboard's `isLlc` / `llcIssuerId` for the target, skip the
+candidate reads below, recap what you know, and route as normal.
+Cap-table review still works for an LLC (it needs no candidate); the
+candidate-scoped flows (financials, approaches, comps, GPC, allocation,
+finalize) need a valuation first — offer `create-val.md`.
 
-Then silently call
-`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
-`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`, and
-`read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-(needed for the **Financials** recap line below — `get:valuation`/`get:approaches`
-alone don't carry period data), and render a short recap so the user sees
-where the valuation stands before doing anything:
+Then silently call `get:valuation`, `get:approaches` and `get:financials`
+(the Financials line needs period data), and render a short recap:
 
 > Here's where **{company}**'s {valuation date} valuation stands:
 > - **Approaches:** {approach list with weights} — {how they were set, e.g. "copied from the prior valuation"}
@@ -1347,8 +1084,8 @@ where the valuation stands before doing anything:
 > - **Cap table:** {accessible / not accessible on this candidate}
 > - **Status:** {Draft / Final}
 
-Keep it to these lines. Speak in business terms — no command names, field
-names, or IDs. Omit a line only if genuinely not applicable.
+No link in the recap (**No dashboard links**). Keep it to these lines; omit one only if it
+genuinely doesn't apply.
 
 Follow the recap with the **valuation summary checklist** (Step 2.5c).
 
@@ -1359,33 +1096,38 @@ the matching individual flow. Do **not** push a "where would you like to
 start?" menu and do **not** prompt "ready for the next step?" — answer
 what they asked, then return control.
 
+As you route, open the valuation's page in the dashboard MCP App only when
+the user directly asks to see it (**Page navigation**). A request that
+changes the valuation leaves the view where it is, and the turn ends by
+offering to open the updated valuation (**Writes**).
+
 | User intent (examples) | Flow to read inline |
 |---|---|
 | "review the cap table", "show holders", "ownership %" | `references/dive-in/cap-table-review.md` |
-| "review financials", "show revenue", "what's the EBITDA", "refresh financials" | `references/dive-in/financials-review.md` |
+| "review financials", "show revenue", "what's the EBITDA", "refresh financials", "enter / add / work on the financials" | `references/dive-in/financials-review.md` (enter, add or work on → its Step 0 offers import from Carta, entry in chat, or entering them manually in the financials view) |
+| "I'll enter the financials manually", "let me type in the financials myself", "show me a form / table to enter financials" | `references/dive-in/edit-financials-view.md` — opens the financials view for the user to fill in. Takes precedence over the `financials-review.md` row for any request to enter the financials by hand. |
+| "let me enter the inputs for the methods", "I want to type in the GPC / post-money / custom value myself", "I'll set the weights myself", "manually set the weighting", "let me weigh the methods" | `references/dive-in/methodology-edit-view.md` — opens the methods table for the user to fill in. Takes precedence over the `set-approaches.md` row for any request to enter method inputs or weights by hand. |
 | "set approaches", "change methodology", "use GPC / M&A / post-money / backsolve", "Custom Value", "manual EV", "set the company value to {N}" | `references/dive-in/set-approaches.md` |
 | "find comps", "update comps", "add a peer", "drop {ticker}" | `references/dive-in/comps.md` |
 | "run GPC analysis", "recommend multiples", "set the 75th percentile", "quartile stats" | `references/dive-in/gpc-analysis.md` (requires `gpc` enabled; if not, read `set-approaches.md` first) |
 | "work on Backsolve", "run backsolve", "select a backsolve share class", "solve for equity value", "override the backsolve value", "make an equity adjustment", "adjust the equity value" | `references/dive-in/backsolve/backsolve.md` (requires `backsolve` enabled; if not, read `set-approaches.md` first — an override/adjustment request on an already-computed candidate enters directly at that file's Step 5) |
 | "how is the backsolve calculated", "explain the backsolve math", "how do we arrive at this value", "walk me through the backsolve numbers", "how does backsolve work", "how is the equity value derived", "show me the formulas", "show me the math" | `references/dive-in/backsolve/backsolve-explained.md` (only enter on explicit "explain / how is it calculated / show me the formulas" phrasing — do NOT enter for requests to configure or run backsolve) |
-| "create an Excel spreadsheet for the backsolve", "export backsolve to Excel", "give me the backsolve in a spreadsheet", "backsolve Excel file", "download as Excel" | `references/dive-in/backsolve/backsolve-excel.md` — the file handles environment detection: writes directly into the current sheet when Claude for Excel is active, generates a `.xlsx` file otherwise |
-| "create a backsolve artifact", "interactive backsolve calculator", "backsolve HTML", "show me an interactive calculator for the backsolve" | `references/dive-in/backsolve/backsolve-html.md` — fetch `get:backsolve` and `get:equity_adjustment` in parallel, then follow the file |
-| "run waterfall / OPM / CSE", "allocate to share classes", "compute holdings value" | `references/dive-in/allocation.md`, for every target kind — **do not branch on `target.kind` here.** That file's Gate 0 resolves which methodologies the candidate supports from `get:configuration` and offers only those, covering CSE/Waterfall/OPM and the Niagara Waterfall / Niagara OPM pair alike. **Route the request and let Gate 0 make that call — don't call `get:configuration` here, and don't call it for any other row in this table.** It fires on an allocation request and nowhere else. Requires a positive EV; if zero or negative, surface plainly and route to `set-approaches.md`. Pass `valuationId` along with the usual ids — Gate 0 and the Niagara commands key off it alone. (`LLC_ENTITY` never reaches here — Step 2.5a stops it.) |
+| "create an Excel spreadsheet for the backsolve", "export backsolve to Excel", "give me the backsolve in a spreadsheet" | `references/dive-in/backsolve/backsolve-excel.md` — the file writes directly into the current sheet when Claude for Excel is active and says so plainly otherwise |
+| "run waterfall / OPM / CSE", "allocate to share classes", "compute holdings value" | `references/dive-in/allocation.md`, for every target kind. Its Gate 0 decides which methodologies to offer; don't call `get:configuration` here or for any other row. Requires a positive EV; if zero or negative, say so and route to `set-approaches.md`. Pass `valuationId` along with the usual ids. |
 | "add another scenario", "create a Version 2", "what if {X}" | `references/dive-in/add-candidate.md` |
 | "create a new valuation", "start a Q2 valuation", "new valuation as of {date}" | `references/dive-in/create-val.md` |
 | "draft audit notes", "produce the audit memo" | `references/dive-in/audit-notes.md` |
 | "view / read the valuation commentary", "add / edit / update the commentary", "write a note explaining this valuation", "clear the commentary" | `references/dive-in/commentary.md` |
 | "upload/attach a document", "add the DCF workbook", "list documents", "what's attached to this valuation", "download a document", "get me the backsolve file" | `references/dive-in/documents.md` |
 | "goal seek", "tune the EV to {target}", "open the GPC dashboard" | Solving backwards from a target value isn't something this skill does. Say so plainly in one line, then offer what it can do: set the company value directly (`references/dive-in/set-approaches.md`, Custom Value) or work the GPC multiples by hand (`references/dive-in/gpc-analysis.md`). Don't invent a solver, and don't iterate multiples yourself trying to land on the number. |
-| "show fund holdings", "fund breakdown", "fund holdings value", "fund level breakdown" | Handled by the **global interrupt** (top of Routing) → **Fund Holdings (cross-flow capability)** below. Do **not** use `get:allocation` for this. |
+| "show fund holdings", "fund breakdown" | The **global interrupt** (top of Routing). |
 | "finalize", "mark as final", "ship it" | `references/dive-in/ship.md` (requires a positive EV and holdings value — verified inline) |
 | "delete this valuation" | `references/dive-in/ship.md` → **Delete a valuation** (requires an explicit `YES` before the call). |
 | "I'm done", "let's move on", "back to the list", "back to the results" | Leave this valuation: stop the Step 2.5c checklist. If the user came from a bulk run and asks for the list, re-show it refreshed (`references/bulk/bulk-results.md` Step 4). Otherwise ask what they'd like to do next. |
 | Anything else | Answer from the recap / current state, or ask one short clarifying question. |
 
-Dependency gates still apply: a candidate must be selected for every flow
-except create-val; allocation and finalize require a positive EV. Surface
-plain-language messages on dependency failures.
+Every flow except create-val needs a selected candidate; allocation and
+finalize need a positive EV. Explain a failed dependency in plain words.
 
 ### Step 2.5c: Valuation summary checklist (every response)
 
@@ -1467,8 +1209,8 @@ Next steps:
   the **Table values** rule as the bulk results table: on a draft, zero or
   a debt-only negative means the value isn't set up yet).
   Format it in the valuation's currency
-  (`get:valuation` → `currencyCode`). Never assume USD or `$`. With no
-  currency code, show the bare number.
+  (`get:valuation` → `currencyCode`); with none, show the bare number (see
+  **Currency default**).
 - **Selected methodology** comes from `get:valuation` too: the approaches with
   `isUsed: true` on the standard scenario (the `scenarios[]` entry whose `id`
   equals `standardScenario.id`). The method items' values need
@@ -1519,7 +1261,7 @@ Next steps:
   values held over from an earlier turn. Reads already made in the same
   response count (e.g. the Step 2.5a recap's), as long as no write came
   after them.
-- Put nothing else in it: no status, cap table, command names, or IDs. The
+- Put nothing else in it: no status or cap table. The
   six-item ✅/⏳ view is still what "what's left?" / "am I done?" gets (see
   **How to use the goal**). Show that view in place of this checklist in
   the same response, not in addition to it.
@@ -1535,9 +1277,9 @@ When the checklist's **Run allocation** step is `[x]` on a **DRAFT** valuation,
 tell the user they can download the valuation for review before
 finalizing. Put it directly under the checklist:
 
-> ✅ Allocation is complete. Before you finalize, you can download this valuation for review: open it in Carta and choose **Actions → Export PDF** (or **Export Excel**).
->
-> [View in Carta]({Pattern B deep link, value-holdings tab})
+> ✅ Allocation is complete. Before you finalize, you can download this valuation for review: on this valuation's page in Carta's valuations dashboard, choose **Actions → Export PDF** (or **Export Excel**).
+
+No link.
 
 - **Once per valuation per session.** Show it the first time the item is
   `[x]`: right after an allocation run (`references/dive-in/allocation.md`
@@ -1548,93 +1290,23 @@ finalizing. Put it directly under the checklist:
 - **The download happens in Carta.** This skill has no command that exports
   a draft (the report is only rendered on finalize). So never say "I'll
   download it" or offer to fetch the file. Point at the Actions menu.
-- Build the link per `references/deep-link.md`: Pattern B, `value-holdings`
-  tab, rendered as a markdown link per its Step 5. The Actions menu is on every tab of
-  the valuation page, so the allocation results tab is the natural landing
-  spot.
-- Keep **Finalize** as a later, separate step. The notice doesn't replace
-  the Step 9 handoff menu; it goes above it.
+- The Actions menu is on the valuation's page.
+- Keep **Finalize** as a later, separate step the user asks for.
 
 ---
 
-## Step 3.1: Access check (silent)
-
-Used by Step 2.2 (bare entry) and Step 3 (bulk general entry).
-
-Nothing to do here. Access was settled once by **Gate 1** on first
-invocation — do not probe, re-check, or call `search_tools` to confirm
-availability. Proceed straight to Step 3.2.
-
-(This step used to run a `search_tools` sentinel on
-`portfolio_valuations:create:project`. That was always broken: the command
-is registered unindexed, so it never appears in `search_tools` results for
-anyone, and the check reported failure for entitled and unentitled callers
-alike.)
-
 ## Step 3.2: Load and render the portfolio dashboard
 
-Used by Step 2.2 (bare entry) and Step 3 (bulk general entry).
-Access is already settled by **Gate 1** — fetch without re-checking.
+Used by Step 2.2 and the bulk runner's Step 3.
 
-### Render preference gate (runs once per session, before fetching data)
-
-**This gate must run on every entry path — not just bare entry.** Before
-fetching any dashboard data, check whether `dashboard_render_pref` is
-already set in this session:
-
-- **If already set**: skip the gate and proceed to the data fetch below.
-- **If not set**: use the `env_mode` already
-  established in Step 1 and ask the user for their preferred display
-  format, inline as plain text (no `AskUserQuestion` — same question as
-  Step 2.2b):
-  - **`env_mode: "artifact"`** (`Artifact` available and neither
-    `mcp__Claude_Preview__preview_start` nor `mcp__Claude_Browser__preview_start`
-    is present, see Step 2.2a): ask
-    > **How would you like to see your portfolio?**
-    > 1. **Interactive dashboard**
-    > 2. **Inline view**
-
-    Store as `dashboard_render_pref`. If "Interactive dashboard", follow
-    `references/cowork-artifact.md`.
-  - **`env_mode: "preview-server"`** (`mcp__Claude_Preview__preview_start` OR
-    `mcp__Claude_Browser__preview_start` present (see `preview_tool_family`),
-    taking priority over `Artifact` when both are present): ask
-    the same question as `artifact` mode above.
-    Store as `dashboard_render_pref`. If "Interactive dashboard", load preview
-    tool schemas via `ToolSearch` (for the recorded `preview_tool_family`) and
-    follow `references/desktop-preview.md`.
-  - **`env_mode: "inline"`** (neither tool available):
-    no question — set `dashboard_render_pref: "markdown"` silently and proceed.
-
-#### Param naming — non-negotiable
-
-Carta's MCP API uses different parameter names and casing across
-endpoints. **Do not pattern-match or guess.** Specifically, when calling
-`read_tool` or `call_tool`, the `name` value and `arguments` keys below are fixed:
-
-| `name` | Required `arguments` |
-|---|---|
-| `portfolio_valuations__list__portfolio_dashboard` | `organizationId` (NOT `organizationPk`), `page_size: 100` (always — never omit), `raw: false` (always — never omit). The formatted response strips null fields and is what downstream scripts expect. Only switch to `raw: true` when the user explicitly asks for the raw API response. |
-| `portfolio_valuations__list__projects` | `ownerId`, `ownerKind: "FIRM"`, `targetId`, `targetKind: "CORPORATION"` (camelCase) |
-| `portfolio_valuations__get__llc_cap_table_summary` | `issuerId` (the LLC issuer id — the candidate's `target.id` from `list:projects`, == the dashboard `llcIssuerId`); optional `asOfDate` — a **full ISO-8601 timestamp** (`YYYY-MM-DDT00:00:00Z`), **never** a bare `YYYY-MM-DD`. Both camelCase — contrast the c-corp cap-table commands' snake_case `project_id` / `candidate_id`. |
-| `portfolio_valuations__get__configuration`, and the four Niagara commands (`compute__niagara_waterfall`, `get__niagara_waterfall`, `compute__niagara_opm`, `get__niagara_opm`) | `valuation_id` (snake_case) — the valuation's **integer** id, the `valuationId` on a `list:projects` candidate. These take it **alone**: no `ownerId`, no `project_id`, no `candidate_id`. Both `get__niagara_*` polls additionally require `groupingMethod` (camelCase, `BY_INTEREST_HOLDER` or `BY_INTEREST_TYPE`) and 400 without it. |
-
-Using a wrong name returns a validation error.
-
-**If `speculative_dashboard` is in context** (set by Step 1's speculative
-fetch), use it directly as page 1 — do not re-fetch. If the portfolio
-spans multiple pages, fetch the remaining pages normally using the cursor
-from `speculative_dashboard`. If `speculative_dashboard` is absent or was
-discarded (firm changed or error), fetch all pages fresh:
+Fetch all pages fresh:
 
 1. Call `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
-   to get the first page. Use `page_size: 100` unless the user has explicitly
-   requested a different value — never omit it.
+   for the first page.
 2. While `companies.length < totalCompanies`, call again with a `cursor`
    (or `page`) param from the previous response until you have all companies.
 3. Merge all `companies` arrays from every page response into one array.
-   Do **not** run `build_artifact.py` or render the dashboard until the
-   last page is received.
+   Do **not** render the dashboard until the last page is received.
 
 Each page response shape:
 - `companies` — portfolio companies in this page. Each item has:
@@ -1734,13 +1406,9 @@ Event → approach mapping:
 | `newTenderOffer` | `date` | Backsolve |
 | `newShareTransfer` | `date` | Backsolve |
 
-**Backsolve caveat (accuracy):** the bulk runner **can** create a
-Backsolve valuation project — it is a supported methodology. It simply
-does **not** auto-populate the Backsolve transaction price from the
-event; that price is entered in Carta afterward (see bulk-runner Step
-6.3). When recommending or creating Backsolve, never say it "can't be
-created in bulk" or "requires a value first" — only the transaction
-price entry is deferred to Carta.
+Backsolve can be created in bulk; only its transaction price is set
+afterward (bulk-runner Step 6.3). Never say it "can't be created
+in bulk".
 
 Format each line as:
 *{Company} — {all events with dates} → **{Approach}** (latest event: {event type}, {date})*
@@ -1753,15 +1421,10 @@ Example:
 
 **No cap table access** group — render as a single comma-separated line of company names
 (no table). After the list, add the note plus the request-access link
-(see `references/deep-link.md`'s **Cap table access request page** section
-for how to construct it — firm-level, needs only the resolved `org_pk`):
+built per `references/deep-link.md` **Cap table access request page**:
 *"Cap table access required — request it from the company, or create a
 pro-forma cap table."*
-[Request cap table access]({BASE_URL}/investors/firm/{ownerId}/information-access/?has_active_holdings=true&inactive=false&ordering=captable_access&page=1&page_size=50)
-
-This is also the link to give whenever the user directly asks how to
-request cap table access, or asks for "the request access link" —
-independent of whether the dashboard is currently being rendered.
+[Request cap table access]({cap table access request URL})
 
 Sort within each group:
 - Events groups (Recent financing rounds, Recent tender offers, Recent share transfers): alphabetical by company name
@@ -1769,8 +1432,9 @@ Sort within each group:
 - No valuation: alphabetical by company name
 - No cap table access: alphabetical
 
-Format currency with a B/M/K suffix ($12.5M, $8.0M, $1.2B). Show `—`
-for any unavailable column.
+Format amounts with a B/M/K suffix (12.5M, 8.0M, 1.2B), with the currency
+symbol only when the data names a currency (see **Currency default**). Show
+`—` for any unavailable column.
 
 After all group tables, print a legend line:
 > *[C] = Carta company*

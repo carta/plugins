@@ -10,18 +10,7 @@ valuation report.
 > and never writes): commentary is a single stored field on the
 > valuation that renders on the report.
 
-## UX Rules
-
-When presenting 5 or fewer choices, ask inline as plain text with a
-numbered list — do not use `AskUserQuestion` or bury the choice in prose.
-Wait for the reply before acting.
-
-## User-Facing Output Rules
-
-Do not surface raw command names, API field names, HTTP status codes, or
-numeric project/candidate IDs in chat. Speak in business terms ("I've
-saved the commentary for the **Q2 2026** valuation"). The commentary text
-itself is the user's content — quote it verbatim.
+The commentary text is the user's content — always quote it verbatim.
 
 ## Prerequisites
 
@@ -79,22 +68,5 @@ Say what was saved in plain prose ("Saved the commentary for
 text verbatim. If commentary existed before, also quote the **previous
 text** it replaced, so the user can restore it if the overwrite wasn't
 what they wanted. If the commentary was cleared, say so and quote the
-text that was removed. Then render the deep link so the user can view it
-on the report/valuation.
-
-### Deep link
-
-See [`references/deep-link.md`](../deep-link.md). Use **Pattern A**
-(project landing) — Carta has no dedicated commentary tab; commentary is
-edited inline and shown on the report. Required context: `ownerId`,
-`targetId`, `project_id`. Render per deep-link.md Step 5 (a
-markdown link).
-
-## Goal-checklist note
-
-Commentary is **not** a checklist item on the End Goal — it's an adjacent
-capability the user can invoke at any time once a candidate exists.
-Reading or editing commentary does not mark anything as complete.
-
-Entry point: the orchestrator's Step 2.5b routing table sends
-"view/edit/update the commentary" requests here.
+text that was removed. The user can view it on the valuation's page in
+Carta's valuations dashboard.

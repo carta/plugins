@@ -1,40 +1,11 @@
 # Backsolve Calculation — How It Works
 
-Explains the math behind the Backsolve approach for the current candidate.
-Entered when the user explicitly asks:
-- **how the backsolve is calculated** / how we arrive at the value (explanation mode)
-- **create an Excel spreadsheet** / export to Excel / give me the formulas in Excel (Excel mode)
-- **create an artifact** / interactive calculator / show me an HTML calculator (HTML mode)
-
-Do not enter this reference for requests to *configure* or *run* the backsolve — those go
-to `references/dive-in/backsolve/backsolve.md`.
-
-## Output mode
-
-Detect from the user's phrasing before fetching any data:
-
-| Phrasing | Mode |
-|---|---|
-| "how is it calculated", "explain the math", "walk me through the numbers" | **explain** — walk through sections 1–6 in prose |
-| "Excel spreadsheet", "export to Excel", "formulas in a spreadsheet" | **excel** — read `backsolve-excel.md` and generate the file |
-| "artifact", "interactive calculator", "HTML", "browser" | **html** — read `backsolve-html.md` and generate the file |
-| Multiple modes mentioned | Deliver all requested modes in one response |
+Explains the math behind the Backsolve approach for the current candidate,
+walking through sections 1–6 in prose.
 
 ## Data to fetch (if not already in context)
 
-Call both in parallel:
-
-```json
-read_tool({
-  "name": "portfolio_valuations__get__backsolve",
-  "arguments": { "ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id> }
-})
-
-read_tool({
-  "name": "portfolio_valuations__get__equity_adjustment",
-  "arguments": { "ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id> }
-})
-```
+Call `get:backsolve` and `get:equity_adjustment` in parallel.
 
 If `get:backsolve` returns no `currentBacksolve` or `approachEquityValue` (the
 calculation hasn't been run yet), tell the user:
@@ -50,12 +21,11 @@ Stop and return control.
 
 Use the fetched data to walk through the calculation in plain language,
 section by section. Replace every placeholder below with the actual values
-from the API response. Speak in business terms — no field names, no command
-names, no internal IDs.
+from the API response.
 
-All currency amounts: use the `currencyCode` from the response — **never
-assume USD**. Format with symbol and thousands separators; use B/M/K suffix
-for large numbers where it aids readability.
+Format amounts per SKILL.md **Currency default** with the response's
+`currencyCode`, with thousands separators and a B/M/K suffix for large
+numbers where it aids readability.
 
 ---
 
@@ -107,7 +77,7 @@ Explain what the breakpoints mean, then show the actual ones:
 
 > "The OPM models the company's cap table as an ordered waterfall of
 > breakpoints — equity-value thresholds where the set of securities that
-> participate in the next dollar of value changes. Each band is priced as a
+> participate in the next unit of value changes. Each band is priced as a
 > call option using Black-Scholes."
 
 Render `allocation.breakpoints` as a table. One row per breakpoint in the
@@ -144,7 +114,7 @@ Explain the option pricing step, then show the incremental values:
 > strike, the volatility, risk-free rate, and time to exit.
 >
 > The **incremental value** for each band equals the call-option value at the
-> previous boundary minus the call-option value at this boundary — the dollar
+> previous boundary minus the call-option value at this boundary — the
 > amount that 'falls into' that band at the solved equity value."
 
 Show a compact table of the breakpoint option values from `allocation.breakpoints`:
@@ -166,7 +136,7 @@ Show the actual formula with live numbers from the first finite breakpoint band
 as S, and the first entry in `allocation.breakpoints` as the example band.
 
 Render it as a formula block, not a table — the user should be able to copy it
-into Excel or a calculator directly:
+into Excel directly:
 
 ```
 Black-Scholes inputs for Band 1 (strike K = {to from first breakpoint}):
@@ -271,7 +241,7 @@ are active:
 ```
 Base (override or computed):   {backsolveEquityValueOverride or backsolveEquityValue}
 × (1 + equityAdjustment):      {result after % adjustment, or omit line if 0%}
-+ New capital raised:          {newCapitalRaised, or omit line if $0}
++ New capital raised:          {newCapitalRaised, or omit line if 0}
 ─────────────────────────────
 Approach equity value:         {approachEquityValue from get:equity_adjustment}
 ```
@@ -284,37 +254,9 @@ Close with:
 
 ## After the explanation
 
-After delivering the prose explanation, **always offer the output formats below**
-unless the user's request already named a specific format (in which case deliver
-that format without asking):
-
-> "Want this in a different format?
-> 1. **Excel spreadsheet** — a workbook with live Black-Scholes formulas in every
->    cell (edit equity value, volatility, or time to exit and everything recalculates)
-> 2. **Interactive HTML calculator** — open in a browser with live sliders/inputs
-> 3. **This explanation is enough, thanks**"
-
-Do not re-read this reference for the follow-up. Use the data already in context.
-
-- If the user picks **Excel**, read `references/dive-in/backsolve/backsolve-excel.md` and follow it.
-- If the user picks **HTML**, read `references/dive-in/backsolve/backsolve-html.md` and follow it.
-
----
-
-## Verify mode (useful when checking a result)
-
-```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --verify --input "$BACKSOLVE_JSON"
-```
-
-This re-runs the scipy `brentq` goal-seek and reports whether the solved equity
-value matches the API response (difference should be < 0.01%).
-
----
-
-## After delivering the output
-
-Do not proactively offer to change any inputs or re-run the calculation. Return
-control and let the user drive. If they ask a follow-up (e.g. "what would
-happen if I changed the volatility?"), answer it from context — do not re-read
-this reference a second time.
+Return control and let the user drive — don't offer to change inputs or re-run
+the calculation. Answer follow-ups (e.g. "what would happen if I changed the
+volatility?") from context without re-reading this reference. If they ask for
+the model in a spreadsheet, read
+`references/dive-in/backsolve/backsolve-excel.md`, using the data already in
+context.

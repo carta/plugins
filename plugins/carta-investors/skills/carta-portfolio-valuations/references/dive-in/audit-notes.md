@@ -9,17 +9,9 @@ copy into audit workpapers, board memos, or compliance documentation.
 > rationale field is empty in the API, it is presented as a `[TODO]`
 > placeholder for the user to fill in.
 
-## UX Rules
+## Memo output rules
 
-When presenting 5 or fewer choices, ask inline as plain text with a
-numbered list of options — do not bury the choice in a paragraph of
-prose.
-
-## User-Facing Output Rules
-
-This reference is unusual: the **output is the deliverable**. The user is
-going to copy it. So the formatting rules are different from other
-references:
+The **output is the deliverable** — the user is going to copy it:
 
 - The drafted memo itself **may** include numeric values (company value,
   holdings value, multiples, weights) — auditors need them.
@@ -29,8 +21,6 @@ references:
 - The drafted memo **must not** include raw command names, API field
   names, HTTP status codes, or numeric project/candidate IDs. Speak in
   business terms.
-- Outside the drafted memo (the agent's prose around it), continue the
-  same backend-mechanics-stay-internal rule that applies elsewhere.
 
 ## Prerequisites
 
@@ -46,16 +36,16 @@ ask the user to pick a valuation row from Step 3 first.
 ## Step 1: Gather the source material (silent)
 
 **Do this silently. Do not narrate the calls in chat.** Make these
-`read_tool` calls in parallel where possible:
+calls in parallel where possible:
 
 | Call | Purpose |
 |---|---|
-| `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Top-level company value, holdings value, status |
-| `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Which approaches are enabled, with weights |
-| `read_tool({"name": "portfolio_valuations__get__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | `weighting_rationale`, `multiple_rationale` (only if GPC is enabled) |
-| `read_tool({"name": "portfolio_valuations__get__gpc_comp_statistics", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Quartile stats for GPC comp set (only if GPC is enabled) |
-| `read_tool({"name": "portfolio_valuations__get__custom_value", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | `description_of_valuation_methodology`, company value, method (only if Custom Value is enabled) |
-| `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Periods used in the valuation (most recent revenue, EBITDA) |
+| `get:valuation` | Top-level company value, holdings value, status |
+| `get:approaches` | Which approaches are enabled, with weights |
+| `get:gpc` | `weighting_rationale`, `multiple_rationale` (only if GPC is enabled) |
+| `get:gpc_comp_statistics` | Quartile stats for GPC comp set (only if GPC is enabled) |
+| `get:custom_value` | `description_of_valuation_methodology`, company value, method (only if Custom Value is enabled) |
+| `get:financials` | Periods used in the valuation (most recent revenue, EBITDA) |
 
 If any of these calls fail, do not abort — degrade gracefully. The memo
 section sourced from a failed call becomes a `[Could not retrieve —
@@ -90,8 +80,8 @@ just for the memo itself.
 ## {Company Name} — {Valuation Date} Valuation Summary
 
 As of {valuation date}, the {valuation candidate name} for {company name}
-yields a company value of {companyValue formatted as currency} and a
-holdings value of {holdingsValue formatted as currency}. The valuation
+yields a company value of {companyValue, full value} and a
+holdings value of {valueOfHoldings, full value}. The valuation
 uses a {weighted breakdown of approaches, e.g. "100% GPC" or "70% GPC,
 30% M&A"} methodology. Status: {DRAFT/FINAL/ARCHIVED}.
 ```
@@ -134,14 +124,14 @@ is non-empty:}
 
 ### Financials Referenced
 The valuation references the following financial periods:
-- {Period 1 label}: revenue {$X.XM}, EBITDA {$X.XM}
-- {Period 2 label}: revenue {$X.XM}, EBITDA {$X.XM}
+- {Period 1 label}: revenue {X.XM}, EBITDA {X.XM}
+- {Period 2 label}: revenue {X.XM}, EBITDA {X.XM}
 - ...
 
 ### Final Value Derivation
 The selected approach mix yields:
-- Enterprise / company value: {companyValue formatted as currency}
-- Holdings value (post-allocation): {holdingsValue formatted as currency}
+- Enterprise / company value: {companyValue, full value}
+- Holdings value (post-allocation): {valueOfHoldings, full value}
 - Status: {DRAFT/FINAL/ARCHIVED}
 ```
 
@@ -162,34 +152,9 @@ After the memo block, on a new line outside the code block, write:
 Then offer two follow-ups, asked inline as plain text:
 
 > **Anything else?**
-> 1. **Edit a rationale in Carta** — render the deep link below and
->    point out that rationales need to be updated in the Carta UI for
->    now.
-> 2. **Move on** — return to the orchestrator's routing.
+> 1. **Edit a rationale in Carta** — open the valuation's page in Carta's
+>    valuations dashboard (SKILL.md **Page navigation → Which page to
+>    open**) and point out that rationales need to be updated there for now.
+> 2. **Move on** — return control.
 
 Wait for the reply, then follow the matching option above.
-
-### Deep link
-
-See [`references/deep-link.md`](../deep-link.md) for URL construction.
-Use **Pattern A** (project landing) — Carta has no dedicated
-audit-notes tab; rationales are edited within their respective
-approach tabs. Required context: `ownerId`, `targetId`, `project_id`.
-Render per deep-link.md Step 5 (a markdown link).
-
-## Goal-checklist note
-
-Audit-notes is **not** a checklist item on the End Goal — it's an
-adjacent capability the user can invoke at any time once a candidate
-exists. Drafting audit notes does not mark anything as complete.
-
-Two entry points exist:
-
-1. **Direct (lateral)** — users invoke it by saying "draft audit
-   notes", "summarize rationales for the EV", "write the memo", etc.
-   The orchestrator's Step 6 routing table sends them here.
-2. **Walk-through suggestion** — `references/dive-in/allocation.md` Step 9
-   (walk-through mode) offers audit-notes as one of three options
-   right after the per-class allocation renders, while the rationale
-   is fresh. After the memo renders, control returns to the
-   allocation handoff prompt so the user can still finalize or pause.

@@ -7,41 +7,18 @@ enabling the approach in `references/dive-in/set-approaches.md` — that
 file turns Backsolve **on**; this one walks the analyst through its
 inputs.
 
-> **Tool-surface note:** `get:backsolve` goes through `read_tool`;
-> `compute:backsolve` and `mutate:backsolve` change data, so they go
-> through `call_tool`, including the nested
-> `captableModifications` object.
+> **Decimals go as strings, not floats.** These commands accept only
+> `str | int | dict | list`, so `0.15` fails validation and `"0.15"`
+> works; whole integers may stay numbers. On `mutate:backsolve` that's
+> `weightedTimeToExit`, `nonConvertibleDebtOverride` (with cents),
+> `equityVolatilityManualEntry`, `assetVolatilityManualEntry`,
+> `nonConvertibleDebtInterestManualEntryOverride`; on
+> `mutate:equity_adjustment` it's `equityAdjustment`,
+> `backsolveEquityValueOverride`, `newCapitalRaised` (Step 5).
 >
-> **Decimal values must be passed as strings, not floats.** The
-> generated schema for every field on this command accepts
-> only `str | int | dict | list` — there is no float type in the union.
-> Confirmed live: passing `assetVolatilityManualEntry: 0.15` (a JSON
-> float) fails validation ("Input should be a valid string" /
-> "Input should be a valid integer, got a number with a fractional
-> part"); passing `assetVolatilityManualEntry: "0.15"` (a string)
-> succeeds. Whole integers (e.g. `nonConvertibleDebtOverride: 5000`) are
-> fine as native numbers since `int` is in the union — it's specifically
-> **non-integer decimals** that must be stringified. This applies to
-> every decimal field on `mutate:backsolve`: `weightedTimeToExit`,
-> `nonConvertibleDebtOverride` (when it has cents), `equityVolatilityManualEntry`,
-> `assetVolatilityManualEntry`, `nonConvertibleDebtInterestManualEntryOverride`.
->
-> **`mutate:equity_adjustment` has the same decimal-as-string
-> requirement** (confirmed live: `equityAdjustment: 0.05` as a JSON
-> float fails with the same pydantic union error as above;
-> `equityAdjustment: "0.05"` succeeds). Applies to every decimal field
-> on that command: `equityAdjustment`, `backsolveEquityValueOverride`,
-> `newCapitalRaised`.
->
-> **`mutate:equity_adjustment` does NOT merge on omitted fields —
-> confirmed live: saving only `showEquityAdjustmentExhibitManual: true`
-> after `equityAdjustment` had been set to `0.15` reset
-> `equityAdjustment` back to `0.0`.** This is the opposite of
-> `mutate:backsolve`'s `captableModifications`, where omitted keys are
-> left untouched. Every save to `mutate:equity_adjustment` must include
-> **every field the candidate should end up with**, not just the ones
-> changed this turn — re-send the currently-stored value (from the most
-> recent `get:equity_adjustment`) for anything not being changed.
+> **`mutate:equity_adjustment` does not merge omitted fields** — an
+> omitted field is reset. `mutate:backsolve` is the opposite: omitted
+> fields are left unchanged.
 
 ## Entry point: equity adjustment / override requests
 
@@ -52,19 +29,6 @@ equity adjustment** for a candidate that has already run Backsolve
 Do not re-run Steps 1–4 first. If Backsolve hasn't been computed yet
 for this candidate, run Step 4 first (silently, no need to ask), then
 continue to Step 5.
-
-**If `excel_mode = true`** and this is a direct entry on an already-computed
-candidate (skipping Steps 1–4), offer the Excel insert before diving into
-Step 5:
-
-> "Backsolve has already been calculated for **{company name}**. Would you like
-> me to add the inputs and live formulas to your current Excel sheet first?"
-> 1. **Yes — insert into current sheet**
-> 2. **No — go straight to the adjustment**
-
-If "Yes", read `references/dive-in/backsolve/backsolve-excel.md` and follow the
-**In-sheet mode** path (fetch `get:backsolve` if not already in context). Then
-continue to Step 5 after inserting. If "No", go straight to Step 5.
 
 ## Entry point: show volatility comps
 
@@ -104,16 +68,7 @@ Backsolve allocation's id twice would just return the same result
 twice. Omitting it defaults to the candidate's standard-scenario
 allocation, which is the comparison point.
 
-> **Confirmed live: these can differ meaningfully even when both
-> allocations pull from the same comp set.** On a real candidate with
-> identical comps behind both allocations, the Backsolve allocation's
-> equity volatility regression came back **~2.5 percentage points
-> higher** than the standard scenario's, across every quartile (min,
-> mean, max) — not just the headline regression result. Do not treat
-> one allocation's result as a proxy for the other's, and do not
-> "sanity check" one against the other and skip the second call to
-> save a round-trip — the whole point of this entry point is showing
-> the user that they're allowed to diverge.
+The two can differ even on identical comps, so always make both calls.
 
 Render both as one comparison table:
 
@@ -132,13 +87,9 @@ Format volatility figures as percentages to two decimals (e.g.
 `usesAssetVolatility` is `true` for the candidate — label the row
 accordingly rather than silently swapping which figures are shown.
 
-Per SKILL.md's volatility disclosure rule, this table (both columns
-labeled, both rows present) is what should back **any** Backsolve
-volatility figure quoted elsewhere in this file — never state a bare
-Backsolve or standard-scenario volatility number without also showing
-(or having just shown) this comparison, and never let a number from
-this table stand in for OPM or DLOM volatility (`references/dive-in/allocation.md`),
-which are separate datasets.
+Any Backsolve volatility figure quoted elsewhere in this file is backed
+by this table (SKILL.md § Volatility disclosure); never let it stand in
+for OPM or DLOM volatility.
 
 If R² is exactly `1.00` on either or both columns, add a one-line note
 below the table — this is a mechanical artifact of having only 2 comps
@@ -148,50 +99,21 @@ statistical fit:
 > *R² of 1.00 reflects having only 2 comps in the regression — not an
 > unusually strong statistical fit.*
 
-Only add this note when the underlying comp count is actually 2 (check
-against the saved comp set from `get:comparables`, or the count implied
-by the quartile spread) — don't attach it reflexively to every R²=1.00
-without checking, since a larger comp set landing on 1.00 by
-coincidence would be a genuinely different (and more surprising) result
-worth noting differently.
-
-## User-Facing Output Rules
-
-Do not surface raw command names, API field names, HTTP status codes,
-or numeric project/candidate IDs in chat. Speak in business terms
-("share class", "transaction price", "equity value"). Rendered share
-class names and dates are expected output.
-
-## UX Rules
-
-Ask inline as plain text (numbered list + wait for reply) — no
-`AskUserQuestion`, per SKILL.md's UX Rules.
+Add it only when the comp count really is 2 (`get:comparables`, or the
+quartile spread).
 
 ## Prerequisites
 
 You need a selected candidate with Backsolve ready to configure:
 - `ownerId`, `project_id`, `candidate_id` — for the API calls.
-- `targetId` — for the deep link.
+- `targetId` — for the share-class call and for opening its page in the
+  dashboard MCP App.
 - The company name and candidate name — for messaging.
 - **Backsolve must be enabled in approaches**
-  (`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`backsolve.is_used` is `true`).
+  (`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`backsolve.isUsed` is `true`).
 
-These should be in conversation context from the orchestrator. If
-Backsolve is not enabled, read `references/dive-in/set-approaches.md`
-inline with intent "enable Backsolve" and stop. Do not attempt the
-Backsolve walkthrough without this prerequisite.
-
-### Excel environment detection (run once, silently)
-
-Before Step 1, run:
-
-```
-ToolSearch({ query: "excel worksheet workbook", max_results: 3 })
-```
-
-If results include tools with "excel", "worksheet", or "workbook" in their name,
-set `excel_mode = true`. Otherwise `excel_mode = false`. This is silent — do not
-tell the user the result.
+If Backsolve is not enabled, read `references/dive-in/set-approaches.md`
+inline with intent "enable Backsolve" and stop.
 
 ## Step 1: Fetch backsolve data and select a share class
 
@@ -247,31 +169,13 @@ read_tool({
 })
 ```
 
-> **`SECURITY_LABEL IS NOT NULL` is the filter that scopes to
-> security-level events** (`Certificate issuance`, `Certificate
-> transfer`, `Convertible conversion`, `Warrant exercise`, `Share class
-> conversion`) instead of corporation/round-level events (`New priced
-> round`, `New share class`, `Company name changed`, `Stock split`,
-> `Valuation finalized/amended/deleted`) that never carry a
-> `SECURITY_LABEL` and would otherwise pollute `MAX(EVENT_DATE)` with
-> dates unrelated to any specific share class.
->
-> **`EVENT_TYPE = 'Certificate issuance'` must be the single-spaced
-> literal.** The DWH schema's own column description for `EVENT_TYPE`
-> renders this value with a doubled space ("Certificate  issuance") —
-> that's a formatting artifact in the description text, not the real
-> value. Querying with the doubled space silently returns zero rows
-> (confirmed live) rather than an error, so a future editor copying the
-> value out of `dwh:get:table_schema` will get a query that "succeeds"
-> with no results. Use the single-spaced form shown above.
->
-> Confirmed live on a real company: without the `CASE WHEN` scoping,
-> two share classes' `MAX(EVENT_DATE)` jumped forward by years once
-> `Certificate transfer` events were included — e.g. one class's true
-> last activity was a 2022 transfer, nearly a decade after its 2013
-> issuance. Initial Issue Date must **not** get the same widening — a
-> transfer/conversion isn't when the class was first issued, so it
-> stays scoped to `Certificate issuance` only via the `CASE WHEN`.
+Keep the query as written:
+- `SECURITY_LABEL IS NOT NULL` keeps only security-level events, so
+  round- and company-level events don't pollute `MAX(EVENT_DATE)`.
+- `'Certificate issuance'` takes a **single** space. The schema
+  description shows a doubled space, which silently returns zero rows.
+- Initial Issue Date stays scoped to issuance by the `CASE WHEN`; only
+  Last Activity Date widens to every event type.
 
 Join each result row to a share class by matching `share_class_prefix`
 to that class's `prefix` from `cap_table__get__certificate_share_classes`
@@ -280,48 +184,23 @@ to that class's `prefix` from `cap_table__get__certificate_share_classes`
 (matching the Issue Closing Date convention elsewhere in this skill),
 not the raw `YYYY-MM-DD` the query returns.
 
-**This query runs once, filtered only by company name — it must never
-be scoped to `preferredShareClasses`/`commonShareClasses` (the
-selectable-as-of-`backsolveDate` lists).** It fetches dates for **every**
-share class returned by `cap_table__get__certificate_share_classes`,
-selectable or not, in a single call. This matters because the table
-below deliberately shows non-selectable classes too (e.g. Series D,
-Series B II) — narrowing the DWH query to only the selectable names
-would silently blank out the date columns on every non-selectable row,
-even ones that do have data. If a share class has no matching
-`share_class_prefix` row, that's because `PORTFOLIO_EVENTS` has no
-data for it (see the known limitation below) — not because it was
-filtered out upstream.
+**Run it once, filtered only by company name** — never scoped to the
+selectable lists, because the table below shows non-selectable classes
+too.
 
-> **Known limitation — surface, don't hide:** two distinct gaps, both
-> render as `—`, neither should be papered over:
-> 1. **Matching is by `CORPORATION_NAME ILIKE`**, since
->    `PORTFOLIO_EVENTS.CORPORATION_ID` is not guaranteed to match the
->    cap-table `corporation_id` used elsewhere in this file (see the
->    DWH schema note on that column) — a firm with two similarly-named
->    portfolio companies could over-match. If the query returns rows
->    for more than one distinct company, narrow the filter (e.g. exact
->    name match) and re-run before using the results.
-> 2. **Coverage in `PORTFOLIO_EVENTS` is not guaranteed to be
->    complete.** Confirmed live on a real company: Common and one
->    Preferred class had outstanding shares per
->    `cap_table:get:certificate_share_classes` but **zero** matching
->    rows of *any* `EVENT_TYPE` in `PORTFOLIO_EVENTS` — the
->    certificate-issuance history for those classes simply isn't in
->    this table (likely predates event tracking, or a data-population
->    gap). This is not something the query can work around.
->
-> Show `—` for Initial Issue Date/Last Activity Date on any share class with no
-> matching `share_class_prefix` row, regardless of which gap caused
-> it. Do not substitute another date (e.g. a certificate's created-at,
-> or a financing round's closing date) to fill it — `—` is correct
-> here, a guessed date is not.
+- Matching is by `CORPORATION_NAME ILIKE` (the DWH corporation id isn't
+  the cap-table id). If rows come back for more than one company, narrow
+  the filter and re-run.
+- `PORTFOLIO_EVENTS` coverage isn't complete; some classes have no rows.
+
+Show `—` for both dates on any class with no matching row. Never
+substitute another date.
 
 **If both `preferredShareClasses` and `commonShareClasses` are empty**,
 surface a plain-language fallback and stop:
 > "There's no priced share class to backsolve from yet for
 > **{company name}** — a financing round needs to be entered in Carta
-> first. {DEEP_LINK}"
+> first."
 
 **If there is exactly one share class total** (across both lists),
 skip the question — use it directly and state plainly that it's the
@@ -377,20 +256,9 @@ If the user replies **yes** to checking for more recent rounds:
 1. Call `cap_table:list:financing_history` for the company and filter for
    priced rounds whose `closing_date` is strictly after `backsolveDate`.
 
-   > **What `closing_date` actually is (confirmed against carta-web
-   > source, `eshares/financing_history/services/calculator_service.py`):**
-   > it is **not** a stored round-inception/closing field. It's computed
-   > as `MAX(issue_date)` over the security events (certificates, notes,
-   > warrants) belonging to that share class within the round's date
-   > window — i.e. **the share class's last recorded activity date**,
-   > not when the round first closed. The domain model self-documents
-   > this: `closing_date: date | None  # this instrument's own latest
-   > issuance, not the round's` (`eshares/financing_history/domain.py`).
-   > Don't refer to it as "the round's closing date" in any user-facing
-   > text — call it what the table below calls it, the class's last
-   > activity date. For this flow's purpose (surfacing whether a class
-   > has *any* recorded activity after `backsolveDate`) that's actually
-   > the right signal — just don't misdescribe what it measures.
+   `closing_date` is the share class's **last activity date** (its latest
+   issuance), not when the round closed — never call it the round's
+   closing date.
 2. **If no such round is found**, reply:
    > "No financing activity was found after {backsolveDate}. The
    > share classes shown are up to date."
@@ -415,18 +283,10 @@ If the user replies **yes** to checking for more recent rounds:
 Wait for the reply and capture the chosen share class name before
 continuing.
 
-**Do not call `mutate:backsolve` yet to save this selection.** Hold it
-as a pending `backsolveShareClass` value in context. It gets folded
-into whichever `mutate:backsolve` call fires *next* in Step 2 — the
-first save the user triggers there (Timeline, Debt, Capped notes, or
-Rights & Preferences), or, if the user picks "Confirm as-is" without
-changing anything else, a dedicated save at Step 2E — so the share
-class selection and the first round of Step 2 edits land in one write,
-not two back-to-back calls for what the user experiences as a single
-"set up Backsolve" action. Once any save has included
-`backsolveShareClass`, treat it as saved for the rest of this session —
-later Step 2 saves don't need to resend it (`mutate:backsolve` leaves
-omitted fields unchanged).
+**Don't save this selection yet.** Hold it as a pending
+`backsolveShareClass` and fold it into the next `mutate:backsolve` call
+in Step 2 (2A–2D), or Step 2E's save if the user changes nothing. Once
+one save has carried it, later saves omit it.
 
 ## Step 2: Review & confirm backsolve inputs
 
@@ -473,17 +333,10 @@ user to make multiple changes in one pass — after saving one section,
 re-render the updated summary and re-ask "anything else?" until they
 pick "Confirm as-is."
 
-If the user asks for an explanation instead of picking a number (e.g.
-"what does that mean", "explain debt option", "what's a capped note"),
-answer in plain business terms using what's already documented in this
-file — the `debtOption` display mapping above, the capped-notes
-treat-as-equity/non-convertible-debt choice, the five Rights &
-Preferences terms (Seniority, Dividends, Liquidation preference
-multiplier, Capped participation, Uncapped participation) — then
-re-render the same five-option menu and wait again. Don't guess at a
-definition that isn't backed by this file; if the user asks about
-something this file doesn't define, say so plainly rather than
-inventing an explanation.
+If the user asks what an option means, explain it in plain terms using
+only what this file defines (the debt mapping, the capped-notes choice,
+the five Rights & Preferences terms), then re-render the menu. For
+anything this file doesn't define, say so rather than invent one.
 
 ### Step 2A: Change Timeline
 
@@ -553,7 +406,7 @@ menu.
 If "Yes":
 
 1. Ask in prose for the **non-convertible debt as of the backsolve
-   date** (a dollar amount) — this maps to `nonConvertibleDebtOverride`.
+   date** (an amount) — this maps to `nonConvertibleDebtOverride`.
 2. Ask inline as plain text for the **interest type**:
    > "Which interest type should apply?"
    > 1. **BAA corporate yield**
@@ -695,10 +548,7 @@ call_tool({
 })
 ```
 
-This is the only path where `backsolveShareClass` needs its own
-dedicated call — every other path already folds it into a 2A–2D save.
-**If it's already saved** (folded into an earlier 2A–2D save this
-session), skip this — there's nothing left to persist.
+If an earlier 2A–2D save already carried it, skip this.
 
 Then move on to **Step 3: Set up Volatility** below.
 
@@ -732,15 +582,10 @@ call_tool({
 })
 ```
 
-**This save succeeds regardless of whether comps or financials are
-present** — it only stores the selection. `allocation.
-assetVolatilityRegression` / `equityVolatilityRegression` in
-`get:backsolve`/`mutate:backsolve` responses are **not** where a
-missing-data problem shows up (confirmed live: both stay `null`
-whether the regression can run or not — do not gate on them). Whether
-the comp set/financials are actually sufficient is only revealed when
-the calculation is run in Step 4 — do not pre-emptively call
-`compute:backsolve` here just to check.
+This save succeeds whether or not comps and financials exist, and the
+regression fields stay `null` either way — don't gate on them. Missing
+data only shows up when Step 4 runs; don't call `compute:backsolve`
+early to check.
 
 Confirm what was saved, then ask if they're ready to run:
 
@@ -824,25 +669,21 @@ actionable:
 
 > "Running the Backsolve calculation failed: {error message}."
 
-**Specifically for `"Volatility required in order to run the
-backsolve"`** (confirmed live — this is what a Linear regression
-selection returns when the comp set or financials are incomplete),
-follow up with next steps rather than leaving the raw message to stand
-alone:
+**For `"Volatility required in order to run the backsolve"`** (linear
+regression with incomplete comps or financials), add next steps:
 
 > "This usually means the comp set or the financials are incomplete
-> for **{company name}**. Comps are added directly in Carta:
-> {COMPS_DEEP_LINK}. Want me to check or fill in financials here?"
+> for **{company name}**. Want me to check the comps or the financials
+> here?"
 
-`{COMPS_DEEP_LINK}`: see [`references/deep-link.md`](../../deep-link.md),
-**Pattern B** with `{tab}` = `comparables` (same tab `comps.md` uses).
-If the user says yes to checking/filling in financials, read
-`references/dive-in/financials-review.md` inline and follow.
+For the comps, read `references/dive-in/comps.md` inline and follow; for
+the financials, `references/dive-in/financials-review.md`.
 
 Do not render a table in this case. Stop and let the user decide next
 steps (e.g. fix the underlying input and retry).
 
-**If it succeeds**, re-fetch `read_tool({"name":
+**If it succeeds**, call `refresh_page` (`references/dashboard-view.md`
+**Refresh it after a change**), then re-fetch `read_tool({"name":
 "portfolio_valuations__get__backsolve", "arguments": {"ownerId":
 <ownerId>, "project_id": <project_id>, "candidate_id":
 <candidate_id>}})` to pick up the headline equity value fields
@@ -850,7 +691,7 @@ steps (e.g. fix the underlying input and retry).
 response's `allocation.totals` (per-share-class breakdown). Render:
 
 > "Backsolve calculation complete for **{company name}**. Implied
-> equity value: **{approachEquityValue, formatted as currency}**.
+> equity value: **{approachEquityValue, full value}**.
 >
 > | Share Class | Type | Quantity | Price | Value per Unit | Total Value |
 > |---|---|---|---|---|---|
@@ -858,31 +699,11 @@ response's `allocation.totals` (per-share-class breakdown). Render:
 > …"
 
 One row per entry in `allocation.totals`, in the order returned. Format
-all dollar figures with a currency symbol and thousands separators;
-show per-unit prices to 2–4 decimal places (small option values like
-$0.0999 shouldn't round to $0.10 and lose the distinction from a
-different row's $0.10).
-
-**Always render the deep link immediately after the table, in the same
-response — never wait for the user to ask for it.** See
-[`references/deep-link.md`](../../deep-link.md), **Pattern B** with
-`{tab}` = `value-company/backsolve/results` (not the plain
-`value-company/backsolve` landing tab used elsewhere in this file —
-`/results` lands directly on the full breakdown). Render per
-deep-link.md Step 5 (a markdown link labeled "See the full results in
-Carta").
-
-**If `excel_mode = true`**, append immediately after the deep link — same response,
-no extra round-trip:
-
-> "Would you like me to add the backsolve inputs and live formulas to your current
-> Excel sheet?"
-> 1. **Yes — insert into current sheet**
-> 2. **No — skip**
-
-If "Yes", read `references/dive-in/backsolve/backsolve-excel.md` and follow the
-**In-sheet mode** path. The `get:backsolve` data is already in context — no re-fetch
-needed. If "No", continue normally.
+all amounts in the valuation's currency (`get:valuation` →
+`currencyCode`; bare number when it has none — SKILL.md § Currency
+default) with thousands separators;
+show per-unit prices to 2–4 decimal places (so `0.0999` doesn't round
+to `0.10`).
 
 Do not proactively offer Step 5 (equity adjustment) here — only enter
 it if the user separately asks to override or adjust the value (see
@@ -932,7 +753,7 @@ Render the current state and the field menu, inline as plain text:
 > 2. **Percentage adjustment** — bump or discount the override value.
 >    Currently: {equityAdjustment as a %, e.g. "+5%", or "0%"}.
 > 3. **New capital raised** — capital raised in the round, added on top.
->    Currently: {newCapitalRaised, currency, or "$0"}.
+>    Currently: {newCapitalRaised, currency, or "0"}.
 > 4. **Adjustment date** — the date the adjustment applies as of.
 >    Currently: {equityAdjustmentDateOverride, or "valuation date"}.
 > 5. **Adjustment note** — a short description of why the adjustment
@@ -943,12 +764,12 @@ Let the user pick one or more fields in a single reply (e.g. "1 and 3",
 "override and add a note") — same multi-select pattern as Step 2D's
 Rights & Preferences. For each field picked, ask a follow-up in prose:
 
-- **Override value** — "What equity value would you like to use?" (a
-  dollar amount, maps to `backsolveEquityValueOverride`).
+- **Override value** — "What equity value would you like to use?" (an
+  amount, maps to `backsolveEquityValueOverride`).
 - **Percentage adjustment** — "What percentage adjustment? (e.g. '+5%'
   or '-10%')" (maps to `equityAdjustment` as a decimal fraction — parse
   "+5%" → `0.05`, "-10%" → `-0.10`; must be ≥ -0.9999).
-- **New capital raised** — "How much new capital was raised?" (a dollar
+- **New capital raised** — "How much new capital was raised?" (an
   amount, maps to `newCapitalRaised`).
 - **Adjustment date** — "What date should the adjustment apply as of?"
   (ISO-8601, maps to `equityAdjustmentDateOverride`).
@@ -966,12 +787,9 @@ computed value rather than zero — mention this plainly: "I'll use the
 computed value (**{backsolveEquityValue, currency}**) as the base for
 that adjustment."
 
-Once the user has specified at least one field, save. **This command
-does not merge on omitted fields (see the tool-surface note at the top
-of this file) — every call must carry every field, not just the ones
-changed this turn.** Start from the values captured in Step 5 part 1
-(or the most recent save's response) and overlay only what the user
-changed this turn; send the rest as-is, not omitted. **Any save that
+Once the user has specified at least one field, save. **Send every
+field** — this command resets omitted ones. Start from part 1's values
+(or the last save's response) and overlay this turn's changes. **Any save that
 changes at least one adjustment field must also set
 `showEquityAdjustmentExhibitManual: true`**, even if the user didn't
 ask about the exhibit flag directly — it marks that this candidate now
@@ -994,13 +812,9 @@ call_tool({
 })
 ```
 
-**Reminder:** `backsolveEquityValueOverride`, `equityAdjustment`, and
-`newCapitalRaised` must be passed as strings, not JSON numbers (see the
-tool-surface note at the top of this file) — this applies even to
-whole-dollar amounts, since these are decimal-typed fields on this
-command. `showEquityAdjustmentExhibitManual` is the one field on this
-command that's a real boolean, not a decimal — pass it as `true`
-natively, not `"true"`.
+`backsolveEquityValueOverride`, `equityAdjustment` and `newCapitalRaised`
+are strings even when whole numbers; `showEquityAdjustmentExhibitManual`
+is a real boolean (`true`, not `"true"`).
 
 After saving, re-render the current state (part 1's fields, refreshed)
 and ask "Anything else to change?" with the same six-item menu, until
@@ -1013,14 +827,3 @@ command names:
 
 > "The equity value in effect for **{company name}** is now
 > **{approachEquityValue, currency}**."
-
-Then render the deep link: [`references/deep-link.md`](../../deep-link.md),
-**Pattern B** with `{tab}` = `value-company/backsolve/results`. Render
-per deep-link.md Step 5.
-
-## Deep link
-
-See [`references/deep-link.md`](../../deep-link.md) for URL construction.
-Use **Pattern B** with `{tab}` = `value-company/backsolve`. Required
-context: `ownerId`, `targetId`, `valuationId`. Render per deep-link.md
-Step 5 (a markdown link).

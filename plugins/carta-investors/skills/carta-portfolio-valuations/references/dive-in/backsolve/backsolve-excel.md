@@ -1,6 +1,6 @@
 # Backsolve — Excel Output
 
-Two paths depending on environment. Detect first, then follow the matching path.
+Writes the backsolve inputs and live formulas into the user's current Excel sheet.
 
 ---
 
@@ -13,11 +13,10 @@ ToolSearch({ query: "excel worksheet workbook", max_results: 3 })
 ```
 
 - **If results include tools with "excel", "worksheet", or "workbook" in their name**:
-  → **In-sheet mode** — write inputs and live formulas directly into the user's current
-  sheet. Do NOT generate a file.
-- **Otherwise** → **File mode** — use the Python script to produce a `.xlsx` file.
+  → **In-sheet mode** below.
+- **Otherwise** → stop and say in one line: "Writing the backsolve into a spreadsheet needs Claude for Excel with a workbook open."
 
-Store the result as `excel_mode = "insheet" | "file"` for the rest of this flow.
+Never generate a file in either case.
 
 ---
 
@@ -44,7 +43,7 @@ Write the following cells to the current sheet:
 
 | Cell | Content | Format |
 |---|---|---|
-| `BASE_COL & BASE_ROW` | `"Backsolve Calculator — {company name}"` | Bold |
+| `BASE_COL & BASE_ROW` | `"Backsolve — {company name}"` | Bold |
 | `BASE_COL & BASE_ROW+2` | `"INPUTS"` | Bold, underline |
 | `BASE_COL & BASE_ROW+3` | `"Computed Backsolve Equity Value  S  (OPM goal-seek result)"` | — |
 | `VAL_COL & BASE_ROW+3` | `{currentBacksolve.backsolveEquityValue as a number}` | Number `#,##0.00` — **not approachEquityValue** |
@@ -59,7 +58,7 @@ After writing, note the **absolute cell addresses** for the four inputs — thes
 referenced in all formula cells. Use `$` for absolute references:
 
 ```
-S_CELL   = $VAL_COL$ROW+3    (e.g. $B$4 if BASE is A1, so S is at B3+1=B4... adjust for actual rows)
+S_CELL   = $VAL_COL$ROW+3    (e.g. $B$4 when BASE is A1)
 VOL_CELL = $VAL_COL$ROW+4
 R_CELL   = $VAL_COL$ROW+5
 T_CELL   = $VAL_COL$ROW+6
@@ -147,47 +146,3 @@ After writing all cells:
 > "Done — the backsolve model is in your sheet starting at {BASE}. Edit the yellow
 > **Inputs** cells (S, σ, r, T) and the breakpoints and allocation recalculate
 > automatically."
-
----
-
-## File mode (no Excel tools detected)
-
-Use the Python script to generate a standalone `.xlsx` file.
-
-### Step 1 — Save API responses
-
-```bash
-BACKSOLVE_JSON=$(mktemp /tmp/backsolve_XXXXXX.json)
-printf '%s' '<the raw get:backsolve JSON string>' > "$BACKSOLVE_JSON"
-
-# Optional — pre-fills Equity Adjustment tab:
-ADJ_JSON=$(mktemp /tmp/backsolve_adj_XXXXXX.json)
-printf '%s' '<the raw get:equity_adjustment JSON string>' > "$ADJ_JSON"
-```
-
-### Step 2 — Run the script
-
-```bash
-COMPANY_SLUG="${COMPANY_NAME// /_}"
-OUTPUT_PATH="/tmp/backsolve_${COMPANY_SLUG}.xlsx"
-
-# Without equity adjustment:
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --excel "$OUTPUT_PATH" --input "$BACKSOLVE_JSON"
-
-# With equity adjustment:
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --excel "$OUTPUT_PATH" --input "$BACKSOLVE_JSON" --equity-adjustment-input "$ADJ_JSON"
-```
-
-### Step 3 — Tell the user
-
-> "Your backsolve workbook is ready at `{OUTPUT_PATH}`. Open it in Excel — edit the
-> yellow input cells and all formulas recalculate automatically. The
-> **Equity Adjustment** tab lets you model overrides and percentage markups."
-
-The workbook has four sheets: **Inputs** (yellow editable cells), **Breakpoints**
-(live `NORM.S.DIST` formulas), **Allocation** (per-class distribution), and
-**Equity Adjustment** (override/markup/new capital formula).
-
-**Note on the equity value:** the **Inputs** sheet shows `currentBacksolve.backsolveEquityValue`
-— the raw OPM goal-seek result before any override or percentage adjustment. The adjusted
-value lives in the **Equity Adjustment** tab.

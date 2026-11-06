@@ -4,20 +4,6 @@ Create a new valuation candidate for a portfolio company by collecting a
 handful of inputs from the user, then calling the right create
 mutation.
 
-## UX Rules
-
-When presenting 5 or fewer choices, ask the question inline as plain
-text — do not use `AskUserQuestion` or any other widget. The prose
-blocks below (shown as `> "..."`) are the literal wording to render,
-with one option per line. Wait for the user's reply, then route based
-on their answer.
-
-## User-Facing Output Rules
-
-Do not surface raw command names, API payloads, HTTP codes, or numeric
-project/candidate IDs in chat. Speak in outcomes ("Your **Q2 2026**
-valuation is created…"). Backend mechanics stay internal.
-
 ## Prerequisites
 
 You need four things to work:
@@ -36,25 +22,12 @@ them directly without re-asking.
 
 ### Resolving the target
 
-Take `targetKind` and `targetId` together from whichever source is
-available:
-
-1. the `target` object (`kind` and `id`) on the resolved project from
-   `list:projects`, captured by the orchestrator's Step 2.5a; or
-2. the matched company's `isLlc` / `llcIssuerId` from
-   `list:portfolio_dashboard` — `isLlc: true` means `LLC_ISSUER` with
-   `llcIssuerId` as the `targetId`; otherwise `CORPORATION` with
-   `corporationId`.
-
-**Source 2 is the one that usually applies here.** This flow routinely
-creates a company's *first* valuation, and a company with no projects yet
-has no `target` object to read — the dashboard fields are then the only
-signal. Resolve from them rather than falling back to `CORPORATION`:
-sending `CORPORATION` for an LLC pairs the wrong kind with an id that
-does not exist, and the create fails.
-
-`LLC_ENTITY` never reaches this file — SKILL.md Step 2.5a stops that
-deprecated target kind upstream with its own message.
+Take `targetKind` and `targetId` together from the `target` (`kind`, `id`)
+on the resolved project from `list:projects`, or else from the dashboard
+row: `isLlc: true` → `LLC_ISSUER` with `llcIssuerId`; otherwise
+`CORPORATION` with `corporationId`. A first valuation has no `target` yet,
+so the dashboard row is usually the source — sending `CORPORATION` for an
+LLC fails the create.
 
 ## Step 1: Valuation Date
 
@@ -62,9 +35,7 @@ If the user already mentioned a date in their prompt, use it directly
 (after running the future-date check below) and skip this question.
 Otherwise, compute the four candidate dates dynamically based on
 today's date, then ask inline as plain text. **All shortcut options
-must be today or earlier — never future-date.** The four "End of
-previous {period}" shortcuts are inherently in the past; just don't
-generate any forward-looking option.
+must be today or earlier — never future-date.**
 
 > **What date should this valuation be as of?**
 > 1. **Today** — `{today's date in YYYY-MM-DD}`
@@ -86,12 +57,11 @@ option 5 or directly in their prompt), validate it:
   > today, or pick a different date?"
   Then re-prompt.
 
-If invalid, ask again in prose rather than re-rendering the widget.
+If invalid, ask again.
 
 ## Step 2: Copy From Previous Valuation (if applicable)
 
-If the company has existing valuation projects in context, ask inline
-as plain text (per this file's UX Rules — no `AskUserQuestion`):
+If the company has existing valuation projects in context, ask:
 
 > "Would you like to copy from a previous valuation? This carries over
 > inputs and settings."
@@ -120,8 +90,7 @@ default from the valuation date's quarter and year:
 - Jan-Mar = Q1, Apr-Jun = Q2, Jul-Sep = Q3, Oct-Dec = Q4
 - Example: valuation date 2026-05-15 → default **"Q2 2026"**
 
-Ask inline as plain text (per this file's UX Rules — no
-`AskUserQuestion`):
+Ask:
 
 > "What would you like to name this valuation?"
 > 1. **Use the default — {default name}**
@@ -169,8 +138,7 @@ name.
 
 **Capture for handoff (internal)**: From the response, extract
 `project_id` and `candidate_id` (from the created candidate). Hold
-them in conversation context — the approach configuration step needs
-them. Do not mention these IDs to the user.
+them in conversation context for later flows. Do not mention these IDs to the user.
 
 ### Error handling
 
@@ -195,10 +163,7 @@ Then **wait ~30 seconds** and call `list:projects` for the same
 `ownerId` / `ownerKind` / `targetId` / `targetKind`, looking for a
 project whose `valuationDate` is the one you just submitted.
 
-The delay is the point. `list:projects` lags a create: a project that
-was genuinely written can still be missing from the list read moments
-later, and reading too early produces a confident wrong answer — "it
-didn't work" — for a valuation that exists. Wait first, then read once.
+Wait first, then read once: `list:projects` lags a create.
 
 - **Project present** → the create succeeded. Take `project_id` and
   `candidate_id` from the list entry rather than the create response,
@@ -210,8 +175,9 @@ didn't work" — for a valuation that exists. Wait first, then read once.
   behind) — re-read `list:projects` and continue to Step 5.
 - **Still absent after that one retry** → stop. Do not issue a third
   create, and do not vary the date or name to get past the error. Say
-  plainly that the valuation couldn't be created and offer the deep
-  link so the user can check in Carta.
+  plainly that the valuation couldn't be created and suggest the user
+  check the company's page in Carta's valuations dashboard (SKILL.md
+  **Page navigation**).
 
 #### `400` — "A valuation project already exists on {date}"
 
@@ -220,27 +186,18 @@ means a valuation already exists on that date — surface it and offer to
 open it or pick a different date. Never retry into it, and never
 sidestep it by shifting the date the user asked for.
 
-## Step 5: Success Messaging + Deep Link
+## Step 5: Success Messaging
 
 Confirm the creation in plain language:
 
 > "Your **{valuation name}** valuation is created (dated
 > **{valuationDate}**)."
 
-Then render the deep link on its own line.
+The create already refreshed the dashboard MCP App (SKILL.md **Refresh the
+page after a change**), so don't move the view.
 
-### Deep link
+## Step 6: Return control
 
-See [`references/deep-link.md`](../deep-link.md) for URL construction.
-Use **Pattern A** (project landing — versions list shows the new
-candidate). Required context: `ownerId`, `targetId`, `project_id`.
-Render per deep-link.md Step 5 (a markdown link).
-
-## Step 6: Continue to approach configuration
-
-Return to the orchestrator's drill-down router ("After a successful
-create in drill-down mode") to handle approach configuration. The
-`project_id` and `candidate_id` captured above are already in context —
-do not re-ask the user. If the user explicitly says they want to stop
-or do something else ("not now", "I'll set that later"), respect that
-intent.
+Confirm what was done and return control. The new `project_id` and
+`candidate_id` stay in context for whatever the user asks next (e.g.
+setting approaches) — do not re-ask for them.

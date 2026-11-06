@@ -1,20 +1,28 @@
 # Portfolio Valuations — Markdown Table Runner
 
-Interactive text-based alternative to the runner widget. Reached when the
-user chooses "Markdown table" for the runner in `artifact` or `preview-server` mode, or any time
-`mcp__visualize__show_widget` is unavailable. Produces a numbered draft run
-plan, collects overrides in prose, confirms before touching the API, creates
-valuations in **Draft** status only (no finalize step).
+The bulk runner. Every bulk run that starts from the runner comes here. An unscoped run
+starts at Step 0, which opens the picker view; its message is the confirmed plan and goes
+straight to Step 8. A run the user already scoped (named companies, a bucket, row numbers)
+starts at Step 1, as does any run when the view can't be used: Steps 1–7 build a numbered
+table, collect overrides in prose and confirm the plan. Either way, valuations are created in
+**Draft** status only (no finalize step).
 
 ---
 
+## Step 0: Open the picker view
+
+Read `references/bulk/bulk-runner-view.md`, open `portfolio_valuations:view:edit_bulk_val`, and
+follow it. Open it first: the view reads the portfolio itself, so don't fetch or classify the
+dashboard before it. The view collects the companies, methods, values, allocation methods and
+one date, and its message is the confirmed plan: go straight from it to Step 8.
+
+**View unavailable** (a terminal client, an error, or the flag is off for this user, per that
+file): continue with Step 1 and the table.
+
 ## Step 1: Fetch and normalise data
 
-If `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` data is already in context from the current
-session, re-use it — do not re-fetch.
-
-Otherwise call `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` (all
-pages, always `page_size: 100`) and merge the `companies` arrays.
+Reuse `list:portfolio_dashboard` data already in context. Otherwise fetch
+every page as SKILL.md Step 3.2 does and merge the `companies` arrays.
 
 ## Step 2: Classify into buckets
 
@@ -47,21 +55,9 @@ priority order below. Never suggest for `noAccess` companies.
 | 3 | `final` bucket (no events) | Carry forward existing approach (display label) |
 | 4 | `noValuation` bucket | _(blank — ask user)_ |
 
-**Event date comparison rules (Priority 1):**
-
-Compare the dates of every event present on the company. Use the one with the latest date to select the approach. If dates tie, financing round takes precedence over secondary market events.
-
-| Event | Date field to compare | Suggested approach |
-|---|---|---|
-| `newFinancingRound` | `closingDate` (fall back to `initialClosingDate`) | **Post-Money** — pre-fill EV from `newFinancingRound.postMoney` |
-| `newTenderOffer` | `date` | **Backsolve** |
-| `newShareTransfer` | `date` | **Backsolve** |
-
-**Backsolve caveat (accuracy):** the runner **can** create a Backsolve
-valuation project — it simply does not auto-populate the Backsolve
-transaction price from the event (that is entered in Carta afterward).
-Never tell the user Backsolve "can't be created in bulk" or "requires a
-value first"; only the transaction price entry is deferred to Carta.
+**Priority 1** uses SKILL.md Step 3.2's **Approach signals** event →
+approach mapping and tie-break. For a Post-Money suggestion, pre-fill the
+EV from `newFinancingRound.postMoney`.
 
 **API approach name → display label mapping:**
 
@@ -81,24 +77,10 @@ mapping above; if the value is unrecognised, show it as-is.
 
 ---
 
-## Step 4: Render the table
+## Step 4: Show the table
 
-Print a brief attention note **above the table** for every company that has at least one event.
-List **all events** present on the company, then state the recommended approach and which event drove it.
-
-Format (one line per company):
-- *"{Company} — {event list} → **{Approach}** (latest event: {event type}, {date})"*
-
-Event list examples:
-- Single event: *"new financing round ($243.7M)"*
-- Multiple events: *"new financing round ($243.7M) + tender offer (2026-03-15) + share transfer (2026-04-01)"*
-
-Examples:
-- *"IMIM [C] — new financing round ($62.5M) → **Post-Money** (latest event: financing round, 2018-03-02)"*
-- *"Meetly [C] — tender offer (2020-01-10) + share transfer (2020-02-15) → **Backsolve** (latest event: share transfer, 2020-02-15)"*
-- *"Acme Corp — new financing round ($50M) + tender offer (2026-04-01) → **Backsolve** (latest event: tender offer, 2026-04-01)"*
-
-Skip the attention note section entirely if no company has any events.
+Above the table, print one line per company with events, in SKILL.md
+Step 3.2's **Approach signals** format. Skip it if no company has events.
 
 Then render **two labelled sections**:
 
@@ -115,7 +97,7 @@ Columns:
 - **Company** — suffix `[C]` if `isCartaCompany == true` (e.g., `MangoCart, Inc. [C]`)
 - **Last Val. Date** — `latestValuation.date` formatted `YYYY-MM-DD`
 - **Status** — `Draft` or `Final`
-- **Suggested Approach** — display label from Step 3. For Post-Money rows show the pre-filled EV inline: `Post-Money ($243.7M)`. For copy-from-previous rows show: `GPC (copy)` (or whichever approach + copy). Blank cell if no suggestion.
+- **Suggested Approach** — display label from Step 3. For Post-Money rows show the pre-filled EV inline: `Post-Money (243.7M)`. For copy-from-previous rows show: `GPC (copy)` (or whichever approach + copy). Blank cell if no suggestion.
 - **Suggested Date** — today's date as default (`YYYY-MM-DD`)
 
 ### No valuation
@@ -160,7 +142,12 @@ From the user's reply, extract:
   `copyFromPrevious: true` instead (see Step 8.1).
 - **Date overrides** — per-company or global. Must be today or earlier;
   if the user specifies a future date, refuse and ask again.
-- **EV overrides** — explicit company value amounts (`"run 1 with EV $50M"`).
+- **Allocation overrides** — "Waterfall" → `WATERFALL`; "CSE", "common stock
+  equivalent" → `COMMON_STOCK_EQUIVALENT`, for Post-Money, Custom Value and
+  Manual EV rows only. Step 8.3 runs them after the value. OPM can't be set in
+  a bulk run: say it needs inputs the run doesn't collect, and offer it on the
+  valuation afterwards.
+- **EV overrides** — explicit company value amounts (`"run 1 with EV 50M"`).
   Parse with B/M/K suffix support. These apply only to Post-Money, Custom
   Value, and Manual EV rows — `create:bulk` has no field for the value
   itself, so overrides captured here are applied in Step 8.3, after the
@@ -185,9 +172,9 @@ with the confirmation prompt outside the block:
 ```
 Here's what I'll create — all as Draft:
 
-1. Acme Corp      — GPC,              as of 2026-03-31
-2. BetaCo         — Post-Money ($243.7M), as of 2026-03-31
-3. GammaCorp      — Manual EV ($15.0M),  as of 2026-03-31
+1. Acme Corp      — GPC,                                    as of 2026-03-31
+2. BetaCo         — Post-Money (243.7M), Waterfall allocation, as of 2026-03-31
+3. GammaCorp      — Manual EV (15.0M),                      as of 2026-03-31
 ```
 
 Type **"yes"** / **"go"** / **"looks good"** to start, or tell me any last changes.
@@ -198,184 +185,45 @@ Do **not** proceed until the user gives a clear affirmation.
 
 ## Step 8: Execute — Draft only
 
-**Whenever more than one company is being created, this MUST go through
-`create:bulk` as a single call — never loop `create:project` per company.**
-This is a non-negotiable rule across the whole skill, not just this
-reference: one confirmed company → the single-company create call in
-`create-val.md` is fine; two or more confirmed companies → always
-`create:bulk`, no exceptions. `create:bulk` already supports everything
-this reference needs per-row (its own `methodology`/`copyFromPrevious`
-and `valuationDate` are set independently per item), so there is no
-overrides gap that would justify falling back to individual creates.
+Two or more confirmed companies always go through one `create:bulk` call
+(SKILL.md § User-Facing Output Rules).
 
 ### Step 8.1: Submit the bulk request
 
-Call `call_tool({"name": "portfolio_valuations__create__bulk", "arguments": {"items": [...]}})` with **one `items` entry per confirmed company**:
+Follow `references/bulk/bulk-runner.md` Step 6.1 (payload, string ids,
+snake_case `methodology` keys, Backsolve), with these differences:
 
-```json
-call_tool({
-  "name": "portfolio_valuations__create__bulk",
-  "arguments": {
-    "items": [
-      {
-        "ownerId": "<org_pk>",
-        "ownerKind": "FIRM",
-        "targetId": "<corporation_id>",
-        "targetKind": "CORPORATION",
-        "valuationDate": "<YYYY-MM-DD, per-row per Step 6's date overrides>",
-        "methodology": "<gpc | dcf | asset | invested_capital | ma | post_money | backsolve | other_indication_of_value>"
-      }
-      // one entry per confirmed row
-    ]
-  }
-})
-```
-
-- **`ownerId` and `targetId` must be strings**, not integers — passing
-  numbers fails validation with a `string_type` error for every item.
-- Set **exactly one** of `methodology` or `copyFromPrevious: true` per
-  item, never both. Use `copyFromPrevious: true` (and omit `methodology`)
-  for an Existing-valuations row where the user kept the suggested
-  "(copy)" approach as-is; use `methodology` for every other row,
-  including every No-valuation row (there is nothing to copy from).
-- **`methodology` keys are snake_case** (`gpc`, `backsolve`, `post_money`,
-  `other_indication_of_value`, `ma`, `dcf`) — this does **not** match the
-  camelCase field names on `portfolio_valuations:mutate:approaches`. Using
-  the camelCase form fails with "Unknown methodology keys." Manual EV and
-  Custom Value both map to `other_indication_of_value`.
-- **The bulk API sets no value** — no `companyValue`, no
-  `equityValueOverride`, for either Post-Money or Custom Value/Manual EV.
-  The number captured in Step 6/7 is applied afterward, per company, in
-  Step 8.3.
-- **Backsolve creates fine** — the project is created just like any other
-  methodology; only the transaction price is left for Carta. Never
-  describe a Backsolve row as failed or skipped because of this.
-
-Capture the `workflowId` from the response (`{status: "submitted",
-workflowId}`). Tell the user:
-> ⏳ Valuations are being created — this may take a moment…
+- Each item's `valuationDate` is its row's date, after Step 6's date
+  overrides.
+- An Existing-valuations row where the user kept the suggested "(copy)"
+  approach sends `copyFromPrevious: true` and no `methodology`. Every
+  other row, including every No-valuation row, sends `methodology`.
 
 ### Step 8.2: Poll for completion
 
-Call `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})`
-every **10 seconds** until complete:
+Follow `references/bulk/bulk-runner.md` Step 6.2. A timeout goes to
+Step 9 with whatever results are in.
 
-```json
-{
-  "status": "completed",
-  "workflowId": "<id>",
-  "summary": { "created": 4, "errors": 1 },
-  "results": [
-    { "index": 0, "ownerId": "1", "targetId": "81", "status": "created", "projectId": 11, "candidateId": 12, "valuationId": 1589 },
-    { "index": 2, "ownerId": "1", "targetId": "235", "status": "error", "error": "..." }
-  ]
-}
-```
+### Step 8.3: Set values and allocation methods for Post-Money, Custom Value, and Manual EV rows
 
-- `status` is `"pending"` while running, `"completed"` when done — treat
-  any unrecognized status as pending and keep polling, up to a 60-minute
-  cap.
-- Per-item results are keyed by `targetId` (string) and carry
-  **`projectId`/`candidateId`** (camelCase) — match each result to its
-  company by `targetId`, then pass `projectId`/`candidateId` as
-  `project_id`/`candidate_id` into Step 8.3.
-- Failed items have `status: "error"` and an `error` message but no
-  `projectId`/`candidateId` — surface the `error` text directly in the
-  Step 10 summary; there's nothing to follow up on.
+Follow `references/bulk/bulk-runner.md` Step 6.3, including its "never
+write a value onto a final valuation" guard, using the values and allocation methods
+of the confirmed plan only: the view's message, or the Step 7 list the user said yes to.
+Report into Step 9.
 
-While polling, print a brief update each time so the user knows the run
-is in progress: `⏳ Still creating valuations… (checked {N}s ago)`.
-
-- **Complete** — proceed to Step 8.3.
-- **Timeout** (60 minutes, no completion) — surface an error and proceed
-  to Step 10 with whatever partial results are available.
-- **Error** returned by the API — surface the error message and stop.
-
-### Step 8.3: Set values for Post-Money, Custom Value, and Manual EV rows
-
-After the bulk run completes, check whether any confirmed rows used
-Post-Money, Custom Value, or Manual EV. If none, skip this step. **Manual
-EV is Custom Value** — same `other_indication_of_value` methodology, same
-call below, using the captured `companyValue`. Skip any such row that
-failed in the bulk run (`status: "error"`) — there's no project to update.
-
-For each **Post-Money** row that succeeded:
-```json
-call_tool({
-  "name": "portfolio_valuations__mutate__post_money",
-  "arguments": {
-    "ownerId": "<org_pk>",
-    "project_id": <projectId from bulk status>,
-    "candidate_id": <candidateId from bulk status>,
-    "equityValueOverride": <post-money value captured in Step 6/7>
-  }
-})
-```
-
-For each **Custom Value / Manual EV** row that succeeded:
-```json
-call_tool({
-  "name": "portfolio_valuations__mutate__custom_value",
-  "arguments": {
-    "ownerId": "<org_pk>",
-    "project_id": <projectId from bulk status>,
-    "candidate_id": <candidateId from bulk status>,
-    "companyValue": <custom value captured in Step 6/7>
-  }
-})
-```
-
-On failure of this follow-up call (after one retry), mark the row in the
-Step 10 summary as `✓ Created · ❌ Value not set` rather than a full
-failure — the valuation project itself still exists.
-
-**Checklist items 1–5** from the main SKILL.md still apply per company
-(cap table, financials, approach inputs, company value, holdings value).
-**Item 6 (FINAL status) is intentionally omitted** — do NOT call any
-finalize or status-update mutation. Leave every valuation in Draft.
+Never call a finalize or status-update command: every valuation stays in
+Draft.
 
 ---
 
-## Step 9: Refresh the dashboard artifact
+## Step 9: Finish
 
-Do this **after Step 8.3 has finished**, before printing the Step 10 summary.
-Refreshing at Step 8.2 (`get:bulk_status` → `completed`) is too early: the bulk
-API creates the projects but sets no values, so a dashboard built at that point
-bakes in a snapshot taken before Step 8.3's Post-Money and Custom Value writes
-land, and every one of those rows renders as `—`.
-
-If the session flag `dashboard_artifact_url` is set, follow the
-**"Refreshing after a run"** section of `references/cowork-artifact.md` (in this
-skill's own `references/`, not the plugin root's) and republish. If the flag is
-not set, no dashboard was published this session — skip to Step 10.
-
-This is not an offer. Do not ask the user whether to refresh, and do not skip it
-because the Step 10 summary already lists what changed — the summary is chat
-text, while the artifact is the surface the user actually reads. Refresh
-silently; narrating the steps is noise.
-
-**Then verify the republish took.** A redeploy of an unchanged payload returns
-success and silently leaves the old data in place, which looks identical to a
-real refresh. Pick one company that Step 8.3 confirmed, find it in the payload
-you just built, and check its `latestValuationDate` equals the run's valuation
-date. If it still carries the pre-run date, the refresh used a stale payload —
-re-fetch `list:portfolio_dashboard` and rebuild before continuing.
-
----
-
-## Step 10: Finish
-
-Read `references/bulk/bulk-results.md` and follow it, using the **markdown
-fallback**. The user picked the text runner, so the results stay in text too.
-That file builds the **Bulk run results** table from the `get:bulk_status`
-results (Step 8.2), after this runner's Step 8.3 follow-ups. The table has
-one row per confirmed company: EV, holdings value, selected methodology,
-required inputs missing, allocation status, and a link to Carta. It also
-handles the "dive into {company}" hand-off into Step 2.5. A Backsolve row is
-a success, not a failure. A row whose Step 8.3 value write failed is marked
-`Value not set`, not failed.
+Once Step 8.3 has finished, read `references/bulk/bulk-results.md` and
+follow it — it builds the **Bulk run results** table (the dashboard MCP App
+already shows the new drafts, refreshed after each create), and handles the "dive
+into {company}" hand-off.
 
 Then remind the user:
 
-> All valuations are in **Draft** status. Review them in Carta and finalize
-> when ready.
+> All valuations are in **Draft** status. Tell me which one to dive into, or
+> which to finalize, when you're ready.

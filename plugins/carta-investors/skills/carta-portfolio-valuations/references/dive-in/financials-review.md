@@ -10,26 +10,8 @@ see if there's data to offer instead. The Data Warehouse is also
 offered as an on-demand comparison/fill source after a populated
 scenario table is shown (Step 4.5).
 
-> **Edits are supported through chat, but Carta is faster.** When a
-> value needs to change — whether filling from a Data Warehouse pull or
-> a one-off manual edit — always mention the Carta deep link as the
-> quicker, less error-prone path, but don't refuse to make the change
-> in chat if the user wants that instead. See **Edit requests** below.
-
-## UX Rules
-
-Every follow-up question in this file is asked inline as plain text —
-numbered options, wait for the reply. Do **not** use `AskUserQuestion`;
-it is not in this skill's `allowed-tools` and must not appear anywhere
-in this file (see SKILL.md's UX Rules).
-
-## User-Facing Output Rules
-
-Do not surface raw command names, SQL, table names, API field names,
-HTTP status codes, or numeric project/candidate IDs in chat. Speak in
-business terms ("revenue", "EBITDA", "annual financials", "the latest
-period"). The rendered financials table itself includes numeric values
-and metric names — that's expected output.
+Never show the SQL or table names in chat. The rendered financials
+tables show values and metric names — that's expected output.
 
 ## Prerequisites
 
@@ -37,7 +19,7 @@ You need a selected candidate:
 - `ownerId`, `project_id`, `candidate_id` — for the scenario call and
   any write.
 - `targetId` — the portfolio company's `corporationId`. Used both for
-  the DWH filter and the deep link.
+  the DWH filter and for opening its page in the dashboard MCP App.
 - The company name — for messaging.
 - An active firm context. If `set_context` has not been called for the
   active firm, DWH queries will fail. The orchestrator's Step 1
@@ -48,20 +30,40 @@ These are already in context from the orchestrator. If any are missing,
 ask the user to pick a valuation row from the orchestrator's drill-down
 flow first.
 
+## Step 0: Entry options (when the user wants to work on financials)
+
+Runs when the user asks to **work on, enter, add or update** the financials
+without giving a period and a value ("I want to enter the financials", "let's
+work on financials", "add financials"). Skip it for a review request ("show
+the financials", "what's the EBITDA"), which starts at Step 1, and for a
+specific edit ("set revenue to 5M for FY2024"), which goes straight to
+**Edit requests**.
+
+**The user wants to enter them by hand.** When the request says the user wants
+to enter the financials themselves ("I'll enter the financials manually", "let
+me type them in", "show me a form to enter financials"), skip the menu and open
+the financials view: read `references/dive-in/edit-financials-view.md` and
+follow it.
+
+Otherwise ask inline, as plain text, and wait:
+
+> How would you like to add the financials for **{company name}**?
+> 1. **Import from Carta** — I'll look up what's stored for this company and offer to fill it in.
+> 2. **Enter them here in chat** — tell me the period and the numbers.
+> 3. **Enter them manually** — I'll open the financials table for you to fill in.
+
+Route the reply:
+- **1, import** → run **Step 2** with reason = on-demand, then Step 4.6 to fill.
+  When it returns zero rows, say so plainly (Step 2's zero-rows, on-demand
+  message) and ask again with options 2 and 3 only.
+- **2, enter in chat** → **Edit requests** below: ask for the period and the
+  values, with no alternative of editing on the page.
+- **3, enter manually** → read `references/dive-in/edit-financials-view.md`
+  and follow it.
+
 ## Step 1: Pull scenario-bound financials (primary source, silent)
 
-**Do this silently.** Call:
-
-```json
-read_tool({
-  "name": "portfolio_valuations__get__financials",
-  "arguments": {
-    "ownerId": <ownerId>,
-    "project_id": <project_id>,
-    "candidate_id": <candidate_id>
-  }
-})
-```
+**Do this silently.** Call `get:financials`.
 
 The response's `periods` array already includes prior-LTM and NTM
 periods (e.g. "08/01/2022 - 07/31/2023") alongside the current-LTM
@@ -130,8 +132,6 @@ ORDER BY PERIOD_END DESC, NAME
 LIMIT 100
 ```
 
-Pass with `limit: 100`.
-
 ### Why these filters
 
 - `CORPORATION_ID = '<targetId>'` — scope to this portco only. Note:
@@ -163,22 +163,14 @@ Pass with `limit: 100`.
   data) with the heading "From the Data Warehouse:", no extra note.
   Then go to **Step 4.6**.
 - **Zero rows** (or the query fails after one retry), fallback reason →
-  no financials exist anywhere. Surface the deep link as the action,
-  not a footnote:
-  > "**{company name}** has no financials entered yet. Add them in
-  > Carta, or tell me the numbers and I'll enter them for you:
-  >
-  > {DEEP_LINK}"
+  no financials exist anywhere. Make entering them the action, not a
+  footnote:
+  > "**{company name}** has no financials entered yet. Tell me the numbers
+  > and I'll enter them for you."
   Then return to the orchestrator's routing.
 - **Zero rows, on-demand reason** → tell the user plainly and return to
   **Step 5**'s menu:
   > "No Data Warehouse financials found for **{company name}**."
-
-## Step 3: (reserved)
-
-*(Intentionally left as a placeholder — Step 4 below covers all three
-render paths. Kept numbered this way so other references that say
-"financials-review's rendering step" don't need to be re-pointed.)*
 
 ## Step 4: Render the financials table
 
@@ -191,14 +183,15 @@ underneath an already-rendered scenario table).
 
 | Period | Revenue | EBITDA |
 |---|---|---|
-| {label} | {revenue, $} | {ebitda, $} |
+| {label} | {revenue} | {ebitda} |
 
 - **Period**: use the period's `label` field verbatim (e.g. "FY2024",
   "08/01/2022 - 07/31/2023") — it's already formatted upstream.
 - Net income and total assets are not shown — not needed for this
   review.
-- Value columns: currency with thousands separators (e.g.
-  `$8,000,000`); show `$0` for a genuine zero, not `—` (a `0` here is a
+- Value columns: the valuation's currency (`get:valuation` →
+  `currencyCode`, per SKILL.md § Currency default) with thousands
+  separators (e.g. `€8,000,000`); show `0` for a genuine zero, not `—` (a `0` here is a
   real reported value, not a missing one — the all-zero case was
   already handled as "not entered" in Step 1).
 - **Label suffix**: each period may carry a `periodType` field
@@ -224,21 +217,19 @@ history:
 
 | Period | Cash & Equivalents | Non-Convertible Debt | Interest Type | Interest Rate |
 |---|---|---|---|---|
-| {label} | {cashAndCashEquivalents, $} | {nonConvertibleDebt, $} | {nonConvertibleDebtInterestType, humanized} | {nonConvertibleDebtInterestManualEntry, %} |
+| {label} | {cashAndCashEquivalents} | {nonConvertibleDebt} | {nonConvertibleDebtInterestType, humanized} | {nonConvertibleDebtInterestManualEntry, %} |
 
 - **Period**: `label` field, same formatting as the Revenue/EBITDA
   table.
-- **Cash & Equivalents** / **Non-Convertible Debt**: currency with
-  thousands separators; `$0` for a genuine zero.
+- **Cash & Equivalents** / **Non-Convertible Debt**: the valuation's
+  currency with thousands separators; `0` for a genuine zero.
 - **Interest Type**: humanize the enum (`CUSTOM_INTEREST` → "Custom",
   underscores → spaces, title case) — never show the raw enum token.
 - **Interest Rate**: `nonConvertibleDebtInterestManualEntry` as a
   percentage with two decimals (e.g. `5.00%`); show `—` if null.
 - If `ltmFinancials` is empty, skip this table entirely — do not
   render an empty shell.
-- **Not editable from chat.** `mutate:financials` has no accepted
-  fields for interest type/rate (see Step 4.7) — if the user asks to
-  change either, redirect to the deep link, no chat-entry option.
+- Interest type and rate can be set in the financials view (`edit-financials-view.md`); see **Edit requests** for chat entry.
 
 ### DWH-shaped table (from Step 2)
 
@@ -254,13 +245,14 @@ history:
 - **Metric**: `NAME` (long form). Show `MNEMONIC` in parentheses only
   if the long form is longer than 30 chars.
 - **Value**: format `FLOAT_VALUE` per `UNIT_TYPE`:
-  - `Dollar` → currency with thousands separators (e.g. `$12,345,678`)
+  - `Dollar` → the row's `CURRENCY` with thousands separators (e.g.
+    `€12,345,678`); with no `CURRENCY`, the bare number
   - `Percentage` → two decimals with `%` (e.g. `42.50%`)
   - `Ratio` → two decimals (e.g. `1.25`)
   - `Number` → integer with thousands separators
   - any other → render `FLOAT_VALUE` as-is
-- **Currency**: render only if the row is dollar-typed and currency is
-  not USD. Otherwise leave blank.
+- **Currency**: the row's `CURRENCY` on every `Dollar`-typed row, USD
+  included. Blank for other unit types.
 
 If a row has `INSTANCE_TYPE = 'Estimate'` (rather than 'Actual'),
 append a small badge to the Metric column: `{NAME} (estimate)`.
@@ -272,7 +264,6 @@ Render in that order.
 by `PERIOD_END DESC` and add a one-line note:
 
 > Showing 30 most recent of {total} financial data points.
-> {DEEP_LINK}
 
 ## Step 4.5: Offer the Data Warehouse as a comparison/fill source
 
@@ -335,10 +326,8 @@ match to any row above. **If a row's `NAME` doesn't clearly describe
 one of these fields, don't guess — leave it unmapped** and list it
 under "not applied" in the summary so the user knows it was skipped.
 
-`nonConvertibleDebtInterestManualEntry` and `nonConvertibleDebtInterestType`
-have **no** matching field in `mutate:financials`'s accepted body (see
-below) — never map a DWH row to either, even if the name suggests a
-match. Report any such row as unmapped too.
+Never map a DWH row to interest type or rate; report any such row as
+unmapped too.
 
 ### Match DWH periods to scenario periods
 
@@ -370,13 +359,12 @@ call_tool({"name": "portfolio_valuations__mutate__financials", "arguments": {
 ```
 
 - **Success** → silently re-run Step 1's `get:financials` call, then
-  show a **Saved changes** table built from that re-fetch. Per SKILL.md's
-  **Writes — save, then show what was saved** rule, every number is the
-  **full, non-abbreviated value** — never `$8.0M`, always `$8,000,000`:
+  show a **Saved changes** table built from that re-fetch (full values,
+  per SKILL.md § Writes):
 
   | Period | Field | Previous | Saved |
   |---|---|---|---|
-  | {label} | {business-term field name} | {full previous value or "—" if new} | {full saved value, $} |
+  | {label} | {business-term field name} | {previous value or "—" if new} | {saved value} |
 
   If the mapping skipped any DWH rows as unmapped, mention them plainly
   below the table:
@@ -384,23 +372,21 @@ call_tool({"name": "portfolio_valuations__mutate__financials", "arguments": {
 
   Then re-render the scenario table (Step 4) and return to Step 5's menu.
 - **Failure** → surface the error plainly, retry once, and if it fails
-  again suggest the deep link as a fallback. Do not silently drop the
+  again suggest editing them on the valuation's page in Carta's valuations
+  dashboard as a fallback, and offer to take them there (SKILL.md **Page navigation → After an action, offer instead of moving**). Do not silently drop the
   attempt.
 
 ## Step 5: Offer follow-up actions
 
-Present inline as plain text (no `AskUserQuestion`):
+Present inline as plain text:
 
 > What would you like to do?
-> 1. **Looks good — what's next?**
+> 1. **Looks good**
 > 2. **Enter or edit a value**
 > 3. **Show a different report type**
 
 Route the reply:
-1. **Looks good** — return to the orchestrator's drill-down routing. In
-   a walk-through after a fresh create, the next unfinished item on the
-   End Goal checklist (likely `set-approaches`) is offered. In
-   lateral-entry mode, just stop and let the user drive.
+1. **Looks good** — confirm what was reviewed and return control.
 2. **Enter or edit a value** — go to **Edit requests** below.
 3. **Show a different report type** — proceed to Step 6 (re-run with
    different filters). Only meaningful for the DWH-shaped table; if the
@@ -427,25 +413,30 @@ filter returns zero rows, surface:
 ## Edit requests
 
 When the user asks to edit a value at any point ("change revenue",
-"add an estimate", "fix the EBITDA", "set revenue to 5M for FY2024"),
-**always mention the Carta deep link as the faster option** — but don't
-refuse to make the change in chat if that's what the user wants:
+"add an estimate", "fix the EBITDA", "set revenue to 5M for FY2024"), or picks
+option 2 in **Step 0**, take it in chat. Don't steer the user to the page instead; offer it only
+when chat can't finish the edit, and open it when they ask to do it in Carta (below).
 
-> "I can update that here, or you can enter it in Carta — the form is
-> faster for period-by-period entry:
->
-> {DEEP_LINK}
->
-> Want me to make the change here instead?"
-
-If the user wants the chat path:
+Ask for what's missing: the period and the values, listing the periods and the
+settable fields. Then:
 - Only `revenue`, `ebitda`, `netIncome`, `totalAssets`,
   `costOfGoodsSold`, `grossProfit`, `totalLiabilities`,
   `cashAndCashEquivalents`, `interestBearingLiabilities`, and
-  `nonConvertibleDebt` are settable via `mutate:financials`. If the
-  user asks to change interest rate/type, there is no chat path — those
-  fields aren't in `mutate:financials`'s accepted body at all; go
-  straight to the deep link with no chat-entry offer.
+  `nonConvertibleDebt` are the documented fields of `mutate:financials`.
+  The non-convertible debt interest type (`nonConvertibleDebtInterestType`:
+  `CUSTOM_INTEREST` or `BAA_CORP_YIELD`) and rate
+  (`nonConvertibleDebtInterestManualEntry`, percentage points, used with
+  Custom) aren't documented there but the API accepts them on the LTM period.
+  Send them with the LTM period's other fields: the type exactly
+  `CUSTOM_INTEREST` or `BAA_CORP_YIELD` (`BAA_CORPORATE_YIELD` fails with an
+  internal error and saves nothing), the rate in percentage points (`5` for
+  5%). Re-fetch and check `ltmFinancials`. An internal error can mean the change
+  was or wasn't applied: read the record before calling again, then retry once
+  with the interest fields left out. If they still didn't save, say plainly that
+  the figures saved but the interest type and rate couldn't be, name the
+  valuation's page in Carta's valuations dashboard as the place to set them,
+  and offer to take them there (SKILL.md **Page navigation → After an action, offer instead of moving**). Never
+  claim they saved without that check.
 - Identify the period (ask if ambiguous — don't guess which period a
   bare "set revenue to 5M" refers to) and the field/value from the
   user's request.
@@ -454,29 +445,13 @@ If the user wants the chat path:
   call shown in Step 4.7 without asking first, re-fetch, and show the
   same "Saved changes" table (one row is fine for a single-value edit).
 
-If the user explicitly says they'd rather do it in Carta, just render
-the deep link and stop — don't push chat entry.
-
-## Deep link
-
-See [`references/deep-link.md`](../deep-link.md) for URL construction.
-Use **Pattern B** with `{tab}` = `financials`. Required context:
-`ownerId`, `targetId`, `valuation_id`. Render per deep-link.md Step 5
-with the label **Edit financials in Carta** (a markdown link).
+If the user says they'd rather do it in Carta, open the valuation's page for
+them (SKILL.md **Page navigation → Which page to open**) and stop — don't push
+chat entry.
 
 ## Goal-checklist contribution
 
-Financials-review contributes to **End Goal item 2: Financials are filled
-in**. Item 2 only applies when the selected methodology requires Financials
-(GPC or M&A — see **Required inputs by methodology** in SKILL.md). Otherwise
-it is N/A, though financials can still be entered. The contribution is
-automatic and API-derived: item 2 is
-satisfied when **either** the scenario call in Step 1 returns at least
-one period with revenue/EBITDA populated, **or** the DWH query in
-Step 2 returns rows for the portco. The user does not need to confirm
-— a successful fill/edit (Step 4.7 or Edit requests) also satisfies it
-immediately, since the next `get:financials` call will reflect it.
-
-If both sources are empty and no edit has been made, item 2 stays
-unsatisfied — the orchestrator's walk-through will continue surfacing
-this step until financials are entered.
+End Goal item 2 (only when the methodology requires Financials) is
+satisfied once Step 1's `get:financials` returns at least one period with
+revenue/EBITDA populated. DWH rows count only once they've been filled
+into the valuation (Step 4.7 or Edit requests).

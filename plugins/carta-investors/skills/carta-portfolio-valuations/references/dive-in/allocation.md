@@ -29,27 +29,16 @@ candidate.
 
 **Do this silently**, before Step 1 and before any methodology prompt.
 
-**Run Gate 0 only when the user has actually asked to allocate** —
-"run allocation", "allocate to share classes", "compute holdings
-value", or a named methodology ("run CSE", "run the waterfall", "run
-OPM"). That request is the only thing that triggers this call. Do not
-call `get:configuration` to enrich a recap, to answer a question about
-the valuation, or ahead of time on the chance the user might want an
-allocation later. It is one call on the allocation path, not a
-background probe.
+**Run Gate 0 only when the user has asked to allocate** ("run
+allocation", "allocate to share classes", "compute holdings value", or a
+named methodology). Never call `get:configuration` for a recap, a
+question, or ahead of time.
 
 **`config.allocationMethodologies` is the only source for what this
-candidate can run.** Do not infer the available set from the target
-kind — not from `isLlc` on the dashboard, not from `corporationId` vs
-`llcIssuerId`, not from a `targetKind` already resolved for this
-candidate. Those signals do not determine which allocations are
-offered, and routing on them shows the user the wrong menu.
-
-This applies to a **named** request too. "Run CSE" does not license
-skipping the call and going straight to Step 4A — the candidate may not
-support CSE, and the only way to know is to ask. Resolve the available
-set first, every time; Step 3 then decides whether the name the user
-gave short-circuits the picker.
+candidate can run** — never infer it from the target kind (`isLlc`,
+`corporationId` vs `llcIssuerId`, `targetKind`). A named request ("run
+CSE") still runs Gate 0 first; Step 3 then decides whether the name
+skips the picker.
 
 Call
 `read_tool({"name": "portfolio_valuations__get__configuration", "arguments": {"valuation_id": <valuation_id>}})`:
@@ -82,12 +71,9 @@ Now build the **available set** the rest of this file works from:
    authority on what may be offered** — if a methodology isn't in it,
    it isn't available, whatever the other fields say.
 2. **Drop both Niagara entries if `enablementFailureReasons` is
-   non-empty** (or `isNiagaraModelEnabled` is false). Being listed is
-   not the same as being runnable — the failure reasons are what say
-   whether a listed run will actually dispatch, and checking here is
-   the whole point: it turns a `422 waterfall_not_eligible` *after* the
-   user has answered three questions into one plain sentence before
-   they answer any.
+   non-empty** (or `isNiagaraModelEnabled` is false). Listed isn't the
+   same as runnable; checking here saves the user answering questions
+   for a run that will be refused.
 
 **If the available set is empty**, stop — there is nothing to offer.
 Explain it in business terms, and pick the wording from what the
@@ -97,22 +83,16 @@ support:
 - **`enablementFailureReasons` non-empty** → use the `message` text as
   the source of truth, rather than paraphrasing from `code`:
 
-  > "Allocation can't run on **{candidate name}** yet — {message}.
-  > {DEEP_LINK}"
+  > "Allocation can't run on **{candidate name}** yet — {message}."
 
 - **`enablementFailureReasons` empty** → there is no `message` to
   quote, so don't invent one and don't guess at a cause. Say only what
   is true:
 
-  > "Allocation isn't available on **{candidate name}**. {DEEP_LINK}"
+  > "Allocation isn't available on **{candidate name}**."
 
-When there *is* a failure reason, its `message` already states the real
-cause — a firm-level killswitch, missing cap-table access across the deal
-group, or an ambiguous/unresolvable ownership structure are the three
-reasons this field carries. Relay it verbatim per the bullet above; don't
-layer a guessed explanation ("it's probably still building") on top of it
-— there is no such reason, and no build-delay or sync-timing mechanism
-behind this gate at all.
+Never add a guessed cause ("it's probably still building") — there is
+no build-delay or sync-timing behind this gate.
 
 If `waterfallAccess.modelStatus` is `NOT_FOUND` or `NOT_ASSIGNED`, this
 company simply doesn't have a waterfall model configured — that's a
@@ -136,80 +116,27 @@ announce which engine a methodology belongs to or explain the split —
 the user asked for an allocation, so just offer what's available and
 run the one they pick.
 
-The UX Rules, User-Facing Output Rules, and widget-availability check
-below apply to **both** engines.
-
-## UX Rules
-
-When presenting 5 or fewer choices, ask inline as plain text with
-numbered options — do not just output free-form prose and hope for a
-typed reply. This applies to the methodology picker, methodology
-keep-or-change confirmation, DLOM method picker, and
-company-vs-per-class DLOM scope picker. The prose `> 1. ... > 2. ...`
-syntax in the steps below is the actual wording to render — one
-option per line — followed by waiting for the reply.
-
-Free-text inputs (time-to-exit value, volatility percentage, custom
-DLOM percentage) are a separate matter — those need freeform numeric
-input, so for those, ask in prose and parse the user's reply.
-
-## User-Facing Output Rules
-
-Do not surface raw command names, API field names, HTTP status codes,
-or numeric project/candidate IDs in chat. Speak in business terms
-("methodology", "volatility", "time to exit", "DLOM", "Chaffe",
-"Finnerty"). Rendered tables of per-class values, volatility comps,
-and DLOM exhibits include numeric values and class names — that's
-expected output.
+SKILL.md § UX Rules applies to both engines. Free-text numbers (time to
+exit, volatility, custom DLOM) are asked in prose and parsed. Tables of
+per-class values, volatility comps and DLOM exhibits are expected output.
 
 ## Prerequisites
 
-You need a selected candidate with an enterprise value to allocate:
-- `ownerId`, `project_id`, `candidate_id` — for the standard-engine API
-  calls, and for reading/writing the saved allocation on either path.
-- `valuation_id` — the valuation's integer id (`valuationId` on the
-  `list:projects` candidate). Every Niagara command keys off this alone,
-  never the project/candidate pair.
-- `targetId` — for the deep link.
-- The company name and candidate name — for messaging.
-- **Positive company value** (`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`companyValue.amount` > 0). The
-  allocation distributes this value; with zero, there's nothing to
-  distribute.
+- `ownerId`, `project_id`, `candidate_id` — standard-engine calls, and
+  reading/writing the saved allocation on either path.
+- `valuation_id` — the integer `valuationId` on the `list:projects`
+  candidate. Every Niagara command keys off this alone.
+- `targetId` — for opening its page in the dashboard MCP App.
+- The company and candidate names — for messaging.
 
-These should be in conversation context from the orchestrator. If the
-company value is zero or null, route to
-`references/dive-in/set-approaches.md` (or whichever approach is
-producing the EV) and stop.
-
-## Goal-checklist contribution
-
-Allocation contributes to **End Goal item 5 (Holdings value is
-positive)**. Once `call_tool({"name": "portfolio_valuations__compute__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` succeeds and `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
-returns a positive `valueOfHoldings.amount`, item 5 is satisfied.
-
-The Niagara path contributes to item 5 the same way — a `SUCCESS` poll
-writes the allocation back onto the candidate, so re-reading
-`get:valuation` afterwards is what confirms it, not the poll payload.
-
-It can also affect **End Goal item 4 (Company value)** indirectly:
-allocation methodology + DLOM choices feed into the final reported EV
-in some configurations. Re-derive the checklist after running.
+Both engines satisfy End Goal item 5 once a fresh `get:valuation` shows
+a positive `valueOfHoldings.amount` — never read it off the poll payload.
 
 ## Step 1: Verify prerequisites (silent)
 
 **Do this silently** unless a prerequisite fails.
 
-Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
-
-```json
-{
-  "ownerId": <ownerId>,
-  "project_id": <project_id>,
-  "candidate_id": <candidate_id>
-}
-```
-
-Check `companyValue`:
+Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and check `companyValue`:
 - **Zero, null, or missing** → surface plain language and ask inline
   as plain text:
 
@@ -238,8 +165,7 @@ result is wrong silently. Run two silent checks:
 1. `read_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` — does the
    summary contain share classes (any non-zero outstanding)? Keep the
    `id` and `securityType` of every `COMMON_SHARE_CLASS` /
-   `PREFERRED_SHARE_CLASS` entry from `captableData` in context — only
-   needed if the user configures per-class DLOM in Step 5.4.
+   `PREFERRED_SHARE_CLASS` entry from `captableData` in context.
 2. `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` — do any periods have
    revenue or EBITDA populated?
 
@@ -264,20 +190,9 @@ user can always skip.
 ## Step 2: Pre-flight `read_tool({"name": "portfolio_valuations__get__allocation", "arguments": {...}})` (REQUIRED)
 
 **Do this silently.** This pre-flight returns the current methodology
-and DLOM configuration on the candidate, plus per-share-class IDs
-needed for any per-class DLOM overrides.
+and DLOM configuration on the candidate.
 
-Call `read_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
-
-```json
-{
-  "ownerId": <ownerId>,
-  "project_id": <project_id>,
-  "candidate_id": <candidate_id>
-}
-```
-
-Capture:
+Call `read_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and capture:
 - `allocationMethodology` — current methodology (or null if not set).
 - `debtOption`, `treatCappedNotesAsEquity` — current debt-treatment
   settings (required for CSE — see Step 4A).
@@ -289,14 +204,10 @@ Capture:
 - For OPM: `weightedTimeToExit`, `equityVolatilityManualEntry`,
   `volatilitySelectionMethod`.
 
-Note: the live response has no top-level `holdings` field with
-share-class IDs. Per-class DLOM overrides (Step 5.4) can't be
-pre-populated from this pre-flight call; resolve share-class IDs from
-`get:cap_table_summary` instead if that path is needed.
 
 If this call returns 404, retry once. If it 404s again, the candidate
 isn't initialized — surface a fallback:
-> "Couldn't load allocation inputs for **{candidate name}**. {DEEP_LINK}."
+> "Couldn't load allocation inputs for **{candidate name}**."
 
 ## Step 3: Pick methodology
 
@@ -391,10 +302,7 @@ like an OPM situation"). The user picks; we configure.
 
 ## Widget availability check (silent, cached — runs once before 4A/4C/N1/N2)
 
-`show_widget` isn't covered by SKILL.md's `env_mode` detection (that
-only probes for the `Artifact` tool /
-`mcp__Claude_Preview__preview_start` / `mcp__Claude_Browser__preview_start`)
-— check separately, once per session, and cache as `widget_available`:
+Check `show_widget` once per session, and cache as `widget_available`:
 
 - `ToolSearch(query: "select:mcp__visualize__show_widget")` — present
   if the schema returns, or it's already in the loaded-tools list.
@@ -522,31 +430,14 @@ to ask for depends on the debt treatment from Step 4C.1:
 
 Ask as a percentage (e.g. 65), convert to decimal (0.65) before saving.
 
-*(Server-side this is `usesAssetVolatility`, which also depends on
-whether the candidate actually carries included debt. This guide uses
-the `debtOption` mapping alone, since re-deriving actual debt needs the
-server's own calculation.)*
-
 **If Linear regression** — call
 `read_tool({"name": "portfolio_valuations__get__volatility_comps", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 first to confirm real numbers exist (needs both comps AND LTM
 financials on the candidate; either missing → empty result):
 
-```json
-{
-  "ownerId": <ownerId>,
-  "project_id": <project_id>,
-  "candidate_id": <candidate_id>
-}
-```
-
 - **Non-empty** → set `LINEAR_REGRESSION`, don't set
-  `equityVolatilityManualEntry`. Per SKILL.md's **volatility disclosure**
-  rule, render the full quartile table (not just mean/median) and label
-  it clearly as **OPM {equity/asset} volatility** — this is a different
-  dataset from DLOM's own volatility (Step 5.2) and from Backsolve's
-  comps, and a bare number here is exactly what causes "wrong
-  volatility" reports:
+  `equityVolatilityManualEntry`. Render the full quartile table labelled
+  **OPM {equity/asset} volatility** (SKILL.md § Volatility disclosure):
   > "Volatility derived from comps on **{candidate name}** ({equity/asset} volatility, OPM): see table below.
   >
   > {full quartile table}
@@ -568,7 +459,7 @@ this adds no further prompts.
 
 DLOM (discount for lack of marketability) is **not required**. Default
 silently to **0%, company-level, no method** for every methodology —
-no DLOM prompts in the normal walk-through. Send explicit zero values
+no DLOM prompts unless asked. Send explicit zero values
 in Step 6 (`dlomMethod: "CUSTOM_DLOM"`, `usesCompanyLevelDlom: true`,
 `companyLevelDlomManualEntry: 0`) rather than omitting them, to avoid
 carrying forward a stale value from a prior methodology.
@@ -603,14 +494,9 @@ Wait for the reply, then act accordingly.
 
 **For Chaffe / Finnerty**:
 
-DLOM volatility is its **own dataset** — a separate, independently
-computed figure from whatever volatility was set on the OPM branch
-(Step 4C.2), even on the same candidate. **Never default to the OPM's
-`equityVolatilityManualEntry` / `assetVolatilityManualEntry` or its
-comps regression here** — the two can differ materially, and handing a
-user the OPM number when they asked about DLOM is the most common
-"wrong volatility" complaint (see SKILL.md's volatility disclosure
-rule).
+DLOM volatility is its **own dataset**. **Never default to the OPM's
+volatility entries or comps regression here** (SKILL.md § Volatility
+disclosure).
 
 If `dlomTimeToExitManualEntry` and `dlomVolatilityManualEntry` are not
 set (for CSE/Waterfall, or if not already in context), fetch
@@ -628,10 +514,8 @@ silently and read the DLOM-specific fields:
   authoritative, already-computed answer.
 
 Default `dlomVolatilityManualEntry` to `dlomVolatilityRegression.result`
-if unset. Per SKILL.md's volatility disclosure rule, whenever any of
-these numbers is shown to the user, label it explicitly as **DLOM
-volatility** and render the full `dlomVolatilityQuartiles` table
-alongside it — not just the single regression or precomputed figure.
+if unset. Whenever one of these numbers is shown, label it **DLOM
+volatility** and render the full `dlomVolatilityQuartiles` table with it.
 
 - Offer to override either; otherwise reuse.
 
@@ -645,42 +529,28 @@ Ask inline as plain text:
 
 > **Apply DLOM at the company level (one value across all classes), or per share class?**
 > 1. **Company level** — set `usesCompanyLevelDlom: true`. One value applies to every class. Recommended unless there's a specific reason to differentiate.
-> 2. **Per share class** — set `usesCompanyLevelDlom: false` and proceed to Step 5.4 (advanced — one value per class).
+> 2. **Per share class** — see Step 5.4.
 > 3. **Keep current setting** — only include this option if the pre-flight returned a setting; on selection, leave the field unchanged.
 
 Wait for the reply, then act accordingly.
 
-### Step 5.4: Per-class DLOM (advanced — only on request)
+### Step 5.4: Per-class DLOM (set it in Carta)
 
-For each share class in the `holdings` list (from the pre-flight),
-ask (identify the class by **name only** — never surface the class id):
-
-> "DLOM for **{class name}**? Enter a percentage (e.g. 25), or 'use the
-> company-level value' to inherit."
-
-Keep each class's `id` internally (do not display it) and build the
-`holdings` list with `{ id, dlom }` for each class. Save in Step 6.
+Per-class DLOM can't be saved from chat: the allocation save drops
+per-class values before they reach the valuation. When the user picks it
+(or asks for it), say so in one line: per-class DLOM is set on the
+valuation's page in Carta's valuations dashboard. Offer to take them there
+(SKILL.md **Page navigation → After an action, offer instead of moving**),
+then continue with the company-level setting unchanged.
 
 ## Step 6: Save (`call_tool({"name": "portfolio_valuations__mutate__allocation", "arguments": {...}})`)
 
-**Field names are camelCase — non-negotiable.** Every field must match
-the MCP command's declared params exactly (`commands.py`,
-`portfolio_valuations:mutate:allocation`) — all camelCase, no
-exceptions. A mismatched key (e.g. snake_case) is **silently dropped
-before reaching carta-web**, no error — a prior version of this guide
-used snake_case and every one of those fields silently failed to save.
-When in doubt, match `get:allocation`'s response field names (same
-camelCase by construction).
+**Field names are camelCase — non-negotiable.** A key the command
+doesn't declare (e.g. snake_case) is **silently dropped**, so the save
+looks fine and changes nothing. When in doubt, match `get:allocation`'s
+response field names.
 
-**`holdings` can be omitted (or sent as `null`)** like every other
-field — the carta-web `allow_null` fix for this is deployed. Only
-build it (real `{ "id": <share class id>, "dlom": <float> }` entries)
-when the user configures per-class DLOM in Step 5.4.
-
-**Known gap:** `AllocationServiceImpl._build_update_kwargs` still
-drops `holdings` before it reaches the domain layer regardless of
-payload — per-class DLOM overrides don't take effect through this
-endpoint yet. Separate issue from the null fix above.
+Never send `holdings` (see Step 5.4).
 
 Build the payload from the captured inputs and call:
 
@@ -701,17 +571,13 @@ Build the payload from the captured inputs and call:
   "dlomVolatilityManualEntry": <float or null>,
   "usesCompanyLevelDlom": <bool>,
   "companyLevelDlomManualEntry": <float or null>,
-  "holdings": [
-    { "id": <share class id>, "dlom": <float> }
-    // omit this field entirely unless configuring per-class DLOM (Step 5.4)
-  ],
   "showChaffeExhibit": <bool>,                            // optional
   "showFinnertyExhibit": <bool>                           // optional
 }
 ```
 
 Only include fields the user actually set or changed — omit
-everything else, including `holdings`.
+everything else.
 
 ### Error handling
 
@@ -723,24 +589,12 @@ everything else, including `holdings`.
 - **Persistent failure**: surface plain-language fallback with deep
   link.
 
-Do not surface raw status codes.
-
 ## Step 7: Run (`call_tool({"name": "portfolio_valuations__compute__allocation", "arguments": {...}})`) — auto-chain after save
 
 **Do this immediately and silently** after Step 6 succeeds. The user
 should not need to ask "now run it."
 
-Call `call_tool({"name": "portfolio_valuations__compute__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
-
-```json
-{
-  "ownerId": <ownerId>,
-  "project_id": <project_id>,
-  "candidate_id": <candidate_id>
-}
-```
-
-Capture the response. It returns per-share-class values reflecting the
+Call `call_tool({"name": "portfolio_valuations__compute__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`. Capture the response. It returns per-share-class values reflecting the
 allocation result.
 
 ### Error handling
@@ -749,7 +603,10 @@ allocation result.
   fails, the inputs may be inconsistent (e.g. OPM with zero
   volatility, time-to-exit < 0). Surface:
   > "Saved the allocation inputs, but the calculation didn't run.
-  > Open in Carta to compute: {DEEP_LINK}."
+  > You can compute it on the valuation's page in Carta's valuations
+  > dashboard."
+
+  Offer to take them there, and open it only on a yes (SKILL.md **Page navigation → After an action, offer instead of moving**).
 
   Do not roll back the `call_tool({"name": "portfolio_valuations__mutate__allocation", "arguments": {...}})` save — the user's inputs
   are still valuable. The compute can be re-run later.
@@ -758,10 +615,7 @@ allocation result.
 
 Refresh the top-level valuation to get the new holdings value:
 
-Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` with:
-```json
-{ "ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id> }
-```
+Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.
 
 Render two things:
 
@@ -777,52 +631,21 @@ thousands separators. Format DLOM as a percentage with one decimal.
 
 > "Allocation complete on **{candidate name}** ({methodology}).
 >
-> Company value: {companyValue formatted as currency}
-> Holdings value: {holdingsValue formatted as currency}
->
-> {DEEP_LINK}"
+> Company value: {companyValue, full value}
+> Holdings value: {valueOfHoldings, full value}"
 
 Include the methodology label so the user remembers which model was
 used. Include both values so the user can sanity-check.
 
+Then follow SKILL.md **Page navigation → After an allocation**: refresh the
+dashboard MCP App and end the turn by offering to open the updated valuation
+page.
+
 ## Step 9: Handoff
 
-The next move depends on End Goal state and mode.
-
-### Walk-through mode
-
-Silently re-derive the End Goal checklist (`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
-`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`). With holdings value now positive, the next
-unfinished item is most likely **item 6 (Status FINAL)** — but
-audit notes are most useful right now, while the rationale is fresh.
-Offer both. Ask inline as plain text:
-
-> **Holdings value is in. Want to draft audit notes while the rationale is fresh, finalize, or pause?**
-> 1. **Draft audit notes** — read `references/dive-in/audit-notes.md` inline. After the memo renders, return to this same prompt so the user gets a second chance to finalize or pause.
-> 2. **Finalize this valuation** — read `references/dive-in/ship.md` inline.
-> 3. **Pause here** — return to the orchestrator's routing.
-
-Wait for the reply, then act accordingly.
-
-Above the question, show the **review download notice** from SKILL.md Step
-2.5d (allocation is complete, so the user can export the draft for review
-before finalizing). It follows that step's once-per-valuation rule.
-
-The audit-notes step is a soft suggestion, not a gate — the user can
-go straight to finalize or pause. Drafting audit notes does not mark
-anything as complete on the End Goal checklist; it's an adjacent
-deliverable.
-
-### Lateral-entry mode
-
-Just confirm the save and stop. The user drives. If the run completed the
-allocation, still show the SKILL.md Step 2.5d review download notice (once
-per valuation). It's information the user needs before finalizing, not a
-next-step suggestion.
-
-To check the mode, look at how this reference was loaded —
-orchestrator walk-through (after a fresh create) vs. direct lateral
-entry via the drill-down routing table.
+Confirm the result and return control — the user drives. If the run
+completed the allocation, show the SKILL.md Step 2.5d review download
+notice (once per valuation).
 
 ## Niagara allocation path
 
@@ -855,8 +678,8 @@ DLOM input on either Niagara run.
 Two things to collect: how results should be grouped, and whether to
 apply a vesting hypothesis. One combined form, not sequential prompts.
 
-**Grouping method** — `groupingMethod`, required on **both** the run
-and the poll, and it must be the *same value* on both. Options:
+**Grouping method** — `groupingMethod`, sent on the Step N4 poll only
+(the run commands don't accept it). Options:
 - `BY_INTEREST_HOLDER` — one group per holder. **The val-tool default;
   use it unless the user asks otherwise.**
 - `BY_INTEREST_TYPE` — one group per interest type.
@@ -999,23 +822,10 @@ with only the changed fields, plus the volatility method:
 ```
 
 Send **one** of the two volatility fields, never both, and omit any
-field the user didn't change.
-
-Three rules on that payload:
-
-- **`volatilitySelectionMethod` must be `MANUAL`** whenever a
-  volatility override is saved. The OPM enrichment supports manual
-  volatility only — linear regression is not implemented for it, so
-  don't offer the Step 4C.2 regression branch on this path.
-- **Send exactly one of the two volatility fields**, per this file's
-  existing allocation rule: `assetVolatilityManualEntry` replaces
-  `equityVolatilityManualEntry` when `debtOption` is `INCLUDE_ALL` or
-  `EXCLUDE_NONCONVERTIBLE`; otherwise it's `equityVolatilityManualEntry`.
-- **camelCase, non-negotiable** — Step 6's warning applies unchanged. A
-  snake_case key is silently dropped before it reaches carta-web, so the
-  save appears to succeed and the run uses the old value.
-
-Step 6's error handling applies to this call as-is.
+field the user didn't change. **`volatilitySelectionMethod` must be
+`MANUAL`** whenever volatility is overridden — the OPM enrichment has no
+linear regression, so don't offer Step 4C.2's regression branch here.
+Step 6's camelCase rule and error handling apply.
 
 ### Step N3: Dispatch the run
 
@@ -1094,14 +904,15 @@ poll the other command hoping for a result. Say plainly that it's still
 computing and hand off:
 
 > "**{candidate name}**'s allocation is still computing. It'll be
-> waiting in Carta when it finishes: {DEEP_LINK}"
+> waiting on the valuation's page in Carta's valuations dashboard when it
+> finishes."
 
 Keep the user informed while polling, but only once — a single "running
 the allocation, this takes a minute" line, not a message per poll.
 
 #### On `FAILURE`
 
-Surface the `error` field in plain language, with the deep link. **For
+Surface the `error` field in plain language. **For
 the OPM, a `FAILURE` can come from the underlying waterfall run rather
 than the OPM itself** — the enrichment can only run on a waterfall that
 succeeded. So don't describe an OPM failure as an OPM-specific problem
@@ -1147,10 +958,8 @@ is the cheap way to page through groups after the first fetch.
 
 > "Allocation complete on **{candidate name}** ({Waterfall / OPM}).
 >
-> Company value: {value formatted as currency}
-> Holdings value: {holdingsValue formatted as currency}
->
-> {DEEP_LINK}"
+> Company value: {value, full value}
+> Holdings value: {valueOfHoldings, full value}"
 
 The company-value field differs between the two payloads:
 - **Waterfall** — `payload.equityValue`, with
@@ -1159,7 +968,9 @@ The company-value field differs between the two payloads:
   payload, and unlike the waterfall poll it carries **no `requestedAt`
   / `completedAt`** — don't report timing for an OPM run.
 
-Take `holdingsValue` from the `get:valuation` refresh, not the poll.
+Take `valueOfHoldings` from the `get:valuation` refresh, not the poll.
+
+Refresh the dashboard MCP App (`references/dashboard-view.md` **Refresh it after a change**); don't move the view. Then end the turn by offering to open the updated valuation page (SKILL.md **Writes → End the turn by offering to open the updated valuation**).
 
 #### The `"Infinity"` values
 
@@ -1171,12 +982,4 @@ becomes a nonsense figure in a table the user may hand to an auditor.
 
 ### Step N6: Handoff
 
-Identical to **Step 9** — walk-through mode offers audit notes /
-finalize / pause, lateral-entry mode confirms and stops. Nothing on
-this path changes the handoff.
-
-## Deep link
-
-See [`references/deep-link.md`](../deep-link.md) for URL construction.
-Use **Pattern B** with `{tab}` = `value-holdings`. Required context:
-`ownerId`, `targetId`, `valuation_id`. Render per deep-link.md Step 5 (a markdown link).
+Same as **Step 9**.
