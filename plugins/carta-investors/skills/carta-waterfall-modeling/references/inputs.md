@@ -52,7 +52,7 @@ defaults to `None`): collect these after all required inputs.
   `description` covers (e.g. granting units from an authorized pool) → collect that optional
   directly, without the "Use defaults" prompt, then walk the rest as above.
 - **The firm saved inputs for this target** (§Saved inputs) → open with one `AskUserQuestion` —
-  "Use saved inputs" vs "Change one or more" — in place of the prompts above. Spell the "Use
+  "Use saved inputs" vs "Change one or more" vs "Reset to defaults" — in place of the prompts above. Spell the "Use
   saved inputs" label inline as for "Use defaults", with each saved value in place of the default
   and each kept `NESTED_LIST` row by its `rows` entry's `label`. On "Change", loop through them one at a time,
   with each saved value in place of the default.
@@ -82,6 +82,25 @@ _"Saved on {saved_at as ISO date}."_ when `saved_by` or its `name` is null. Then
 `dropped` row: _"**{label}** ({option's `label`}) is no longer available for this company, so this
 run goes without it."_ — or _"A saved {option's `label`} row is no longer available for this
 company, so this run goes without it."_ when `label` is null.
+
+**Reset to defaults** — on that choice, or when the user asks to reset at that prompt, confirm
+with one `AskUserQuestion` — "Reset to defaults" / "Cancel" (Cancel returns to the prompt):
+
+> Reset your firm's saved inputs for **{company}**? Its next waterfalls start from the defaults.
+
+Then:
+
+```
+call_tool({"name": "waterfall_modeling__delete__saved_inputs", "arguments": {
+  "owner_kind":  "FIRM",
+  "owner_id":    "<org_pk from Step 1>",
+  "target_kind": "<locked from Step 2>",
+  "target_id":   "<locked from Step 2>"
+}})
+```
+
+Success → _"Reset — **{company}** runs on the defaults again."_ Any error → _"Couldn't reset the
+saved inputs right now."_ Either way, collect this run's optionals from the defaults, as above.
 
 ## Formatting by `input_type`
 
