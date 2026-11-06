@@ -181,6 +181,14 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.ShareDialog.StopSharing` | click | "Stop sharing for everyone" confirmed. |
 | `MancoReporting.ShareDialog.ShareAsNew` | click | "Share as new" after the shared copy was deleted. |
 | `MancoReporting.ShareDialog.KeepPrivate` | click | "Keep private" after the shared copy was deleted. |
+| `MancoReporting.ShareDialog.ShareSucceeded` | click | Share, Update, Save changes or Overwrite actually persisted — fired once `run()`'s own call resolves, not at the button click. |
+| `MancoReporting.ShareDialog.ShareFailed` | click | The same call threw. |
+| `MancoReporting.ShareDialog.ShareAsNewSucceeded` | click | "Share as new" actually persisted. |
+| `MancoReporting.ShareDialog.ShareAsNewFailed` | click | The same call threw. |
+| `MancoReporting.ShareDialog.StopSharingSucceeded` | click | "Stop sharing for everyone" actually persisted. |
+| `MancoReporting.ShareDialog.StopSharingFailed` | click | The same call threw. |
+| `MancoReporting.ShareDialog.KeepPrivateSucceeded` | click | "Keep private" actually persisted. |
+| `MancoReporting.ShareDialog.KeepPrivateFailed` | click | The same call threw. |
 | `MancoReporting.ShareDialog.ShareTab` | click | The Share tab of the Share panel. |
 | `MancoReporting.ShareDialog.ExportTab` | click | The Export tab of the Share panel (the HTML download itself is `BudgetVsActuals.ExportHtml`). |
 | `MancoReporting.ShareDialog.GeneralAccessPeople` | click | General access set to "Only people you add". |
@@ -301,17 +309,30 @@ hand-vendored rather than generated, stays in place across a rebuild. It warns i
 
 ## Firm, user and environment
 
-`GET /api/telemetry-context` (`scripts/serve.py`) returns `{firmId, environment, userId}`.
+`GET /api/telemetry-context` returns `{firmId, environment, userId, surface}` — answered by
+`scripts/serve.py` locally and by `server/worker.js` on the hosted app, each with its own
+values for the same shape.
 
 - `firmId` becomes an `iglu:com.carta/firm/jsonschema/1-1-0` context on every event, so
   telemetry joins on the real Carta id rather than a slugified firm name. It is omitted
   entirely when the id does not resolve — a placeholder would pollute the firm dimension.
-- `userId` comes from `<dashboard_dir>/.user-id` (`manco_paths.read_user_id`) — written by
-  `serve.py --user-id` at launch, or earlier by the build-path flow in
-  `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md`, whichever ran last. It's **optional**:
-  a dashboard nothing has written it for yet emits events with no user attached, so measure
-  the unattributed share before trusting any per-user figure.
+- `userId` comes from `<dashboard_dir>/.user-id` (`manco_paths.read_user_id`) locally —
+  written by `serve.py --user-id` at launch, or earlier by the build-path flow in
+  `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md`, whichever ran last — or from
+  `sessionUserId` on the hosted app. Either way it's **optional**: a session nothing has
+  resolved it for yet emits events with no user attached, so measure the unattributed share
+  before trusting any per-user figure.
 - `environment` is `nonprod` only when stated explicitly; anything else means production.
+- `surface` is a fixed literal each server answers for itself — `"local"` from `serve.py`,
+  `"hosted"` from `worker.js` — and `app/src/analytics.js` reads it to pick the
+  `interfaceId` every event carries: plain `carta-manco-reporting` for local, suffixed
+  `carta-manco-reporting-hosted` for hosted, the same `-hosted` convention
+  `server/reportShare.js`'s `SOURCE_CLIENT` uses for a shared budget_report's
+  `source.client`. Split local vs. hosted on `interfaceId`, never on whether `userId`
+  resolved — either surface can emit events with no user id. Anything but an explicit
+  `"hosted"` — absent, or a failed or unauthorized probe on either surface — reads as
+  local, so a hosted load with no valid session, or a network blip on either surface, is
+  counted as local rather than dropped.
 
 ## Not instrumented
 

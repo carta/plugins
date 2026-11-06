@@ -20,6 +20,16 @@ const DONE = {
   [REPORT_ACTIONS.DELETE]: "Stopped sharing. The shared copy is gone for everyone; yours stays here.",
 };
 
+// A click (trackClick("MancoReporting.ShareDialog.Share"), ".ShareAsNew", ".StopSharing")
+// only means the button was pressed — the call it starts can still fail. These are the
+// op's own outcome, fired once run() actually knows: counting a click alone as "shared"
+// would overstate every successful-share metric by its failure rate.
+const RUN_OUTCOME_EVENT = {
+  [REPORT_ACTIONS.SHARE]: ["MancoReporting.ShareDialog.ShareSucceeded", "MancoReporting.ShareDialog.ShareFailed"],
+  [REPORT_ACTIONS.PUBLISH_AS_NEW]: ["MancoReporting.ShareDialog.ShareAsNewSucceeded", "MancoReporting.ShareDialog.ShareAsNewFailed"],
+  [REPORT_ACTIONS.DELETE]: ["MancoReporting.ShareDialog.StopSharingSucceeded", "MancoReporting.ShareDialog.StopSharingFailed"],
+};
+
 function initials(person) {
   const base = (person.name || person.email || "?").trim();
   const parts = base.split(/[\s@.]+/).filter(Boolean);
@@ -195,6 +205,7 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
   };
 
   const run = async (op, extra = {}) => {
+    const [succeededId, failedId] = RUN_OUTCOME_EVENT[op] || [];
     setBusy(true);
     setError(null);
     try {
@@ -205,16 +216,23 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
       const params = { report_id: report.id, ...extra, ...(view ? { view } : {}) };
       const outcome = shareOutcome(await reportsApi.runShareOp(op, params));
       if (outcome.kind === "decide") {
+        // Mid-flow, not terminal: the user still has to pick Overwrite, Share as new or
+        // Keep private, each of which fires its own succeeded/failed pair.
         setOutcome(outcome.status);
         return;
       }
       if (outcome.kind === "partial") {
+        // Carta already saved the change — only the page rebuild failed — so this counts
+        // as succeeded, the same rule keepPrivate() applies to its own REBUILD_FAILED case.
+        if (succeededId) trackClick(succeededId);
         setError({ message: outcome.message, code: null });
         return;
       }
       onClose();
       onDone?.(op === REPORT_ACTIONS.SHARE && link ? UPDATED : DONE[op]);
+      if (succeededId) trackClick(succeededId);
     } catch (e) {
+      if (failedId) trackClick(failedId);
       setError({ message: e.message, code: e.code });
     } finally {
       setBusy(false);
@@ -232,7 +250,9 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
       const { notice } = await actSaved(reportsApi, report.id, REPORT_ACTIONS.UNLINK);
       onClose();
       if (notice) onDone?.(notice);
+      trackClick("MancoReporting.ShareDialog.KeepPrivateSucceeded");
     } catch (e) {
+      trackClick("MancoReporting.ShareDialog.KeepPrivateFailed");
       setError({ message: e.message, code: e.code });
     } finally {
       setBusy(false);

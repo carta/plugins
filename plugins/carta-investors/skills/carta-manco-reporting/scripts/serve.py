@@ -694,6 +694,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "firmId": _read_firm_id(DATA_DIR),
                 "environment": manco_paths.read_carta_environment(DATA_DIR),
                 "userId": manco_paths.read_user_id(DATA_DIR),
+                "surface": "local",
             })
         if path == "/api/reports":
             listing, etag = _reports_listing()

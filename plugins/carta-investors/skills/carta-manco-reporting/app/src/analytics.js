@@ -39,12 +39,23 @@ function toTrackerUserId(userId) {
   return Number.isInteger(userId) && userId > 0 ? String(userId) : undefined;
 }
 
+// The one field that tells local skill traffic apart from the hosted Worker's in every
+// Snowplow event this app emits — same "-hosted" suffix convention server/reportShare.js's
+// SOURCE_CLIENT uses for a shared budget_report's source.client. Each server's own
+// /api/telemetry-context answers its own literal ("local" from scripts/serve.py, "hosted"
+// from server/worker.js). Anything but an explicit "hosted" — absent, or a failed or
+// unauthorized probe on either surface — reads as local, so a hosted load with no valid
+// session, or a network blip on either surface, is counted as local rather than dropped.
+function interfaceIdFor(surface) {
+  return surface === "hosted" ? "carta-manco-reporting-hosted" : "carta-manco-reporting";
+}
+
 export async function initMancoTracker() {
   if (typeof window === "undefined" || !window.mcpUiTracker) return;
-  const { environment, firmId, userId } = await telemetryContext();
+  const { environment, firmId, userId, surface } = await telemetryContext();
   firmContexts = toFirmContexts(firmId);
   window.mcpUiTracker.initTracker({
-    interface: { interfaceType: "micro_app", interfaceId: "carta-manco-reporting" },
+    interface: { interfaceType: "micro_app", interfaceId: interfaceIdFor(surface) },
     environment: environment === "nonprod" ? "nonprod" : "production",
     userId: toTrackerUserId(userId),
   });
