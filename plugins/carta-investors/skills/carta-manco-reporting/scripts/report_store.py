@@ -36,6 +36,23 @@ STORE_VERSION = 1
 # The snapshot's id for the budget Carta itself keeps, when no workbook leads.
 CARTA_BUDGET_ID = "carta"
 
+# A reserved, from-scratch source for a custom report with no budget behind it at all: an
+# actuals-only firm has nothing to cut a report *from*, but still wants one for its ledger
+# figures (pivot.js's VALUE_FIELDS.actual computes Actual straight from the ledger, never
+# from a budget). The derive id travels in the request path (serve.py's _REPORT_ACTION_RE,
+# server/worker.js's REPORT_ACTION_RE — both [A-Za-z0-9_.-]), so the value stays inside that
+# character set and survives encodeURIComponent unchanged. It leads with "_", which _slug()
+# never emits, and _unique_id reserves it as it does CARTA_BUDGET_ID. The hosted Worker's own
+# from-scratch sentinel (server/reportShare.js, not yet built) must use this same value: the
+# client sends one id, whichever backend serves it.
+ACTUALS_ONLY_ID = "_actuals-only"
+
+# The budget["source"] an actuals-only report's build input carries, read back by
+# build_manco_datadir._read_monthly_crosstab_budget to tell it apart from a plain
+# monthly-crosstab budget (an uploaded workbook, or one shared with you), which always
+# resolves as "excel-workbook" regardless of its own stated source.
+ACTUALS_ONLY_SOURCE = "actuals-only"
+
 TRACKING = "tracking"
 EDITED = "edited"  # holds its own copy of the budget, apart from any workbook
 SHARED_IN = "shared-in"
@@ -89,6 +106,23 @@ def carta_budget_input(entry: Dict[str, Any]) -> Dict[str, Any]:
         "label": label, "period_year": entry.get("period_year"), "dimensions": [],
         "view_kinds": ["by-account"], "workbook_meta": {"shape_adapter": "monthly-crosstab", "sheet": label},
         "rows": rows,
+    }
+
+
+def _actuals_only_input() -> Dict[str, Any]:
+    """A from-scratch custom report with no budget behind it at all. There is nothing to
+    cut here — just an empty by-account shell for the custom-report machinery (derive,
+    edit_custom) to carry its view/pivot and gl_codes on, the same way carta_budget_input
+    stands in for a real workbook. `source: ACTUALS_ONLY_SOURCE` marks it so
+    build_manco_datadir._read_monthly_crosstab_budget resolves it as itself rather than as
+    "excel-workbook" like every other monthly-crosstab budget. It still can't be shared —
+    the share contract (report_payload.validate) refuses a budget with no rows, same as any
+    other; that needs its own change, not this one."""
+    return {
+        "label": "Actuals only", "period_year": None, "dimensions": [],
+        "view_kinds": ["by-account"],
+        "workbook_meta": {"shape_adapter": "monthly-crosstab", "sheet": "Actuals only"},
+        "source": ACTUALS_ONLY_SOURCE, "rows": [],
     }
 
 
@@ -259,8 +293,9 @@ class ReportStore:
 
     @staticmethod
     def _unique_id(doc: Dict[str, Any], base: str) -> str:
-        # "carta" names Carta's own budget in the snapshot, so no report may take it.
-        taken = {r["id"] for r in doc["reports"]} | {CARTA_BUDGET_ID}
+        # CARTA_BUDGET_ID names Carta's own budget in the snapshot, and ACTUALS_ONLY_ID the
+        # from-scratch source, so no report may take either.
+        taken = {r["id"] for r in doc["reports"]} | {CARTA_BUDGET_ID, ACTUALS_ONLY_ID}
         candidate, n = base, 2
         while candidate in taken:
             candidate, n = "%s-%d" % (base, n), n + 1
@@ -467,6 +502,8 @@ class ReportStore:
             if not entry:
                 raise ReportEditError("Carta's budget isn't loaded on this dashboard", "not_found")
             return carta_budget_input(entry), CARTA_BUDGET_ID, None
+        if source_id == ACTUALS_ONLY_ID:
+            return _actuals_only_input(), ACTUALS_ONLY_ID, None
         source = self.find(doc, source_id)
         data, mapping_from = self._copy_budget(source)
         custom = data.pop("custom", None)

@@ -2189,7 +2189,8 @@ def _read_monthly_crosstab_budget(data, path, as_of_month):
 
     return {
         **figures,
-        "source": "excel-workbook",
+        # An actuals-only budget keeps its marker; every other monthly-crosstab budget is an excel-workbook.
+        "source": data["source"] if data.get("source") == report_store.ACTUALS_ONLY_SOURCE else "excel-workbook",
         "by_tag_value": None,
         "workbook_meta": data.get("workbook_meta"),
         "view_kinds": ["by-account"],
@@ -5389,7 +5390,10 @@ def _refigure(entry, as_of_month):
 def _resolve_excel_budget(dashboard_dir, as_of_month, p, data):
     """read_excel_budget()'s aggregation, over the already-loaded `data` read from `p`."""
     rows = data.get("rows") or []
-    if not rows:
+    # Zero rows normally means nothing to ingest. A custom report is the one exception: its
+    # own Actual always comes from the ledger (pivot.js's VALUE_FIELDS.actual), never from
+    # its rows, so an actuals-only one (cut to zero budget rows on purpose) is still real.
+    if not rows and report_store.custom_gl_codes(data) is None:
         return None
     rows = [_carry_forward_names(r) for r in rows]
 

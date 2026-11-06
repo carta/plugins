@@ -500,13 +500,16 @@ export default function App() {
   // under Custom Reporting, where the sidebar lists it.
   const ownCustomUnderBva = routeParent === BVA && !!routeChild
     && (isDraftSlug(routeChild) || ownCustomReports.some(c => c.slug === routeChild));
-  // A custom-reporting/<id> child opens only as a draft or a custom report; any other id
-  // (a deleted report, a plain budget) counts as no child at all. One that opens does so
-  // whether or not this firm has a budget, even before the section shows: with no saved
-  // report it waits on the ledger, and that page says so.
+  // A custom-reporting/<id> or budget-vs-actuals/<id> child opens only as a draft or a
+  // custom report; any other id (a deleted report, a plain budget) counts as no child at
+  // all. One that opens does so whether or not this firm has a budget, even before the
+  // section shows: with no saved report it waits on the ledger, and that page says so. A
+  // custom report with no budget rows of its own (an actuals-only one) can be the only
+  // entry under either route — its own page must still open even when that leaves Budget
+  // vs Actuals itself out of the nav (hasBudget is false, so BVA isn't in validParents).
   const customChildOpens = !!routeChild && (isDraftSlug(routeChild)
     || isCustomReportBudget(budgetsList.find(b => b.id === routeChild)));
-  const customPageOpens = routeParent === CUSTOM_REPORTING && customChildOpens;
+  const customPageOpens = (routeParent === CUSTOM_REPORTING || routeParent === BVA) && customChildOpens;
   const activeParent = ownCustomUnderBva && validParents.has(CUSTOM_REPORTING) ? CUSTOM_REPORTING
     : validParents.has(routeParent) || customPageOpens ? routeParent : "dashboard";
   // A section opened with no child specified lands on its first page.
