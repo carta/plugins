@@ -136,8 +136,18 @@ def _mail_domains(value: object, where: str) -> list[dict]:
     } for v in value]
 
 
+def _top_contact(top: object, where: str) -> dict | None:
+    """A top contact is null, or a person's name and a non-negative integer interaction count."""
+    if top is None:
+        return None
+    return {
+        **_person(top, f"{where}.topContact"),
+        "interactions": _count(top.get("interactions"), f"{where}.topContact.interactions"),
+    }
+
+
 def _year_grades(value: object, where: str) -> list[dict]:
-    """One grade per calendar year: the year, its interactions and contacts, and the grade crm-api gave it."""
+    """One grade per calendar year: the year, its interactions and contacts, the grade crm-api gave it and, when sent, its top contact."""
     if not isinstance(value, list):
         raise fail("row_invalid", f"{where} must be a list")
     grades = []
@@ -145,12 +155,15 @@ def _year_grades(value: object, where: str) -> list[dict]:
         year = entry.get("year") if isinstance(entry, dict) else None
         if not isinstance(year, int) or isinstance(year, bool) or entry.get("strength") not in STRENGTHS:
             raise fail("row_invalid", f"{where} entries need an integer year and a strength")
-        grades.append({
+        grade = {
             "year": year,
             "interactions": _count(entry.get("interactions"), f"{where}.interactions"),
             "contacts": _count(entry.get("contacts"), f"{where}.contacts"),
             "strength": entry["strength"],
-        })
+        }
+        if "topContact" in entry:
+            grade["topContact"] = _top_contact(entry["topContact"], where)
+        grades.append(grade)
     return grades
 
 
@@ -181,10 +194,7 @@ def clean_relationship(raw: object, where: str) -> dict:
         **counts,
         **domains,
         **years,
-        "topContact": None if top is None else {
-            **_person(top, f"{where}.topContact"),
-            "interactions": _count(top.get("interactions"), f"{where}.topContact.interactions"),
-        },
+        "topContact": _top_contact(top, where),
         "matrix": cells,
     }
 

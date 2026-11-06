@@ -73,14 +73,24 @@
     });
   }
 
-  // One grade per calendar year: the year, its interactions and contacts, and the grade crm-api gave it.
+  // A top contact is null, or a person's name and a non-negative integer interaction count.
+  function topContact(top, where) {
+    if (top == null) return null;
+    return { name: person(top, where + '.topContact').name, interactions: count(top.interactions, where + '.topContact.interactions') };
+  }
+
+  // One grade per calendar year: the year, its interactions and contacts, the grade crm-api gave it and, when sent, its top contact.
   function yearGrades(value, where) {
     if (!Array.isArray(value)) throw fail('row_invalid', where + ' must be a list');
     return value.map(function (entry) {
       if (!isObject(entry) || !Number.isInteger(entry.year) || STRENGTHS.indexOf(entry.strength) < 0) {
         throw fail('row_invalid', where + ' entries need an integer year and a strength');
       }
-      return { year: entry.year, interactions: count(entry.interactions, where + '.interactions'), contacts: count(entry.contacts, where + '.contacts'), strength: entry.strength };
+      var grade = { year: entry.year, interactions: count(entry.interactions, where + '.interactions'), contacts: count(entry.contacts, where + '.contacts'), strength: entry.strength };
+      if ('topContact' in entry) {
+        grade.topContact = topContact(entry.topContact, where);
+      }
+      return grade;
     });
   }
 
@@ -109,10 +119,7 @@
         strength: cell.strength
       };
     });
-    out.topContact = top === null ? null : {
-      name: person(top, where + '.topContact').name,
-      interactions: count(top.interactions, where + '.topContact.interactions')
-    };
+    out.topContact = topContact(top, where);
     out.matrix = cells;
     return out;
   }

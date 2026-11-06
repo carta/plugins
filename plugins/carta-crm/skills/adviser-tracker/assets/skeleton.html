@@ -24,7 +24,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/20px var(--sans)}
 .notice{background:var(--ink-color-global-feedback-warning-subtle);border:1px solid var(--yellow);border-left:4px solid var(--yellow);padding:12px 16px;margin-bottom:16px;font-size:14px}
 .insight{margin:0 0 16px;padding:12px 16px;background:var(--ink-color-global-feedback-info-subtle);border:1px solid var(--ink-color-global-brand-blue-30);border-left:4px solid var(--ink-color-global-border-focus-default);font-size:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:0;padding:24px;margin-bottom:24px}
-.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px 16px;flex-wrap:wrap}
 h2{font:500 20px/28px var(--sans);margin:0 0 4px}
 #card-table h2{font-family:var(--serif);font-size:28px;line-height:40px;font-weight:400;margin-bottom:8px}
 .sub{color:var(--muted);font-size:14px;margin:0 0 12px}
@@ -44,9 +44,22 @@ h2{font:500 20px/28px var(--sans);margin:0 0 4px}
 .toggle button[aria-pressed="true"]{background:var(--ink-color-global-action-primary);color:#FFFFFF}
 button:focus-visible,summary:focus-visible{outline:2px solid var(--ink-color-global-border-focus-default);outline-offset:0;box-shadow:var(--ink-focus-ring)}
 .empty{color:var(--muted);padding:24px 0;margin:0}
-table{width:100%;border-collapse:collapse}
+/* Fixed column widths keep every column in place when the year toggle changes the rows.
+   The number columns and Relationship strength have pixel widths. Bank takes 22% of the table. A long bank domain ends in an ellipsis and shows in full on hover. Top contact takes the rest.
+   The table min-width leaves Top contact 160px after the pixel widths and Bank's 22%. Below it the wrapper scrolls and no column shrinks.
+   A 1000px viewport leaves 886px for the table: 1000px minus 32px page padding, 24px card padding and a 1px card border on each side. The min-width fits in 886px, so the whole table shows there with no sideways scroll. */
+.tbl-wrap{overflow-x:auto}
+/* While the table scrolls sideways, the rank, the bank column and the tier label stay in view so each row keeps its name.
+   The bank column starts after the 44px rank column. Its shadow marks the edge the other columns scroll under. */
+.tbl-wrap td:nth-child(-n+2),.tbl-wrap th:nth-child(-n+2){position:sticky;left:0;z-index:1;background:var(--card)}
+.tbl-wrap td:nth-child(2),.tbl-wrap th:nth-child(2){left:44px;box-shadow:6px 0 6px -6px rgba(0,0,0,.2)}
+.tbl-wrap tr.tier .tier-l{position:sticky;left:10px}.tbl-wrap table{min-width:867px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+col.c-idx{width:44px}col.c-q{width:48px}col.c-total{width:140px}col.c-rel{width:140px}col.c-bank{width:22%}
+/* On a phone only the bank column stays in view, at 150px, so the scrolling columns keep room to read. */
+@media (max-width:600px){.tbl-wrap td:first-child,.tbl-wrap th:first-child{position:static}.tbl-wrap td:nth-child(2),.tbl-wrap th:nth-child(2){left:0}col.c-bank{width:150px}.card-head .toggle{margin-bottom:12px}}
 th{font-weight:500;font-size:12px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ink-color-global-border-default);white-space:nowrap}
-td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;position:relative;transition:background-color .15s}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere;position:relative;transition:background-color .15s}
 tr:last-child td{border-bottom:0}
 tr[data-d]:hover td{background:var(--ink-color-global-surface-lightgray-hover)}
 .num{text-align:right;font-variant-numeric:tabular-nums}
@@ -55,10 +68,12 @@ td.idx{color:var(--muted);width:36px}
 td.total{font-weight:600}
 th small{font-size:11px;font-style:normal}
 td.chg{animation:flash .8s ease-out}
-tr.tier td{background:var(--bg);color:var(--ink);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;cursor:default}
+.tbl-wrap tr.tier td{background:var(--bg);color:var(--ink);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;cursor:default}
 .bank{display:flex;align-items:center;gap:12px;text-align:left}
 .bank .n{display:block;font-weight:500}
-.bank .grey{display:block}
+.bank .grey{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bank>span{min-width:0}
+th:last-child,td:last-child{padding-left:20px}
 .grey{color:var(--muted);font-size:12px}
 .hint{display:inline-block;width:14px;height:14px;line-height:14px;margin-left:4px;border:1px solid var(--muted);border-radius:9999px;color:var(--muted);font-size:10px;font-style:normal;text-align:center;cursor:help}
 .hint:hover,.hint:focus-visible{color:var(--ink);border-color:currentColor}
@@ -4750,15 +4765,20 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     return '<td><div class="bank">' + logoTile(a.logo, 'sm') +
       '<span><span class="n">' + esc(a.name) + (r.relationship.linkedDomains && r.relationship.linkedDomains.length
         ? hint('Includes interactions from ' + companies(r.relationship.linkedDomains) + '.') : '') +
-      '</span><span class="grey">' + esc(a.domain) + '</span></span></div></td>';
+      '</span><span class="grey" title="' + esc(a.domain) + '">' + esc(a.domain) + '</span></span></div></td>';
   }
   function numCell(domain, col, v, cls) {
     return '<td class="num ' + cls + '" data-k="' + esc(domain) + '|' + col + '" data-v="' + v + '">' + v + '</td>';
   }
   // Only the quarter of asOf in the current year is partial.
   function isPartialCol(col) { return state.year === cy && col === partialQ; }
+  // The top contact of `year` when the result names one per year, else the one over the whole window.
+  function topContactOf(rel, year) {
+    var g = yearGrade(rel, year);
+    return g && 'topContact' in g ? g.topContact : rel.topContact;
+  }
   function dataRow(r, i, year) {
-    var q = byQuarter(r, year), rel = r.relationship, tc = rel.topContact, d = r.adviser.domain;
+    var q = byQuarter(r, year), rel = r.relationship, tc = topContactOf(rel, year), d = r.adviser.domain;
     var total = yearTotal(r, year);
     return '<tr data-d="' + esc(d) + '"><td class="idx">' + i + '</td>' + bankCell(r) +
       q.map(function (n, c) { return numCell(d, c, n, ''); }).join('') +
@@ -4803,7 +4823,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       return '<button type="button" data-year="' + y + '" aria-pressed="' + (y === year) + '">' + y + '</button>';
     }).join('') + '</div>';
     var sub = 'Deals created per quarter of the selected year, per bank. ' + source() +
-      ' Top contact is the person with the most emails and meetings with anyone on our team.';
+      ' Top contact is the person with the most emails and meetings with anyone on our team in the selected year.';
     var how = choices() + ' The current quarter is partial and shows only the days so far. ' + strengthRule() +
       (data.rows.length ? tierRule(year) + ' ' : '') +
       'Hover a row to highlight it.';
@@ -4815,15 +4835,15 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       var cols = [0, 1, 2, 3].map(function (c) {
         return '<th class="num">Q' + (c + 1) + (isPartialCol(c) ? '*' : '') + '</th>';
       }).join('');
-      body = '<table><thead><tr><th>#</th><th>Investment bank</th>' + cols +
+      body = '<div class="tbl-wrap"><table><colgroup><col class="c-idx"><col class="c-bank">' + '<col class="c-q">'.repeat(4) + '<col class="c-total"><col class="c-rel"><col class="c-contact"></colgroup><thead><tr><th>#</th><th>Investment bank</th>' + cols +
         '<th class="num total">Year total' + (state.year === cy ? ' <small>YTD</small>' : '') + '</th><th>Relationship strength</th><th>Top contact</th></tr></thead><tbody>';
       [1, 2].forEach(function (t) {
         var rs = rankTier(data.rows.filter(function (r) { return tierOf(r, year) === t; }), year);
         if (!rs.length) return;
-        body += '<tr class="tier"><td colspan="9">Tier ' + t + '</td></tr>';
+        body += '<tr class="tier"><td colspan="9"><span class="tier-l">Tier ' + t + '</span></td></tr>';
         rs.forEach(function (r) { body += dataRow(r, ++n, year); });
       });
-      body += '</tbody></table>';
+      body += '</tbody></table></div>';
       if (partialQ >= 0 && year === cy) body += '<p class="grey note">* Quarter to date, to ' + asOfText() + '</p>';
     }
     var card = el('card-table'), from = shown;
