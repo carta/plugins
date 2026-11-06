@@ -276,8 +276,7 @@
       .skeleton { animation: none; }
     }
 
-    /* Determinate while the row count is known, indeterminate before it is — the loans
-       query reports a total, the ones before it do not. */
+    /* Indeterminate while loading: no query reports its row count before paging ends. */
     .progress {
       background: var(--ink-color-global-surface-background-underlay);
       border-radius: var(--ink-size-global-radius-subtle);
@@ -1182,23 +1181,15 @@
       el.hidden = !text;
     }
 
-    // `done`/`total` known -> a real bar. Called with neither -> indeterminate, which is
-    // honest about not knowing rather than inventing a percentage.
-    function progress(done, total) {
+    // The row count is not known before paging finishes, so the bar is indeterminate while it
+    // shows: honest about not knowing rather than inventing a percentage. null hides it.
+    function progress(shown) {
       const bar = document.getElementById('progress');
       const fill = document.getElementById('progress-fill');
       if (!bar || !fill) return;
-      if (done == null) { bar.hidden = true; return; }
+      if (shown == null) { bar.hidden = true; return; }
       bar.hidden = false;
-      // Width rides on the attribute, not `.style`: setAttribute is the one mutation every
-      // element supports, and the class already carries the determinate/indeterminate state.
-      if (total && total > 0) {
-        fill.className = 'progress-fill';
-        fill.setAttribute('style', 'width:' + Math.min(100, Math.round((done / total) * 100)) + '%');
-      } else {
-        fill.className = 'progress-fill indeterminate';
-        fill.setAttribute('style', '');
-      }
+      fill.className = 'progress-fill indeterminate';
     }
 
     function fail(err) {
@@ -1351,7 +1342,9 @@
     }
 
     // The response body has a size cap that truncates mid-result, so anything
-    // portfolio-sized is paged. `limit`/`offset` are tool arguments, not SQL.
+    // portfolio-sized is paged, with LIMIT and OFFSET written into the SQL: the connector's own
+    // `offset` argument does not keep the query's ORDER BY from page to page, so pages
+    // overlap and rows go missing; its `limit` is sent only as the page size. Every paged query sorts on a unique key or on every column it selects.
     const PAGE_SIZE = 500;
     const MAX_PAGES = 40;
 
@@ -1361,21 +1354,16 @@
       return withRetry(() => queryOnce(sql, opts), (opts && opts.label) || 'Loading');
     }
 
+    // The connector's `limit` is sent as the page size so a smaller default can never cut a page
+    // short and end paging early; its `offset` is never sent.
     async function queryOnce(sql, opts) {
-      const args = { sql: sql, format: 'markdown' };
-      if (opts && opts.limit !== undefined) args.limit = opts.limit;
-      if (opts && opts.offset !== undefined) args.offset = opts.offset;
+      const paged = opts && opts.limit !== undefined;
+      const args = paged
+        ? { sql: `${sql}\nLIMIT ${opts.limit} OFFSET ${opts.offset || 0}`, format: 'markdown', limit: opts.limit }
+        : { sql, format: 'markdown' };
       const text = unwrap(await callMcp(command('dwh__execute__query', args)));
       const parsed = parseTable(text);
-      return { rows: parsed.rows, skipped: parsed.skipped, total: totalRows(text) };
-    }
-
-    // `total_rows: N | offset: 0 | limit: 500 | format: markdown`, when present.
-    function totalRows(text) {
-      const first = (text || '').split(/\r?\n/)[0] || '';
-      if (!first.startsWith('total_rows:')) return null;
-      const match = first.match(/total_rows:\s*(\d+)/);
-      return match ? parseInt(match[1], 10) : null;
+      return { rows: parsed.rows, skipped: parsed.skipped };
     }
 
     // Stops on a short page. Reports truncation rather than trailing off quietly.
@@ -1389,12 +1377,9 @@
         const result = await query(sql, { limit: PAGE_SIZE, offset: page * PAGE_SIZE });
         rows.push(...result.rows);
         skipped += result.skipped || 0;
-        if (onProgress) onProgress(rows.length, result.total);
+        if (onProgress) onProgress(rows.length);
         if (onPage) onPage(rows);
         if (result.rows.length < PAGE_SIZE) return { rows: rows, truncated: false, skipped: skipped };
-        if (result.total !== null && rows.length >= result.total) {
-          return { rows: rows, truncated: false, skipped: skipped };
-        }
       }
       return { rows: rows, truncated: true, skipped: skipped };
     }
@@ -1496,7 +1481,8 @@
                      ${windowSql}
               FROM ${OBLIGATIONS}
               WHERE ${COL.is_paid} = FALSE AND ${COL.due_date} >= CURRENT_DATE
-              GROUP BY ${COL.amount_currency}, ${COL.obl_loan_id}`;
+              GROUP BY ${COL.amount_currency}, ${COL.obl_loan_id}
+              ORDER BY ${COL.amount_currency}, ${COL.obl_loan_id}`;
     }
 
     // Codes come from our own aggregate query; the shape check keeps a surprising
@@ -1632,7 +1618,8 @@
                      ${COL.str_draw_period_end} AS draw_period_end${active}
               FROM ${STRUCTURES}
               WHERE ${COL.str_currency} = '${cc}'
-              ORDER BY ${COL.str_loan_id}, ${COL.str_name}${COL.str_id ? `, ${COL.str_id}` : ''}`;
+              ORDER BY loan_id, structure_name${COL.str_id ? ', structure_id' : ''}, structure_type, committed, drawn,
+                       outstanding, advance_count, tranche_count, lender_count, closing, draw_period_end${active ? ', is_active' : ''}`;
     }
 
     // Scoped to the currency on screen, like every other detail query. Unscoped, it
@@ -1648,7 +1635,8 @@
                      ${COL.adv_date} AS advance_date, ${COL.adv_amount} AS amount,
                      ${COL.adv_maturity} AS maturity, ${COL.adv_outstanding} AS outstanding${active}
               FROM ${ADVANCES}${scope}
-              ORDER BY ${COL.adv_loan_id}, ${COL.adv_date}${COL.adv_id ? `, ${COL.adv_id}` : ''}`;
+              ORDER BY loan_id, advance_date${COL.adv_id ? `, ${COL.adv_id}` : ''}, advance_name, amount,
+                       maturity, outstanding${structure ? ', structure_id' : ''}${active ? ', is_active' : ''}`;
     }
 
     // STRUCTURE records committed, drawn and outstanding but NOT undrawn — there is no
@@ -2846,9 +2834,9 @@
 
       renderTiles();
       status('Loading loans…');
-      const loaded = await queryAll(loansSql(cc), (count, total) => {
-        status(total ? `Loading loans… ${num(count)} of ${num(total)}` : `Loading loans… ${num(count)}`);
-        progress(count, total);
+      const loaded = await queryAll(loansSql(cc), count => {
+        status(`Loading loans… ${num(count)}`);
+        progress(count);
       }, partial => {
         // Paint what has arrived. A stale load must not overwrite the current one.
         if (superseded(token)) return;

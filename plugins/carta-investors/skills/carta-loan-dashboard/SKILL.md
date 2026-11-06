@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.29.0</carta-plugin>
+<carta-plugin>carta-investors:7.29.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -132,7 +132,7 @@ firm's rows.
 
 **`LOAN_OPS` row access follows the session's ACTIVE FIRM — probing unscoped as staff is convenient but is also the trap.** Unscoped, staff reads every firm at once, so the schema and the numbers look right while you build. Scoped to a firm, you read that firm's rows and no others. The same `SELECT COUNT(*) FROM LOAN_OPS.LOAN` returns a different firm's loans depending on which firm is active. A 0-row query returns no headers, so the schema becomes unreadable — probe unscoped, then pin the target firm for the artifact (Step 5's `firm_context_id`). `dwh__list__tables` does not enumerate `LOAN_OPS` at all, and both `SHOW` and `INFORMATION_SCHEMA` are blocked — probe tables by name with `SELECT * FROM <table> LIMIT 1`.
 
-`<loan_id>` is the paging tiebreaker: the artifact fetches the whole portfolio with `offset`, which needs a total order or rows shuffle across page boundaries. If it does not resolve, the artifact falls back to `<loan_name>`.
+`<loan_id>` is the paging tiebreaker: the artifact pages the loan query with SQL `OFFSET`, which needs a total order or rows shuffle across page boundaries. If it does not resolve, the artifact falls back to `<loan_name>`.
 
 **Fallback — trigger ONLY on a query error (warehouse layers diverge; the synonyms exist only to recover, never to pre-empt):**
 - *Loan table not found* (the Step-4 query errors that `LOAN_OPS.LOAN` is unknown): call `read_tool({"name": "dwh__list__tables", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-loan-dashboard"]}})`, set `<loan_table>` to the datashare loan view (`LOAN` or ends `_LOAN`, e.g. `LOAN_OPS.LOANOPS_DATASHARE_LOAN`); re-run. If that returns no loan view at all, tell the user loan data isn't available in this context and stop (error table: *Loan table not found*).
@@ -307,7 +307,7 @@ Return measures are out of scope for this dashboard and are handled by a separat
 
 The loans table lists **active loans only** (`<active> = TRUE`); the KPI tiles still describe the whole portfolio, so the Active Loans tile names both counts.
 
-The artifact pages the loan query itself — `limit`/`offset` are `dwh__execute__query` arguments, never SQL — at 500 rows a page, stopping on a short page, up to 40 pages (20,000 loans). Past that it says so on screen rather than showing a silent subset.
+The artifact pages every row-set query itself (loans, scheduled payments, terms, ITD totals, fees, next due, structures, draws), writing `LIMIT` and `OFFSET` into the SQL (the connector's own `offset` argument does not keep a query's `ORDER BY` between pages, so pages overlap and rows go missing; its `limit` is sent only as the page size), at 500 rows a page, stopping on a short page, up to 40 pages (20,000 rows). Past that the loan list says so on screen rather than showing a silent subset.
 
 `columns` holds the names resolved in Step 3 (e.g. `"committed": "TOTAL_COMMITMENT"`) — the artifact
 builds its SQL from them, so it needs no discovery of its own. It knows its own tool names
