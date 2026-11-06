@@ -629,10 +629,12 @@ def main(argv: Optional[list] = None) -> int:
     both are "try again next build", not failures. Why goes to the log, and to the
     status file under own_sync._record_blocked's rule.
 
-    `--plan` (with `--mirrors` or `--recreate`), `--record`, `--retire` and `--lookup` are the
-    skill's own session-push side of this, documented on `_plan`, `record_session_push`,
-    this function's own `--retire`/`--lookup` branches, and references/serve-and-update.md's
-    Step 5.2, below.
+    `--plan` (with `--mirrors` or `--recreate`), `--record` and `--retire` are the skill's own
+    session-push side of this, documented on `_plan`, `record_session_push`, this function's
+    own `--retire` branch, and references/serve-and-update.md's Step 5.2, below.
+
+    `--lookup` is a plain local read of a report's own-sync uuid — a read-only query with no
+    Carta round trip; the skill's own steps do not call it.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", required=True)
@@ -672,8 +674,7 @@ def main(argv: Optional[list] = None) -> int:
                              "or while a plan for this report is still on disk (a push this run "
                              "that hasn't been recorded yet, succeeded or not), never a uuid a "
                              "failed push or a retired link left stale. A plain local read, no "
-                             "Carta call, no lock, always exits 0; for Step 5.3 once Step 5.2's "
-                             "push has already returned")
+                             "Carta call, no lock, always exits 0")
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir).expanduser()
 

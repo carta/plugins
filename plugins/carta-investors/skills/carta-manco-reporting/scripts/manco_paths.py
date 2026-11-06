@@ -16,24 +16,21 @@ Subcommands:
                               (the skill launches a localhost server + browser,
                               which only works in a local Claude Code session —
                               not Cowork or a Claude Code cloud session)
-  hosted-url (--dashboard-dir <dir> | --firm-name <name> [--firm-uuid <uuid>]) [report_id] [--tab TAB]
-                            → the hosted app's link, for one firm or (with report_id) one
-                              report. With --dashboard-dir, firm_name and firm_uuid are read
-                              straight from <dir>'s own snapshot.json and accounts.json — the
-                              firm name and uuid Step 4's build recorded for this dashboard
-                              (its own --firm-name/--firm-uuid args), never the cache-dir
-                              slug, which names a directory, not a firm. --firm-name/
-                              --firm-uuid instead take values resolved some other way (e.g. a
-                              Carta MCP list_contexts call before any local build exists) —
-                              exactly one of --dashboard-dir or --firm-name is required, and
-                              --firm-name must not be empty or all-whitespace (errors out
-                              rather than building a link to an "unknown" firm).
+  hosted-url (--dashboard-dir <dir> | --firm-name <name> [--firm-uuid <uuid>])
+                            → a bare link to the firm itself, no report or tab — the hosted
+                              app's own firm chooser/landing page for it, which lists all of
+                              the firm's reports. With --dashboard-dir, firm_name and
+                              firm_uuid are read straight from <dir>'s own snapshot.json and
+                              accounts.json — the firm name and uuid Step 4's build recorded
+                              for this dashboard (its own --firm-name/--firm-uuid args), never
+                              the cache-dir slug, which names a directory, not a firm.
+                              --firm-name/--firm-uuid instead take values resolved some other
+                              way (e.g. a Carta MCP list_contexts call before any local build
+                              exists) — exactly one of --dashboard-dir or --firm-name is
+                              required, and --firm-name must not be empty or all-whitespace
+                              (errors out rather than building a link to an "unknown" firm).
                               firm_name is slugged the way the hosted Worker does
-                              (hosted_firm_slug, NOT this module's own slugify). report_id is
-                              a report's own-sync uuid, as own_sync.py --record last recorded
-                              it (own_sync.py --lookup reads the same value back); omit it for
-                              a bare link to the firm itself, with no tab or report — the
-                              hosted app's own firm chooser/landing page for it
+                              (hosted_firm_slug, NOT this module's own slugify)
 
 snapshot_age_days is the age of the last datadir rebuild (Step 4), which runs
 on every invocation. raw_age_days is the age of the last actual DWH fetch
@@ -108,11 +105,6 @@ def slugify(name):
 # against.
 HOSTED_APP_URL = "https://manco-reporting.carta.cloud"
 
-# Budget vs Actuals' own route segment — app/src/shell/reportNav.js's BVA — the default
-# tab hosted_url and the CLI's --tab both build a link against. One name, so the function
-# and the CLI can't drift onto different defaults.
-BVA_TAB = "budget-vs-actuals"
-
 
 def hosted_firm_slug(name):
     """server/worker.js's slugify(), ported exactly — the slug the hosted app's own
@@ -129,12 +121,14 @@ def hosted_firm_slug(name):
     return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-") or "unknown"
 
 
-def hosted_url(firm_name, firm_uuid, report_id=None, tab=BVA_TAB):
-    """The hosted app's link to one firm, or (with `report_id`) one report: the same
-    `/firm/<slug>` or `/firm/<slug>/<tab>/<reportId>` shape app/src/shell/route.js's
-    parseRoute() reads client-side, with `firm_name` slugged the way the hosted Worker
-    itself does (hosted_firm_slug, above) — never this module's own cache-dir slugify(),
-    which can produce a different slug for the same name.
+def hosted_url(firm_name, firm_uuid):
+    """The hosted app's bare link to one firm — the `/firm/<slug>` shape
+    app/src/shell/route.js's parseRoute() reads client-side, with `firm_name` slugged the
+    way the hosted Worker itself does (hosted_firm_slug, above) — never this module's own
+    cache-dir slugify(), which can produce a different slug for the same name. Never a link
+    to a specific report: the firm's own landing page already lists all of its reports, and
+    a report deep link can go stale (the report can move, be renamed, or stop existing)
+    while the firm link never does.
 
     Carries `firm` (the slug) as a query string alongside the path, plus `firmUuid` when
     `firm_uuid` is given, so the hosted app can confirm the firm by uuid rather than by slug
@@ -142,26 +136,9 @@ def hosted_url(firm_name, firm_uuid, report_id=None, tab=BVA_TAB):
     punctuation) and the uuid is unambiguous. Mirrors app/src/state/firmParam.js's own
     `firmHref`/`withFirmParam`: `firmUuid` is omitted, never sent empty, when there is none
     — a dashboard predating the field, or one `read_firm_identity` found no accounts.json
-    for.
-
-    `report_id` is this dashboard's own-sync uuid for the report, as own_sync.py's
-    `--record` (the session push's own stamp) or `push_if_changed` (the sweep's) last
-    recorded it — not a live check that the mirror still exists on the hosted app, just the
-    uuid this dashboard has on record for it. A report that has never been pushed has no
-    uuid and so nothing to link to.
-
-    Omit `report_id` for a bare `/firm/<slug>` link with no tab or report segment — the
-    hosted app's own landing page for that firm (picked by its firm chooser when the slug
-    is unresolved, or shown straight when it isn't). `tab` is meaningless with no report:
-    this function drops it rather than building a path the client can't resolve to a real
-    report."""
+    for."""
     slug = hosted_firm_slug(firm_name)
-    if report_id:
-        path = "{}/firm/{}/{}/{}".format(
-            HOSTED_APP_URL, urllib.parse.quote(slug, safe=""),
-            urllib.parse.quote(tab, safe=""), urllib.parse.quote(report_id, safe=""))
-    else:
-        path = "{}/firm/{}".format(HOSTED_APP_URL, urllib.parse.quote(slug, safe=""))
+    path = "{}/firm/{}".format(HOSTED_APP_URL, urllib.parse.quote(slug, safe=""))
     params = {"firm": slug}
     if firm_uuid:
         params["firmUuid"] = firm_uuid
@@ -598,7 +575,7 @@ def cmd_hosted_url(args):
         firm_name, firm_uuid = args.firm_name, args.firm_uuid
         if not (firm_name or "").strip():
             raise SystemExit("hosted-url: --firm-name is empty — nothing to build a link against")
-    print(json.dumps({"url": hosted_url(firm_name, firm_uuid, args.report_id, args.tab)}))
+    print(json.dumps({"url": hosted_url(firm_name, firm_uuid)}))
 
 
 def main():
@@ -618,7 +595,7 @@ def main():
 
     sub.add_parser("detect-surface", help="classify local vs sandboxed runtime surface").set_defaults(fn=cmd_detect_surface)
 
-    u = sub.add_parser("hosted-url", help="build the hosted app's link to a firm, or one of its reports")
+    u = sub.add_parser("hosted-url", help="build the hosted app's bare link to a firm")
     g = u.add_mutually_exclusive_group(required=True)
     g.add_argument("--dashboard-dir",
                     help="firm_name and firm_uuid are read from here (snapshot.json, accounts.json) "
@@ -628,9 +605,6 @@ def main():
                          "build exists), for a firm-only link with no dashboard dir to read from yet "
                          "— must not be empty or all-whitespace")
     u.add_argument("--firm-uuid", help="only with --firm-name; ignored with --dashboard-dir")
-    u.add_argument("report_id", nargs="?", default=None,
-                    help="omit for a bare link to the firm itself, with no tab or report")
-    u.add_argument("--tab", default=BVA_TAB)
     u.set_defaults(fn=cmd_hosted_url)
 
     args = p.parse_args()
