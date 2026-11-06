@@ -9,8 +9,9 @@ when_to_use: >-
   Use when the user asks to change a security that is already on the cap table, often to
   match the signed documents: "fix the dates in Carta to match the paperwork", "change the
   issue date", "update the cost basis", "change the legend", "fix the exercise price",
-  "fix the SAFE's cap or discount", "correct CS-12", "cancel ES-12", "cancel part of this
-  grant". To issue new equity, use carta-issuance.
+  "fix the SAFE's cap or discount", "correct CS-12", "something looks wrong on CS-12, show me
+  first", "I need to fix something on ES-12", "cancel ES-12", "cancel part of this grant". To
+  issue new equity, use carta-issuance.
 owner: carta-cap-table maintainers (#cap-table-eng)
 model: inherit
 allowed-tools:
@@ -39,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.1</carta-plugin>
 
 # Manage securities
 

@@ -27,7 +27,8 @@ then:
 - **The user named the field and the value:** go on to the preview with that `thread_id`. The
   open page turns into the diff.
 - **They did not** ("show me first", "something is wrong", only a person or securities): say in
-  one line what the page shows, then ask what to change.
+  one line what the page shows, then ask which field to change as **No field named** in
+  [§ Fields and values](#fields-and-values) says, never in free text.
 
 Send that `thread_id` with the first preview.
 
