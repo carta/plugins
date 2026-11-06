@@ -476,6 +476,12 @@ export default function App() {
     { slug: BVA,                 label: "Budget vs Actuals", icon: "company",
       hidden:   () => !firmHasBudget,
       children: budgetChildren },
+    // Actuals by GL account, no budget columns — stands in for Budget vs
+    // Actuals only while this firm has nothing budgeted, in Carta or a
+    // workbook. The two never show together, so this always lands right
+    // under Dashboard, in whichever one's slot the other leaves empty.
+    { slug: "monthly-actuals",   label: "Monthly Actuals",   icon: "ledger",
+      hidden:   () => firmHasBudget },
     // Your own saved custom reports, then the action that makes another. A custom report
     // draws straight from the ledger (canDerive needs only accountsData, not a budget), so
     // a firm with no budget at all still sees this section once it has something to list —
@@ -483,11 +489,6 @@ export default function App() {
     { slug: CUSTOM_REPORTING,    label: "Custom Reporting",  icon: "customreport",
       hidden:   () => customReportChildren.length === 0,
       children: customReportChildren },
-    // Actuals by GL account, no budget columns — stands in for Budget vs
-    // Actuals only while this firm has nothing budgeted, in Carta or a
-    // workbook. The two never show together.
-    { slug: "monthly-actuals",   label: "Monthly Actuals",   icon: "ledger",
-      hidden:   () => firmHasBudget },
   ].filter(item => !item.hidden || !item.hidden(snapshot));
 
   // The tab segment reads "<parent>" or "<parent>/<id>" — peel off the parent slug and
