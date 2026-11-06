@@ -36,11 +36,12 @@ The widget accepts free-text input, so use it for every `input_type` —
 **Optional inputs** (`required == false`, has a `default`; a `NESTED_LIST`
 defaults to `None`): collect these after all required inputs.
 
-- **The firm has saved inputs for this target** (Step 3's cached saved inputs, filtered per §Saved inputs) → open with one `AskUserQuestion` —
-  "Use saved inputs" vs "Change one or more" vs "Reset to defaults" — in place of the prompts below. Spell the "Use
-  saved inputs" label inline as for "Use defaults", with each saved value in place of the default
-  and each kept `NESTED_LIST` row by its `rows` entry's `label`. On "Change", loop through them one at a time,
-  with each saved value in place of the default. Otherwise, never offer "Use saved inputs" or "Reset to defaults".
+- **The firm has saved inputs for this target** (Step 3's cached saved inputs, filtered per §Saved
+  inputs) → open with one `AskUserQuestion` — "Use saved inputs" vs "Change one or more" vs "Reset to
+  defaults" — in place of the prompts below. Spell the "Use saved inputs" label inline as for "Use
+  defaults", with each saved value in place of the default and each kept `NESTED_LIST` row by its
+  `rows` entry's `label`. On "Change", loop through them one at a time, with each saved value in place
+  of the default. Otherwise, never offer "Use saved inputs" or "Reset to defaults".
 - **2 or fewer optionals, none a `NESTED_LIST` with rows** → ask each directly, one at a time, the same
   way as required inputs. (The ENUM `(default)` marker on the matching
   choice already shows the default — don't add a separate "use defaults?"
@@ -59,8 +60,8 @@ defaults to `None`): collect these after all required inputs.
 
 ## Saved inputs
 
-Step 3's saved-inputs read: `404` with `error: saved_inputs_not_found` → nothing saved yet. Any other error → saved inputs aren't
-available here. Either way, say nothing and collect the optionals as above. Use
+Step 3's saved-inputs read: `404` with `error: saved_inputs_not_found` → nothing saved yet. Any other
+error → saved inputs aren't available here. Either way, say nothing and collect the optionals as above. Use
 only the `options` keys whose `available_inputs` entry is not skipped above (no rows or
 `unavailable`), and within a `NESTED_LIST` only the rows still in its `rows` without a `locked_reason`;
 name each other saved row with the `dropped` line below. None left → no saved inputs.
@@ -87,8 +88,9 @@ call_tool({"name": "waterfall_modeling__delete__saved_inputs", "arguments": {
 }})
 ```
 
-Success → _"Reset — **{company}** runs on the defaults again."_ Any error → _"Couldn't reset the
-saved inputs right now."_ Either way, collect this run's optionals from the defaults, as above.
+Success → _"Reset — **{company}** runs on the defaults again."_ Set the cached saved inputs to
+`saved_inputs_not_found`. Any error → _"Couldn't reset the saved inputs right now."_ Either way, collect
+this run's optionals from the defaults, as above.
 
 ## Formatting by `input_type`
 

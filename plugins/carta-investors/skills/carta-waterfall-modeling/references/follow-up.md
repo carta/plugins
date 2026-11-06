@@ -9,9 +9,9 @@ written (excel). Table specs live in `references/rendering.<get_command noun>.md
 ## Save inputs (before the menu)
 
 Before the first "What next?" menu of a run, once per run — in a batch, once after the last run — offer
-to save its optional inputs when it had any, and the cached saved inputs (`SKILL.md` Step 3) are saved inputs
-they differ from or `saved_inputs_not_found` (`references/inputs.md` §Saved inputs). Otherwise —
-including when that read failed any other way — go straight to the menu.
+to save its optional inputs when it had any, and the cached saved inputs (`SKILL.md` Step 3) are saved
+inputs they differ from or `saved_inputs_not_found` (`references/inputs.md` §Saved inputs). Otherwise —
+including when the Step 3 read failed any other way — go straight to the menu.
 
 Ask **one** `AskUserQuestion` — options "Save inputs" / "Not now" — listing each optional input as
 `**{label}:** {value}` (an ENUM by its `choices[].label`, a `NESTED_LIST` by each row's `label`):
@@ -30,8 +30,9 @@ call_tool({"name": "waterfall_modeling__mutate__saved_inputs", "arguments": {
 }})
 ```
 
-Success → _"Saved — your firm's next waterfall for **{company}** will offer these inputs."_ Then the
-menu.
+Success → _"Saved — your firm's next waterfall for **{company}** will offer these inputs."_ Set the
+cached saved inputs to the optional entries of the `options` sent, with `saved_at` now, `saved_by`
+null and no `dropped`. Then the menu.
 
 - `409 saved_inputs_conflict` → "Someone else just saved inputs for **{company}** — save these
   instead?" Retry the same call.
