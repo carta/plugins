@@ -214,6 +214,8 @@ function initReport(payload) {
 // ─── Column display name — stable even after drag-reorder ────────────────────
 // ci is the original index in sh.columns, fixed at data load time.
 const colDisplayName = (col, ci) => col.name || ('Column ' + (ci + 1));
+// The header cell itself stays blank for a column the report left unnamed; prompts and panels still need a name.
+const colHeaderText = (col, ci) => col._synthetic ? '' : colDisplayName(col, ci);
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 // parseNum mirrors lib/report_numbers.py parse_number (plain numbers, "1,000", "$1,234.56", "46.81%",
@@ -228,9 +230,11 @@ const parseNum = v => {
   return neg ? -Number(t) : Number(t);
 };
 // Percentage columns aggregate and sort as fractions: "46.81%" -> 0.4681, 0.5 -> 0.5.
-const parseCell = (v, type) => {
+// A "46.81%" cell is the fraction 0.4681 in any number column: ownership rows put percentages under count headers.
+const isPercentText = v => typeof v === 'string' && v.includes('%');
+const parseCell = v => {
   const n = parseNum(v);
-  return n !== null && type === 'percentage' && typeof v === 'string' && v.includes('%') ? n / 100 : n;
+  return n !== null && isPercentText(v) ? n / 100 : n;
 };
 const isBlank = v => v === null || v === undefined || String(v).trim() === '';
 const MONTHS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -249,9 +253,10 @@ function parseDate(v) {
   const dt  = new Date(day);
   return mo >= 1 && dt.getUTCMonth() === +mo - 1 && dt.getUTCDate() === +d ? day : null;
 }
-const PCT = v => { if (isBlank(v)) return '—'; if (typeof v === 'string' && v.includes('%')) return v; const n = parseNum(v); return n === null ? '—' : (n * 100).toFixed(4) + '%' };
+const PCT = v => { if (isBlank(v)) return '—'; if (isPercentText(v)) return v; const n = parseNum(v); return n === null ? '—' : (n * 100).toFixed(4) + '%' };
 // Integer and decimal columns: grouped, whole numbers stay whole, fractions keep up to 6 places.
-const NUM = v => { if (isBlank(v)) return '—'; const n = parseNum(v); return n === null ? '—' : n.toLocaleString(undefined, { maximumFractionDigits: 6 }) };
+// A count column can carry a percentage cell (a cap table's ownership row), which keeps its own text.
+const NUM = v => { if (isBlank(v)) return '—'; if (isPercentText(v)) return v; const n = parseNum(v); return n === null ? '—' : n.toLocaleString(undefined, { maximumFractionDigits: 6 }) };
 // cur is a currency object {code, symbol}. Prefer ISO-code-driven Intl currency
 // formatting (correct symbol + grouping per the viewer's locale); fall back to a
 // symbol prefix + grouped decimal when the code is missing/invalid. With no currency
@@ -397,7 +402,7 @@ function rebuildHeaders(idx) {
     const color    = entry ? '#285DA3' : '#BEBFC0';
     const pri      = sh._sort.length > 1 && entry
       ? `<sup style="color:#285DA3;font-size:9px">${sh._sort.indexOf(entry) + 1}</sup>` : '';
-    th.innerHTML   = esc(colDisplayName(col, ci)) + `<span class="th-sort si" style="color:${color};margin-left:4px">${icon}${pri}</span>`;
+    th.innerHTML   = esc(colHeaderText(col, ci)) + `<span class="th-sort si" style="color:${color};margin-left:4px">${icon}${pri}</span>`;
     th.onclick     = () => clickHeaderSort(idx, ci);
 
     // Drag-to-reorder
@@ -436,7 +441,7 @@ function rebuildHeaders(idx) {
 // A cell's sort key; null (blank or unreadable) sorts last in both directions
 function sortKey(v, type) {
   if (isBlank(v)) return null;
-  if (NUM_TYPES.has(type)) return parseCell(v, type);
+  if (NUM_TYPES.has(type)) return parseCell(v);
   if (type === 'date') return parseDate(v);
   return String(v);
 }
@@ -537,6 +542,36 @@ function renderBody(idx) {
 // ─── Totals bar (tfoot) ────────────────────────────────────────────────────────
 const TOT_CYCLE = ['sum', 'avg', 'min', 'max', 'count'];
 
+// A sheet whose rows already include its own totals ("Totals", "Total shares outstanding") gets no
+// ∑ bar: it would sit under them and add them back into its own sums. A totals row is a label that
+// starts with the word "Total", after only blank cells, with at least one non-zero figure that equals
+// the sum of its column over the rows above it. Only one has to: a cap table puts footer rows such as
+// "Fully diluted shares" above "Total Shares outstanding", and those land in some columns' sums. A
+// holder named "Total Wine & More" with a share count, or "Total Return Partners" beside a class
+// name, is a data row.
+const OWN_TOTAL_LABEL = /^totals?\b/i;
+// Totals are often rounded (a "100.0000%" over percentages shown to 4 places), so near enough counts.
+const sumsMatch = (total, sum) => Math.abs(total - sum) <= 1e-4 * Math.max(1, Math.abs(total));
+function rowIsOwnTotal(r, sumsAbove) {
+  const at = r.findIndex(c => !isBlank(c));
+  if (at < 0 || typeof r[at] !== 'string' || !OWN_TOTAL_LABEL.test(r[at].trim())) return false;
+  const figures = r.map((c, ci) => [ci, c]).slice(at + 1).filter(([, c]) => !isBlank(c));
+  return figures.some(([ci, c]) => {
+    const n = parseCell(c);
+    // A zero would match the empty sum above a first row.
+    return n !== null && n !== 0 && sumsMatch(n, sumsAbove[ci] || 0);
+  });
+}
+function sheetHasOwnTotals(sh) {
+  const sums = [];
+  return sh.rows.some(r => {
+    if (!Array.isArray(r) || rowIsSection(r, sh.columns.length)) return false;
+    if (rowIsOwnTotal(r, sums)) return true;
+    r.forEach((c, ci) => { const n = parseCell(c); if (n !== null) sums[ci] = (sums[ci] || 0) + n; });
+    return false;
+  });
+}
+
 function renderTotalsBar(idx) {
   const sh      = data[sheetNames[idx]];
   const cols    = sh.columns;
@@ -544,7 +579,7 @@ function renderTotalsBar(idx) {
   const foot    = document.getElementById('foot-' + idx);
   if (!foot) return;
   foot.innerHTML = '';
-  if (!visCis.length) return;
+  if (!visCis.length || sheetHasOwnTotals(sh)) return;
 
   const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length) && !rowIsTotal(r));
   const hasAny   = visCis.some(ci => sh._totals[ci]);
@@ -565,7 +600,7 @@ function renderTotalsBar(idx) {
       td.className = 'tot-cell num' + (op ? ' active' : '');
       td.title     = op ? 'Click to change aggregation' : 'Click to add totals';
       if (op) {
-        const cells = dataRows.map(r => ({ n: parseCell(r[ci], col.type), cur: cellCurrency(sh, r, ci) })).filter(c => c.n !== null);
+        const cells = dataRows.map(r => ({ n: parseCell(r[ci]), cur: cellCurrency(sh, r, ci) })).filter(c => c.n !== null);
         const nums  = cells.map(c => c.n);
         let result = null;
         if (op === 'sum')   result = nums.reduce((a, b) => a + b, 0);
@@ -692,7 +727,7 @@ function excelXml(idx) {
   const visCis = sh._colOrder.filter(ci => isVis(sh, ci));
 
   const headerCells = visCis.map(ci =>
-    `<Cell ss:StyleID="header"><Data ss:Type="String">${esc(cols[ci]._synthetic ? '' : cols[ci].name)}</Data></Cell>`
+    `<Cell ss:StyleID="header"><Data ss:Type="String">${esc(colHeaderText(cols[ci], ci))}</Data></Cell>`
   ).join('');
 
   const dataRows = sh.rows.filter(r => !rowIsSection(r, sh.columns.length)).map(row => {
@@ -702,8 +737,8 @@ function excelXml(idx) {
       const col   = cols[ci];
       const raw   = rd[ci];
       const isNum = NUM_TYPES.has(col.type);
-      const n     = isNum ? parseCell(raw, col.type) : null;
-      const sid   = col.type === 'money' ? moneyStyle(cellCurrency(sh, row, ci)) : isNum ? col.type : (isTotal ? 'total' : '');
+      const n     = isNum ? parseCell(raw) : null;
+      const sid   = isNum && isPercentText(raw) ? 'percentage' : col.type === 'money' ? moneyStyle(cellCurrency(sh, row, ci)) : isNum ? col.type : (isTotal ? 'total' : '');
       const style = sid ? ` ss:StyleID="${sid}"` : '';
       // A number cell holds a real number; text that is not one (blank, "n/a") becomes an empty text cell
       if (n !== null) return `<Cell${style}><Data ss:Type="Number">${String(n)}</Data></Cell>`;

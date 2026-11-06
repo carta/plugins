@@ -29,7 +29,7 @@ for _root in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_root / "lib"))
         break
 from report_display import excel_sheet_name  # noqa: E402
-from report_numbers import parse_number  # noqa: E402
+from report_numbers import is_percent_text, parse_fraction, parse_number  # noqa: E402
 from report_rows import is_section_list  # noqa: E402
 
 from openpyxl import Workbook
@@ -236,6 +236,7 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
         row_curr = row_currencies[row_data_idx] if row_data_idx < len(row_currencies) else None
 
         for col_idx, (col, val) in enumerate(zip(columns, row), start=1):
+            percent_cell = False
             if is_summary:
                 col_letter = get_column_letter(col_idx)
                 op = agg_ops.get(col["name"])
@@ -247,12 +248,14 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                     cell = ws.cell(row=row_idx, column=col_idx, value=val)
             else:
                 if col["type"] in ("integer", "money", "percentage", "decimal") and val is not None:
-                    number = parse_number(val)
+                    number = parse_fraction(val)
                     if number is not None:
-                        if col["type"] == "integer":
+                        if is_percent_text(val):
+                            # A percentage, also in a count column (a cap table's ownership rows).
+                            val = number
+                            percent_cell = True
+                        elif col["type"] == "integer":
                             val = int(number) if number == int(number) else number
-                        elif isinstance(val, str) and "%" in val:
-                            val = number / 100  # "46.81%" -> 0.4681 under a 0.00% format
                         else:
                             val = float(number)
                 elif col["type"] == "date" and isinstance(val, str) and val.strip():
@@ -266,7 +269,9 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                 cell.fill = summary_fill
                 cell.font = summary_font
 
-            if col["type"] == "money":
+            if percent_cell:
+                cell.number_format = FORMAT_MAP["percentage"]
+            elif col["type"] == "money":
                 # A totals row carries the currency its amounts were added up in, like any row.
                 zero_idx = col_idx - 1
                 if isinstance(row_curr, list):

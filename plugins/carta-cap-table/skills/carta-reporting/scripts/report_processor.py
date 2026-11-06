@@ -95,7 +95,6 @@ import argparse
 import json
 import sys
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 # The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
@@ -105,7 +104,7 @@ for _root in Path(__file__).resolve().parents:
         break
 from report_display import DATA_QUALITY_SHEETS, detect_hidden_columns, normalize_columns  # noqa: E402
 from report_hosts import DOWNLOAD_TIMEOUT_SECONDS, check_download_url  # noqa: E402
-from report_numbers import parse_number  # noqa: E402
+from report_numbers import parse_fraction, parse_number  # noqa: E402
 from report_rows import is_structural, relabel_structural  # noqa: E402
 from report_summary import SUMMARY_TABLE, summary_value_header  # noqa: E402
 
@@ -118,22 +117,11 @@ def _parse_numeric(val):
     return parse_number(val)
 
 
-def _parse_percentage(val):
-    """Parse a percentage cell or threshold to a fraction: "46.81%" -> 0.4681, 0.5 -> 0.5.
-
-    The percent form is divided in decimal arithmetic so "14.28%" is the same float as 0.1428."""
-    if isinstance(val, str) and val.strip().endswith("%"):
-        try:
-            return float(Decimal(val.replace(",", "").replace("%", "").strip()) / 100)
-        except InvalidOperation:
-            return None
-    return _parse_numeric(val)
-
-
 def _numeric_parser(ctype):
-    """The reader for a column's cells: percentage columns hold fractions, every other
-    numeric column its plain number. Filters, sorts, formulas and aggregations all use it."""
-    return _parse_percentage if ctype == "percentage" else _parse_numeric
+    """The reader for a column's cells, report_numbers.parse_fraction for every number column:
+    percentage columns hold fractions, and a "46.81%" cell is a fraction in any column.
+    Filters, sorts, formulas and aggregations all use it."""
+    return parse_fraction
 
 
 # The engine's parseDate (skills/carta-reporting/assets/artifact_engine.html) reads the same formats; change them together.
