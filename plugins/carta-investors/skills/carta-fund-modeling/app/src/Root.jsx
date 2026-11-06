@@ -8,10 +8,11 @@ import App from "./App.jsx";
 import FundChooser from "./FundChooser.jsx";
 import { FirmDataContext } from "./state/FirmData.jsx";
 import { FS, sans } from "./ui/theme.js";
+import LoadingScreen from "./ui/LoadingScreen.jsx";
 import { parseRoute, navigate, subscribeNav, isFirmId } from "./route.js";
 import { postToOuter } from "./bridge-client.js";
 import { FirmAccess } from "./firm-access.js";
-import { runFirmLoad, CONNECTING_STEP } from "./state/firmLoad.js";
+import { runFirmLoad, stepProgress, CONNECTING_STEP } from "./state/firmLoad.js";
 
 export default function Root({ features }) {
   // The URL path is the source of truth for the selected firm.
@@ -124,11 +125,7 @@ export default function Root({ features }) {
   }
 
   if (!extras) {
-    return (
-      <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" }}>
-        <div style={{ fontSize: FS.bodyLg }}>{loadingStep || `Loading ${firm}…`}</div>
-      </div>
-    );
+    return <LoadingScreen label={loadingStep || `Loading ${firm}…`} progress={stepProgress(loadingStep)} />;
   }
 
   return (

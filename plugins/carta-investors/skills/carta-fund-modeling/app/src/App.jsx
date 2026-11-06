@@ -31,6 +31,7 @@ import { fmContext } from "./pinpoint/fmContext.js";
 import { postToOuter, onFromOuter } from "./bridge-client.js";
 import { signOut } from "./sign-out.js";
 import { trackClick, trackRender } from "./analytics.js";
+import LoadingScreen from "./ui/LoadingScreen.jsx";
 
 // Ink icons, drawn with the Lucide glyph Ink's kit maps each one to (Ink name → Lucide name
 // in the comment). Each entry is [id, label, paths].
@@ -296,12 +297,9 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
 
   if (!fundStates) {
     return (
-      <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <CartaLogo size={40} style={{ margin: "0 auto", opacity: 0.9 }} />
-          <div style={{ marginTop: 12, fontSize: FS.bodyLg }}>Loading fund data…</div>
-        </div>
-      </div>
+      <LoadingScreen label="Loading fund data…">
+        <CartaLogo size={40} style={{ margin: "0 auto 12px", opacity: 0.9 }} />
+      </LoadingScreen>
     );
   }
 

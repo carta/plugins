@@ -1,5 +1,23 @@
 export const CONNECTING_STEP = "Connecting to Carta…";
+export const SETTING_CONTEXT_STEP = "Setting firm context";
+export const QUERYING_STEP = "Querying fund data";
+export const BUILDING_SNAPSHOT_STEP = "Building snapshot";
 export const STORING_SNAPSHOT_STEP = "Storing snapshot";
+
+// The steps the server reports while it loads a firm, in order. Each owns a stretch of the loading
+// bar; the long "Querying fund data" step gets the largest.
+const LOAD_STEPS = [
+  [CONNECTING_STEP, 0.05, 0.12],
+  [SETTING_CONTEXT_STEP, 0.12, 0.2],
+  [QUERYING_STEP, 0.2, 0.75],
+  [BUILDING_SNAPSHOT_STEP, 0.75, 0.92],
+  [STORING_SNAPSHOT_STEP, 0.92, 0.98],
+];
+/** The bar's `{ from, to }` for a load step, or null for one this list doesn't know. */
+export function stepProgress(step) {
+  const hit = LOAD_STEPS.find(([name]) => name === step);
+  return hit ? { from: hit[1], to: hit[2] } : null;
+}
 
 /** Load `firm`'s Carta data into this session through /api/load-firm, passing each progress
  *  step to `onStep`. `force` marks a user-requested reload, which the server refuses with
