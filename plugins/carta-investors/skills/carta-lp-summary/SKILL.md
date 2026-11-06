@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.25</carta-plugin>
+<carta-plugin>carta-investors:7.28.26</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -97,6 +97,7 @@ Carta Home may invoke this skill with the firm already resolved (name and firm U
 - Redeploy to the URL you were given instead of searching for one (Step 5e).
 - Reply with only the published artifact URL.
 - Write `origin: "home"` in the config (Step 4); any other invocation writes `"chat"`. It labels the page-open analytics event with where the request came from.
+- Write the home URL Carta Home gave you as `home_url` in the config, so the page shows a "Back to Home" link. Without it the link stays hidden.
 - Skip the intro (Step 2) and the branding follow-up (5f): Home builds its dashboards in parallel and waits on each URL, so a question here would stall the whole starter pack.
 - A brand set up earlier carries into Home's build only through that firm's own workdir (5a): the build reads the firm's previous `lp-summary-data.json` from there, as any rebuild does.
 
@@ -180,6 +181,7 @@ Do **not** put these numbers in the artifact. It re-fetches on open.
   firm_warehouse_id: "<firm_id from step 3>",
   artifact_title: "<firm_name> — LP Summary",
   origin: "<home when Carta Home invoked this skill, otherwise chat>",
+  home_url: "<Carta Home's URL when Carta Home gave you one, otherwise omit>",
   tables: { funds: "FUND_ADMIN.FUNDS", partners: "FUND_ADMIN.PARTNER_DATA",
             nav: "FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS",
             contacts: "FUND_ADMIN.PARTNER_CONTACTS",

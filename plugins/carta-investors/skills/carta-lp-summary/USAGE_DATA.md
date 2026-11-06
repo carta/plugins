@@ -35,6 +35,7 @@ without the tracker sends nothing.
 | Event | Action | Meaning |
 |---|---|---|
 | `LPSummary.View.FromHome` / `.FromChat` | render | The page loaded; built by Carta Home or from a chat request |
+| `LPSummary.BackToHome` | click | Followed the "Back to Home" link to the Carta Home page that built this one |
 | `LPSummary.Empty` | render | The page loaded with no limited partners to show |
 | `LPSummary.Unavailable.LoadError` | render | The page couldn't load its data |
 | `LPSummary.Update.Show` / `.Dismiss` | render / click | The "newer version" banner showed / was dismissed |
