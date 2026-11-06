@@ -1304,6 +1304,7 @@
         </div>
 
         <div id="update-banner-slot"></div>
+        <div id="freshnessNote" role="status" style="display: none; font-size: 12px; color: var(--ink-color-global-text-subtle); margin-bottom: 8px;"></div>
 
         <div id="loadingState">
             <div id="loadingStatus" style="display: none; font-size: 13px; color: var(--ink-color-global-text-subtle); margin-bottom: 12px;"></div>
@@ -1393,8 +1394,13 @@
         // deterministic sort: issuer + asset name alone ties when a fund holds two
         // tranches of the same class, so FUND_INVESTMENT_KEY (unique per fund)
         // breaks the tie.
-        const PAGE_SIZE = 200;
-        const MAX_PAGES = 50;  // hard cap (10K rows) to prevent runaway loops
+        // The server pages the query from the `limit`/`offset` arguments, so the SQL
+        // carries no LIMIT or OFFSET. Pages start at PAGE_LIMIT rows and shrink when
+        // the server answers `too_large`; after the first page reveals total_rows the
+        // rest are fetched PAGE_CONCURRENCY at a time.
+        const PAGE_LIMIT = 200;
+        const PAGE_CONCURRENCY = 4;
+        const MAX_PAGES = 500;  // a query planned into more pages fails rather than showing partial rows as complete
 
         // Columns the live and point-in-time tables share. TOTAL_COST, TOTAL_PROCEEDS,
         // TOTAL_VALUE and RESIDUAL_GAIN_LOSS are the app's Deal IRR figures: total cost
@@ -1427,7 +1433,7 @@
         // date blank; per-share values recomputed client-side in transformData; FX
         // badge simply doesn't appear), and a position counts as exited once nothing
         // of it is still held — the same rows IS_ACTIVE_INVESTMENT = FALSE marks live.
-        function buildSoiQuery(fundFilter, offset, limit, asOfDate) {
+        function buildSoiQuery(fundFilter, asOfDate) {
             if (!asOfDate) {
                 return `SELECT${SOI_SHARED_COLUMNS},
                     INVESTMENT_DATE                    AS acquisition_date,
@@ -1440,8 +1446,7 @@
                     COALESCE(NOT IS_ACTIVE_INVESTMENT, FALSE) AS is_exited
                 FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
                 WHERE ${fundFilter}
-                ORDER BY issuer_name, asset_name, fund_uuid, FUND_INVESTMENT_KEY
-                LIMIT ${limit} OFFSET ${offset}`;
+                ORDER BY issuer_name, asset_name, fund_uuid, FUND_INVESTMENT_KEY`;
             }
             const asOf = escSqlLiteral(asOfDate);
             return `SELECT${SOI_SHARED_COLUMNS},
@@ -1457,12 +1462,11 @@
             WHERE ${fundFilter}
               AND effective_date <= '${asOf}'
               AND (next_effective_date IS NULL OR next_effective_date > '${asOf}')
-            ORDER BY issuer_name, asset_name, fund_uuid, FUND_INVESTMENT_KEY
-            LIMIT ${limit} OFFSET ${offset}`;
+            ORDER BY issuer_name, asset_name, fund_uuid, FUND_INVESTMENT_KEY`;
         }
 
-        function buildSoiSql(fundUuid, offset, limit, asOfDate) {
-            return buildSoiQuery(`FUND_UUID = '${escSqlLiteral(fundUuid)}'`, offset, limit, asOfDate);
+        function buildSoiSql(fundUuid, asOfDate) {
+            return buildSoiQuery(`FUND_UUID = '${escSqlLiteral(fundUuid)}'`, asOfDate);
         }
 
         // Deal IRR — gross IRR per fund × company (issuer), from the app's own
@@ -1470,7 +1474,7 @@
         // "Current" shows the latest one and a past as-of shows exactly that quarter.
         // Partitioning by issuer alone would let one fund's IRR overwrite another's
         // when two funds hold the same company.
-        function buildDealIrrSql(fundUuids, offset, limit, asOfDate) {
+        function buildDealIrrSql(fundUuids, asOfDate) {
             const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
             const dateFilter = asOfDate
                 ? ` AND PERFORMANCE_QUARTER_END_DATE = '${escSqlLiteral(asOfDate)}'`
@@ -1486,8 +1490,7 @@
                 PARTITION BY FUND_UUID, ISSUER_ID
                 ORDER BY PERFORMANCE_QUARTER_END_DATE DESC
             ) = 1
-            ORDER BY fund_uuid, issuer_id
-            LIMIT ${limit} OFFSET ${offset}`;
+            ORDER BY fund_uuid, issuer_id`;
         }
 
         // Investment Cash Flows — the dated flows behind the app's Deal IRR, rebuilt
@@ -1503,7 +1506,7 @@
         // conversions and MANUAL_NON_DEAL_IRR entries, which the app shows too.
         const CASH_FLOW_REALIZATION_EVENTS = "'OTHER_REALIZATION', 'INVESTMENT_SALE', 'ESCROW_CHANGE'";
 
-        function buildCashFlowSql(fundUuids, offset, limit, asOfDate) {
+        function buildCashFlowSql(fundUuids, asOfDate) {
             const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
             const dateCap = asOfDate ? `'${escSqlLiteral(asOfDate)}'` : 'CURRENT_DATE()';
             return `SELECT fund_uuid, issuer_id, issuer_name, asset_name, flow_date, amount, flow_kind
@@ -1530,8 +1533,7 @@
                   AND EFFECTIVE_DATE <= ${dateCap}
             )
             WHERE flow_kind IS NOT NULL
-            ORDER BY fund_uuid, issuer_id, flow_date, line_id
-            LIMIT ${limit} OFFSET ${offset}`;
+            ORDER BY fund_uuid, issuer_id, flow_date, line_id`;
         }
 
         // Look-through drill-down — one fund-of-funds parent issuer's underlying
@@ -1593,7 +1595,7 @@
         // waiting for the user to expand each fund-of-funds position one at a time,
         // loadFund() calls this once per fund load and every position's underlying
         // holdings are ready before the table renders.
-        function buildUnderlyingBulkSql(fundUuids, offset, limit, asOfDate) {
+        function buildUnderlyingBulkSql(fundUuids, asOfDate) {
             const table = asOfDate ? 'UNDERLYING_INVESTMENTS_HISTORY' : 'UNDERLYING_INVESTMENTS';
             const dateFilter = asOfDate
                 ? ` AND EFFECTIVE_DATE <= '${asOfDate}' AND (NEXT_EFFECTIVE_DATE IS NULL OR NEXT_EFFECTIVE_DATE > '${asOfDate}')`
@@ -1617,8 +1619,7 @@
                 CURRENCY_CODE                AS currency_code
             FROM FUND_ADMIN.${table}
             WHERE FUND_UUID IN (${uuidList})${dateFilter}
-            ORDER BY fund_uuid, parent_issuer_name, remaining_value DESC NULLS LAST
-            LIMIT ${limit} OFFSET ${offset}`;
+            ORDER BY fund_uuid, parent_issuer_name, remaining_value DESC NULLS LAST`;
         }
 
         // Cross-fund search — every look-through holding across every one of the firm's funds
@@ -1652,9 +1653,9 @@
         // reporting currency), since a firm's funds aren't guaranteed to share one
         // currency. Uses an explicit IN-list of the firm's own fund UUIDs (already
         // known from FUNDS) rather than a FIRM_UUID column.
-        function buildSoiSqlAllFunds(fundUuids, offset, limit, asOfDate) {
+        function buildSoiSqlAllFunds(fundUuids, asOfDate) {
             const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
-            return buildSoiQuery(`FUND_UUID IN (${uuidList})`, offset, limit, asOfDate);
+            return buildSoiQuery(`FUND_UUID IN (${uuidList})`, asOfDate);
         }
 
         // === Markdown-table parser ===
@@ -1664,11 +1665,7 @@
 
         function parseDwhQueryResult(result) {
             const text = unwrapResponse(result);
-            return parseNdjson(text).rows.map(r => {
-                const out = {};
-                Object.keys(r).forEach(k => { out[k.toLowerCase()] = r[k]; });
-                return out;
-            });
+            return parseNdjson(text).rows.map(lowercaseKeys);
         }
 
         function unwrapResponse(result) {
@@ -1677,8 +1674,7 @@
                 throw new Error('Unexpected response shape: ' + (typeof result));
             }
             if (result.isError) {
-                const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
-                throw new Error('dwh query failed: ' + msg);
+                throw new Error('dwh query failed: ' + (errorText(result) || '<no message>'));
             }
             if (result.content && Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
                 return result.content[0].text;
@@ -1689,10 +1685,25 @@
             throw new Error('Could not find text payload in response');
         }
 
+        // The MCP tool result is a JSON object of shape {result: "<ndjson body>"}.
+        // Without this unwrap the envelope parses as one valid JSON line whose only
+        // key is `result`, so every real row silently vanishes and the report comes
+        // out empty rather than erroring.
+        function unwrapEnvelope(text) {
+          const stripped = (text || '').trimStart();
+          if (!stripped.startsWith('{')) return text;
+          try {
+            const outer = JSON.parse(stripped);
+            if (outer && typeof outer.result === 'string') return outer.result;
+          } catch (_) { /* not an envelope — probably genuine ndjson */ }
+          return text;
+        }
+
         function parseNdjson(text) {
             const rows = [];
             let nextOffset = null;
-            if (!text) return { rows, nextOffset };
+            let totalRows = null;
+            if (!text) return { rows, nextOffset, totalRows };
 
             let body = text;
             const stripped = text.trimStart();
@@ -1700,6 +1711,8 @@
             if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
                 const m = firstLine.match(/next_offset:\s*(\d+)/);
                 if (m) nextOffset = parseInt(m[1], 10);
+                const t = firstLine.match(/total_rows:\s*([\d,]+)/);
+                if (t) totalRows = parseInt(t[1].replace(/,/g, ''), 10);
                 body = text.slice(text.indexOf('\n\n') + 2);
             }
 
@@ -1713,7 +1726,7 @@
                     console.warn('parseNdjson: skipping malformed line', e);
                 }
             }
-            return { rows, nextOffset };
+            return { rows, nextOffset, totalRows };
         }
 
         // === Data transform ===
@@ -2096,25 +2109,21 @@
         let sortDir = 'asc';
         let allExpanded = false;
 
-        // Sticky flag: once we've called welcome to re-initialize the MCP session
-        // for this artifact load, don't call it again. If a subsequent MCP call
-        // still comes back demanding welcome, surface the error instead of looping.
-        let welcomeCalledThisSession = false;
-
-        // Active fund + per-fund cache. Cache survives fund switches but not page reloads —
-        // the SOI rarely changes within a single sidebar session, so persistent caching
-        // isn't worth the complexity yet.
+        // Active fund + per-fund cache. This one lasts for the page's lifetime; a copy of
+        // each loaded view is also saved in localStorage (see readStoredSnapshot) so a
+        // remounted page opens on it while a fresh load runs.
         let currentFundUuid = INITIAL_FUND_UUID;
         // 'YYYY-MM-DD' quarter-end string, or null for the live/current position.
         let currentAsOfDate = null;
-        const fundCache = new Map();  // `${fundUuid}::${asOfDate||'current'}` → { companies, irrAsOfDate }
+        const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
+        const fundCache = new Map();  // viewCacheKey() → { companies, irrAsOfDate }
 
         // ── Investment Cash Flows tab state ──
         // The tab lives in page state, never the URL hash.
         const HOLDINGS_TAB = 'holdings';
         const CASH_FLOWS_TAB = 'cashFlows';
         let activeTab = HOLDINGS_TAB;
-        // Raw cash-flow rows per view, same key as fundCache: { rows, truncated }.
+        // Raw cash-flow rows per view, same key as fundCache: { rows }.
         // Fetched the first time the tab opens for that view; a failed load isn't
         // cached, so reopening retries.
         const cashFlowCache = new Map();
@@ -2129,7 +2138,7 @@
         let cfRenderedNames = [];
 
         // ── Look-through drill-down state ──
-        // Underlying-holdings cache, keyed by `${fundUuid}::${parentIssuerName}`.
+        // Underlying-holdings cache, keyed by underlyingCacheKey (fund, parent issuer and as-of).
         // Value is one of: undefined (never fetched), 'loading', an array of parsed
         // rows, or an Error (fetch failed — shown inline, doesn't block the rest of
         // the table).
@@ -2829,7 +2838,7 @@
             if (!isExpanded) return frag;
 
             const colCount = getColumns().length;
-            const cacheKey = `${asset.fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
+            const cacheKey = underlyingCacheKey(asset.fundUuid, parentIssuerName, currentAsOfDate);
             const cached = underlyingCache.get(cacheKey);
 
             // underlying rows carry the same `asset-group-${companyIdx}` class as the
@@ -2983,7 +2992,7 @@
             // positions with no look-through data) before the table renders. This
             // per-row fetch only fires if that bulk prefetch missed this key, e.g. it
             // partially failed.
-            const cacheKey = `${fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
+            const cacheKey = underlyingCacheKey(fundUuid, parentIssuerName, currentAsOfDate);
             if (!underlyingCache.has(cacheKey)) {
                 await loadUnderlyingInto(cacheKey, fundUuid, parentIssuerName);
             }
@@ -3010,7 +3019,7 @@
         // The bulk prefetch failed for this fund, so retry with the much narrower
         // single-position query rather than repeating the query that just failed.
         async function retryUnderlying(fundUuid, parentIssuerName) {
-            const cacheKey = `${fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
+            const cacheKey = underlyingCacheKey(fundUuid, parentIssuerName, currentAsOfDate);
             await loadUnderlyingInto(cacheKey, fundUuid, parentIssuerName);
             render();
         }
@@ -3155,7 +3164,6 @@
             const panel = document.getElementById('cashFlowPanel');
             if (panel && !document.getElementById('cfTableBody')) {
                 panel.innerHTML = `
-                    <div class="cf-note" id="cfNote" hidden></div>
                     <div class="table-scroll-wrap">
                         <div class="table-scroll">
                             <table>
@@ -3190,8 +3198,12 @@
             else updateScrollAffordances();
         }
 
-        function viewCacheKey() {
-            return `${currentFundUuid}::${currentAsOfDate || 'current'}`;
+        function underlyingCacheKey(fundUuid, parentIssuerName, asOfDate) {
+            return `${fundUuid}::${parentIssuerName}::${asOfDate || 'current'}`;
+        }
+
+        function viewCacheKey(fundUuid = currentFundUuid, asOfDate = currentAsOfDate) {
+            return `${fundUuid}::${asOfDate || 'current'}`;
         }
 
         function viewFundMeta() {
@@ -3218,8 +3230,8 @@
             const fundUuids = Object.keys(viewFundMeta());
             const asOfDate = currentAsOfDate;
             try {
-                const result = await fetchPages((offset, limit) => buildCashFlowSql(fundUuids, offset, limit, asOfDate));
-                cashFlowCache.set(key, result);
+                const rows = await fetchAllPages(() => buildCashFlowSql(fundUuids, asOfDate), 'Cash flows');
+                cashFlowCache.set(key, { rows });
             } catch (err) {
                 console.warn('SOI: cash flow load failed', err);
                 if (cashFlowLoadingKey === key) cashFlowLoadingKey = null;
@@ -3264,7 +3276,6 @@
         function renderCashFlowMessage(msg, onRetry, isError) {
             cfRenderedNames = [];
             renderCashFlowHead();
-            document.getElementById('cfNote').hidden = true;
             const tbody = document.getElementById('cfTableBody');
             tbody.innerHTML = '';
             const tr = document.createElement('tr');
@@ -3297,12 +3308,6 @@
             const q = filterText.toLowerCase();
             const data = q ? inView.filter(c => c.name.toLowerCase().includes(q)) : inView;
             cfRenderedNames = data.map(c => c.name);
-
-            const note = document.getElementById('cfNote');
-            note.hidden = !cached.truncated;
-            note.textContent = cached.truncated
-                ? `Showing the first ${cached.rows.length.toLocaleString('en-US')} cash flows — results were truncated, so totals are incomplete.`
-                : '';
 
             renderCashFlowHead();
             const tbody = document.getElementById('cfTableBody');
@@ -3433,6 +3438,13 @@
             return typeof text === 'string' && /welcome/i.test(text);
         }
 
+        // The text of an isError envelope. The gateway puts a wrapped command's own
+        // error in `result.result`, beside the generic message, so both are read.
+        function errorText(result) {
+          const text = (r) => (r && r.content && r.content[0] && r.content[0].text) || '';
+          return [text(result), text(result && result.result)].filter(Boolean).join(' ');
+        }
+
         // Every Carta MCP call — call_tool, set_context, welcome alike — must carry
         // _instrumentation_v2 or the MCP rejects it with an "attach it to every
         // call" error. Centralized here so every call site (including the retry
@@ -3490,28 +3502,51 @@
             }
         }
 
-        // Transparently recovers from "please call welcome first" errors. On the first
-        // such failure per artifact load, call welcome to re-initialize the session and
-        // retry the original call once. Any other error passes through untouched, and
-        // `welcomeCalledThisSession` stops a loop if welcome didn't fix the cause.
-        async function callMcpWithWelcomeRetry(toolName, args) {
-            const result = await callCartaTool(toolName, args);
-            if (!result || !result.isError) return result;
+        // Shared in-flight "call welcome" recovery, same idiom as `_mcpNsPromise`
+        // above: the first caller to hit "welcome required" starts the recovery and
+        // stashes the promise here; every other concurrent caller awaits this same
+        // promise instead of racing its own welcome() call or giving up on a stale
+        // error. `fetchFundSnapshot()` runs the holdings and deal IRR queries in one
+        // `Promise.all`, and `fetchAllRows` runs PAGE_CONCURRENCY pages at once — if
+        // the session had actually expired, several can independently see "welcome
+        // required" before any continuation gets a chance to run, so a plain
+        // boolean flag would only rescue whichever call happens to resume first;
+        // every other caller would see the flag already set and return its own
+        // stale error immediately, without waiting for the first caller's
+        // welcome() to finish. A shared promise fixes that: everyone waits for the one
+        // recovery, then each caller retries its own original call.
+        let _welcomeRecoveryPromise = null;
 
-            const errorText = (result.content && result.content[0] && result.content[0].text) || '';
-            if (!isWelcomeRequiredMessage(errorText) || welcomeCalledThisSession) {
-                return result;
-            }
-
+        function recoverSessionOnce() {
+          if (!_welcomeRecoveryPromise) {
             setLoadingStatus('Reconnecting to Carta…');
-            welcomeCalledThisSession = true;
-            const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
-            if (welcomeResult && welcomeResult.isError) {
-                const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
-                throw new Error('Failed to initialize MCP session: ' + msg);
-            }
+            _welcomeRecoveryPromise = (async () => {
+              const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
+              if (welcomeResult && welcomeResult.isError) {
+                throw new Error('Failed to initialize MCP session: ' + (errorText(welcomeResult) || '<no message>'));
+              }
+            })();
+          }
+          return _welcomeRecoveryPromise;
+        }
 
-            return await callCartaTool(toolName, args);
+        // Transparently recovers from "please call welcome first" errors. On the
+        // first such failure, call welcome to re-initialize the session; any
+        // concurrent caller that also hits "welcome required" awaits that same
+        // recovery (see `recoverSessionOnce` above) instead of failing early. Once
+        // recovery settles, each caller retries its own original call once — a
+        // failed recovery propagates to every waiter rather than retrying against a
+        // still-broken session.
+        async function callMcpWithWelcomeRetry(toolName, args) {
+          const result = await callCartaTool(toolName, args);
+          if (!result || !result.isError) return result;
+
+          if (!isWelcomeRequiredMessage(errorText(result))) {
+            return result;
+          }
+
+          await recoverSessionOnce();
+          return await callCartaTool(toolName, args);
         }
 
         // Lucide chevron-down, which is what Ink's `down-bold` icon maps to, inlined
@@ -3717,30 +3752,121 @@
 
         // ── Fetch and render ──
 
-        // Page through the warehouse query until we hit a short page (or the safety cap).
-        // Stops as soon as a page returns fewer rows than PAGE_SIZE, which signals we've
-        // read the last batch. truncated is true when the cap cut the result short.
-        async function fetchPages(buildSql) {
-            const allRows = [];
-            for (let page = 0; page < MAX_PAGES; page++) {
-                const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
-                    name: 'dwh__execute__query',
-                    arguments: {
-                        sql: buildSql(page * PAGE_SIZE, PAGE_SIZE),
-                        format: 'ndjson',
-                    },
-                });
-                // Parser unwraps the response envelope and throws on error envelopes.
-                const pageRows = parseDwhQueryResult(result);
-                allRows.push(...pageRows);
-                if (pageRows.length < PAGE_SIZE) return { rows: allRows, truncated: false };
-            }
-            console.warn(`SOI fetch hit MAX_PAGES (${MAX_PAGES}); results may be truncated at ${MAX_PAGES * PAGE_SIZE} rows.`);
-            return { rows: allRows, truncated: true };
+        // `too_large` is the server's "this page is over the inline ceiling" error;
+        // its fix text names a row count that fits ("lower the limit param to about 48").
+        // Returns the smaller limit to retry with, or null when the error is something
+        // else or the page is already a single row.
+        function shrunkLimit(message, limit) {
+          if (!/"code"\s*:\s*"too_large"/.test(message) || limit <= 1) return null;
+          const m = message.match(/limit param to about (\d+)/);
+          const suggested = m ? parseInt(m[1], 10) : limit;
+          return Math.max(1, Math.min(suggested, Math.floor(limit / 2)));
         }
 
-        async function fetchAllPages(buildSql) {
-            return (await fetchPages(buildSql)).rows;
+        // Runs one query to exhaustion. The SQL carries no LIMIT or OFFSET: the server
+        // pages it from the `limit` / `offset` arguments. The first page is fetched
+        // alone, to learn total_rows and a page size that fits. The remaining ranges
+        // then run PAGE_CONCURRENCY at a time and are joined in offset order. A page
+        // that comes back `too_large` is retried at the same offset with fewer rows,
+        // and the smaller size is kept for the rest of the query. It returns every row
+        // of the query or rejects: a query needing more than MAX_PAGES pages, or any
+        // page that fails, fails the load, and no call for that query starts after that.
+        // `onProgress(loaded, total)` hears the running row count after every page.
+        async function fetchAllRows(buildSql, label, onProgress = () => {}) {
+          const sql = buildSql();
+          let limit = PAGE_LIMIT;
+          let failed = false;
+          let loaded = 0;
+          let total = null;
+
+          async function fetchPage(offset, count) {
+            for (;;) {
+              if (failed) throw new Error(label + ': stopped after a failed page');
+              const sent = Math.min(limit, count);
+              const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+                name: 'dwh__execute__query',
+                arguments: {
+                  sql,
+                  format: 'ndjson',
+                  // The server infers delivery shape from clientInfo.name, which cannot
+                  // distinguish clients that accept a binary blob from those that reject
+                  // it. `inline` forces the always-safe plain-string path.
+                  response_mode: 'inline',
+                  limit: sent,
+                  offset,
+                },
+              });
+              try {
+                return parseNdjson(unwrapEnvelope(unwrapResponse(result)));
+              } catch (error) {
+                const smaller = shrunkLimit(error.message || '', sent);
+                if (smaller === null) throw error;
+                // Concurrent pages sent at the old size fail together; only the first
+                // to report shrinks, the rest retry at the size it set.
+                limit = Math.min(limit, smaller);
+              }
+            }
+          }
+
+          // Every row of [start, end), paged at the current size.
+          async function fetchRange(start, end) {
+            const rows = [];
+            let offset = start;
+            while (offset < end) {
+              const page = await fetchPage(offset, end - offset);
+              if (page.rows.length === 0) throw new Error(label + ': empty page at offset ' + offset);
+              rows.push(...page.rows);
+              offset += page.rows.length;
+              loaded += page.rows.length;
+              onProgress(loaded, total);
+            }
+            return rows;
+          }
+
+          const first = await fetchPage(0, Infinity);
+          loaded = first.rows.length;
+          if (first.nextOffset === null) {
+            onProgress(loaded, loaded);
+            return first.rows;
+          }
+          if (first.rows.length === 0) throw new Error(label + ': empty first page with more rows pending');
+          if (first.totalRows === null) throw new Error(label + ': next_offset without total_rows');
+          total = first.totalRows;
+          onProgress(loaded, total);
+
+          const ranges = [];
+          for (let start = first.nextOffset; start < first.totalRows; start += limit) {
+            ranges.push([start, Math.min(start + limit, first.totalRows)]);
+          }
+          if (ranges.length > MAX_PAGES) {
+            throw new Error(label + ': more than ' + MAX_PAGES + ' pages; results incomplete');
+          }
+          const pages = new Array(ranges.length);
+          let nextRange = 0;
+          async function worker() {
+            while (nextRange < ranges.length) {
+              const i = nextRange++;
+              try {
+                pages[i] = await fetchRange(ranges[i][0], ranges[i][1]);
+              } catch (error) {
+                failed = true;
+                throw error;
+              }
+            }
+          }
+          await Promise.all(Array.from({ length: Math.min(PAGE_CONCURRENCY, ranges.length) }, worker));
+          return first.rows.concat(...pages);
+        }
+
+        // Warehouse column aliases come back upper-case; the page reads lower-case keys.
+        function lowercaseKeys(row) {
+            const out = {};
+            Object.keys(row).forEach(k => { out[k.toLowerCase()] = row[k]; });
+            return out;
+        }
+
+        async function fetchAllPages(buildSql, label) {
+            return (await fetchAllRows(buildSql, label)).map(lowercaseKeys);
         }
 
         // Sort key for vintage-descending order. Funds with no vintage_date sort
@@ -4399,7 +4525,12 @@
                 currentCurrency = fundMeta ? fundMeta.currency : null;
             }
 
-            const cacheKey = `${fundUuid}::${currentAsOfDate || 'current'}`;
+            // One load uses one as-of date throughout: the user can change it while
+            // this load is still running.
+            const asOfDate = currentAsOfDate;
+            const cacheKey = viewCacheKey(fundUuid, asOfDate);
+            // A freshness note describes the view it was drawn for, never the next one.
+            showFreshnessNote(null, false);
 
             // Cache hit → render immediately (underlying holdings were already
             // prefetched and cached the first time this fund/as-of pair was loaded).
@@ -4412,6 +4543,23 @@
                 return;
             }
 
+            const scope = { fundUuid, isPooled, pooled, asOfDate, fundUuids: isPooled ? pooled.map(f => f.uuid) : [fundUuid] };
+
+            // A copy saved by an earlier visit shows at once while a fresh load runs
+            // behind it; the artifact is remounted every time the user comes back.
+            const stored = readStoredSnapshot(cacheKey);
+            if (stored) {
+                applyFundView(buildFundView(stored.snapshot, scope), cacheKey, false);
+                showFreshnessNote(stored.savedAt, true);
+                try {
+                    await refreshStoredView(stored.snapshot, scope, cacheKey);
+                } catch (error) {
+                    console.warn('SOI: background refresh failed', error);
+                    if (viewCacheKey() === cacheKey) showFreshnessNote(stored.savedAt, false);
+                }
+                return;
+            }
+
             // Cache miss → shimmer + fetch.
             showLoading();
             // Name what's loading. This is the longest wait in the page, and a bare
@@ -4421,49 +4569,177 @@
                 ? `Loading investments across ${pooled.length} funds…`
                 : `Loading ${loadingFund ? loadingFund.name : 'fund'} investments…`);
             try {
-                let transformed;
-                const scopeFundUuids = isPooled ? pooled.map(f => f.uuid) : [fundUuid];
-                const investments = await fetchAllPages((offset, limit) => isPooled
-                    ? buildSoiSqlAllFunds(scopeFundUuids, offset, limit, currentAsOfDate)
-                    : buildSoiSql(fundUuid, offset, limit, currentAsOfDate));
-                setLoadingStatus('Loading deal IRR…');
-                const irr = await fetchDealIrr(scopeFundUuids, currentAsOfDate);
-                if (isPooled) {
-                    const fundMetaByUuid = {};
-                    pooled.forEach(f => { fundMetaByUuid[f.uuid] = { name: f.name, currency: f.currency }; });
-                    transformed = transformData(investments, fundMetaByUuid, null, irr.byKey);
-                } else {
-                    transformed = transformData(investments, null, fundUuid, irr.byKey);
-                }
-
-                // Automatically calculate look-through holdings for every
-                // FUND_INVESTMENT position in one bulk query, instead of waiting for
-                // the user to expand each one — see buildUnderlyingBulkSql.
-                setLoadingStatus('Calculating underlying (look-through) holdings…');
-                await prefetchUnderlyingHoldings(transformed, scopeFundUuids, currentAsOfDate);
-
-                // A failed IRR query isn't cached, so coming back to this view
-                // retries it instead of keeping the blank column.
-                if (!irr.failed) fundCache.set(cacheKey, { companies: transformed, irrAsOfDate: irr.asOfDate });
-                loadedCompanies = transformed;
-                irrAsOfDate = irr.asOfDate;
-                irrUnavailable = irr.failed;
-                showCompaniesInView();
+                const snapshot = await fetchFundSnapshot(scope, true);
+                applyFundView(buildFundView(snapshot, scope), cacheKey, true);
+                writeStoredSnapshot(cacheKey, snapshot);
             } catch (error) {
                 console.error('SOI: fund load failed', error);
                 showError(error && error.userFacing ? error.message : "Couldn't load this fund's investments.", () => loadFund(fundUuid));
             }
         }
 
-        // Deal IRR for every fund × company in scope. Runs after the SOI query rather
-        // than alongside it so the two never race through the welcome-retry path. A
-        // failure blanks the IRR column (the header tooltip says why) instead of
+        // Everything one view's table is built from, as plain data so it can be saved:
+        // raw SOI rows, deal IRR entries, and the look-through rows per position.
+        // `scope` pins the fund, pooling and as-of date the whole snapshot is for.
+        async function fetchFundSnapshot(scope, showProgress) {
+            const { fundUuid, isPooled, asOfDate, fundUuids } = scope;
+            // Deal IRR doesn't depend on the SOI rows, so the two load together.
+            // fetchDealIrr never rejects, so a failed IRR can't mask an SOI error.
+            const [investments, irr] = await Promise.all([
+                fetchAllPages(() => isPooled
+                    ? buildSoiSqlAllFunds(fundUuids, asOfDate)
+                    : buildSoiSql(fundUuid, asOfDate), 'Investments'),
+                fetchDealIrr(fundUuids, asOfDate),
+            ]);
+            const snapshot = {
+                investments,
+                irrEntries: Array.from(irr.byKey),
+                irrAsOfDate: irr.asOfDate,
+                irrFailed: irr.failed,
+                underlying: {},
+                lookThroughFailed: false,
+            };
+            // Look-through holdings for every FUND_INVESTMENT position in one bulk
+            // query, instead of waiting for the user to expand each one.
+            if (showProgress) setLoadingStatus('Calculating underlying (look-through) holdings…');
+            const transformed = buildFundView(snapshot, scope).companies;
+            // Drop look-through rows left by a saved copy so the bulk query refreshes them.
+            forEachFundInvestment(transformed, (a, c) => underlyingCache.delete(underlyingCacheKey(a.fundUuid, c.name, asOfDate)));
+            await prefetchUnderlyingHoldings(transformed, fundUuids, asOfDate);
+            snapshot.underlying = collectUnderlying(transformed, asOfDate);
+            // A position whose look-through query failed holds an Error, not rows.
+            forEachFundInvestment(transformed, (a, c) => {
+                if (!(underlyingCacheKey(a.fundUuid, c.name, asOfDate) in snapshot.underlying)) snapshot.lookThroughFailed = true;
+            });
+            return snapshot;
+        }
+
+        function forEachFundInvestment(companiesList, fn) {
+            companiesList.forEach(c => c.assets.forEach(a => { if (a.isFundInvestment) fn(a, c); }));
+        }
+
+        // Rebuilds the renderer's company list from a snapshot and seeds the
+        // look-through cache with the snapshot's rows.
+        function buildFundView(snapshot, { fundUuid, isPooled, pooled }) {
+            const irrByKey = new Map(snapshot.irrEntries);
+            let companiesList;
+            if (isPooled) {
+                const fundMetaByUuid = {};
+                pooled.forEach(f => { fundMetaByUuid[f.uuid] = { name: f.name, currency: f.currency }; });
+                companiesList = transformData(snapshot.investments, fundMetaByUuid, null, irrByKey);
+            } else {
+                companiesList = transformData(snapshot.investments, null, fundUuid, irrByKey);
+            }
+            Object.keys(snapshot.underlying).forEach(key => {
+                if (!underlyingCache.has(key)) underlyingCache.set(key, snapshot.underlying[key]);
+            });
+            return { companies: companiesList, irrAsOfDate: snapshot.irrAsOfDate, irrFailed: snapshot.irrFailed };
+        }
+
+        function applyFundView(view, cacheKey, remember) {
+            // A failed IRR query isn't cached, so coming back to this view
+            // retries it instead of keeping the blank column.
+            if (remember && !view.irrFailed) fundCache.set(cacheKey, { companies: view.companies, irrAsOfDate: view.irrAsOfDate });
+            loadedCompanies = view.companies;
+            irrAsOfDate = view.irrAsOfDate;
+            irrUnavailable = view.irrFailed;
+            showCompaniesInView();
+        }
+
+        // Re-queries behind a view drawn from a saved copy. The table is redrawn only
+        // when the fresh data differs and the user is still on the same view.
+        async function refreshStoredView(oldSnapshot, scope, cacheKey) {
+            const snapshot = await fetchFundSnapshot(scope, false);
+            // A position whose look-through failed would draw an error over good saved
+            // rows, so keep the saved copy and report the failed refresh.
+            if (snapshot.lookThroughFailed) {
+                // The failed query left an Error where each saved row set was; put those back.
+                Object.entries(oldSnapshot.underlying).forEach(([key, rows]) => {
+                    if (underlyingCache.get(key) instanceof Error) underlyingCache.set(key, rows);
+                });
+                throw new Error('look-through refresh incomplete');
+            }
+            writeStoredSnapshot(cacheKey, snapshot);
+            if (viewCacheKey() !== cacheKey) return;
+            const signature = s => JSON.stringify([s.investments, s.irrEntries, s.irrFailed, s.underlying]);
+            if (signature(snapshot) !== signature(oldSnapshot)) {
+                applyFundView(buildFundView(snapshot, scope), cacheKey, true);
+            } else if (!snapshot.irrFailed) {
+                fundCache.set(cacheKey, { companies: loadedCompanies, irrAsOfDate });
+            }
+            showFreshnessNote(null, false);
+        }
+
+        // ── Saved copy of each view, so a remounted artifact opens instantly ──
+        const STORED_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+        // Keyed by firm and build, so a rebuilt artifact never reads a copy whose shape
+        // an older build wrote.
+        function storedSnapshotKey(cacheKey) {
+            return `cartaSoi.snapshot:${FIRM_UUID}:${ARTIFACT_VERSION}:${cacheKey}`;
+        }
+
+        function readStoredSnapshot(cacheKey) {
+            try {
+                const raw = localStorage.getItem(storedSnapshotKey(cacheKey));
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                if (!parsed || !parsed.snapshot || typeof parsed.savedAt !== 'number') return null;
+                if (Date.now() - parsed.savedAt > STORED_SNAPSHOT_MAX_AGE_MS) return null;
+                return parsed;
+            } catch (e) { return null; }
+        }
+
+        // Best effort: storage can be full or unavailable. On a full store, drop every
+        // other saved SOI view and try once more.
+        function writeStoredSnapshot(cacheKey, snapshot) {
+            const key = storedSnapshotKey(cacheKey);
+            const payload = JSON.stringify({ savedAt: Date.now(), snapshot });
+            try {
+                localStorage.setItem(key, payload);
+            } catch (e) {
+                try {
+                    Object.keys(localStorage)
+                        .filter(k => k.startsWith('cartaSoi.snapshot:') && k !== key)
+                        .forEach(k => localStorage.removeItem(k));
+                    localStorage.setItem(key, payload);
+                } catch (e2) { /* not saved; the next visit loads in full */ }
+            }
+        }
+
+        // Plain-data copy of the look-through rows cached for this view's positions.
+        // Positions whose query failed hold an Error and are left out so they retry.
+        function collectUnderlying(companiesList, asOfDate) {
+            const out = {};
+            forEachFundInvestment(companiesList, (a, c) => {
+                const key = underlyingCacheKey(a.fundUuid, c.name, asOfDate);
+                const rows = underlyingCache.get(key);
+                if (Array.isArray(rows)) out[key] = rows;
+            });
+            return out;
+        }
+
+        function showFreshnessNote(savedAt, refreshing) {
+            const el = document.getElementById('freshnessNote');
+            if (!el) return;
+            if (savedAt === null && !refreshing) {
+                el.style.display = 'none';
+                el.textContent = '';
+                return;
+            }
+            const when = new Date(savedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            el.textContent = refreshing ? `Showing data from ${when} — refreshing…` : `Showing data from ${when}. Refresh failed.`;
+            el.style.display = 'block';
+        }
+
+        // Deal IRR for every fund × company in scope. Runs alongside the SOI query;
+        // bootstrap's set_context has already re-initialized the MCP session, so the
+        // two don't race through the welcome-retry path. A failure blanks the IRR column (the header tooltip says why) instead of
         // failing the whole dashboard. asOfDate is the quarter-end the figures
         // reflect: the requested one, or for "Current" the latest one returned.
         async function fetchDealIrr(fundUuids, asOfDate) {
             try {
-                const rows = await fetchAllPages((offset, limit) =>
-                    buildDealIrrSql(fundUuids, offset, limit, asOfDate));
+                const rows = await fetchAllPages(() => buildDealIrrSql(fundUuids, asOfDate), 'Deal IRR');
                 const byKey = new Map();
                 let latest = null;
                 rows.forEach(r => {
@@ -4508,22 +4784,21 @@
             if (targets.length === 0) return;
 
             try {
-                const rows = await fetchAllPages((offset, limit) =>
-                    buildUnderlyingBulkSql(fundUuids, offset, limit, asOfDate));
+                const rows = await fetchAllPages(() => buildUnderlyingBulkSql(fundUuids, asOfDate), 'Look-through holdings');
                 const grouped = new Map();
                 rows.forEach(r => {
-                    const key = `${r.fund_uuid}::${r.parent_issuer_name}::${asOfDate || 'current'}`;
+                    const key = underlyingCacheKey(r.fund_uuid, r.parent_issuer_name, asOfDate);
                     if (!grouped.has(key)) grouped.set(key, []);
                     grouped.get(key).push(r);
                 });
                 targets.forEach(t => {
-                    const key = `${t.fundUuid}::${t.parentIssuerName}::${asOfDate || 'current'}`;
+                    const key = underlyingCacheKey(t.fundUuid, t.parentIssuerName, asOfDate);
                     if (!underlyingCache.has(key)) underlyingCache.set(key, grouped.get(key) || []);
                 });
             } catch (err) {
                 const asError = err instanceof Error ? err : new Error(String(err));
                 targets.forEach(t => {
-                    const key = `${t.fundUuid}::${t.parentIssuerName}::${asOfDate || 'current'}`;
+                    const key = underlyingCacheKey(t.fundUuid, t.parentIssuerName, asOfDate);
                     if (!underlyingCache.has(key)) underlyingCache.set(key, asError);
                 });
             }
@@ -4679,7 +4954,6 @@
         // ── Update banner: is this page behind the published build? ──
         // A rendered artifact is a frozen copy and the sandbox blocks outbound fetches,
         // so carta-mcp reads the published version and this compares it to the stamp.
-        const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
         const UPDATE_DISMISS_KEY = "cartaSoi.dismissedUpdateVersion";
         const UPDATE_PROMPT_TEXT = "Rebuild my Schedule of Investments artifact";
 

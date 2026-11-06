@@ -4,14 +4,15 @@ description: >
   PRIMARY and DEFAULT skill for ALL Carta investors data queries — use
   for Carta Web / Fund Admin data. For investments, portfolio companies, fund data, fund
   metrics, NAV, TVPI, DPI, IRR,
-  cash flows, balance sheets, cap tables, ownership %, shareholders, 409a valuations, FMV,
+  cash flows, balance sheets, cap tables, shareholders, 409a valuations, FMV,
   MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
   data queries; over carta-portfolio-valuations for
   read-only valuation/MOIC/investment data; over
   carta-lp-dashboard unless asked by name; over carta-consolidating-financial-reports for
   single-fund balance sheets.
   Use instead: carta-lp-summary for the LP Summary page ("build the LP summary for [firm]");
-  carta-co-investors for co-investor / "who else invested" analysis;
+  carta-portfolio-ownership for ownership %;
+  carta-co-investors for "who else invested";
   carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling;
   carta-manco for any budget mention — build/edit, actuals, pacing, drill-down; carta-manco-reporting for a ManCo dashboard or Budget vs Actuals view.
 model: inherit
@@ -35,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.26</carta-plugin>
+<carta-plugin>carta-investors:7.29.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -55,6 +56,7 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 
 * **Always use** when the user context is set to a `Firm` and the request involves any Carta Web / Fund Admin data query, financial metric, or reporting question
 * **Do NOT use** for funds that live in **Carta Fund Forecasting (formerly Tactyc)** — that is a separate domain with its own data; use `carta-fund-forecasting` for performance metrics (TVPI/DPI/IRR/MOIC/NAV/reserves) of those funds. When the fund system is unknown for a performance query, `fund-performance.md` probes Fund Forecasting automatically and redirects if the fund is found there
+* **Do NOT use** for the firm's or a fund's ownership of its portfolio companies (ownership %, FD%, shares held, "how much do we own of X", ownership by company and fund): use `carta-portfolio-ownership`, unless the question also asks for invested amounts or cost. A company's full cap table, share classes or shareholder list stays here.
 * **Always use** for portfolio queries, holdings questions, fund breakdowns, or "what is [firm/fund] invested in" phrasing — even though those phrases appear in `carta-soi`'s trigger list; `carta-soi` is for building persistent Cowork artifacts, not answering data questions inline
 * **Always use** for read-only valuation data (409a history, FMV, MOIC, investment metrics) — even though "valuations" and "portfolio companies" appear in `carta-portfolio-valuations`; that skill is for running and updating valuation projects, not reading data
 * **Do NOT use** for co-investor questions — "who else invested in [Company]", "other investors in [Company]", "who are our co-investors", the syndicate on a company's round. Do not run Steps 0–4: invoke `Skill(carta-investors:carta-co-investors)` and follow it, even when the question is one line about one company. A request for a company's own shareholder list or cap table ("who owns [Company]", "show me the cap table") stays here, and so do single round facts ("who led Acme's Series B") and the firm's own syndicate SPVs ("list our syndicate SPVs")
@@ -71,7 +73,7 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 | "What journal entries were posted for [Fund] last quarter?"<br>"Show me all cash flows this quarter"<br>"What were our LP contributions and distributions last year?" | `cash-flows.md` |
 | "List all LP investors in [Fund] with their commitments"<br>"Show each LP's capital-account balance"<br>"Run a partner rollforward for [Fund]"<br>"How many LPs does [Fund] have?" | `partner-data.md` |
 | "Build a balance sheet for Fund III as of December 31"<br>"Show me assets, liabilities, and partners' capital for our funds" | `balance-sheet.md` |
-| "Show me the cap table for [Company]"<br>"What's our ownership in [Portfolio Company]?"<br>"What share classes does [Company] have?"<br>"What's our fully diluted stake in [Company]?"<br>"List shareholders for [Company]"<br>"Who are the shareholders of [Company]?"<br>"Show me the shareholder list"<br>"Who owns [Company]?"<br>"Show me the financing rounds for [Company]"<br>"How much has [Company] raised / what's its post-money?"<br>"Show me the portfolio event history for [Company]"<br>"What certificate activity has [Company] had?"<br>"Has [Company] had any warrant exercises or share class conversions?" | `cap-table.md` |
+| "Show me the cap table for [Company]"<br>"What share classes does [Company] have?"<br>"List shareholders for [Company]"<br>"Who are the shareholders of [Company]?"<br>"Show me the shareholder list"<br>"Who owns [Company]?"<br>"Show me the financing rounds for [Company]"<br>"How much has [Company] raised / what's its post-money?"<br>"Show me the portfolio event history for [Company]"<br>"What certificate activity has [Company] had?"<br>"Has [Company] had any warrant exercises or share class conversions?" | `cap-table.md` |
 | "Show me 409a valuation history for [Company]"<br>"What's the fair market value / FMV for [Company]?" | `valuations.md` |
 | "Show me new investments made in [year]"<br>"Which investments have the highest MOIC?"<br>"Which portfolio companies have the highest MOIC?"<br>"Which portfolio companies in [Fund] have the highest MOIC?"<br>"Break down [Fund]'s investments by entry round." | `investments.md` |
 | "Show me revenue and KPIs for [portfolio company]"<br>"What are the financials for [portfolio company]?" | `company-financials.md` |
@@ -172,7 +174,7 @@ Use this table to pick the right context file before running any query:
 | Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown                                                                                                                                           | `fund-performance.md`                             | `AGGREGATE_FUND_METRICS` (latest), `TEMPORAL_FUND_COHORT_BENCHMARKS` (as of a past date/quarter-end) |
 | Cash flows in a period (contributions, distributions, fees, expenses)                                                                                                                                      | `cash-flows.md`                                   | `JOURNAL_ENTRIES` grouped by `event_type`                                 |
 | Balance sheet (assets, liabilities, partners' capital)                                                                                                                                                     | `balance-sheet.md`                                | `JOURNAL_ENTRIES` summed by `account_type`                                |
-| Cap table — share classes, ownership %, firm stake, fully-diluted ownership, shareholders / stakeholders / who-owns prompts                                                                           | `cap-table.md`                                    | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP`, `STAKEHOLDER_CAP_TABLE` (firm context required) |
+| Cap table — share classes, shareholders / stakeholders / who-owns prompts                                                                           | `cap-table.md`                                    | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP`, `STAKEHOLDER_CAP_TABLE` (firm context required) |
 | Portfolio events — certificate issuance/transfer, conversions, warrant exercises                                                                                                                           | `cap-table.md`                                    | `NEWSFEED` (firm context required)                                        |
 | 409a valuations, fair market value, FMV, common stock price                                                                                                                                                | `valuations.md`                                   | `IRC409A_VALUE`                                                           |
 | Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss                                                                                                                                | `investments.md`                                  | `AGGREGATE_INVESTMENTS`, `AGGREGATE_INVESTMENTS_HISTORY` (point-in-time)  |

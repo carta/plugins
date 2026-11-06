@@ -1,0 +1,2083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{FIRM_NAME}} — Portfolio Ownership</title>
+    <!-- SangBleu Versailles is Carta's brand serif but isn't licensed for distribution
+         outside Carta's environments, so it's referenced as the first font-family
+         option for staff-machine fidelity and falls back to EB Garamond / Georgia
+         everywhere else. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=EB+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: light dark;
+            --page-padding: 48px;
+            /* Ink tokens — values copied verbatim from theme-with-ink/tokens.css.
+               Inline only what this view uses. */
+            --ink-color-global-surface-background-default: light-dark(#FFFFFF, rgb(18 18 18));
+            --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+            --ink-color-global-surface-lightgray-hover: light-dark(#DEDFDF, #2D2D2D);
+            --ink-color-global-feedback-negative-strong: light-dark(#E52431, #FAD9D7);
+            --ink-color-global-text-default: light-dark(#1A1A1A, #EDEDED);
+            --ink-color-global-text-subtle: light-dark(#656B6B, #A7AAAA);
+            --ink-color-global-border-default: light-dark(#A7AAAA, #656B6B);
+            --ink-color-global-border-subtle: light-dark(#DEDFDF, #2D2D2D);
+            --ink-color-global-border-focus-default: light-dark(#285DA3, #8BABD6);
+            --ink-color-global-border-focus-light: light-dark(#C0D1E9, #1A3E6D);
+            --ink-color-global-link-default: light-dark(#285DA3, #8BABD6);
+            --ink-color-global-link-hover: light-dark(#1A3E6D, #4176BC);
+            --ink-color-global-surface-disabled: light-dark(#EDEDED, #394040);
+            --ink-color-global-text-disabled: light-dark(#CECFCF, #656B6B);
+            --ink-color-global-feedback-info-subtle: light-dark(#EAF0F8, #122948);
+            --ink-color-global-feedback-info-strong: light-dark(#285DA3, #2C67B5);
+            --ink-button-background-color-primary-base-default: light-dark(#1A1A1A, #FFFFFF);
+            --ink-button-background-color-primary-base-hover: light-dark(#202020, #CECFCF);
+            --ink-button-font-color-primary-base: light-dark(#FFFFFF, #1A1A1A);
+            --ink-color-global-brand-white: #FFFFFF;
+            --ink-color-global-brand-gray-70: #9C9F9F;
+            --ink-color-global-brand-gray-90: #394040;
+            --ink-color-global-brand-brown-10: #FBFAF9;
+            /* Sand (Ink's brown-10) for fund rows and the As of menu. Light mode only:
+               a dark brown reads as loud on this near-monochrome dark theme, so dark
+               mode uses Ink's underlay dark arm. */
+            --ownership-surface-sand: light-dark(var(--ink-color-global-brand-brown-10), #2D2D2D);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Fallback for any borderless focusable element (links, native buttons) —
+           bordered controls get their own border-recolor + ring instead. */
+        :focus-visible {
+            outline: 2px solid var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--ink-color-global-surface-background-default);
+            color: var(--ink-color-global-text-default);
+            padding: var(--page-padding);
+        }
+
+        .container { max-width: 1600px; margin: 0 auto; }
+
+        /* ── Header ── */
+        .header { margin-bottom: 24px; }
+
+        .carta-logo {
+            display: block;
+            width: 64px;
+            height: 32px;
+            margin-bottom: 24px;
+            color: var(--ink-color-global-text-default);
+        }
+
+        .header-eyebrow {
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--ink-color-global-text-subtle);
+            letter-spacing: 0.02em;
+            margin-bottom: 2px;
+        }
+
+        .header h1 {
+            font-family: "SangBleu Versailles", 'EB Garamond', Georgia, "Times New Roman", serif;
+            font-size: 28px;
+            font-weight: 400;
+            line-height: 48px;
+            color: var(--ink-color-global-text-default);
+        }
+
+        /* ── Shimmer loading state ── */
+        @keyframes shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+
+        .shimmer-bone {
+            background: linear-gradient(90deg, var(--ink-color-global-surface-background-underlay) 25%, var(--ink-color-global-border-default) 50%, var(--ink-color-global-surface-background-underlay) 75%);
+            background-size: 800px 100%;
+            animation: shimmer 1.5s infinite ease-in-out;
+            border-radius: 4px;
+        }
+
+        .loading-status { font-size: 13px; color: var(--ink-color-global-text-subtle); margin-bottom: 12px; }
+
+        .shimmer-toolbar { height: 32px; width: 220px; margin-bottom: 12px; }
+
+        .shimmer-table-header {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
+            margin-bottom: 4px;
+        }
+
+        .shimmer-row {
+            display: flex;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--ink-color-global-surface-background-underlay);
+        }
+
+        .shimmer-cell { height: 14px; flex: 1; }
+        .shimmer-cell:first-child { flex: 2; }
+
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+        .content-area { display: none; }
+        .content-area.loaded { display: block; animation: fade-in 0.3s ease; }
+
+        /* ── Fund filter ── */
+        .switcher-row { margin-bottom: 16px; }
+
+        .fund-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 100%;
+            padding: 7px 12px;
+            background-color: var(--ink-color-global-surface-background-default);
+            border: 1px solid var(--ink-color-global-border-subtle);
+        }
+
+        .fund-switcher-label {
+            font-size: 13px;
+            color: var(--ink-color-global-text-subtle);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        /* ── Combobox ──
+           A native <select> can't be searched, which stops scaling once a firm has
+           dozens of funds: a trigger, a filterable listbox, and keyboard support. */
+        .combo { position: relative; display: inline-flex; min-width: 0; }
+
+        .combo-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 320px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--ink-color-global-text-default);
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .combo-trigger:focus-visible {
+            outline: 2px solid var(--ink-color-global-border-focus-default);
+            outline-offset: 3px;
+            box-shadow: none;
+        }
+
+        .combo-trigger-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Multi-select trigger. A slightly wider budget than the single-select one
+           because it carries an overflow count as well as a name, but still one
+           line that never wraps — Fund and As of read as a single unit, and a
+           wrapping trigger would change the toolbar's height on every pick. */
+        .combo-trigger--multi {
+            max-width: 320px;
+            white-space: nowrap;
+        }
+
+        /* Ink Bubble, count variant: 18px pill, info colors, tabular figures.
+           The same treatment Ink's GlobalFilter uses for an applied-filter count.
+           It never shrinks — the count is the only signal that the trigger's label
+           isn't the whole selection, so it must not be what gets ellipsed away. */
+        .bub {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 18px;
+            min-width: 18px;
+            padding: 0 6px;
+            border: 1px solid var(--ink-color-global-feedback-info-strong);
+            border-radius: 999px;
+            background: var(--ink-color-global-feedback-info-subtle);
+            color: var(--ink-color-global-feedback-info-strong);
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1;
+            letter-spacing: 0.01em;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* ── Ink Checkbox ──
+           20px box at radius-subtle. The box stays white in both themes and the
+           glyph is a dark stroke — Ink does not fill the box on check. */
+        .ink-chk {
+            position: relative;
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+        }
+
+        .ink-chk > input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+            width: 20px;
+            height: 20px;
+            margin: 0;
+        }
+
+        .ink-chk > .ink-chk-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid var(--ink-color-global-border-default);
+            border-radius: 4px;
+            background: var(--ink-color-global-brand-white);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.12s, box-shadow 0.12s;
+        }
+
+        .ink-chk > .ink-chk-box > svg {
+            display: block;
+            opacity: 0;
+            color: var(--ink-color-global-brand-gray-90);
+        }
+
+        .combo-option:hover .ink-chk > .ink-chk-box { border-color: light-dark(var(--ink-color-global-brand-gray-90), var(--ink-color-global-brand-gray-70)); }
+        .ink-chk.is-checked > .ink-chk-box > .ink-chk-check,
+        .ink-chk.is-mixed > .ink-chk-box > .ink-chk-dash { opacity: 1; }
+
+        .ink-chk > input:focus-visible + .ink-chk-box {
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+        }
+
+        /* Ink's Dropdown.Trigger caret: 16px, in the trigger's own color. */
+        .combo-chevron {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: currentColor;
+            flex-shrink: 0;
+        }
+
+        .combo-panel {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: -12px;
+            z-index: 50;
+            /* Grows with the longest fund name up to 560px; longer names are
+               middle-truncated by fitComboLabels, which keeps the distinguishing
+               suffix (", LP", "-A") visible. */
+            width: max-content;
+            min-width: 320px;
+            max-width: min(560px, calc(100vw - 32px));
+            background: var(--ink-color-global-surface-background-default);
+            border: 1px solid var(--ink-color-global-border-subtle);
+            border-radius: 4px;
+            box-shadow: 0 4px 20px 0 rgb(0 0 0 / 0.1);
+            padding: 4px 0;
+        }
+
+        .combo-panel.align-right { left: auto; right: 0; }
+
+        .combo-search-wrap { padding: 8px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+
+        .combo-search {
+            width: 100%;
+            height: 40px;
+            padding: 0 12px;
+            font-family: inherit;
+            font-size: 14px;
+            color: var(--ink-color-global-text-default);
+            background: var(--ink-color-global-surface-background-default);
+            border: 1px solid var(--ink-color-global-border-default);
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .combo-search:focus {
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+        }
+
+        .combo-list {
+            max-height: 340px;
+            overflow-y: auto;
+            /* Reserve the scrollbar's width so it can't cover the vintage column. */
+            scrollbar-gutter: stable;
+            list-style: none;
+        }
+
+        .combo-list:focus-visible { outline: none; box-shadow: none; }
+        .combo-panel:focus { outline: none; }
+
+        .combo-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            line-height: 24px;
+            color: var(--ink-color-global-text-default);
+            cursor: pointer;
+        }
+
+        .combo-option:hover,
+        .combo-option.active { background: var(--ink-color-global-surface-background-underlay); }
+
+        .combo-option-label {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .combo-option.is-family > .combo-option-label { font-weight: 600; }
+        .combo-option.is-member { padding-left: 40px; }
+
+        .combo-option.is-all {
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
+            margin-bottom: 2px;
+            padding-bottom: 10px;
+        }
+
+        .combo-meta {
+            font-size: 12px;
+            color: var(--ink-color-global-text-subtle);
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+        }
+
+        .combo-empty, .combo-footer {
+            padding: 10px 12px;
+            font-size: 12px;
+            color: var(--ink-color-global-text-subtle);
+        }
+
+        /* Only multi-select panels get a footer, and it pairs Clear all with Apply. */
+        .combo-footer {
+            border-top: 1px solid var(--ink-color-global-border-subtle);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .combo-clear-all {
+            border: 0;
+            background: none;
+            padding: 0;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: normal;
+            text-transform: none;
+            color: var(--ink-color-global-link-default);
+            cursor: pointer;
+        }
+
+        .combo-clear-all:hover { color: var(--ink-color-global-link-hover); text-decoration: underline; }
+        .combo-clear-all:focus-visible {
+            outline: 2px solid var(--ink-color-global-border-focus-default);
+            outline-offset: 2px;
+        }
+        .combo-clear-all:disabled {
+            color: var(--ink-color-global-text-subtle);
+            cursor: default;
+            text-decoration: none;
+            opacity: 0.6;
+        }
+
+        /* Ink Button, primary + small. Black in light mode, white in dark — the
+           action color. Never blue; blue stays reserved for links and focus. */
+        .ink-btn--primary {
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: var(--ink-button-background-color-primary-base-default);
+            color: var(--ink-button-font-color-primary-base);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            cursor: pointer;
+            appearance: none;
+        }
+
+        .ink-btn--primary:hover { background: var(--ink-button-background-color-primary-base-hover); }
+        .ink-btn--primary:focus-visible {
+            outline: 0;
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+        }
+        .ink-btn--primary:disabled {
+            background: var(--ink-color-global-surface-disabled);
+            color: var(--ink-color-global-text-disabled);
+            cursor: not-allowed;
+        }
+
+
+        @media (max-width: 640px) {
+            .fund-switcher { display: flex; width: 100%; }
+            .combo { position: static; flex: 1; }
+            .combo-trigger { max-width: 100%; }
+            .combo-panel,
+            .combo-panel.align-right { left: 0; right: 0; width: auto; min-width: 0; max-width: none; }
+        }
+
+        /* ── Toolbar ── */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .search-wrapper { position: relative; display: flex; align-items: center; }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--ink-color-global-text-subtle);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-input {
+            height: 32px;
+            padding: 0 10px 0 30px;
+            border: 1px solid var(--ink-color-global-border-subtle);
+            background: var(--ink-color-global-surface-background-default);
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            width: 220px;
+            color: var(--ink-color-global-text-default);
+            transition: border-color 0.15s;
+        }
+
+        .search-input::placeholder { color: var(--ink-color-global-text-subtle); }
+
+        .search-input:focus {
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+        }
+
+        /* Ink ghost button — transparent at rest, light gray on hover. */
+        .ink-btn--ghost {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--ink-color-global-text-default);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            appearance: none;
+        }
+
+        .ink-btn--ghost:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+        .ink-btn--ghost:focus-visible {
+            outline: 0;
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+        }
+        .ink-btn--ghost[hidden] { display: none; }
+
+        .toolbar-end {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toolbar-status { font-size: 13px; color: var(--ink-color-global-text-subtle); }
+
+        /* ── As of ── */
+        .as-of-wrap { position: relative; }
+
+        .ink-btn--ghost.as-of-trigger { border-color: var(--ink-color-global-border-subtle); }
+
+        .as-of-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            z-index: 50;
+            width: 300px;
+            background: var(--ownership-surface-sand);
+            border: 1px solid var(--ink-color-global-border-subtle);
+            border-radius: 4px;
+            box-shadow: 0 4px 20px 0 rgb(0 0 0 / 0.1);
+            overflow: hidden;
+        }
+
+        .as-of-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 12px;
+            border: 0;
+            background: none;
+            font-family: inherit;
+            text-align: left;
+            color: var(--ink-color-global-text-default);
+            cursor: pointer;
+        }
+
+        .as-of-option + .as-of-option,
+        .as-of-custom { border-top: 1px solid var(--ink-color-global-border-subtle); }
+
+        .as-of-option:hover,
+        .as-of-option:focus-visible {
+            outline: 0;
+            box-shadow: none;
+            background: var(--ink-color-global-surface-background-underlay);
+        }
+
+        .as-of-text {
+            flex: 1;
+            font-size: 13px;
+            line-height: 18px;
+            white-space: nowrap;
+        }
+
+        .as-of-text strong { font-weight: 600; }
+
+        .as-of-sub { margin-left: 6px; font-size: 12px; font-style: italic; color: var(--ink-color-global-text-subtle); }
+
+
+        .as-of-custom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+
+        .as-of-custom input {
+            height: 28px;
+            padding: 0 6px;
+            font-family: inherit;
+            font-size: 13px;
+            color: var(--ink-color-global-text-default);
+            background: var(--ink-color-global-surface-background-default);
+            border: 1px solid var(--ink-color-global-border-default);
+            border-radius: 4px;
+        }
+
+        /* ── Table ── */
+        .table-scroll-wrap { position: relative; }
+
+        /* Scrolling sideways already makes this box the table's scroll container, so
+           the header can only stick inside it: bound its height to the window and
+           let it scroll vertically too. */
+        .table-scroll {
+            overflow: auto;
+            max-height: calc(100vh - 2 * var(--page-padding));
+        }
+
+        /* Right-edge fade hinting there's more to see on horizontal scroll. On the
+           non-scrolling wrapper so it stays pinned instead of scrolling away. */
+        .table-scroll-wrap::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 32px;
+            pointer-events: none;
+            background: linear-gradient(to right, transparent, var(--ink-color-global-surface-background-default));
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .table-scroll-wrap.has-more-right::after { opacity: 1; }
+
+        table { min-width: 100%; border-collapse: collapse; }
+
+        th {
+            background: var(--ink-color-global-surface-background-default);
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--ink-color-global-text-default);
+            /* A shadow, not a border: collapsed borders scroll away from a sticky cell. */
+            box-shadow: inset 0 -1px 0 var(--ink-color-global-text-default);
+            height: 40px;
+            line-height: 20px;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 3;
+        }
+
+        th.number { text-align: right; }
+
+        th.sortable { cursor: pointer; user-select: none; transition: color 0.12s; }
+
+        th.sortable:hover,
+        th.sortable.dimmed { color: var(--ink-color-global-text-subtle); }
+
+        .th-inner { display: inline-flex; align-items: center; gap: 6px; }
+
+        th.number .th-inner { justify-content: flex-end; }
+
+        .sort-indicator {
+            display: inline-flex;
+            color: var(--ink-color-global-border-default);
+            transition: color 0.12s;
+        }
+
+        th.sortable.active .sort-indicator { color: var(--ink-color-global-text-default); }
+
+        td {
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--ink-color-global-text-default);
+            line-height: 22px;
+            height: 40px;
+            vertical-align: middle;
+            white-space: nowrap;
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
+        }
+
+        tbody tr:last-child td { border-bottom: none; }
+
+        /* ── Sticky first column ── */
+        th:first-child,
+        td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: var(--ink-color-global-surface-background-default);
+            padding-left: 8px;
+            min-width: 320px;
+            max-width: 46%;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        th:first-child { z-index: 4; }
+
+        th:first-child::after,
+        td:first-child::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -6px;
+            bottom: 0;
+            width: 6px;
+            pointer-events: none;
+            box-shadow: inset 6px 0 6px -6px rgba(0,0,0,0.08);
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .table-scroll.scrolled th:first-child::after,
+        .table-scroll.scrolled td:first-child::after { opacity: 1; }
+
+        /* ── Company and fund rows ── */
+        tr.company-row { cursor: pointer; user-select: none; }
+
+        tr.company-row:hover td { background: var(--ink-color-global-surface-background-underlay); }
+
+        tr.fund-row td { background: var(--ownership-surface-sand); }
+
+        /* One 28px step (16px disclosure + 12px gap) puts the fund name directly under
+           its company's name. */
+        tr.fund-row td:first-child { padding-left: 36px; }
+
+        tr.fund-row:hover td { background: var(--ink-color-global-surface-background-underlay); }
+
+        .fund-row-name { font-weight: 500; }
+
+        .ink-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .ink-icon svg { display: block; }
+
+        .expand-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            color: var(--ink-color-global-border-default);
+            transition: color 0.15s;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        tr.company-row:hover .expand-icon { color: var(--ink-color-global-text-subtle); }
+
+        .company-cell { display: flex; align-items: center; }
+
+        .company-name { font-weight: 600; color: var(--ink-color-global-text-default); }
+
+        .no-cap-table-tag {
+            margin-left: 8px;
+            padding: 0 6px;
+            border-radius: 4px;
+            background: var(--ink-color-global-surface-background-underlay);
+            color: var(--ink-color-global-text-subtle);
+            font-size: 11px;
+            font-weight: 500;
+            line-height: 20px;
+            white-space: nowrap;
+        }
+
+        /* ── Expand-all toggle (header) ── */
+        .th-expand { display: inline-flex; align-items: center; }
+
+        .expand-all-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ink-color-global-border-default);
+            cursor: pointer;
+            transition: color 0.12s;
+            flex-shrink: 0;
+        }
+
+        .expand-all-toggle:hover { color: var(--ink-color-global-text-default); }
+
+        .number { font-variant-numeric: tabular-nums; text-align: right; }
+
+        /* ── Tooltip ── */
+        .tooltip-trigger {
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-decoration-color: var(--ink-color-global-border-default);
+            text-underline-offset: 3px;
+            cursor: default;
+        }
+
+        tr.company-row .tooltip-trigger { cursor: pointer; }
+
+        .tooltip-popup {
+            position: fixed;
+            background: var(--ink-color-global-text-default);
+            color: var(--ink-color-global-surface-background-default);
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 18px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            white-space: pre;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 100;
+        }
+
+        .tooltip-popup.visible { opacity: 1; }
+
+        /* ── Empty / error states ──
+           Neutral status is --text-subtle, errors are --negative-strong. Retry
+           controls are links, so they take the link color, not the error's. */
+        .empty-state {
+            text-align: center;
+            padding: 48px 16px;
+            color: var(--ink-color-global-text-subtle);
+            white-space: normal;
+        }
+
+        .empty-state.error { color: var(--ink-color-global-feedback-negative-strong); }
+
+        .retry-link {
+            margin-left: 6px;
+            padding: 0;
+            border: none;
+            background: none;
+            font: inherit;
+            color: var(--ink-color-global-link-default);
+            text-decoration: underline;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 2px;
+            cursor: pointer;
+        }
+
+        .retry-link:hover { color: var(--ink-color-global-link-hover); }
+
+        .retry-link:focus-visible {
+            outline: 2px solid var(--ink-color-global-border-focus-default);
+            outline-offset: 2px;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+    <script type="application/json" id="ownership-state">{{STATE_JSON}}</script>
+    <div class="container">
+        <div class="header">
+            <svg class="carta-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 528 264" role="img" aria-label="Carta"><path fill="currentColor" d="M0,0v264h528V0H0ZM517.44,253.44H10.56V10.56h506.88v242.88ZM69.26,137.15c0-26.47,22.34-42,42.39-42,14.35,0,27.74,5.38,34.9,17.78l-13.4,7.77c-2.31-3.49-5.47-6.35-9.17-8.3-3.71-1.96-7.85-2.98-12.05-2.95-11.79,0-25.81,9.2-25.81,27.42s13.41,27.58,26.93,27.58c9.4,0,17.21-5.24,21.84-13.33l13.7,6.33c-7.76,13.95-21.62,21.38-37.72,21.38-20.25-.02-41.6-15.58-41.6-41.69h0ZM197.5,178.83c11.14,0,21.66-4.91,27.09-12.05v9.81h16.55v-79.39h-16.55v9.83c-5.16-7.2-15.93-11.89-27.09-11.89-24.38,0-41.44,17.75-41.44,41.84s17.21,41.84,41.44,41.84ZM199.09,110.21c15.3,0,25.8,11.41,25.8,26.78s-10.51,26.78-25.8,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM330.1,112.96h-17.18v-15.85h17.34v-20.69h17.05v20.69h17.33v15.85h-17.33v63.61h-17.21v-63.61ZM412.2,178.83c11.16,0,21.68-4.91,27.11-12.05v9.81h16.58v-79.39h-16.58v9.83c-5.16-7.2-15.93-11.89-27.11-11.89-24.36,0-41.42,17.75-41.42,41.84s17.2,41.84,41.42,41.84ZM413.81,110.21c15.28,0,25.81,11.41,25.81,26.78s-10.53,26.78-25.81,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM278.62,176.49h-17.21v-79.39h15.77v14.78c3.9-8.78,9.77-14.5,19.3-14.98,1.97-.03,3.93,0,5.89.21l-.26,15.89c-13.69,0-23.47,7.34-23.47,27.79v35.72h-.01Z"/></svg>
+            <div class="header-eyebrow">{{FIRM_NAME}}</div>
+            <h1>Portfolio Ownership</h1>
+        </div>
+
+        <div id="loadingState">
+            <div class="loading-status" id="loadingStatus" hidden></div>
+            <div class="shimmer-bone shimmer-toolbar"></div>
+            <div class="shimmer-table-header"><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div></div>
+            <div class="shimmer-row"><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div></div>
+            <div class="shimmer-row"><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div></div>
+            <div class="shimmer-row"><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div></div>
+            <div class="shimmer-row"><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div><div class="shimmer-bone shimmer-cell"></div></div>
+        </div>
+
+        <div class="content-area" id="contentArea">
+            <div class="switcher-row" id="fundFilterRow">
+                <span class="fund-switcher">
+                    <span class="fund-switcher-label" id="fundComboLabel">Fund</span>
+                    <div class="combo" id="fundCombo"></div>
+                </span>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <span class="search-icon" id="searchIcon"></span>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Filter by company or fund..." aria-label="Filter by company or fund">
+                </div>
+                <div class="as-of-wrap" id="asOfWrap">
+                    <button type="button" class="ink-btn--ghost as-of-trigger" id="asOfButton" aria-haspopup="menu" aria-expanded="false" aria-controls="asOfMenu">
+                        <span id="asOfLabel"></span><span class="combo-chevron" id="asOfChevron"></span>
+                    </button>
+                    <div class="as-of-menu" id="asOfMenu" role="menu" aria-labelledby="asOfButton" hidden></div>
+                </div>
+                <div class="toolbar-end">
+                    <span class="toolbar-status" id="toolbarStatus" role="status" hidden></span>
+                    <button type="button" class="ink-btn--ghost" id="downloadCsv" hidden>Download CSV</button>
+                </div>
+            </div>
+
+            <div class="table-scroll-wrap">
+                <div class="table-scroll">
+                    <table>
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>/* __MCP_UI_TRACKER_JS__ */</script>
+    <script>
+        // STATE: {firm_uuid, firm_name, artifact_id, funds: [{uuid, name, fund_family_name?, vintage_date?}],
+        //   ownership_sql, initial_as_of}, embedded by render-artifact.py. ownership_sql is
+        //   references/ownership.sql verbatim, so the page and the skill's chat answers
+        //   run the same query.
+        // FIRM_UUID: the artifact pins the viewer's MCP firm context to this on load (via
+        //   set_context), so the warehouse query succeeds even if the viewer has switched
+        //   contexts elsewhere.
+        // CARTA_MCP_SERVER: the Carta connector's DISPLAY NAME. The artifact runtime's mcp
+        //   capability addresses a connector by display name only, because a published
+        //   page runs for many viewers and connector ids are per-viewer facts.
+        const STATE = JSON.parse(document.getElementById('ownership-state').textContent);
+        const FUNDS = STATE.funds;
+        const FUND_BY_UUID = new Map(FUNDS.map(f => [f.uuid, f]));
+        const FIRM_UUID = '{{FIRM_UUID}}';
+        const CARTA_MCP_SERVER = '{{CARTA_MCP_SERVER}}';
+        // welcome initializes the viewer's MCP session. The server requires it once per
+        // session; when the session expires, later calls fail asking for welcome, and
+        // callMcpWithWelcomeRetry recovers.
+        const CALL_TOOL = 'call_tool';
+        const SET_CONTEXT_TOOL = 'set_context';
+        const WELCOME_TOOL = 'welcome';
+
+        // The warehouse query response has a payload size limit, so the page reads the
+        // result in pages. ownership.sql's ORDER BY is unique per row, which OFFSET
+        // paging needs to neither skip nor repeat a row.
+        const PAGE_SIZE = 500;
+        const MAX_PAGES = 20;
+
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+        const ALL_FUNDS = '__all__';
+        const ALL_FUNDS_LABEL = 'All funds and SPVs';
+        const FAMILY_PREFIX = 'family:';
+
+        const AS_OF_PERIODS = [
+            { kind: 'Month', unit: 'month' },
+            { kind: 'Quarter', unit: 'quarter' },
+            { kind: 'Year', unit: 'year' },
+        ];
+
+        // `tooltip` names the two columns that are the company's totals, not the fund's.
+        const COLUMNS = [
+            { key: 'name', label: 'Investment' },
+            { key: 'shares', label: 'Shares held', num: true },
+            { key: 'outstandingPct', label: 'Outstanding ownership %', num: true },
+            { key: 'outstanding', label: 'Outstanding', num: true, tooltip: "The company's total outstanding shares" },
+            { key: 'fdPct', label: 'Fully diluted ownership %', num: true },
+            { key: 'fullyDiluted', label: 'Fully diluted shares', num: true, tooltip: "The company's total fully diluted shares" },
+        ];
+
+        // ── Dates ──
+        // Every date is a local calendar day. new Date('YYYY-MM-DD') parses as UTC
+        // midnight, which is the previous day west of Greenwich, so never use it.
+
+        function localIsoDate(d) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+
+        function todayIso() {
+            return localIsoDate(new Date());
+        }
+
+        function parseLocalDate(iso) {
+            const [y, m, d] = iso.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        function isRealDate(iso) {
+            return DATE_RE.test(iso) && localIsoDate(parseLocalDate(iso)) === iso;
+        }
+
+        function fmtDate(iso) {
+            return parseLocalDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        // Day 0 of a month is the last day of the month before, so each end is the day
+        // before the current period starts. Quarters are calendar quarters.
+        function priorPeriodEnds(today) {
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            const monthEnd = new Date(year, month, 0);
+            const quarterEnd = new Date(year, Math.floor(month / 3) * 3, 0);
+            const yearEnd = new Date(year - 1, 11, 31);
+            return {
+                month: { date: localIsoDate(monthEnd) },
+                quarter: { date: localIsoDate(quarterEnd) },
+                year: { date: localIsoDate(yearEnd) },
+            };
+        }
+
+        // ── Formatters ──
+
+        const SHARES_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+        function fmtShares(val) {
+            return val == null ? '—' : SHARES_FORMAT.format(val);
+        }
+
+        // Ownership arrives as a fraction (0.0432 = 4.320%); three decimals, like the web app.
+        function fmtPct(val) {
+            return val == null ? '—' : `${(val * 100).toFixed(3)}%`;
+        }
+
+        // Warehouse strings (company and fund names) flow through innerHTML; escape
+        // before interpolating so a value can't inject markup.
+        function escHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // ── Ink icons (OshFont glyphs, Y-flipped for standalone SVG) ──
+
+        const INK_ICONS = {
+            'down': '<svg viewBox="61 206 386 387" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M446 219c-4 4-9 6-15 6-5 0-10-3-14-7l-160-168-161 168c-8 8-20 9-29 1-4-4-6-9-6-15 0-5 2-10 6-14l175-184c4-4 9-6 15-6 5 0 11 2 15 6l175 184c7 8 7 21-1 29z"/></svg>',
+            'forward': '<svg viewBox="63 129 384 384" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M164 0c-4 0-8 2-11 5-6 6-6 16 0 22l172 164-172 164c-6 6-6 16 0 22 5 6 15 6 22 0l184-175c3-3 4-7 4-11 0-4-1-8-4-11l-184-176c-3-3-7-4-11-4z"/></svg>',
+            'search': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M290 173l15 15 4 4c24 29 38 65 38 103 0 87-72 159-160 159-88 0-159-72-159-159 0-88 71-160 159-160 37 0 72 13 100 36z m-103 0c-67 0-121 54-121 122 0 67 54 121 121 121 67 0 122-54 122-121 0-68-55-122-122-122z m121 17l39-37-20-21-40 39z m120-100l-1-2c-9-21-21-30-30-35l-2-1-75 73 34 35z m12-13l-2-3c-7-14-16-25-27-31l-4-2 35-34c5-5 11-7 18-7 6 0 12 2 17 7 9 10 9 25-1 35z m-12 13l-1-2c-9-21-21-30-30-35l-2-1 12-11 4 2c11 6 20 17 27 31l2 3z"/></svg>',
+            'up-carat': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M67 149c4-4 9-5 14-5l351 0c5 0 10 2 14 5 4 4 6 9 6 15 0 5-2 10-6 14l-175 184c-4 4-9 6-15 6-5 0-11-2-15-6l-175-184c-7-8-7-21 1-29z"/></svg>',
+            'down-carat': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M446 363c-4 4-9 5-15 5l-351 0c-5 0-9-2-13-5-4-4-6-9-6-15 0-5 2-10 5-14l176-184c4-4 9-6 15-6 5 0 10 2 14 6l176 184c7 8 7 21-1 29z"/></svg>',
+            'sort-carat': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M111 268l289 0c5 0 9 2 12 5 7 7 7 18 0 25l-144 145c-3 3-7 5-12 5-5 0-9-2-12-5l-144-145c-7-7-7-18 0-25 3-3 7-4 11-5z m290-89l-289 0c-5 0-9-1-12-4-7-7-7-18 0-25l144-145c3-3 7-5 12-5 5 0 9 2 12 5l144 145c7 7 7 18 0 25-3 3-7 4-11 4z"/></svg>',
+            'expand-all': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M185 362l49 0 0-66c0-4 1-8 4-11 4-4 7-5 11-5l7 0c4 0 8 1 11 5 3 3 4 7 4 11l0 66 49 0c3 0 6 2 8 5 1 1 3 5-1 10l-66 75c-1 2-4 4-8 4-4 0-6-2-7-4l-68-75-1-1c-1-4 0-7 0-9 2-3 5-5 8-5z m136-269l-49 0 0 67c0 4-2 8-5 11-3 3-7 5-11 5l-6 0c-4 0-8-2-11-5-3-3-5-7-5-11l1-67-49 0c-4 0-7-1-8-4-1-1-3-5 1-10l66-75c1-3 4-4 7-4 4 0 7 2 7 3l69 76 0 1c2 3 2 6 0 9-1 3-4 4-7 4z m98 155l-326 0c-11 0-20-9-20-20 0-11 9-20 20-20l326 0c11 0 20 9 20 20 0 11-9 20-20 20z"/></svg>',
+            'collapse-all': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M245 283c1-1 3-3 7-3 5 0 7 2 7 3l69 75 0 1c2 4 1 7 0 9-1 3-4 5-7 5l-49 0 0 67c0 4-2 7-5 11-3 3-7 5-11 5l-6 0c-4 0-8-2-11-5-3-4-5-7-5-11l1-67-49 0c-4 0-7-1-8-4-2-2-3-6 1-11z m16-111c-2 3-4 4-8 4-4 0-6-2-7-3l-68-76-1-1c-1-3-1-6 0-9 2-3 5-4 8-4l49 0 0-67c0-4 1-8 4-11 4-3 7-5 11-5l7 0c4 0 8 2 11 5 3 3 4 7 4 11l0 67 49 0c4 0 6 1 8 4 1 2 3 6-1 10z m158 76l-326 0c-11 0-20-9-20-20 0-11 9-20 20-20l326 0c11 0 20 9 20 20 0 11-9 20-20 20z"/></svg>'
+        };
+
+        function inkIcon(name, size) {
+            return `<span class="ink-icon" style="width:${size}px;height:${size}px">${INK_ICONS[name].replace('<svg ', `<svg width="${size}" height="${size}" `)}</span>`;
+        }
+
+        // Lucide chevron-down (Ink's `down-bold`) and check, inlined because the
+        // artifact sandbox blocks the Lucide CDN.
+        const CHECK_SVG_SMALL = '<svg class="ink-chk-check" viewBox="0 0 12 12" width="14" height="14" fill="none"><path d="M2 6.2l2.6 2.6L10 3.4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        const DASH_SVG = '<svg class="ink-chk-dash" viewBox="0 0 12 12" width="14" height="14" fill="none"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>';
+        const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+        const NO_CAP_TABLE_TAG = '<span class="no-cap-table-tag tooltip-trigger" data-tooltip="The company doesn\'t keep its cap table on Carta,\nso its share counts and ownership aren\'t available">No cap table on Carta</span>';
+
+        // ── State ──
+
+        let asOf = '';
+        const ownershipCache = new Map();  // as-of date → rows, every fund in STATE.funds
+        let loadedRows = [];
+        let loadSeq = 0;  // the latest load; a slower earlier one must not draw over it
+        let fundFilter = new Set(FUNDS.map(f => f.uuid));
+        let companies = [];
+        let filterText = '';
+        let sortCol = null;
+        let sortDir = 'asc';
+        // Companies open by default, so the page tracks the ones the viewer closed:
+        // a company that first appears at another as-of date opens like the rest.
+        const collapsedCompanies = new Set();
+        let loadError = null;  // { message, onRetry } while the page has no rows to show
+        let welcomeCalledThisSession = false;
+        let downloads = null;
+
+        // ── Data ──
+
+        function num(v) {
+            if (v == null || v === '') return null;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function flag(v) {
+            return v === true || /^true$/i.test(String(v));
+        }
+
+        function isoDay(v) {
+            const s = v == null ? '' : String(v).slice(0, 10);
+            return DATE_RE.test(s) ? s : null;
+        }
+
+        // Mirrors ownership.sql: above 1 is a data fault, so it shows as blank, not >100%.
+        function ratio(part, whole) {
+            if (part == null || !whole) return null;
+            const r = part / whole;
+            return r <= 1 ? r : null;
+        }
+
+        // One company per company_key with a fund under it for every row of the funds
+        // in fundUuids. The company row sums its funds' shares and divides by the
+        // company totals, rather than adding percentages, so its funds always add up.
+        function buildCompanies(rows, fundUuids) {
+            const byKey = new Map();
+            rows.forEach(r => {
+                if (!fundUuids.has(r.fund_uuid)) return;
+                let c = byKey.get(r.company_key);
+                if (!c) {
+                    c = { key: r.company_key, name: r.company_name || '—', outstanding: null, fullyDiluted: null,
+                          capTableAsOf: null, hasCapTable: false, funds: [] };
+                    byKey.set(r.company_key, c);
+                }
+                c.outstanding ??= num(r.outstanding_shares);
+                c.fullyDiluted ??= num(r.fully_diluted_shares);
+                c.capTableAsOf ??= isoDay(r.cap_table_as_of);
+                c.hasCapTable ||= flag(r.has_cap_table);
+                const fund = FUND_BY_UUID.get(r.fund_uuid);
+                c.funds.push({
+                    uuid: r.fund_uuid,
+                    name: fund ? fund.name : r.fund_uuid,
+                    shares: num(r.shares_held),
+                    outstandingPct: num(r.outstanding_ownership),
+                    fdPct: num(r.fully_diluted_ownership),
+                    ownershipAsOf: isoDay(r.ownership_as_of),
+                });
+            });
+            return [...byKey.values()].map(c => {
+                c.funds.sort((a, b) => a.name.localeCompare(b.name));
+                const held = c.funds.filter(f => f.shares != null);
+                c.shares = held.length ? held.reduce((sum, f) => sum + f.shares, 0) : null;
+                c.outstandingPct = ratio(c.shares, c.outstanding);
+                c.fdPct = ratio(c.shares, c.fullyDiluted);
+                c.ownershipAsOf = c.funds.map(f => f.ownershipAsOf).filter(Boolean).sort().pop() || null;
+                return c;
+            });
+        }
+
+        function selectedFundUuids() {
+            return new Set(fundFilter);
+        }
+
+        function fundFilterLabel() {
+            return fundFilter.size === FUNDS.length ? ALL_FUNDS_LABEL
+                : FUNDS.filter(f => fundFilter.has(f.uuid)).map(f => f.name).join('; ');
+        }
+
+        // ── Query ──
+
+        function ownershipSql(asOfDate) {
+            if (!DATE_RE.test(asOfDate)) throw new Error('Invalid as-of date: ' + asOfDate);
+            const fundList = FUNDS.map(f => {
+                if (!UUID_RE.test(f.uuid)) throw new Error('Invalid fund UUID: ' + f.uuid);
+                return `'${f.uuid}'`;
+            }).join(', ');
+            return STATE.ownership_sql.replaceAll('<FUND_UUIDS>', fundList).replaceAll('<AS_OF_DATE>', asOfDate).trim();
+        }
+
+        function parseDwhQueryResult(result) {
+            return parseNdjson(unwrapResponse(result)).map(r => {
+                const out = {};
+                Object.keys(r).forEach(k => { out[k.toLowerCase()] = r[k]; });
+                return out;
+            });
+        }
+
+        function unwrapResponse(result) {
+            if (typeof result === 'string') return result;
+            if (!result || typeof result !== 'object') {
+                throw new Error('Unexpected response shape: ' + (typeof result));
+            }
+            if (result.isError) {
+                const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
+                throw new Error('dwh query failed: ' + msg);
+            }
+            if (Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
+                return result.content[0].text;
+            }
+            if (result.structuredContent && typeof result.structuredContent.result === 'string') {
+                return result.structuredContent.result;
+            }
+            throw new Error('Could not find text payload in response');
+        }
+
+        // The ndjson payload may open with a `total_rows: …` header line and a blank line.
+        function parseNdjson(text) {
+            const rows = [];
+            if (!text) return rows;
+            let body = text;
+            const firstLine = text.trimStart().split('\n')[0] || '';
+            if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
+                body = text.slice(text.indexOf('\n\n') + 2);
+            }
+            for (const raw of body.split('\n')) {
+                const line = raw.trim();
+                if (!line || line.startsWith('(Result truncated')) continue;
+                try {
+                    const obj = JSON.parse(line);
+                    if (obj && typeof obj === 'object' && !Array.isArray(obj)) rows.push(obj);
+                } catch (e) {
+                    console.warn('parseNdjson: skipping malformed line', e);
+                }
+            }
+            return rows;
+        }
+
+        // Stops at the first short page, which is the last one.
+        async function fetchAllPages(sql) {
+            const rows = [];
+            for (let page = 0; page < MAX_PAGES; page++) {
+                const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+                    name: 'dwh__execute__query',
+                    // On its own line: a trailing `--` comment in the query would swallow it.
+                    arguments: { sql: `${sql}\nLIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`, format: 'ndjson' },
+                });
+                const pageRows = parseDwhQueryResult(result);
+                rows.push(...pageRows);
+                if (pageRows.length < PAGE_SIZE) return rows;
+            }
+            // A truncated result must never look complete: the later companies would be missing
+            // and the last one's shares held would sum only some of its funds.
+            const err = new Error('This portfolio has more positions than the page can load. Ask in chat for some funds or companies.');
+            err.userFacing = true;
+            throw err;
+        }
+
+        // ── MCP plumbing ──
+
+        // The Carta MCP asks for `welcome` when the viewer's session has expired. Match
+        // on the word: narrow enough to skip unrelated warehouse errors, loose enough to
+        // survive wording tweaks.
+        function isWelcomeRequiredMessage(text) {
+            return typeof text === 'string' && /welcome/i.test(text);
+        }
+
+        // The one stamp every Carta MCP call from this page carries: the host can't tell
+        // a UI-issued call from a model-issued one, so this is the only record of origin.
+        const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-portfolio-ownership'], from_ui: true };
+
+        function withInstrumentation(args) {
+            return { ...args, _instrumentation_v2: INSTRUMENTATION_V2 };
+        }
+
+        let mcpNsPromise = null;
+        // null means this view cannot run mcp — not granted, not served, or failed to
+        // load. Polls up to 2 s because window.claude may not be ready on first render.
+        function mcpNamespace() {
+            if (!mcpNsPromise) {
+                mcpNsPromise = (async () => {
+                    for (let i = 0; i < 5; i++) {
+                        try {
+                            const mcp = await Promise.resolve(window.claude?.use?.('mcp') ?? null);
+                            if (mcp) return mcp;
+                        } catch (_) {}
+                        if (i < 4) await new Promise(r => setTimeout(r, 500));
+                    }
+                    return null;
+                })();
+            }
+            return mcpNsPromise;
+        }
+
+        // A tool that ran and reported failure comes back as an isError envelope so the
+        // welcome recovery can read its message. Connector-level codes rethrow.
+        async function callCartaTool(toolName, args) {
+            const mcp = await mcpNamespace();
+            if (!mcp) {
+                throw new Error('No live Carta connector in this view — the page cannot load data');
+            }
+            try {
+                return await mcp.callTool(CARTA_MCP_SERVER, toolName, withInstrumentation(args || {}));
+            } catch (err) {
+                if (err && err.code === 'tool_error') {
+                    return { isError: true, code: err.code, result: err.result, content: [{ type: 'text', text: err.message || 'tool error' }] };
+                }
+                // The name this page was published with matches none of the viewer's
+                // connectors, so every call fails: say so instead of a bare code.
+                if (err && err.code === 'server_not_connected') {
+                    const e = new Error('Could not reach the Carta connector "' + CARTA_MCP_SERVER + '". Its name may not match the Carta connector in your Claude settings. Ask whoever shared this dashboard to re-publish it. (server_not_connected)');
+                    e.userFacing = true;
+                    throw e;
+                }
+                throw err;
+            }
+        }
+
+        // On the first "call welcome" failure per page load, call welcome and retry once.
+        // welcomeCalledThisSession stops a loop when welcome didn't fix the cause.
+        async function callMcpWithWelcomeRetry(toolName, args) {
+            const result = await callCartaTool(toolName, args);
+            if (!result || !result.isError) return result;
+
+            const errorText = (result.content && result.content[0] && result.content[0].text) || '';
+            if (!isWelcomeRequiredMessage(errorText) || welcomeCalledThisSession) {
+                return result;
+            }
+
+            setLoadingStatus('Reconnecting to Carta…');
+            welcomeCalledThisSession = true;
+            const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
+            if (welcomeResult && welcomeResult.isError) {
+                const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
+                throw new Error('Failed to initialize MCP session: ' + msg);
+            }
+
+            return await callCartaTool(toolName, args);
+        }
+
+        // ── Loading / error / empty states ──
+
+        function showLoading(msg) {
+            document.getElementById('loadingState').hidden = false;
+            document.getElementById('contentArea').classList.remove('loaded');
+            setLoadingStatus(msg);
+        }
+
+        function showContent() {
+            document.getElementById('loadingState').hidden = true;
+            document.getElementById('contentArea').classList.add('loaded');
+            setLoadingStatus(null);
+        }
+
+        function setLoadingStatus(msg) {
+            const el = document.getElementById('loadingStatus');
+            el.textContent = msg || '';
+            el.hidden = !msg;
+        }
+
+        // Drawn in place of the table, so the fund filter and As of stay usable.
+        // `onRetry`, when given, adds a Try again control that re-runs it.
+        function showError(message, onRetry) {
+            loadError = { message, onRetry };
+            companies = [];
+            render();
+            showContent();
+        }
+
+        function errorRow({ message, onRetry }) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = COLUMNS.length;
+            td.className = 'empty-state error';
+            td.textContent = message;
+            if (onRetry) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'retry-link';
+                btn.textContent = 'Try again';
+                btn.addEventListener('click', onRetry);
+                td.append(' ', btn);
+            }
+            tr.appendChild(td);
+            return tr;
+        }
+
+        // ── As of ──
+
+        function syncAsOfButton() {
+            document.getElementById('asOfLabel').textContent = 'As of ' + fmtDate(asOf);
+        }
+
+        function asOfMenuIsOpen() {
+            return !document.getElementById('asOfMenu').hidden;
+        }
+
+        // One line per option: the name, then its date.
+        function asOfOption(kind, date, title) {
+            return `<button type="button" class="as-of-option" role="menuitem" data-as-of-kind="${kind}" data-as-of-date="${date}">
+                        <span class="as-of-text">${title} <span class="as-of-sub">${escHtml(fmtDate(date))}</span></span>
+                    </button>`;
+        }
+
+        // Built on every open: the period ends move with the viewer's clock.
+        function openAsOfMenu() {
+            closeCombo(false);
+            const ends = priorPeriodEnds(new Date());
+            const today = todayIso();
+            const menu = document.getElementById('asOfMenu');
+            menu.innerHTML = asOfOption('Today', today, '<strong>Current</strong>')
+                + AS_OF_PERIODS
+                    .map(p => asOfOption(p.kind, ends[p.unit].date, `End of prior <strong>${p.unit}</strong>`))
+                    .join('')
+                + `<label class="as-of-custom">Pick a date<input type="date" id="asOfDateInput" max="${today}" value="${asOf}"></label>`;
+            menu.hidden = false;
+            document.getElementById('asOfButton').setAttribute('aria-expanded', 'true');
+            menu.querySelector('.as-of-option').focus();
+        }
+
+        function closeAsOfMenu(refocus) {
+            const menu = document.getElementById('asOfMenu');
+            if (menu.hidden) return;
+            menu.hidden = true;
+            const button = document.getElementById('asOfButton');
+            button.setAttribute('aria-expanded', 'false');
+            if (refocus) button.focus();
+        }
+
+        function moveAsOfFocus(step) {
+            const items = [...document.querySelectorAll('#asOfMenu .as-of-option, #asOfDateInput')];
+            if (!items.length) return;
+            const i = items.indexOf(document.activeElement);
+            const next = i < 0 ? (step > 0 ? 0 : items.length - 1) : (i + step + items.length) % items.length;
+            items[next].focus();
+        }
+
+        function pickAsOf(kind, date) {
+            if (!isRealDate(date) || date > todayIso()) return;
+            trackUi('click', 'Ownership.AsOf.' + kind);
+            closeAsOfMenu(true);
+            loadAsOf(date);
+        }
+
+        // ── Fund filter (combobox) ──
+
+        const COMBO_SEARCH_THRESHOLD = 8;  // a search box on a handful of options is noise
+        // `selection` is the staged ticks; `fundFilter` is what the table shows.
+        const fundCombo = { items: [], selection: new Set(), query: '', open: false, activeIndex: -1 };
+
+        function vintageSortKey(f) {
+            return f.vintage_date || '0000-00-00';
+        }
+
+        // Most recent vintage first, undated last; a fund family sits at its newest
+        // member's vintage and is itself an option that filters to every member.
+        function fundFilterItems() {
+            const families = new Map();
+            const entries = [];
+            FUNDS.forEach(f => {
+                if (!f.fund_family_name) {
+                    entries.push({ sortKey: vintageSortKey(f), funds: [f] });
+                    return;
+                }
+                if (!families.has(f.fund_family_name)) {
+                    const entry = { family: f.fund_family_name, funds: [] };
+                    families.set(f.fund_family_name, entry);
+                    entries.push(entry);
+                }
+                families.get(f.fund_family_name).funds.push(f);
+            });
+            const byVintageThenName = (a, b) => vintageSortKey(b).localeCompare(vintageSortKey(a)) || a.name.localeCompare(b.name);
+            families.forEach(entry => {
+                entry.funds.sort(byVintageThenName);
+                entry.sortKey = vintageSortKey(entry.funds[0]);
+            });
+            entries.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+
+            const fundMeta = f => (f.vintage_date ? f.vintage_date.slice(0, 4) : '');
+            const items = [{ value: ALL_FUNDS, label: ALL_FUNDS_LABEL }];
+            entries.forEach(entry => {
+                if (entry.family && entry.funds.length > 1) {
+                    items.push({ value: FAMILY_PREFIX + entry.family, label: entry.family, isFamily: true,
+                                 meta: `Fund family · ${entry.funds.length} funds` });
+                    entry.funds.forEach(f => items.push({ value: f.uuid, label: f.name, meta: fundMeta(f), groupName: entry.family }));
+                } else {
+                    entry.funds.forEach(f => items.push({ value: f.uuid, label: f.name, meta: fundMeta(f) }));
+                }
+            });
+            return items;
+        }
+
+        function populateFundFilter() {
+            fundCombo.items = fundFilterItems();
+            fundCombo.selection = new Set(fundFilter);
+            renderComboTrigger();
+            // One fund has nothing to filter.
+            document.getElementById('fundFilterRow').hidden = FUNDS.length <= 1;
+            // On the mount, which survives renderComboTrigger's rewrite, so it is added once.
+            // Focus moving within the filter (search, Clear all, Apply, trigger) keeps the panel
+            // open; focus leaving it closes the panel and drops the staged ticks.
+            const mount = document.getElementById('fundCombo');
+            mount.addEventListener('focusout', e => {
+                if (!e.relatedTarget || !mount.contains(e.relatedTarget)) closeCombo(false);
+            });
+        }
+
+        function renderComboTrigger() {
+            const mount = document.getElementById('fundCombo');
+            mount.innerHTML = `
+                <button type="button" class="combo-trigger combo-trigger--multi" id="fundCombo-trigger"
+                        aria-haspopup="listbox" aria-expanded="${fundCombo.open}"
+                        aria-labelledby="fundComboLabel fundCombo-trigger">
+                    ${comboSummaryMarkup()}
+                    <span class="combo-chevron">${CHEVRON_SVG}</span>
+                </button>
+                <div class="combo-panel" id="fundCombo-panel" tabindex="-1" hidden>
+                    ${fundCombo.items.length >= COMBO_SEARCH_THRESHOLD ? `
+                    <div class="combo-search-wrap">
+                        <input type="text" class="combo-search" id="fundCombo-search"
+                               placeholder="Search funds" autocomplete="off" aria-controls="fundCombo-list">
+                    </div>` : ''}
+                    <ul class="combo-list" role="listbox" aria-multiselectable="true" id="fundCombo-list" tabindex="-1" aria-labelledby="fundComboLabel"></ul>
+                    <div class="combo-footer" id="fundCombo-footer"></div>
+                </div>`;
+
+            const trigger = mount.querySelector('.combo-trigger');
+            trigger.addEventListener('click', () => (fundCombo.open ? closeCombo(true) : openCombo()));
+            trigger.addEventListener('keydown', onComboTriggerKey);
+            const search = mount.querySelector('.combo-search');
+            if (search) {
+                search.addEventListener('input', e => {
+                    fundCombo.query = e.target.value;
+                    fundCombo.activeIndex = 0;
+                    renderComboList();
+                });
+                search.addEventListener('keydown', onComboPanelKey);
+            }
+            mount.querySelector('.combo-list').addEventListener('keydown', onComboPanelKey);
+            wireComboFooter(mount.querySelector('.combo-footer'));
+        }
+
+        // The trigger reads the applied filter, not the staged ticks: the all-funds
+        // label, or the first fund's name with a +N count for the rest.
+        function comboSummaryMarkup() {
+            const label = v => `<span class="combo-trigger-value" title="${escHtml(v)}">${escHtml(v)}</span>`;
+            const picked = FUNDS.filter(f => fundFilter.has(f.uuid));
+            if (picked.length === FUNDS.length || !picked.length) return label(ALL_FUNDS_LABEL);
+            const rest = picked.length - 1;
+            return label(picked[0].name) + (rest > 0 ? `<span class="bub">+${rest}</span>` : '');
+        }
+
+        // The fund uuids a row stands for: a family row stands for all its members.
+        function comboItemUuids(item) {
+            if (item.value === ALL_FUNDS) return FUNDS.map(f => f.uuid);
+            if (item.value.startsWith(FAMILY_PREFIX)) {
+                const family = item.value.slice(FAMILY_PREFIX.length);
+                return FUNDS.filter(f => f.fund_family_name === family).map(f => f.uuid);
+            }
+            return [item.value];
+        }
+
+        // 'checked' | 'mixed' | 'empty'; a family or the all row is mixed when only some members are ticked.
+        function comboItemSelectState(item) {
+            const uuids = comboItemUuids(item);
+            const hits = uuids.filter(u => fundCombo.selection.has(u)).length;
+            if (!hits) return 'empty';
+            return hits === uuids.length ? 'checked' : 'mixed';
+        }
+
+        function comboCheckboxMarkup(item) {
+            const sel = comboItemSelectState(item);
+            const cls = sel === 'checked' ? ' is-checked' : (sel === 'mixed' ? ' is-mixed' : '');
+            // One glyph per box: two children in the 20px flex box would centre the pair.
+            const glyph = sel === 'checked' ? CHECK_SVG_SMALL : (sel === 'mixed' ? DASH_SVG : '');
+            return `<span class="ink-chk${cls}">
+                <input type="checkbox" tabindex="-1" ${sel === 'checked' ? 'checked' : ''} aria-hidden="true">
+                <span class="ink-chk-box">${glyph}</span>
+            </span>`;
+        }
+
+        // A family's members stay visible when the family name matches (and vice
+        // versa), so a matched group never renders as a header with nothing under it.
+        function comboVisibleItems() {
+            const q = fundCombo.query.trim().toLowerCase();
+            if (!q) return fundCombo.items;
+            const matches = i => (i.label + ' ' + (i.isFamily ? '' : (i.meta || ''))).toLowerCase().includes(q);
+            const matchedGroups = new Set(fundCombo.items.filter(i => i.isFamily && matches(i)).map(i => i.label));
+            return fundCombo.items.filter(i =>
+                matches(i) ||
+                (i.groupName && matchedGroups.has(i.groupName)) ||
+                (i.isFamily && fundCombo.items.some(c => c.groupName === i.label && matches(c))));
+        }
+
+        function renderComboList() {
+            const list = document.getElementById('fundCombo-list');
+            const visible = comboVisibleItems();
+            if (!visible.length) {
+                list.innerHTML = `<li class="combo-empty">No funds match “${escHtml(fundCombo.query)}”.</li>`;
+            } else {
+                list.innerHTML = visible.map((item, idx) => {
+                    const cls = ['combo-option'];
+                    if (item.value === ALL_FUNDS) cls.push('is-all');
+                    if (item.isFamily) cls.push('is-family');
+                    if (item.groupName) cls.push('is-member');
+                    if (idx === fundCombo.activeIndex) cls.push('active');
+                    return `<li class="${cls.join(' ')}" role="option" id="fundCombo-opt-${idx}"
+                                aria-selected="${comboItemSelectState(item) === 'checked'}" data-value="${escHtml(item.value)}">
+                        ${comboCheckboxMarkup(item)}
+                        <span class="combo-option-label" data-full="${escHtml(item.label)}">${escHtml(item.label)}</span>
+                        ${item.meta ? `<span class="combo-meta">${escHtml(item.meta)}</span>` : ''}
+                    </li>`;
+                }).join('');
+                list.querySelectorAll('.combo-option').forEach(li => {
+                    // Toggling re-renders the list and detaches this <li>; stopping here keeps
+                    // the document click-outside handler from closing the panel on every tick.
+                    li.addEventListener('click', e => {
+                        e.stopPropagation();
+                        toggleComboValue(li.dataset.value);
+                    });
+                });
+            }
+            renderComboFooter();
+            fitComboLabels(list);
+            // The panel's width follows its rows, so check the right edge only now.
+            const panel = document.getElementById('fundCombo-panel');
+            if (!panel.hidden) alignComboPanel(panel);
+            const active = list.querySelector('.combo-option.active');
+            if (active) {
+                active.scrollIntoView({ block: 'nearest' });
+                const input = document.getElementById('fundCombo-search');
+                if (input) input.setAttribute('aria-activedescendant', active.id);
+            }
+        }
+
+        // Apply is dead when nothing is ticked or the ticks match what is on screen.
+        function renderComboFooter() {
+            const footer = document.getElementById('fundCombo-footer');
+            const n = fundCombo.selection.size;
+            const canApply = n > 0 && !sameSet(fundCombo.selection, fundFilter);
+            // Updated in place: replacing a focused button would drop focus out of the
+            // panel and dismiss it.
+            footer.querySelector('.combo-clear-all').disabled = n === 0;
+            const apply = footer.querySelector('.combo-apply');
+            apply.disabled = !canApply;
+            apply.textContent = n > 0 ? `Apply (${n})` : 'Apply';
+        }
+
+        function wireComboFooter(footer) {
+            footer.innerHTML = `
+                <button type="button" class="combo-clear-all">Clear all</button>
+                <button type="button" class="ink-btn--primary combo-apply">Apply</button>`;
+            footer.querySelector('.combo-clear-all').addEventListener('click', e => {
+                e.stopPropagation();
+                fundCombo.selection.clear();
+                renderComboList();
+                // Clear all disables itself; keep focus inside the panel.
+                document.getElementById('fundCombo-list').focus();
+            });
+            footer.querySelector('.combo-apply').addEventListener('click', e => {
+                e.stopPropagation();
+                applyComboSelection();
+            });
+        }
+
+        function sameSet(a, b) {
+            return a.size === b.size && [...a].every(x => b.has(x));
+        }
+
+        function toggleComboValue(value) {
+            const item = fundCombo.items.find(i => i.value === value);
+            if (!item) return;
+            // A row that isn't fully ticked fills in; a fully ticked one clears.
+            const turnOn = comboItemSelectState(item) !== 'checked';
+            comboItemUuids(item).forEach(u => (turnOn ? fundCombo.selection.add(u) : fundCombo.selection.delete(u)));
+            renderComboList();
+        }
+
+        // Fund names in one firm usually share a long prefix and differ at the end
+        // ("... Fund II, LP" vs "... Fund II-A, LP"), so an end ellipsis hides the one
+        // part that tells them apart. Cut from the middle instead, full name on hover.
+        function fitComboLabels(list) {
+            list.querySelectorAll('.combo-option-label').forEach(el => {
+                const full = el.dataset.full || '';
+                el.textContent = full;
+                el.removeAttribute('title');
+                if (el.scrollWidth <= el.clientWidth) return;
+                el.title = full;
+                let lo = 0;
+                let hi = full.length;
+                while (lo < hi) {
+                    const keep = Math.ceil((lo + hi) / 2);
+                    el.textContent = middleTruncate(full, keep);
+                    if (el.scrollWidth <= el.clientWidth) lo = keep; else hi = keep - 1;
+                }
+                el.textContent = middleTruncate(full, lo);
+            });
+        }
+
+        function middleTruncate(text, keep) {
+            const head = Math.ceil(keep / 2);
+            return text.slice(0, head).trimEnd() + '…' + text.slice(text.length - (keep - head)).trimStart();
+        }
+
+        function openCombo() {
+            closeAsOfMenu(false);
+            fundCombo.open = true;
+            fundCombo.query = '';
+            fundCombo.activeIndex = 0;
+            document.getElementById('fundCombo-panel').hidden = false;
+            document.getElementById('fundCombo-trigger').setAttribute('aria-expanded', 'true');
+            renderComboList();
+            const search = document.getElementById('fundCombo-search');
+            if (search) { search.value = ''; search.focus(); } else { document.getElementById('fundCombo-list').focus(); }
+        }
+
+        function closeCombo(refocus) {
+            if (!fundCombo.open) return;
+            fundCombo.open = false;
+            // Dismissing without Apply drops the staged ticks.
+            fundCombo.selection = new Set(fundFilter);
+            document.getElementById('fundCombo-panel').hidden = true;
+            const trigger = document.getElementById('fundCombo-trigger');
+            trigger.setAttribute('aria-expanded', 'false');
+            if (refocus) trigger.focus();
+        }
+
+        function applyComboSelection() {
+            if (!fundCombo.selection.size) return;
+            const changed = !sameSet(fundCombo.selection, fundFilter);
+            fundFilter = new Set(fundCombo.selection);
+            closeCombo(true);
+            if (!changed) return;
+            renderComboTrigger();
+            trackUi('click', 'Ownership.Fund.Filter');
+            // A cache hit when the date has loaded, a retry when it failed, and nothing
+            // to show yet before the firm context is pinned.
+            if (asOf) loadAsOf(asOf);
+        }
+
+        // Flips the panel when it would otherwise run past the right edge. Measured
+        // from the left-anchored position, or a flipped panel would always look like
+        // it fits and flip back.
+        function alignComboPanel(panel) {
+            panel.classList.remove('align-right');
+            const rect = panel.getBoundingClientRect();
+            panel.classList.toggle('align-right', rect.right > window.innerWidth - 8);
+        }
+
+        function onComboTriggerKey(e) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openCombo();
+            }
+        }
+
+        function onComboPanelKey(e) {
+            const visible = comboVisibleItems();
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeCombo(true);
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!visible.length) return;
+                const step = e.key === 'ArrowDown' ? 1 : -1;
+                fundCombo.activeIndex = (fundCombo.activeIndex + step + visible.length) % visible.length;
+                renderComboList();
+            } else if (e.key === 'Enter' || (e.key === ' ' && !e.target.classList.contains('combo-search'))) {
+                // Space toggles the active row, except in the search box where it is typing.
+                e.preventDefault();
+                const item = visible[fundCombo.activeIndex];
+                if (item) toggleComboValue(item.value);
+            }
+        }
+
+        // ── Sorting and filtering ──
+
+        function byName(a, b) {
+            return a.name.localeCompare(b.name);
+        }
+
+        // Unsorted reads alphabetically. A blank figure is "unknown", not zero, so
+        // those rows stay at the bottom in both directions.
+        function sorted(list) {
+            const dir = sortDir === 'asc' ? 1 : -1;
+            if (!sortCol || sortCol === 'name') return [...list].sort((a, b) => (sortCol ? dir : 1) * byName(a, b));
+            return [...list].sort((a, b) => {
+                const va = a[sortCol];
+                const vb = b[sortCol];
+                if (va == null || vb == null) return (va == null) - (vb == null) || byName(a, b);
+                return dir * (va - vb) || byName(a, b);
+            });
+        }
+
+        function setSort(key) {
+            trackUi('click', 'Ownership.Sort.' + key);
+            if (sortCol === key) {
+                sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortCol = key;
+                sortDir = 'asc';
+            }
+            render();
+        }
+
+        function filtered() {
+            const q = filterText.trim().toLowerCase();
+            if (!q) return companies;
+            return companies.filter(c => c.name.toLowerCase().includes(q) || c.funds.some(f => f.name.toLowerCase().includes(q)));
+        }
+
+        function sortIndicator(key) {
+            if (sortCol !== key) return inkIcon('sort-carat', 10);
+            return inkIcon(sortDir === 'asc' ? 'up-carat' : 'down-carat', 10);
+        }
+
+        // ── Expand / collapse ──
+
+        function allExpanded() {
+            return companies.every(c => !collapsedCompanies.has(c.key));
+        }
+
+        function toggleCompany(key) {
+            if (collapsedCompanies.has(key)) {
+                trackUi('click', 'Ownership.Company.Expand');
+                collapsedCompanies.delete(key);
+            } else {
+                trackUi('click', 'Ownership.Company.Collapse');
+                collapsedCompanies.add(key);
+            }
+            render();
+        }
+
+        function toggleAll() {
+            if (allExpanded()) {
+                trackUi('click', 'Ownership.CollapseAll');
+                companies.forEach(c => collapsedCompanies.add(c.key));
+            } else {
+                trackUi('click', 'Ownership.ExpandAll');
+                collapsedCompanies.clear();
+            }
+            render();
+        }
+
+        // ── Render ──
+
+        function renderHead() {
+            const expanded = allExpanded();
+            document.getElementById('tableHead').innerHTML = '<tr>' + COLUMNS.map((col, i) => {
+                const cls = ['sortable'];
+                if (col.num) cls.push('number');
+                if (sortCol === col.key) cls.push('active');
+                else if (sortCol) cls.push('dimmed');
+                const label = col.tooltip
+                    ? `<span class="tooltip-trigger" data-tooltip="${escHtml(col.tooltip)}">${col.label}</span>`
+                    : col.label;
+                const toggle = i === 0
+                    ? `<span class="th-expand"><span class="expand-all-toggle" id="expandAllToggle" role="button" tabindex="0"
+                             aria-label="${expanded ? 'Collapse all' : 'Expand all'}">${inkIcon(expanded ? 'collapse-all' : 'expand-all', 16)}</span></span>`
+                    : '';
+                return `<th class="${cls.join(' ')}" data-sort="${col.key}"><div class="th-inner">${toggle}${label}<span class="sort-indicator">${sortIndicator(col.key)}</span></div></th>`;
+            }).join('') + '</tr>';
+        }
+
+        function numberCells(shares, outstandingPct, outstanding, fdPct, fullyDiluted) {
+            return [fmtShares(shares), fmtPct(outstandingPct), fmtShares(outstanding), fmtPct(fdPct), fmtShares(fullyDiluted)]
+                .map(v => `<td class="number">${v}</td>`).join('');
+        }
+
+        // A company without a Carta cap table shows dashes throughout: whatever the
+        // query returned for it has no cap table behind it.
+        function companyRows(c) {
+            const expanded = !collapsedCompanies.has(c.key);
+            const v = c.hasCapTable ? c : {};
+            const name = `<span class="company-name">${escHtml(c.name)}</span>`;
+            let html = `<tr class="company-row" data-company="${escHtml(c.key)}" aria-expanded="${expanded}">
+                <td><div class="company-cell"><span class="expand-icon">${inkIcon(expanded ? 'down' : 'forward', 10)}</span>${name}${c.hasCapTable ? '' : ' ' + NO_CAP_TABLE_TAG}</div></td>
+                ${numberCells(v.shares, v.outstandingPct, v.outstanding, v.fdPct, v.fullyDiluted)}</tr>`;
+            if (!expanded) return html;
+            c.funds.forEach(f => {
+                const fv = c.hasCapTable ? f : {};
+                html += `<tr class="fund-row">
+                    <td><span class="fund-row-name">${escHtml(f.name)}</span></td>
+                    ${numberCells(fv.shares, fv.outstandingPct, v.outstanding, fv.fdPct, v.fullyDiluted)}</tr>`;
+            });
+            return html;
+        }
+
+        function render() {
+            const tbody = document.getElementById('tableBody');
+            if (loadError) {
+                document.getElementById('tableHead').innerHTML = '';
+                tbody.innerHTML = '';
+                tbody.appendChild(errorRow(loadError));
+                return;
+            }
+            renderHead();
+            const data = sorted(filtered());
+            if (!companies.length) {
+                tbody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="empty-state">No portfolio positions as of ${escHtml(fmtDate(asOf))}.</td></tr>`;
+            } else if (!data.length) {
+                tbody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="empty-state">No companies match your filter.</td></tr>`;
+            } else {
+                tbody.innerHTML = data.map(companyRows).join('');
+            }
+            updateScrollAffordances();
+        }
+
+        function showCompanies() {
+            loadError = null;
+            companies = buildCompanies(loadedRows, selectedFundUuids());
+            render();
+            showContent();
+        }
+
+        // ── Load ──
+
+        async function loadAsOf(date) {
+            asOf = date;
+            syncAsOfButton();
+            const seq = ++loadSeq;
+            if (ownershipCache.has(date)) {
+                loadedRows = ownershipCache.get(date);
+                showCompanies();
+                return;
+            }
+            showLoading(`Loading ownership as of ${fmtDate(date)}…`);
+            try {
+                const rows = await fetchAllPages(ownershipSql(date));
+                ownershipCache.set(date, rows);
+                if (seq !== loadSeq) return;
+                loadedRows = rows;
+                showCompanies();
+            } catch (error) {
+                if (seq !== loadSeq) return;
+                console.error('Ownership: loading failed', error);
+                showError(error && error.userFacing ? error.message : "Couldn't load ownership.", () => loadAsOf(date));
+            }
+        }
+
+        // ── Download ──
+
+        const SAVE_UNAVAILABLE = new Set(['unavailable', 'not_granted', 'capability_disabled', 'capability_removed']);
+
+        function syncDownloadButton() {
+            document.getElementById('downloadCsv').hidden = !downloads;
+        }
+
+        function setToolbarStatus(text) {
+            const el = document.getElementById('toolbarStatus');
+            el.textContent = text || '';
+            el.hidden = !text;
+        }
+
+        // A company name is set by the company, not the firm, so a text cell that a
+        // spreadsheet would read as a formula (leading = + - @) is prefixed with a quote.
+        function csvCell(v) {
+            let s = v == null ? '' : String(v);
+            if (typeof v === 'string' && /^[=+\-@]/.test(s) && !/^-?\d+(?:\.\d+)?%?$/.test(s)) s = "'" + s;
+            return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }
+
+        // The rows on screen, each company followed by its funds. Percentages as
+        // percent with three decimals, share counts unrounded.
+        function ownershipCsv(list) {
+            const pct = v => (v == null ? '' : (v * 100).toFixed(3));
+            const header = ['Company', 'Fund', 'Shares held', 'Outstanding ownership %', 'Outstanding shares',
+                            'Fully diluted ownership %', 'Fully diluted shares', 'Ownership as of', 'Cap table as of'];
+            const lines = [];
+            list.forEach(c => {
+                const v = c.hasCapTable ? c : {};
+                lines.push([c.name, fundFilterLabel(), v.shares, pct(v.outstandingPct), v.outstanding, pct(v.fdPct),
+                            v.fullyDiluted, c.ownershipAsOf, c.capTableAsOf]);
+                c.funds.forEach(f => {
+                    const fv = c.hasCapTable ? f : {};
+                    lines.push([c.name, f.name, fv.shares, pct(fv.outstandingPct), v.outstanding, pct(fv.fdPct),
+                                v.fullyDiluted, f.ownershipAsOf, c.capTableAsOf]);
+                });
+            });
+            return '﻿' + [header, ...lines].map(r => r.map(csvCell).join(',')).join('\n');
+        }
+
+        function csvFilename() {
+            return `${STATE.artifact_id}-${asOf}.csv`;
+        }
+
+        async function downloadCsv() {
+            if (!downloads || !companies.length) return;
+            trackUi('click', 'Ownership.Download');
+            try {
+                await downloads.save({ filename: csvFilename(), data: ownershipCsv(sorted(filtered())) });
+            } catch (err) {
+                const code = err && err.code;
+                if (code === 'declined') return;
+                if (SAVE_UNAVAILABLE.has(code)) { downloads = null; syncDownloadButton(); }
+                setToolbarStatus(code === 'rate_limited' ? 'A save is already waiting for you to confirm.' : 'Could not export from this view.');
+                setTimeout(() => setToolbarStatus(''), 4000);
+            }
+        }
+
+        // ── Bootstrap ──
+
+        async function bootstrap() {
+            if (!FIRM_UUID || !CARTA_MCP_SERVER || !Array.isArray(FUNDS) || !FUNDS.length) {
+                showError('This page was published without its firm, connector or funds. Ask Claude to rebuild it.');
+                return;
+            }
+            populateFundFilter();
+            // Pinned once for the page's lifetime: the page is firm-scoped, so neither a
+            // fund filter nor a new as-of date needs it again.
+            showLoading('Connecting to Carta…');
+            try {
+                const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
+                if (contextResult && contextResult.isError) {
+                    const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
+                    throw new Error(msg);
+                }
+            } catch (error) {
+                console.error('Ownership: pinning firm context failed', error);
+                showError(error && error.userFacing ? error.message : "Couldn't connect to Carta.", () => bootstrap());
+                return;
+            }
+            await loadAsOf(STATE.initial_as_of || todayIso());
+        }
+
+        // ── Init ──
+
+        document.getElementById('searchIcon').innerHTML = inkIcon('search', 14);
+        document.getElementById('asOfChevron').innerHTML = CHEVRON_SVG;
+
+        // Re-decides whether the sticky-column shadow and the right-edge fade show,
+        // after a scroll, a resize or a render changes the table's width.
+        function updateScrollAffordances() {
+            const scroller = document.querySelector('.table-scroll');
+            if (!scroller) return;
+            scroller.classList.toggle('scrolled', scroller.scrollLeft > 0);
+            const hasMore = scroller.scrollWidth - scroller.scrollLeft - scroller.clientWidth > 1;
+            scroller.closest('.table-scroll-wrap').classList.toggle('has-more-right', hasMore);
+        }
+
+        document.addEventListener('scroll', e => {
+            if (e.target.closest && e.target.closest('.table-scroll')) updateScrollAffordances();
+        }, true);
+        window.addEventListener('resize', () => updateScrollAffordances());
+
+        document.addEventListener('input', e => {
+            if (e.target.id === 'searchInput') {
+                filterText = e.target.value;
+                render();
+            }
+        });
+
+        document.addEventListener('change', e => {
+            if (e.target.id === 'asOfDateInput') pickAsOf('Custom', e.target.value);
+        });
+
+        document.addEventListener('click', e => {
+            const target = e.target;
+            if (!target.closest) return;
+            if (!target.closest('#fundCombo')) closeCombo(false);
+            if (!target.closest('#asOfWrap')) closeAsOfMenu(false);
+
+            const option = target.closest('[data-as-of-kind]');
+            if (option) {
+                pickAsOf(option.dataset.asOfKind, option.dataset.asOfDate);
+            } else if (target.closest('#asOfButton')) {
+                if (asOfMenuIsOpen()) closeAsOfMenu(true); else openAsOfMenu();
+            } else if (target.closest('#downloadCsv')) {
+                downloadCsv();
+            } else if (target.closest('#expandAllToggle')) {
+                toggleAll();
+            } else if (target.closest('th[data-sort]')) {
+                setSort(target.closest('th[data-sort]').dataset.sort);
+            } else if (target.closest('tr.company-row')) {
+                toggleCompany(target.closest('tr.company-row').dataset.company);
+            }
+        });
+
+        // Escape and the arrow keys drive the As of menu; the company filter and the
+        // date input keep their own typing.
+        document.addEventListener('keydown', e => {
+            if (e.target.id === 'expandAllToggle' && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                toggleAll();
+                return;
+            }
+            if (!asOfMenuIsOpen()) return;
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeAsOfMenu(true);
+                return;
+            }
+            if (e.target.id === 'searchInput' || e.target.id === 'asOfDateInput') return;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                moveAsOfFocus(e.key === 'ArrowDown' ? 1 : -1);
+                return;
+            }
+        });
+
+        // Tooltip (body-appended popup, no layout impact)
+        const tip = document.createElement('div');
+        tip.className = 'tooltip-popup';
+        document.body.appendChild(tip);
+
+        document.addEventListener('mouseover', e => {
+            const trigger = e.target.closest && e.target.closest('.tooltip-trigger');
+            if (!trigger) return;
+            tip.textContent = trigger.dataset.tooltip;
+            tip.classList.add('visible');
+            const rect = trigger.getBoundingClientRect();
+            let left = rect.left;
+            if (left + tip.offsetWidth > window.innerWidth - 8) left = rect.right - tip.offsetWidth;
+            if (left < 8) left = 8;
+            tip.style.left = left + 'px';
+            tip.style.top = rect.top - tip.offsetHeight - 6 + 'px';
+        });
+
+        document.addEventListener('mouseout', e => {
+            if (e.target.closest && e.target.closest('.tooltip-trigger')) tip.classList.remove('visible');
+        });
+
+        bootstrap();
+
+        // The tracker relays through window.claude, which may not be ready at script
+        // start; once mcp resolves, so does the downloads capability.
+        mcpNamespace().then(mcp => {
+            if (!mcp) return;
+            initUiTracker('carta-portfolio-ownership', CARTA_MCP_SERVER);
+            trackUi('render', 'Ownership.View');
+            return Promise.resolve(window.claude.use('downloads')).catch(() => null).then(d => {
+                downloads = d;
+                syncDownloadButton();
+            });
+        });
+    </script>
+</body>
+</html>

@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.26</carta-plugin>
+<carta-plugin>carta-investors:7.29.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -351,11 +351,12 @@ A tab strip above the table switches between **Holdings** (the default) and **In
 - **Lines.** Money invested is negative; proceeds and terminal value are positive. Each fund × company ends with a **Terminal value** line: the Holdings tab's Fair market value for the same positions, dated at the as-of date (today for Current). A realization lists each leg separately (return of cost, then gain), so proceeds often come in pairs, as in the app. A note converting with capitalized interest adds a *Capitalized interest* line and an offsetting *Interest income* line.
 - **Groups.** Rows group by company, and by fund within a company several funds hold. A group's amount is its net cash flow, which equals the company's Total G/L on the Holdings tab except where interest was capitalized (Total cost counts that interest; the flows show it as an offsetting pair) or cost was set in another currency. The app's own export differs from its Gain/Loss in the same places. The fund, As of and company search controls and the Show / Hide exited companies button apply to both tabs; exited companies keep their flows and end in a $0 terminal value.
 - **Source.** Flows are rebuilt from `FUND_ADMIN.JOURNAL_ENTRIES`, because the asset records the app uses aren't in the connector's tables. Amounts and dates match the app; the account wording uses the holding's name (e.g. *Investment - Limited partnership interest*) where the app names its share class (*Investment - Membership Interest*), and company names follow the Holdings tab.
-- **Large firms.** Results stop at 10,000 lines; past that the tab says the list was truncated. A failed load shows an error with Try again on the tab only.
+- **Large firms.** A list needing more than 500 pages fails to load rather than showing part of it. A failed load shows an error with Try again on the tab only.
 - **No export.** The tab has no Export to Excel; point a user at the app's Deal IRR Export for a spreadsheet.
 
 ## Caveats
 
 - **The connector display name must match what the viewer has.** A published page runs for whoever opens it. If a viewer's Carta connector carries a different display name, every call rejects with `server_not_connected`; the page shows that plainly. Re-invoke this skill to republish against the right name. In Cowork, `list_connectors` returns empty — see `gate-carta-connector-name.md`, Step 1a.
 - **Session re-initialization.** When a `set_context` or dwh call returns an error that mentions `welcome`, the artifact briefly shows "Reconnecting to Carta…" above the shimmer, calls `welcome` itself, and retries the original call once.
+- **Saved copy.** Each loaded view is saved in the browser for 24 hours. Reopening the page shows it at once with a "Showing data from …" note, then refreshes behind it and redraws if anything changed. A rebuilt artifact never reads an older build's copy.
 - **Cowork-only.** Live Artifacts only render in Cowork. If the user is in Claude Code or Claude Desktop, explain that the artifact view requires Cowork. For inline data answers, point them at the `carta-explore-data` skill.

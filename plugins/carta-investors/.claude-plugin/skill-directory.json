@@ -190,6 +190,16 @@
       "Spin up the **portfolio analytics app** for {{FIRM}}"
     ]
   },
+  "carta-portfolio-ownership": {
+    "category": "portfolio",
+    "name": "Ownership by company and fund",
+    "order": 35,
+    "prompts": [
+      "How much does {{FIRM}} own of [company]?",
+      "Show our fully diluted ownership by company and by fund",
+      "Build an ownership table for the whole portfolio"
+    ]
+  },
   "carta-portfolio-valuations": {
     "category": "portfolio",
     "name": "Portfolio valuations",
