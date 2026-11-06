@@ -733,6 +733,7 @@ function ccrForgetDocs(activityId) {
 }
 
 async function ccrFetchEmail(target, partnerId) {
+  const logo = ccrFirmLogoDataUri();
   const res = await mcpRead("fa:get:capital-activity-partner-email-preview", {
     fund_uuid: target.fundUuid,
     capital_activity_id: target.activityId,
@@ -752,7 +753,44 @@ async function ccrFetchEmail(target, partnerId) {
     p = ccrPayload(alt, (c) => "subject" in c || "body" in c);
   }
   if (!p) throw new Error("no preview in the response");
-  return p;
+  if (p.body_format !== "html") return p;
+  const { html, unresolved } = inlineEmailImages(p.body || "", await logo);
+  return Object.assign({}, p, { body: html, unresolvedImages: unresolved });
+}
+
+// The firm's own logo as a data: URI, or null. Cached for the session because every
+// notice in the firm carries the same logo.
+let _ccrFirmLogoPromise = null;
+function ccrFirmLogoDataUri() {
+  if (!_benchmarkFirmId) return Promise.resolve(null);
+  if (!_ccrFirmLogoPromise) {
+    _ccrFirmLogoPromise = mcpRead("fa:get:firm_logo", { firm_uuid: _benchmarkFirmId }).then((res) => {
+      const p = res.isError ? null : ccrPayload(res, (c) => "data_uri" in c);
+      return (p && p.data_uri) || null;
+    }).catch((e) => {
+      console.error("[firm logo error]", e);
+      return null;
+    });
+  }
+  return _ccrFirmLogoPromise;
+}
+
+// The sandbox CSP is img-src 'self' data:, so an email image served from a URL shows
+// as a broken icon. The firm's co-branding logo (alt="Logo" in fund-admin's email base
+// template) is swapped for its data: URI; any other URL image is dropped and counted
+// so the preview can say the sent email carries more than it shows.
+function inlineEmailImages(html, logoDataUri) {
+  let unresolved = 0;
+  const out = String(html).replace(/<img\b[^>]*>/gi, tag => {
+    const src = /\bsrc\s*=\s*"([^"]*)"/i.exec(tag)?.[1] ?? '';
+    if (/^data:/i.test(src)) return tag;
+    if (logoDataUri && /\balt\s*=\s*"Logo"/i.test(tag)) {
+      return tag.replace(/\bsrc\s*=\s*"[^"]*"/i, `src="${logoDataUri}"`);
+    }
+    unresolved++;
+    return '';
+  });
+  return { html: out, unresolved };
 }
 
 async function ccrFetchPdf(target, interestId) {
@@ -1723,6 +1761,9 @@ function ccrEmailPane() {
         "<span>Preview only: the address ends in the placeholder [/LINK_CARTA] instead of a " +
         "link. Each investor's sent email carries a working link to their own capital call. " +
         "Everything else here is final.</span></div>"
+      : "") +
+    (e.unresolvedImages > 0
+      ? '<p class="ccr-note">Some images in the sent email can\'t be shown in this preview.</p>'
       : "");
 }
 
@@ -2272,7 +2313,7 @@ async function ccrPaintPdf() {
   const width = Math.max(240, host.clientWidth || 560);
 
   try {
-    const doc = await pdfjsLib.getDocument({ data: ccrB64Bytes(uri.slice(uri.indexOf(",") + 1)) }).promise;
+    const doc = await pdfjsLib.getDocument({ data: ccrB64Bytes(uri.slice(uri.indexOf(",") + 1)), isEvalSupported: false }).promise;
     for (let n = 1; n <= doc.numPages; n++) {
       if (token !== _ccrPaintToken) return;
       const page = await doc.getPage(n);

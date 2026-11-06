@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.12</carta-plugin>
+<carta-plugin>carta-investors:7.28.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -162,7 +162,7 @@ not inside a fund-data dashboard.
   changes**, which opens a modal and keeps an unsent request as a draft on this computer, and
   **Approve and release**, behind its own confirm step. Read from `fa:get:capital-activity-review-summary`,
   `fa:list:capital-activity-review-row` (its rows carry each group's `wire_status` for the Wires
-  tab), `fa:get:capital-activity-partner-email-preview` and
+  tab), `fa:get:capital-activity-partner-email-preview`, `fa:get:firm_logo` and
   `fa:get:capital-activity-notice-pdf-preview`; written with `fa:mutate:request-capital-activity-changes`
   and `fa:mutate:approve-capital-activity`. Reads ride `read_tool` and writes `call_tool`, both
   already in the grant, so adding a command never changes the publish call.
@@ -196,7 +196,8 @@ not inside a fund-data dashboard.
   than shown as a column of dashes. The review panel is `min(1160px, 96vw)` by `min(780px, 92vh)`.
 
   **The email preview follows `carta-home`'s `renderEmailPreview`** — the same command, the same
-  envelope-plus-scriptless-iframe shape, the same `[/LINK_CARTA]` caveat. Recipients key on
+  envelope-plus-scriptless-iframe shape, the same `[/LINK_CARTA]` caveat, the same firm logo
+  inlined as a `data:` URI (the CSP blocks image URLs). Recipients key on
   `addr_type` (`TO` / `CC` / `BCC`), not `type`. Keep the two behaviourally identical.
 
   **The Notice tab shows the real PDF, painted by a renderer the artifact carries.** Read with

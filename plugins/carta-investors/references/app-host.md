@@ -18,12 +18,12 @@ result isn't already in context — the Carta MCP bootstrap normally has it):
 These are the `web_base_url` values `carta config list-envs` reports per
 environment; re-derive from there if a new environment appears.
 
-`local` is the one row you cannot resolve from the name alone. A local MCP
-fronting the shared TEST backend serves `https://app.test.carta.rocks`, while a
-fully local stack serves `http://localhost:8000` — the environment name is
-identical either way. When `get_current_user`'s `base_url` is an `http://localhost:<port>`
-address, that is the web app: use it. Otherwise ask the user which one they are on rather
-than picking.
+`local` is the one row you cannot resolve from the name alone. A local MCP can
+front a laptop stack (`http://localhost:8000`), a dev stack published on its own
+hosts, or the shared TEST backend (`https://app.test.carta.rocks`), and the
+environment name is identical in each case. A local server's `get_current_user`
+`base_url` names the web app it is wired to: use it. When it is empty, ask the
+user which one they are on rather than picking.
 
 **Outside that `local` case, never use `get_current_user`'s `base_url` as the app host.** It is the
 API host, not the app host: on `test` it returns `https://test.carta.rocks`,

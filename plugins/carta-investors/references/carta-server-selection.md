@@ -15,11 +15,9 @@ block; each answers with its `environment`. Keep the chosen server's answer: its
 file). Read the table backwards: the row whose app base URL is the link's origin names the
 environment, and the server whose `environment` matches that row is the one. A row's name is
 a prefix, as that file says. Never compare `base_url` with the link: outside the `local` row
-it is the API host, not the app host. For `local`, follow that file's rule:
-
-- A `local` server whose `base_url` is `http://localhost:<port>` serves a localhost link.
-- A `local` server with any other `base_url` fronts the shared test backend, so it can serve
-  a test link. When both it and a `test` server could, ask which with `AskUserQuestion`.
+it is the API host, not the app host. A `local` server serves the link whose origin is its
+`base_url`, by that file's `local` rule; a `local` server with an empty `base_url` could serve
+any link. When more than one server could serve a link, ask which with `AskUserQuestion`.
 
 **No server matches the link** → say this session isn't connected to that Carta
 environment, and stop.

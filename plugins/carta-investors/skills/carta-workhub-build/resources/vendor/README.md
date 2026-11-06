@@ -24,6 +24,8 @@ ESM-only and the fake-worker path goes through a dynamic `import()`, which the s
 refuses. Do not bump this pin without re-testing a real notice inside a published
 artifact.
 
+**Why `isEvalSupported: false`.** 3.11.174 is open to CVE-2024-4367 (script run from a crafted font); turning eval off closes it.
+
 **Why a PDF renderer at all.** The browser's own viewer is blocked in the artifact
 sandbox — `<object>`, `<iframe src="data:application/pdf">` and `<embed src="blob:">`
 all render nothing — so the page has to rasterise the document itself.
