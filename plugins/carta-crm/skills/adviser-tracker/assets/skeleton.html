@@ -45,17 +45,17 @@ h2{font:500 20px/28px var(--sans);margin:0 0 4px}
 button:focus-visible,summary:focus-visible{outline:2px solid var(--ink-color-global-border-focus-default);outline-offset:0;box-shadow:var(--ink-focus-ring)}
 .empty{color:var(--muted);padding:24px 0;margin:0}
 /* Fixed column widths keep every column in place when the year toggle changes the rows.
-   The number columns and Relationship strength have pixel widths. Bank takes 22% of the table. A long bank domain ends in an ellipsis and shows in full on hover. Top contact takes the rest.
-   The table min-width leaves Top contact 160px after the pixel widths and Bank's 22%. Below it the wrapper scrolls and no column shrinks.
+   The rank column is 44px. Every other column takes a share of the table, and Top contact takes the rest, so a wide window spreads its extra width over all columns. A long bank domain ends in an ellipsis and shows in full on hover.
+   At the table min-width each quarter column keeps 43px for its header, Year total and Relationship strength keep 140px and the text columns keep 160px. Below it the wrapper scrolls and no column shrinks.
    A 1000px viewport leaves 886px for the table: 1000px minus 32px page padding, 24px card padding and a 1px card border on each side. The min-width fits in 886px, so the whole table shows there with no sideways scroll. */
 .tbl-wrap{overflow-x:auto}
 /* While the table scrolls sideways, the rank, the bank column and the tier label stay in view so each row keeps its name.
    The bank column starts after the 44px rank column. Its shadow marks the edge the other columns scroll under. */
 .tbl-wrap td:nth-child(-n+2),.tbl-wrap th:nth-child(-n+2){position:sticky;left:0;z-index:1;background:var(--card)}
 .tbl-wrap td:nth-child(2),.tbl-wrap th:nth-child(2){left:44px;box-shadow:6px 0 6px -6px rgba(0,0,0,.2)}
-.tbl-wrap tr.tier .tier-l{position:sticky;left:10px}.tbl-wrap table{min-width:867px}
+.tbl-wrap tr.tier .tier-l{position:sticky;left:10px}.tbl-wrap table{min-width:875px}
 table{width:100%;border-collapse:collapse;table-layout:fixed}
-col.c-idx{width:44px}col.c-q{width:48px}col.c-total{width:140px}col.c-rel{width:140px}col.c-bank{width:22%}
+col.c-idx{width:44px}col.c-q{width:5%}col.c-total{width:16%}col.c-rel{width:16%}col.c-bank{width:22%}
 /* On a phone only the bank column stays in view, at 150px, so the scrolling columns keep room to read. */
 @media (max-width:600px){.tbl-wrap td:first-child,.tbl-wrap th:first-child{position:static}.tbl-wrap td:nth-child(2),.tbl-wrap th:nth-child(2){left:0}col.c-bank{width:150px}.card-head .toggle{margin-bottom:12px}}
 th{font-weight:500;font-size:12px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ink-color-global-border-default);white-space:nowrap}
