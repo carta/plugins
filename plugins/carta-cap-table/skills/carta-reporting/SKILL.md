@@ -59,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.30</carta-plugin>
+<carta-plugin>carta-cap-table:6.110.32</carta-plugin>
 
 # Custom Reports
 
@@ -643,7 +643,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `mixed_currency_columns` non-empty | That column's amounts are in more than one currency, so its totals (summary or per group), `pct_of_total`, `running_sum` and `delta` were left out — those formulas are also listed in `skipped_formulas`. Never total them yourself. | "'[Column]' has amounts in several currencies, so I left its total out rather than add them together." |
 | `missing_columns` or `skipped_formulas` non-empty (other than for `mixed_currency_columns`) | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
 | `unknown_filter_columns` non-empty | A filter named a column this sheet does not have, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't filter on '[Column]' — it isn't in this report, so these rows are unfiltered. Here are the columns I can filter on: […]" Offer to re-run against a real column. |
-| `unknown_sort_columns` non-empty | A sort named a column this sheet does not have, so **that sort did not run** and the rows are not in the order asked for. Never present the result as sorted. A column that is one of the `formulas` names you requested is computed after the sort runs, so it cannot be sorted on (unless it is aggregated by a `group_by`). | Formula column: "I can't sort by a computed column — the rows are not sorted by '[Column]'". Any other name: "I couldn't sort by '[Column]' — it isn't in this report, so the rows are not sorted by it. Here are the columns I can sort on: […]" Offer to re-run against a real column. |
+| `unknown_sort_columns` non-empty | A sort named a column this sheet does not have, so **that sort did not run** and the rows are not in the order asked for. Never present the result as sorted. A column that is one of the `formulas` names you requested is computed after the sort runs, so it cannot be sorted on (unless it is aggregated by a `group_by`). A sheet with a `summary_table` names every sort column here: the summary orders its own rows. | Formula column: "I can't sort by a computed column — the rows are not sorted by '[Column]'". `summary_table` sheet: drop the `sort`, and for largest first rerun with `"order": "value_desc"`. Any other name: "I couldn't sort by '[Column]' — it isn't in this report, so the rows are not sorted by it. Here are the columns I can sort on: […]" Offer to re-run against a real column. |
 | `unsupported_filters` non-empty | A `>`, `<`, `>=` or `<=` filter named a text column, which has no order, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't apply '[Column] [op] [value]' — '[Column]' is text, so these rows are unfiltered on it." Offer `=`, `!=` or `contains` instead, or a numeric or date column. |
 | `structural_rows_dropped` > 0 | The sheet has section headings or total rows, and a filter, sort, column pick, formula or aggregation was applied, which cannot keep them in place. | "Section headings and totals were left out because of the filters/sort — say so if you want them back unsorted." |
 | `warnings.unknown_sheets` present | A name in `warnings.unknown_sheets.requested` is not in this report, so it was left out. | "This report has no sheet called '[Name]'. Its sheets are: […]" (list `warnings.unknown_sheets.available`) Offer to re-run with a real sheet. |
@@ -709,12 +709,43 @@ presenting a filtered report, the same way you check `missing_columns`. An order
 `stats.unsupported_filters` as `{"column", "op"}`.
 
 `sort` runs before `columns` selects, so a sort column need not be one of the selected columns.
-Rows with no value in the sort column go last, ascending or descending. A sort naming a column
-the sheet does not have applies no ordering and is reported in `stats.unknown_sort_columns`; so does a
-sort on a `formulas` column (formulas run after the sort), unless a `group_by` aggregates it.
+Rows with no value in the sort column go last, ascending or descending. A sort that did not run is
+reported in `stats.unknown_sort_columns`; the warnings table lists when that happens.
 `running_sum` and `delta` over a money column are money, in the currency of the source cells.
 A summary's totals row is `{"_t": [cells]}`, like a source totals row, and its "Total" label sits in
 the first visible (not `hidden`) column with no aggregation (no label when every such column has one).
+
+**Totals by group, pivots and subtotals: use `summary_table`.** It lays out the rows the way a
+Carta custom report's summary does. Use `group_by` only for `avg`, `min` or `max`, and `summary`
+only for a Total row under the detail rows.
+
+```json
+"aggregations": {"type": "summary_table",
+                 "rows":   ["Share Class", "Vesting Schedule"],
+                 "pivot":  "Threshold Value",
+                 "values": [{"column": "Units", "fn": "sum"}],
+                 "totals": {"rows": true, "columns": true},
+                 "subtotals": false,
+                 "order":  "key_asc"}
+```
+
+- `rows`: 1 or 2 columns to group by. A blank cell groups as "(blank)", and groups sort by key
+  (numbers as numbers, text without case, blank last); `"order": "value_desc"` sorts them by the
+  first value, largest first. With `subtotals`, `value_desc` orders the groups inside each
+  first-column group; the first-column groups and their Total rows stay in key order. When the
+  first value is a sum left blank for mixed currencies, the groups stay in key order. A money
+  column that holds more than one currency can't be a row or pivot column: that raises an error.
+- `values`: each `{"column", "fn": "sum" | "count", "percent_of"?: "total" | "group", "name"?}`.
+  `sum` takes a number column; `count` counts rows. `percent_of` shows the share of the grand total
+  or of the first row column's group (that one needs two `rows`). `name` sets the header; without
+  it a sum is headed by its column, a count "Count", a share "% of total" or "% of group". The
+  same column may appear twice (a sum and its share) when the headers differ.
+- `pivot`: one column whose values become columns, with exactly one value and no `percent_of` or
+  `name`. `totals.columns` adds a Total column to a pivot.
+- `totals.rows` adds a grand Total row; `subtotals` (two `rows` only) adds a "Total {group}" row
+  after each group of the first row column. Both are `{"_t"}` rows.
+- The summary decides the columns and their order: leave `columns` and `sort` out of that sheet.
+  Filters run first. Any other shape raises an error naming the rule it breaks.
 A sheet with a filter asking for zero on a numeric column (op `=` with value 0, or op `in` with a 0
 in its list) keeps its all-zero rows (no `empty_rows_dropped`); other numeric filters still drop them.
 
@@ -799,7 +830,7 @@ merged tab (`missing_columns`, `unknown_filter_columns`, `unknown_sort_columns`,
 `mixed_currency_columns`) is the union over the merged sources, in first-seen order, so a source's
 skipped formula or unrun filter still shows.
 
-`kept_row_count` is the data rows in the result, before the preview cut: after grouping, without a summary totals row. `displayed_row_count` counts the displayed rows other than section headings and `_t` totals rows (a summary aggregation's Total row is counted), so it is < `kept_row_count` exactly when a preview cut data rows.
+`kept_row_count` is the data rows in the result, before the preview cut: after grouping, without the totals rows an aggregation adds. `displayed_row_count` counts the displayed rows other than section headings and `_t` totals rows (a `summary` aggregation's Total row is counted; a `summary_table`'s subtotal and Total rows are not), so it is < `kept_row_count` exactly when a preview cut data rows.
 
 ---
 

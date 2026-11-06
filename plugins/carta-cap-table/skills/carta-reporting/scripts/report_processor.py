@@ -65,14 +65,22 @@ Aggregations:
     {"type": "group_by", "group_by": "Stakeholder Name",
      "columns": {"Shares Issued": "sum", "Grant Count": "count"}}
   Supported ops: sum avg min max count
+  Summary table (the group, pivot and totals a Carta custom report keeps; see apply_summary_table):
+    {"type": "summary_table", "rows": ["Share Class", "Vesting Schedule"],
+     "values": [{"column": "Units", "fn": "sum"},
+                {"column": "Units", "fn": "sum", "percent_of": "group", "name": "% of class"}],
+     "totals": {"rows": true}, "subtotals": true}
+    {"type": "summary_table", "rows": ["Vesting Schedule"], "pivot": "Threshold Value",
+     "values": [{"column": "Units", "fn": "sum"}], "totals": {"rows": true, "columns": true}}
 
 Output JSON: {"data", "stats", "warnings"} — the full shape is the Output block under
 "Script Reference" in the carta-reporting SKILL.md.
 
   kept_row_count is the data rows in the result, before the preview cut: after grouping,
-  without a summary totals row. displayed_row_count counts the displayed rows other than
-  section headings and `_t` totals rows (a summary aggregation's Total row is counted), so it
-  is < kept_row_count exactly when a preview cut data rows.
+  without the totals rows an aggregation adds. displayed_row_count counts the displayed rows
+  other than section headings and `_t` totals rows (a `summary` aggregation's Total row is
+  counted; a `summary_table`'s subtotal and Total rows are not), so it is < kept_row_count
+  exactly when a preview cut data rows.
 
   Each column dict may carry "hidden": true — set automatically by
   detect_hidden_columns() for technical identifier columns (ID-suffixed names,
@@ -489,11 +497,242 @@ def _currencies_of(row_ids, name, currencies):
     return found
 
 
-def apply_aggregations(columns, rows, agg_spec, currencies=None):
+# A summary table groups, pivots and totals rows exactly as a Carta custom report's summary does, so
+# an answer built with one shows what a custom report's summary shows. Change them together.
+SUMMARY_TABLE = "summary_table"
+SUMMARY_FNS = ("sum", "count")
+PERCENT_BASES = ("total", "group")
+SUMMARY_ORDERS = ("key_asc", "value_desc")
+MAX_SUMMARY_ROWS = 2
+BLANK_LABEL = "(blank)"
+TOTAL_LABEL = "Total"
+PERCENT_HEADERS = {"total": "% of total", "group": "% of group"}
+
+
+def check_summary_table(spec):
+    """Raise ValueError for a summary table a custom report cannot hold, with the rule it breaks."""
+    rows, values, totals = spec.get("rows"), spec.get("values"), spec.get("totals") or {}
+    has_pivot = "pivot" in spec
+    if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_SUMMARY_ROWS or len(set(rows)) != len(rows):
+        raise ValueError("summary_table rows must name 1 or 2 different columns to group by")
+    if not isinstance(values, list) or not values or not all(isinstance(v, dict) for v in values):
+        raise ValueError('summary_table values must be a list like [{"column": ..., "fn": "sum"}]')
+    for value in values:
+        if value.get("fn") not in SUMMARY_FNS:
+            raise ValueError(f"summary_table fn must be sum or count, not {value.get('fn')!r}")
+        if "percent_of" in value and value["percent_of"] not in PERCENT_BASES:
+            raise ValueError("summary_table percent_of must be total or group")
+        if value.get("percent_of") == "group" and len(rows) < MAX_SUMMARY_ROWS:
+            raise ValueError("percent_of group is a share of the first row column's group, so it needs two rows")
+    if has_pivot and (len(values) != 1 or "percent_of" in values[0] or "name" in values[0]):
+        raise ValueError("a pivot takes exactly one value, without percent_of or name: its columns are the pivot's values")
+    if totals.get("columns") and not has_pivot:
+        raise ValueError("totals.columns adds a Total column to a pivot, so it needs a pivot")
+    if spec.get("subtotals") and len(rows) != MAX_SUMMARY_ROWS:
+        raise ValueError("subtotals total each group of the first row column, so they need two rows")
+    if spec.get("order", "key_asc") not in SUMMARY_ORDERS:
+        raise ValueError("summary_table order must be key_asc or value_desc")
+
+
+def groups_of(spec):
+    """The columns a summary table groups by: its row columns, then its pivot."""
+    return [*spec["rows"], *([spec["pivot"]] if "pivot" in spec else [])]
+
+
+def _decimal_text(number):
+    """A number as plain digits, without trailing zeros or an exponent: 12.50 is "12.5", 1E+2 is "100"."""
+    text = format(Decimal(str(number)).normalize(), "f")
+    return "0" if text == "-0" else text
+
+
+class _SummaryColumn:
+    """A column the summary table reads: its position, type, and how a cell reads as a group."""
+
+    def __init__(self, index, ctype, symbol):
+        self.index, self.type, self.symbol = index, ctype, symbol
+
+    def cell(self, row):
+        return row[self.index] if self.index < len(row) else None
+
+    def group(self, row):
+        cell = self.cell(row)
+        if self.type in NUMERIC_TYPES:
+            return _numeric_parser(self.type)(cell)
+        return None if cell in (None, "") else cell
+
+    def number(self, row):
+        """The cell as an amount to sum: a blank or unreadable cell adds nothing."""
+        return _numeric_parser(self.type)(self.cell(row)) or 0
+
+    def order(self, group):
+        """Numbers sort as numbers, anything else as text without case, and blank sorts last."""
+        if group is None:
+            return (1, 0, "")
+        if self.type in NUMERIC_TYPES:
+            return (0, group, "")
+        return (0, 0, str(group).lower())
+
+    def label(self, group):
+        """A group as a row label or a pivot header; money carries the symbol of the currency its cells are in."""
+        if group is None:
+            return BLANK_LABEL
+        if self.type == "money":
+            return f"{self.symbol}{group:,.2f}"
+        if self.type in NUMERIC_TYPES:
+            return _decimal_text(group)
+        return str(group)
+
+
+def apply_summary_table(columns, rows, spec, currencies, base_currency):
+    """Group the rows by 1 or 2 columns, optionally pivot one column into columns, and sum or count.
+
+    spec: {"rows": [col, col?], "pivot"?: col, "values": [{"column", "fn": "sum"|"count",
+    "percent_of"?: "total"|"group", "name"?}], "totals"?: {"rows"?: bool, "columns"?: bool},
+    "subtotals"?: bool, "order"?: "key_asc"|"value_desc"}.
+    Each group row holds its labels, then its amounts; a percentage is a fraction rounded to 6
+    places, None when what it divides by is zero. With `subtotals`, each first-level group is
+    followed by its "Total <group>" row; `totals.rows` adds a grand Total row. Both are `{"_t"}`
+    rows. `value_desc` orders groups by their first value, largest first, ties in key order; with
+    `subtotals` it orders the groups inside each first-column group, and the first-column groups
+    and their Total rows stay in key order.
+    A money value whose amounts are in more than one currency is None in every cell and named in
+    the returned mixed columns, and `value_desc` keeps key order when that value is the first.
+    A money row or pivot column that holds more than one currency raises: its groups would mix
+    amounts under one currency symbol.
+    """
+    check_summary_table(spec)
+    idx = _col_map(columns)
+    types = {col["name"]: col.get("type") for col in columns}
+    pivot_name = spec.get("pivot")
+    values = spec["values"]
+    named = [*groups_of(spec), *(v.get("column") for v in values)]
+    missing = [name for name in dict.fromkeys(named) if name not in idx]
+    if missing:
+        raise ValueError(f"summary_table names columns this sheet does not have: {', '.join(map(str, missing))}")
+    for value in values:
+        if value["fn"] == "sum" and types[value["column"]] not in NUMERIC_TYPES:
+            raise ValueError(f'summary_table can only sum a number column, and "{value["column"]}" is not one')
+
+    all_ids = range(len(rows))
+
+    def several_currencies(name):
+        return types[name] == "money" and len(_currencies_of(all_ids, name, currencies)) > 1
+
+    def symbol_of(name):
+        """The symbol of the one currency a money column's cells are in; the sheet's when they carry none."""
+        found = _currencies_of(all_ids, name, currencies) if types[name] == "money" else {}
+        return next(iter(found.values()), base_currency or {}).get("symbol", "")
+
+    source = {name: _SummaryColumn(idx[name], types[name], symbol_of(name)) for name in named}
+    row_sources = [source[name] for name in spec["rows"]]
+    pivot = source[pivot_name] if pivot_name else None
+    totals = spec.get("totals") or {}
+    mixed = list(dict.fromkeys(v["column"] for v in values if v["fn"] == "sum" and several_currencies(v["column"])))
+    mixed_groups = [name for name in dict.fromkeys(groups_of(spec)) if several_currencies(name)]
+    if mixed_groups:
+        raise ValueError(
+            f"summary_table can't group by {', '.join(mixed_groups)}: it holds amounts in more than one currency"
+        )
+
+    def measure(group_rows, value):
+        if value["fn"] == "count":
+            return len(group_rows)
+        return round(sum(source[value["column"]].number(row) for row in group_rows), 4)
+
+    def blank(value):
+        """A sum over amounts in several currencies is left blank: they don't add up to anything."""
+        return value["fn"] == "sum" and value["column"] in mixed
+
+    def amount(group_rows, value, denominator=None):
+        if blank(value):
+            return None
+        number = measure(group_rows, value)
+        if "percent_of" not in value:
+            return number
+        return round(number / denominator, 6) if denominator else None
+
+    grand = [measure(rows, value) for value in values]
+    pivots = sorted({pivot.group(row) for row in rows}, key=pivot.order) if pivot else []
+
+    def cells(group_rows, parent):
+        if pivot:
+            by_pivot = {}
+            for row in group_rows:
+                by_pivot.setdefault(pivot.group(row), []).append(row)
+            out = [amount(by_pivot.get(group, []), values[0]) for group in pivots]
+            return out + ([amount(group_rows, values[0])] if totals.get("columns") else [])
+        return [amount(group_rows, value, grand[i] if value.get("percent_of") == "total" else parent[i])
+                for i, value in enumerate(values)]
+
+    def grouped(keys, source_rows):
+        groups = {}
+        for row in source_rows:
+            groups.setdefault(tuple(key.group(row) for key in keys), []).append(row)
+        return groups
+
+    def ordered(groups):
+        def key_order(item):
+            return tuple(key.order(group) for key, group in zip(row_sources, item[0]))
+        # Never order by a sum the table leaves blank for mixed currencies.
+        if spec.get("order") == "value_desc" and not blank(values[0]):
+            return sorted(groups.items(), key=lambda item: (-measure(item[1], values[0]), key_order(item)))
+        return sorted(groups.items(), key=key_order)
+
+    def labels(groups):
+        return [key.label(group) for key, group in zip(row_sources, groups)]
+
+    first_level = grouped(row_sources[:1], rows)
+    parents = {top: [measure(top_rows, value) for value in values] for top, top_rows in first_level.items()}
+    out_rows = []
+    if spec.get("subtotals"):
+        for top, top_rows in sorted(first_level.items(), key=lambda item: row_sources[0].order(item[0][0])):
+            for groups, group_rows in ordered(grouped(row_sources, top_rows)):
+                out_rows.append(labels(groups) + cells(group_rows, parents[top]))
+            top_label = row_sources[0].label(top[0])
+            out_rows.append({"_t": [top_label, f"{TOTAL_LABEL} {top_label}", *cells(top_rows, parents[top])]})
+    else:
+        for groups, group_rows in ordered(grouped(row_sources, rows)):
+            out_rows.append(labels(groups) + cells(group_rows, parents[groups[:1]]))
+    if totals.get("rows"):
+        out_rows.append({"_t": [TOTAL_LABEL, *[None] * (len(row_sources) - 1), *cells(rows, grand)]})
+
+    out_cols = [{"name": name, "type": "string" if types[name] in NUMERIC_TYPES else types[name]}
+                for name in spec["rows"]]
+    if pivot:
+        value_type = "integer" if values[0]["fn"] == "count" else types[values[0]["column"]]
+        value_cols = [{"name": pivot.label(group), "type": value_type} for group in pivots]
+        if totals.get("columns"):
+            value_cols.append({"name": TOTAL_LABEL, "type": value_type})
+        value_names = [values[0]["column"]] * len(value_cols)
+    else:
+        value_cols = [{"name": value.get("name") or (PERCENT_HEADERS[value["percent_of"]] if "percent_of" in value
+                               else value["column"] if value["fn"] == "sum" else "Count"),
+                       "type": "percentage" if "percent_of" in value
+                       else "integer" if value["fn"] == "count" else types[value["column"]]}
+                      for value in values]
+        value_names = [value["column"] for value in values]
+    out_cols += value_cols
+    headers = [col["name"] for col in out_cols]
+    repeated = sorted({h for h in headers if headers.count(h) > 1})
+    if repeated:
+        raise ValueError(f"summary_table would show more than one column called {', '.join(repeated)}: give each value its own name")
+
+    # A money amount is in the one currency its column's cells carry; every other cell takes none.
+    value_currencies = [
+        next(iter(_currencies_of(all_ids, name, currencies).values()), None)
+        if col["type"] == "money" and name not in mixed else None
+        for col, name in zip(value_cols, value_names)
+    ]
+    row_currencies = [None] * len(spec["rows"]) + value_currencies
+    return out_cols, out_rows, None, {"rows": [row_currencies] * len(out_rows), "mixed_columns": mixed}
+
+
+def apply_aggregations(columns, rows, agg_spec, currencies=None, base_currency=None):
     """
     agg_spec types:
-      summary  — appends one totals row at the bottom.
-      group_by — collapses rows by a key column, producing one row per group.
+      summary       — appends one totals row at the bottom.
+      group_by      — collapses rows by a key column, producing one row per group.
+      summary_table — groups, pivots and totals as a custom report keeps it (apply_summary_table).
     currencies, when given, is one {money column name: currency} per row (only for cells that
     hold an amount). An amount aggregate over more than one currency is left as None: adding
     100 USD to 100 EUR is not 200 of anything.
@@ -523,8 +762,10 @@ def apply_aggregations(columns, rows, agg_spec, currencies=None):
         value = _agg_values(_agg_inputs(group_rows, idx, op, _numeric_parser(col.get("type"))), op)
         return value, next(iter(found.values()), None)
 
-    idx_map  = _col_map(columns)
     agg_type = agg_spec.get("type", "summary")
+    if agg_type == SUMMARY_TABLE:
+        return apply_summary_table(columns, rows, agg_spec, currencies, base_currency)
+    idx_map  = _col_map(columns)
     agg_cols = agg_spec.get("columns", {})
 
     if agg_type == "summary":
@@ -849,15 +1090,20 @@ def main():
                 formula_currency[j] = None if currency == base_currency else currency
 
         cols, rows, summary_meta, agg_currencies = apply_aggregations(
-            cols, rows, aggregations, row_amount_currencies)
+            cols, rows, aggregations, row_amount_currencies, base_currency)
         if aggregations and aggregations.get("type") == "group_by":
             # Each group's currencies travel with it, so the order of the groups cannot strand them.
             sortable |= {col["name"] for col in cols}
             rows, group_order = sort_rows_with_indices(cols, rows, list(range(len(rows))), sort_spec)
             agg_currencies["rows"] = [agg_currencies["rows"][i] for i in group_order]
+        elif aggregations and aggregations.get("type") == SUMMARY_TABLE:
+            # The summary orders its own rows, so no sort applies: report each as not run.
+            sortable = set()
         mixed_currency_columns = sorted(set(formula_mixed) | set(agg_currencies["mixed_columns"]))
-        # Data rows in the full result: after grouping, without the totals row, before the preview cut.
-        kept_count = len(rows) - (summary_meta or {}).get("count", 0)
+        # Data rows in the full result: after grouping, without the totals rows, before the preview cut.
+        # Section and source total rows are still set aside here, so every `{_t}` row is a total
+        # the aggregation produced.
+        kept_count = sum(1 for r in rows if not isinstance(r, dict))
 
         # Naming a column — in `columns`, as the group_by key, or as an aggregated column — is a
         # request to see it, even a technical identifier.
@@ -868,10 +1114,10 @@ def main():
                 for col in cols]
 
         # After aggregations: summary appends one totals row (no original index);
-        # group_by collapses all rows (all original indices lost).
+        # group_by and summary_table collapse all rows (all original indices lost).
         if summary_meta and summary_meta.get("count", 0) > 0:
             orig_indices = orig_indices + [None]
-        elif aggregations and aggregations.get("type") == "group_by":
+        elif aggregations and aggregations.get("type") in ("group_by", SUMMARY_TABLE):
             orig_indices = [None] * len(rows)
 
         # Build row_currencies parallel to rows.

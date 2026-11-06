@@ -215,6 +215,8 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
 
     for row_idx, row in enumerate(rows, start=DATA_START):
         row_data_idx = row_idx - DATA_START  # 0-based position in rows list
+        # Every totals row is styled as one, wherever it sits; only the trailing summary rows get formulas.
+        is_total = False
 
         if isinstance(row, dict):
             if "_s" in row:
@@ -224,6 +226,7 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                 continue
             elif "_t" in row and isinstance(row["_t"], list):
                 row = row["_t"]
+                is_total = True
             else:
                 continue
 
@@ -242,8 +245,6 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                 else:
                     # The "Total" label sits in a visible column without an op (report_processor.py picked it); the rest are blank.
                     cell = ws.cell(row=row_idx, column=col_idx, value=val)
-                cell.fill = summary_fill
-                cell.font = summary_font
             else:
                 if col["type"] in ("integer", "money", "percentage", "decimal") and val is not None:
                     number = parse_number(val)
@@ -261,6 +262,9 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                     if parsed is not None:
                         val = parsed
                 cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            if is_total or is_summary:
+                cell.fill = summary_fill
+                cell.font = summary_font
 
             if col["type"] == "money":
                 # A totals row carries the currency its amounts were added up in, like any row.
