@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.27.0</carta-plugin>
+<carta-plugin>carta-investors:7.28.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -318,5 +318,4 @@ Before delivering the brand board:
 
 ## Related skills (bundled in this plugin)
 
-- `powered-by` — embeds the "Powered by Carta" lockup on artifacts. Complementary — `carta-brand-extraction` produces the board, `powered-by` adds the Carta badge if the data came from Carta.
 - `carta-agm-deck-builder` — the main orchestrator skill that chains brand extraction + deck generation + Carta badge.
