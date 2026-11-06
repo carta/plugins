@@ -107,6 +107,7 @@ from report_display import DATA_QUALITY_SHEETS, detect_hidden_columns, normalize
 from report_hosts import DOWNLOAD_TIMEOUT_SECONDS, check_download_url  # noqa: E402
 from report_numbers import parse_number  # noqa: E402
 from report_rows import is_structural, relabel_structural  # noqa: E402
+from report_summary import SUMMARY_TABLE, summary_value_header  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -499,14 +500,12 @@ def _currencies_of(row_ids, name, currencies):
 
 # A summary table groups, pivots and totals rows exactly as a Carta custom report's summary does, so
 # an answer built with one shows what a custom report's summary shows. Change them together.
-SUMMARY_TABLE = "summary_table"
 SUMMARY_FNS = ("sum", "count")
 PERCENT_BASES = ("total", "group")
 SUMMARY_ORDERS = ("key_asc", "value_desc")
 MAX_SUMMARY_ROWS = 2
 BLANK_LABEL = "(blank)"
 TOTAL_LABEL = "Total"
-PERCENT_HEADERS = {"total": "% of total", "group": "% of group"}
 
 
 def check_summary_table(spec):
@@ -618,12 +617,12 @@ def apply_summary_table(columns, rows, spec, currencies, base_currency):
     def several_currencies(name):
         return types[name] == "money" and len(_currencies_of(all_ids, name, currencies)) > 1
 
-    def symbol_of(name):
-        """The symbol of the one currency a money column's cells are in; the sheet's when they carry none."""
+    def currency_of(name):
+        """The one currency a money column's cells are in; the sheet's when they carry none."""
         found = _currencies_of(all_ids, name, currencies) if types[name] == "money" else {}
-        return next(iter(found.values()), base_currency or {}).get("symbol", "")
+        return next(iter(found.values()), base_currency or {})
 
-    source = {name: _SummaryColumn(idx[name], types[name], symbol_of(name)) for name in named}
+    source = {name: _SummaryColumn(idx[name], types[name], currency_of(name).get("symbol", "")) for name in named}
     row_sources = [source[name] for name in spec["rows"]]
     pivot = source[pivot_name] if pivot_name else None
     totals = spec.get("totals") or {}
@@ -705,8 +704,7 @@ def apply_summary_table(columns, rows, spec, currencies, base_currency):
             value_cols.append({"name": TOTAL_LABEL, "type": value_type})
         value_names = [values[0]["column"]] * len(value_cols)
     else:
-        value_cols = [{"name": value.get("name") or (PERCENT_HEADERS[value["percent_of"]] if "percent_of" in value
-                               else value["column"] if value["fn"] == "sum" else "Count"),
+        value_cols = [{"name": summary_value_header(value),
                        "type": "percentage" if "percent_of" in value
                        else "integer" if value["fn"] == "count" else types[value["column"]]}
                       for value in values]
@@ -724,7 +722,11 @@ def apply_summary_table(columns, rows, spec, currencies, base_currency):
         for col, name in zip(value_cols, value_names)
     ]
     row_currencies = [None] * len(spec["rows"]) + value_currencies
-    return out_cols, out_rows, None, {"rows": [row_currencies] * len(out_rows), "mixed_columns": mixed}
+    # The currency each money group column is labelled in, for the custom report save to check.
+    group_currencies = {name: currency_of(name).get("code") for name in dict.fromkeys(groups_of(spec))
+                        if types[name] == "money"}
+    return out_cols, out_rows, None, {"rows": [row_currencies] * len(out_rows), "mixed_columns": mixed,
+                                      "group_currencies": group_currencies}
 
 
 def apply_aggregations(columns, rows, agg_spec, currencies=None, base_currency=None):
@@ -872,6 +874,27 @@ def sort_rows_with_indices(columns, rows, orig_indices, sort_spec):
 # Main
 # ---------------------------------------------------------------------------
 
+# The column types label_overrides renames cells in.
+LABEL_TYPES = ("string", "text", None)
+
+
+def renamed_group_values(columns, raw_rows, row_indices, names, label_overrides):
+    """{column: {raw value: label}} for each rename label_overrides made in the named columns of the
+    given raw rows: the group labels a summary table shows that the report itself does not hold."""
+    position = _col_map(columns)
+    found = {}
+    for name in names:
+        i = position.get(name)
+        if i is None or columns[i].get("type") not in LABEL_TYPES:
+            continue
+        cells = (raw_rows[oi][i] for oi in row_indices if i < len(raw_rows[oi]))
+        renames = {cell: label_overrides[cell] for cell in cells
+                   if isinstance(cell, str) and cell in label_overrides and label_overrides[cell] != cell}
+        if renames:
+            found[name] = renames
+    return found
+
+
 def apply_label_overrides(columns, rows, label_overrides):
     """Replace exact string cell values in string/text columns using the override map.
 
@@ -881,8 +904,7 @@ def apply_label_overrides(columns, rows, label_overrides):
     """
     if not label_overrides:
         return rows
-    string_types = {"string", "text", None}
-    col_indices = [i for i, col in enumerate(columns) if col.get("type") in string_types]
+    col_indices = [i for i, col in enumerate(columns) if col.get("type") in LABEL_TYPES]
     if not col_indices:
         return rows
     result = []
@@ -1091,12 +1113,22 @@ def main():
 
         cols, rows, summary_meta, agg_currencies = apply_aggregations(
             cols, rows, aggregations, row_amount_currencies, base_currency)
+        is_summary_table = bool(aggregations) and aggregations.get("type") == SUMMARY_TABLE
+        if is_summary_table:
+            # What a custom report save checks about the groups on screen: which values are renamed
+            # (orig_indices are still the rows the summary grouped) and each money group's currency.
+            summary_stats = {
+                "renamed_group_values": renamed_group_values(
+                    normalize_columns(sheet["columns"]), all_rows, orig_indices, groups_of(aggregations),
+                    label_overrides),
+                "group_currencies": agg_currencies["group_currencies"],
+            }
         if aggregations and aggregations.get("type") == "group_by":
             # Each group's currencies travel with it, so the order of the groups cannot strand them.
             sortable |= {col["name"] for col in cols}
             rows, group_order = sort_rows_with_indices(cols, rows, list(range(len(rows))), sort_spec)
             agg_currencies["rows"] = [agg_currencies["rows"][i] for i in group_order]
-        elif aggregations and aggregations.get("type") == SUMMARY_TABLE:
+        elif is_summary_table:
             # The summary orders its own rows, so no sort applies: report each as not run.
             sortable = set()
         mixed_currency_columns = sorted(set(formula_mixed) | set(agg_currencies["mixed_columns"]))
@@ -1186,6 +1218,8 @@ def main():
             "mixed_currency_columns": mixed_currency_columns,
             "structural_rows_dropped": structural_dropped,
         }
+        if is_summary_table:
+            stats[sheet_name].update(summary_stats)
 
     # merge_sheets: {"Target Tab Name": ["Source Sheet A", "Source Sheet B"]}
     # Concatenates rows from source sheets into a single output tab; removes sources from output.

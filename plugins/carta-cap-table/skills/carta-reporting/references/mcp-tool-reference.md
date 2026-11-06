@@ -190,15 +190,25 @@ call_tool({"name": "reporting__create__report_template", "arguments": { corporat
   # definition — the object build_template_definition.py writes to its --out file; pass it as the file holds it.
   #   A custom report holds ONE report type: `source` is a single object, and Carta refuses `sources`, `join`
   #   (unsupported_block), `dates`, formulas and aggregations (not_supported). A date filter keeps its exact date.
+  #   Totals go in a sheet's `summary`, never `aggregations`.
   #   { schema_version: 1, default_name, source: { report_type, params: {} },
   #     sheets: [{ name, from: { match: "exact" | "prefix" | "suffix", value, merge? },
   #                columns: [{ key } | { dynamic, field?, source }], filters: [{ key, op, value }], sort: [{ key, direction }] }] }
+  #   A sheet with totals has `summary` in place of `columns` and `sort` (its filters run first), written from a
+  #   report_processor `summary_table`:
+  #     summary: { rows: [1 or 2 keys], pivot?: key, values: [{ key, fn: "sum" | "count",
+  #                percent_of?: "total" | "group", id?, header? }], totals?: { rows?, columns? },
+  #                subtotals?, order?: "key_asc" | "value_desc" }
+  #   `id` is needed when a key repeats (a sum and its share); `header` is 1-60 characters. A pivot takes one value
+  #   with no percent_of, id or header. Carta sums a money column whatever its currency, so totals of amounts in
+  #   more than one currency are never saved, and it labels a money group in dollars, so a summary grouped by
+  #   money in another currency is never saved either.
   #   Columns, filters and sort are named by `key`, never by header. A per-item column (one per share
   #   class, plan, currency…) is named by `dynamic`, `field` and `source`; filters and sort take keys only.
   #   Merged sheets are saved as one sheet whose `from` matches every merged sheet by a common start or
   #   end of name, with `merge: true`; a prefix or suffix value is 1-31 characters. Carta refuses a report
   #   type it does not take yet (unsupported_report_type, its reason names the types it takes). No as-of
-  #   date, formulas or aggregations.
+  #   date or formulas.
   #   At most 10 sheets with distinct tab names and at most 200 columns per sheet; op is one of
   #   > < >= <= = != contains in; `in` takes a list of 1 to 100 values and every other op one value;
   #   direction is asc or desc.

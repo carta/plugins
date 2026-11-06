@@ -59,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.110.32</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.0</carta-plugin>
 
 # Custom Reports
 
@@ -522,7 +522,7 @@ Run each script only in the one-line form shown below, as its own command: write
    >
    > _(Add this line only when `_templates_available_<corporation_id>` is `true` after the check in "Save as a custom report":)_ Or say **Save this as a custom report** to keep the report in Carta and run it again at a new as-of date.
    >
-   > _(When the answer combined more than one report type, or used a formula, a summary or group total, a date window, picked people, plans, securities or share classes, or data from outside the reports, write instead:)_ Or say **Save this as a custom report**: a custom report keeps one report's sheets, columns, filters and sort, so I'll tell you what it would keep before I save anything.
+   > _(When the answer combined more than one report type, or used a formula, totals other than a `summary_table`, a date window, picked people, plans, securities or share classes, or data from outside the reports, write instead:)_ Or say **Save this as a custom report**: a custom report keeps one report's sheets, columns, filters, sort and totals by group, so I'll tell you what it would keep before I save anything.
 
    When `warnings.data_quality` is non-empty, add one sentence with a clause for each sheet in it: "Carta flagged {N} securities with data warnings" ({N} is the "Data Warnings" count) and "{M} defective securities" ({M} is the "Defective Securities" count), then "Say **show data warnings** to see them." When the user says **show data warnings**, rerun `report_processor.py` with `sheets` naming every sheet in `warnings.data_quality`, keeping the sheets already in the report in `sheets`, and rebuild the report.
 
@@ -548,9 +548,9 @@ Run each script only in the one-line form shown below, as its own command: write
 
 ## Save as a custom report
 
-A report built here can be kept in Carta as a custom report: one report's sheets, columns, filters and sort, with no as-of date, so it can be run again from Run Reports at a new date. This step is only for a report the user has seen in full.
+A report built here can be kept in Carta as a custom report: one report's sheets, columns, filters, sort and totals by group, with no as-of date, so it can be run again from Run Reports at a new date. This step is only for a report the user has seen in full.
 
-A custom report holds **one report type**. It cannot keep rows from two report types lined up, formulas, summary or group totals, a date window such as "the last 12 months" (a date filter keeps the exact date it had), or anything that did not come from the report itself. Step 2 tells the user what the saved custom report would and would not keep, and waits for their choice: never save something different from what the user saw without saying so.
+A custom report holds **one report type**. It keeps totals laid out as a `summary_table` (sums and counts by one or two columns, a pivot, subtotals, a Total row and column, shares of the total or of a group), exactly as the answer showed them. It cannot keep rows from two report types lined up, formulas, a Total row under the detail rows (`summary`), averages, minimums or maximums (`group_by`), totals of amounts in more than one currency, groups shown under a renamed value, groups of money in a currency other than US dollars (Carta labels them in dollars), a date window such as "the last 12 months" (a date filter keeps the exact date it had), or anything that did not come from the report itself. Step 2 tells the user what the saved custom report would and would not keep, and waits for their choice: never save something different from what the user saw without saying so.
 
 **Check once per company, as soon as step 1 has found it (one company only; skip it for a multi-company request):** whether custom reports are on is decided per company, so a listed tool says nothing. Call `read_tool({"name": "reporting__list__report_templates", "arguments": { corporation_id }})`. Set `_templates_available_<corporation_id>` to `true` only when the call succeeds, and keep the custom reports it lists as `_templates_<corporation_id>` for step 2b; on any failure (custom reports not enabled for the company, not found, no permission, or anything else), set it to `false` and do not retry. When it is `false`, never offer a custom report and never mention one. If the user asks for one anyway, say "I can't save this report as a custom report for this company right now." and stop.
 
@@ -562,13 +562,17 @@ A custom report holds **one report type**. It cannot keep rows from two report t
 
 2. **Compare the answer with what a custom report keeps, before asking for anything else.** From this conversation, list what the answer on screen used: the report types run for it (step 4a), any `formulas`, `aggregations` or `group_by` in its config (global or per sheet), a date window (the `issued_from` and `issued_to` create params, or a date filter on a column), any other scoping create param the save drops (`stakeholder_ids`, `equity_plan_ids`, `security_ids`, `share_class_ids`), and anything that did not come from a downloaded report (a figure you worked out yourself, a file or table the user gave you, the web).
 
-   - One report type, and only sheets, columns, filters and sort → go to step 3.
+   - One report type, and only sheets, columns, filters, sort and `summary_table` aggregations → go to step 3.
    - Anything else → **save nothing yet.** Tell the user in plain words what the custom report would keep and what it would not, one line per difference, using these:
 
      | The answer used | Say |
      |---|---|
      | More than one report type | "This answer combines {Report A} and {Report B}. A custom report holds one report, so it can't keep how they line up." |
-     | A formula, summary or group total | "A custom report can't keep {the {name} column, or the totals}; it saves the rest." |
+     | A formula | "A custom report can't keep the {name} column; it saves the rest." |
+     | A `summary` (Total row under the rows) or a `group_by` aggregation | "A custom report can't keep {the Total row under the rows, or the averages, minimums or maximums}. It can keep sums and counts by one or two columns, with a Total row: I can show the report that way first." |
+     | A `summary_table` summing a column that `mixed_currency_columns` names | "{Column} holds amounts in more than one currency, and a custom report would add them together, so it can't keep those totals." |
+     | A `summary_table` sheet whose stats list `renamed_group_values` | "The totals are grouped by {column}, which shows {raw} as {label}, and a custom report can't keep that rename." |
+     | A `summary_table` sheet whose stats give a `group_currencies` code other than USD | "A custom report labels {column} in dollars, and its amounts are in {code}, so it can't keep totals grouped by it." |
      | A date window | "A custom report doesn't keep {the window}. For issue dates set on the report: every run covers all dates. For a date filter on a column: it keeps the date {date}, so every run uses that same date." |
      | People, plans, securities or share classes picked as report settings | "A custom report doesn't keep the {people, plans, securities or share classes} you picked, so every run covers all of them." |
      | Data from outside the reports | "{What it was} isn't in a Carta report, so it can't be kept." |
@@ -578,27 +582,35 @@ A custom report holds **one report type**. It cannot keep rows from two report t
      - **One custom report per report type**: only when the answer used more than one type. List the types. Each is saved on its own, with its own columns and filters, and rows are not lined up between them.
      - **Don't save**: stop, and say the report on screen is unchanged.
 
-   Act on their choice. For the closest single custom report, step 4 writes the config of that one report type with `formulas` and `aggregations` left out everywhere. For one per report type, run steps 3 to 6 once per type, one after the other, each with that type's own data file, `report_type`, config and create params, and name each "{name} — {Report Type}". Never choose for the user.
+   When the user would rather keep the totals, rerun `report_processor.py` with the same totals as a `summary_table` ("Totals by group, pivots and subtotals" under "Script Reference"), show it, and start this section again: never save totals the user has not seen.
+
+   Act on their choice. For the closest single custom report, step 4 writes the config of that one report type with `formulas`, and every aggregation step 2 said would not be kept, left out everywhere. For one per report type, run steps 3 to 6 once per type, one after the other, each with that type's own data file, `report_type`, config and create params, and name each "{name} — {Report Type}". Never choose for the user.
 
 3. **Ask for the name and the audience in one `AskUserQuestion` call** (two questions):
    - *Name*: offer a short name that says what the report shows, such as "Outstanding grants by holder", and the report type's own name as the second option. The user can type their own.
    - *Who can see it*: "Only me" (recommended, the default) or "All company admins".
 
 4. **Write the inputs**, each with `Write`:
-   - `carta-reporting/template-config.json`: the current `carta-reporting/config.json`, with `sheets` set to a list of the sheets shown in the report when the config names none. In ARTIFACT mode those are the sheets in `report_processor.py`'s `stats` that `build_report_page.py` did not list in `omitted_sheets`; in MARKDOWN mode, the sheets in `report_processor.py`'s `stats`. Keep only what step 2 told the user would be kept, whichever option they chose: leave `formulas` and `aggregations` out (global and per sheet), and take out of `columns`, `filters` and `sort` every column a formula, an aggregation or you produced yourself, since the report has no such column. When the config names no `columns`, set `columns` to the report's columns the answer showed, by their headers: a custom report with no `columns` keeps every column of the report, usually far more than the answer showed.
+   - `carta-reporting/template-config.json`: the current `carta-reporting/config.json`, with `local_file` set to the full report's `carta-reporting/carta_report_<pk>.json`, `preview` taken out, and `sheets` set to a list of the sheets shown in the report when the config names none. In ARTIFACT mode those are the sheets in `report_processor.py`'s `stats` that `build_report_page.py` did not list in `omitted_sheets`; in MARKDOWN mode, the sheets in `report_processor.py`'s `stats`. Keep only what step 2 told the user would be kept, whichever option they chose: leave `formulas` out, and every aggregation but a `summary_table` (global and per sheet), and take out of `columns`, `filters` and `sort` every column a formula, an aggregation or you produced yourself, since the report has no such column. A `summary_table` stays exactly as it ran; its sheet keeps its filters, and the summary decides its columns and their order. For every other sheet, when the config names no `columns`, set `columns` to the report's columns the answer showed, by their headers: a custom report with no `columns` keeps every column of the report, usually far more than the answer showed.
    - `carta-reporting/template-name.txt`: the name, exactly as the user chose it, and nothing else.
    - `carta-reporting/create-params.json`: the `arguments` object of the full report's `reporting__create__report` call.
 
-5. **Build the definition**, as its own command, on one line. The name goes in by file, never on the command line:
+5. **Build the definition.** First run the saved config through `report_processor.py`, as its own command, on one line: its stats tell the next script what the totals on screen show.
 
    ```bash
-   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py" --config "carta-reporting/template-config.json" --report "carta-reporting/carta_report_<pk>.json" --report-type "<report_type>" --name-file "carta-reporting/template-name.txt" --create-params "carta-reporting/create-params.json" --out "carta-reporting/template-definition.json"
+   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/template-config.json" --out "carta-reporting/template-result.json"
+   ```
+
+   Then build the definition, as its own command, on one line. The name goes in by file, never on the command line:
+
+   ```bash
+   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_template_definition.py" --config "carta-reporting/template-config.json" --report "carta-reporting/carta_report_<pk>.json" --report-type "<report_type>" --name-file "carta-reporting/template-name.txt" --create-params "carta-reporting/create-params.json" --result "carta-reporting/template-result.json" --out "carta-reporting/template-definition.json"
    ```
 
    - **It exits 1 and prints `{"refused": [...]}`:** nothing is saved. Tell the user why in plain words, one line per reason, and offer to change the report so it can be saved (for example, drop the formula, or pick another column for the column or filter a reason names). Do not retry the same input.
    - **`dropped_params` is not empty:** step 2 already told the user; after the save, say again that the custom report does not keep those filters (name each one the report used: people, plans, securities, share classes or issue dates), so every run covers all of them.
 
-6. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the custom report's `id`: put `{ id, display_name, report_type, last_modified: now }` at the front of `_templates_<corporation_id>`, so step 2b offers it on the next request, then say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." When step 2 found differences, add what the saved custom report keeps and what it does not, in one or two sentences (for example "It keeps the {Report Type} sheets with the columns, filters and sort you saw, and none of {what was left out}."). Never show the id.
+6. **Save it.** `Read` `carta-reporting/template-definition.json`, then `call_tool({"name": "reporting__create__report_template", "arguments": { corporation_id, name, visibility, definition }})`. `name` is the definition's `default_name`, and `definition` is passed exactly as the file holds it, so the two names match. `visibility` is `"creator"` for "Only me" and `"company_admins"` for "All company admins". On success the result has the custom report's `id`: put `{ id, display_name, report_type, last_modified: now }` at the front of `_templates_<corporation_id>`, so step 2b offers it on the next request, then say: "Saved **{name}** in Carta — {Only you can run it | Company admins can run it}. Run it again from Run Reports at a new as-of date." When step 2 found differences, add what the saved custom report keeps and what it does not, in one or two sentences (for example "It keeps the {Report Type} sheets with the columns, filters and sort you saw, and none of {what was left out}."). When it kept a `summary_table`, say what: "It keeps the totals by {rows}{, with a column per {pivot}}{, a subtotal per {first row column}}{ and a Total row}, worked out again at every run." Never show the id.
 
 **When the save does not go through, always tell the user; never drop a save silently. The report on screen is unchanged.**
 
@@ -716,8 +728,9 @@ A summary's totals row is `{"_t": [cells]}`, like a source totals row, and its "
 the first visible (not `hidden`) column with no aggregation (no label when every such column has one).
 
 **Totals by group, pivots and subtotals: use `summary_table`.** It lays out the rows the way a
-Carta custom report's summary does. Use `group_by` only for `avg`, `min` or `max`, and `summary`
-only for a Total row under the detail rows.
+Carta custom report's summary does, so the user can save what they see as a custom report. Use
+`group_by` only for `avg`, `min` or `max`, and `summary` only for a Total row under the detail rows;
+neither can be saved.
 
 ```json
 "aggregations": {"type": "summary_table",
@@ -809,6 +822,8 @@ All fields except the file source are optional — omit or set to `null` to skip
                          "unsupported_filters": [],
                          "skipped_formulas": [], "structural_rows_dropped": N,
                          "mixed_currency_columns": [],   // merged tabs: every list stat is the union over the merged sources
+                         "renamed_group_values": {"Share Class": {"CBU": "Phantom Units"}},  // summary_table only: renames among the grouped rows
+                         "group_currencies": {"Threshold Value": "EUR"},  // summary_table only: the currency of each money group column
                          "merged_from": [...], "schema_warnings": [...]}},   // last two: merged tabs only
   "warnings": {"unknown_sheets": {"requested": [...], "available": [...]},
                "merge_sources_missing": [{"target": ..., "source": ...}],

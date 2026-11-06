@@ -7,7 +7,8 @@ build_template_definition.py — turn the report a user built into a Carta repor
 
 Usage:
     uv run build_template_definition.py --config <config.json> --report-type <type> \
-        --name-file <name.txt> --out <definition.json> [--report <report.json>] [--create-params <params.json>]
+        --name-file <name.txt> --out <definition.json> [--report <report.json>] [--create-params <params.json>] \
+        [--result <result.json>]
 
 --config         the report_processor.py config that produced the report on screen.
 --report-type    the report type that was run, e.g. securities_ledger_report.
@@ -16,11 +17,16 @@ Usage:
 --out            the definition file to write (schema v1, the body's `definition` for the save).
 --report         the downloaded report JSON; defaults to the config's `local_file`.
 --create-params  the arguments the report was created with; the filters among them are not saved.
+--result         report_processor.py's --out file for this same config; needed to save a summary_table.
+                 Its stats say which sums mix currencies, which group values the screen shows renamed,
+                 and the currency of each money group, which the summary can't keep differently.
 
 The config names columns by header, and headers follow each company's terminology. The
 definition names them by `key`, which the downloaded report JSON carries on every column, so the
 script looks each header up in that file. It writes only what a template stores, and only what
-the screen showed: the sheets in report order, the columns, the filters and the sort. A template
+the screen showed: the sheets in report order, the columns, the filters and the sort, or for a
+sheet with a `summary_table` aggregation, the filters and the summary (groups, pivot, sums and
+counts, shares, totals and subtotals) with each column headed as the screen headed it. A template
 never stores an as-of date: every run asks for one. It ignores the config's `label_overrides`:
 a renamed value is a display choice, and Carta's template renders its own labels. A filter on a
 renamed value cannot be reproduced reliably there (text matches case-insensitively, a rename can
@@ -28,7 +34,7 @@ land on a value the report already holds, several raw values can share a label),
 never rewrites a filter value. When the config has `label_overrides`, it refuses only a filter a
 rename can affect: a `contains` whose text (ignoring letter case) is inside a rename's raw value
 or label, or any other operator whose value equals one of them. Every other filter is saved
-unchanged.
+unchanged. A summary is refused when a group it shows is renamed, as the result's stats say.
 
 Stdout is JSON. On success: {"out": <file>, "sheets": [<sheet name>, ...], "dropped_params": [...]},
 where dropped_params are the report's scoping filters (people, plans, securities, share classes,
@@ -52,6 +58,7 @@ for _root in Path(__file__).resolve().parents:
         break
 from report_display import detect_hidden_columns, excel_sheet_name, normalize_columns  # noqa: E402
 from report_rows import is_structural  # noqa: E402
+from report_summary import SUMMARY_TABLE, default_header, summary_value_header  # noqa: E402
 
 SCHEMA_VERSION = 1
 
@@ -79,13 +86,23 @@ SCOPING_FILTERS = frozenset(
 # A config field that transforms the data beyond select, filter and sort, with what to tell the user.
 UNSUPPORTED = {
     "formulas": "Formulas (computed columns) can't be saved in a custom report yet.",
-    "aggregations": "Summary rows and group-by totals can't be saved in a custom report yet.",
 }
+# What to tell the user about an aggregation a custom report can't keep as its `summary`.
+AGGREGATION_REFUSALS = {
+    "summary": "A Total row under the detail rows can't be saved in a custom report; totals by a column can.",
+    "group_by": (
+        "These group totals can't be saved as shown. A custom report keeps sums and counts by one or two "
+        "columns, laid out its own way, so I'd show them that way first."
+    ),
+}
+# Carta's custom report labels a money group in dollars, whatever currency its amounts are in.
+GROUP_LABEL_CURRENCY = "USD"
+MAX_SUMMARY_HEADER = 60  # also the limit of a summary value's id
 # Custom-field columns exist only at some dates; every other dynamic column (one per share class,
 # equity plan, currency...) is saved by kind, field and the item the screen showed.
 CUSTOM_FIELD_KINDS = frozenset({"custom_event", "custom_property"})
 # Of those, the ones the config can also set for a single sheet.
-UNSUPPORTED_PER_SHEET = ("formulas", "aggregations")
+UNSUPPORTED_PER_SHEET = ("formulas",)
 
 
 class TemplateRefused(Exception):
@@ -141,7 +158,7 @@ def _unreproducible_filters(config):
 
 
 def _sheet_transforms(config, report):
-    """{sheet name: (columns, filters, sort, shared)} for the sheets to save, in the order
+    """{sheet name: (columns, filters, sort, aggregations, shared)} for the sheets to save, in the order
     report_processor shows them: report order. A named sheet the report lacks comes last, so it
     is refused.
 
@@ -164,14 +181,14 @@ def _sheet_transforms(config, report):
     for name in names:
         own = per_sheet.get(name, {})
         values, shared = [], set()
-        for field in ("columns", "filters", "sort"):
+        for field in ("columns", "filters", "sort", "aggregations"):
             if field in own:
                 values.append(own[field])
             else:
                 values.append(config.get(field))
                 shared.add(field)
-        columns, filters, sort = values
-        transforms[name] = (columns, filters or [], sort or [], frozenset(shared))
+        columns, filters, sort, aggregations = values
+        transforms[name] = (columns, filters or [], sort or [], aggregations or None, frozenset(shared))
     return transforms
 
 
@@ -215,8 +232,8 @@ def _incomplete(item, fields, what, sheet_name, reasons):
     return bool(missing)
 
 
-def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, reasons):
-    columns, filters, sort, shared = transforms
+def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, stats, reasons):
+    columns, filters, sort, aggregations, shared = transforms
     shown = _shown_columns(sheet)
     by_header = {}
     for column in shown:
@@ -237,7 +254,19 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, reasons)
             return None
         return _column_key(sheet_name, matches[0], reasons)
 
-    if columns:
+    definition = {"name": excel_sheet_name(sheet_name), "from": {"match": "exact", "value": sheet_name}}
+    kind = (aggregations or {}).get("type", "summary")
+    is_summary = bool(aggregations) and kind == SUMMARY_TABLE
+    if aggregations and not is_summary:
+        reasons.append(AGGREGATION_REFUSALS.get(kind, AGGREGATION_REFUSALS["summary"]))
+
+    if is_summary:
+        # The summary decides the columns and their order, so the sheet keeps neither columns nor sort.
+        summary = _summary(sheet_name, aggregations, stats, key_of, reasons)
+        if summary is not None:
+            definition["summary"] = summary
+        keys, output_headers = [], set()
+    elif columns:
         chosen = [header for header in columns if applies(header, "columns")]
         keys = [key_of(header) for header in chosen]
         output_headers = {header for header in chosen if header in by_header}
@@ -249,7 +278,7 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, reasons)
         output_headers = {c["name"] for c in shown}
 
     saved_keys = [key for key in keys if key is not None]
-    if not keys:
+    if not keys and not is_summary:
         reasons.append(f'"{sheet_name}" has no column to save.')
     if len(saved_keys) > MAX_COLUMNS:
         reasons.append(f'"{sheet_name}" has {len(saved_keys)} columns; a template keeps at most {MAX_COLUMNS} per sheet.')
@@ -258,11 +287,8 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, reasons)
     if repeated:
         reasons.append(f'"{sheet_name}" names the same column more than once ({", ".join(repeated)}).')
 
-    definition = {
-        "name": excel_sheet_name(sheet_name),
-        "from": {"match": "exact", "value": sheet_name},
-        "columns": [key if isinstance(key, dict) else {"key": key} for key in saved_keys],
-    }
+    if not is_summary:
+        definition["columns"] = [key if isinstance(key, dict) else {"key": key} for key in saved_keys]
 
     def filter_or_sort_key(header, what):
         """A filter or sort names a keyed column only: a template can't filter or sort on a
@@ -306,7 +332,7 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, reasons)
         definition["filters"] = saved_filters
 
     # It sorts after selecting, and skips a sort on a column the output lacks: save only the
-    # sort the screen applied.
+    # sort the screen applied. A summary orders its own rows, so its sheet has none.
     saved_sort = []
     for item in sort:
         if _incomplete(item, ("column",), "sort", sheet_name, reasons):
@@ -323,6 +349,112 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, reasons)
     if saved_sort:
         definition["sort"] = saved_sort
     return definition
+
+
+def _summary(sheet_name, spec, stats, key_of, reasons):
+    """The `summary` block for a report_processor summary_table, or None after recording why it
+    can't be saved. report_processor already refused every shape a custom report can't hold, so
+    this maps headers to keys and writes each value's header as the screen showed it. `stats` is
+    report_processor's stats for this sheet, run on the config being saved: it says what the screen
+    shows that Carta would show differently."""
+    pivot = spec.get("pivot")
+    groups = [*spec["rows"], *([pivot] if pivot else [])]
+    group_keys = [_summary_key(sheet_name, header, key_of, reasons) for header in groups]
+    value_keys = [_summary_key(sheet_name, value["column"], key_of, reasons) for value in spec["values"]]
+    if stats is None:
+        reasons.append(
+            f'The totals in "{sheet_name}" can\'t be checked: run report_processor.py on the config being saved '
+            "and pass its result with --result."
+        )
+        return None
+    _check_groups_as_shown(sheet_name, groups, stats, reasons)
+    _check_one_currency(sheet_name, spec["values"], stats, reasons)
+    if None in group_keys or None in value_keys:
+        return None
+
+    summary = {"rows": group_keys[: len(spec["rows"])]}
+    if pivot:
+        summary["pivot"] = group_keys[-1]
+    taken = set(summary["rows"])
+    values = []
+    for value, key in zip(spec["values"], value_keys):
+        out = {"key": key, "fn": value["fn"]}
+        if "percent_of" in value:
+            out["percent_of"] = value["percent_of"]
+        if not pivot:
+            header = summary_value_header(value)
+            # Carta heads a value without a header by default_header; any other header is kept as shown.
+            if header != default_header(value):
+                if len(header) > MAX_SUMMARY_HEADER:
+                    reasons.append(
+                        f'The column "{header}" in "{sheet_name}" has a name longer than {MAX_SUMMARY_HEADER} '
+                        "characters, which a custom report can't keep. Give it a shorter name."
+                    )
+                out["header"] = header
+            # Each column needs its own key: a column summed twice (an amount and its share) takes an id.
+            if key in taken:
+                out["id"] = _summary_id(value, key, taken)
+            taken.add(out.get("id", key))
+        values.append(out)
+    summary["values"] = values
+    totals = {name: True for name in ("rows", "columns") if (spec.get("totals") or {}).get(name)}
+    if totals:
+        summary["totals"] = totals
+    if spec.get("subtotals"):
+        summary["subtotals"] = True
+    if spec.get("order"):
+        summary["order"] = spec["order"]
+    return summary
+
+
+def _summary_key(sheet_name, header, key_of, reasons):
+    key = key_of(header)
+    if isinstance(key, dict):
+        reasons.append(f'The totals in "{sheet_name}" use "{header}", a per-item column, which a custom report can\'t total on yet.')
+        return None
+    return key
+
+
+
+
+def _summary_id(value, key, taken):
+    base = f'{key}_{value["fn"]}' + (f'_of_{value["percent_of"]}' if "percent_of" in value else "")
+    base = base[:MAX_SUMMARY_HEADER - 3]
+    candidate, n = base, 2
+    while candidate in taken:
+        candidate, n = f"{base}_{n}", n + 1
+    return candidate
+
+
+def _check_groups_as_shown(sheet_name, groups, stats, reasons):
+    """Refuse a group label Carta would show differently: a value the screen shows renamed comes back
+    under its raw name, and a money group in another currency comes back labelled in dollars."""
+    renamed = stats.get("renamed_group_values") or {}
+    currencies = stats.get("group_currencies") or {}
+    for header in dict.fromkeys(groups):
+        if renamed.get(header):
+            raw, label = next(iter(renamed[header].items()))
+            reasons.append(
+                f'The totals in "{sheet_name}" are grouped by "{header}", which shows "{raw}" as '
+                f'"{label}", and a custom report can\'t keep that rename.'
+            )
+        code = currencies.get(header)
+        if code and code != GROUP_LABEL_CURRENCY:
+            reasons.append(
+                f'The totals in "{sheet_name}" are grouped by "{header}", amounts in {code}, and a custom '
+                "report would label them in dollars."
+            )
+
+
+def _check_one_currency(sheet_name, values, stats, reasons):
+    """Refuse a sum the screen left blank for mixed currencies: Carta's custom report would add them together."""
+    mixed = set(stats.get("mixed_currency_columns") or [])
+    for header in dict.fromkeys(v["column"] for v in values if v["fn"] == "sum"):
+        if header in mixed:
+            reasons.append(
+                f'"{header}" in "{sheet_name}" holds amounts in more than one currency, and a custom report '
+                "would add them together, so its totals can't be saved."
+            )
 
 
 def _ref_label(key):
@@ -348,7 +480,7 @@ def _merge_affix(sources, sheet_names):
     return None
 
 
-def _merge_sheets(config, sheets_by_source, report, reasons):
+def _merge_sheets(config, sheets_by_source, transforms, report, reasons):
     """Fold each `merge_sheets` target into one definition sheet that matches its sources by a
     common end or start of name and merges them. The order is report_processor's: the sheets not
     merged, in report order, then each merged sheet in `merge_sheets` order."""
@@ -371,8 +503,12 @@ def _merge_sheets(config, sheets_by_source, report, reasons):
             )
             continue
         parts = [sheets_by_source[src] for src in sources]
-        transforms = [{k: part.get(k) for k in ("columns", "filters", "sort")} for part in parts]
-        if any(t != transforms[0] for t in transforms[1:]):
+        # report_processor totals each sheet before it merges them; a custom report would total the merged rows.
+        if any((transforms[src][3] or {}).get("type") == SUMMARY_TABLE for src in sources):
+            reasons.append(f'The sheets merged into "{target}" are totalled one by one, which a custom report can\'t keep.')
+            continue
+        picks = [{k: part.get(k) for k in ("columns", "filters", "sort")} for part in parts]
+        if any(p != picks[0] for p in picks[1:]):
             reasons.append(f'The sheets merged into "{target}" pick, filter or sort columns differently, so they can\'t be saved as one sheet.')
             continue
         match, value = affix
@@ -383,7 +519,7 @@ def _merge_sheets(config, sheets_by_source, report, reasons):
     return [sheet for source, sheet in sheets_by_source.items() if source not in merged_sources] + merged_out
 
 
-def build_definition(config, report, report_type, default_name, create_params=None):
+def build_definition(config, report, report_type, default_name, create_params=None, result_stats=None):
     """(definition, dropped_params) for the report the config describes. Raises TemplateRefused."""
     reasons = []
     reasons.extend(_unsupported_features(config))
@@ -402,13 +538,18 @@ def build_definition(config, report, report_type, default_name, create_params=No
     present = [name for name in transforms if name in report]
     headers = {name: {c["name"] for c in _shown_columns(report[name])} for name in present}
     sheets_by_source = {}
+    # report_processor folds a merged source's stats into its tab; a summary there is refused as a merge.
+    merged = {src for srcs in (config.get("merge_sheets") or {}).values() if isinstance(srcs, list) for src in srcs}
     for sheet_name, sheet_transforms in transforms.items():
         if sheet_name not in report:
             reasons.append(f'The report has no sheet called "{sheet_name}".')
             continue
         elsewhere = set().union(*(headers[name] for name in present if name != sheet_name))
-        sheets_by_source[sheet_name] = _sheet_definition(sheet_name, report[sheet_name], sheet_transforms, elsewhere, reasons)
-    sheets = _merge_sheets(config, sheets_by_source, report, reasons)
+        sheets_by_source[sheet_name] = _sheet_definition(
+            sheet_name, report[sheet_name], sheet_transforms, elsewhere,
+            (result_stats or {}).get(sheet_name, {} if sheet_name in merged else None), reasons
+        )
+    sheets = _merge_sheets(config, sheets_by_source, transforms, report, reasons)
     # The limit counts the definition's sheets: a merged sheet is one, however many it folds in.
     if len(sheets) > MAX_SHEETS:
         reasons.append(f"The report has {len(sheets)} sheets; a template keeps at most {MAX_SHEETS}.")
@@ -448,6 +589,7 @@ def main():
     parser.add_argument("--out", required=True, help="the definition JSON file to write")
     parser.add_argument("--report", help="the downloaded report JSON (default: the config's local_file)")
     parser.add_argument("--create-params", help="JSON file of the arguments the report was created with")
+    parser.add_argument("--result", help="report_processor.py's --out file for this config")
     args = parser.parse_args()
 
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -459,9 +601,10 @@ def main():
         _refuse(["The downloaded report file is not on this computer, so its columns can't be read."])
     report = json.loads(Path(report_path).read_text(encoding="utf-8"))
     create_params = json.loads(Path(args.create_params).read_text(encoding="utf-8")) if args.create_params else None
+    result_stats = json.loads(Path(args.result).read_text(encoding="utf-8"))["stats"] if args.result else None
 
     try:
-        definition, dropped = build_definition(config, report, args.report_type, name, create_params)
+        definition, dropped = build_definition(config, report, args.report_type, name, create_params, result_stats)
     except TemplateRefused as refused:
         _refuse(refused.reasons)
     Path(args.out).write_text(json.dumps(definition, ensure_ascii=False), encoding="utf-8")
