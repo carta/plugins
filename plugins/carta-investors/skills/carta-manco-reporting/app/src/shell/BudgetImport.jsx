@@ -35,7 +35,9 @@ export default function BudgetImport({ hosted, budgetUpload, onChanged }) {
   const note = describeUpload(budgetUpload);
 
   return (
-    <div style={{ ...sans, fontSize: FS.small, color: FAINT, lineHeight: 1.4, display: "grid", gap: 6, marginBottom: 10 }}>
+    // No marginBottom here — Sidebar.jsx's own divider (the rule below this control)
+    // owns the gap to what follows, so this and that margin don't stack.
+    <div style={{ ...sans, fontSize: FS.small, color: FAINT, lineHeight: 1.4, display: "grid", gap: 6 }}>
       {note && (
         // The uploaded workbook's filename is one long, underscore-heavy token with no
         // natural break point, so it overflows this column — invisibly on a wide screen

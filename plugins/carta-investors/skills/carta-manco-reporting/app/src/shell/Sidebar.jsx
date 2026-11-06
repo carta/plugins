@@ -145,10 +145,18 @@ export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, 
 
       <span style={{ flex: "0 0 10px" }} />
 
-      {/* One footer block so the wordmark and as-of line keep their own
-          tight 5px gap regardless of the rail's own (near-zero) gap. */}
+      {/* Same horizontal inset (FOOTER_INSET_X) as the footer block below, so the budget
+          controls line up with the wordmark and date lines rather than sitting flush with the rail edge. */}
+      <div style={styles.footerAction}>{footerAction}</div>
+
+      {/* Same divider + wordmark/as-of layout as carta-fund-modeling's own sidebar
+          footer: a hairline rule separating any action controls above from the
+          product identity below, then the wordmark and data-status lines keeping
+          their own tight 5px gap regardless of the rail's own (near-zero) gap. The
+          gap above the rule is the divider's own margin-top only — nothing above it
+          (footerAction included) may carry a bottom margin, or the two would stack. */}
+      <div style={styles.divider} />
       <div style={styles.footer}>
-        {footerAction}
         <div style={styles.wordmark}>Carta Management Company Reporting</div>
         <div style={styles.dataStatus}>Data as of {formatAsOf(asOf)}</div>
         {/* Only when the ManCo's books stop earlier than the fetch date —
@@ -243,6 +251,10 @@ function formatAsOf(iso) {
 
 const SIDEBAR_WIDTH = 240; // Ink SideNav's own standard open width (--ink-sidenav-container-width-base-open)
 export const SIDEBAR_WIDTH_PX = SIDEBAR_WIDTH; // consumed by AppShell for main-column margin
+
+// Shared by footerAction and footer below, so the budget controls can't drift out of
+// horizontal line with the wordmark/date block by one of the two paddings changing alone.
+const FOOTER_INSET_X = 2;
 
 const styles = {
   wrap: {
@@ -386,19 +398,34 @@ const styles = {
   // weight/placement as carta-fund-modeling's own DataStatus.
   // Product wordmark over the data line, matching carta-fund-modeling's
   // own rail footer — the app names itself rather than carrying a lockup.
+  // FS.small, a step under fund-modeling's FS.body: "Carta Management Company
+  // Reporting" is ~221px bold at 12px against the footer's 216px, so 12px wraps it.
   wordmark: {
     ...sans,
-    fontSize: FS.body,
+    fontSize: FS.small,
     fontWeight: 700,
     color: INK,
     letterSpacing: "-0.01em",
     lineHeight: 1.3,
   },
+  // footer's own horizontal inset, with no vertical margin — the gap to the divider
+  // below is the divider's own margin-top, not a margin here.
+  footerAction: {
+    padding: `0 ${FOOTER_INSET_X}px`,
+  },
+  // Matches carta-fund-modeling's own sidebar footer: a hairline rule, margin-top only,
+  // the 9px gap below it coming from the footer block's own top padding (not a second
+  // margin) so the two don't stack.
+  divider: {
+    height: 1,
+    background: LINE,
+    margin: "9px 8px 0",
+  },
   footer: {
     display: "flex",
     flexDirection: "column",
     gap: 5,
-    padding: "0 2px",
+    padding: `9px ${FOOTER_INSET_X}px 0`,
   },
   dataStatus: {
     ...sans,
