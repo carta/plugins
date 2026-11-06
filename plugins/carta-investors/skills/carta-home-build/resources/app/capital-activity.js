@@ -308,6 +308,12 @@ const CA_PAYOUT_STATUSES = {
   FAILED:                       { label: 'Failed',                       tone: 'failed' },
 };
 
+// A part-paid capital call reads as paid once no more than a flat amount (in the
+// call's own currency) and no more than a fraction of the call is still owed, so a
+// rounding or fee shortfall is not worth chasing an LP over.
+const CA_NEAR_PAID_MAX = 25;
+const CA_NEAR_PAID_FRACTION = 0.01;
+
 // A capital call's pill, coloured on the same scale as a payout's.
 const CA_CALL_STATUSES = {
   paid:           { label: 'Paid',           tone: 'settled' },
@@ -322,10 +328,15 @@ const CA_CALL_STATUSES = {
 // that `paymentStatus` collapses.
 function trackerRowPayment(r, isCall) {
   if (isCall) {
-    const paymentStatus = r.payment_status ?? 'unpaid';
+    const amountPending = parseFloat(r.amount_pending ?? 0);
+    const amount = parseFloat(r.net_contribution ?? 0);
+    const nearPaid = r.payment_status === 'partially_paid'
+      && amountPending <= CA_NEAR_PAID_MAX
+      && amountPending <= amount * CA_NEAR_PAID_FRACTION;
+    const paymentStatus = nearPaid ? 'paid' : (r.payment_status ?? 'unpaid');
     return {
-      amount: parseFloat(r.net_contribution ?? 0),
-      amountPending: parseFloat(r.amount_pending ?? 0),
+      amount,
+      amountPending,
       amountReceived: parseFloat(r.amount_received ?? 0),
       paymentStatus,
       status: CA_CALL_STATUSES[paymentStatus] ?? CA_CALL_STATUSES.unpaid,
@@ -390,7 +401,7 @@ function canRemind(r) {
 
 // One entry per interest group, because the send collapses a group's rows into a
 // single email — listing rows would double-count a two-interest investor. Every
-// row not yet fully paid can be reminded. A group reads "Partially paid", so the
+// row that does not read as paid can be reminded. A group reads "Partially paid", so the
 // picker leaves it to the GP to opt in, only when every row in it is partly paid:
 // one interest that has paid nothing makes the whole group a to-do.
 function groupOutstandingRows(rows, include) {
@@ -446,7 +457,7 @@ function blockedRemindGroups(rows) {
 // An email-disabled row reads "Email disabled" whatever it owes. Otherwise an
 // already-reminded row offers "Resend" over its last-reminded date, so the GP
 // can see which LPs have been chased. A partly paid row is never presented as a
-// task — a fund can carry a few dollars' balance for years — so it only notes
+// task — a partner who has paid part of the call is already engaging — so it only notes
 // when it was last reminded; its reminder lives in the row menu.
 function remindCellInner(r, activityId) {
   if (!canRemind(r)) {
@@ -498,7 +509,7 @@ function amountCellInner(r) {
 }
 
 // Paid rows report when; outstanding ones report how late — in red only for an
-// LP who has paid nothing, so a small leftover balance does not read as urgent.
+// LP who has paid nothing, since a partly paid partner is already engaging.
 function dateCellInner(r) {
   if (r.daysLate > 0 && r.paymentStatus !== 'paid') {
     const quiet = r.paymentStatus === 'partially_paid' ? ' ca-late-quiet' : '';

@@ -4,8 +4,8 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.19.7",
-    "headline": "The Skill directory is now expandable cards with click-to-copy prompts. Rebuild to get the new layout."
+    "version": "1.19.8",
+    "headline": "A capital call partner with only a few dollars left to pay now reads as Paid, so you are not reminded to chase them. Rebuild to get it."
   },
   "carta-lp-summary": {
     "version": "1.2.0",
