@@ -219,10 +219,10 @@ message; act on it:
 - **Draft emails**: one draft per new holder with the user's own email draft tool. Never send.
   No such tool: write them in the chat.
 
-On later turns, `cap_table:list:securities` with the type's `type` and the set's holders: count
-`awaiting_signatures` ("Alex has signed 3 of 4"). To remind holders to accept, preview with
-`cap_table:compute:acceptance_reminders_preview` the ids in `waiting_for_acceptance`, then
-`cap_table:mutate:apply_plan` once the user confirms.
+On later turns, `cap_table:list:securities` with the type's `type` and the set's holders shows
+status, not acceptance. To remind holders, preview
+`cap_table:compute:acceptance_reminders_preview` with the set's issued security ids, drop each blocked
+id, say why, preview again, then `cap_table:mutate:apply_plan` once confirmed.
 
 ## 11. When a command is refused
 
