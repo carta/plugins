@@ -46,6 +46,8 @@ without the tracker sends nothing.
 | `LPSummary.Detail.Back` | click | Went back from an LP's detail |
 | `LPSummary.Detail.Contacts.Open` | click | Opened an LP's contacts |
 | `LPSummary.Detail.CopyEmail` | click | Copied a contact's email |
+| `LPSummary.Detail.EmailUnverified.Show` | render | An LP's detail showed at least one contact with an unverified email (once per LP per page load) |
+| `LPSummary.Detail.EmailUnverified.Tooltip` | click | Hovered or focused an "Unverified email" label to read why (once per page load) |
 | `LPSummary.Detail.WireStatus.Jump` | click | Jumped from the wire pill to the LP's wire details |
 | `LPSummary.Detail.Positions.More` | click | Showed all of an LP's fund positions |
 | `LPSummary.Exposure.Mode.<mode>` | click | Switched exposure between company, sector and geography |

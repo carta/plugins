@@ -66,7 +66,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.25.12</carta-plugin>
+<carta-plugin>carta-investors:7.25.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, take its sandboxed branch instead of stopping — the hosted app needs no plugin files.
 
@@ -552,8 +552,8 @@ Stems → queries.md section. **The DWH stems below are file-required — the bu
 is missing any of their `<stem>.ndjson` files** (write an empty file when truly none):
 `nav_latest`(§2, **rows required**), `investments`(§3, **rows required**),
 `cashflows`(§5 — the single 7-column query that feeds both LP IRR and the NAV/TVPI trend; do **not** run a
-separate §13), `fund_metrics`(§1/§12), `accrued_carry`(§7), `distributed_carry`(§7 — realized "Carried interest
-earned"; feeds the "Carry distributed" callout, $0→"—"), `cohort`(§8), `deal_irr`(§10), `financing`(§11),
+separate §13), `fund_metrics`(§1/§12), `accrued_carry`(§7), `distributed_carry`(§7 — realized carry, fund-level "Carried interest
+earned" or GP-entity carry distributions; feeds the "Carry distributed" callout, $0→"—"), `cohort`(§8), `deal_irr`(§10), `financing`(§11),
 `partners`(§9), `ownership`(§4), `captable`(§15 — a present-but-empty file is fine for firms whose portcos
 aren't Carta cap-table customers, but the file itself must exist), `corporations`(§16 — the entity_link ->
 corporation_uuid bridge that `captable` and `financing`'s "Latest round" enrichment depend on; same

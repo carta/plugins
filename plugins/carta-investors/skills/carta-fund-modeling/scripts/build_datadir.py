@@ -41,7 +41,7 @@ lowercased name, so extra columns are harmless. Logical files (stem.md|psv|tsv|t
                              year); fund_reporting_currency drives the firm display
                              currency (never hardcoded USD)
     accrued_carry  optional  ALLOCATIONS GP side (§7): fund_uuid, accrued_carry, as_of
-    distributed_carry optional ALLOCATIONS GP side 'Carried interest earned' (§7): fund_uuid,
+    distributed_carry optional ALLOCATIONS fund-level 'Carried interest earned', else GP-entity carry distributions (§7): fund_uuid,
                              carry_distributed, as_of — realized carry paid to the GP; 0 when none
     waterfall      optional  PROFIT_ALLOCATION_WATERFALL_CONFIG: fund_id|fund_uuid,
                              config_name, carry_rate, preferred_return, gp_catchup_rate,
@@ -575,8 +575,8 @@ def build(rawdir, out, meta):
         if a and (accrued_asof is None or a > accrued_asof):
             accrued_asof = a
 
-    # ---- carry DISTRIBUTED (realized, from Carta books) — ALLOCATIONS GP side,
-    #      'Carried interest earned' bucket (§7). Real realized carry paid to the
+    # ---- carry DISTRIBUTED (realized, from Carta books) — fund-level 'Carried
+    #      interest earned', else GP-entity carry distributions (§7). Real realized carry paid to the
     #      GP; 0.0 when none distributed yet -> the app shows "—". Booked as an
     #      OUTFLOW (negative, like lp distributions), so take the magnitude — the
     #      realized carry paid to the GP is a positive amount. ----
@@ -1117,7 +1117,7 @@ def build(rawdir, out, meta):
         gpEconomics[i] = {"accruedCarryToday": round(f["accrued"], 2), "accruedCarryAsOf": accrued_asof,
                           "carryDistributed": round(f["carryDistributed"], 2), "carryDistributedAsOf": dist_carry_asof,
                           "gpCapitalNav": round(f["gpNav"], 2),
-                          "notes": "Accrued carry is the booked carried-interest-accrued allocation to the GP; carryDistributed is the booked realized (carried-interest-earned) carry."}
+                          "notes": "Accrued carry is the booked carried-interest-accrued allocation to the GP; carryDistributed is the booked realized carry (fund-level carried interest earned, else the GP entity's carry distributions)."}
         windDownYear[i] = calc_vint + 10
         cashflows[i] = {"flows": flows, "paidInTotal": round(f["lpPaidIn"], 2),
                         "terminalDate": "%d-12-31" % (calc_vint + 10)}

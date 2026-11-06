@@ -420,6 +420,12 @@
     .copy-note { font-size: var(--ink-font-global-size-small-1); color: var(--ink-color-global-text-subtle); }
     .copy-note:empty { display: none; }
     .contacts-btn { all: unset; cursor: pointer; font: 400 var(--ink-font-global-size-body-1)/20px var(--ink-font-global-family-base); color: var(--ink-color-global-text-subtle); }
+    .unverified { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; position: relative; padding: 1px 8px; border: 1px solid var(--ink-color-global-brand-yellow-80); border-radius: 999px; background: var(--ink-color-global-feedback-warning-subtle); color: var(--local-color-pill-pending-text); font: 400 var(--ink-font-global-size-small-1)/16px var(--ink-font-global-family-base); white-space: nowrap; }
+    .unverified:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); }
+    .unverified .ink-tooltip { max-width: 240px; }
+    .contacts-menu:has(.unverified) { min-width: 260px; }
+    .contacts-menu .unverified { margin-left: 0; align-self: flex-start; }
+    .contacts-menu .unverified .ink-tooltip { width: 220px; }
     .contacts-btn:hover { color: var(--ink-color-global-text-default); text-decoration: underline; }
     .contacts-btn:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); }
     .contacts-menu { width: max-content; max-width: min(320px, calc(100vw - 32px)); top: 28px; }
@@ -1013,6 +1019,8 @@
             if (!key || seen.has(key)) continue;
             seen.add(key);
             const person = { name: c.name || null, email: c.email || null };
+            // The email notices go to differs from the one on the contact's Carta account.
+            if (c.mismatch) person.mismatch = true;
             if (wantPrimary && !primary) primary = person; else others.push(person);
           }
         }
@@ -2002,7 +2010,7 @@
     const WELCOME_TOOL = 'welcome';
     const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-lp-summary'], from_ui: true };
     // Matches .claude-plugin/skill-versions.json; the update banner compares it to the published one.
-    const ARTIFACT_VERSION = '1.1.1';
+    const ARTIFACT_VERSION = '1.2.0';
 
     // Config values land in SQL, so only plain identifiers are accepted.
     const IDENT = /^[A-Za-z0-9_.]+$/;
@@ -2089,6 +2097,14 @@
     // A table column or mode key as a plain label, never free text.
     const trackLabel = key => String(key || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 40);
     let searchTracked = false;
+    // Unverified-email events: a Show per LP whose flagged contacts were viewed, a Tooltip once per page load.
+    const unverifiedShown = new Set();
+    let unverifiedTipTracked = false;
+    function trackUnverifiedTip(e) {
+      if (unverifiedTipTracked || !(e.target instanceof Element) || !e.target.closest('[data-unverified]')) return;
+      unverifiedTipTracked = true;
+      track('click', 'Detail.EmailUnverified.Tooltip');
+    }
 
     let welcomeCalled = false;
     let welcomeRetried = false;
@@ -2319,10 +2335,11 @@
     // lists the rest under "+N contacts".
     function contactsSql() {
       return `SELECT c.FUND_ID AS fund_uuid, c.PARTNER_ID AS partner_id, c.CONTACT_FULL_NAME AS contact_name,
-                     c.CONTACT_EMAIL AS contact_email, c.IS_PRIMARY_CONTACT AS is_primary, c.FIRM_ID AS firm_id
+                     c.CONTACT_EMAIL AS contact_email, c.IS_PRIMARY_CONTACT AS is_primary,
+                     c.IS_CONTACT_EMAIL_MISMATCHED AS email_mismatch, c.FIRM_ID AS firm_id
               FROM ${table('contacts')} c
               WHERE (c.CONTACT_FULL_NAME IS NOT NULL OR c.CONTACT_EMAIL IS NOT NULL)${firmPin('c')}
-              ORDER BY c.FUND_ID, c.PARTNER_ID, c.IS_PRIMARY_CONTACT DESC, c.CONTACT_FULL_NAME, c.CONTACT_EMAIL`;
+              ORDER BY c.FUND_ID, c.PARTNER_ID, c.IS_PRIMARY_CONTACT DESC, c.CONTACT_FULL_NAME, c.CONTACT_EMAIL, c.IS_CONTACT_EMAIL_MISMATCHED`;
     }
 
     // One row per security, in the fund's own currency. A position already in that currency
@@ -2439,6 +2456,7 @@
     const $ = id => document.getElementById(id);
 
     const ICON = {
+      warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
       chevron: '<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
       chevronDown: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
       close: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
@@ -2994,6 +3012,16 @@
       return `<span class="email-wrap"><a href="mailto:${esc(email)}">${esc(email)}</a><button class="icon-btn copy-btn" type="button" data-copy="${esc(email)}" title="Copy email" aria-label="Copy ${esc(email)}">${ICON.copy}</button></span>`;
     }
 
+    // The warehouse gives only a yes/no: the account email itself is never exposed to the GP.
+    const UNVERIFIED_EMAIL = 'Unverified email';
+    const UNVERIFIED_EMAIL_TIP = "This email doesn't match their Carta account. Notices may not reach them.";
+    const unverifiedCount = fam => [fam.contact, ...(fam.otherContacts || [])].filter(p => p && p.mismatch).length;
+    // In the contacts menu the tooltip opens from the label's start, since the menu scrolls and clips.
+    function unverifiedHtml(person, inMenu) {
+      if (!person || !person.mismatch) return '';
+      return `<span class="ink-tooltip-wrap unverified" tabindex="0" data-unverified><span class="ink-tooltip is-multiline ${inMenu ? 'is-start' : 'is-end'}" role="tooltip">${esc(UNVERIFIED_EMAIL_TIP)}</span>${ICON.warning}${esc(UNVERIFIED_EMAIL)}</span>`;
+    }
+
     function contactLineHtml(fam, missing) {
       const c = fam.contact;
       const parts = [];
@@ -3001,6 +3029,7 @@
       if (c && c.email) {
         if (c.name) parts.push(SEP);
         parts.push(emailHtml(c.email));
+        parts.push(unverifiedHtml(c, false));
       }
       // An LP with no contact at all has its contact line name everything missing; any other
       // LP gets a note under its contacts.
@@ -3010,9 +3039,10 @@
       if (others.length) {
         const shown = parts.length > 0 && !inLine;
         if (shown) parts.push(SEP);
-        const more = shown ? `+${others.length} more` : `+${others.length} contact${others.length === 1 ? '' : 's'}`;
+        const flagged = others.filter(o => o.mismatch).length;
+        const more = (shown ? `+${others.length} more` : `+${others.length} contact${others.length === 1 ? '' : 's'}`) + (flagged ? ` (${flagged} need${flagged === 1 ? 's' : ''} review)` : '');
         const open = ui.menu === 'contacts';
-        const list = others.map(o => `<div class="contact">${o.name ? `<span class="d-strong">${esc(o.name)}</span>` : ''}${o.email ? `<span class="contact-email">${emailHtml(o.email)}</span>` : ''}</div>`).join('');
+        const list = others.map(o => `<div class="contact">${o.name ? `<span class="d-strong">${esc(o.name)}</span>` : ''}${o.email ? `<span class="contact-email">${emailHtml(o.email)}</span>${unverifiedHtml(o, true)}` : ''}</div>`).join('');
         parts.push(`<span class="menu-wrap"><button class="contacts-btn" type="button" data-menu="contacts" aria-haspopup="dialog" aria-expanded="${open}">${more}</button>
           ${open ? `<div class="menu contacts-menu" role="dialog" aria-label="Additional contacts" data-menu-for="contacts"><div class="menu-title">Additional contacts</div>${list}</div>` : ''}</span>`);
       }
@@ -3189,6 +3219,7 @@
       const fam = selectedFamily();
       if (!fam) { el.innerHTML = data.families.length ? '' : `<div class="empty">${NO_LPS}</div>`; return; }
       const pf = familyProfile(fam.records);
+      if (unverifiedCount(fam) && !unverifiedShown.has(fam.key)) { unverifiedShown.add(fam.key); track('render', 'Detail.EmailUnverified.Show'); }
       el.innerHTML = `<button class="m-back" type="button" data-back><span aria-hidden="true">←</span>All Limited Partners</button>
         <div class="d-title"><h2 class="d-name">${esc(fam.name)}</h2>${lpWireChip(fam)}</div>
         <div class="d-meta">
@@ -3828,6 +3859,8 @@
       document.addEventListener('click', onClick);
       document.addEventListener('mouseover', fitTooltip);
       document.addEventListener('focusin', fitTooltip);
+      document.addEventListener('mouseover', trackUnverifiedTip);
+      document.addEventListener('focusin', trackUnverifiedTip);
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape' && ui.menu) { const id = ui.menu; closeMenu(); refocus(`[data-menu="${id}"]`); return; }
         const row = e.target.closest && (e.target.closest('[data-x-toggle]') || (e.target.matches('[data-open]') && e.target));
@@ -3919,7 +3952,7 @@
       for (const c of res.contacts.rows) {
         const k = recordKey(c.fund_uuid, c.partner_id);
         if (!contacts.has(k)) contacts.set(k, []);
-        contacts.get(k).push({ name: c.contact_name, email: c.contact_email, is_primary: c.is_primary === true });
+        contacts.get(k).push({ name: c.contact_name, email: c.contact_email, is_primary: c.is_primary === true, mismatch: c.email_mismatch === true });
       }
       data.wireRestricted = res.wires.failed;
       const wires = new Map(res.wires.rows.map(w => [recordKey(w.fund_uuid, w.partner_id), w]));

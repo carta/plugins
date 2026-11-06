@@ -210,7 +210,7 @@ export default function GpEconomics(props) {
           </tbody>
         </table>
       </TableScroll>
-      {/* Carry distributed — booked REALIZED carry paid to the GP (Carried interest earned) */}
+      {/* Carry distributed — booked REALIZED carry paid to the GP (fund-level Carried interest earned, else GP-entity carry distributions) */}
       <div className="card" style={{ padding: "14px 20px", marginBottom: 10, display: "flex", alignItems: "baseline", gap: 18, flexWrap: "wrap" }}>
         <StatTile label="Carry distributed · Carta books"
           value={m.carryDistributed != null && m.carryDistributed > 0 ? fmtM(m.carryDistributed) : "—"} style={{ flex: "none" }} />
@@ -219,7 +219,7 @@ export default function GpEconomics(props) {
         </span>
       </div>
       <SourceNote style={{ marginBottom: 28 }}>
-        Source: Carta Fund Admin. Accrued and distributed carry are the booked “carried interest accrued” / “earned” allocations (“—” when none). Modeled GP carry =
+        Source: Carta Fund Admin. Accrued and distributed carry are the booked “carried interest accrued” allocations and the carry paid out (“earned” or GP-entity carry distributions) (“—” when none). Modeled GP carry =
         {" "}{(carryRate / (1 - carryRate) * 100).toFixed(0)}% of LP net profit; GP commit is the GP's co-investment (fund config where recorded, else GP paid-in), and GP capital is it grown to the marks (“—” when neither is recorded).
         {" "}<span style={{ color: "var(--ink-color-global-link-default)", fontWeight: 600 }}>Highlighted row</span> = current marks.
       </SourceNote>

@@ -8,8 +8,8 @@
     "headline": "The Skill directory is now expandable cards with click-to-copy prompts. Rebuild to get the new layout."
   },
   "carta-lp-summary": {
-    "version": "1.1.1",
-    "headline": "A new overview at the top: total and unfunded commitments, distributions and DPI, and how concentrated your LP base is. Filter to the LPs whose wires need review."
+    "version": "1.2.0",
+    "headline": "See which LP contacts have an unverified email, one that doesn't match their Carta account, so you know whose notices may not reach them."
   },
   "carta-soi": {
     "version": "1.4.9",

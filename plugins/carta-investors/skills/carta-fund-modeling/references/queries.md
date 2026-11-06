@@ -206,10 +206,17 @@ quarter-end earlier than navAsOf; label it as such. Surfaced in the **GP returns
 callout, and consumed by `src/model/reprice.js` for the LP-vs-carry uplift split — so it must be the real
 booked number, not 0. Funds with no accrual return $0.
 
-**Carry DISTRIBUTED (realized).** The realized counterpart is the `'Carried interest earned'` bucket — carry
+**Carry DISTRIBUTED (realized).** The realized counterpart is the `'Carried interest earned'` bucket (or, for firms that book payouts in the GP entity, the carry distributions below) — carry
 actually paid out to the GP (vs. `'Carried interest accrued'`, which is unrealized). Same GP-side pattern; save
 as the `distributed_carry` stem (columns `fund_uuid, carry_distributed, as_of`):
 SQL: the `distributed_carry` stem in `queries.json` (`uv run scripts/emit_stem_sql.py --raw <raw_dir> --stem distributed_carry`).
+**Firms that book payouts inside the GP entity.** Some firms never use `'Carried interest earned'`; they book
+each GP member's payout as `'Distribution - Carried interest'` (and `'In kind distribution - Carried interest'`)
+on the **GP entity** (`ENTITY_TYPE_NAME = 'GP'`), under the GP entity's own `fund_uuid`. The stem maps the GP
+entity back to its LP fund(s) through `GP_ENTITY_NAME` on the fund-level accrual rows (as `gp_carry` does, §7b).
+A GP entity that serves several LP funds (a main fund plus a community fund) is **split by each fund's share of
+accrued carry** (evenly when none accrued) so the firm total is never double counted. A fund that has fund-level
+`'Carried interest earned'` uses that and ignores the GP-entity payouts.
 **Sign convention (important):** unlike accrued carry (booked **positive**), realized `'Carried interest earned'`
 is booked on the GP side as an **outflow — negative** `ACTUAL_AMOUNT` (the GP capital account is relieved when
 carry is paid), exactly like LP distributions. So take `ABS(SUM(...))` — the realized carry paid to the GP is a
@@ -218,7 +225,8 @@ paid carry — e.g. a fund at 7× DPI — read `$0`/"—" because the raw sum is
 → `snapshot.gpEconomics[fundId].carryDistributed` (+ `carryDistributedAsOf`). Surfaced in the **GP returns**
 "Carry distributed · Carta books" callout below the table; **genuinely $0 → the card shows "—"** (no carry
 distributed yet). Do **not** confuse a general GP-side `'Distribution'` bucket (return of GP capital, etc.) with
-realized carry — only `'Carried interest earned'` is carry.
+realized carry — only `'Carried interest earned'` on the fund, or `'Distribution - Carried interest'` /
+`'In kind distribution - Carried interest'` on the GP entity, is carry.
 
 ## 7b. GP partner-level carry (real, from Carta books) → `ALLOCATIONS` → `gp_carry`
 Per-GP-partner accrued carry, for the GP Economics **GP partner carry** table. `'Carried interest accrued'`
