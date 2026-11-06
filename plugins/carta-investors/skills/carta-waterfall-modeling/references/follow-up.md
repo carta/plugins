@@ -6,6 +6,38 @@ written (excel). Table specs live in `references/rendering.<get_command noun>.md
 (the results shape — e.g. `rendering.niagara_results.md`); formatting in
 `SKILL.md` §Formatting rules.
 
+## Save inputs (before the menu)
+
+Before the first "What next?" menu of a run, once per run — in a batch, once after the last run — offer
+to save its optional inputs when it had any, and the Step 4 saved-inputs read returned saved inputs
+they differ from or `saved_inputs_not_found` (`references/inputs.md` §Saved inputs). Otherwise —
+including when that read failed any other way — go straight to the menu.
+
+Ask **one** `AskUserQuestion` — options "Save inputs" / "Not now" — listing each optional input as
+`**{label}:** {value}` (an ENUM by its `choices[].label`, a `NESTED_LIST` by each row's `label`):
+
+> Save these inputs for **{company}**? Your firm's next waterfall for **{company}** will offer them.
+
+On "Save inputs", send the run's full `options` from Step 5 (a save replaces what was saved before):
+
+```
+call_tool({"name": "waterfall_modeling__mutate__saved_inputs", "arguments": {
+  "owner_kind":  "FIRM",
+  "owner_id":    "<org_pk from Step 1>",
+  "target_kind": "<locked from Step 2>",
+  "target_id":   "<locked from Step 2>",
+  "options":     { /* the options sent in Step 5 */ }
+}})
+```
+
+Success → _"Saved — your firm's next waterfall for **{company}** will offer these inputs."_ Then the
+menu.
+
+- `409 saved_inputs_conflict` → "Someone else just saved inputs for **{company}** — save these
+  instead?" Retry the same call.
+- `400` → surface `message` verbatim; go to the menu.
+- Any other error → "Couldn't save the inputs right now." Go to the menu.
+
 ## Follow-up prompt
 
 After rendering the holder table (or, in `excel`, after writing the **Waterfall** tab), present the

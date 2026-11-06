@@ -72,7 +72,8 @@ read_tool({"name": "waterfall_modeling__get__saved_inputs", "arguments": {
 → { options, saved_by, saved_at, dropped }
 ```
 
-Any error, `404` included → no saved inputs; say nothing and collect the optionals as above. Use
+`404` with `error: saved_inputs_not_found` → nothing saved yet. Any other error → saved inputs aren't
+available here. Either way, say nothing and collect the optionals as above. Use
 only the `options` keys whose `available_inputs` entry is not skipped above (no rows or
 `unavailable`), and within a `NESTED_LIST` only the rows still in its `rows` without a `locked_reason`;
 name each other saved row with the `dropped` line below. None left → no saved inputs.

@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.7</carta-plugin>
+<carta-plugin>carta-investors:7.28.8</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -462,8 +462,9 @@ results doc.)
 ### Follow-up prompt
 
 After rendering the holder table (or, in `excel`, after writing the **Waterfall**
-tab; or, in the chat results-page path, after the link), present the follow-up menu and run the chosen action per
-[`references/follow-up.md`](references/follow-up.md) — the **surface-specific
+tab; or, in the chat results-page path, after the link), offer to save the run's inputs, then present
+the follow-up menu and run the chosen action per
+[`references/follow-up.md`](references/follow-up.md) — the save-inputs offer, the **surface-specific
 menu** (you **must** call `AskUserQuestion` with every option for the surface,
 never in prose, never collapsed) and — **only when Step 3 returned `save_command`**
 — the update-holding-values action (confirm-then-post, anchored on the run
