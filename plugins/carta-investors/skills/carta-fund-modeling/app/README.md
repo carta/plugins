@@ -10,9 +10,10 @@ file in `src/`, refresh, done.
 
 **Do NOT run `npm run build` after editing source** — there is no build step for source edits.
 `npm run build` rebuilds the vendored ESM bundles (`../dist/vendor/react.esm.js`,
-`../dist/vendor/sucrase.esm.js`) and the Claude MCP App panel bundle (`dist-panel/panel.js`,
+`../dist/vendor/sucrase.esm.js`) and the Claude MCP App panel bundle (`../webapp/panel/panel.js` and `tokens.css`,
 gitignored, never committed), so it is needed **only to update deps** (a React or Sucrase
-version bump) or to produce the panel bundle, never per edit.
+version bump) or to produce the panel bundle, never per edit. `npm run build:panel` builds just
+the panel bundle (what a deploy runs; see `DEPLOY.md`).
 
 ## Layout
 
@@ -36,6 +37,6 @@ npm run dev
 
 npm test          # model unit tests (vitest)
 
-# Only after bumping React/Sucrase: rebuild ../dist/vendor and commit it (dist-panel/ is not committed).
+# Only after bumping React/Sucrase: rebuild ../dist/vendor and commit it (webapp/panel/ is not committed).
 npm run build
 ```

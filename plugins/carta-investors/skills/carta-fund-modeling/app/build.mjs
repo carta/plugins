@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 // Builds the fund-modeling skill's webapp/ vendor bundles. The app source (app/src) is
 // served directly and transpiled in-browser, so it is NOT copied here — this only
-// emits ../webapp/vendor/*.esm.js, plus the Claude MCP App panel bundle app/dist-panel/panel.js
-// (gitignored, outside the deployed webapp/ assets). Run from app/: npm run build.
+// emits ../webapp/vendor/*.esm.js, plus the Claude MCP App panel bundle webapp/panel/panel.js
+// (gitignored, deployed with the webapp/ assets and served at /panel/). Run from app/: npm run build,
+// or npm run build:panel for the panel alone (what a deploy runs).
 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve, relative } from "node:path";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { build as esbuild } from "esbuild";
 
 const APP = fileURLToPath(new URL(".", import.meta.url)); // this file lives at app/build.mjs
 const WEBAPP = resolve(APP, "../webapp");
 const VENDOR_OUT = resolve(WEBAPP, "vendor");
+const PANEL_OUT = resolve(WEBAPP, "panel");
 
 // React is CJS-only. `export * from 'react'` drops every name — esbuild can't
 // enumerate a CJS module's exports for a star re-export. So import the default
@@ -94,19 +96,28 @@ async function verifyReactBundle() {
 
 // Single-file bundle for the Claude MCP App panel (src/panel.jsx). Unlike the in-browser
 // transpile above, a panel has no server to fetch source from, so everything ships as one file.
+// It lands in webapp/panel/ with the stylesheet so the Worker serves both at /panel/, where
+// carta-mcp fetches them.
 async function buildPanel() {
   await esbuild({
     ...COMMON,
     entryPoints: [resolve(APP, "src/panel.jsx")],
-    outfile: resolve(APP, "dist-panel/panel.js"),
+    outfile: resolve(PANEL_OUT, "panel.js"),
     format: "iife",
     jsx: "automatic",
     loader: { ".js": "jsx" },
   });
-  console.log("  bundled dist-panel/panel.js ✓");
+  await copyFile(resolve(APP, "src/ui/tokens.css"), resolve(PANEL_OUT, "tokens.css"));
+  console.log("  bundled webapp/panel/panel.js + tokens.css ✓");
 }
 
 (async () => {
+  // `node build.mjs panel` builds only the panel, which is all a deploy needs: the full build
+  // also rewrites webapp/vendor and removes webapp/src, the symlink to app/src.
+  if (process.argv[2] === "panel") {
+    await buildPanel();
+    return;
+  }
   // Remove only the files this script writes: webapp/vendor/ also holds hand-maintained
   // files (the tracker bundle, README.md) that a whole-folder clean would delete.
   console.log("build: cleaning generated webapp/vendor/ files (+ legacy webapp/src, webapp/assets)…");

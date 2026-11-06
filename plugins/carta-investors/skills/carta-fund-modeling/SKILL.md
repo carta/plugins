@@ -66,7 +66,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.2</carta-plugin>
+<carta-plugin>carta-investors:7.28.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, take its sandboxed branch instead of stopping — the hosted app needs no plugin files.
 
@@ -722,8 +722,8 @@ DWH SELECT-only + `LIMIT`; the only write is the user-triggered portfolio (scena
 ## Editing the app
 Source under `app/src/` is served directly; the service worker transpiles `.jsx` in-browser. **Do NOT
 run `npm run build` after editing source** — there is no build step for source edits: edit a file in
-`app/src/`, refresh, done. `npm run build` only rebuilds `webapp/vendor/*` and is needed **only** on a
-React/Sucrase version bump.
+`app/src/`, refresh, done. `npm run build` rebuilds `webapp/vendor/*` and the panel bundle and is needed **only** on a
+React/Sucrase version bump. A deploy runs `npm run build:panel` alone (see DEPLOY.md).
 
 ## Analytics
 New interactive elements: call `trackClick(elementId)` (or `trackRender(elementId)` for view/dialog mounts)
