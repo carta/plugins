@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.23</carta-plugin>
+<carta-plugin>carta-investors:7.28.24</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -89,7 +89,8 @@ The flow is:
 
 1. Resolve firm + portfolio company.
 2. Fetch the **options contract** for that company → returns `run_command`,
-   `get_command`, `cap_table_command` (when available), and `available_inputs`.
+   `get_command`, `cap_table_command` (when available), and `available_inputs`; then read the
+   firm's **saved inputs** for it.
 3. Collect inputs from the user.
 4. Dispatch via `run_command` → returns `{execution_id}`.
 5. **When `cap_table_command` is available** — show the cap table the run used for
@@ -307,9 +308,27 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
   (Step 5) and results (Step 6) always use the picked `target_id` locked in Step 2.
   Root display name = `root.name` when set, else the picked company name.
 
+Then **always** read the firm's saved inputs for the target, before Step 4:
+
+```
+read_tool({"name": "waterfall_modeling__get__saved_inputs", "arguments": {
+  "owner_kind":  "FIRM",
+  "owner_id":    "<org_pk from Step 1>",
+  "target_kind": "<locked from Step 2>",
+  "target_id":   "<locked from Step 2>",
+  "include_required": false
+}})
+→ { options, saved_by, saved_at, dropped }
+```
+
+Step 4 handles its response and errors per `references/inputs.md` §Saved inputs; they never stop the flow.
+
 Cache `run_command`, `get_command`, `cap_table_command` (if present),
 `save_command` (if present), `breakpoint_allocations_command` (if present), `currency` (if present),
-`is_multi_entity`, `root` (if present), and the catalog for the rest of the flow. **Do not re-call `get:options` mid-flow.**
+`is_multi_entity`, `root` (if present), the saved inputs, and the catalog for the rest of the flow. **Do not re-call `get:options` mid-flow.**
+After a successful save of inputs (`references/follow-up.md` §Save inputs), set the cached saved inputs to the
+optional entries (`required == false`) of the `options` sent, with `saved_at` now, `saved_by` null and no `dropped`; after a successful reset
+(`references/inputs.md` §Saved inputs), set them to `saved_inputs_not_found`.
 
 **Announce the multi-entity structure before collecting inputs.** When
 `is_multi_entity` is `true`, print one sentence before Step 4 — e.g. _"This is a

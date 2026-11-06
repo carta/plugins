@@ -9,7 +9,7 @@ written (excel). Table specs live in `references/rendering.<get_command noun>.md
 ## Save inputs (before the menu)
 
 Before the first "What next?" menu of a run, once per run — in a batch, once after the last run — offer
-to save its optional inputs when it had any, and the Step 4 saved-inputs read returned saved inputs
+to save its optional inputs when it had any, and the cached saved inputs (`SKILL.md` Step 3) are saved inputs
 they differ from or `saved_inputs_not_found` (`references/inputs.md` §Saved inputs). Otherwise —
 including when that read failed any other way — go straight to the menu.
 
