@@ -334,6 +334,18 @@ def _rj_carry_tier_rates(raw_json: dict) -> "list[float] | None":
     return rates if len(rates) > 1 else None
 
 
+def _rj_has_preferred_return_tier(raw_json: dict) -> bool:
+    """True when a waterfall tier is a preferred return.
+
+    Without one or a stated preferred rate, a multiple on a tiered-carry ladder ("20% until the LPs receive 3x,
+    then 25%") is where the carry steps up, not a hurdle."""
+    tiers = _rj_get(raw_json, "carried_interest", "waterfall_tiers")
+    return any(
+        isinstance(tier, dict) and _to_str(_unwrap(tier.get("kind"))) == "preferred_return"
+        for tier in (tiers if isinstance(tiers, list) else [])
+    )
+
+
 def _load_provisions(value: Any) -> list[dict]:
     """Parse a side letter's economic_provisions field.
 
@@ -1078,6 +1090,13 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
             "capitalCallNoticeDays": _rj_field(raw_json, ("capital_provisions", "capital_call_notice_days"), _to_int),
             "initialClosingDate": _rj_field(raw_json, ("fund_terms", "initial_closing_date"), _to_date10),
         } if terms_extracted else {}
+        if (
+            terms.get("preferredReturnMultiple") is not None
+            and terms.get("preferredReturnRate") is None
+            and terms.get("carryTierRates")
+            and not _rj_has_preferred_return_tier(raw_json)
+        ):
+            terms["preferredReturnMultiple"] = None
         # An event row with every term empty states nothing, so it is no more "Full data" than none.
         terms_extracted = terms_extracted and any(v not in (None, "", []) for v in terms.values())
         carry = terms.get("carriedInterestRate")

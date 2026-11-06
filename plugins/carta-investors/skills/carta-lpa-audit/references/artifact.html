@@ -1266,6 +1266,13 @@
       return rates.length > 1 ? rates : null;
     }
 
+    // True when a waterfall tier is a preferred return. Without one or a stated preferred rate, a multiple
+    // on a tiered-carry ladder ("20% until the LPs receive 3x, then 25%") is where the carry steps up, not a hurdle.
+    function rjHasPreferredReturnTier(rawJson) {
+      const tiers = rjGet(rawJson, 'carried_interest', 'waterfall_tiers');
+      return (Array.isArray(tiers) ? tiers : []).some(tier => tier && typeof tier === 'object' && toStr(unwrapEnv(tier.kind)) === 'preferred_return');
+    }
+
     function rjGet(rawJson, ...path) {
       if (!rawJson) return null;
       const roots = [rawJson];
@@ -1985,6 +1992,10 @@
           capitalCallNoticeDays: rjField(rawJson, ['capital_provisions', 'capital_call_notice_days'], toInt),
           initialClosingDate: rjField(rawJson, ['fund_terms', 'initial_closing_date'], toDate10),
         } : {};
+        if (terms.preferredReturnMultiple != null && terms.preferredReturnRate == null && terms.carryTierRates
+          && !rjHasPreferredReturnTier(rawJson)) {
+          terms.preferredReturnMultiple = null;
+        }
         // An event row with every term empty states nothing, so it is no more "Full data" than none.
         termsExtracted = termsExtracted && Object.values(terms).some(v => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && !v.length));
         const notFundLpa = documentType === OPERATING_AGREEMENT_DOCUMENT_TYPE
