@@ -11,6 +11,9 @@ import { FirmAccess, getJson } from "./firm-access.js";
 
 const SEARCH_DELAY_MS = 300;
 
+// In the Claude panel /api/firms answers 409 when the user has no recent load of the firm (loads expire after an hour).
+const NO_RECENT_LOAD = "Fund Modeling has no recent load of your firm. Open it at https://fund-modeling.carta.cloud/, then reopen this panel.";
+
 // A search answer carries no fund count, so a count shows only when the firm has one.
 function cardFacts(f) {
   return [
@@ -46,7 +49,7 @@ export default function FundChooser({ onPick, autoOpen = true }) {
           const pinned = new FirmAccess(isStaff, found).pinnedFirm;
           if (autoOpen && pinned) onPick(pinned);
         })
-        .catch((e) => { if (live) setError(String(e)); });
+        .catch((e) => { if (live) setError(e.message === "HTTP 409" ? NO_RECENT_LOAD : String(e)); });
     }, q ? SEARCH_DELAY_MS : 0);
     return () => { live = false; clearTimeout(timer); };
   }, [q, isStaff, onPick, autoOpen]);
