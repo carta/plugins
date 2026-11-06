@@ -57,6 +57,10 @@ TRACKING = "tracking"
 EDITED = "edited"  # holds its own copy of the budget, apart from any workbook
 SHARED_IN = "shared-in"
 
+# The `origin` adopt_own_sync writes: a copy with no local source behind it — the one
+# shape record_own_sync's own uuid-claim check (below) drops without raising.
+_ADOPTED_ORIGIN = {"kind": "copy", "from": None}
+
 _LOCK_TIMEOUT = 10.0
 _LOCK_STALE_AFTER = 30.0
 
@@ -665,13 +669,34 @@ class ReportStore:
         push was in flight. Either way `uuid` must not end up live in Carta with
         nothing local claiming it: here it only goes into `dismissed_uuids`, so a pull
         never re-imports it even if the delete below fails; own_sync.push_if_changed is
-        what actually deletes it upstream when this returns None."""
+        what actually deletes it upstream when this returns None.
+
+        Invariant: at most one local report claims a given Carta uuid (adopt_own_sync's
+        own doc states it; this is the other writer of an own-sync link). The only other
+        report this drops to hold it is one of adopt_own_sync's own copies (origin
+        _ADOPTED_ORIGIN) — a pull that adopted this push's brand-new mirror early, before
+        this call could land; dropping it leaves the push's own report as the one real
+        local claimant. Any other claimant — a user's own edited report, a workbook
+        report, anything adopt_own_sync didn't write — means `uuid` itself is wrong (a
+        session's own --record passed the wrong one, say), and this raises
+        ReportEditError("conflict") instead: silently dropping a real report over a bad
+        uuid would lose its budget and edits with nothing to report it.
+
+        :raises ReportEditError: ("conflict") when `uuid` already names a report this
+            method would not itself have produced.
+        """
         with self.transaction() as doc:
             try:
                 report = self.find(doc, report_id)
             except ReportEditError:
                 _dismiss(doc, uuid)
                 return None
+            if uuid:
+                others = [r for r in doc["reports"] if r is not report and self.own_sync_uuid(r) == uuid]
+                if any(r.get("origin") != _ADOPTED_ORIGIN for r in others):
+                    raise ReportEditError("that Carta report is already linked to another report", "conflict")
+                if others:
+                    doc["reports"] = [r for r in doc["reports"] if r is report or self.own_sync_uuid(r) != uuid]
             report["own_sync"] = {
                 "uuid": uuid,
                 "payload_fingerprint": payload_fingerprint(payload),
@@ -806,6 +831,35 @@ class ReportStore:
                     keep.append(r)
                 doc["reports"] = keep
         return counts
+
+    def adopt_own_sync(self, name: str, budget: Dict[str, Any], uuid: str, payload_fingerprint_value: str) -> Optional[Dict[str, Any]]:
+        """A private, is_owner budget_report share_ops.pull found with no local record at
+        all. Materialized as an ordinary personal copy (state EDITED, origin "copy", no
+        `from`: there is no local source behind it), with its own-sync link already
+        stamped as if this dashboard had pushed it itself — so own_sync.py's sweep
+        (plan_push) never tries to create a second mirror for it, and the next local
+        edit's payload_fingerprint comparison starts from what Carta actually holds, not
+        from nothing.
+
+        Invariant: at most one local report claims a given Carta uuid — this and
+        record_own_sync are its two writers, each enforcing it inside its own
+        transaction. Checked fresh here, not against whatever share_ops.pull saw when it
+        decided to call this — a sweep's own push (record_own_sync), or a second pull
+        running at the same time, can claim `uuid` in between. Returns None, adopting
+        nothing, when `uuid` is already claimed (dismissed_uuids: a report's own-sync
+        link or an explicit dismissal) or already shared under a `shared` link.
+        """
+        with self.transaction() as doc:
+            if uuid in self.dismissed_uuids(doc) or any(self.shared_uuid(r) == uuid for r in doc["reports"]):
+                return None
+            new_id = self._unique_id(doc, _slug(name))
+            report = {
+                "id": new_id, "name": name, "origin": dict(_ADOPTED_ORIGIN),
+                "state": EDITED, "budget": budget, "shared": None, "hidden": False, "updated_at": _now(),
+                "own_sync": {"uuid": uuid, "payload_fingerprint": payload_fingerprint_value, "pushed_name": name, "synced_at": _now()},
+            }
+            doc["reports"].append(report)
+            return self.metadata(report)
 
     def share_payload_path(self, report_id: str) -> Path:
         return self.inputs_dir / ("%s.share.json" % report_id)

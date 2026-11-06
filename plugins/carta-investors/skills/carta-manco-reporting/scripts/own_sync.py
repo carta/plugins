@@ -18,8 +18,9 @@ whose rename wins). report_store.ReportStore.dismissed_uuids folds in every
 report's own sync uuid, so a mirror this dashboard pushed is never imported
 back by share_ops.pull as if someone else had shared it — only for *this*
 local reports.json, though: a mirror pushed from a different checkout of the
-same dashboard (a second machine, a reinstalled skill) has no local record and
-would still come back as a pulled copy there.
+same dashboard (a second machine, a reinstalled skill) has no local record
+here, so share_ops.pull adopts it as a personal copy of its own
+(report_store.ReportStore.adopt_own_sync), linked to the same mirror.
 
 Removing a synced report locally must go through `forget`, not
 report_store.ReportStore.remove directly: `remove` alone only stops a local
@@ -555,16 +556,29 @@ def write_plans(data_dir: Path, user_id: int, recreate: Optional[str] = None) ->
 
 def record_session_push(data_dir: Path, report_id: str, pushed_uuid: str) -> Dict[str, Any]:
     """Stamp a push a Claude session made from `report_id`'s plan, exactly as
-    push_if_changed stamps its own, and drop that plan. `delete_uuid` names a mirror the
-    session must delete itself (the report was removed while the push was in flight);
-    this process has no Carta connection to do it."""
+    push_if_changed stamps its own, and drop that plan either way — a refused stamp
+    (below) still consumed the plan it was asked to record, so leaving it on disk would
+    only have a later, unrelated push wrongly match or fail to rule it out
+    (guard-own-sync-push.js; retire_session_push's own doc). `delete_uuid` names a mirror
+    the session must delete itself (the report was removed while the push was in
+    flight); this process has no Carta connection to do it.
+
+    Answers `{"recorded": False, "delete_uuid": None, "error": "conflict"}`, deleting
+    nothing, when `pushed_uuid` already names a different, real local report (report_store.
+    ReportStore.record_own_sync's own doc) — the uuid the caller passed is wrong, not a
+    report-removed-meanwhile race, and that uuid is still the other report's live mirror.
+    """
     plan_file, arguments_file = manco_paths.own_sync_plan_files(data_dir, report_id)
     plan = json.loads(plan_file.read_text())
     orphaned: List[str] = []
-    result = _record_push(report_store.ReportStore(data_dir), data_dir, report_id, plan, pushed_uuid,
-                          orphaned.append)
-    plan_file.unlink()
-    arguments_file.unlink(missing_ok=True)
+    try:
+        result = _record_push(report_store.ReportStore(data_dir), data_dir, report_id, plan, pushed_uuid,
+                              orphaned.append)
+    except report_store.ReportEditError as e:
+        return {"recorded": False, "delete_uuid": None, "error": e.code}
+    finally:
+        plan_file.unlink(missing_ok=True)
+        arguments_file.unlink(missing_ok=True)
     return {"recorded": result is not None, "delete_uuid": orphaned[0] if orphaned else None}
 
 

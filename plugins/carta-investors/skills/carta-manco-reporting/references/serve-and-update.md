@@ -435,6 +435,9 @@ Sub-agent brief:
 > 4. On success, run `<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --record <report_id> --uuid <the response's report.uuid>`.
 >    If it prints a `delete_uuid`, call `mcp__<SERVER>__call_tool` with `name` =
 >    `fa__delete__budget_report` and `arguments` = `{"fund_uuid": "<fund_uuid>", "report_uuid": <delete_uuid>}`.
+>    If it prints `"error": "conflict"` instead, answer exactly `failed: conflict`, push
+>    nothing more for this report, and delete nothing — the uuid it named is another
+>    report's live mirror, not this one's to touch.
 > 5. If a `fa__mutate__budget_report` call answers **not found** — the hosted app's own
 >    Delete, most likely, deliberate, not a glitch — run `<UV_BIN> run
 >    "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir
@@ -533,11 +536,12 @@ Sub-agent brief:
 > On any other failure, stop after one try — never retry, never vary the call, never fall
 > back to another command — and answer exactly `failed: <the error's first line>`.
 > Otherwise, after step 4's `import` prints its counts, answer exactly one line: `pulled
-> added=<N> updated=<N> removed=<N> skipped=<N>`.
+> added=<N> adopted=<N> updated=<N> removed=<N> skipped=<N>`.
 
-- **`not_enabled`**, or **`pulled added=0 updated=0 ...`** — nothing changed; say nothing.
-- **`pulled added=<N> updated=<M> ...`** with `N` or `M` above 0 — one line, after Step 5.3's
-  link (if any) and before Step 6's menu: *"Loaded `<N+M>` reports shared with you — they're
+- **`not_enabled`**, or **`pulled added=0 adopted=0 updated=0 ...`** — nothing changed; say
+  nothing.
+- **`pulled added=<N> adopted=<P> updated=<M> ...`** with `N`, `P` or `M` above 0 — one line,
+  after Step 5.3's link (if any) and before Step 6's menu: *"Loaded `<N+P+M>` reports — they're
   in the Budget vs Actuals sidebar (reload the tab if it's already open)."*
 - **`failed: <reason>`** — one line: *"Couldn't load reports shared with you yet (`<reason>`)
   — use **Load shared reports** in the sidebar to retry."* Never retry it in this run.

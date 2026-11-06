@@ -380,7 +380,13 @@ def list_reports(bridge: Any, ctx: Dict[str, Any], emit: Emit) -> Optional[List[
 
 
 def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emit) -> Dict[str, Any]:
-    """Load the reports shared with you and refresh the ones you already have.
+    """Load the reports shared with you, adopt your own reports pushed from elsewhere, and
+    refresh the ones you already have.
+
+    A listing entry with no local record at all splits two ways: `is_owner` means it is
+    this user's own report with nothing here claiming it yet, adopted as a personal copy
+    (adopt_own_sync) rather than filed under Shared Reports. Anything else is someone
+    else's share and goes through upsert_pulled.
 
     Each payload is checked against the contract before it's stored; one that
     fails is skipped and counted, never rendered with wrong numbers.
@@ -392,30 +398,38 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
     doc = store.load()
     dismissed = store.dismissed_uuids(doc)
     local = {store.shared_uuid(r): r for r in doc["reports"] if store.shared_uuid(r)}
-    wanted = []
+    wanted, to_adopt = [], []
     for meta in reports:
         uuid = meta.get("uuid")
         if uuid in dismissed:
-            continue  # removed here on purpose: upsert_pulled would drop it anyway
+            continue  # removed here on purpose: upsert_pulled/adopt_own_sync would drop it anyway
         mine = local.get(uuid)
         if mine is not None and mine.get("state") != report_store.SHARED_IN:
             continue  # your own local report: Carta holds the copy you shared, not a newer one
         if mine is not None and (mine.get("shared") or {}).get("updated_at") == meta.get("updated_at"):
             continue  # unchanged since the last pull
+        if mine is None and meta.get("is_owner"):
+            to_adopt.append(meta)
+            continue
         wanted.append(meta)
-    pulled, skipped = [], 0
-    for i, meta in enumerate(wanted, 1):
-        emit("Fetching shared report %d of %d…" % (i, len(wanted)))
+
+    def _fetch(meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         try:
-            full = bridge.call("fa__get__budget_report", {"fund_uuid": ctx["fund_uuid"], "report_uuid": meta["uuid"]}, emit)
-            fetched = envelope(full)
+            fetched = envelope(bridge.call("fa__get__budget_report", {"fund_uuid": ctx["fund_uuid"], "report_uuid": meta["uuid"]}, emit))
             report_payload.validate(fetched.get("payload"))
         except ShareError as e:
             if e.code == "unexpected_call":
                 raise  # a call nobody asked for may have changed something: never a quiet skip
-            skipped += 1
-            continue
+            return None
         except report_payload.PayloadError:
+            return None
+        return fetched
+
+    pulled, adopted, skipped = [], 0, 0
+    for i, meta in enumerate(wanted, 1):
+        emit("Fetching shared report %d of %d…" % (i, len(wanted)))
+        fetched = _fetch(meta)
+        if fetched is None:
             skipped += 1
             continue
         info = fetched["report"]
@@ -425,7 +439,19 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
             "budget": canonical.budget_from_canonical(fetched["payload"], report_id="pending", name=info.get("name") or "Shared report"),
             "shared": _shared_meta(info),
         })
+    for i, meta in enumerate(to_adopt, 1):
+        emit("Loading your own report %d of %d…" % (i, len(to_adopt)))
+        fetched = _fetch(meta)
+        if fetched is None:
+            skipped += 1
+            continue
+        info = fetched["report"]
+        name = info.get("name") or "Budget"
+        budget = canonical.budget_from_canonical(fetched["payload"], report_id="pending", name=name)
+        if store.adopt_own_sync(name, budget, info["uuid"], report_store.payload_fingerprint(fetched["payload"])) is not None:
+            adopted += 1
     upstream = {m.get("uuid") for m in reports if m.get("uuid")} if listing is not None else None
     counts = store.upsert_pulled(pulled, upstream)
+    counts["adopted"] = adopted
     counts["skipped"] = skipped
     return {"status": "ok", "counts": counts}

@@ -54,11 +54,11 @@ export async function actSaved(reportsApi, ...args) {
   }
 }
 
-// Whether a pull added, updated or removed a report shared with you — when it did not,
-// nothing on the page changed.
+// Whether a pull added, adopted, updated or removed a report — when it did not, nothing
+// on the page changed.
 export function pullChanged(result) {
   const counts = result?.counts || {};
-  return !!(counts.added || counts.updated || counts.removed);
+  return !!(counts.added || counts.adopted || counts.updated || counts.removed);
 }
 
 // Duplicates a report and opens the copy. A copy made but not yet on the page

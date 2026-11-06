@@ -144,10 +144,13 @@ Carta that mirrors your own reports privately, with no effect on Share.
   update that belongs to it but differs from its arguments file. The bridge's own relay
   session is exempt (`share_bridge.BRIDGE_ENV`): it checks its calls itself.
 - `--record <report_id> --uuid <uuid>` reads the `.plan.json` the latest `--plan` wrote,
-  stamps the push, drops that plan, clears `blocked_by`, and prints
+  stamps the push, drops that plan either way, clears `blocked_by`, and prints
   `{"recorded": <bool>, "delete_uuid": <uuid or null>}`. `delete_uuid` names a mirror the
-  session must delete, when the report was removed while its push was in flight. Used by
-  Step 5.2's sub-agent after every successful push.
+  session must delete, when the report was removed while its push was in flight. When
+  `--uuid` already names a different, real local report, it prints
+  `{"recorded": false, "delete_uuid": null, "error": "conflict"}` instead, deleting
+  nothing — that uuid is the other report's live mirror. Used by Step 5.2's sub-agent
+  after every push.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.
@@ -217,8 +220,12 @@ in order, and nothing else. Do not search for the script; its path is below.
 2. List the reports: `call_tool` with name `fa__get__budget_reports` and arguments
    `{"fund_uuid": "<fund_uuid>"}`.
 
-3. For each report in that list whose `is_owner` is false, fetch it: `call_tool` with name
-   `fa__get__budget_report` and arguments `{"fund_uuid": "<fund_uuid>", "report_uuid": "<report_uuid>"}`.
+3. For each report in that list, fetch it: `call_tool` with name `fa__get__budget_report`
+   and arguments `{"fund_uuid": "<fund_uuid>", "report_uuid": "<report_uuid>"}`. Fetch every
+   report, `is_owner` true or false — `import_shared_reports.py import` (next step) decides
+   on its own which ones it actually needs: someone else's share, a report this dashboard
+   already tracks, or one of the user's own reports with no local record yet, adopted as a
+   personal copy rather than filed under Shared Reports.
 
 4. Write the answers, unchanged, to `<dashboard_dir>/.reports/pulled.json` as
    `{"list": <step 2 result>, "reports": {"<report_uuid>": <step 3 result>, ...}}`, then:
@@ -227,11 +234,12 @@ in order, and nothing else. Do not search for the script; its path is below.
    <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/import_shared_reports.py" import --data-dir "<dashboard_dir>" --responses "<dashboard_dir>/.reports/pulled.json"
    ```
 
-   It prints the counts (`added`, `updated`, `removed`, `skipped`). A report whose payload
-   fails the contract — or whose size `fa:get:budget_report` offloaded to a document URL
-   instead of inlining — is skipped, never shown with wrong numbers.
+   It prints the counts (`added`, `adopted`, `updated`, `removed`, `skipped`). A report whose
+   payload fails the contract — or whose size `fa:get:budget_report` offloaded to a document
+   URL instead of inlining — is skipped, never shown with wrong numbers.
 
-5. Tell the user how many reports were added or updated and to reload the dashboard page.
+5. Tell the user how many reports were added, adopted as their own, or updated, and to
+   reload the dashboard page.
    If step 2's `call_tool` answers that the command "is not enabled for this user" (or either
    step answers "Unknown tool"/"Unknown command"), sharing isn't turned on for them yet; say
    so and stop.

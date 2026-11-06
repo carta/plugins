@@ -75,6 +75,7 @@ export function pulledMessage(result) {
   const counts = result?.counts || {};
   const bits = [];
   if (counts.added) bits.push(`${counts.added} added`);
+  if (counts.adopted) bits.push(`${counts.adopted} of your own loaded`);
   if (counts.updated) bits.push(`${counts.updated} updated`);
   if (counts.kept_local) bits.push(`${counts.kept_local} kept with your changes`);
   if (counts.removed) bits.push(`${counts.removed} removed`);
