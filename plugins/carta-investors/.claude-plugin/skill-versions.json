@@ -8,8 +8,8 @@
     "headline": "A capital call partner with only a few dollars left to pay now reads as Paid, so you are not reminded to chase them. Rebuild to get it."
   },
   "carta-lp-summary": {
-    "version": "1.2.0",
-    "headline": "See which LP contacts have an unverified email, one that doesn't match their Carta account, so you know whose notices may not reach them."
+    "version": "1.2.1",
+    "headline": "Firms with more than 500 LP records now see every limited partner exactly once, so commitment totals and LP counts match Carta."
   },
   "carta-soi": {
     "version": "1.4.9",

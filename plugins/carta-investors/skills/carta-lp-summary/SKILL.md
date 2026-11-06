@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.21</carta-plugin>
+<carta-plugin>carta-investors:7.28.22</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -307,7 +307,7 @@ The artifact reads these tables through `dwh__execute__query`, each pinned to th
 
 **Look-through is an estimate.** The LP's share of a fund is their NAV over the fund's NAV; it multiplies the fund's value in each company, and companies are summed across the LP's funds. A security's value and cost scale by the same share. The NAV the named holdings do not account for (cash, fees, other assets) shows as Exposure's "Other" row, so the % column adds up to 100%.
 
-**Row volume.** Each load pages 500 rows at a time, up to 200 pages per table. Past that the page says the figures are partial instead of showing a silent subset.
+**Row volume.** Each load pages 500 rows at a time, up to 200 pages per table, with `LIMIT` and `OFFSET` written into the SQL (the connector's own `limit` and `offset` arguments do not keep a query's `ORDER BY` between pages, so pages overlap and rows go missing). Every paged query therefore sorts on a unique key. Past the page cap the page says the figures are partial instead of showing a silent subset.
 
 ## Error table
 

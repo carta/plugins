@@ -54,6 +54,7 @@ except ImportError:  # Windows has no fcntl; msvcrt locks the same byte range.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import manco_paths
 import report_store
+import manco_banner
 from shapes import canonical as canonical_budget
 from shapes import formula_infer
 from shapes import totals_tree
@@ -67,15 +68,11 @@ MONTH_LABELS_FULL_YEAR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 
 def parse_total_rows(text):
     """Extract the `total_rows: N` value from a pipe-table's optional
-    preamble line (e.g. `total_rows: 1842 | offset: 0 | limit: 1000 |
+    preamble line (e.g. `total_rows: 1,842 | offset: 0 | limit: 1000 |
     format: markdown`). Returns None when the preamble is absent — single
     -page responses and hand-written fixtures both take this path, and
     callers must treat that as "nothing to check against", not zero."""
-    lines = [ln for ln in text.splitlines() if ln.strip()]
-    if not lines or not lines[0].startswith("total_rows:"):
-        return None
-    m = re.match(r"total_rows:\s*(\d+)", lines[0])
-    return int(m.group(1)) if m else None
+    return manco_banner.parse_banner_total(text)
 
 
 def parse_pipe_table(text):
@@ -87,7 +84,7 @@ def parse_pipe_table(text):
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if not lines:
         return []
-    start = 1 if lines[0].startswith("total_rows:") else 0
+    start = 1 if lines[0].startswith(manco_banner.PREFIX) else 0
     headers = [h.strip().lower() for h in lines[start].split(" | ")]
     di = start + 1
     if di < len(lines) and re.fullmatch(r"[\s\-|]+", lines[di]):

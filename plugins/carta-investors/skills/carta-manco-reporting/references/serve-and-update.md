@@ -461,55 +461,66 @@ silently. If it returns any `needs_human:` line, tell the user in one sentence w
 isn't on the hosted app yet and the reason, and go on. Never retry it in this run.
 
 
-## Step 5.3 — Offer the hosted app's link to this firm's report
+## Step 5.3 — Offer the hosted app's link
 
-**Only when this firm's Budget vs Actuals is backed by an imported workbook** — 2.75
-resolved one, never Carta's own `fa__list__budgets` fallback, which has no local report to
-mirror and so nothing own_sync could ever push. `<REPORT_ID>` is the workbook report's id
-(`manco_paths.default_budget_id`): "primary" for the usual single-workbook case, or
-whatever the workbook's own file name or declared `id` names otherwise. Skip entirely for
-a firm using Carta's own budget.
+Every build offers a link to the hosted app: the workbook report when it mirrors there, else
+the firm itself. Run this only after Step 5.2 has returned (when 5.2 ran at all) — this step
+never pushes anything; the workbook branch reads back what Step 5.2 (or an earlier run)
+recorded.
 
-Run this only after Step 5.2 has returned (when 5.2 ran at all) — this step never pushes
-anything itself, it only reads back what Step 5.2 just did (or an earlier run did). A plain
-local read: no Carta call, no lock, no timeout needed.
+**Workbook-backed Budget vs Actuals** (2.75 resolved one, never Carta's own
+`fa__list__budgets` fallback) — `<REPORT_ID>` is the workbook report's id
+(`manco_paths.default_budget_id`): "primary" for the usual single-workbook case, or whatever
+the workbook's own file name or declared `id` names otherwise. A plain local read, no Carta
+call, no lock, no timeout needed:
 
 ```bash
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/own_sync.py" --data-dir "<dashboard_dir>" --lookup "<REPORT_ID>"
 ```
 
-- **`{"uuid": "<uuid>"}`** — build the hosted link and offer it, as the **last** output of
-  this run before Step 6's menu — after 5c's gap line (if any) and Step 5.2's `needs_human`
-  line (if any):
+- **`{"uuid": "<uuid>"}`** — build the deep link to that report:
 
   ```bash
   <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url --dashboard-dir "<dashboard_dir>" "<uuid>"
   ```
 
-  `hosted-url` reads the firm's name and uuid straight from `<dashboard_dir>`'s own
-  snapshot.json/accounts.json — the values Step 4's build recorded for this dashboard
-  (its `--firm-name`/`--firm-uuid` args). Never pass or compose a firm name by hand here;
-  the local cache slug (`manco_paths.slugify`) in particular can differ from the slug the
-  hosted app itself routes on. Offer the printed `url` on one line, e.g. *"Also on the
-  hosted app: `<url>`"*. The uuid
-  is this dashboard's own-sync mirror as recorded locally, just now or from an earlier
-  push — not a live check that the mirror still exists on the hosted app (it could have
-  been deleted there, or from another checkout, since the last push). Do not build this
-  link from any other uuid (a local report id, a remembered one from an earlier turn) —
-  only from this call's own `"uuid"`.
+  The uuid is this dashboard's own-sync mirror as recorded locally, just now or from an
+  earlier push — not a live check that the mirror still exists on the hosted app (it could
+  have been deleted there, or from another checkout, since the last push). Do not build this
+  link from any other uuid (a local report id, a remembered one from an earlier turn) — only
+  from this call's own `"uuid"`.
 
 - **`{"uuid": null}`** — the report is read-only, hasn't been built yet, its mirror was
   deleted on the hosted app (Step 5.2's `--retire` branch), or Step 5.2's push for it failed
-  (its `needs_human` line, just printed, already said why). There's nothing to offer; say
-  nothing further.
+  (its `needs_human` line, just printed, already said why). Fall back to the firm-only link
+  below — the firm still has a hosted dashboard even when this one report doesn't mirror to
+  it.
+
+**Carta's own budget, or the workbook-backed case's fallback above** — skip the own-sync
+lookup (there is nothing workbook-specific to look up) and build a bare link to the firm
+itself, no report or tab:
+
+```bash
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url --dashboard-dir "<dashboard_dir>"
+```
+
+In both cases, `hosted-url` reads the firm's name and uuid straight from `<dashboard_dir>`'s
+own snapshot.json/accounts.json — the values Step 4's build recorded for this dashboard (its
+`--firm-name`/`--firm-uuid` args). Never pass or compose a firm name by hand here; the local
+cache slug (`manco_paths.slugify`) in particular can differ from the slug the hosted app
+itself routes on.
+
+Offer the link on one line, as the **last** output of this run before Step 6's menu, after
+5c's gap line (if any) and Step 5.2's `needs_human` line (if any): *"Also on the hosted app:
+`<url>`"*. Never open a tab for it — every build that reaches this step chose local at Gate 1.
 
 
 ## Step 5.4 — Load reports shared with you
 
 **SILENT unless something changed or failed.** Run it only when this run has a Carta MCP
-(`<SERVER>`); skip it on a cache-only reopen. Run this after the URL is out, once Step 5.2
-**and** Step 5.3 have both returned (when either ran at all) — on every invocation, warm
-reopen included, since a report can be shared with you between runs.
+(`<SERVER>`); skip it on a cache-only reopen. Run this after the URL is out, once Steps 5.2
+and 5.3 have both returned — on every invocation, warm reopen included, since a report can be
+shared with you between runs.
 
 Dispatch **one** fresh-context sub-agent (Agent tool, `subagent_type: general-purpose`,
 which inherits this session's whole tool surface, its Carta connector included) with the

@@ -66,9 +66,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.21</carta-plugin>
+<carta-plugin>carta-investors:7.28.22</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch (skipping the open-in-tab step on a failed gate-file read) instead of stopping — the hosted app itself needs no plugin files.
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files.
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -178,7 +178,7 @@ so ask as usual.
   that `list_contexts` returns for it, or by its firm UUID (`firm_id`) when `carta_id` is null. **Open the hosted app** with
   `https://fund-modeling.carta.cloud/firm/<carta_id>` (else `/firm/<firm_id>`), then reply and end the turn: "Open
   **\<link\>** and sign in with Carta to open **\<canonical name\>**." Do **not** launch `serve.py` or scan
-  caches. Fall back: **Open the hosted app** with the bare link, then reply with it plus the **Switch firm** line from Gate 0, naming the firm as typed, when
+  caches. Fall back: **Open the hosted app** with the bare link, then reply with it plus the **Switch firm** line from Gate 0, naming the firm as typed, and end the turn, when
   there is no Carta MCP or `list_contexts` leaves no single firm. Never put a firm name in the link.
 - **Local** → continue to **Step 0** silently.
 

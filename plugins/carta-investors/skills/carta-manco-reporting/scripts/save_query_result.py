@@ -28,10 +28,8 @@ import re
 import sys
 from pathlib import Path
 
-# A result banner: "total_rows: 1,000 | offset: 0 | limit: 1000 | format: markdown"
-_BANNER_PREFIX = "total_rows:"
-_BANNER_RE = re.compile(
-    r"total_rows:\s*([\d,]+)\s*\|\s*offset:\s*([\d,]+)\s*\|\s*limit:\s*([\d,]+)")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import manco_banner  # noqa: E402
 
 # What the harness writes in place of a result too large to inline.
 _SPILL_RE = re.compile(r"saved to (\S+)")
@@ -210,10 +208,10 @@ def short_page_warning(text: str, dest_name: str):
     be below the SQL's LIMIT. Comparing against `total_rows` catches a
     truncated pull whatever the two disagree about.
     """
-    m = _BANNER_RE.search(text)
+    m = manco_banner.BANNER_RE.search(text)
     if not m:
         return None
-    total, offset, limit = (int(g.replace(",", "")) for g in m.groups())
+    total, offset, limit = (manco_banner.to_int(g) for g in m.groups())
     if total <= offset + limit:
         return None
     return (f"warning: {dest_name} holds rows {offset + 1}-{offset + limit} of "
@@ -228,7 +226,7 @@ def strip_banner(text: str) -> str:
     landing mid-file would be read as a data row by the pipe-table parser.
     """
     lines = text.lstrip("\n").split("\n")
-    if lines and lines[0].lstrip().startswith(_BANNER_PREFIX):
+    if lines and lines[0].lstrip().startswith(manco_banner.PREFIX):
         lines = lines[1:]
         while lines and not lines[0].strip():
             lines = lines[1:]

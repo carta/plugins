@@ -53,9 +53,9 @@ gets the opening line at the same moment the check begins, not after it.
 none) → skip the uv prerequisite below and everything else in this gate — none of it can run
 without Bash. Go straight to the **`surface=sandboxed`** branch below, including its
 hosted-link hand-off, and treat its "Open the hosted app" step as the gate-file-unreadable
-case (that section's last sentence: skip opening, give the reply with the link). A Bash
-tool that IS present but whose `detect-surface` call fails ("No such file", a bad path) is a
-different case, covered further down where `detect-surface` is actually run.
+case, which that section's "If that file can't be read" sentence covers. A Bash tool that IS present but whose
+`detect-surface` call fails ("No such file", a bad path) is a different case, covered further
+down where `detect-surface` is actually run.
 
 ### Prerequisite — ensure `uv` is installed
 
@@ -240,10 +240,11 @@ it:**
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" detect-surface
 ```
 - `"surface": "sandboxed"` → **stop immediately.** Do **not** scan caches, resolve a
-  firm, touch the MCP, or launch `serve.py`. **Open the hosted app** with the bare link
-  (see "Open the hosted app" below), then reply with this message (substance verbatim),
+  firm, touch the MCP, or launch `serve.py`. **Open the hosted app** with
+  **https://manco-reporting.carta.cloud** (see "Open the hosted app" below), then reply with
+  this message (substance verbatim),
   then end the turn:
-  > This session is running in the cloud, where the local build above can't reach your
+  > This session is running in the cloud, where a local dashboard can't reach your
   > browser — but you don't need it. **Carta also hosts this dashboard** at
   > **https://manco-reporting.carta.cloud** — sign in with Carta and pick your firm, with
   > nothing to build.

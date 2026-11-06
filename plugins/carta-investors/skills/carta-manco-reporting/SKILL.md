@@ -147,9 +147,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.28.21</carta-plugin>
+<carta-plugin>carta-investors:7.28.22</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch (skipping the open-in-tab step on a failed gate-file read) instead of stopping — the hosted app itself needs no plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
 # ManCo Reporting Dashboard
 
@@ -235,7 +235,7 @@ the sandboxed-exit and hosted-or-local gates that sit before this table.
 | 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
 | 5.2 | when this run has a Carta MCP and the build's own sweep recorded that the `claude` CLI couldn't reach Carta | Push the owner's reports to the hosted app from this session | [serve-and-update.md](references/serve-and-update.md) |
-| 5.3 | when this firm's Budget vs Actuals is backed by an imported workbook | Offer the hosted app's link to this firm's report | [serve-and-update.md](references/serve-and-update.md) |
+| 5.3 | always | Offer the hosted app's link — the report it is backed by when workbook-backed, else the firm itself | [serve-and-update.md](references/serve-and-update.md) |
 | 5.4 | when this run has a Carta MCP, once Steps 5.2 and 5.3 have both returned | Load reports shared with you | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
 | 7 | only when the operator asks for a budget in the hosted app that the automatic sync didn't deliver to the audience they want (their own session, or colleagues), and the hosted Import budget button is enabled | Export the workbook budget as a bundle to upload | [serve-and-update.md](references/serve-and-update.md) |

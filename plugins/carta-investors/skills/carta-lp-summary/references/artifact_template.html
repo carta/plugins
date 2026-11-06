@@ -2071,12 +2071,10 @@
       return { done: true, saved };
     }
 
-    // Paging stops on a short page or once every row the query reports has come back. Rows the
-    // parser could not read still came back, so they count: a full page with one unreadable row
-    // is not the last page.
-    function isLastPage(pageRows, pageSkipped, pageSize, seenSoFar, total) {
-      if (pageRows + pageSkipped < pageSize) return true;
-      return total != null && seenSoFar >= total;
+    // Paging stops on a short page. Rows the parser could not read still came back, so they
+    // count: a full page with one unreadable row is not the last page.
+    function isLastPage(pageRows, pageSkipped, pageSize) {
+      return pageRows + pageSkipped < pageSize;
     }
     // </lps-core>
   </script>
@@ -2087,7 +2085,7 @@
     const WELCOME_TOOL = 'welcome';
     const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-lp-summary'], from_ui: true };
     // Matches .claude-plugin/skill-versions.json; the update banner compares it to the published one.
-    const ARTIFACT_VERSION = '1.2.0';
+    const ARTIFACT_VERSION = '1.2.1';
 
     // Config values land in SQL, so only plain identifiers are accepted.
     const IDENT = /^[A-Za-z0-9_.]+$/;
@@ -2272,7 +2270,9 @@
 
     function parseTable(text) {
       if (!text || typeof text !== 'string') return { rows: [], skipped: 0 };
-      const lines = text.split(/\r?\n/).map(l => l.trimEnd()).filter(l => l.length > 0);
+      // Split before trimming: a cell left empty at the end of a line (a name that starts with
+      // a line break) is still a cell.
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
       if (lines.length === 0) return { rows: [], skipped: 0 };
       const head = lines[0].startsWith('total_rows:') ? 1 : 0;
       if (head >= lines.length) return { rows: [], skipped: 0 };
@@ -2281,46 +2281,57 @@
       if (lines.length > start && /^[\s\-|]+$/.test(lines[start])) start++;
       const rows = [];
       let skipped = 0;
-      for (let i = start; i < lines.length; i++) {
-        const cells = reconcileOverflow(lines[i].split(' | ').map(c => c.trim()), headers);
-        if (!cells) { skipped++; continue; }
+      const cellsOf = line => line.split(' | ').map(c => c.trim());
+      const addRow = cells => {
         const row = {};
         headers.forEach((h, j) => { row[h] = coerce(cells[j], h); });
         rows.push(row);
+      };
+      // A line break inside a name splits one row over several lines: a short line takes in the
+      // following lines while the joined cells still fit the header, and counts as one skipped
+      // row when they never add up to a full one.
+      let pending = null;
+      for (let i = start; i < lines.length; i++) {
+        let cells = cellsOf(lines[i]);
+        if (pending) {
+          const joined = pending.slice(0, -1).concat([pending[pending.length - 1] + ' ' + cells[0]], cells.slice(1));
+          if (joined.length <= headers.length) cells = joined; else skipped++;
+          pending = null;
+        }
+        if (cells.length < headers.length) { pending = cells; continue; }
+        const full = reconcileOverflow(cells, headers);
+        if (!full) { skipped++; continue; }
+        addRow(full);
       }
+      if (pending) skipped++;
       return { rows, skipped };
-    }
-
-    function totalRows(text) {
-      const match = ((text || '').split(/\r?\n/)[0] || '').match(/total_rows:\s*(\d+)/);
-      return match ? parseInt(match[1], 10) : null;
     }
 
     const PAGE_SIZE = 500;
     const MAX_PAGES = 200;
 
-    async function queryOnce(sql, opts) {
-      const args = { sql, format: 'markdown' };
-      if (opts && opts.limit !== undefined) args.limit = opts.limit;
-      if (opts && opts.offset !== undefined) args.offset = opts.offset;
-      const text = unwrap(await callMcpWithWelcomeRetry(CALL_TOOL, { name: 'dwh__execute__query', arguments: args }));
-      const parsed = parseTable(text);
-      return { rows: parsed.rows, skipped: parsed.skipped, total: totalRows(text) };
+    // The connector's `limit` is sent as the page size so a smaller default can never cut a page
+    // short and end paging early; its `offset` is never sent (see queryAll).
+    async function queryOnce(sql) {
+      const text = unwrap(await callMcpWithWelcomeRetry(CALL_TOOL, { name: 'dwh__execute__query', arguments: { sql, format: 'markdown', limit: PAGE_SIZE } }));
+      return parseTable(text);
     }
 
-    const query = (sql, opts) => withRetry(() => queryOnce(sql, opts), (opts && opts.label) || 'Loading');
+    const query = (sql, label) => withRetry(() => queryOnce(sql), label || 'Loading');
 
-    // Pages until a short page. Reports truncation and dropped rows instead of showing a
-    // silent subset.
+    // Pages until a short page, with LIMIT and OFFSET in the SQL itself: the connector's own
+    // limit and offset arguments do not keep the query's ORDER BY from one page to the next,
+    // so pages overlap and rows go missing. Every query paged here sorts on a unique key.
+    // Reports truncation and dropped rows instead of showing a silent subset.
     async function queryAll(sql, label) {
       const rows = [];
       let skipped = 0;
       for (let page = 0; page < MAX_PAGES; page++) {
-        const result = await query(sql, { limit: PAGE_SIZE, offset: page * PAGE_SIZE, label });
+        const result = await query(`${sql}\n LIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`, label);
         assertFirm(result.rows);
         rows.push(...result.rows);
         skipped += result.skipped || 0;
-        if (isLastPage(result.rows.length, result.skipped || 0, PAGE_SIZE, rows.length + skipped, result.total)) return { rows, truncated: false, skipped };
+        if (isLastPage(result.rows.length, result.skipped || 0, PAGE_SIZE)) return { rows, truncated: false, skipped };
       }
       return { rows, truncated: true, skipped };
     }
@@ -2338,7 +2349,7 @@
     // Deliberately not pinned: it reads which firm the session's row access is on, so assertFirm
     // can refuse a session that has moved to another firm. (Not named *Sql, which must all pin.)
     function firmProbe() {
-      return `SELECT DISTINCT p.FIRM_ID AS firm_id FROM ${table('partners')} p WHERE ${LP_ROWS}`;
+      return `SELECT DISTINCT p.FIRM_ID AS firm_id FROM ${table('partners')} p WHERE ${LP_ROWS} ORDER BY p.FIRM_ID`;
     }
 
     // A session that moved to another firm returns its rows, which assertFirm refuses, or — once

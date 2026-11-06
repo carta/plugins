@@ -33,12 +33,10 @@ Claude in Chrome tool names and their order; change it with this file too.
 ## Open a link
 
 Once `browser_family` is set, this is how a hosted hand-off opens a page for the user instead
-of only giving its link as text: open the link first, then give the reply, then end the turn
-— the reply with the link is always given, whether or not opening succeeded, so a failed or
-missing browser costs the user nothing. A caller that can't read this file at all (claude.ai
-chat is the surface where that happens) never reaches this section — its own "files can't be
-found" handling is what applies instead, and that handling must still give the reply with the
-link rather than stopping.
+of only giving its link as text: open the link first, then give the reply with the link — the
+reply is always given, whether or not opening succeeded, so a failed or missing browser costs
+the user nothing. Whether the turn ends there is each caller's own call, stated where it hands
+off.
 
 - `browser_family` is `none` → skip opening and give the link only.
 - Otherwise open the link in a **new tab**: the family's tabs-context tool, then its
