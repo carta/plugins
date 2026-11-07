@@ -951,6 +951,18 @@
         ORDER BY FUND_NAME`;
     }
 
+    // Query P — the people and entities holding carried interest in the firm's own GP entities.
+    // They invest on the side, in their own name or through a personal vehicle, so they are the
+    // firm's team and not co-investors. Optional: where the account cannot read the view, or the
+    // firm has none, the report is unchanged.
+    function buildTeamSql() {
+      return `SELECT DISTINCT MEMBER_NAME
+        FROM FUND_ADMIN.GP_ENTITY_MEMBER_CARRY_PERCENTAGES
+        WHERE FIRM_ID = '${FIRM_UUID}'
+          AND MEMBER_NAME IS NOT NULL
+        ORDER BY MEMBER_NAME`;
+    }
+
     // Query T — live/exited status per company, behind the filter tabs, and
     // whether a matching SPA exists (HAS_SPA, the same match Mode B's QC counts).
     // An SPA with no purchasers extracted leaves no trace in Queries S and R, so
@@ -1242,6 +1254,39 @@
       FIRM_BRAND = firmBrandPrefix(FIRM_NAME, names);
     }
 
+    // Name suffixes and numerals that are no part of a person's first or last name.
+    const PERSON_SUFFIX_RE = /^(JR|SR|II|III|IV|MD|PHD|ESQ)$/;
+
+    let FIRM_TEAM_NAMES = new Set();
+    let FIRM_TEAM_PEOPLE = [];
+
+    function setFirmTeam(teamRows) {
+      const names = teamRows.map(r => normalizeName(r.MEMBER_NAME)).filter(Boolean);
+      FIRM_TEAM_NAMES = new Set(names);
+      // A person is written in more than one way ("Jane Q. Doe", "Doe, Jane"), so the first and last
+      // word are what is compared. A trust or company is compared by its whole name only.
+      FIRM_TEAM_PEOPLE = names.filter(n => isIndividualInvestor(null, titleWords(n))).map(n => {
+        const words = n.split(/[^A-Z0-9']+/).filter(w => w && !PERSON_SUFFIX_RE.test(w));
+        return words.length >= 2 ? { first: words[0], last: words[words.length - 1] } : null;
+      }).filter(Boolean);
+    }
+
+    // The person rule reads capitalised words, so an upper-cased name is title-cased to be tested.
+    function titleWords(norm) {
+      return norm.toLowerCase().replace(/(^|[ '-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+    }
+
+    // True when the name is one of the firm's carry holders: the same name, or a person whose first
+    // and last name both appear in a short name. Matched against the investor, never the firm's funds.
+    function matchesFirmTeam(investorName) {
+      const norm = normalizeName(investorName);
+      if (!norm) return false;
+      if (FIRM_TEAM_NAMES.has(norm)) return true;
+      const words = norm.split(/[^A-Z0-9']+/).filter(Boolean);
+      if (words.length > 5) return false;
+      return FIRM_TEAM_PEOPLE.some(p => words.includes(p.first) && words.includes(p.last));
+    }
+
     // True when the name IS one of the firm's own vehicles — the one rule for SPA
     // purchasers and cap table holders alike.
     //
@@ -1331,7 +1376,7 @@
       for (const row of summaryRows) {
         const purchaser = (row.PURCHASER_NAME || '').trim();
         if (!purchaser) continue;
-        if (matchesFirmVehicle(purchaser)) continue;
+        if (matchesFirmVehicle(purchaser) || matchesFirmTeam(purchaser)) continue;
         // Trimmed like buildCompanyRounds' and buildCompanyStatus' keys: a
         // portfolio name stored with stray whitespace otherwise misses both maps.
         for (const c of coerceArray(row.COMPANIES)) {
@@ -1346,7 +1391,8 @@
         if (cap.holders.length) capCompanies.push(company);
         for (const h of cap.holders) {
           const identity = holderIdentity(h.stakeholder, h.group);
-          if (matchesFirmVehicle(h.stakeholder) || matchesFirmVehicle(identity)) continue;
+          if (matchesFirmVehicle(h.stakeholder) || matchesFirmVehicle(identity) ||
+              matchesFirmTeam(h.stakeholder) || matchesFirmTeam(identity)) continue;
           sight(company, 'cap', applyCanonical(identity), h.stakeholder, null, h.ownership || 0);
         }
       }
@@ -1551,12 +1597,12 @@
         return;
       }
 
-      let summaryRows, roundsRows, statusRows, vehicleRows, capRows;
+      let summaryRows, roundsRows, statusRows, vehicleRows, capRows, teamRows;
       try {
         setLoadingStatus('Loading co-investor data from Carta…');
-        // Fully independent — issue all five concurrently so the wait is the
+        // Fully independent — issue all six concurrently so the wait is the
         // slowest query rather than their sum.
-        [summaryRows, roundsRows, statusRows, vehicleRows, capRows] = await Promise.all([
+        [summaryRows, roundsRows, statusRows, vehicleRows, capRows, teamRows] = await Promise.all([
           fetchAllRows(buildSummarySql, 'Query S'),
           fetchAllRows(buildRoundsSql, 'Query R'),
           // Query T supplies Live/Exited status, HAS_SPA and every coverage figure,
@@ -1577,6 +1623,11 @@
           // the report to SPA-only rather than blocking it.
           fetchAllRows(buildCapTableSql, 'Query C').catch(err => {
             console.warn('cap table query failed; showing SPA data only', err);
+            return [];
+          }),
+          // Carry holders only take team members off the list, so a failure here leaves the list as is.
+          fetchAllRows(buildTeamSql, 'Query P').catch(err => {
+            console.warn('carry holders query failed; not excluding the firm team', err);
             return [];
           }),
         ]);
@@ -1603,6 +1654,7 @@
       setLoadingStatus('Building your report…');
 
       setFirmVehicles(vehicleRows);
+      setFirmTeam(teamRows);
       const { coInvestors, companyHolders, capCompanies } = buildCoInvestors(summaryRows, capRows);
       const summaryTotal = portfolioSizeFromSummary(summaryRows);
       const companyRounds = buildCompanyRounds(roundsRows);
