@@ -1207,12 +1207,39 @@
 
     const FIRM_NAME_COMPACT = firmNameCompact(FIRM_NAME);
 
+    // A name's words, sorted, without its legal suffix, series numeral or "Fund": two spellings that
+    // only reorder the same words ("IA Venture Strategies Fund II Side Fund" and "IA Venture
+    // Strategies II Side Fund, LP") share a key. Null under three words: a two-word key
+    // ("Fvlcrum Holdings") would also fold in an investor whose name merely reorders them.
+    function wordBagKey(norm) {
+      const words = stemName(norm).split(/[^A-Z0-9]+/).filter(w => w && w !== 'FUND');
+      return words.length >= 3 ? words.sort().join(' ') : null;
+    }
+
+    // The leading words of the firm's name that three or more of its own funds also lead with
+    // ("FVLCRUM" for "FVLCRUM Funds" and the funds "Fvlcrum Aggregator LP", "Fvlcrum Fund BL LP",
+    // "Fvlcrum Holdings LLC"). A lone word counts only at six letters or more, like the firm name itself.
+    function firmBrandPrefix(firmName, vehicleNames) {
+      const firmWords = stemName(normalizeName(firmName)).split(' ');
+      const vehicles = vehicleNames.map(v => normalizeName(v).split(' '));
+      for (let k = firmWords.length; k >= 1; k--) {
+        const prefix = firmWords.slice(0, k).join(' ');
+        if (k === 1 && compactName(prefix).length < 6) break;
+        if (vehicles.filter(w => w.slice(0, k).join(' ') === prefix).length >= 3) return prefix;
+      }
+      return null;
+    }
+
     // The firm name alone until Query V returns; setFirmVehicles adds the rest.
     let FIRM_VEHICLE_MATCHERS = vehicleMatchers([FIRM_NAME]);
+    let FIRM_VEHICLE_BAGS = new Set();
+    let FIRM_BRAND = null;
 
     function setFirmVehicles(vehicleRows) {
       const names = vehicleRows.map(r => (r.FUND_NAME || '').trim());
       FIRM_VEHICLE_MATCHERS = vehicleMatchers([FIRM_NAME, ...names]);
+      FIRM_VEHICLE_BAGS = new Set(names.map(v => wordBagKey(normalizeName(v))).filter(Boolean));
+      FIRM_BRAND = firmBrandPrefix(FIRM_NAME, names);
     }
 
     // True when the name IS one of the firm's own vehicles — the one rule for SPA
@@ -1229,6 +1256,9 @@
       const norm = normalizeName(purchaserName);
       if (!norm) return false;
       if (FIRM_NAME_COMPACT !== null && containsFirmName(norm, FIRM_NAME_COMPACT)) return true;
+      if (FIRM_BRAND !== null && (norm === FIRM_BRAND || norm.startsWith(FIRM_BRAND + ' '))) return true;
+      const bag = wordBagKey(norm);
+      if (bag !== null && FIRM_VEHICLE_BAGS.has(bag)) return true;
       const stem = usableStem(norm);
       const multiWord = norm.includes(' ');
       return FIRM_VEHICLE_MATCHERS.some(v =>
