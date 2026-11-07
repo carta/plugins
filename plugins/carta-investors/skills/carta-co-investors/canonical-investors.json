@@ -194,6 +194,100 @@
       "patterns": [
         "%Rocket Internet Capital Partners%"
       ]
+    },
+    {
+      "canonical": "Industry Ventures",
+      "patterns": [
+        "Industry Ventures%"
+      ]
+    },
+    {
+      "canonical": "PeakSpan Capital",
+      "patterns": [
+        "PeakSpan%"
+      ]
+    },
+    {
+      "canonical": "Gratitude Railroad",
+      "patterns": [
+        "Gratitude Railroad%"
+      ]
+    },
+    {
+      "canonical": "Album VC",
+      "patterns": [
+        "Album VC%",
+        "Album Ventures%"
+      ]
+    },
+    {
+      "canonical": "Valar Ventures",
+      "patterns": [
+        "Valar Ventures%",
+        "Valar Fund%"
+      ]
+    },
+    {
+      "canonical": "Battery Ventures",
+      "patterns": [
+        "Battery Ventures%",
+        "Battery Investment Partners%"
+      ]
+    },
+    {
+      "canonical": "Lowercarbon Capital",
+      "patterns": [
+        "Lowercarbon%"
+      ]
+    },
+    {
+      "canonical": "Alumni Ventures",
+      "patterns": [
+        "Alumni Ventures%"
+      ]
+    },
+    {
+      "canonical": "Gaingels",
+      "patterns": [
+        "Gaingels%"
+      ]
+    },
+    {
+      "canonical": "Mana Ventures",
+      "patterns": [
+        "Mana Ventures%"
+      ]
+    },
+    {
+      "canonical": "Story Ventures",
+      "patterns": [
+        "Story Venture%"
+      ]
+    },
+    {
+      "canonical": "StepStone Group",
+      "patterns": [
+        "StepStone%"
+      ]
+    },
+    {
+      "canonical": "Adams Street Partners",
+      "patterns": [
+        "Adams Street%"
+      ]
+    },
+    {
+      "canonical": "BlackRock",
+      "patterns": [
+        "BlackRock%"
+      ]
+    },
+    {
+      "canonical": "T. Rowe Price",
+      "patterns": [
+        "T. Rowe Price%",
+        "T Rowe Price%"
+      ]
     }
   ]
 }
