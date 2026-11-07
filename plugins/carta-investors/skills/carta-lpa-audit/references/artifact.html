@@ -1905,6 +1905,10 @@
     // FUND_CARRY_MAX_PCT the figure is a member profit split (a holdings LLC paying 100%
     // to its manager), not fund carry, so these terms are withheld.
     const OPERATING_AGREEMENT_WITHHELD_TERMS = ['carriedInterestRate', 'carryTierRates', 'preferredReturnRate', 'preferredReturnMultiple', 'waterfallStructure'];
+    // The terms the fund table shows. An agreement is "Full data" only when it states one of
+    // them, and the one stating the most of them is the fund's agreement: a fee basis or a
+    // waterfall type alone leaves every column blank. Kept in step with HEADLINE_TERMS in process.py.
+    const HEADLINE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears'];
 
     const SHORT_TEXT_LIMIT = 60;
     // Cut long verbatim text to SHORT_TEXT_LIMIT characters at a word boundary, ending in an ellipsis.
@@ -1998,6 +2002,8 @@
         }
         // An event row with every term empty states nothing, so it is no more "Full data" than none.
         termsExtracted = termsExtracted && Object.values(terms).some(v => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && !v.length));
+        // Counted before a withheld profit split is cleared: the agreement did state it.
+        const headlineTermCount = termsExtracted ? HEADLINE_TERMS.filter(field => terms[field] != null).length : 0;
         const notFundLpa = documentType === OPERATING_AGREEMENT_DOCUMENT_TYPE
           && terms.carriedInterestRate != null && terms.carriedInterestRate > FUND_CARRY_MAX_PCT;
         if (notFundLpa) {
@@ -2033,6 +2039,7 @@
           limitedPartners: lps,
           currencyCode,
           termsExtracted,
+          headlineTermCount,
           terms,
           termFlags: termFlags(terms),
           boundingBoxes: bboxes,
@@ -2395,13 +2402,14 @@
 
       const fundsOut = [];
       for (const firmName of firmFundNames) {
-        // Prefer populated terms, then an agreement naming this fund's series, then the
-        // stronger name match, then recency. First maximum wins, mirroring Python's max().
+        // Prefer the agreement stating the most headline terms, then any populated terms, then an
+        // agreement naming this fund's series, then the stronger name match, then recency.
+        // First maximum wins, mirroring Python's max().
         let matchedEid = null, matchedLpa = null, matchTier = null;
         const hits = lpaHits.get(firmName) || [];
         if (hits.length) {
-          const keyOf = ([eid, tier, namesSeries]) => [lpas.get(eid).termsExtracted ? 1 : 0, namesSeries ? 1 : 0, tier, lpas.get(eid).createdAt || ''];
-          const cmpKey = (x, y) => (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]) || (x[3] < y[3] ? -1 : x[3] > y[3] ? 1 : 0);
+          const keyOf = ([eid, tier, namesSeries]) => [lpas.get(eid).headlineTermCount, lpas.get(eid).termsExtracted ? 1 : 0, namesSeries ? 1 : 0, tier, lpas.get(eid).createdAt || ''];
+          const cmpKey = (x, y) => (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]) || (x[3] - y[3]) || (x[4] < y[4] ? -1 : x[4] > y[4] ? 1 : 0);
           let best = hits[0];
           let bestKey = keyOf(best);
           for (let i = 1; i < hits.length; i++) {
@@ -2431,7 +2439,7 @@
         let status;
         if (!matchedLpa && parentRefs.length) status = 'PARENT_AGREEMENT';
         else if (!matchedLpa) status = 'MISSING';
-        else if (!matchedLpa.termsExtracted) status = 'PARTIAL';
+        else if (!matchedLpa.headlineTermCount) status = 'PARTIAL';
         else status = 'EXTRACTED';
 
         fundsOut.push({
@@ -3162,7 +3170,7 @@
             (c.vehicleAgreement ? tile('VEHICLE_AGREEMENT', 'Vehicle agreements', c.vehicleAgreement,
                 capitalized(STATUS.VEHICLE_AGREEMENT.noEconomics) + ' · ' + ofTotal) : '') +
             // A gap tile shows only when there is a gap; Missing also stays for side letters on a fund with no LPA.
-            (c.partial ? tile('PARTIAL', 'Partial data', c.partial, 'On file · no terms in the documents') : '') +
+            (c.partial ? tile('PARTIAL', 'Partial data', c.partial, 'On file · no headline terms in the documents') : '') +
             (c.missing || withoutLpa ? tile('MISSING', 'Missing an LPA', c.missing,
                 ofTotal + (withoutLpa ? ' · ' + withoutLpa + ' side letter' + (withoutLpa === 1 ? '' : 's') + ' without one' : '')) : '') +
             (c.parentAgreement ? tile('PARENT_AGREEMENT', 'Governed by parent', c.parentAgreement,
@@ -3285,7 +3293,7 @@
                 (fund.lpaStatus === 'MISSING' && (fund.possibleLpaNames || []).length ? ' · possible match to check' : '');
             cells += '<td class="c-gap" colspan="' + TERM_COLUMNS.length + '">' + esc(gap) + '</td>';
         } else if (fund.lpaStatus === 'PARTIAL') {
-            cells += '<td class="c-gap" colspan="' + TERM_COLUMNS.length + '">On file, but the documents state no economic terms</td>';
+            cells += '<td class="c-gap" colspan="' + TERM_COLUMNS.length + '">On file, but the documents state no headline fee, carry, hurdle or fund-term figures</td>';
         } else if (fund.lpaStatus === 'VEHICLE_AGREEMENT') {
             // Every vehicle row reads the same; a stated 0% fee or a fund term is in its panel, and any check flag stays on the row.
             cells += '<td class="c-gap" colspan="' + TERM_COLUMNS.length + '">Vehicle agreement · ' +
@@ -3368,14 +3376,16 @@
                 '<a class="carta-link" href="' + escAttr(docsUrl()) + '" data-external>Upload the full ' + documentLabel(fund.lpa) + ' ↗</a></div></div>';
         }
         const vehicleNote = isVehicle ? '<div class="drawer-empty">' + vehicleText + '</div>' : '';
-        if (!t) {
-            // These documents name the fund but state no fee, carry or term: signature
-            // pages from a subscription packet, or a short-form agreement.
-            return html + '<div class="drawer-empty">The documents on file for this fund name it but state no economic terms. ' +
-                'They are often signature pages from a subscription packet. ' +
-                'Upload the full ' + documentLabel(fund.lpa) + ': drop it into this chat, or ' +
-                '<a class="carta-link" href="' + escAttr(docsUrl()) + '" data-external>upload it in Carta ↗</a></div></div>';
-        }
+        // A Partial fund's documents state none of the headline terms: signature pages from
+        // a subscription packet, a short-form agreement, or an agreement stating only terms
+        // the table does not show. Any such terms still list below the note.
+        const partialNote = fund.lpaStatus === 'PARTIAL'
+            ? '<div class="drawer-empty">The documents on file for this fund name it but state no headline fee, carry, hurdle or fund-term figures. ' +
+              'They are often signature pages from a subscription packet. ' +
+              'Upload the full ' + documentLabel(fund.lpa) + ': drop it into this chat, or ' +
+              '<a class="carta-link" href="' + escAttr(docsUrl()) + '" data-external>upload it in Carta ↗</a></div>'
+            : '';
+        if (!t) return html + partialNote + '</div>';
         const feeBasis = t.mgmtFeeBasisInvestmentPeriod ? ' of ' + esc(t.mgmtFeeBasisInvestmentPeriod) : '';
         // Hyphenated terms ("whole-of-fund", "catch-up") stay on one line; a wrap falls between words.
         const waterfall = t.waterfallStructure
@@ -3405,7 +3415,7 @@
             ? '<div class="term-checks"><strong>Check the LPA</strong><ul>' +
               flags.map(fl => '<li>' + esc(TERM_LABELS[fl.field]) + ': ' + esc(fl.reason) + '</li>').join('') + '</ul></div>'
             : '';
-        return html + vehicleNote + '<dl class="facts">' +
+        return html + partialNote + vehicleNote + '<dl class="facts">' +
             rows.map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>').join('') + '</dl>' + notFundLpa + checks + '</div>';
     }
 

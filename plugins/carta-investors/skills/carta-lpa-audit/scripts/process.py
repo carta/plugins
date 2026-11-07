@@ -972,6 +972,14 @@ OPERATING_AGREEMENT_WITHHELD_TERMS = (
     "carriedInterestRate", "carryTierRates", "preferredReturnRate", "preferredReturnMultiple", "waterfallStructure",
 )
 
+# The terms the fund table shows. An agreement is "Full data" only when it states one of
+# them, and the one stating the most of them is the fund's agreement: a fee basis or a
+# waterfall type alone leaves every column blank. Kept in step with HEADLINE_TERMS in artifact.html.
+HEADLINE_TERMS = (
+    "mgmtFeeRateInvestmentPeriod", "carriedInterestRate", "preferredReturnRate",
+    "preferredReturnMultiple", "fundTermYears", "investmentPeriodYears",
+)
+
 SHORT_TEXT_LIMIT = 60
 
 
@@ -1099,6 +1107,8 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
             terms["preferredReturnMultiple"] = None
         # An event row with every term empty states nothing, so it is no more "Full data" than none.
         terms_extracted = terms_extracted and any(v not in (None, "", []) for v in terms.values())
+        # Counted before a withheld profit split is cleared: the agreement did state it.
+        headline_term_count = sum(terms.get(field) is not None for field in HEADLINE_TERMS) if terms_extracted else 0
         carry = terms.get("carriedInterestRate")
         not_fund_lpa = (
             document_type == OPERATING_AGREEMENT_DOCUMENT_TYPE and carry is not None and carry > FUND_CARRY_MAX_PCT
@@ -1136,6 +1146,7 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
             "limitedPartners": lps,
             "currencyCode": currency_code,
             "termsExtracted": terms_extracted,
+            "headlineTermCount": headline_term_count,
             "terms": terms,
             "termFlags": term_flags(terms),
             "boundingBoxes": bboxes,
@@ -1525,15 +1536,18 @@ def match_all(
 
     funds_out: list[dict] = []
     for firm_name in firm_fund_names:
-        # Prefer populated terms, then an agreement naming this fund's series, then the
-        # stronger name match, then recency.
+        # Prefer the agreement stating the most headline terms, then any populated terms, then an
+        # agreement naming this fund's series, then the stronger name match, then recency.
         matched_lpa: dict | None = None
         match_tier: int | None = None
         hits = lpa_hits.get(firm_name) or []
         if hits:
             matched_eid, match_tier, _ = max(
                 hits,
-                key=lambda h: (bool(lpas[h[0]].get("termsExtracted")), h[2], h[1], lpas[h[0]].get("createdAt") or ""),
+                key=lambda h: (
+                    lpas[h[0]]["headlineTermCount"], bool(lpas[h[0]].get("termsExtracted")), h[2], h[1],
+                    lpas[h[0]].get("createdAt") or "",
+                ),
             )
             matched_lpa = {
                 **lpas[matched_eid],
@@ -1556,8 +1570,8 @@ def match_all(
             status = "PARENT_AGREEMENT"  # series' own terms not on file; the parent LLC's agreement is
         elif matched_lpa is None:
             status = "MISSING"
-        elif not matched_lpa.get("termsExtracted"):
-            status = "PARTIAL"  # LPA detected but terms event not extracted
+        elif not matched_lpa["headlineTermCount"]:
+            status = "PARTIAL"  # LPA detected, but it states none of the terms the table shows
         else:
             status = "EXTRACTED"
 
