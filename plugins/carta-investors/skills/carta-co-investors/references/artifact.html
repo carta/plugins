@@ -1733,9 +1733,31 @@
       return 'tag tag-neutral';
     }
 
+    // Documents write an entity's type in hundreds of ways ("LP", "L.P.", "Delaware limited partnership",
+    // "LIMITED_PARTNERSHIP"), so the column shows one of a few kinds. The order matters: a trust company
+    // is a company, a limited liability company is not a partnership, and a bare "Limited" is a company.
+    const INVESTOR_TYPE_RULES = [
+      ['Individual', INDIVIDUAL_TYPE_RE],
+      ['Company', /trust compan/],
+      ['Trust', /trust/],
+      ['LLC', /\bl\.?l\.?c\.?\b|limited liability company|limitada/],
+      ['Partnership', /\bl\.?l?\.?p\.?\b|\blllp\b|\bilp\b|\bk\/s\b|partnership|\bscsp?\b|\bslp\b|\bkg\b/],
+      ['Fund', /\b(fund|vc|vcc)\b|fundo/],
+      ['Foundation', /foundation/],
+      ['IRA', /\bira\b/],
+      ['Company', /\b(inc|corp|corporation|company|ltd|ltda|limited|gmbh|ag|ab|sa|sas|bv|pte|pty|plc|spa|co|ug|spc|group|holdings)\b|s\.a\.|b\.v\.|s\.p\.a|c\.v\.|s\.à r\.l|a\.ş|\bs\.?l\b/],
+    ];
+
+    function investorTypeLabel(entityType) {
+      const t = (entityType || '').toLowerCase().replace(/_/g, ' ');
+      const rule = INVESTOR_TYPE_RULES.find(([, re]) => re.test(t));
+      return rule ? rule[0] : 'Other';
+    }
+
+    // The original text stays on hover, so nothing the document said is lost.
     function entityTag(entityType) {
       if (!entityType || entityType === '—') return '<span class="tag tag-neutral">—</span>';
-      return '<span class="' + entityTagClass(entityType) + '">' + esc(entityType) + '</span>';
+      return '<span class="' + entityTagClass(entityType) + '" title="' + escAttr(entityType) + '">' + esc(investorTypeLabel(entityType)) + '</span>';
     }
 
     function hasDate(d) { return d && d !== '—'; }
