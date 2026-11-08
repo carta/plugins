@@ -9,72 +9,177 @@
        renders consistently on systems without "Inter var" installed locally. */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-    /* === SHARED CARTA STYLESHEET (inlined from ux-patterns/css/cap-table-artifact.css) === */
     :root {
-        color-scheme: light;
-        --surface-bg: #FFFFFF;
-        --surface-underlay: #F1F1F1;
-        --surface-darkgray-default: #1A1A1A;
-        --text-default: #1A1A1A;
-        --text-subtle: #656B6B;
-        --border-default: #A7AAAA;
-        --border-subtle: #DEDFDF;
-        --negative-subtle: #FFEEEF;
-        --negative-strong: #E52431;
-        --positive-subtle: #EBF7F6;
-        --positive-strong: #2D9E90;
-        --info-subtle: #EAF0F8;
-        --info-strong: #285DA3;
+      color-scheme: light dark;
+
+      /* === Text === */
+      --ink-color-global-text-default:     light-dark(#1A1A1A, #EDEDED);
+      --ink-color-global-text-subtle:      light-dark(#656B6B, #A7AAAA);
+      --ink-color-global-text-very-subtle: light-dark(#9C9F9F, #394040);
+      --ink-color-global-text-inverse:     light-dark(#FFFFFF, #1A1A1A);
+
+      /* === Surfaces === */
+      --ink-color-global-surface-background-default:  light-dark(#FFFFFF, rgb(18 18 18));
+      --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+      --ink-color-global-surface-background-overlay:  light-dark(rgb(0 0 0 / 0.8), rgb(80 80 80 / 0.8));
+
+      /* === Borders === */
+      --ink-color-global-border-subtle:        light-dark(#DEDFDF, #2D2D2D);
+      --ink-color-global-border-default:       light-dark(#A7AAAA, #656B6B);
+      --ink-color-global-border-hover:         light-dark(#656B6B, #9C9F9F);
+      --ink-color-global-border-active:        light-dark(#1A1A1A, #CECFCF);
+      --ink-color-global-border-focus-default: light-dark(#285DA3, #8BABD6);
+      --ink-color-global-border-focus-light:   light-dark(#C0D1E9, #1A3E6D);
+
+      /* === Semantic feedback === */
+      --ink-color-global-feedback-positive-subtle: light-dark(#EBF7F6, #063A32);
+      --ink-color-global-feedback-positive-strong: light-dark(#2D9E90, #2D9E90);
+      --ink-color-global-feedback-negative-subtle: light-dark(#FFEEEF, #401018);
+      --ink-color-global-feedback-negative-strong: light-dark(#E52431, #FAD9D7);
+      --ink-color-global-feedback-warning-subtle:  light-dark(#FFFCED, #341C00);
+      --ink-color-global-feedback-warning-strong:  light-dark(#F8D648, #B58A00);
+      --ink-color-global-feedback-info-subtle:     light-dark(#EAF0F8, #122948);
+      --ink-color-global-feedback-info-strong:     light-dark(#285DA3, #2C67B5);
+
+      /* === Links === */
+      --ink-color-global-link-default: light-dark(#285DA3, #8BABD6);
+      --ink-color-global-link-hover:   light-dark(#1A3E6D, #4176BC);
+
+      /* === Radius === */
+      --ink-size-global-radius-flat:   0;
+      --ink-size-global-radius-subtle: 4px;
+      --ink-radius-pill: 9999px;
+
+      /* === Spacing === */
+      --ink-spacing-global-vertical-xxsmall: 4px;
+      --ink-spacing-global-vertical-xsmall:  8px;
+      --ink-spacing-global-vertical-small:   12px;
+      --ink-spacing-global-vertical-normal:  16px;
+      --ink-spacing-global-vertical-gutter:  20px;
+      --ink-spacing-global-vertical-large:   24px;
+      --ink-spacing-global-vertical-xlarge:  32px;
+
+      --ink-spacing-global-horizontal-xxsmall: 4px;
+      --ink-spacing-global-horizontal-xsmall:  8px;
+      --ink-spacing-global-horizontal-small:   12px;
+      --ink-spacing-global-horizontal-normal:  16px;
+      --ink-spacing-global-horizontal-large:   24px;
+      --ink-spacing-global-horizontal-xlarge:  32px;
+
+      /* === Typography === */
+      --ink-font-global-family-base:      "Inter", "Inter var", system-ui, sans-serif;
+      --ink-font-global-family-prominent: "SangBleu Versailles", Georgia, serif;
+
+      --ink-font-global-size-small-1:           12px;
+      --ink-font-global-size-body-1:            14px;
+      --ink-font-global-size-heading-3:         16px;
+      --ink-font-global-size-heading-2-desktop: 20px;
+      --ink-font-global-size-display-1:         28px;
+
+      --ink-font-global-leading-small-1:           20px;
+      --ink-font-global-leading-body-1:            24px;
+      --ink-font-global-leading-heading-3:         28px;
+      --ink-font-global-leading-heading-2-desktop: 36px;
+      --ink-font-global-leading-display-1:         48px;
+
+      --ink-font-global-weight-body-3:    400;
+      --ink-font-global-weight-body-2:    500;
+      --ink-font-global-weight-body-1:    600;
+      --ink-font-global-weight-heading-1: 400;
+      --ink-font-global-weight-heading-3: 500;
+      --ink-font-global-weight-small-1:   500;
+
+      /* === Elevation === */
+      --ink-elevation-global-shadow-small:  0 4px 12px 0 rgb(0 0 0 / 0.08);
+      --ink-elevation-global-shadow-large:  0 4px 20px 0 rgb(0 0 0 / 0.2);
+
+      /* === Focus ring === */
+      --ink-focus-ring: 0 0 0 4px var(--ink-color-global-border-focus-light);
     }
+    /* The host stamps data-theme for an explicit theme choice. light-dark() follows
+       color-scheme, so pinning it lets that choice beat the OS setting. */
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"]  { color-scheme: dark; }
+    /* Page tokens beyond Ink's: the drawer's scrim, the same dim in both modes. */
+    :root { --scrim: rgb(0 0 0 / 0.32); }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-        font-family: "Inter var", "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: var(--surface-bg);
-        color: var(--text-default);
-        padding: 24px;
+        background: var(--ink-color-global-surface-background-default);
+        color: var(--ink-color-global-text-default);
+        font-family: var(--ink-font-global-family-base);
+        font-size: var(--ink-font-global-size-body-1);
+        line-height: var(--ink-font-global-leading-body-1);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }
 
-    .container { max-width: 1100px; margin: 0 auto; }
+    :focus-visible {
+        outline: 2px solid var(--ink-color-global-border-focus-default);
+        box-shadow: var(--ink-focus-ring);
+        outline-offset: 0;
+    }
+
+    .container { padding: var(--ink-spacing-global-vertical-large) var(--ink-spacing-global-horizontal-xlarge) 40px; }
+    @media (max-width: 599px) { .container { padding: var(--ink-spacing-global-vertical-normal); } }
+
+    .carta-logo {
+      display: block;
+      width: 64px;
+      height: 32px;
+      margin-bottom: var(--ink-spacing-global-vertical-large);
+      color: var(--ink-color-global-text-default);
+    }
 
     .header { margin-bottom: 32px; }
-    /* Ink heading-1 spec is weight 400 (intended for SangBleu serif). At Inter,
-       weight 500 reads better than the canonical 600 without going under-emphasized. */
-    .header h1 { font-size: 28px; font-weight: 500; line-height: 40px; color: var(--text-default); margin-bottom: 8px; letter-spacing: -0.01em; }
-    .header p { color: var(--text-subtle); font-size: 14px; font-weight: 400; line-height: 24px; }
+    /* Ink heading-1: SangBleu serif at weight 400, as on carta-lpa-audit. */
+    .header h1 {
+        font-family: var(--ink-font-global-family-prominent);
+        font-size: var(--ink-font-global-size-display-1);
+        line-height: 40px;
+        font-weight: var(--ink-font-global-weight-heading-1);
+        color: var(--ink-color-global-text-default);
+    }
+    @media (max-width: 599px) { .header h1 { font-size: 22px; line-height: 32px; } }
+    .header p {
+        margin-top: var(--ink-spacing-global-vertical-xxsmall);
+        font-size: var(--ink-font-global-size-small-1);
+        line-height: var(--ink-font-global-leading-small-1);
+        color: var(--ink-color-global-text-subtle);
+    }
 
     .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
-    .metric-card { background: var(--surface-bg); border: 1px solid #E9EAEA; padding: 20px; }
+    .metric-card { background: light-dark(var(--ink-color-global-surface-background-default), var(--ink-color-global-surface-background-underlay)); border: 1px solid var(--ink-color-global-border-subtle); padding: var(--ink-spacing-global-vertical-normal); border-radius: var(--ink-size-global-radius-flat); box-shadow: var(--ink-elevation-global-shadow-small); }
     /* Tooltipped tiles need positioning context + hover-elevation transition.
        Scoping these to .has-tooltip avoids attaching listeners to static tiles. */
     .metric-card.has-tooltip { position: relative; transition: box-shadow 0.15s ease, transform 0.15s ease; }
-    .metric-card.has-tooltip:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
-    .metric-label { font-size: 12px; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 500; line-height: 20px; display: inline-flex; align-items: center; gap: 4px; }
-    .metric-value { font-size: 28px; font-weight: 600; line-height: 48px; color: var(--surface-darkgray-default); font-variant-numeric: tabular-nums; }
+    .metric-card.has-tooltip:hover { transform: translateY(-1px); box-shadow: var(--ink-elevation-global-shadow-large); }
+    .metric-label { font-size: 12px; color: var(--ink-color-global-text-subtle); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; font-weight: var(--ink-font-global-weight-body-3); line-height: 16px; display: inline-flex; align-items: center; gap: 4px; }
+    .metric-value { font-size: 24px; font-weight: var(--ink-font-global-weight-body-3); line-height: 32px; color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; }
     /* Text-shaped metric value — for tiles whose primary value is a name, not a number.
-       Slightly smaller, no tabular-nums so the name kerns naturally. */
-    .metric-value-text { font-size: 20px; font-weight: 600; line-height: 28px; color: var(--surface-darkgray-default); overflow-wrap: anywhere; }
-    .metric-sub { font-size: 13px; color: var(--text-subtle); margin-top: 4px; font-weight: 400; }
+       Same size as a number, without tabular-nums so the name kerns naturally. */
+    .metric-value-text { font-size: 24px; font-weight: var(--ink-font-global-weight-body-3); line-height: 32px; color: var(--ink-color-global-text-default); overflow-wrap: anywhere; }
+    .metric-sub { font-size: 12px; color: var(--ink-color-global-text-subtle); margin-top: 4px; font-weight: 400; line-height: 18px; }
 
-    /* Ink tooltip — black background, white text, caret pointing into the trigger.
+    /* Ink tooltip — inverse colors (dark on light, light on dark), caret pointing into the trigger.
        Spec: plugins/skill-dev/skills/theme-with-ink/SKILL.md — Tooltip section. */
     .has-tooltip { cursor: help; }
-    .has-tooltip:focus-visible { outline: 2px solid var(--info-strong); outline-offset: 2px; box-shadow: 0 0 0 4px var(--border-focus-light); border-radius: 2px; }
-    .tooltip-icon { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--text-subtle); font-size: 10px; font-weight: 600; line-height: 1; color: var(--text-subtle); font-family: "Inter var", "Inter", sans-serif; }
+    .has-tooltip:focus-visible { border-radius: 2px; }
+    .tooltip-icon { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--ink-color-global-text-subtle); font-size: 10px; font-weight: 600; line-height: 1; color: var(--ink-color-global-text-subtle); font-family: "Inter var", "Inter", sans-serif; }
     .tooltip {
       position: absolute;
       top: calc(100% + 10px);
       left: 50%;
       transform: translateX(-50%);
-      background: #1A1A1A;
-      color: #FFFFFF;
+      background: var(--ink-color-global-text-default);
+      color: var(--ink-color-global-text-inverse);
       padding: 10px 12px;
       border-radius: 4px;
       font-size: 12px;
       line-height: 18px;
       font-weight: 400;
-      font-family: "Inter var", "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: inherit;
       width: max-content;
       max-width: 280px;
       text-align: left;
@@ -98,7 +203,7 @@
       height: 0;
       border-left: 6px solid transparent;
       border-right: 6px solid transparent;
-      border-bottom: 6px solid #1A1A1A;
+      border-bottom: 6px solid var(--ink-color-global-text-default);
     }
     .has-tooltip:hover .tooltip,
     .has-tooltip:focus-visible .tooltip { opacity: 1; visibility: visible; }
@@ -121,41 +226,32 @@
        either constant means raising this max-height. */
     .tooltip-wide .tt-body { max-height: 640px; overflow: hidden; }
     .tooltip-wide::after { left: 28px; transform: none; }
-    .tooltip-wide .tt-intro { color: rgba(255, 255, 255, 0.95); margin-bottom: 10px; }
-    .tooltip-wide .tt-section-label { color: rgba(255, 255, 255, 0.7); font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; margin-top: 4px; }
+    .tooltip-wide .tt-intro { color: color-mix(in srgb, var(--ink-color-global-text-inverse) 95%, transparent); margin-bottom: 10px; }
+    .tooltip-wide .tt-section-label { color: color-mix(in srgb, var(--ink-color-global-text-inverse) 70%, transparent); font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; margin-top: 4px; }
     .tooltip-wide .tt-group { margin-bottom: 10px; }
     .tooltip-wide .tt-group:last-child { margin-bottom: 0; }
-    .tooltip-wide .tt-group-canonical { color: #FFFFFF; font-weight: 600; font-size: 12px; line-height: 18px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tooltip-wide .tt-group-merged { color: rgba(255, 255, 255, 0.78); font-size: 11.5px; line-height: 16px; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tooltip-wide .tt-more { color: rgba(255, 255, 255, 0.7); font-style: italic; font-size: 11.5px; line-height: 16px; }
+    .tooltip-wide .tt-group-canonical { color: var(--ink-color-global-text-inverse); font-weight: 600; font-size: 12px; line-height: 18px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tooltip-wide .tt-group-merged { color: color-mix(in srgb, var(--ink-color-global-text-inverse) 78%, transparent); font-size: 11.5px; line-height: 16px; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tooltip-wide .tt-more { color: color-mix(in srgb, var(--ink-color-global-text-inverse) 70%, transparent); font-style: italic; font-size: 11.5px; line-height: 16px; }
     .tooltip-wide .tt-group-merged .tt-more { padding-left: 0; }
-    .tooltip-wide .tt-empty { color: rgba(255, 255, 255, 0.85); font-style: italic; }
+    .tooltip-wide .tt-empty { color: color-mix(in srgb, var(--ink-color-global-text-inverse) 85%, transparent); font-style: italic; }
 
-    .table-title { font-size: 16px; font-weight: 500; line-height: 28px; color: var(--text-default); margin-bottom: 12px; }
-    .table-container { background: var(--surface-bg); overflow-x: auto; }
+    .table-title { font-size: var(--ink-font-global-size-heading-3); font-weight: var(--ink-font-global-weight-heading-3); line-height: 28px; color: var(--ink-color-global-text-default); margin-bottom: 12px; }
+    .table-container { background: var(--ink-color-global-surface-background-default); overflow-x: auto; border: 1px solid var(--ink-color-global-border-subtle); }
     table { width: 100%; min-width: 480px; border-collapse: collapse; }
-    th { background: var(--surface-bg); padding: 10px 16px; text-align: left; font-size: 14px; font-weight: 500; color: var(--text-default); border-bottom: 1px solid var(--border-default); line-height: 20px; }
-    td { padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); font-size: 14px; color: var(--text-default); line-height: 24px; }
-    tbody tr:hover { background: #E9EAEA; }
+    th { background: var(--ink-color-global-surface-background-underlay); padding: var(--ink-spacing-global-vertical-xsmall) var(--ink-spacing-global-horizontal-small); text-align: left; font-size: var(--ink-font-global-size-small-1); font-weight: var(--ink-font-global-weight-small-1); color: var(--ink-color-global-text-subtle); border-bottom: 1px solid var(--ink-color-global-border-subtle); line-height: 20px; white-space: nowrap; }
+    td { padding: 10px var(--ink-spacing-global-horizontal-small); border-bottom: 1px solid var(--ink-color-global-border-subtle); font-size: 14px; color: var(--ink-color-global-text-default); line-height: 24px; }
+    tbody tr:hover { background: color-mix(in srgb, var(--ink-color-global-surface-background-underlay) 50%, var(--ink-color-global-surface-background-default)); }
     tbody tr:last-child td { border-bottom: none; }
 
     .number { font-variant-numeric: tabular-nums; font-size: 14px; text-align: right; }
-    .timestamp { font-size: 12px; color: var(--text-subtle); margin-top: 24px; text-align: center; line-height: 20px; }
+    .timestamp { font-size: 12px; color: var(--ink-color-global-text-subtle); margin-top: 24px; text-align: center; line-height: 20px; }
 
     /* === ARTIFACT-SPECIFIC STYLES === */
 
-    /* Extended Ink tokens used by artifact-specific styles — not in the canonical
-       stylesheet but defined in plugins/skill-dev/skills/theme-with-ink/SKILL.md. */
-    :root {
-      --border-focus-light: #C0D1E9;       /* Ink border.focus.light */
-      --surface-lightgray-hover: #E9EAEA;  /* Ink surface.lightgray.hover */
-      --warning-subtle: #FFFCED;           /* Ink Category Yellow tag bg */
-      --tag-yellow-text: #C88600;          /* Ink Category Yellow tag text */
-    }
-
     .chip-more {
       font-size: 12px;
-      color: var(--text-subtle);
+      color: var(--ink-color-global-text-subtle);
       background: none;
       border: none;
       padding: 0;
@@ -164,10 +260,10 @@
       text-underline-offset: 2px;
       white-space: nowrap;
     }
-    .chip-more:hover { color: var(--text-default); }
-    .footer-note { font-size: 12px; color: var(--text-subtle); margin-top: 8px; }
+    .chip-more:hover { color: var(--ink-color-global-text-default); }
+    .footer-note { font-size: 12px; color: var(--ink-color-global-text-subtle); margin-top: 8px; }
     .company-link {
-      color: var(--info-strong);
+      color: var(--ink-color-global-link-default);
       font-size: 13px;
       font-weight: 400;
       text-decoration: underline;
@@ -180,13 +276,16 @@
       display: inline;
       white-space: nowrap;
     }
-    .company-link:hover { color: #1A3E6D; }
+    .company-link:hover { color: var(--ink-color-global-link-hover); }
+    /* A company with nothing to open: plain text in every state, so link blue always means clickable. */
+    .company-link--inert { color: var(--ink-color-global-text-subtle); text-decoration: none; cursor: default; }
+    .company-link--inert:hover { color: var(--ink-color-global-text-subtle); }
 
     .drawer-backdrop {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.2);
+      background: var(--scrim);
       z-index: 999;
     }
     .drawer-backdrop.open { display: block; }
@@ -195,21 +294,24 @@
       position: fixed;
       right: 0;
       top: 0;
-      width: 680px;
-      max-width: 95vw;
+      width: clamp(560px, 50vw, 960px);
+      max-width: 100vw;
       height: 100vh;
-      background: var(--surface-bg);
-      box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+      background: var(--ink-color-global-surface-background-default);
+      box-shadow: var(--ink-elevation-global-shadow-large);
       transform: translateX(100%);
       transition: transform 0.25s ease;
       z-index: 1000;
       overflow-y: auto;
-      padding: 24px;
+      padding: var(--ink-spacing-global-vertical-normal) var(--ink-spacing-global-horizontal-large) var(--ink-spacing-global-vertical-xlarge);
+      border-left: 1px solid var(--ink-color-global-border-subtle);
     }
     .drawer.open { transform: translateX(0); }
+    /* Off-canvas, a shadow would still show along the window's right edge. */
+    .drawer:not(.open) { box-shadow: none; }
     .drawer table { min-width: 0; }
 
-    /* Ink Transparent Button — 4px radius, surface.lightgray.hover on hover. */
+    /* Ink Transparent Button — 4px radius, underlay surface on hover. */
     .drawer-close {
       position: absolute;
       top: 12px;
@@ -222,19 +324,18 @@
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: var(--text-default);
+      color: var(--ink-color-global-text-subtle);
       cursor: pointer;
       padding: 0;
       transition: background-color 0.12s ease;
     }
-    .drawer-close:hover { background: var(--surface-lightgray-hover); }
-    .drawer-close:active { background: var(--border-subtle); }
-    .drawer-close:focus-visible { outline: 2px solid var(--info-strong); outline-offset: 2px; box-shadow: 0 0 0 4px var(--border-focus-light); }
+    .drawer-close:hover { background: var(--ink-color-global-surface-background-underlay); color: var(--ink-color-global-text-default); }
+    .drawer-close:active { background: var(--ink-color-global-border-subtle); }
     .drawer-close svg { display: block; }
 
-    .drawer h2 { font-size: 18px; font-weight: 600; color: var(--text-default); margin-bottom: 4px; padding-right: 32px; }
-    .drawer-subtitle { font-size: 13px; color: var(--text-subtle); margin-bottom: 20px; }
-    .drawer-round-label { font-size: 14px; font-weight: 600; color: var(--text-default); margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle); }
+    .drawer h2 { font-size: var(--ink-font-global-size-heading-2-desktop); font-weight: var(--ink-font-global-weight-heading-3); color: var(--ink-color-global-text-default); margin-bottom: 4px; padding-right: 32px; line-height: 28px; }
+    .drawer-subtitle { font-size: var(--ink-font-global-size-small-1); color: var(--ink-color-global-text-subtle); margin-bottom: 20px; line-height: var(--ink-font-global-leading-small-1); }
+    .drawer-round-label { font-size: var(--ink-font-global-size-heading-3); font-weight: var(--ink-font-global-weight-heading-3); color: var(--ink-color-global-text-default); margin: 16px 0 8px; padding-bottom: 0; border-bottom: 0; }
 
     .you-badge {
       display: inline-flex;
@@ -245,62 +346,52 @@
       border-radius: 4px;
       font-size: 11px;
       font-weight: 600;
-      background: var(--positive-subtle);
-      color: var(--positive-strong);
-      border: 1px solid var(--positive-strong);
+      background: var(--ink-color-global-feedback-positive-subtle);
+      color: var(--ink-color-global-feedback-positive-strong);
+      border: 1px solid var(--ink-color-global-feedback-positive-strong);
       vertical-align: middle;
     }
 
-    /* Ink spec: tables have no outer container border. Borders come from header
-       (#A7AAAA bottom) and body cells (#DEDFDF bottom) — see theme-with-ink. */
-    .drawer .table-container { box-shadow: none; }
+    .drawer .table-container { box-shadow: none; border: 1px solid var(--ink-color-global-border-subtle); }
     .drawer td, .drawer th { padding: 8px 12px; }
     /* Carta UX rule: totals always bolded. */
     .drawer tfoot td {
-      font-weight: 600;
+      font-weight: var(--ink-font-global-weight-body-1);
       font-size: 13px;
-      background: #EAF0F8;
-      border-top: 1px solid var(--border-default);
+      background: var(--ink-color-global-surface-background-underlay);
+      border-top: 1px solid var(--ink-color-global-border-subtle);
     }
 
     /* Ink Category/Flex Tag — no border, semantic colors. Used on entity-type cells.
-       Compact 24px height (vs Ink standard 28px) for table-cell density;
+       Compact 20px height (vs Ink standard 28px) for table-cell density;
        reserves the green (Positive) palette for the inline "You" badge. */
     .tag {
       display: inline-flex;
       align-items: center;
-      height: 24px;
-      padding: 0 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: var(--ink-size-global-radius-subtle);
+      font-size: var(--ink-font-global-size-small-1);
+      font-weight: var(--ink-font-global-weight-small-1);
       line-height: 1;
       white-space: nowrap;
     }
-    .tag-neutral { background: var(--surface-underlay); color: var(--text-default); }
-    .tag-blue { background: var(--info-subtle); color: var(--info-strong); }
-    .tag-yellow { background: var(--warning-subtle); color: var(--tag-yellow-text); }
+    .tag-neutral { background: var(--ink-color-global-surface-background-underlay); color: var(--ink-color-global-text-default); }
+    .tag-blue { background: var(--ink-color-global-feedback-info-subtle); color: var(--ink-color-global-link-default); }
+    .tag-yellow { background: var(--ink-color-global-feedback-warning-subtle); color: var(--ink-color-global-text-default); }
 
     .page-footer {
       margin-top: 32px;
       padding-top: 16px;
-      border-top: 1px solid var(--border-subtle);
+      border-top: 1px solid var(--ink-color-global-border-subtle);
       display: flex;
-      align-items: flex-start;
+      align-items: baseline;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 12px;
     }
-    .carta-link { font-size: 13px; color: var(--info-strong); text-decoration: none; }
-    .carta-link:hover { text-decoration: underline; }
-    .powered-by-carta {
-      position: fixed;
-      bottom: 20px; right: 20px;
-      width: min(13.5vw, calc(13.5vh * 5.66));
-      height: auto; line-height: 0;
-      pointer-events: none; z-index: 10;
-    }
-    .powered-by-carta svg { display: block; width: 100%; height: auto; }
+    .carta-link { font-size: 13px; color: var(--ink-color-global-link-default); text-decoration: none; }
+    .carta-link:hover { text-decoration: underline; color: var(--ink-color-global-link-hover); }
 
     /* Filter tab bar */
     .filter-bar {
@@ -309,14 +400,16 @@
       gap: 4px;
       margin-bottom: 16px;
     }
-    .filter-controls { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-subtle); }
+    .filter-controls { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-color-global-text-subtle); }
     .filter-select, .filter-btn {
-      height: 32px; border-radius: 4px; font-size: 13px; font-family: inherit;
-      border: 1px solid var(--border-default); background: var(--surface-bg); color: var(--text-default);
+      height: 32px; border-radius: var(--ink-size-global-radius-subtle); font-size: var(--ink-font-global-size-body-1); font-family: inherit;
+      border: 1px solid var(--ink-color-global-border-default); background: var(--ink-color-global-surface-background-default); color: var(--ink-color-global-text-default);
     }
-    .filter-select { padding: 0 8px; }
+    .filter-select { padding: 0 32px 0 var(--ink-spacing-global-horizontal-small); background-position: right 12px center; appearance: none; -webkit-appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; }
+    .filter-select:hover { border-color: var(--ink-color-global-border-hover); }
+    .filter-select:focus-visible { border-color: var(--ink-color-global-border-focus-default); outline: none; box-shadow: var(--ink-focus-ring); }
     .filter-btn { padding: 0 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
-    .filter-btn:hover { background: var(--surface-underlay); }
+    .filter-btn:hover { background: var(--ink-color-global-surface-background-underlay); }
     .footer-note .carta-link {
       font: inherit; background: none; border: none; padding: 0; cursor: pointer;
       text-decoration: underline; text-underline-offset: 2px;
@@ -327,21 +420,21 @@
       align-items: center;
       height: 32px;
       padding: 0 14px;
-      border-radius: 4px;
-      font-size: 13px;
+      border-radius: var(--ink-size-global-radius-subtle);
+      font-size: var(--ink-font-global-size-body-1);
       font-weight: 500;
       cursor: pointer;
-      border: 1px solid var(--border-default);
-      background: var(--surface-bg);
-      color: var(--text-subtle);
+      border: 1px solid var(--ink-color-global-border-default);
+      background: var(--ink-color-global-surface-background-default);
+      color: var(--ink-color-global-text-subtle);
       transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
       font-family: inherit;
     }
-    .filter-tab:hover { background: var(--surface-underlay); color: var(--text-default); }
+    .filter-tab:hover { background: var(--ink-color-global-surface-background-underlay); color: var(--ink-color-global-text-default); }
     .filter-tab.active {
-      background: var(--text-default);
-      color: var(--surface-bg);
-      border-color: var(--text-default);
+      background: var(--ink-color-global-text-default);
+      color: var(--ink-color-global-text-inverse);
+      border-color: var(--ink-color-global-text-default);
     }
     .filter-count {
       display: inline-flex;
@@ -354,12 +447,12 @@
       font-size: 11px;
       font-weight: 600;
       margin-left: 6px;
-      background: rgba(255,255,255,0.2);
+      background: color-mix(in srgb, var(--ink-color-global-text-inverse) 20%, transparent);
       color: inherit;
     }
     .filter-tab:not(.active) .filter-count {
-      background: var(--surface-underlay);
-      color: var(--text-subtle);
+      background: var(--ink-color-global-surface-background-underlay);
+      color: var(--ink-color-global-text-subtle);
     }
 
     /* === Load / error states (live artifact only) ===
@@ -368,7 +461,7 @@
     #loading-state { padding: 8px 0 32px; }
     #loading-status {
       font-size: 13px;
-      color: var(--text-subtle);
+      color: var(--ink-color-global-text-subtle);
       margin-bottom: 16px;
       min-height: 18px;
     }
@@ -377,9 +470,9 @@
       border-radius: 6px;
       margin-bottom: 8px;
       background: linear-gradient(90deg,
-        var(--surface-underlay) 25%,
-        #E8E8E8 37%,
-        var(--surface-underlay) 63%);
+        var(--ink-color-global-surface-background-underlay) 25%,
+        color-mix(in srgb, var(--ink-color-global-surface-background-underlay) 70%, var(--ink-color-global-border-default)) 37%,
+        var(--ink-color-global-surface-background-underlay) 63%);
       background-size: 400% 100%;
       animation: shimmer 1.4s ease-in-out infinite;
     }
@@ -393,37 +486,41 @@
     #error-state {
       display: none;
       padding: 24px;
-      border: 1px solid #E0E0E0;
+      border: 1px solid var(--ink-color-global-border-subtle);
       border-radius: 8px;
-      background: var(--surface-underlay);
+      background: var(--ink-color-global-surface-background-underlay);
     }
     #error-state h2 {
-      font-size: 16px;
+      font-size: var(--ink-font-global-size-heading-3);
       font-weight: 600;
       margin: 0 0 8px;
-      color: var(--text-default);
+      color: var(--ink-color-global-text-default);
     }
     #error-state p {
       font-size: 13px;
-      color: var(--text-subtle);
+      color: var(--ink-color-global-text-subtle);
       margin: 0 0 6px;
       line-height: 1.5;
     }
     #error-details summary {
       font-size: 11px;
-      color: var(--text-subtle);
+      color: var(--ink-color-global-text-subtle);
       cursor: pointer;
     }
     #error-detail {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 11px;
-      color: var(--text-subtle);
+      color: var(--ink-color-global-text-subtle);
       word-break: break-word;
     }
   </style>
 </head>
 <body>
   <div class="container">
+    <svg class="carta-logo" role="img" aria-label="Carta" fill="none" viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
+        <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
+      </svg>
     <div class="header" id="page-header"></div>
 
     <div id="loading-state">
@@ -1796,7 +1893,7 @@
       if (hasDrawer(c)) {
         return '<button class="company-link" onclick="openDrawer(\'' + escAttr(jsString(c)) + '\')">' + esc(c) + '</button>';
       }
-      return '<span class="company-link" style="cursor:default;opacity:0.5;pointer-events:none">' + esc(c) + '</span>';
+      return '<span class="company-link company-link--inert">' + esc(c) + '</span>';
     }
 
     function expandChips(id, btn) {
@@ -1885,7 +1982,8 @@
       const c = coverageForFilter('all');
       const coveredPct = c && c.total > 0 ? Math.round(c.covered / c.total * 100) : 0;
       document.getElementById('page-header').innerHTML =
-        '<h1>' + esc(m.firmName) + ' — Co-Investor Analysis</h1>' +
+        '<h1>Co-Investor Analysis</h1>' +
+        '<p>' + esc(m.firmName) + ' · From stock purchase agreements and cap tables · Data as of ' + esc(m.generatedAt) + '</p>' +
         (c ? '<p>' + c.covered + ' of your ' + c.total + ' portfolio companies have an SPA or detailed cap table on file (' + coveredPct + '%)</p>' : '');
     }
 
@@ -2010,7 +2108,7 @@
       const ci = view.shown;
       if (ci.length === 0) {
         document.getElementById('main-table').innerHTML =
-          '<p style="padding:24px;color:var(--text-subtle);font-size:14px">' +
+          '<p style="padding:24px;color:var(--ink-color-global-text-subtle);font-size:14px">' +
           esc(emptyStateMessage(filter)) + '</p>';
         return;
       }
@@ -2154,8 +2252,5 @@
 
     bootstrap();
   </script>
-  <div class="powered-by-carta" aria-label="Powered by Carta">
-    <svg width="572" height="101" viewBox="0 0 572 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M370.228 0V100.61H571.448V0H370.228ZM567.423 96.5856H374.252V4.0244H567.423V96.5856ZM396.623 52.2674C396.623 42.1817 405.138 36.2615 412.777 36.2615C418.246 36.2615 423.347 38.3119 426.076 43.0367L420.967 45.9988C420.087 44.6697 418.883 43.5796 417.472 42.8341C416.057 42.0885 414.48 41.6995 412.878 41.7116C408.386 41.7116 403.042 45.2167 403.042 52.162C403.042 59.1074 408.151 62.6732 413.304 62.6732C416.888 62.6732 419.864 60.6756 421.628 57.5919L426.85 60.0029C423.894 65.3193 418.611 68.1517 412.477 68.1517C404.761 68.1436 396.623 62.2154 396.623 52.2633V52.2674ZM445.493 68.1517C449.738 68.1517 453.748 66.2796 455.816 63.5607V67.3008H462.125V37.0436H455.816V40.7918C453.85 38.0485 449.746 36.2615 445.493 36.2615C436.2 36.2615 429.701 43.0245 429.701 52.2066C429.701 61.3887 436.261 68.1517 445.493 68.1517ZM446.101 41.9993C451.932 41.9993 455.934 46.3472 455.934 52.2066C455.934 58.066 451.928 62.4139 446.101 62.4139C440.275 62.4139 436.139 58.0052 436.139 52.0851C436.139 46.1649 440.271 41.9993 446.101 41.9993ZM496.029 43.0488H489.481V37.0071H496.09V29.1217H502.59V37.0071H509.195V43.0488H502.59V67.2886H496.029V43.0488ZM527.315 68.1517C531.568 68.1517 535.578 66.2796 537.646 63.5607V67.3008H543.963V37.0436H537.646V40.7918C535.679 38.0485 531.576 36.2615 527.315 36.2615C518.03 36.2615 511.53 43.0245 511.53 52.2066C511.53 61.3887 518.086 68.1517 527.315 68.1517ZM527.931 41.9993C533.753 41.9993 537.767 46.3472 537.767 52.2066C537.767 58.066 533.753 62.4139 527.931 62.4139C522.108 62.4139 517.969 58.0052 517.969 52.0851C517.969 46.1649 522.1 41.9993 527.931 41.9993ZM476.409 67.2602H469.849V37.0031H475.858V42.6355C477.346 39.2885 479.58 37.1084 483.213 36.9261C483.963 36.9139 484.709 36.9261 485.459 37.0071L485.359 43.061C480.14 43.061 476.413 45.8569 476.413 53.6532V67.2643L476.409 67.2602Z" fill="#1A1A1A"/><path d="M0 67.2018V65.4679L2.60086 65.0633C4.62375 64.7743 4.97053 64.3119 4.97053 61.9422V28.6512C4.97053 26.2816 4.62375 25.8192 2.60086 25.5302L0 25.1256V23.3917H19.8243C28.3205 23.3917 37.4524 25.4146 37.4524 35.1245C37.4524 42.9849 30.0544 47.3774 19.8821 47.3774H10.9814V62C10.9814 64.3119 11.3282 64.7743 13.3511 64.9477L17.6858 65.3523V67.2018H0ZM10.9814 27.0907V44.8922H20.5179C26.76 44.8922 30.6323 42.0601 30.6323 35.2979C30.6323 28.5356 26.76 25.7036 20.5179 25.7036H13.8713C11.4438 25.7036 10.9814 25.877 10.9814 27.0907Z" fill="#1A1A1A"/><path d="M54.8109 67.8953C46.3725 67.8953 39.6681 61.8844 39.6681 52.5791C39.6681 43.2738 46.3725 37.263 54.8109 37.263C63.2492 37.263 69.9536 43.2738 69.9536 52.5791C69.9536 61.8844 63.2492 67.8953 54.8109 67.8953ZM54.8109 65.6412C59.6658 65.6412 64.0006 61.7111 64.0006 52.5791C64.0006 43.4472 59.6658 39.5171 54.8109 39.5171C49.9559 39.5171 45.6212 43.4472 45.6212 52.5791C45.6212 61.7111 49.9559 65.6412 54.8109 65.6412Z" fill="#1A1A1A"/><path d="M87.6815 67.8375L76.6423 42.2335C76.1221 41.0776 75.8331 40.6152 73.8102 40.1528L72.0763 39.7482V38.1877H86.41V39.7482L84.5604 40.1528C82.5376 40.6152 81.9596 41.0776 82.4798 42.2335L90.2823 60.6129L96.4088 46.6261L92.8832 38.1877H104.385V39.7482L102.535 40.1528C100.512 40.6152 99.9922 41.0776 100.455 42.2335L107.853 60.6129L115.655 42.2335C116.175 41.0776 115.771 40.6152 113.748 40.1528L111.898 39.7482V38.1877H122.995V39.7482L121.261 40.1528C119.239 40.6152 118.95 41.0776 118.429 42.2335L107.332 67.8375H105.252L97.7381 49.8627L89.7622 67.8375H87.6815Z" fill="#1A1A1A"/><path d="M139.946 67.8953C130.988 67.8953 125.15 61.4221 125.15 52.7525C125.15 43.0427 132.433 37.263 139.599 37.263C146.824 37.263 152.43 41.7711 153.644 49.9205H130.641C130.641 50.0939 130.641 50.2673 130.641 50.4407C130.641 59.0524 135.091 64.2541 141.911 64.2541C146.073 64.2541 150.465 62.6936 152.257 56.4515H154.106C152.488 64.0229 147.518 67.8953 139.946 67.8953ZM139.484 39.4015C135.265 39.4015 131.739 42.2335 130.872 47.6086H147.575C147.113 41.7133 143.818 39.4015 139.484 39.4015Z" fill="#1A1A1A"/><path d="M159.249 67.2018V65.6412L161.099 65.2367C163.122 64.7743 163.469 64.4275 163.469 63.156V42.8693C163.469 41.5977 163.122 41.251 161.099 40.7886L159.249 40.384V38.8235L168.67 37.4942V44.7188C170 39.806 174.045 37.4364 177.282 37.4364C179.594 37.4364 181.443 38.5345 181.443 40.9042C181.443 42.8115 179.998 44.083 178.265 44.083C175.837 44.083 175.201 41.7133 172.889 41.7133C170.924 41.7133 168.67 44.5454 168.67 48.2444V63.156C168.67 64.4275 169.017 64.8321 171.04 65.1211L174.045 65.5257V67.2018H159.249Z" fill="#1A1A1A"/><path d="M199.407 67.8953C190.448 67.8953 184.611 61.4221 184.611 52.7525C184.611 43.0427 191.893 37.263 199.06 37.263C206.285 37.263 211.891 41.7711 213.105 49.9205H190.102C190.102 50.0939 190.102 50.2673 190.102 50.4407C190.102 59.0524 194.552 64.2541 201.372 64.2541C205.533 64.2541 209.926 62.6936 211.718 56.4515H213.567C211.949 64.0229 206.978 67.8953 199.407 67.8953ZM198.945 39.4015C194.725 39.4015 191.2 42.2335 190.333 47.6086H207.036C206.574 41.7133 203.279 39.4015 198.945 39.4015Z" fill="#1A1A1A"/><path d="M232.581 67.8953C225.241 67.8953 218.884 62.1156 218.884 52.9837C218.884 43.794 225.415 37.263 233.911 37.263C237.494 37.263 239.806 38.7657 241.193 40.095V26.6861C241.193 25.4146 240.846 24.8944 238.823 24.6055L235.818 24.2009V22.6404L246.395 21.311V62.2312C246.395 63.5028 246.742 63.8495 248.765 64.3119L250.614 64.7165V66.277L241.193 67.4329V63.7339C240.153 64.8899 237.205 67.8953 232.581 67.8953ZM235.298 64.6587C238.246 64.6587 240.095 63.6184 241.193 62.6936V41.3666C239.517 40.3262 237.841 39.7482 235.356 39.7482C229.229 39.7482 224.663 44.372 224.663 51.9434C224.663 59.8038 229.171 64.6587 235.298 64.6587Z" fill="#1A1A1A"/><path d="M286.714 67.8953C283.131 67.8953 280.53 66.3926 279.143 65.0633L274.635 67.8375H274.23V26.6861C274.23 25.4146 273.883 25.0678 271.86 24.6055L270.011 24.2009V22.6404L279.432 21.311V41.4244C280.472 40.2684 283.42 37.263 288.043 37.263C295.384 37.263 301.741 43.0427 301.741 52.1746C301.741 61.3643 295.21 67.8953 286.714 67.8953ZM285.327 40.4996C282.379 40.4996 280.53 41.5399 279.432 42.4647V63.7917C281.108 64.8321 282.784 65.4101 285.269 65.4101C291.396 65.4101 295.962 60.7863 295.962 53.2149C295.962 45.3545 291.453 40.4996 285.327 40.4996Z" fill="#1A1A1A"/><path d="M311.899 81.8244C310.107 81.8244 309.067 80.495 309.067 79.1657C309.067 77.6052 310.223 76.2759 312.65 75.2933C314.789 74.4264 315.771 74.0218 316.812 71.6521L319.124 66.5082L308.662 42.2335C308.142 41.0776 307.853 40.6152 305.83 40.1528L304.096 39.7482V38.1877H318.43V39.7482L316.581 40.1528C314.558 40.6152 313.98 41.0776 314.5 42.2335L322.071 60.0927L330.105 42.2335C330.625 41.0776 330.221 40.6152 328.198 40.1528L326.348 39.7482V38.1877H337.445V39.7482L335.711 40.1528C333.688 40.6152 333.4 41.0776 332.879 42.2335L317.39 76.3915C315.482 80.6106 313.575 81.8244 311.899 81.8244Z" fill="#1A1A1A"/></svg>
-  </div>
 </body>
 </html>
