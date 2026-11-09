@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.20</carta-plugin>
+<carta-plugin>carta-investors:7.30.21</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -84,7 +84,7 @@ Rules the page applies:
 - MOIC is estimated value over the LP's share of cost, read over the securities whose cost is recorded (a sector pools its companies'); it reads "—" when no cost is recorded.
 - Wire status per fund is **Confirmed**, **Stale** (confirmed more than 12 months ago), **Unverified** (added and not confirmed, or changed since), **Missing**, or **Restricted** (the viewer's role cannot read wire data). An LP shows its worst. No bank name or account number is shown anywhere.
 - A feeder passes through to its master fund. Any other fund-of-fund holding keeps its own name, and groups under "Fund investments" by sector.
-- Sector is Carta's broad industry, then the firm's own Industry or Sector tag, then "Unclassified".
+- Sector is the firm's own Industry or Sector tag, else "Unclassified".
 - Amounts in different currencies are never added together: the detail shows a Capital / Performance block per currency.
 - The LP pane's edge drags (or takes arrow keys) to give the detail more room, between 300px and whatever leaves the detail 360px; the width is kept between visits and a double-click resets it. The detail lays itself out by its own width: Fund positions drop Unfunded and Net TVPI and Exposure its bars below 760px, and Capital stacks above Performance below 600px.
 - On a phone the toggle swaps the views in place, and the list and the detail take turns, with a back link to the list.
@@ -189,7 +189,6 @@ Do **not** put these numbers in the artifact. It re-fetches on open.
             underlying: "FUND_ADMIN.UNDERLYING_INVESTMENTS",
             entity_links: "FUND_ADMIN.CORPORATION_ENTITY_LINKS_V2",
             corporations: "FUND_ADMIN.CORPORATION_BASIC_INFO_V2",
-            companies: "FUND_ADMIN.ROUND_BENCHMARKABLE_COMPANIES",
             tags: "FUND_ADMIN.INVESTMENT_TAGS" } }
 ```
 
@@ -303,7 +302,7 @@ The artifact reads these tables through `dwh__execute__query`, each pinned to th
 - `FUND_ADMIN.PARTNER_CONTACTS` — every contact on each LP account, name and email, flagged primary or not. The table has no role or title column, so none is shown.
 - `FUND_ADMIN.AGGREGATE_INVESTMENTS` — active holdings per security (`ASSET_NAME`) with their remaining value (fair value) and cost (`TOTAL_COST`) in the fund's currency. A position in the fund's own currency reads the native columns, because the base-currency columns are not populated for it (mostly 0); only a foreign-currency position reads `BASE_CURRENCY_REMAINING_VALUE` / `BASE_CURRENCY_TOTAL_COST`. One with no converted value is counted in a note, never guessed; a cost that is not recorded reads "—".
 - `FUND_ADMIN.UNDERLYING_INVESTMENTS` — which of the firm's own funds a fund-of-fund holding is, so a feeder passes through to its master (matched by fund name when no link is recorded).
-- `FUND_ADMIN.CORPORATION_ENTITY_LINKS_V2` + `FUND_ADMIN.ROUND_BENCHMARKABLE_COMPANIES` — Carta's `INDUSTRY_BROAD`; `FUND_ADMIN.INVESTMENT_TAGS` — the firm's Industry or Sector tag where Carta has none.
+- `FUND_ADMIN.INVESTMENT_TAGS` — the firm's Industry or Sector tag, each company's sector.
 - **Geography** (Exposure's third grouping, offered only when the LP's companies in scope include one whose recorded country — HQ, else the firm's Country tag — is not the US): the firm's own `FUND_ADMIN.INVESTMENT_TAGS` Geography or Region values as written (a tag's first value, trimmed; category matched case-insensitively), else its Country values — with spellings of one country merged into one row (US, USA, United States and United States of America; UK and United Kingdom; Cayman and Cayman Islands; BVI; UAE; Korea; The Netherlands), and any other value left as written — else each company's HQ `COUNTRY` from `FUND_ADMIN.CORPORATION_BASIC_INFO_V2` (via `CORPORATION_ENTITY_LINKS_V2`) as US / Non-US. One source for the whole firm, so a company without a value in it reads Unknown; nothing is inferred and Carta's internal sales regions are not used. Groups sort by estimated NAV with Unknown last; written-off companies with a recorded cost stay in their group at $0. A note under the table names the source.
 - `FUND_ADMIN.FUNDS` — fund name, vintage year (the PDF's Fund positions) and **reporting currency**. Funds Carta no longer services are left out.
 

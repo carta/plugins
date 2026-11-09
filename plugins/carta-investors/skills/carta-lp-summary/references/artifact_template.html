@@ -1271,7 +1271,7 @@
     function sectorOf(company, sectors) {
       if (company.is_fund) return FUND_INVESTMENTS_SECTOR;
       const s = sectors.get(company.issuer_id) || {};
-      return s.industry || s.tag || UNCLASSIFIED;
+      return s.tag || UNCLASSIFIED;
     }
 
     // Look-through for one set of LP fund records sharing a currency: the LP's share of
@@ -2089,7 +2089,7 @@
     const WELCOME_TOOL = 'welcome';
     const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-lp-summary'], from_ui: true };
     // Matches .claude-plugin/skill-versions.json; the update banner compares it to the published one.
-    const ARTIFACT_VERSION = '1.3.0';
+    const ARTIFACT_VERSION = '1.3.1';
 
     // Config values land in SQL, so only plain identifiers are accepted.
     const IDENT = /^[A-Za-z0-9_.]+$/;
@@ -2472,16 +2472,6 @@
               ORDER BY u.FUND_UUID, u.PARENT_ISSUER_ID, u.UNDERLYING_FUND_UUID`;
     }
 
-    // Carta's broad industry for each company the firm holds.
-    function industriesSql() {
-      return `SELECT l.GENERAL_LEDGER_ISSUER_ID AS issuer_id, MAX(c.INDUSTRY_BROAD) AS industry, l.FIRM_ID AS firm_id
-              FROM ${table('entity_links')} l
-              JOIN ${table('companies')} c ON c.CORPORATION_UUID = l.CORPORATION_ID
-              WHERE c.INDUSTRY_BROAD IS NOT NULL${firmPin('l')}
-              GROUP BY l.GENERAL_LEDGER_ISSUER_ID, l.FIRM_ID
-              ORDER BY l.GENERAL_LEDGER_ISSUER_ID`;
-    }
-
     // The firm's own Geography, Region and Country tags, one value per category per company
     // (a tag's value is a list; its first entry, trimmed).
     function geoTagsSql() {
@@ -2503,7 +2493,7 @@
               ORDER BY l.GENERAL_LEDGER_ISSUER_ID`;
     }
 
-    // The firm's own Industry or Sector tag, for companies Carta has no industry for.
+    // The firm's own Industry or Sector tag, which is each company's sector.
     function tagsSql() {
       return `SELECT t.GENERAL_LEDGER_ISSUER_ID AS issuer_id, MIN(f.value[0]::STRING) AS tag, t.FIRM_ID AS firm_id
               FROM ${table('tags')} t, LATERAL FLATTEN(input => t.TAGS_JSON) f
@@ -4136,7 +4126,6 @@
       };
       const sectors = new Map();
       for (const t of res.tags.rows) sectors.set(t.issuer_id, { tag: t.tag });
-      for (const i of res.industries.rows) sectors.set(i.issuer_id, { ...(sectors.get(i.issuer_id) || {}), industry: i.industry });
       const currencyOf = new Map(Array.from(data.funds.values()).map(f => [f.fund_uuid, f.currency_code || '']));
       const geoTags = new Map();
       for (const t of res.geoTags.rows) {
@@ -4152,7 +4141,7 @@
       const dropped = sumBy(results, r => r.skipped);
       if (dropped) data.notes.push(dropped + ' row(s) could not be read and were left out, so some figures may not tie out.');
       if (results.some(r => r.truncated)) data.notes.push('This firm is larger than one load can hold, so the figures are partial.');
-      if (res.industries.failed && res.tags.failed) data.notes.push('Sectors are unavailable in this view, so every company reads Unclassified.');
+      if (res.tags.failed) data.notes.push('Sectors are unavailable in this view, so every company reads Unclassified.');
       if (res.contacts.failed) data.notes.push('Contacts are unavailable in this view.');
       if (res.wires.failed) data.notes.push('Wire status could not be loaded in this view, so every fund reads Restricted.');
     }
@@ -4169,7 +4158,7 @@
       try {
         status('Loading limited partners…');
         await assertSessionOnFirm();
-        const [funds, partners, latest, flows, contacts, holdings, wires, masters, industries, tags, geoTags, hq] = await Promise.all([
+        const [funds, partners, latest, flows, contacts, holdings, wires, masters, tags, geoTags, hq] = await Promise.all([
           queryAll(fundsSql(), 'Loading funds'),
           queryAll(partnersSql(), 'Loading limited partners'),
           queryAll(latestNavSql(), 'Loading NAV'),
@@ -4178,14 +4167,13 @@
           queryAll(holdingsSql(), 'Loading holdings'),
           queryOptional(wiresSql(), 'Loading wire status'),
           queryOptional(mastersSql(), 'Loading fund links'),
-          queryOptional(industriesSql(), 'Loading sectors'),
           queryOptional(tagsSql(), 'Loading tags'),
           queryOptional(geoTagsSql(), 'Loading geography tags'),
           queryOptional(hqCountrySql(), 'Loading company countries'),
         ]);
         // The queries ran in parallel; a firm switch during them leaves some empty, not foreign.
         await assertSessionOnFirm();
-        assemble({ funds, partners, latest, flows, contacts, holdings, wires, masters, industries, tags, geoTags, hq });
+        assemble({ funds, partners, latest, flows, contacts, holdings, wires, masters, tags, geoTags, hq });
         data.loaded = true;
         ui.sel = data.families.length ? data.families[0].key : null;
         // A search typed while the page loaded applies to the first selection too.
