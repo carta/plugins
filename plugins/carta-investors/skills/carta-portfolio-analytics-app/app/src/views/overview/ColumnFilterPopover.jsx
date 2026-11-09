@@ -22,8 +22,9 @@ export function emptyCond(valueType) {
 
 /** Controlled editor body. `otherCompanies` are the rows passing every filter
  *  except this column's, so a category count answers "how many would I keep".
- *  `action` is an optional control rendered on the heading row (e.g. add/remove column). */
-export function ColumnFilterBody({ spec, data, ctx, draft, onDraft, otherCompanies, action }) {
+ *  `action` is an optional control rendered on the heading row (e.g. add/remove column).
+ *  `unitHint` replaces the hint beside a number input (e.g. a mixed-currency note). */
+export function ColumnFilterBody({ spec, data, ctx, draft, onDraft, otherCompanies, action, unitHint: hintOverride }) {
   const vt = columnValueType(spec);
   const label = columnLabel(spec, data);
   const [search, setSearch] = useState("");
@@ -74,7 +75,7 @@ export function ColumnFilterBody({ spec, data, ctx, draft, onDraft, otherCompani
       value={draft[field] ?? ""} onChange={(e) => set({ [field]: e.target.value })} style={{ width: isDate ? 150 : 110 }} />
   );
   // Percentage KPIs are stored as fractions; say so, or "25" silently means 2,500%.
-  const unitHint = unit === "Months" ? "months" : unit === "Percentage" ? "as a fraction (0.25 = 25%)" : unit === "Dollar" ? data.source?.currency : unit;
+  const unitHint = hintOverride != null ? hintOverride : unit === "Months" ? "months" : unit === "Percentage" ? "as a fraction (0.25 = 25%)" : unit === "Dollar" ? data.source?.currency : unit;
   return (
     <>
       {heading}
@@ -95,7 +96,7 @@ export function ColumnFilterBody({ spec, data, ctx, draft, onDraft, otherCompani
 /** The header-anchored popover: fixed under `anchorRect` (a DOMRect from the
  *  funnel button), portaled to <body> so the table's overflow can't clip it.
  *  Draft-then-Apply, like the Filters panel — the page has one commit model. */
-export default function ColumnFilterPopover({ spec, data, ctx, filter, otherCompanies, anchorRect, onApply, onClose }) {
+export default function ColumnFilterPopover({ spec, data, ctx, filter, otherCompanies, anchorRect, onApply, onClose, unitHint }) {
   const vt = columnValueType(spec);
   const [draft, setDraft] = useState(() => filter?.cond || emptyCond(vt));
   const ref = useRef(null);
@@ -108,7 +109,7 @@ export default function ColumnFilterPopover({ spec, data, ctx, filter, otherComp
       background: "var(--ink-color-global-surface-background-default)", border: "1px solid var(--ink-color-global-border-subtle)",
       borderRadius: 8, boxShadow: POPOVER_SHADOW, zIndex: Z.popover, display: "flex", flexDirection: "column", maxHeight: 420 }}>
       <div style={{ padding: "16px 18px", overflowY: "auto", flex: 1 }}>
-        <ColumnFilterBody spec={spec} data={data} ctx={ctx} draft={draft} onDraft={setDraft} otherCompanies={otherCompanies} />
+        <ColumnFilterBody spec={spec} data={data} ctx={ctx} draft={draft} onDraft={setDraft} otherCompanies={otherCompanies} unitHint={unitHint} />
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 18px", borderTop: "1px solid var(--ink-color-global-border-subtle)" }}>
         <Btn onClick={() => { onApply(emptyCond(vt)); onClose(); }}>Clear</Btn>

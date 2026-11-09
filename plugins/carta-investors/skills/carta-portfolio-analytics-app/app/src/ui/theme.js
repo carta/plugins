@@ -497,7 +497,7 @@ export const GLOBAL_CSS = `
   /* Column-header filter funnel: hidden until the header is hovered or focused,
      always shown (in the info colour) while that column has an active filter. */
   .col-filter-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink-color-global-text-subtle); cursor: pointer; opacity: 0; transition: opacity .1s ${EASE}, background .1s ${EASE}; }
-  th:hover .col-filter-btn, .col-filter-btn:focus-visible, .col-filter-btn.is-active, .col-filter-btn.is-open { opacity: 1; }
+  th:hover .col-filter-btn, td.kpi-name:hover .col-filter-btn, .col-filter-btn:focus-visible, .col-filter-btn.is-active, .col-filter-btn.is-open { opacity: 1; }
   .col-filter-btn:hover { background: ${SHADE}; }
   .col-filter-btn.is-active { color: var(--ink-color-global-feedback-info-strong); }
   .col-filter-btn:focus-visible { border-color: ${BLUE}; box-shadow: var(--focus-ring); outline: none; }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
-import { H2, Dropdown, Segmented, Toggle, SearchInput, TextInput, Btn, Badge, Modal, Eyebrow, StickyRibbon,
+import { H2, Dropdown, FilterIcon, Segmented, Toggle, SearchInput, TextInput, Btn, Badge, Modal, Eyebrow, StickyRibbon,
   ddTriggerStyle, ChevronDownIcon, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW,
   GF_WARM_SURFACE, GF_NAV_ACTIVE_BG, GF_TAG_BORDER, GF_TAG_BG, GF_BUBBLE_BG } from "../ui/components.jsx";
 import { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W } from "../ui/charts.jsx";
@@ -27,6 +27,8 @@ import ViewControl from "../ui/ViewControl.jsx";
 import ViewsPerTagButton from "../ui/ViewsPerTagButton.jsx";
 import { planViewsPerTag } from "../model/viewsPerTag.js";
 import { newViewId } from "../state/useSavedViews.js";
+import { readKpiFilters, kpiFilterPredicate, removeKpiFilter, sameKpiFilters, kpiFilterLabel, kpiCurrencies } from "../model/kpiValueFilters.js";
+import ColumnFilterPopover from "./overview/ColumnFilterPopover.jsx";
 import { FavoriteStar } from "../ui/favorites.jsx";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
 import { openCompany } from "../state/focus.js";
@@ -167,6 +169,17 @@ export default function PivotDashboard({ data, dashboard }) {
   const [selTags, setSelTags] = useState(() => new Set()); // tagId()s; empty = no tag filter
   const [favOnly, setFavOnly] = useState(false); // show only starred companies
   const [selSignals, setSelSignals] = useState(() => new Set()); // custom-rule ids; empty = no signal filter
+  const [kpiFilters, setKpiFilters] = useState([]); // [{ key, cond }] value conditions, e.g. Revenue > 0
+  const [kpiPop, setKpiPop] = useState(null);         // { key, rect } — the open value-filter popover
+  const openKpiFilter = (key, rect) => { trackClick("PortfolioAnalytics.Pivot.KpiValueFilter"); setKpiPop({ key, rect }); };
+  const applyKpiFilter = (key, cond) => setKpiFilters((list) => [...removeKpiFilter(list, key), ...readKpiFilters([{ key, cond }], data)]);
+  // A money threshold is read in each company's own currency; say so when the KPI has several.
+  const kpiUnitHint = (key) => {
+    const m = metricOf(data, key);
+    if (!m || m.unit !== "Dollar") return undefined;
+    const curs = kpiCurrencies(data, key);
+    return curs.length > 1 ? "in each company's own currency" : (curs[0] || data.source?.currency);
+  };
   const [search, setSearch] = useState("");
   const [showSettings, setShowSettings] = useState(false); // the settings popup
   const [window, setWindow] = useState(8);          // trailing period columns
@@ -233,6 +246,7 @@ export default function PivotDashboard({ data, dashboard }) {
       setQOnly(true);
       setDateOrder("desc");
       setSelPos(new Set());
+      setKpiFilters([]);
       setFavOnly(false);
       setShowFc(false);
       setFullFig(false);
@@ -267,6 +281,8 @@ export default function PivotDashboard({ data, dashboard }) {
     setDateOrder(v.dateOrder === "asc" ? "asc" : "desc");
     // views saved before position metrics existed have no posKeys -> none selected
     setSelPos(new Set(v.posKeys || []));
+    // views saved before value filters existed have no kpiFilters -> none
+    setKpiFilters(readKpiFilters(v.kpiFilters, data));
     setViewId(id);
   };
   // Persist "all shown" as [] so saved views stay small and keep their legacy
@@ -275,7 +291,7 @@ export default function PivotDashboard({ data, dashboard }) {
     metricKeys: allMetricKeys.length && allMetricKeys.every((k) => selMetrics.has(k)) ? [] : [...selMetrics],
     metricOrder: [...metricOrder], posKeys: [...selPos], fund,
     companyIds: allCompanyIds.length && allCompanyIds.every((id) => selCompanies.has(id)) ? [] : [...selCompanies],
-    tags: [...selTags], window, qOnly, dateOrder,
+    tags: [...selTags], window, qOnly, dateOrder, kpiFilters: readKpiFilters(kpiFilters, data),
     signals: [...selSignals], favOnly, showFc, fullFig, growthMode, growthBasis,
     cellFormats: formats,
   });
@@ -302,6 +318,7 @@ export default function PivotDashboard({ data, dashboard }) {
       (v.window ?? 8) === window &&
       (v.qOnly !== false) === qOnly &&
       (v.dateOrder === "asc" ? "asc" : "desc") === dateOrder &&
+      sameKpiFilters(readKpiFilters(v.kpiFilters, data), readKpiFilters(kpiFilters, data)) &&
       setEq(viewSignals(v), selSignals) &&
       !!v.favOnly === favOnly &&
       !!v.showFc === showFc &&
@@ -310,7 +327,7 @@ export default function PivotDashboard({ data, dashboard }) {
       (v.growthBasis === "yoy" ? "yoy" : "qoq") === growthBasis &&
       formatsEq(viewFormatsOf(v), formats)
     );
-  }, [views, viewId, selMetrics, metricOrder, selPos, fund, selCompanies, selTags, window, qOnly, dateOrder, allMetricKeys, allCompanyIds, metrics,
+  }, [views, viewId, selMetrics, metricOrder, selPos, fund, selCompanies, selTags, window, qOnly, dateOrder, kpiFilters, data, allMetricKeys, allCompanyIds, metrics,
       selSignals, favOnly, showFc, fullFig, growthMode, growthBasis, dashDoc, formats, firmFormats]);
   const saveView = () => {
     const nm = newName.trim(); if (!nm) return;
@@ -396,6 +413,10 @@ export default function PivotDashboard({ data, dashboard }) {
   // honest shape — these values don't belong to a quarter at all.
   const showPos = selPos.size > 0;
 
+  // Value conditions read each company's latest value on the grid shown, so a
+  // "Revenue > 0" view means the latest quarter on quarters and the latest month on months.
+  const kpiPredicate = useMemo(() => kpiFilterPredicate(kpiFilters, data, qOnly), [kpiFilters, data, qOnly]);
+
   // rows: one per (company, metric-it-reports) that passes the filters
   const rows = useMemo(() => {
     const out = [];
@@ -405,6 +426,7 @@ export default function PivotDashboard({ data, dashboard }) {
       .filter((c) => companyMatchesTags(c, selTags))
       .filter((c) => !favOnly || isFavorite(dashDoc, c.id))
       .filter((c) => selSignals.size === 0 || (hitsByCompany[c.id] || []).some((h) => selSignals.has(h.ruleId)))
+      .filter(kpiPredicate)
       .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => a.name.localeCompare(b.name));
     const orderIdx = new Map(metricOrder.map((k, i) => [k, i]));  // user-chosen row order (default: qualitative first, then A→Z)
@@ -477,7 +499,7 @@ export default function PivotDashboard({ data, dashboard }) {
     let prev = null;
     for (const r of out) { r.firstOfCompany = r.companyId !== prev; prev = r.companyId; }
     return out;
-  }, [data, fund, selCompanies, selTags, favOnly, selSignals, hitsByCompany, dashDoc, search, selMetrics, metricOrder, periodSet, qOnly, showForecast, futureSet,
+  }, [data, fund, selCompanies, selTags, favOnly, selSignals, kpiPredicate, hitsByCompany, dashDoc, search, selMetrics, metricOrder, periodSet, qOnly, showForecast, futureSet,
       selPos, posOrder, showPos, growthBasis]);
 
   const companyCount = new Set(rows.map((r) => r.companyId)).size;
@@ -853,6 +875,7 @@ export default function PivotDashboard({ data, dashboard }) {
             companyOpts={companyOpts} selCompanies={selCompanies} onCompanies={setSelCompanies}
             metricOpts={metricOpts} selMetrics={selMetrics} onMetrics={onMetrics}
             posOpts={posOpts} selPos={selPos} onPos={setSelPos} posAvailable={posAvailable}
+            data={data} kpiFilters={kpiFilters} onKpiFilters={setKpiFilters} onEditKpiFilter={openKpiFilter}
             planTagViews={dashboard ? planTagViews : null} onAddViews={addViews} />
         </div>
         <div style={{ position: "relative", display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -860,6 +883,13 @@ export default function PivotDashboard({ data, dashboard }) {
           <Btn size="toolbar" onClick={exportCsv} disabled={!rows.length}>Export CSV</Btn>
         </div>
       </StickyRibbon>
+
+      {kpiPop && (
+        <ColumnFilterPopover spec={{ kind: "metric", key: kpiPop.key }} data={data}
+          filter={kpiFilters.find((f) => f.key === kpiPop.key)} otherCompanies={[]}
+          anchorRect={kpiPop.rect} unitHint={kpiUnitHint(kpiPop.key)}
+          onApply={(cond) => applyKpiFilter(kpiPop.key, cond)} onClose={() => setKpiPop(null)} />
+      )}
 
       <Modal open={showSettings} onClose={() => setShowSettings(false)}
         title="KPI settings" width={760} minHeight={620} labelledById="dash-settings-title">
@@ -988,12 +1018,13 @@ export default function PivotDashboard({ data, dashboard }) {
                     </td>
                   )}
                   {!r.collapsed && (<>
-                  <td className="pivot-frozen" style={{ ...stickyCell, left: CO_W, maxWidth: KPI_W, zIndex: 1, color: "var(--ink-color-global-text-subtle)", ...sans,
+                  <td style={{ ...stickyCell, left: CO_W, maxWidth: KPI_W, zIndex: 1, color: "var(--ink-color-global-text-subtle)", ...sans,
                       // Full string, not stickyCell's shorthand + a longhand paddingTop —
                       // React's style diff skips an unchanged shorthand, orphaning padding-top.
                       padding: r.firstOfCompany ? `${GROUP_PAD_TOP}px 14px 9px` : "9px 14px",
                       ...(!showPos && { boxShadow: LAST_FROZEN_DIVIDER }),
-                      ...(r.firstOfCompany && { borderTop: groupDivider }) }}>
+                      ...(r.firstOfCompany && { borderTop: groupDivider }) }}
+                    className={`pivot-frozen${!r.position && !r.isQual ? " kpi-name" : ""}`}>
                     {r.metricLabel}
                     {r.custom
                       ? <Badge tone="info" title="Custom KPI (chart of accounts)" style={{ marginLeft: 6 }}>custom</Badge>
@@ -1001,6 +1032,19 @@ export default function PivotDashboard({ data, dashboard }) {
                     {r.position && (
                       <Badge tone="neutral" title={r.posTip} style={{ marginLeft: 6, cursor: "help" }}>POS</Badge>
                     )}
+                    {/* A Yes/No, date, text or position row has no threshold to filter on. */}
+                    {!r.position && !r.isQual && (() => {
+                      const on = kpiFilters.some((f) => f.key === r.metricKey);
+                      return (
+                        <button type="button" className={`col-filter-btn${on ? " is-active" : ""}${kpiPop?.key === r.metricKey ? " is-open" : ""}`}
+                          aria-label={`Filter companies by ${r.metricLabel}`} aria-pressed={on}
+                          title={on ? `Filtered — ${r.metricLabel}` : `Filter companies by ${r.metricLabel}`}
+                          style={{ marginLeft: 4, verticalAlign: "middle" }}
+                          onClick={(e) => { e.stopPropagation(); openKpiFilter(r.metricKey, e.currentTarget.getBoundingClientRect()); }}>
+                          <FilterIcon size={12} />
+                        </button>
+                      );
+                    })()}
                   </td>
                   {showPos && (
                     <td data-tip={r.position
@@ -1200,7 +1244,8 @@ export default function PivotDashboard({ data, dashboard }) {
 function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOnly, favTotal, hasCartaTags,
   signalOptions, selSignals, onSignals,
   fundOpts, fund, onFund, companyOpts, selCompanies, onCompanies,
-  metricOpts, selMetrics, onMetrics, posOpts, selPos, onPos, posAvailable, planTagViews, onAddViews }) {
+  metricOpts, selMetrics, onMetrics, posOpts, selPos, onPos, posAvailable, planTagViews, onAddViews,
+  data, kpiFilters = [], onKpiFilters = () => {}, onEditKpiFilter }) {
   const hasFav = favTotal > 0 || favOnly;
   const hasSignals = signalOptions.length > 0;
   const hasFunds = fundOpts.length > 1; // "All funds" is always entry 0
@@ -1284,7 +1329,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
   // when this fires, and the reset effect below skips re-seeding while open.
   const resetAll = () => {
     onTags(new Set()); setFavOnly(false); onSignals(new Set()); onFund("ALL"); onCompanies(new Set(allCompanyIds));
-    onMetrics(new Set(allMetricIds)); onPos(new Set());
+    onMetrics(new Set(allMetricIds)); onPos(new Set()); onKpiFilters([]);
     setDraftTags(new Set()); setDraftFav(false); setDraftSignals(new Set()); setDraftFund("ALL"); setDraftCompanies(new Set(allCompanyIds));
     setDraftMetrics(new Set(allMetricIds)); setDraftPos(new Set());
   };
@@ -1347,12 +1392,20 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
   if (selPos.size > 0) {
     catTags.push({ key: "__posmetrics", label: `Position KPIs (${selPos.size})`, clear: () => onPos(new Set()) });
   }
+  for (const f of readKpiFilters(kpiFilters, data)) {
+    catTags.push({ key: `__kv:${f.key}`, label: kpiFilterLabel(f, data), clear: () => onKpiFilters(removeKpiFilter(kpiFilters, f.key)),
+      edit: onEditKpiFilter ? (rect) => onEditKpiFilter(f.key, rect) : null });
+  }
 
-  const tagChip = ({ key, label, clear }) => (
+  // A chip with `edit` reopens its editor: the label is a button anchoring the popover.
+  const tagChip = ({ key, label, clear, edit }) => (
     <span key={key} style={{ display: "inline-flex", alignItems: "center", height: 28, padding: "0 4px 0 8px",
       fontSize: FS.small, lineHeight: 1, whiteSpace: "nowrap", borderRadius: 4, boxSizing: "border-box",
       border: `1px solid ${GF_TAG_BORDER}`, background: GF_TAG_BG, color: GF_TAG_BORDER, ...sans }}>
-      {label}
+      {edit
+        ? <button type="button" onClick={(e) => edit(e.currentTarget.getBoundingClientRect())} title={`Edit ${label}`}
+            style={{ border: "none", background: "transparent", padding: 0, color: "inherit", font: "inherit", cursor: "pointer" }}>{label}</button>
+        : label}
       <button onClick={clear} aria-label={`Clear ${label} filter`}
         style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 6,
           width: 16, height: 16, border: "none", borderRadius: 3, background: "transparent",
