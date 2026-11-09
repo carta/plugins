@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.11</carta-plugin>
+<carta-plugin>carta-investors:7.30.12</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -237,10 +237,11 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
-- **Single SELECT only — no UNION / UNION ALL, no SHOW commands** — the tool enforces one SELECT at a time; `SHOW TABLES LIKE '%...'` and other `SHOW *` commands also return `Only a single SELECT statement is allowed`. Use `read_tool({"name": "dwh__list__tables", ...})` for table discovery and run separate `read_tool` calls when you need counts from multiple tables.
+- **One statement per call; `UNION` / `UNION ALL` are allowed** — the tool runs a single read-only SELECT (set operations included). `SHOW TABLES LIKE '%...'` and other `SHOW *` commands return `Only a single SELECT statement is allowed`. Use `read_tool({"name": "dwh__list__tables", ...})` for table discovery.
 - **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse and returns a hard `ValueError: Querying INFORMATION_SCHEMA is not allowed`. Use `read_tool({"name": "dwh__list__tables", ...})` to list tables and `read_tool({"name": "dwh__get__table_schema", ...})` to inspect columns. These MCP tools are the only valid schema-discovery path.
-- **`LATERAL` (including `LATERAL FLATTEN`) is not permitted** — returns `ValueError: Lateral is not permitted in query execution`. To access keys in a VARIANT/ARRAY column, use explicit JSON path notation (e.g. `col:key::STRING`) rather than `LATERAL FLATTEN`.
-- **Inline `VALUES` lists are not permitted** — returns `Values is not permitted in query execution`, so a date spine or literal list built with `FROM VALUES (...)` fails. Use `WHERE col IN ('a', 'b')` for a literal list, or select the dates from a real table.
+- **`LATERAL FLATTEN` is allowed; a correlated `LATERAL (subquery)` is not** — it returns `LATERAL subqueries are not permitted in query execution`. To read keys in a VARIANT/ARRAY column, use `LATERAL FLATTEN(INPUT => t.col)` or JSON path notation (`col:key::STRING`).
+- **No inline literal rows, and every SELECT needs a FROM** — these fail with `Values is not permitted in query execution`, `Generator is not permitted…`, `TableFromRows is not permitted…` (from `TABLE(GENERATOR(...))` / `TABLE(FLATTEN(...))`) or `Queries must reference a table`. Do not build a date or value list with `VALUES`, `SELECT 1`, `TABLE(GENERATOR(...))` or `TABLE(FLATTEN(...))`; query the real table with the literals in the filter and group by them, e.g. `WHERE DATE(AS_OF_DATE) IN ('2026-03-31','2026-06-30') GROUP BY DATE(AS_OF_DATE)` (`DATE()` keeps it working when `AS_OF_DATE` is a TIMESTAMP) returns one row per listed date that has data; a date with no rows is absent, so report it as missing. Use `CASE` for a literal mapping.
+- **Also blocked:** `RESULT_SCAN`, `GET_DDL`, `LAST_QUERY_ID`, `GET_QUERY_OPERATOR_STATS`, `SYSTEM$*` and `CURRENT_USER/ROLE/ACCOUNT/WAREHOUSE/DATABASE/SCHEMA/SESSION/AVAILABLE_ROLES()` functions, `$var` session variables and `$$` quoted strings. Do not retry them; they are guardrails, not data problems.
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
