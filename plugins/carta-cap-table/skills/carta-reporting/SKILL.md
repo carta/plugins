@@ -59,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.7</carta-plugin>
 
 # Custom Reports
 
@@ -541,7 +541,7 @@ Run each script only in the one-line form shown below, as its own command: write
 5. **Show a preview** — the artifact created in step 4d is the live preview.
 
 6. **Export to Excel**
-   - **Claude Desktop prompt bar** — when the user's message starts with `Generate Carta Excel —`, skip steps 1–5 and invoke `Skill(carta-cap-table:carta-reporting-excel)` directly. The payload includes the corporation ID, so no company lookup is needed. Run step 0 first, with the payload's `Environment:` line as the environment the user named in gate 0b (Production when the line is absent).
+   - **Claude Desktop prompt bar** — when the user's message starts with `Generate Carta Excel —`, skip steps 1–5 and invoke `Skill(carta-cap-table:carta-reporting-excel)` directly. The payload includes the corporation ID, so no company lookup is needed. Run step 0 first, with the payload's `Environment:` line as the environment the user named in gate 0b (Production when the line is absent). Then follow the preflight access check in `carta-reporting-excel`, which confirms each payload `corporation_id` with step 1a's first read before any report read.
    - **MARKDOWN mode (`Artifact` tool not available)** — handled by `carta-reporting-markdown`, which invokes `Skill(carta-cap-table:carta-reporting-excel)` when the user confirms.
 
 ---

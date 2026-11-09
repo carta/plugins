@@ -23,7 +23,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.7</carta-plugin>
 
 # Excel Export
 
@@ -75,6 +75,20 @@ already scoped; only the labelling is generic. Do not describe any total as comp
 ## Column source (MARKDOWN mode)
 
 Use the column list confirmed during the Customization Checkpoint (resolved in `carta-reporting-markdown`).
+
+## Preflight access check (ARTIFACT mode)
+
+A prompt bar payload can be pasted into a session other than the one that built it: another user, firm or environment. That session may have no access to the payload's company, and a `user_report_pk` belongs to the user who generated it. Before reading any report data, confirm this session can reach each payload `corporation_id`.
+
+Confirm access once per distinct `corporation_id` on the `Reports:` lines, using only the ID: no company name is needed, and a name search cannot confirm a comma-joined `Corporation:` line or a payload with no name. For each one, make the same first read `carta-reporting` step 1a makes, on `_carta_prefix`:
+
+```
+read_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, detail: "minimal", page_size: 1 }})
+```
+
+- **Success:** that company is accessible, whatever `data.results` holds. Once every ID succeeds, go on with the export. If the report is then expired or `report_status` returns `not_found`, follow the Error Handling table: that is a stale report, not an access problem.
+- **Company error** (as `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` *Company errors* defines it): that company is not accessible. Read every ID first, then **stop**. Do not fall back to DWH or other reads to find the data, and do not write a file. Tell the user this export request was created in a session with different Carta access, so this session cannot see each unreachable company. Name each one as `<label> (ID <corporation_id>)`, taking the label from the `Corporation — Sheet` sheet name or the `Corporation:` line. Ask them to sign in to Carta with the account that generated the report, or to request cap table access to those companies, then regenerate the report and copy a fresh Excel prompt.
+- **Any other error:** follow the Error Handling table. Do not give the access explanation.
 
 ## Running the export
 
@@ -137,7 +151,7 @@ UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-e
 
 | Situation | What to do |
 |---|---|
-| `report_status` or `download_url` returns `not_found` | The report expired or belongs to another session. Follow the retry rule in "Running the export", then say the report is not available and offer to build it again with carta-reporting. |
+| `report_status` or `download_url` returns `not_found` | The report expired or belongs to another session. Follow the retry rule in "Running the export", then say the report is not available and offer to regenerate it with carta-reporting. If the preflight access check found the company, give this advice, not the access explanation. |
 | A script does not run (for example `uv` not found, or the Bash call is blocked) | Do not write the file with another library. Say the Excel file cannot be built here. Show the data as a table, or give the presigned `download_url` and say it expires. |
 | `excel_exporter.py` stops with `as_of_date must be in YYYY-MM-DD format` | Run it once more with `--as-of-date` as `YYYY-MM-DD`. |
 | `unknown_param` or `invalid_argument` on a `cap_table__*` command | This skill reads only the report file. Do not pull rows with other commands: build the report with carta-reporting. |
