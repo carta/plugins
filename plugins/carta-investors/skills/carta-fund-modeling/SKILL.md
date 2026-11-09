@@ -47,6 +47,7 @@ allowed-tools:
   - mcp__remote-devices__Claude_Browser__navigate
   - mcp__remote-devices__Claude_Browser__tabs_context
   - mcp__remote-devices__Claude_Browser__tabs_create
+  - mcp__ccd_view__show_pane
   - enable__mcp__remote-devices__Claude_Browser
   - mcp__Claude_in_Chrome__tabs_context_mcp
   - mcp__Claude_in_Chrome__tabs_create_mcp
@@ -66,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.12</carta-plugin>
+<carta-plugin>carta-investors:7.30.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files.
 
@@ -187,6 +188,13 @@ so ask as usual.
 Read `${CLAUDE_PLUGIN_ROOT}/references/gate-in-app-browser.md` (the plugin's own `references/`, not this skill's; do
 not search for it) and follow it to set `browser_family`, then its "Open a link" section to open the hosted link. If
 that file can't be read, skip opening and give the reply with the link — never stop.
+
+When `browser_family` is `claude_browser`, also run `ToolSearch(query: "select:mcp__ccd_view__show_pane")` with the
+gate's probe. Then, when tabs-context reports the Browser pane isn't open yet (`browserOpen: false`), skip
+tabs-create, which fails with no pane, and `navigate` straight to the link; `navigate` opens the pane itself but
+leaves it hidden. Right after that navigate, once, call `mcp__ccd_view__show_pane` with `{"pane": "preview"}` when
+that tool is available; when it isn't, add to the reply that the user can open the Browser pane to see the page.
+When the pane is already open, follow the gate's steps as written.
 
 ## Step 0 — Resolve identity + check the local cache
 
