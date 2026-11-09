@@ -358,8 +358,8 @@ the only pair guaranteed to be right — composing one from what we intended
 is how a user ends up with a URL that 403s or points at a dead port.
 
 Emit exactly one URL for the user as message text, never only inside a tool's output. Put it
-at the start of the message that makes the next step's first tool call (Step 5.2's, Step 5.4's,
-or Step 6's menu, whichever comes next), and keep going in that same message. Never fold the
+at the start of the message that makes the next step's first tool call (Step 5.2's, or Step
+6's menu, whichever comes next), and keep going in that same message. Never fold the
 `serve.py` log read into the same Bash call as a later step's command:
 
 ```
@@ -487,17 +487,19 @@ the hosted app itself routes on.
 Give the link on one line: *"On the hosted app: `<url>`"*. Never open a tab for it.
 
 
-## Step 5.4 — Load reports shared with you
+## Step 5.4 — Load reports shared with you, only when asked
 
-**SILENT unless something changed or failed.** Run it only when this run has a Carta MCP
-(`<SERVER>`); skip it on a cache-only reopen. Run this after the URL is out, once Step 5.2 has
-returned (when it ran at all) — on every invocation, warm reopen included, since a report can be
-shared with you between runs.
+**Not part of the default run.** Never load shared reports on your own after the dashboard
+launches; the app's **Load shared reports** button in the sidebar does it whenever the user
+wants. Run this step only when the user asks in chat to load the reports shared with them (the
+app suggests that prompt when its own load can't reach Carta), and only when this run has a
+Carta MCP (`<SERVER>`) — after Step 5 has emitted the URL and Step 5.2 has returned (when it
+ran at all).
 
 Dispatch **one** fresh-context sub-agent (Agent tool, `subagent_type: general-purpose`,
 which inherits this session's whole tool surface, its Carta connector included) with the
 brief below, filling in `<SERVER>`, `<UV_BIN>` and `<dashboard_dir>` verbatim, and wait for
-it to finish before going on to Step 6. A payload is up to 256 KB, so it stays out of this
+it to finish. A payload is up to 256 KB, so it stays out of this
 conversation.
 
 `import_shared_reports.py import` merges what's pulled, then rebuilds the dashboard — even
@@ -520,10 +522,11 @@ Sub-agent brief:
 > Otherwise, after step 4's `import` prints its counts, answer exactly one line: `pulled
 > added=<N> adopted=<N> updated=<N> removed=<N> skipped=<N>`.
 
-- **`not_enabled`**, or **`pulled added=0 adopted=0 updated=0 ...`** — nothing changed; say
-  nothing.
-- **`pulled added=<N> adopted=<P> updated=<M> ...`** with `N`, `P` or `M` above 0 — one line,
-  before Step 6's menu: *"Loaded `<N+P+M>` reports — they're
+- **`not_enabled`** — one line: sharing isn't turned on for them yet.
+- **`pulled added=0 adopted=0 updated=0 ...`** — one line: no new or changed reports shared
+  with them.
+- **`pulled added=<N> adopted=<P> updated=<M> ...`** with `N`, `P` or `M` above 0 — one line:
+  *"Loaded `<N+P+M>` reports — they're
   in the Budget vs Actuals sidebar (reload the tab if it's already open)."*
 - **`failed: <reason>`** — one line: *"Couldn't load reports shared with you yet (`<reason>`)
   — use **Load shared reports** in the sidebar to retry."* Never retry it in this run.
