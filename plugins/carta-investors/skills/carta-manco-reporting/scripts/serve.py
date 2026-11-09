@@ -30,6 +30,7 @@ already wrote to the data dir.
 Usage:
   python3 serve.py --data-dir <dir> [--web-dir <webapp>] [--src-dir <per-firm src>]
                    [--port N] [--no-open]
+  python3 serve.py --data-dir <dir> --reopen [--no-open]
 
 Customizing for your microapp:
   - Add fixed-name routes to chat_session.DATA_FILE_ROUTES (e.g. "/api/snapshot":
@@ -64,6 +65,7 @@ import time
 import webbrowser
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
+from urllib.request import ProxyHandler, build_opener
 
 import chat_session
 import manco_paths
@@ -1021,6 +1023,55 @@ def _maybe_open_browser(url, no_open):
         pass
 
 
+# A localhost probe must never go through a proxy: the default opener honours
+# HTTP_PROXY and macOS's system proxy settings, neither of which exempts 127.0.0.1.
+_LOCAL = build_opener(ProxyHandler({}))
+
+
+def _dashboard_url(port, token):
+    return "http://127.0.0.1:%d/?t=%s" % (port, token)
+
+
+def _announce(url):
+    """The line the skill reads the dashboard's URL from, on launch and on reuse alike."""
+    print("[serve] manco-reporting at %s" % url, flush=True)
+
+
+def _running_url(data_dir):
+    """The URL of this data dir's own server when it is up, else None.
+
+    Reads the port and token a launch recorded and asks that port for this data dir's
+    snapshot, so a different process that later took the port never counts as ours.
+    """
+    try:
+        port = int((data_dir / ".port").read_text().strip())
+        token = (data_dir / ".token").read_text().strip()
+    except (OSError, ValueError):
+        return None
+    try:
+        with _LOCAL.open("http://127.0.0.1:%d/api/snapshot?t=%s" % (port, token), timeout=3) as resp:
+            if resp.status != 200:
+                return None
+    except Exception:
+        return None
+    return _dashboard_url(port, token)
+
+
+def reopen(data_dir, no_open):
+    """Reuse a running server: print its URL and open it the way a launch does.
+
+    Returns 0 when this data dir's server answered, 3 when nothing of ours is up — the
+    caller then launches one.
+    """
+    url = _running_url(data_dir)
+    if url is None:
+        print("[serve] not running for %s" % data_dir, flush=True)
+        return 3
+    _announce(url)
+    _maybe_open_browser(url, no_open)
+    return 0
+
+
 def _default_src_dir(data_dir, web_dir):
     """The single source of truth for --src-dir when the caller omits it.
 
@@ -1068,6 +1119,11 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", "0")))
     ap.add_argument("--no-open", action="store_true")
     ap.add_argument(
+        "--reopen", action="store_true",
+        help="reuse this data dir's running server: print its URL, open it in the browser "
+        "(unless --no-open), and exit 0; exit 3 without launching when none is up",
+    )
+    ap.add_argument(
         "--share-mcp-server",
         default=None,
         help="the one Carta MCP server name report sharing may use (e.g. a test connector); "
@@ -1102,6 +1158,8 @@ def main():
     CLAUDE_BIN = args.claude_bin
 
     DATA_DIR = Path(args.data_dir).resolve()
+    if args.reopen:
+        sys.exit(reopen(DATA_DIR, args.no_open))
     WEB_DIR = Path(args.web_dir).resolve()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else _default_src_dir(DATA_DIR, WEB_DIR)
@@ -1133,8 +1191,8 @@ def main():
         pass
 
     idle_timeout = max(0, args.idle_timeout)
-    url = "http://127.0.0.1:%d/?t=%s" % (port, TOKEN)
-    print("[serve] manco-reporting at %s" % url, flush=True)
+    url = _dashboard_url(port, TOKEN)
+    _announce(url)
     print("[serve] data-dir: %s" % DATA_DIR, flush=True)
     print("[serve] web-dir:  %s%s" % (WEB_DIR, "" if (WEB_DIR / "vendor").exists() else "  (vendor missing — run `npm run build` in app/)"), flush=True)
     # An unknown path falls through to the SPA shell, so a missing tracker answers 200

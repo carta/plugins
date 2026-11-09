@@ -285,18 +285,23 @@ URL**. Then go to Step 6 — the URL is not the end of the run.
 
 ### 5a — Reuse if it's already up
 
-**Check this before anything else. Never compute a port first.** Read
-`<dashboard_dir>/.port` and `<dashboard_dir>/.token`, and if the port has
-a listener, confirm it is this firm's server rather than someone else's
-process on the same port:
+**Check this before anything else. Never compute a port first.** Ask the
+recorded server whether it is still up for this data dir — it reads `.port`
+and `.token`, confirms the port answers with this firm's snapshot rather than
+someone else's process on the same port, and opens the dashboard in the
+user's browser exactly as a launch does:
 
 ```bash
-curl -sf -o /dev/null -w '%{http_code}' \
-  "http://127.0.0.1:<port>/api/snapshot?t=<token>"
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py" \
+  --data-dir "<dashboard_dir>" --reopen
 ```
 
-A `200` means our server, for this data dir, still serving. **Reuse it** —
-skip the launch, write `pk` to `<dashboard_dir>/.user-id` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Reusing a running server), emit that same URL, and go to Step 6.
+Exit `0` (it prints `[serve] manco-reporting at <url>`) means our server,
+for this data dir, still serving, and the browser is now open on it.
+**Reuse it** — skip the launch, write `pk` to `<dashboard_dir>/.user-id` per
+`${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Reusing a running
+server), emit that printed URL, and go to Step 6. Exit `3` means nothing of
+ours is up: go to 5b.
 
 This matters more than it looks. Treating an occupied port as "find
 another one" hands out a new URL on every invocation — 8787, then 8788,
@@ -660,7 +665,10 @@ run** — an explicit `--budget-workbook` arg counts as an answer. They have
 already said what they wanted; asking again reads as not having listened.
 
 **On a re-invocation** — the dashboard came back from persisted refs
-without asking anything — the URL goes out first, then the offer. Someone
+without asking anything — the URL goes out first, then the offer. "First"
+means visible: the `Dashboard: http://127.0.0.1:…` line and its orientation
+line are reply text the user reads before the question card appears, never
+only your own thinking, and the question's own text carries the URL too (below). Someone
 re-opening a dashboard they built last week usually wants to look at it,
 and only sometimes wants to update it. Making them answer questions before
 they can see it inverts that.
@@ -684,7 +692,10 @@ screen are then as of `raw_as_of`, not current. If the operator asks, through
 the free-text option, to retry the pull, go back to Step 2.6 and Step 3, then
 Step 4.
 
-> **Anything to update?** The dashboard is live at the link above.
+> **Anything to update?** The dashboard is live at `<the Step 5 URL>`.
+
+Put the real URL in the question text, every time: a question card can hide the
+text before it, and the link must stay in view while the user decides.
 
 Order the options so the one most likely to be why the operator came back
 leads the list. `AskUserQuestion` takes at most four options: two are always
