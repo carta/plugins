@@ -86,7 +86,7 @@ export function FormulaEditor({ data, dashboard, onSaved, initial = null, onCanc
     if (compiled.error || !compiled.fn || resolved.unknown.length) return null;
     const rows = [];
     for (const c of data.companies || []) {
-      const l = formulaLatest(c, compiled, resolved.map);
+      const l = formulaLatest(c, compiled, resolved.map, { quarterly: true, metrics });
       if (l) rows.push({ name: c.name, v: l.v, d: l.d });
     }
     rows.sort((a, b) => b.v - a.v);
@@ -231,7 +231,7 @@ function FormulaCard({ f, data, metrics, total, onEdit, onAssign, onDelete }) {
       if (compiled.error || !compiled.fn) continue;
       const resolved = resolveRefs(compiled.refs, metrics);
       if (resolved.unknown.length) continue;
-      const l = formulaLatest(c, compiled, resolved.map);
+      const l = formulaLatest(c, compiled, resolved.map, { quarterly: true, metrics });
       if (l) out.push({ id: c.id, name: c.name, v: l.v, d: l.d, custom: !!(f.overrides || {})[c.id] });
     }
     return out.sort((a, b) => b.v - a.v);
@@ -245,7 +245,7 @@ function FormulaCard({ f, data, metrics, total, onEdit, onAssign, onDelete }) {
     const compiled = compile(ex);
     const resolved = resolveRefs(compiled.refs, metrics);
     if (compiled.error || resolved.unknown.length) return [];
-    return formulaSeries(company, compiled, resolved.map);
+    return formulaSeries(company, compiled, resolved.map, { quarterly: true, metrics });
   }, [company, f, metrics]);
 
   // The card and the table it belongs to are one unit, so they sit closer together

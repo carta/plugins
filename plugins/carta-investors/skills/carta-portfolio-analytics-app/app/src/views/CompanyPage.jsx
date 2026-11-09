@@ -903,7 +903,7 @@ function KpiTable({ data, company, quarterly, metrics }) {
                     ? (cell.v - prev.v) / Math.abs(prev.v) : null;
                   return (
                     <td key={p} style={{ ...tdStyle, textAlign: "right" }}
-                      data-tip={quarterly && cell.months > 1
+                      data-tip={quarterly && cell.months > 1 && cell.agg !== "formula"
                         ? `${cell.agg === "sum" ? "Sum of" : "Closing value of"} ${cell.months} reported periods: ${cell.parts.join(", ")}`
                         : undefined}>
                       {growth

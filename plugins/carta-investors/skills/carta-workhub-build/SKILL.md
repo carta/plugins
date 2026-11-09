@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.13</carta-plugin>
+<carta-plugin>carta-investors:7.30.14</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -89,12 +89,12 @@ not inside a fund-data dashboard.
   load opens on Needs Action, or on the next tab holding work when it is empty
   (`FAR_TAB_OPEN_ORDER`); after that only the viewer changes tabs. Each tab carries a count
   pill and a one-line description. The queue holds the workflows Workhub has a panel for, plus expense
-  payments, management fee reviews, cash reconciliation and SOI reviews, listed in `TASK_TEMPLATES_WITH_TILES` in
+  payments, management fee reviews, cash reconciliation, SOI reviews and missing audit documents, listed in `TASK_TEMPLATES_WITH_TILES` in
   `resources/carta-workhub.config.js`: requests (`request-generic`), capital activities (`request-capital-activity`), financial packages
   (`publish-financial-package`), expense payments (`prepare-and-pay-expense`), management fee
   reviews (`review-management-fees`), cash reconciliation (`cash-reconciliation`, one workflow per bank
-  transaction) and SOI reviews (`review-soi-v2`). No panel opens the last four, so each is a Carta link under
-  Expense payments, Management fees, Cash reconciliation or SOI review, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
+  transaction) SOI reviews (`review-soi-v2`) and missing audit documents (`missing-audit-documents`, the GP's upload task for a fund's audit year). No panel opens the last five, so each is a Carta link under
+  Expense payments, Management fees, Cash reconciliation, SOI review or Audit, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out, except the audit upload task, which GPs also see on the web; add a template to that list once a panel opens its tasks. Completed reads the same list,
   so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
   shows, including the ones no panel opens (a capital call With Carta or Completed), as a
   Carta link. Inside a tab, rows are grouped by the `task_display_group` (`{id, name, order}`)

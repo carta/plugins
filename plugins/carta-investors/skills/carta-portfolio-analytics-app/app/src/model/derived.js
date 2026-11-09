@@ -20,10 +20,16 @@ export function withCustomMetrics(data, customMetrics) {
   const built = rows.map((row) => buildCustomMetric(row, companies, reported)).filter((b) => Object.keys(b.series).length);
   if (!built.length) return data;
 
+  // `seriesQ` holds each formula evaluated on the quarter grid; seriesPoints()
+  // reads it in place of rolling the per-period results up (see formulaSeries).
   const nextCompanies = companies.map((c) => {
-    const extra = {};
-    for (const { metric, series } of built) if (series[c.id]) extra[metric.key] = series[c.id];
-    return Object.keys(extra).length ? { ...c, series: { ...(c.series || {}), ...extra } } : c;
+    const extra = {}, extraQ = {};
+    for (const { metric, series, seriesQ } of built) {
+      if (series[c.id]) extra[metric.key] = series[c.id];
+      if (seriesQ[c.id]) extraQ[metric.key] = seriesQ[c.id];
+    }
+    if (!Object.keys(extra).length && !Object.keys(extraQ).length) return c;
+    return { ...c, series: { ...(c.series || {}), ...extra }, seriesQ: { ...(c.seriesQ || {}), ...extraQ } };
   });
 
   return { ...data, metrics: [...(data.metrics || []), ...built.map((b) => b.metric)], companies: nextCompanies };

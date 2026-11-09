@@ -1031,7 +1031,7 @@ export default function PivotDashboard({ data, dashboard }) {
                       ? `ℹ Company-reported quarterly figure; its monthly filings for this quarter sum to ${fmtVal(gap.monthlySum, r.unit, null, part.cur)} (${gap.parts.join(", ")}).`
                       : "";
                     const tip = (!part || part.months == null ? "" :
-                        (part.months > 1
+                        (part.months > 1 && part.agg !== "formula"
                           ? `${part.agg === "sum" ? "Sum of" : "Closing value of"} ${part.months} reported periods: ${part.parts.join(", ")}`
                           : "") +
                         (partial ? `${part.months > 1 ? "\n" : ""}⚠ Partial quarter — only ${part.months} of ${part.expected} months reported (${part.parts.join(", ")}), so this total is understated.` : ""))

@@ -9,7 +9,7 @@
 // would be silently wrong. This reuses the same pointNearMonthsBack helper the
 // QoQ/YoY columns use, so every year-over-year figure in the app is
 // computed the same way.
-import { pointNearMonthsBack, metricCadence } from "./kpi.js";
+import { pointNearMonthsBack, metricCadence, seriesPoints } from "./kpi.js";
 
 // Reporting cadence → months between periods, for ltm()'s trailing-year sum.
 const CADENCE_MONTHS = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
@@ -189,18 +189,29 @@ export function resolveRefs(refs, metrics) {
 }
 
 /** Evaluate a compiled formula across a company's history → [{d, v}] (ascending).
- *  A period is included only when every referenced metric has a value that period. */
-export function formulaSeries(company, compiled, refKeyMap) {
+ *  A period is included only when every referenced metric has a value that period.
+ *
+ *  `quarterly: true` evaluates on the quarter grid: each input is first rolled up
+ *  to quarters by its own rule (a flow like Revenue is summed across the months, a
+ *  level takes the closing value), THEN the formula runs once per quarter. Rolling
+ *  the formula's monthly results up afterwards cannot work: "{Revenue} × 4" would
+ *  keep one month × 4, and summing instead would add up three margin percentages.
+ *  `metrics` supplies each input's roll-up rule (its `agg`). A quarter whose summed
+ *  input is missing months comes back `partial`, as the input does. */
+export function formulaSeries(company, compiled, refKeyMap, { quarterly = false, metrics = [] } = {}) {
   if (!compiled.fn) return [];
   const refs = compiled.refs;
-  const maps = {}; // refName -> Map(period -> value)
-  const pts = {};  // refName -> raw points, for backward-in-time lookups
+  const metricByKey = new Map(metrics.map((m) => [m.key, m]));
+  const maps = {}; // refName -> Map(period -> point)
+  const pts = {};  // refName -> points, for backward-in-time lookups
   const periodSets = [];
   for (const r of refs) {
     const key = refKeyMap[r];
     if (!key) return []; // unresolved ref
-    const arr = (company.series || {})[key] || [];
-    maps[r] = new Map(arr.map((p) => [p.d, p.v]));
+    const arr = quarterly
+      ? seriesPoints(company, key, metricByKey.get(key), true)
+      : (company.series || {})[key] || [];
+    maps[r] = new Map(arr.map((p) => [p.d, p]));
     pts[r] = arr;
     periodSets.push(arr.map((p) => p.d));
   }
@@ -208,7 +219,9 @@ export function formulaSeries(company, compiled, refKeyMap) {
   const periods = [...new Set(periodSets.flat())].sort();
   // Cadence for ltm()'s trailing-year window. When refs disagree, the coarsest
   // (fewest periods per year) wins, so ltm never over-counts by summing too many.
-  const cadences = refs.map((r) => CADENCE_MONTHS[metricCadence(company, refKeyMap[r])]).filter(Boolean);
+  // On the quarter grid no input is finer than a quarter.
+  const cadences = refs.map((r) => CADENCE_MONTHS[metricCadence(company, refKeyMap[r])]).filter(Boolean)
+    .map((m) => (quarterly ? Math.max(3, m) : m));
   const ctx = { cadenceMonths: cadences.length ? Math.max(...cadences) : null };
   const out = [];
   for (const d of periods) {
@@ -217,18 +230,23 @@ export function formulaSeries(company, compiled, refKeyMap) {
     // genuine year rather than a fixed number of rows back.
     const resolve = (name, back) => {
       if (!maps[name]) return null;
-      if (!back) return maps[name].has(d) ? maps[name].get(d) : null;
+      if (!back) return maps[name].has(d) ? maps[name].get(d).v : null;
       const p = pointNearMonthsBack(pts[name], d, back, 2);
       return p ? p.v : null;
     };
     const v = compiled.fn(resolve, ctx);
-    if (v != null && Number.isFinite(v)) out.push({ d, v });
+    if (v == null || !Number.isFinite(v)) continue;
+    if (!quarterly) { out.push({ d, v }); continue; }
+    const short = refs.map((r) => maps[r].get(d)).find((p) => p && p.partial);
+    out.push(short
+      ? { d, v, agg: "formula", months: short.months, expected: short.expected, parts: short.parts, partial: true }
+      : { d, v, agg: "formula", months: 1, expected: 1, parts: [d], partial: false });
   }
   return out;
 }
 
 /** Latest evaluated value for a company (from the derived series), or null. */
-export function formulaLatest(company, compiled, refKeyMap) {
-  const s = formulaSeries(company, compiled, refKeyMap);
+export function formulaLatest(company, compiled, refKeyMap, opts) {
+  const s = formulaSeries(company, compiled, refKeyMap, opts);
   return s.length ? s[s.length - 1] : null;
 }

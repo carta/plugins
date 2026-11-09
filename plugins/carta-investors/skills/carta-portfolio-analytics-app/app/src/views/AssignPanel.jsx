@@ -25,7 +25,7 @@ function cellDetail(company, expr, metrics, unit) {
   if (compiled.error) return { error: compiled.error };
   const resolved = resolveRefs(compiled.refs, metrics);
   if (resolved.unknown.length) return { error: `Unknown KPI: ${resolved.unknown.join(", ")}` };
-  const { points, mixed } = customMetricSeries(company, compiled, resolved.map, metrics, unit);
+  const { points, mixed } = customMetricSeries(company, compiled, resolved.map, metrics, unit, { quarterly: true });
   if (mixed) return { mixed: true };
   const last = points.length ? points[points.length - 1] : null;
   return { value: last ? last.v : null, cur: last ? last.cur : null, d: last ? last.d : null, empty: !last };

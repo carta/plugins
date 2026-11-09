@@ -114,19 +114,20 @@ const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
 const TASK_TEMPLATE_MANAGEMENT_FEES = 'review-management-fees';
 const TASK_TEMPLATE_CASH_RECONCILIATION = 'cash-reconciliation';
 const TASK_TEMPLATE_SOI_REVIEW = 'review-soi-v2';
+const TASK_TEMPLATE_AUDIT_DOCUMENTS = 'missing-audit-documents';
 // The tasks that wait on the GP's decision on a drafted capital call or distribution.
 const TASK_CAPITAL_ACTIVITY_REVIEW = 'review-capital-activity';
 const TASK_CAPITAL_ACTIVITY_CHANGES = 'review-capital-activity-changes';
 // Every tab, Completed included, shows only these workflows: the ones a Workhub
 // panel opens (request thread, capital call review, reporting tracker), plus expense
-// payments, management fee reviews, cash reconciliation and SOI reviews, which open a
-// companion page or MCP App in a new chat, or link out to Carta. One list for all
+// payments, management fee reviews, cash reconciliation, SOI reviews and missing audit
+// documents, which open a companion page or MCP App in a new chat, or link out to Carta. One list for all
 // tabs, so finished work never shows a kind of task the open tabs leave out. Any
 // other template stays out until a panel opens it.
 const TASK_TEMPLATES_WITH_TILES = [
   TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE,
   TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES, TASK_TEMPLATE_CASH_RECONCILIATION,
-  TASK_TEMPLATE_SOI_REVIEW,
+  TASK_TEMPLATE_SOI_REVIEW, TASK_TEMPLATE_AUDIT_DOCUMENTS,
 ];
 
 // The skill that guides Claude on a task's companion page, by the task app's tracker column or

@@ -100,22 +100,29 @@ export function pointsFor(company, key) {
   return (company && company.series && company.series[key]) || [];
 }
 
+/** The points a headline value reads: a custom formula's quarter-grid series
+ *  (see formulaQuarters), else the reported points. A formula's per-period
+ *  series answers "this month × 4", not the quarter the formula describes. */
+export function headlinePoints(company, key) {
+  return formulaQuarters(company, key) || pointsFor(company, key);
+}
+
 /** Points on/after a date (e.g. the fund's investment date) — ascending. */
 export function pointsSince(company, key, sinceDate) {
-  const p = pointsFor(company, key);
+  const p = headlinePoints(company, key);
   return sinceDate ? p.filter((x) => x.d >= sinceDate) : p;
 }
 
 /** Latest {d, v, cur} for a company+metric, or null. */
 export function latest(company, key) {
-  const p = pointsFor(company, key);
+  const p = headlinePoints(company, key);
   return p.length ? p[p.length - 1] : null;
 }
 
 /** Value `steps` periods before the latest (steps=1 -> prior period = QoQ on
  *  quarterly data; steps=4 -> ~YoY). Returns null if not enough history. */
 export function priorValue(company, key, steps) {
-  const p = pointsFor(company, key);
+  const p = headlinePoints(company, key);
   const i = p.length - 1 - steps;
   return i >= 0 ? p[i].v : null;
 }
@@ -163,7 +170,7 @@ export function pointNearMonthsBack(points, fromDate, months, tol) {
 /** Calendar-aware fractional change: latest vs the point ~`months` earlier.
  *  Returns null when there's no comparable prior point in range or it's 0. */
 export function changeOverMonths(company, key, months, tol) {
-  const pts = pointsFor(company, key);
+  const pts = headlinePoints(company, key);
   const cur = pts.length ? pts[pts.length - 1] : null;
   if (!cur) return null;
   const prev = pointNearMonthsBack(pts, cur.d, months, tol);
@@ -213,7 +220,16 @@ export const aggOf = (metric) => (metric && metric.agg === "sum" ? "sum" : "last
  *  flag a partial quarter (e.g. only 2 of 3 months reported). A company that already
  *  reports quarterly yields months=1 and an unchanged value. */
 export function quarterlyPoints(company, key, metric) {
-  return rollUpQuarters(pointsFor(company, key), metric);
+  const q = formulaQuarters(company, key);
+  return q || rollUpQuarters(pointsFor(company, key), metric);
+}
+
+/** A custom formula's own quarter-grid series (inputs rolled up first, then the
+ *  formula run per quarter — see formulaSeries), or null for any other metric.
+ *  Rolling the formula's per-period results up instead would keep only the last
+ *  month of "{Revenue} × 4". */
+export function formulaQuarters(company, key) {
+  return (company && company.seriesQ && company.seriesQ[key]) || null;
 }
 
 /** The roll-up itself, over ANY points array — so forecasts get exactly the same
@@ -280,6 +296,8 @@ export function expectedPerQuarter(company, key) {
  *  is three. Each rolled point carries {months, parts, agg, partial}. */
 export function seriesPoints(company, key, metric, quarterly = true) {
   if (!quarterly) return pointsFor(company, key);
+  const fq = formulaQuarters(company, key);
+  if (fq) return fq;                              // already carries its own partial flags
   const qp = quarterlyPoints(company, key, metric);
   // How many source periods a quarter *should* have is judged LOCALLY, against the
   // preceding quarter — not from the company's lifetime cadence. A company that
