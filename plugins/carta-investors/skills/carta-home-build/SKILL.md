@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.19</carta-plugin>
+<carta-plugin>carta-investors:7.30.20</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -72,7 +72,11 @@ own sidebar tile.
 ## What the artifact does
 
 - **Schedule of Investments (SOI)** — fund-level summary of the top 3 funds by value, with
-  gain/loss coloring. Pulled from `FUND_ADMIN.AGGREGATE_INVESTMENTS`. The card footer
+  gain/loss coloring. Pulled from `FUND_ADMIN.AGGREGATE_INVESTMENTS`. When Carta
+  administers only some of the firm's funds, a note under the card reads "Carta administers
+  N of your M funds". M counts each fund on the card or among the real funds in
+  `FUND_ADMIN.FUNDS` once; a fund in that lookup counts toward N only if its
+  `IS_ADMINISTERED_BY_CARTA` flag is set, and a card fund the lookup misses counts as administered. The card footer
   launches the standalone SOI dashboard; home holds no holdings table of its own.
 - **Fund Performance** — Net IRR, TVPI, DPI summary chart vs. peer benchmarks. Pulled from
   `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` — queries all funds for the active firm
@@ -330,12 +334,8 @@ clicks, keystrokes, dropdown changes. IDs are literals: never put customer data 
 fund or company names) in one. A detail that varies goes in `{ value }` — a tour step, a
 batch size — which only a click carries; a `render` keeps just its ID.
 
-Page-load events: `CartaHome.View` (render) fires on every load. `CartaHome.View.Version`
-(click, `value` = the skill version the page was built with) follows it, so analytics can
-tell who is on an old Home. `CartaHome.View.First` (render) fires only on a browser's
-first load (localStorage key `carta-home-viewed-v1`). `CartaHome.Tour.Start` fires only when
-the tour actually opens, not on every load. `CartaHome.Tour.Next` and `.Skip` carry the step
-number the viewer saw (a skipped What's new step isn't counted).
+Every event the page sends, and when it fires, is listed in `USAGE_DATA.md` beside this
+file. Add a row there whenever you add an event.
 
 Dashboard cards: a card whose query answers with no rows is hidden, never shown blank
 (`settleDashboardCard` in `app/segment-dashboards.js`), and fires `CartaHome.SOI.Empty`,
@@ -842,7 +842,7 @@ Carta Home dashboard as a whole, not on requests for one of those cards in isola
 
 | Card | DWH Table | Notes |
 |------|-----------|-------|
-| SOI | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.FUNDS` | Joined on FUND_UUID |
+| SOI | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.FUNDS` | Joined on FUND_UUID; a second `FUND_ADMIN.FUNDS` lookup (every real fund with `IS_ADMINISTERED_BY_CARTA`) feeds the scope note |
 | Fund Performance | `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` (chart + metrics); `FUND_ADMIN.AGGREGATE_FUND_METRICS` (Total Value fallback when benchmarks empty) | All funds for the firm, ≥ 2021-06-01 |
 | LP Summary | `FUND_ADMIN.PARTNER_DATA` + `FUND_ADMIN.FUNDS` + `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` | Largest LP families by commitment per fund currency, net TVPI from each partner's latest month; Fund Admin firms only (`resources/app/segment-dashboards.js`) |
 | Capital Activity | none — `fa:list:active-capital-activity` + `fa:list:capital-activity-partner` | Active capital calls/distributions + per-partner detail; the row `id`/`fund_uuid` feed the reminder `call_tool` call |

@@ -493,7 +493,53 @@ function renderFundSummaryCard(fundRows) {
   }).join("");
 }
 
+// A firm whose funds Carta administers only in part must not read its SOI totals as the
+// whole firm. A fund counts as "real" when it has a vintage or a fund size, so the
+// placeholder and duplicate records FUND_ADMIN.FUNDS carries never count.
+async function fetchRealFunds(firmId) {
+  try {
+    const res = await _mcp("read_tool", {
+      name: "dwh__execute__query",
+      arguments: {
+        sql: `SELECT FUND_UUID, COALESCE(IS_ADMINISTERED_BY_CARTA, FALSE) AS IS_ADMINISTERED
+              FROM FUND_ADMIN.FUNDS
+              WHERE FIRM_ID = '${firmId}'
+                AND (VINTAGE_DATE IS NOT NULL OR FUND_SIZE IS NOT NULL)`,
+        format: 'ndjson',
+        response_mode: 'inline',
+      }
+    });
+    if (res.isError) return null;
+    return dwhRows(res, "FUND_UUID");
+  } catch (_) {
+    return null;  // the note is optional; the card stands without it
+  }
+}
+
+// Every FUND_UUID on the SOI card or in the lookup counts once toward the total. For a fund
+// the lookup returns, its IS_ADMINISTERED flag decides; only a card fund the lookup doesn't
+// return counts as administered by default. Null when Carta administers all of them, none of
+// them, or the lookup failed: no note at all.
+function soiScopeNote(funds, cardFundUuids) {
+  if (!funds) return null;
+  const isAdministered = f => f.IS_ADMINISTERED === true || String(f.IS_ADMINISTERED).toLowerCase() === "true";
+  const flag = new Map(funds.filter(f => f.FUND_UUID).map(f => [f.FUND_UUID, isAdministered(f)]));
+  const all = new Set([...(cardFundUuids || []).filter(Boolean), ...flag.keys()]);
+  const covered = [...all].filter(u => flag.get(u) ?? true).length;
+  if (!covered || covered >= all.size) return null;
+  return `Carta administers ${covered} of your ${all.size} funds`;
+}
+
+function renderSOIScope(note) {
+  const el = document.getElementById("soi-scope-note");
+  if (!el) return;
+  el.textContent = note || "";
+  el.hidden = !note;
+  if (note) trackHome("render", "CartaHome.SOI.PartialScope");
+}
+
 function renderSOIError(msg) {
+  renderSOIScope(null);
   document.getElementById("soi-fund-label").textContent = "—";
   document.getElementById("soi-rows").innerHTML =
     `<div class="loading-row" style="color:var(--ink-color-global-feedback-negative-strong); font-size:11px;">${msg}</div>`;
@@ -675,6 +721,7 @@ async function fetchLiveData() {
         value: parseFloat(r.TOTAL_VALUE ?? 0),
         gl:    parseFloat(r.TOTAL_GL ?? 0),
       })));
+      renderSOIScope(soiScopeNote(await fetchRealFunds(firmId), dwhFundRows.map(r => r.FUND_UUID)));
     }
     settleDashboardCard("soi", dwhFundRows.length > 0);
 
