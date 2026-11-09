@@ -357,7 +357,10 @@ carries the port actually bound and the token actually in use, which is
 the only pair guaranteed to be right — composing one from what we intended
 is how a user ends up with a URL that 403s or points at a dead port.
 
-Emit exactly one URL for the user:
+Emit exactly one URL for the user as message text, never only inside a tool's output. Put it
+at the start of the message that makes the next step's first tool call (Step 5.2's, Step 5.4's,
+or Step 6's menu, whichever comes next), and keep going in that same message. Never fold the
+`serve.py` log read into the same Bash call as a later step's command:
 
 ```
 Dashboard: http://127.0.0.1:<port>/?t=<token>
@@ -461,34 +464,34 @@ silently. If it returns any `needs_human:` line, tell the user in one sentence w
 isn't on the hosted app yet and the reason, and go on. Never retry it in this run.
 
 
-## Step 5.3 — Offer the hosted app's link
+## Step 5.3 — Give the hosted app's link, only when asked
 
-Every build offers a bare link to the firm itself, no report or tab — the firm's hosted
-landing page lists all of the user's reports there, so one link works regardless of which
-report this build is for, a workbook-backed Budget vs Actuals or Carta's own budget alike.
-Run this only after Step 5.2 has returned (when 5.2 ran at all) — this step never pushes
+**Not part of the default run.** A build ends on the local dashboard's URL alone; never offer
+the hosted link unprompted. Run this step only when the user asks for the hosted app or its
+link (e.g. "is this on the hosted app?", "give me the online link") — at any point once Step 5
+has emitted the URL, after Step 5.2 has returned (when 5.2 ran at all). It never pushes
 anything and makes no Carta call:
 
 ```bash
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url --dashboard-dir "<dashboard_dir>"
 ```
 
-`hosted-url` reads the firm's name and uuid straight from `<dashboard_dir>`'s own
-snapshot.json/accounts.json — the values Step 4's build recorded for this dashboard (its
-`--firm-name`/`--firm-uuid` args). Never pass or compose a firm name by hand here; the local
-cache slug (`manco_paths.slugify`) in particular can differ from the slug the hosted app
-itself routes on.
+The link is a bare link to the firm itself, no report or tab — the firm's hosted landing page
+lists all of the user's reports, so one link works for any report, a workbook-backed Budget vs
+Actuals or Carta's own budget alike. `hosted-url` reads the firm's name and uuid straight from
+`<dashboard_dir>`'s own snapshot.json/accounts.json — the values Step 4's build recorded for
+this dashboard (its `--firm-name`/`--firm-uuid` args). Never pass or compose a firm name by
+hand here; the local cache slug (`manco_paths.slugify`) in particular can differ from the slug
+the hosted app itself routes on.
 
-Offer the link on one line, as the **last** output of this run before Step 6's menu, after
-5c's gap line (if any) and Step 5.2's `needs_human` line (if any): *"Also on the hosted app:
-`<url>`"*. Never open a tab for it — every build that reaches this step chose local at Gate 1.
+Give the link on one line: *"On the hosted app: `<url>`"*. Never open a tab for it.
 
 
 ## Step 5.4 — Load reports shared with you
 
 **SILENT unless something changed or failed.** Run it only when this run has a Carta MCP
-(`<SERVER>`); skip it on a cache-only reopen. Run this after the URL is out, once Steps 5.2
-and 5.3 have both returned — on every invocation, warm reopen included, since a report can be
+(`<SERVER>`); skip it on a cache-only reopen. Run this after the URL is out, once Step 5.2 has
+returned (when it ran at all) — on every invocation, warm reopen included, since a report can be
 shared with you between runs.
 
 Dispatch **one** fresh-context sub-agent (Agent tool, `subagent_type: general-purpose`,
@@ -500,9 +503,8 @@ conversation.
 `import_shared_reports.py import` merges what's pulled, then rebuilds the dashboard — even
 when nothing changed. That rebuild replays the build's own recorded argv
 (`.build-args.json`), `--no-sync-sweep` included, so it spawns no `claude`-CLI sweep either
-— there is nothing for Step 5.2's `--plan` or Step 5.3's `hosted-url` to wait on or race
-against. This step runs after both have returned, so its messages never interleave with
-theirs. A pulled report is stored with `state: "shared-in"`, which `own_sync`'s push path
+— there is nothing for Step 5.2's `--plan` to wait on or race against. This step runs after
+5.2 has returned, so its messages never interleave with 5.2's. A pulled report is stored with `state: "shared-in"`, which `own_sync`'s push path
 treats as read-only, so nothing this step's rebuild does re-pushes it as the owner's own.
 
 Sub-agent brief:
@@ -521,7 +523,7 @@ Sub-agent brief:
 - **`not_enabled`**, or **`pulled added=0 adopted=0 updated=0 ...`** — nothing changed; say
   nothing.
 - **`pulled added=<N> adopted=<P> updated=<M> ...`** with `N`, `P` or `M` above 0 — one line,
-  after Step 5.3's link (if any) and before Step 6's menu: *"Loaded `<N+P+M>` reports — they're
+  before Step 6's menu: *"Loaded `<N+P+M>` reports — they're
   in the Budget vs Actuals sidebar (reload the tab if it's already open)."*
 - **`failed: <reason>`** — one line: *"Couldn't load reports shared with you yet (`<reason>`)
   — use **Load shared reports** in the sidebar to retry."* Never retry it in this run.

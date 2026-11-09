@@ -147,7 +147,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.6</carta-plugin>
+<carta-plugin>carta-investors:7.30.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
@@ -214,15 +214,16 @@ Eight steps, cache-first: Step 0's local cache probe decides whether Steps 1,
 1.5, and 2 need the Carta MCP at all, the same way `carta-fund-modeling`
 resolves identity from a local cache before ever touching the MCP. Step 3
 (limited to what Step 2.5's `needs_fetch` names) and Steps 4, 5 and 6 run on
-every invocation that reaches them — a local-surface invocation that picks
-**Open hosted app** at Gate 1 never does: it replies with the hosted link and
-ends the turn before Step 0 runs at all. See
+every invocation that reaches them — only a sandboxed session, or a local
+invocation that itself asks for the hosted app, never does: it replies with
+the hosted link and ends the turn before Step 0 runs at all. Never ask a local
+session whether to run hosted or local. See
 [firm-resolution.md](references/firm-resolution.md)'s Gate 0 and Gate 1 for
-the sandboxed-exit and hosted-or-local gates that sit before this table.
+the sandboxed exit and the asked-for hosted hand-off that sit before this table.
 
 | Step | Run it? | What it does | Detail |
 |---|---|---|---|
-| 0 | after Gate 0 (surface check, says hello and installs `uv` first) and Gate 1 (hosted-or-local) — reached only once Gate 0 confirms a local surface and Gate 1 picks "Local" | Capture the firm, probe the local cache, finish the greeting | [firm-resolution.md](references/firm-resolution.md) |
+| 0 | always, after Gate 0 (says hello, installs `uv`, surface check) — skipped only by a sandboxed surface or an invocation that asks for the hosted app (Gate 1) | Capture the firm, probe the local cache, finish the greeting | [firm-resolution.md](references/firm-resolution.md) |
 | 0.5 | always | Claude CLI preflight — find (or offer to install) the `claude` CLI report sharing needs, before the data-fetch wait | [serve-and-update.md](references/serve-and-update.md) |
 | 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-lookup.md](references/firm-lookup.md) |
 | 1.5 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit (same condition as Step 1) | ManCo eligibility hard gate — confirms an active Fund Admin subscription and an active management company before proceeding | [firm-lookup.md](references/firm-lookup.md) |
@@ -235,8 +236,8 @@ the sandboxed-exit and hosted-or-local gates that sit before this table.
 | 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
 | 5.2 | when this run has a Carta MCP and the build's own sweep recorded that the `claude` CLI couldn't reach Carta | Push the owner's reports to the hosted app from this session | [serve-and-update.md](references/serve-and-update.md) |
-| 5.3 | always | Offer the hosted app's link — a bare link to the firm itself, never a specific report | [serve-and-update.md](references/serve-and-update.md) |
-| 5.4 | when this run has a Carta MCP, once Steps 5.2 and 5.3 have both returned | Load reports shared with you | [serve-and-update.md](references/serve-and-update.md) |
+| 5.3 | only when the user asks for the hosted app's link | Give the hosted app's link — a bare link to the firm itself, never a specific report | [serve-and-update.md](references/serve-and-update.md) |
+| 5.4 | when this run has a Carta MCP, once Step 5.2 has returned | Load reports shared with you | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
 | 7 | only when the operator asks for a budget in the hosted app that the automatic sync didn't deliver to the audience they want (their own session, or colleagues), and the hosted Import budget button is enabled | Export the workbook budget as a bundle to upload | [serve-and-update.md](references/serve-and-update.md) |
 

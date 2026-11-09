@@ -1,10 +1,10 @@
-# Gate 0, Gate 1, and Step 0 — greeting, surface check, hosted-or-local, cache probe
+# Gate 0, Gate 1, and Step 0 — greeting, surface check, hosted hand-off, cache probe
 
 On **every** invocation: the greeting's opening line and the surface check (Gate 0) — a
-sandboxed surface exits there, before any of the rest. On a **local surface**: Gate 1's
-hosted-or-local question next — a "Hosted" pick replies with the link and exits there too.
-Only once Gate 1 picks **"Local"** (the normal case) does Step 0's argument capture and local
-cache probe, and the rest of the greeting, run. Leading with the opening line means the
+sandboxed surface exits there, before any of the rest. On a **local surface**: Gate 1 — an
+invocation that itself asks for the hosted app gets the link and exits there too. Every other
+local invocation (the normal case) goes straight on to Step 0's argument capture and local
+cache probe, and the rest of the greeting, with no question in between. Leading with the opening line means the
 reader has an answer to "what is this going to do" on screen while the checks behind it run,
 rather than a silent pause before anything appears.
 
@@ -159,15 +159,15 @@ different installer, a different URL, or ask the user again how to proceed.
 
 **SILENT from here on** — zero further user-facing output in this step,
 unless the surface turns out to be sandboxed (below). The next allowed
-output is Gate 1's question (on `"surface": "local"`) or 0.3's continuation
-of the greeting (once Gate 1 picks "Local"). Do NOT output any text after
+output is Gate 1's hosted reply (only when the invocation asked for the hosted
+app) or 0.3's continuation of the greeting. Do NOT output any text after
 this check, including phrases like "Surface is local — safe to continue",
 "Checking local cache", "Now checking the local dashboard cache for…",
 "Surface is local, proceeding silently to Step 0.2's cache probe", or any
 other narration of what is happening — **announcing that you're about to
 be quiet is not the same as being quiet, and is exactly as forbidden as any
-other sentence here.** Between this check and Gate 1's question (or 0.3, once
-past Gate 1), a tool call is the whole turn — issue it and say nothing, not
+other sentence here.** Between this check and 0.3 (or Gate 1's hosted
+reply), a tool call is the whole turn — issue it and say nothing, not
 even a single confirming word.
 
 **If the Bash tool itself is present but the command fails** — wrong path,
@@ -286,30 +286,20 @@ be read, skip opening and give the reply with the link — never stop. Either wa
 goes in the reply text itself: a terminal session has `browser_family: none`, so the reply is
 the only way the user reaches it.
 
-## Gate 1 — Hosted or local (local sessions only)
+## Gate 1 — Hosted hand-off, only when asked (local sessions only)
 
 Reached only on `"surface": "local"` — a sandboxed session never reaches here (Gate 0 already
-exited). This gate runs **before** Step 0.1 captures `<FIRM_NAME_INPUT>`/`<FIRM_ID_HINT>` and
-before Step 1 runs over MCP for the BUILD path proper — both still apply here exactly as Step
-0.1/Step 1 state them, just reached from this earlier point on a "hosted, firm named" pick,
-not only from a cache MISS. Carta hosts this dashboard at the bare link (see "Open the hosted
-app" above); the user signs in there and the hosted app's own firm chooser (or its `?firm=`
-query param — see [DEPLOY.md](../DEPLOY.md)'s "Which firm opens") picks the firm, so the
-hosted path needs no local cache. Ask **before Step 0.1** — before any cache scan or MCP call
-— with `AskUserQuestion`:
+exited). A local session builds and opens the local dashboard by default: **never ask the user
+whether to run hosted or local.** Take the hosted hand-off below only when the invocation
+itself asks for the hosted app — it says "hosted" or "online", or pastes the bare hosted-app
+URL. Anything else, a pasted Carta firm URL/UUID included, → **Local**.
 
-> **Header:** "Where to run"
-> **Question:** "Open the hosted ManCo dashboard, or build it locally on this machine?"
-> - **"Open hosted app"** — Use it in your browser at manco-reporting.carta.cloud: sign in
->   with Carta, nothing to install. Carta's own budget shows there automatically; a budget
->   you import from your own workbook needs this skill's local workflow to reach it.
-> - **"Build locally"** — Run it on this computer from your firm's data, pulled through your
->   Carta connection, with your own workbook budget imported and mapped against it.
-
-Skip the question when the invocation already chose one: "hosted" or "online" (or the bare
-hosted-app URL) → hosted; "local", "build", "refresh", or "fetch fresh" → local (0.1 already
-treats the last two as `<FORCE_REFRESH>`, which only makes sense against a local build). A
-pasted Carta firm URL/UUID chooses neither, so ask as usual.
+This check runs **before** Step 0.1 captures `<FIRM_NAME_INPUT>`/`<FIRM_ID_HINT>` and before
+Step 1 runs over MCP for the BUILD path proper — both still apply to a hosted hand-off exactly
+as Step 0.1/Step 1 state them, just reached from this earlier point. Carta hosts this dashboard
+at the bare link (see "Open the hosted app" above); the user signs in there and the hosted
+app's own firm chooser (or its `?firm=` query param — see [DEPLOY.md](../DEPLOY.md)'s "Which
+firm opens") picks the firm, so the hosted path needs no local cache.
 
 - **Hosted, no firm named** → **Open the hosted app** with the bare link, then reply with it
   and end the turn: "Open **https://manco-reporting.carta.cloud** in your browser, sign in
