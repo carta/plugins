@@ -142,8 +142,8 @@ placeholder.
 **Always pass `--no-sync-sweep`.** A build without it spawns a detached `claude`-CLI
 own-sync sweep — it errors for an operator with no working `claude` CLI (or one signed
 out), and even where it works it is a second, separate path to the same Carta connector
-this session already has. `--no-sync-sweep` skips that sweep only: Step 5.2, right after
-the URL, pushes every owned report itself, through this session's own connector, with no
+this session already has. `--no-sync-sweep` skips that sweep only: Step 5.2, when the user
+asks for it, pushes every owned report itself, through this session's own connector, with no
 `claude` CLI and no detached process. In-app Share ([report-sharing.md](report-sharing.md))
 goes through the `claude` CLI bridge regardless — a separate path to Carta from own-sync,
 which `--no-sync-sweep` leaves untouched.
@@ -358,13 +358,17 @@ the only pair guaranteed to be right — composing one from what we intended
 is how a user ends up with a URL that 403s or points at a dead port.
 
 Emit exactly one URL for the user as message text, never only inside a tool's output. Put it
-at the start of the message that makes the next step's first tool call (Step 5.2's, or Step
-6's menu, whichever comes next), and keep going in that same message. Never fold the
-`serve.py` log read into the same Bash call as a later step's command:
+at the start of the message that makes the next tool call (Step 6's menu, or a later step's
+first call), and keep going in that same message. Never fold the `serve.py` log read into the
+same Bash call as a later step's command:
 
 ```
 Dashboard: http://127.0.0.1:<port>/?t=<token>
 ```
+
+**This line is verbatim, with the real URL in it.** Never replace it with a description of
+the dashboard ("it's running at a local address", "the dashboard is live") and never leave it
+out: the printed link is the only way the user opens the dashboard.
 
 Then one orientation line, e.g. *"`<FIRM_NAME>` — `<MANCO_NAME>` · through `<AS_OF>`. Click any chart bar or category row to drill into journal entries."*
 
@@ -391,13 +395,15 @@ disclose says nothing. Never list which lines; the counts orient, and
 Step 6 is where the unresolved ones get resolved.
 
 
-## Step 5.2 — Push to the hosted app from this session
+## Step 5.2 — Push to the hosted app from this session, only when asked
 
-**SILENT on success.** Run it whenever this run has a Carta MCP (`<SERVER>`) — every
-invocation — right after the URL is out; skip it only on a cache-only reopen with no MCP at
-all. Step 4 always builds with `--no-sync-sweep`, so no sweep ever runs for a dashboard
-built this way, and `own_sync.py --plan` plans a push for every owned report that is new or
-changed unconditionally, without waiting on or deferring to one.
+**Not part of the default run.** Never push to the hosted app on your own after the dashboard
+launches. Run this step only when the user asks to put their reports on the hosted app (e.g.
+"push my reports to the hosted app", "sync this to the online app"), only when this run has a
+Carta MCP (`<SERVER>`), and only after Step 5 has emitted the URL. Step 4 always builds with
+`--no-sync-sweep`, so no sweep ever runs for a dashboard built this way, and `own_sync.py
+--plan` plans a push for every owned report that is new or changed unconditionally, without
+waiting on or deferring to one.
 
 Planning also needs to settle any rename made on the hosted app onto the local report
 first — otherwise a plan built after a rename would resend the pre-rename name and silently
@@ -415,8 +421,7 @@ First, get this dashboard's fund_uuid — a local read, no Carta call:
 It prints `{"fund_uuid": "<fund_uuid>"}`. Then dispatch **one** fresh-context sub-agent
 (Agent tool, `subagent_type: general-purpose`, which inherits this session's tools, its
 Carta connector included) with the brief below, filling in `<SERVER>`, `<UV_BIN>`,
-`<dashboard_dir>` and `<fund_uuid>` verbatim. Don't wait to tell the user anything before it
-returns.
+`<dashboard_dir>` and `<fund_uuid>` verbatim, and wait for it to finish.
 
 Sub-agent brief:
 
@@ -459,9 +464,11 @@ Sub-agent brief:
 > one line per report pushed, `pushed` or `needs_human: <report_id>: <the error's first
 > line>`, or exactly `nothing_to_push` if step 2 applied.
 
-If the sub-agent answers `nothing_to_push` or `failed: own-sync lock held too long`, go on
-silently. If it returns any `needs_human:` line, tell the user in one sentence which report
-isn't on the hosted app yet and the reason, and go on. Never retry it in this run.
+Since the user asked, answer with one line: the reports pushed, or that everything was
+already on the hosted app (`nothing_to_push`), or, for `failed: own-sync lock held too long`,
+that another push is still running and to ask again in a few minutes. For each `needs_human:`
+line, say in one sentence which report isn't on the hosted app yet and the reason. Never retry
+it in this run.
 
 
 ## Step 5.3 — Give the hosted app's link, only when asked
@@ -484,7 +491,9 @@ this dashboard (its `--firm-name`/`--firm-uuid` args). Never pass or compose a f
 hand here; the local cache slug (`manco_paths.slugify`) in particular can differ from the slug
 the hosted app itself routes on.
 
-Give the link on one line: *"On the hosted app: `<url>`"*. Never open a tab for it.
+Give the link on one line: *"On the hosted app: `<url>`"*. Never open a tab for it. When this
+run hasn't pushed their reports (Step 5.2), add one line offering to — the hosted app shows only
+what has been pushed there.
 
 
 ## Step 5.4 — Load reports shared with you, only when asked
@@ -738,12 +747,13 @@ the operator has nothing left to change.
 
 ## Step 7 — Export the budget for the hosted app
 
-**Usually not needed for your own view.** Step 5.2 mirrors every workbook budget you own to
-Carta privately, from this session, right after every build — so it shows only in your own
+**Usually not needed for your own view.** Step 5.2, when the user asks for it, mirrors every
+workbook budget they own to Carta privately, from this session — so it shows only in their own
 hosted session. Colleagues see it only through Share or a firm-wide upload from this step.
-Reach for this step only when the sync didn't deliver what the operator asks for: this
-budget isn't in their own hosted session (no Carta MCP this run, or Step 5.2 reported
-`needs_human` for it), or they want colleagues to see it without sharing it.
+Reach for this step only when that push can't deliver what the operator asks for: this budget
+isn't in their own hosted session (no Carta MCP this run, or Step 5.2 reported `needs_human`
+for it), or they want colleagues to see it without sharing it. When it's missing only because
+no push has run, offer Step 5.2 first.
 
 **Even then, check the hosted button exists before exporting anything.** The hosted app's
 **Import budget** control is gated by `IMPORT_BUDGET_ENABLED` in

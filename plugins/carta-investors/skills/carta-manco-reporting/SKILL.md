@@ -147,7 +147,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.8</carta-plugin>
+<carta-plugin>carta-investors:7.30.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
@@ -235,7 +235,7 @@ the sandboxed exit and the asked-for hosted hand-off that sit before this table.
 | 4 | always | Rebuild the datadir | [serve-and-update.md](references/serve-and-update.md) |
 | 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
-| 5.2 | when this run has a Carta MCP and the build's own sweep recorded that the `claude` CLI couldn't reach Carta | Push the owner's reports to the hosted app from this session | [serve-and-update.md](references/serve-and-update.md) |
+| 5.2 | only when the user asks to push their reports to the hosted app, and this run has a Carta MCP | Push the owner's reports to the hosted app from this session | [serve-and-update.md](references/serve-and-update.md) |
 | 5.3 | only when the user asks for the hosted app's link | Give the hosted app's link — a bare link to the firm itself, never a specific report | [serve-and-update.md](references/serve-and-update.md) |
 | 5.4 | only when the user asks to load reports shared with them | Load reports shared with you | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
@@ -344,10 +344,11 @@ datadir build runs silently. Speak only at:
   text.** `record_mapping.py query tables --part current|input` renders
   it; paste its output verbatim. See "Render the table before you ask" in
   [budget-unresolved.md](references/budget-unresolved.md) for the rule
-- Step 5 — the dashboard URL, its orientation line, and — only when the
+- Step 5 — the dashboard URL (the literal `Dashboard: http://127.0.0.1:…` line, never a
+  description of it), its orientation line, and — only when the
   build reported gaps — one line counting where the report and the
   client's own workbook differ (5c)
-- Step 5.4 — one line with its outcome, only when the user asked for it
+- Steps 5.2 and 5.4 — one line with the outcome, only when the user asked for them
 - Step 6 — the offer to update, on a re-invocation
 - Any hard error (MCP unauth, no data, port range exhausted)
 

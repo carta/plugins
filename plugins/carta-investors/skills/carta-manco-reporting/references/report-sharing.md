@@ -12,8 +12,8 @@ All from the report controls beside **Export**, and none of it needs Claude in t
 
 | Action | What happens |
 |---|---|
-| Rename | Local, immediately. For a report this dashboard syncs to the hosted app (own_sync.py), your own synced copy there catches up at the skill's next invocation (Step 5.2's push) — a rebuild the app itself triggers pushes nothing, since it runs with `--no-sync-sweep`. A rename made on the hosted app reaches here the same way: at the skill's next invocation, or sooner if `serve.py`'s own background reconcile runs at this dashboard's next launch (needs the `claude` CLI signed in); a rename of a hosted copy, an uploaded budget or Carta's own budget stays on the hosted app. |
-| Duplicate | Local, immediately; the copy reaches the hosted app the same way, at the skill's next invocation. Holds its own copy of the budget and keeps the report's budget mapping. |
+| Rename | Local, immediately. For a report this dashboard syncs to the hosted app (own_sync.py), your own synced copy there catches up when the user asks the skill to push reports to the hosted app (Step 5.2) — a rebuild the app itself triggers pushes nothing, since it runs with `--no-sync-sweep`. A rename made on the hosted app reaches here the same way: on a push the user asks for (Step 5.2), or sooner if `serve.py`'s own background reconcile runs at this dashboard's next launch (needs the `claude` CLI signed in); a rename of a hosted copy, an uploaded budget or Carta's own budget stays on the hosted app. |
+| Duplicate | Local, immediately; the copy reaches the hosted app the same way, when the user asks for a push (Step 5.2). Holds its own copy of the budget and keeps the report's budget mapping. |
 | Hide | Local and hosted. Hidden reports come back from the sidebar's **Show N hidden**. |
 | Share | Only the people you add (where a new share starts), or everyone who can view the entity's accounting. People are picked from that same list, which the dashboard saves for a day in `.shareable-users.json` (**Refresh** under the list asks Carta again; a recipient Carta refuses clears it). |
 | Update | Sends the owner's later changes. Until then recipients keep the version they have. When the report has no share (sharing was stopped, maybe in another tab), nothing is sent: the app is told the shared copy was deleted and asks whether to share it as new or keep it private. A share reaches everyone only when the Share dialog sends an explicit choice of everyone. |
@@ -87,8 +87,8 @@ Carta that mirrors your own reports privately, with no effect on Share.
   `checking` (no probe has landed yet, `reason` is `null`), `available`, or
   `unavailable`; once a probe has run, `reason` is `ok`, `not_installed`, or
   `not_logged_in`.
-- The skill always pushes the owner's own reports to Carta for the hosted app itself,
-  through this session's own Carta connector, right after every build — Step 5.2
+- The skill pushes the owner's own reports to Carta for the hosted app itself, through this
+  session's own Carta connector, when the user asks for it — Step 5.2
   ([serve-and-update.md](serve-and-update.md)), via `own_sync.py --plan`. The same
   `plan_push` that a sweep (below) would use builds what the session sends, so the two
   never differ. `--plan` plans a push for every report that's new or changed,

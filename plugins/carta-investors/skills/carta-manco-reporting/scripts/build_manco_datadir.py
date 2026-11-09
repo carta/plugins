@@ -6556,8 +6556,8 @@ def main():
                         "--no-sync-sweep — knows whose reports these are")
     p.add_argument("--no-sync-sweep", action="store_true",
                    help="skip the detached claude-CLI own-sync sweep this build would otherwise spawn — "
-                        "the skill pushes each report itself, through its own Carta connector, right "
-                        "after Step 5's URL (serve-and-update.md Step 5.2)")
+                        "the skill pushes each report itself, through its own Carta connector, when "
+                        "the user asks for it (serve-and-update.md Step 5.2)")
     args = p.parse_args()
     if not args.as_of_year:
         args.as_of_year = int(args.as_of.split("-")[0])
