@@ -33,10 +33,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
+  - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -54,7 +55,7 @@ No inputs required — this skill loops the full portfolio automatically.
 
 ### Portfolio Enumeration
 
-Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, ask the user to narrow scope.
+Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, follow `${CLAUDE_PLUGIN_ROOT}/references/portfolio-over-20.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it).
 
 ### Per-Company Commands
 

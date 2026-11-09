@@ -21,8 +21,8 @@ latest revision, read-only. Every change happens in chat; the page follows.
 
 Every edit's first bootstrap sends `look_first: true`, whatever the user said, so the page is up
 before the first preview. The result leads with `next_step`, `companion_url` and `how_to_reply`,
-and carries `thread_id`. Follow `next_step`, post the link,
-then:
+and carries `thread_id`. Follow `next_step`, post the link as
+[SKILL.md § Flow](../SKILL.md#flow) step 5 says, then:
 
 - **The user named the field and the value:** go on to the preview with that `thread_id`. The
   open page turns into the diff.

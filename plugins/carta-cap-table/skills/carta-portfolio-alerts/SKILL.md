@@ -35,10 +35,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
+  - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -54,7 +55,7 @@ No inputs required — this skill loops the full portfolio. For a full-portfolio
 
 ### Portfolio Enumeration
 
-For a full-portfolio scan, call `list_accounts` to get all portfolio companies. Filter to accounts where `id` starts with `corporation_pk:`. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, ask the user to narrow scope.
+For a full-portfolio scan, call `list_accounts` to get all portfolio companies. Filter to accounts where `id` starts with `corporation_pk:`. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, follow `${CLAUDE_PLUGIN_ROOT}/references/portfolio-over-20.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it).
 
 ### Per-Company Commands
 
@@ -218,5 +219,5 @@ Healthy (7): Alpha, Zeta, Eta, Theta, Iota, Kappa, Lambda
 ## Caveats
 
 - Portfolio data reflects point-in-time API calls, not a single atomic snapshot
-- Rate limit: maximum 20 companies per invocation — ask the user to narrow scope if more than 20
+- Rate limit: maximum 20 companies per invocation
 - Always show the scan date and count: "Scanned 12 companies on Mar 18, 2025"

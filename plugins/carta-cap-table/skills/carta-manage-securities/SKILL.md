@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.5</carta-plugin>
 
 # Manage securities
 
@@ -124,7 +124,7 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 
 1. **Bootstrap.** Call it once per change (twice only for the label retry in [§ Actions](#actions)),
    after any earlier apply, with `company`, `security_type` and `label` (a list), `security`
-   (ids) or `holder`. To reverse a
+   (ids) or `holder` (the name exactly as the user wrote it). To reverse a
    cancellation or undo a termination, send `label` or `security`: `holder` finds only
    securities held now. For an
    edit, always send `look_first: true`, so the Change page opens before the first preview
@@ -138,7 +138,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
      person and 2+ rows are selectable, ask which ones in one `AskUserQuestion`.
 3. **Collect the inputs** for the action. Use the user's words; ask only for what is missing,
    in one `AskUserQuestion` with up to 4 questions. Dates are `YYYY-MM-DD`.
-   - **Edit:** see [references/change-flow.md](references/change-flow.md) for fields, reason,
+   - **Edit:** `securities` (a list of ids; the other previews take `security`). See
+     [references/change-flow.md](references/change-flow.md) for fields, reason,
      note, Rule 144 and the Change page. The field formats are in
      [references/field-contract.md](references/field-contract.md).
    - **Cancel:** `security`, `cancel_date` (not in the future), `cancel_reason`, and `notes`.
@@ -156,7 +157,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 5. **Show the preview.** With `next_step` and the browser tool it names, follow it, then keep
    the chat to one line: the count, the fields, the reason, any problem and the full text of a
    legend that changes. Else show a table in chat (security · field · before → after, or the
-   tranches for a partial cancel). Post any `companion_url` as `[See it in Carta](<companion_url>)`.
+   tranches for a partial cancel). Post every `companion_url` as
+   `[See it in Carta](<companion_url>)`, never as a bare address.
 6. **List the side effects.** Show every `side_effects` label before the approval question.
    Name each one that cannot be undone, such as an email to a holder.
 7. **Approval.** Ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** and
