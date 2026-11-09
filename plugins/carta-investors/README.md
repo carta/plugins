@@ -53,7 +53,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-download-audit-documents` | Download a fund's audit documents as one zip per audit area, across several funds at once, with a searchable contents page. Internal-only. |
 | `carta-new-audit-documents` | Report which audit documents are new, changed or gone since the last check of the same fund, year and area. Internal-only. |
 | `carta-build-audit-home` | Build, rebuild or open Carta Audit Home, a live page listing every fund an auditor can audit with readiness by area, what's new and downloads. Internal-only. |
-| `firm-bulk-entity-update` | Not implemented yet. Will carry a firm's monthly change file for a deal group's firm-controlled entities through one cycle — ingest, resolve, review, write, true-up — instead of one entity at a time. Internal-only. |
+| `firm-bulk-entity-update` | Takes a firm's monthly change file for its deal groups' firm-controlled entities, checks every row against Carta and shows a read-only review, asking each deal group's open items in the chat instead of one entity at a time. Writes nothing to Carta. Internal-only. |
 | `staff-ilevel-data-collection-import` | Carta staff only. Import a firm's iLevel KPI history from the warehouse into the same firm's Data Collection in a sandbox or test Carta, then check the figures ValTool reads. Chat-driven, with Carta's own financials page open in the browser pane. Never writes to production. Internal-only. |
 
 ### KYC
