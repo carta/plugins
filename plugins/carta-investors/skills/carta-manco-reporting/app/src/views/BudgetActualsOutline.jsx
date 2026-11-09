@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { sans, inkNum, INK, PAPER, LINE, BORDER_DEFAULT, FAINT, MICRO, SHADE, BLUE, FS } from "../ui/theme.js";
 import { Bubble, CollapseCaret, NoteIcon } from "../ui/components.jsx";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead, drillCellProps } from "../ui/table.jsx";
-import { childDisplayLabel, glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
+import { childDisplayLabel, glNameMap, glTooltip, subAccountsByAccount, subCodeMap, subsOfAccounts } from "../ui/glNames.js";
 import { dimensionValue, dimensionValuesAvailable, rowTagScope } from "../ui/dimension.js";
 import { NEST_STEP } from "../ui/nesting.js";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SUMMARY } from "../ui/ledger.js";
@@ -116,6 +116,7 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   const [hoverCell, setHoverCell] = useState(null);
   const glNames = useMemo(() => glNameMap(accountsData?.entries), [accountsData]);
   const subCodes = useMemo(() => subCodeMap(accountsData?.entries), [accountsData]);
+  const subsByAccount = useMemo(() => subAccountsByAccount(accountsData?.entries), [accountsData]);
 
   // A breakout that is on is a question already asked, so the rows arrive
   // open rather than as a second click on every one. That holds for all of
@@ -380,6 +381,7 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
                 actualsByKey={actualsByKey}
                 glNames={glNames}
                 subCodes={subCodes}
+                subsByAccount={subsByAccount}
                 aggregates={aggregates}
                 valueAliases={valueAliases}
                 tagValuesAvailable={tagValuesAvailable}
@@ -622,7 +624,7 @@ function CollapsedHeaderRow({ row, style, labelIndent, closingRow, aggregates, c
 
 function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvailable = true,
                      periodYear, columns, monthlyBudgets = false, onDrill, asTotal, extraIndent, sectionFlat, breakdownChild, collapsed, onToggleCollapse,
-                     closingRow, alignIndent, glNames, subCodes,
+                     closingRow, alignIndent, glNames, subCodes, subsByAccount,
                      breakout, entries, dimension, open, onToggleLine, elsewhere,
                      widened, onDrillTotal, rowByKey, sharedWithLabel,
                      excludedEntries, excludedEntriesByKey,
@@ -856,8 +858,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
             like a normal row's, live on the label's own tooltip. The
             workbook's own comment is separate, on its own icon below. */}
         <HoverTip text={[hasGls ? glTooltip(row.gl_codes, glNames, row.scopes, subCodes,
-                                            children.map(c => subOfChildLabel(c.label))
-                                                    .filter(Boolean)) : null, rowNote]
+                                            subsOfAccounts(row.gl_codes, subsByAccount)) : null, rowNote]
           .filter(Boolean).join("\n\n") || null}>
           {asTotal ? `Total ${row.label}` : row.label}
         </HoverTip>

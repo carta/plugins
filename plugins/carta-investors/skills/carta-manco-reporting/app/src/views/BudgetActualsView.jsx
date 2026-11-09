@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, microCaption, FS, RED, subheadRow, SUBHEAD_ICON_BTN } from "../ui/theme.js";
 import { H1, NoteIcon } from "../ui/components.jsx";
 import BudgetActualsAccounts, { hasMonthlyDetail } from "./BudgetActualsAccounts.jsx";
-import { glNameMap, glTooltip, childDisplayLabel } from "../ui/glNames.js";
+import { glNameMap, glTooltip, childDisplayLabel, subAccountsByAccount, subCodeMap, subsOfAccounts } from "../ui/glNames.js";
 import { NEST_STEP } from "../ui/nesting.js";
 import { dimensionOf, dimensionValue, dimensionValuesAvailable,
          dimensionLabel, dimensionLabelPlural, rowTagScope } from "../ui/dimension.js";
@@ -158,6 +158,8 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   // Per-dept actuals map: {dept: {account_type: actual_ytd}}.
   // Computed once from accountsData.entries and reused across all row cells.
   const glNames = useMemo(() => glNameMap(accountsData?.entries), [accountsData]);
+  const subCodes = useMemo(() => subCodeMap(accountsData?.entries), [accountsData]);
+  const subsByAccount = useMemo(() => subAccountsByAccount(accountsData?.entries), [accountsData]);
 
   // Column budgets are one total, not a monthly split (shapes/tag_crosstab.py) —
   // widening actuals can't widen the budget figure alongside it, so it's opt-in.
@@ -395,6 +397,8 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
                   actualsByKey={actualsByKey}
                   labelByKey={labelByKey}
                   glNames={glNames}
+                  subCodes={subCodes}
+                  subsByAccount={subsByAccount}
                   onDrill={drilldown?.openTagValueAccount}
                   period={effectivePeriod}
                   tagValuesAvailable={tagValuesAvailable}
@@ -446,7 +450,7 @@ export const DEPT_SUB_COLS = [
   { label: "Var $" },
 ];
 
-export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, labelByKey, onDrill, period, glNames,
+export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, labelByKey, onDrill, period, glNames, subCodes, subsByAccount,
                     tagValuesAvailable = true, breakout = null, breakoutActuals = null,
                     openRows = null, onToggleRow = null, dimension = null,
                     hoverCell = null, onHoverCell = null, heldCell = null }) {
@@ -575,7 +579,11 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
         {/* The accounts behind a line live on its own tooltip — see the
             outline's label cell for why the codes left this column. */}
         <HoverTip text={row.account_type != null
-                        ? glTooltip(row.account_type_all || [row.account_type], glNames)
+                        ? (() => {
+                            const codes = row.account_type_all || [row.account_type];
+                            return glTooltip(codes, glNames, null, subCodes,
+                                             subsOfAccounts(codes, subsByAccount));
+                          })()
                         : null}>
           {label}
         </HoverTip>

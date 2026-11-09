@@ -44,15 +44,43 @@ export function subCodeMap(entries) {
   return m;
 }
 
-/** The sub-account part of a breakout child's label, or null.
- *
- *  The account breakout names a child "<account> · <sub>" so two accounts'
- *  sub-accounts stay apart. The row already says which account it is, so
- *  the reader wants the half they don't have.
- */
-export function subOfChildLabel(label) {
-  const i = String(label ?? "").indexOf(" · ");
-  return i === -1 ? null : label.slice(i + 3);
+const byText = (a, b) => String(a ?? "").localeCompare(String(b ?? ""), undefined, { numeric: true });
+
+/** GL account code → its sub-accounts as { sub, code }, in ledger order
+ *  (code, then name). The code stays beside its name because a firm can book
+ *  one sub-account name under two accounts, each with its own code. Read off
+ *  the entries so a row's tooltip can list them without the row being opened
+ *  by account first. */
+export function subAccountsByAccount(entries) {
+  const seen = new Map();
+  for (const e of entries || []) {
+    if (e.acct_type == null || !e.sub) continue;
+    if (!seen.has(e.acct_type)) seen.set(e.acct_type, new Map());
+    const subs = seen.get(e.acct_type);
+    if (!subs.has(e.sub)) subs.set(e.sub, e.sub_code || null);
+  }
+  const out = new Map();
+  for (const [acct, subs] of seen) {
+    out.set(acct, [...subs.entries()]
+      .map(([sub, code]) => ({ sub, code }))
+      .sort((a, b) => (a.code ? 0 : 1) - (b.code ? 0 : 1)
+                   || byText(a.code, b.code) || byText(a.sub, b.sub)));
+  }
+  return out;
+}
+
+/** The sub-accounts under a row's GL accounts. One name under two accounts
+ *  is two sub-accounts, so they are told apart by code. */
+export function subsOfAccounts(codes, byAccount) {
+  const out = [];
+  const seen = new Set();
+  for (const c of codes || []) {
+    for (const s of byAccount?.get(Number(c)) ?? byAccount?.get(c) ?? []) {
+      const key = s.code ?? s.sub;
+      if (!seen.has(key)) { seen.add(key); out.push(s); }
+    }
+  }
+  return out;
 }
 
 /** The label a breakout child displays. A sub-account reads "<sub code> -
@@ -66,6 +94,10 @@ export function childDisplayLabel(child, breakout) {
   if (child.sub == null) return child.label;
   return child.subCode ? `${child.subCode} - ${child.sub}` : child.sub;
 }
+
+// A firm's sub-accounts under one account run from a couple to a few dozen;
+// past this the tooltip stops being scannable and says how many are left.
+export const MAX_SUB_LINES = 5;
 
 export function glTooltip(codes, names, scopes, subCodes, subs) {
   const list = (codes || []).filter(c => c != null);
@@ -84,18 +116,17 @@ export function glTooltip(codes, names, scopes, subCodes, subs) {
   // back as internal plumbing, which meant a line quietly reporting one
   // value of an account looked identical to one reporting all of it —
   // and on one firm it took the wrong nine entries of ten for months.
-  // The sub-accounts the row is broken out into, under the accounts they
-  // belong to. The rows below state the names; this states the codes, which
-  // is what a reader reconciling against the ledger came for and the one
-  // thing the breakout itself cannot show them.
-  const subLines = [];
-  for (const sub of subs || []) {
-    if (!sub) continue;
-    const code = subCodes?.get(sub);
-    subLines.push(code ? `${code} — ${sub}` : sub);
-  }
-  const subHead = subLines.length
-    ? [`Sub-account${subLines.length > 1 ? "s" : ""} broken out below`] : [];
+  // The sub-accounts under the row's accounts, with the codes a reader
+  // reconciling against the ledger searches for. A row reporting one
+  // sub-account already names it in its scopes, so listing all of them
+  // would contradict the figure.
+  const reportsOneSub = (scopes || []).some(sc => sc.source === "sub_account");
+  const all = reportsOneSub ? [] : (subs || []).filter(Boolean);
+  const shown = all.slice(0, MAX_SUB_LINES)
+    .map(({ sub, code }) => code ? `${code} — ${sub}` : sub);
+  const hidden = all.length - shown.length;
+  const subLines = hidden > 0 ? [...shown, `+${hidden} more`] : shown;
+  const subHead = shown.length ? [`Sub-account${all.length > 1 ? "s" : ""}`] : [];
 
   return [head, ...named, ...subHead, ...subLines,
           ...scopeLines(scopes, subCodes)].join("\n");
