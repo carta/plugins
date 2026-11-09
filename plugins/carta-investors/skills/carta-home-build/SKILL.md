@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.30.14</carta-plugin>
+<carta-plugin>carta-investors:7.30.17</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -336,6 +336,14 @@ tell who is on an old Home. `CartaHome.View.First` (render) fires only on a brow
 first load (localStorage key `carta-home-viewed-v1`). `CartaHome.Tour.Start` fires only when
 the tour actually opens, not on every load. `CartaHome.Tour.Next` and `.Skip` carry the step
 number the viewer saw (a skipped What's new step isn't counted).
+
+Dashboard cards: a card whose query answers with no rows is hidden, never shown blank
+(`settleDashboardCard` in `app/segment-dashboards.js`), and fires `CartaHome.SOI.Empty`,
+`CartaHome.Perf.Empty` or `CartaHome.LP.Empty` (render). A card whose query fails keeps an
+error line and fires `CartaHome.SOI.LoadError`, `CartaHome.Perf.LoadError` or
+`CartaHome.LP.LoadError` (`failDashboardCard`). Once every card the firm gets has loaded or
+failed, `CartaHome.View.Cards` (click, `value` = the cards shown, a failed card included, e.g.
+`soi,perf`, or `none`) records which Home the firm got. The full list is in `USAGE_DATA.md`.
 
 A button that copies a prompt calls `trackPrompt(elementId, prompt, source, { skill, rank })`
 instead. The tracker attaches the suggested text (never the viewer's edits) as the
@@ -727,14 +735,17 @@ arrive is the one outcome to avoid.
 
 ### Step 7: Validate
 
-Open the published URL and check that it displays fund data for the active firm without
-errors — SOI rows and Fund Performance charts should both
-populate. The first open asks the viewer to consent to the Carta connector; until they
-accept, every card shows its no-connector state.
+Open the published URL and check that it loads for the active firm without errors. Home
+shows only the dashboard cards that have data for this firm: a firm whose funds Carta
+doesn't administer can see fewer cards, or none, and that is expected, not a failure.
+The first open asks the viewer to allow the Carta connector; until they do, the cards show a
+message asking them to connect.
 
 ### Step 8: Confirm
 
-Give the user the artifact's URL, name the firm in its title, and tell them it is live.
+Give the user the artifact's URL, name the firm in its title, and tell them it is live. Tell
+them the first open asks them to allow the Carta connector. Describe only what they will see.
+Never say cards will look empty or are still loading: Home hides any card without data.
 When Step 2c read Home or a dashboard as `customized` or `no_baseline`, follow with one
 summary for the whole update — keep-customizations.md step 6, with Home's lines and the
 lines each dashboard skill returned, grouped by page:

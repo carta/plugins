@@ -24,7 +24,7 @@ import { planViewsPerTag } from "../model/viewsPerTag.js";
 import { allTags, tagId, tagsFor, companyMatchesTags } from "../model/tags.js";
 import { STATUS_CAT } from "../model/status.js";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
-import { signalHitsByCompany, BUILTIN_SIGNALS } from "../model/signals.js";
+import { signalHitsByCompany, BUILTIN_SIGNALS, knownSignals } from "../model/signals.js";
 import { Heatmap } from "../ui/charts.jsx";
 import { metricOptions, metricOf, pointsFor, cartaFirmUrl } from "../model/kpi.js";
 import {
@@ -134,13 +134,14 @@ export function defaultCompletenessMetrics(metricOpts, max = 6) {
   return new Set(picked.slice(0, max));
 }
 
-const VIEW_HINT = "A view saves your grouping, fund, companies, tags, KPIs, periods, reporting status and gap filters.";
+const VIEW_HINT = "A view saves your grouping, fund, companies, tags, favorites, signals, KPIs, periods, reporting status and gap filters.";
 const sortedIds = (set) => [...set].map(String).sort();
 
-/** The saved-view form of the config: Sets become sorted arrays. Favorites,
- *  signals and the search box stay out of views, as on Company KPIs. */
+/** The saved-view form of the config: Sets become sorted arrays. The search box
+ *  stays out of views, as on Company KPIs. */
 const encodeView = (c) => ({ groupBy: c.groupBy, fund: c.fund, metricKeys: sortedIds(c.metrics), companyIds: sortedIds(c.companies),
-  tags: sortedIds(c.tags), statuses: sortedIds(c.statuses), gapsOnly: c.gapsOnly, window: c.win, includeFiling: c.includeFiling });
+  tags: sortedIds(c.tags), statuses: sortedIds(c.statuses), gapsOnly: c.gapsOnly, window: c.win, includeFiling: c.includeFiling,
+  signals: sortedIds(c.signals), favOnly: c.favOnly });
 
 function Completeness({ data, dashboard }) {
   const metrics = data.metrics || [];
@@ -155,6 +156,8 @@ function Completeness({ data, dashboard }) {
     gapsOnly: false, win: 8,
     // Trailing quarters that have not settled yet. Hidden by default, one toggle to include.
     includeFiling: false,
+    signals: new Set(),     // signal ids; empty = no signal filter
+    favOnly: false,         // starred companies only
   }), [defaultMetrics]);
   const [cfg, setCfg] = useState(defaults);
   const decodeView = (v) => ({
@@ -162,16 +165,17 @@ function Completeness({ data, dashboard }) {
     metrics: v.metricKeys ? new Set(v.metricKeys) : defaultMetrics,
     companies: new Set(v.companyIds || []), tags: new Set(v.tags || []), statuses: new Set(v.statuses || []),
     gapsOnly: !!v.gapsOnly, win: v.window ?? 8, includeFiling: !!v.includeFiling,
+    signals: knownSignals(v.signals, dashboard?.doc?.rules), favOnly: !!v.favOnly,
   });
   const savedViews = useSavedViews({ dashboard, docKey: "reportingViews", cfg, setCfg, defaults, encode: encodeView, decode: decodeView });
   // Functional updates: FilterMenu's Apply calls several setters back to back.
   const setter = (key) => (v) => setCfg((c) => ({ ...c, [key]: v }));
-  const { groupBy, fund, metrics: selMetrics, companies: selCompanies, tags: selTags, statuses: selStatuses, gapsOnly, win, includeFiling } = cfg;
+  const { groupBy, fund, metrics: selMetrics, companies: selCompanies, tags: selTags, statuses: selStatuses, gapsOnly, win, includeFiling,
+    signals: selSignals, favOnly } = cfg;
   const setGroupBy = setter("groupBy"), setFund = setter("fund"), setSelMetrics = setter("metrics"), setSelCompanies = setter("companies"),
-    setSelStatuses = setter("statuses"), setGapsOnly = setter("gapsOnly"), setWin = setter("win"), setIncludeFiling = setter("includeFiling");
-  // Not part of a view — as on Company KPIs, these narrow the page for this visit only.
-  const [favOnly, setFavOnly] = useState(false);
-  const [selSignals, setSelSignals] = useState(() => new Set()); // signal ids; empty = no signal filter
+    setSelStatuses = setter("statuses"), setGapsOnly = setter("gapsOnly"), setWin = setter("win"), setIncludeFiling = setter("includeFiling"),
+    setSelSignals = setter("signals"), setFavOnly = setter("favOnly");
+  // Not part of a view — as on Company KPIs, the search narrows the page for this visit only.
   const [search, setSearch] = useState("");
 
   const dashDoc = dashboard?.doc;
@@ -419,7 +423,6 @@ function Completeness({ data, dashboard }) {
   // Keeps Group by and the selected view (now flagged •), like Company KPIs' Reset.
   const resetAllFilters = () => {
     setCfg((c) => ({ ...defaults, groupBy: c.groupBy }));
-    setFavOnly(false); setSelSignals(new Set());
   };
 
   const exportGaps = () => {

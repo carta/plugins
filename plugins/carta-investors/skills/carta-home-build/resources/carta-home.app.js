@@ -305,8 +305,8 @@ async function fetchBenchmarkData() {
       }
     });
     if (res.isError) throw new Error("DWH failed");
-    const rows = parseDWH(res);
-    if (!rows.length) { await fetchBenchmarkFallback(); return; }
+    const rows = dwhRows(res, "FUND_UUID");
+    if (!rows.length) { settleDashboardCard("perf", await fetchBenchmarkFallback()); return; }
 
     // Build sorted date list
     const dateSet = new Set(rows.map(r => r.PERFORMANCE_QUARTER_START_DATE));
@@ -365,11 +365,17 @@ async function fetchBenchmarkData() {
     _benchLabels = labels; _benchDatasets = allDatasets;
     drawBenchmarkChart(labels, allDatasets);
     _renderBenchLegend(fundDatasets, p50Datasets.length > 0);
+    settleDashboardCard("perf", true);
   } catch(e) {
-    // Benchmark query failed (not just empty) — try the same AGGREGATE_FUND_METRICS
-    // fallback the empty-rows path uses, so a benchmark-pipeline hiccup doesn't blank
-    // the card when the firm has real fund metrics.
-    try { await fetchBenchmarkFallback(); } catch(_) {}
+    // Reached when the benchmark query failed, or it was empty and the fund metrics fallback
+    // threw. Either way try the AGGREGATE_FUND_METRICS fallback here, so a benchmark-pipeline
+    // hiccup doesn't blank the card when the firm has real fund metrics. Without a fund to
+    // show, the card keeps an error line: a failed query is never read as "no data".
+    let hasData = false;
+    try { hasData = await fetchBenchmarkFallback(); } catch(_) {}
+    if (hasData) { settleDashboardCard("perf", true); return; }
+    renderBenchError("Can't load fund performance — something went wrong reaching Carta.");
+    failDashboardCard("perf");
   }
 }
 
@@ -396,7 +402,7 @@ function _benchShowChartNote(msg) {
 
 // When the benchmarks table has no qualifying rows, preview the detail page's
 // source (AGGREGATE_FUND_METRICS) instead of blanking. Returns false when no fund
-// data exists anywhere, leaving the card blank as before.
+// data exists anywhere, so the caller hides the card.
 async function fetchBenchmarkFallback() {
   if (!(await mcpAvailable()) || !_benchmarkFirmId) return false;
   // IRR/TVPI/DPI are almost always null for these firms; TOTAL_VALUE is populated,
@@ -415,8 +421,8 @@ async function fetchBenchmarkFallback() {
     }
   });
   if (res.isError) throw new Error("DWH fallback failed");
-  const rows = parseDWH(res).filter(r => r.FUND_UUID);
-  if (!rows.length) return false;  // no fund data at all — leave the card blank
+  const rows = dwhRows(res, "FUND_UUID");
+  if (!rows.length) return false;  // no fund data at all
 
   rows.forEach((r, i) => { _fundColorMap[r.FUND_NAME] = `var(${_benchToken(i)})`; });
   // AGGREGATE_FUND_METRICS is a latest-month snapshot per fund, not a quarterly
@@ -459,10 +465,14 @@ function populateFallback(reason) {
   const noConnectorMsg = "Can't load your portfolio — add or allow Carta in Settings → Connectors, then reload.";
   renderSOIError(reason || noConnectorMsg);
 
-  const benchMsg = reason || "Can't load fund performance — add or allow Carta in Settings → Connectors, then reload.";
+  renderBenchError(reason || "Can't load fund performance — add or allow Carta in Settings → Connectors, then reload.");
+}
+
+// The Fund performance card's error line, unless the card already shows something.
+function renderBenchError(msg) {
   const benchMetrics = document.getElementById("benchmark-metrics");
   if (benchMetrics && !benchMetrics.textContent.trim()) {
-    benchMetrics.innerHTML = `<div style="font-size:11px;color:var(--ink-color-global-feedback-negative-strong);padding-top:8px;">${benchMsg}</div>`;
+    benchMetrics.innerHTML = `<div style="font-size:11px;color:var(--ink-color-global-feedback-negative-strong);padding-top:8px;">${msg}</div>`;
   }
 }
 
@@ -545,6 +555,12 @@ function parseDWH(res) {
     Object.keys(r).forEach(k => { out[k.toUpperCase()] = r[k]; });
     return out;
   });
+}
+
+// The rows of a warehouse answer that carry any of `keys`. An empty answer arrives as one
+// envelope object with none of a row's columns, and must not count as a row.
+function dwhRows(res, ...keys) {
+  return parseDWH(res).filter(r => keys.some(k => r[k] != null));
 }
 
 // ── Live data fetch from Carta MCP ──
@@ -632,6 +648,7 @@ async function fetchLiveData() {
 
     // Step 2: single DWH query — fund names + portfolio values (no set_context or fa:list:entities needed)
     let dwhFundRows = [];
+    let soiFailed = false;
     try {
       const dwhRes = await _mcp("read_tool", {
         name: "dwh__execute__query",
@@ -640,22 +657,26 @@ async function fetchLiveData() {
           format: 'ndjson',
           }
       });
-      if (!dwhRes.isError) {
-        dwhFundRows = parseDWH(dwhRes);
+      if (dwhRes.isError) soiFailed = true;
+      else {
+        dwhFundRows = dwhRows(dwhRes, "FUND_UUID");
       }
-    } catch (e) { console.error('[DWH error]', e); }
+    } catch (e) { console.error('[DWH error]', e); soiFailed = true; }
 
-    // Render SOI card
+    // Render SOI card. A failed query keeps the card with its error line, never hides it.
+    if (soiFailed) {
+      renderSOIError(SOI_LOAD_ERROR);
+      failDashboardCard("soi");
+      return;
+    }
     if (dwhFundRows.length > 0) {
       renderFundSummaryCard(dwhFundRows.map(r => ({
         name:  r.FUND_NAME ?? "Fund",
         value: parseFloat(r.TOTAL_VALUE ?? 0),
         gl:    parseFloat(r.TOTAL_GL ?? 0),
       })));
-    } else {
-      trackHome("render", "CartaHome.SOI.Empty");
-      renderSOIError("No fund data");
     }
+    settleDashboardCard("soi", dwhFundRows.length > 0);
 
   } catch (err) {
     console.error("Carta MCP fetch error:", err);
@@ -663,11 +684,11 @@ async function fetchLiveData() {
     trackHome("render", "CartaHome.Unavailable.LoadError");
     // Connector-level codes rethrow from _mcp and land here. Each has a different fix,
     // so name it — one generic banner hides the action that would repair the page.
-    renderSOIError(SOI_ERROR_BY_CODE[err?.code]
-      || "Can't load your portfolio — something went wrong reaching Carta.");
+    renderSOIError(SOI_ERROR_BY_CODE[err?.code] || SOI_LOAD_ERROR);
   }
 }
 
+const SOI_LOAD_ERROR = "Can't load your portfolio — something went wrong reaching Carta.";
 const SOI_ERROR_BY_CODE = {
   needs_reauth:         "Can't load your portfolio — reconnect Carta in Settings → Connectors.",
   server_not_connected: "Can't load your portfolio — add the Carta connector in Settings → Connectors.",
@@ -1227,7 +1248,8 @@ async function fetchUserEnrichment() {
     const whatsNewP = _listWhatsNewPrompts();
     const res = await _mcp("get_current_user", {});
     if (res && res.isError) {
-      // No profile means no plugin access to check, so "What's new" stays hidden.
+      // No profile means no plugin access to check, so "What's new" stays hidden. The
+      // finally below still marks the profile done: without a profile there is no LP card.
       return;
     }
 
@@ -1253,6 +1275,7 @@ async function fetchUserEnrichment() {
   } catch (e) {
     console.error("[carta-home][debug] get_current_user error:", e);
   } finally {
+    segmentProfileDone();
     markEnrichmentDone();
   }
 }
@@ -1366,6 +1389,7 @@ const TOUR_STEPS = [
   {
     id:    'dashboards-section',
     title: 'Your dashboards',
+    skipIfHidden: true,
     desc:  "Live views of your firm's data from Carta. Open one for the details.",
   },
   {
@@ -1389,8 +1413,9 @@ const TOUR_STEPS = [
 ];
 
 let _tourIdx = 0;
-// The steps this tour walks and counts, fixed when it opens: a section that appears later
-// (What's new after a slow get_current_user) is not part of it, so the counter never changes.
+// The steps this tour walks and counts, taken when it opens. A section that appears later
+// (What's new after a slow get_current_user) does not join it; one that hides mid-walk (the
+// dashboards section once every card is empty) leaves it, through tourSectionHidden.
 let _tourSteps = [];
 // Element that had focus when the tour opened, so focus can be handed back on
 // exit. The tour currently auto-starts, so this is usually <body>.
@@ -1428,6 +1453,14 @@ function _tourIsOpen() {
 // Where the current step sits among the steps this tour shows (-1 when it is skipped).
 function _tourPos() {
   return _tourSteps.indexOf(TOUR_STEPS[_tourIdx]);
+}
+
+// A skippable section has hidden: drop its step from the walk and the counter, and move on
+// if the tour is showing it now.
+function tourSectionHidden(id) {
+  if (!_tourIsOpen()) return;
+  _tourSteps = _tourSteps.filter(step => step.id !== id);
+  if (TOUR_STEPS[_tourIdx].id === id) _tourPaint();
 }
 
 function _tourShownSteps() {

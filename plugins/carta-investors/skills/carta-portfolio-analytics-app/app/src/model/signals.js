@@ -21,6 +21,14 @@ export const BUILTIN_SIGNALS = [
   { id: "revenue-declining", tag: "Revenue declining" },
 ];
 
+/** A saved view's signal ids, minus any signal deleted since it was saved — a
+ *  stale id would match no company and empty the page. `rules` are the firm's
+ *  custom rules. Returns a Set. */
+export function knownSignals(ids, rules) {
+  const known = new Set([...BUILTIN_SIGNALS.map((s) => `builtin:${s.id}`), ...(rules || []).map((r) => r.id)]);
+  return new Set((ids || []).filter((id) => known.has(id)));
+}
+
 /** Built-in signals firing for one company: [{ tag, tone, detail, ruleId }].
  *  Only rule kept: sustained revenue decline (≥ 2 quarters down). Everything else
  *  is left to user-defined custom rules (model/rules.js). */

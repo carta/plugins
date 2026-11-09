@@ -17,7 +17,7 @@ import { editTarget, addTarget, stageEdit, canEditCompany } from "../model/pendi
 import { currencyActive, DEFAULT_CURRENCY } from "../model/currency.js";
 import { useCanPublish } from "../state/usePublish.js";
 import { customSignalsForCompany, OPS } from "../model/rules.js";
-import { signalsForCompany, BUILTIN_SIGNALS } from "../model/signals.js";
+import { signalsForCompany, BUILTIN_SIGNALS, knownSignals } from "../model/signals.js";
 import { availablePositionMetrics, positionMetricOptions, positionMetricOf } from "../model/position.js";
 import { cellFormat, formatSummary, isGrowthBasis, isRowScope, statsOf, SCALES, RULE_COLORS } from "../model/cellFormat.js";
 import { allTags, tagId, tagsFor, companyMatchesTags, hasCartaTags } from "../model/tags.js";
@@ -36,7 +36,13 @@ import { groupRows, useRowWindow } from "../ui/rowWindow.js";
 
 const EMPTY_RULES = [];
 const NEG = "var(--ink-color-global-feedback-negative-strong)";
-const PIVOT_VIEW_HINT = "A view saves your KPI selection and order, fund, companies, tags, and timeline window.";
+const PIVOT_VIEW_HINT = "A view saves your KPI selection and order, fund, companies, tags, favorites, signals, Configure options and conditional formatting.";
+const NO_FORMATS = {};
+// Same conditional formatting, ignoring key order — formats are edited one metric at a time.
+const formatsEq = (a, b) => {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => k in b && JSON.stringify(a[k]) === JSON.stringify(b[k]));
+};
 const POS = "var(--ink-color-global-feedback-positive-strong)";
 // Sticky left-column widths — the KPI column's sticky offset must equal the
 // company column's width, so both read from these constants (no drift).
@@ -180,6 +186,9 @@ export default function PivotDashboard({ data, dashboard }) {
   // ---- saved views (a named snapshot of the filter config) ----
   const views = dashboard?.doc?.views || [];
   const [viewId, setViewId] = useState(null);       // null = unsaved / custom filters
+  // The open view's conditional formatting; null on Default, which uses the firm's.
+  const [viewFormats, setViewFormats] = useState(null);
+  const formats = viewFormats || dashDoc?.cellFormats || NO_FORMATS;
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState("");
   // Manual filter edits keep the saved view selected; `dirty` below flags the drift.
@@ -204,6 +213,12 @@ export default function PivotDashboard({ data, dashboard }) {
     });
   };
   const onWindow = (v) => { trackClick("PortfolioAnalytics.Pivot.SetWindow"); setWindow(v); };
+  const viewSignals = (v) => knownSignals(v.signals, dashDoc?.rules);
+  // Conditional formatting belongs to the view. Default (no view) keeps the firm's
+  // own formatting, saved as you edit it; a view saved before formatting was part
+  // of views opens with that same firm formatting.
+  const firmFormats = dashDoc?.cellFormats || NO_FORMATS;
+  const viewFormatsOf = (v) => v.cellFormats || firmFormats;
   const applyView = (id) => {
     const v = views.find((x) => x.id === id);
     if (!v) {
@@ -218,6 +233,12 @@ export default function PivotDashboard({ data, dashboard }) {
       setQOnly(true);
       setDateOrder("desc");
       setSelPos(new Set());
+      setFavOnly(false);
+      setShowFc(false);
+      setFullFig(false);
+      setGrowthMode(false);
+      setGrowthBasis("qoq");
+      setViewFormats(null);
       setViewId(null);
       return;
     }
@@ -232,9 +253,14 @@ export default function PivotDashboard({ data, dashboard }) {
     setSelCompanies(new Set(v.companyIds && v.companyIds.length ? v.companyIds : allCompanyIds));
     // views saved before tags existed have no `tags` -> no tag filter
     setSelTags(new Set(v.tags || []));
-    // a view never saves a signal selection, so switching to one always clears it —
-    // otherwise a signal filter from before the switch keeps silently narrowing rows
-    setSelSignals(new Set());
+    // A view saved before these options existed opens with each at its default.
+    setSelSignals(viewSignals(v));
+    setFavOnly(!!v.favOnly);
+    setShowFc(!!v.showFc);
+    setFullFig(!!v.fullFig);
+    setGrowthMode(!!v.growthMode);
+    setGrowthBasis(v.growthBasis === "yoy" ? "yoy" : "qoq");
+    setViewFormats(viewFormatsOf(v));
     setWindow(v.window ?? 8);
     setQOnly(v.qOnly !== false);
     // views saved before this option have no dateOrder -> keep the default newest-first
@@ -250,10 +276,12 @@ export default function PivotDashboard({ data, dashboard }) {
     metricOrder: [...metricOrder], posKeys: [...selPos], fund,
     companyIds: allCompanyIds.length && allCompanyIds.every((id) => selCompanies.has(id)) ? [] : [...selCompanies],
     tags: [...selTags], window, qOnly, dateOrder,
+    signals: [...selSignals], favOnly, showFc, fullFig, growthMode, growthBasis,
+    cellFormats: formats,
   });
   // A view is "dirty" once the live state drifts from its saved snapshot. Derived
   // by comparison — not by tracking setter calls — so a Filters Apply with no real
-  // change stays clean, and a signal pick (never part of a view) can't dirty one.
+  // change stays clean.
   // Effective values follow applyView's defaulting rules, so a legacy view with
   // absent fields or the [] = "all" canonicalization compares clean.
   const setEq = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
@@ -273,13 +301,22 @@ export default function PivotDashboard({ data, dashboard }) {
       setEq(new Set(v.tags || []), selTags) &&
       (v.window ?? 8) === window &&
       (v.qOnly !== false) === qOnly &&
-      (v.dateOrder === "asc" ? "asc" : "desc") === dateOrder
+      (v.dateOrder === "asc" ? "asc" : "desc") === dateOrder &&
+      setEq(viewSignals(v), selSignals) &&
+      !!v.favOnly === favOnly &&
+      !!v.showFc === showFc &&
+      !!v.fullFig === fullFig &&
+      !!v.growthMode === growthMode &&
+      (v.growthBasis === "yoy" ? "yoy" : "qoq") === growthBasis &&
+      formatsEq(viewFormatsOf(v), formats)
     );
-  }, [views, viewId, selMetrics, metricOrder, selPos, fund, selCompanies, selTags, window, qOnly, dateOrder, allMetricKeys, allCompanyIds, metrics]);
+  }, [views, viewId, selMetrics, metricOrder, selPos, fund, selCompanies, selTags, window, qOnly, dateOrder, allMetricKeys, allCompanyIds, metrics,
+      selSignals, favOnly, showFc, fullFig, growthMode, growthBasis, dashDoc, formats, firmFormats]);
   const saveView = () => {
     const nm = newName.trim(); if (!nm) return;
     const id = newViewId();
     dashboard.update((doc) => { doc.views = [...(doc.views || []), { id, name: nm, ...snapshot() }]; return doc; });
+    setViewFormats(formats);
     setViewId(id); setSaving(false); setNewName("");
   };
   const updateView = () => {
@@ -289,6 +326,7 @@ export default function PivotDashboard({ data, dashboard }) {
   const deleteView = () => {
     if (!viewId) return;
     dashboard.update((doc) => { doc.views = (doc.views || []).filter((v) => v.id !== viewId); return doc; });
+    setViewFormats(null);
     setViewId(null);
   };
   const planTagViews = (g) => planViewsPerTag({ cat: g.cat, values: g.values, base: snapshot(), existing: views, makeId: newViewId });
@@ -298,10 +336,14 @@ export default function PivotDashboard({ data, dashboard }) {
   };
 
   // ---- conditional formatting (color scales / color-code rules per metric) ----
-  const formats = dashboard?.doc?.cellFormats || {};
+  // In a view, an edit changes the view's formatting (flagged • until Update);
+  // on Default it saves straight to the firm's formatting.
   const [showFmt, setShowFmt] = useState(false);
-  const saveFormat = (key, fmt) => dashboard.update((doc) => { doc.cellFormats = { ...(doc.cellFormats || {}), [key]: fmt }; return doc; });
-  const removeFormat = (key) => dashboard.update((doc) => { const c = { ...(doc.cellFormats || {}) }; delete c[key]; doc.cellFormats = c; return doc; });
+  const editFormats = (fn) => (viewFormats
+    ? setViewFormats(fn)
+    : dashboard.update((doc) => { doc.cellFormats = fn(doc.cellFormats || {}); return doc; }));
+  const saveFormat = (key, fmt) => editFormats((c) => ({ ...c, [key]: fmt }));
+  const removeFormat = (key) => editFormats((c) => { const n = { ...c }; delete n[key]; return n; });
 
   // Built-in signals lead, then custom rules.
   // A stable fallback, not `[]` — a fresh array each render would defeat

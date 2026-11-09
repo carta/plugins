@@ -1,23 +1,74 @@
-// ── Segment dashboards: LP summary card ──
-// Depends on core.js (carta-home.app.js): _mcp(), parseDWH(), fmtCurrency(), escHtml().
-// Every firm gets the SOI and Fund performance cards; a Fund Admin firm adds LP summary,
-// so the grid holds 2 or 3. The profile (fund admin) and the firm arrive separately;
-// the LP rows load once both are in.
-const _segment = { fundAdmin: false, firmId: null };
+// ── Segment dashboards: which cards show, and the LP summary card ──
+// Depends on core.js (carta-home.app.js): _mcp(), dwhRows(), fmtCurrency(), escHtml(), trackHome().
+// SOI and Fund performance are built for every firm, LP summary for Fund Admin firms. A card
+// whose query answers with no rows is hidden instead of showing a blank, and the grid sizes
+// itself to the cards left; with none left the whole section goes. A card whose query fails
+// stays, showing its error line.
+const _segment = { fundAdmin: false, firmId: null, profileDone: false };
 
 const LP_CARD_ROWS = 3;
 
-function dashboardLayout(seg) {
-  const lp = seg.fundAdmin === true;
-  return { lp, count: lp ? 3 : 2 };
+// One entry per dashboard card: its element id and the name its empty event carries.
+const DASHBOARD_CARDS = {
+  soi:  { id: "soi-card",  event: "SOI" },
+  perf: { id: "perf-card", event: "Perf" },
+  lp:   { id: "lp-card",   event: "LP" },
+};
+// "loading" until the card's query settles, then "data", "empty" or "error".
+const _cardState = Object.fromEntries(Object.keys(DASHBOARD_CARDS).map(key => [key, "loading"]));
+let _cardsReported = false;
+
+// The cards this firm gets: LP summary only for a Fund Admin firm.
+function firmCards(seg) {
+  return Object.keys(DASHBOARD_CARDS).filter(key => key !== "lp" || seg.fundAdmin === true);
+}
+
+function dashboardLayout(seg, state) {
+  const shown = firmCards(seg).filter(key => state[key] !== "empty");
+  return { shown, count: shown.length };
 }
 
 function layoutDashboards() {
   const grid = document.getElementById("dashboard-grid");
   if (!grid) return;
-  const layout = dashboardLayout(_segment);
+  const layout = dashboardLayout(_segment, _cardState);
   grid.dataset.cards = String(layout.count);
-  document.getElementById("lp-card").hidden = !layout.lp;
+  Object.entries(DASHBOARD_CARDS).forEach(([key, card]) => {
+    const el = document.getElementById(card.id);
+    if (el) el.hidden = !layout.shown.includes(key);
+  });
+  const section = document.getElementById("dashboards-section");
+  if (section) section.hidden = layout.count === 0;
+  // The tour is not loaded in every test page.
+  if (section?.hidden && typeof tourSectionHidden === "function") tourSectionHidden("dashboards-section");
+  reportDashboardCards();
+}
+
+// A card's query has settled. Empty hides the card; data keeps it.
+function settleDashboardCard(key, hasData) {
+  if (!(key in _cardState) || _cardState[key] !== "loading") return;
+  _cardState[key] = hasData ? "data" : "empty";
+  if (!hasData) trackHome("render", `CartaHome.${DASHBOARD_CARDS[key].event}.Empty`);
+  layoutDashboards();
+}
+
+// A card's query failed. The card stays with its error line, so it counts as shown.
+function failDashboardCard(key) {
+  if (!(key in _cardState) || _cardState[key] !== "loading") return;
+  _cardState[key] = "error";
+  trackHome("render", `CartaHome.${DASHBOARD_CARDS[key].event}.LoadError`);
+  layoutDashboards();
+}
+
+// Once every card this firm gets has settled (data, empty or error), record which ones it
+// saw (e.g. "soi,perf" or "none"): every card but the empty ones, so a card showing its error
+// line counts. Sent as a click because a render event can't carry a value.
+function reportDashboardCards() {
+  if (_cardsReported || !_segment.profileDone) return;
+  if (firmCards(_segment).some(key => _cardState[key] === "loading")) return;
+  _cardsReported = true;
+  const shown = dashboardLayout(_segment, _cardState).shown;
+  trackHome("click", "CartaHome.View.Cards", { value: shown.length ? shown.join(",") : "none" });
 }
 
 // From fetchUserEnrichment, once get_current_user answers.
@@ -25,6 +76,13 @@ function segmentSetFundAdmin(flag) {
   _segment.fundAdmin = flag === true;
   layoutDashboards();
   if (_segment.fundAdmin && _segment.firmId) fetchLpSummary();
+}
+
+// From fetchUserEnrichment, once get_current_user has answered or failed, so whether the
+// firm gets an LP card is known. Never from the 5s backstop: a slow profile can still add it.
+function segmentProfileDone() {
+  _segment.profileDone = true;
+  reportDashboardCards();
 }
 
 // From fetchLiveData, once the firm is resolved and pinned with set_context.
@@ -66,7 +124,6 @@ function lpTvpi(r) {
 function renderLpRows(rows) {
   const el = document.getElementById("lp-rows");
   if (!el) return;
-  if (!rows.length) { el.innerHTML = `<div class="loading-row">No LPs yet</div>`; return; }
   el.innerHTML = rows.map(r => {
     return `<div class="tbl-row">
       <span class="tbl-col-name"><span class="lp-name" title="${escHtml(r.FAMILY_NAME)}">${escHtml(r.FAMILY_NAME || "LP")}</span></span>
@@ -83,10 +140,13 @@ async function fetchLpSummary() {
   try {
     const res = await _mcp("read_tool", { name: "dwh__execute__query", arguments: { sql: lpSummarySql(firmId), format: "ndjson" } });
     if (res.isError) throw new Error("LP summary query failed");
-    renderLpRows(parseDWH(res));
+    const rows = dwhRows(res, "FAMILY_ID", "FAMILY_NAME");
+    if (rows.length) renderLpRows(rows);
+    settleDashboardCard("lp", rows.length > 0);
   } catch (e) {
     console.error("[carta-home] LP summary failed", e);
     const el = document.getElementById("lp-rows");
     if (el) el.innerHTML = `<div class="loading-row">Can't load your LPs right now.</div>`;
+    failDashboardCard("lp");
   }
 }

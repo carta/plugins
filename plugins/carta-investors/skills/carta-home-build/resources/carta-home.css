@@ -179,6 +179,8 @@
       --dash-min-height: 286px;
       --dash-chart-height: 100px;
     }
+    /* One card keeps the width it has beside a second, instead of stretching the row. */
+    .card-grid[data-cards="1"] { grid-template-columns: minmax(0, min(100%, 560px)); }
     .card-grid[data-cards="3"] { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
     .card-grid[data-cards="4"] { --dash-min-height: 190px; --dash-chart-height: 64px; }
     /* Three across leaves no room for a third column, so SOI drops Gain/Loss. */
@@ -2042,6 +2044,7 @@
 
 /* ── Segment dashboards: LP summary card ── */
 .dash-card[hidden] { display: none; }
+#dashboards-section[hidden] { display: none; }
 .tbl-col-lp { width: 128px; white-space: nowrap; flex-shrink: 0; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); }
 .tbl-row.tbl-header .tbl-col-lp { font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--ink-color-global-text-subtle); }
 .lp-dot { margin: 0 4px; color: var(--ink-color-global-border-default); }
