@@ -501,7 +501,7 @@ async function fetchRealFunds(firmId) {
     const res = await _mcp("read_tool", {
       name: "dwh__execute__query",
       arguments: {
-        sql: `SELECT FUND_UUID, COALESCE(IS_ADMINISTERED_BY_CARTA, FALSE) AS IS_ADMINISTERED
+        sql: `SELECT FUND_UUID, COALESCE(IS_ADMINISTERED_BY_CARTA, FALSE) AS IS_ADMINISTERED, ENTITY_TYPE_NAME
               FROM FUND_ADMIN.FUNDS
               WHERE FIRM_ID = '${firmId}'
                 AND (VINTAGE_DATE IS NOT NULL OR FUND_SIZE IS NOT NULL)`,
@@ -519,7 +519,9 @@ async function fetchRealFunds(firmId) {
 // Every FUND_UUID on the SOI card or in the lookup counts once toward the total. For a fund
 // the lookup returns, its IS_ADMINISTERED flag decides; only a card fund the lookup doesn't
 // return counts as administered by default. Null when Carta administers all of them, none of
-// them, or the lookup failed: no note at all.
+// them, or the lookup failed: no note at all. The note says "SPVs" only when the lookup
+// returns every counted entity and each is an SPV; any fund, or an entity the lookup
+// doesn't type, keeps "funds".
 function soiScopeNote(funds, cardFundUuids) {
   if (!funds) return null;
   const isAdministered = f => f.IS_ADMINISTERED === true || String(f.IS_ADMINISTERED).toLowerCase() === "true";
@@ -527,7 +529,9 @@ function soiScopeNote(funds, cardFundUuids) {
   const all = new Set([...(cardFundUuids || []).filter(Boolean), ...flag.keys()]);
   const covered = [...all].filter(u => flag.get(u) ?? true).length;
   if (!covered || covered >= all.size) return null;
-  return `Carta administers ${covered} of your ${all.size} funds`;
+  const types = new Map(funds.filter(f => f.FUND_UUID).map(f => [f.FUND_UUID, String(f.ENTITY_TYPE_NAME || "").toLowerCase()]));
+  const noun = [...all].every(u => types.get(u) === "spv") ? "SPVs" : "funds";
+  return `Carta administers ${covered} of your ${all.size} ${noun}`;
 }
 
 function renderSOIScope(note) {

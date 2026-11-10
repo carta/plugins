@@ -139,8 +139,7 @@ on with its own browser tool. The prompt contains only that link, which comes fr
 ## Credentials
 
 The plugin does not read tokens, API keys or other credentials from your machine. Carta MCP calls go
-through the Carta connector, which you authorise in Claude. The fund-construction companion page signs
-you in through Carta's own sign-in page; its server keeps the OAuth tokens, never your machine.
+through the Carta connector, which you authorise in Claude.
 Elsewhere, "token" in the plugin's files means design tokens (colors and spacing) or parser tokens.
 
 ## Data & Privacy
