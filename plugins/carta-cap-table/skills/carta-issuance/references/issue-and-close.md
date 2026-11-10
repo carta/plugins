@@ -19,14 +19,14 @@ real Carta prefix ([engine.md Step
 Phase 1.5 has already saved and validated these rows, so this is a **read-only** confirmation
 before the irreversible `issue_securities` call, not another save.
 
-Print the review as markdown, then confirm with one `AskUserQuestion` —
-[chat-surface.md §2–3](chat-surface.md#2-review--printed-markdown-non-blocking). **That order
-is mandatory and overrides any host rule about prose between tool calls**; the review is the
-gate, not narration of one. The full always/conditional/optional column spec, the
+Confirm with one `AskUserQuestion` whose first option carries the review as markdown in its
+`preview` — [chat-surface.md §2–3](chat-surface.md#2-review--in-the-confirms-preview). Never
+print the review as prose before the confirm: the host shows that prose only as a one-line
+summary. The full always/conditional/optional column spec, the
 default-explanation text, the confirm prompt, and the compressed format for identical-term
 batches are in [references/chat-review.md](chat-review.md).
 
-> **Tool pre-load:** `call_tool` must already be loaded (Phase 0 batched it) before you print
+> **Tool pre-load:** `call_tool` must already be loaded (Phase 0 batched it) before you show
 > the review. Do not `ToolSearch` here — it adds serial latency after the user has confirmed. If
 > for any reason it isn't loaded, load it now, *before* rendering the review.
 
@@ -42,7 +42,7 @@ confirming is entitled to know which, so carry the matching sentence into the co
 | PIU | *"Confirming will send these profits interest units to the signatory for signature."* |
 
 The artifact carries this in its own Confirm step; on the chat surface it is yours to say, in
-the same turn as the review.
+the review's preview.
 
 
 ---

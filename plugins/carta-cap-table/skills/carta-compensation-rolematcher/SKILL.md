@@ -4,7 +4,8 @@ description: >-
   Match a job title to Carta's standard job area, level and track. Classifies a job
   title or description into the CTC taxonomy (job area, focus, level, track). Use when
   the user wants to know how a role is categorized or mapped to the taxonomy structure —
-  not to fetch salary, equity, or benchmark numbers. Do NOT use when the user is asking
+  not to fetch salary, equity, or benchmark numbers. Also use for a job level or role
+  question with no title given, such as "what level is this?": the skill asks for it. Do NOT use when the user is asking
   for "market rates", "benchmark data", "compensation ranges", "what does X pay", or
   "show me benchmarks" — use carta-compensation-benchmarks for that. Do NOT use when the
   user is asking how their own company compares to market — e.g. "our internal pay bands
@@ -20,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.10</carta-plugin>
 
 # CTC RoleMatcher
 
@@ -35,7 +36,7 @@ Map any job title or description to the Carta Total Compensation benchmark taxon
 
 ## Gates
 
-**Required inputs**: a job title or job description, or a list of them. This skill takes no company and makes no Carta call.
+**Required inputs**: a job title or job description, or a list of them. This skill takes no company and makes no Carta call. When the user gives none (for example "what level is this?"), call `AskUserQuestion` for the job title or job description before you classify.
 
 **AI computation**: Yes. The classification is your judgment against the taxonomy below. Always give the confidence and the reasoning.
 

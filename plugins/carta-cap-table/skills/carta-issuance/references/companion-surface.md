@@ -149,9 +149,10 @@ then [§ 10](#10-follow-through). `failed`: say the page shows why. `running`: s
 still issuing. Null: if `status` is `issued`, `partially_issued` or `pending_board_approval`,
 close on it with § 10; otherwise say Issue is not pressed yet.
 
-**Elsewhere**, print the review, then one `AskUserQuestion` naming the latest revision: "Issue
-revision 7?", with `issue_summary`'s agreement, signatories and holders to email from
-`cap_table:get:draft_set_companion`. Once confirmed, read it again; if its status is `issued`,
+**Elsewhere**, ask one `AskUserQuestion` naming the latest revision: "Issue revision 7?". Its
+Issue option's `preview` holds the review, with `issue_summary`'s agreement, signatories and
+holders to email from `cap_table:get:draft_set_companion`. Never print the review as prose
+before the question: the host shows that prose only as a one-line summary. Once confirmed, read it again; if its status is `issued`,
 `partially_issued` or `pending_board_approval`, close on it. Otherwise call
 `cap_table:mutate:issue_securities` with `corporation_id`, `security_type` and `draft_set_id`,
 and no `drafts`.

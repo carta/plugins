@@ -45,7 +45,8 @@ The user asked to save and stop, rather than to review and issue.
    (escape hatch)](engine.md#save-as-draft-escape-hatch) — **no `validate_drafts`**, by design.
 4. Record the returned `draft_set_id` + each row's `draft_pk` into your tracked state.
 5. Report it. All rows saved → the *Saved as draft*
-   [closing](issue-and-close.md#closing); any row errored →
+   [closing](issue-and-close.md#closing), with its Drafts UI link from
+   [engine.md § Save as draft](engine.md#save-as-draft-escape-hatch); any row errored →
    [Error recovery](mutate-recovery.md#error-recovery).
 
 ## Branch B — save + validate, before the review

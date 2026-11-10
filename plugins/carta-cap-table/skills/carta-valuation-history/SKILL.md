@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.10</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -173,7 +173,8 @@ effective/expiration dates, before showing the history table.
 
 **Currency**: format `price` with **the row's own `currency`**, trimming trailing zeros. Never
 hardcode a `$`, and never default to USD — a GBP valuation shown as dollars is a reporting
-error, not a cosmetic one.
+error, not a cosmetic one. Put the ISO code before every amount (`USD 23.71`), in the table and
+in the prose, also when all rows are in USD. Do not use a currency symbol such as `$` or `£`.
 
 | Effective | Expires | FMV/Share | Type | Source | Share Class | Status |
 |-----------|---------|-----------|------|--------|-------------|--------|

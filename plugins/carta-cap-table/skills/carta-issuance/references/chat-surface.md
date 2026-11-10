@@ -11,7 +11,7 @@ blocked on a tool, a CLI or a connection.
 
 **Interactive-wait budget: 2**, plus [the source question](../SKILL.md#ask-where-the-details-are)
 when the request stated nothing to issue. One batched collect (§1), one confirm (§3); the review (§2) is
-printed markdown and does not block. **A single-recipient issuance that spends more than two
+in the confirm and adds no wait. **A single-recipient issuance that spends more than two
 blocking waits has a bug in it** — most often a question about a value that was computable
 (§4), or one question per field where one batch would have done.
 
@@ -40,6 +40,10 @@ Ask **once**, for everything still unknown after §4's defaults are applied. Sev
 go in **one** `AskUserQuestion` call — one wait, not one per field. Before a field goes in the
 batch, check it against §4; if it is there, it is already answered.
 
+**A `0` or blank exercise price on any type but ZEPO is not an answer.** Do not save it, and
+do not put the FMV in its place. Say that only a ZEPO grant takes $0, ask for the price in
+prose, and end the turn.
+
 **Never ask who the recipients are.** ([The source question](../SKILL.md#ask-where-the-details-are)
 asks where the details are, runs before this phase, and is not part of this batch.) A prompt that named nobody is one recipient whose name
 you ask for *inside* the batch, not a gating question ahead of it, and never a reason to invent
@@ -67,30 +71,31 @@ instead of taking its default — a default is right for a prompt that said noth
 a file that said something specific. Full obligations:
 [issuance-import/SKILL.md](../issuance-import/SKILL.md).
 
-## 2. Review — printed markdown, non-blocking
+## 2. Review — in the confirm's preview
 
-Print the resolved, **already-saved-and-validated** rows as markdown. It is output, not a tool
-call, and §3 follows in the same turn.
+The review is the resolved, **already-saved-and-validated** rows as markdown. Put it in the
+`preview` of the confirm's first option (`"Issue N <type> now"`), in the §3 call. If the
+confirm has no `preview` field, put it in the question text.
 
-**The review is printed *before* the confirm tool call, always** — an explicit exception to any
-host rule about prose between tool calls, because the review is not narration of the gate, it
-**is** the gate. A confirm that reaches the user first means they approved an irreversible
-issuance without seeing the terms, and printing the review afterwards cannot repair an answer
-already given. If you are about to call `AskUserQuestion` and the review is not on screen,
-print it first. Print it as your own message text, never inside the question or an option:
-the confirm stays short and names only the choice.
+**Never print the review as prose before the confirm.** The host shows prose between tool calls
+only as a one-line summary. A confirm that reaches the user without the terms means they
+approved an irreversible issuance blind. Tool input reaches the user word for word, so the
+preview holds the whole review: the table, the one-line default explanations,
+the draft set the rows were saved into, and the type's confirm sentence
+([issue-and-close.md](issue-and-close.md#say-what-confirming-actually-does--it-differs-by-type)).
+The question stays short and names only the choice.
 
-Columns, conditional and optional fields, the per-value default explanations, the `ZEPO` and
-pending-board-approval renderings, and the compressed format for identical-term batches are in
-[chat-review.md](chat-review.md). **Render every always-column with its `(default)` /
+**Read [chat-review.md](chat-review.md) before you write the preview, on every run**, and use
+its labels word for word. It holds the columns, conditional and optional fields, the per-value
+default explanations, the `ZEPO` and pending-board-approval renderings, and the compressed
+format for identical-term batches. **Render every always-column with its `(default)` /
 `(autofill — …)` / `(from existing record)` tag** — the review is the single override point for
 everything the skill chose, so an undisplayed default is one the user never got to reject.
 
-State the draft set the rows were saved into, then hand off to §3.
-
 ## 3. Confirm — exactly one `AskUserQuestion`
 
-A single blocking choice over a fixed option set, with nothing free-text to collect.
+A single blocking choice over a fixed option set, with nothing free-text to collect. The first
+option carries the §2 review in its `preview`.
 
 | Option | Where it goes |
 |---|---|

@@ -1,7 +1,7 @@
 # Chat review content
 
-The content spec for the chat surface's review — printed as markdown, then confirmed with one
-`AskUserQuestion` ([chat-surface.md §2–3](chat-surface.md#2-review--printed-markdown-non-blocking)).
+The content spec for the chat surface's review — markdown in the `preview` of the confirm's
+first option, in one `AskUserQuestion` ([chat-surface.md §2–3](chat-surface.md#2-review--in-the-confirms-preview)).
 Referenced from [issue-and-close.md § Phase 2](issue-and-close.md#phase-2--the-review-gate).
 The artifact renders its own review and does not use this file.
 
@@ -15,7 +15,8 @@ screen the user can go back to, so it keeps the **full** list below.
 
 **Use each name below as its label, word for word.** Render one column per name, or a
 two-column `Field | Value` table with one row per name. A tag goes in the value cell, never in
-a third column.
+a third column. `Type` is the stakeholder type (`INDIVIDUAL` or `ORGANIZATION`), in its own
+cell, never folded into `Stakeholder`.
 
 - **Certificate — always (13):** Stakeholder · Type · Email · Relationship · Share class
   (prefix) · Quantity · Price/share · Board approval · Issue date · Rule 144 date · Build

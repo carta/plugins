@@ -15,7 +15,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.10</carta-plugin>
 
 # Transform Configuration
 
@@ -70,7 +70,7 @@ Grouping heuristics (apply in order; unmatched → "Other"):
 
 ## Customization Checkpoint
 
-One `AskUserQuestion` covering columns, filters, sort, and format. Content adapts based on what the original prompt already specified. Always ask it before the output preview or an Excel export, also when the prompt asks to download or export the report. Ask it with the `AskUserQuestion` tool, not as a plain-text question.
+One `AskUserQuestion` covering columns, filters, sort, and format. Content adapts based on what the original prompt already specified. Always ask it before the output preview or an Excel export, also when the prompt asks to download or export the report. Ask it with the `AskUserQuestion` tool, not as a plain-text question: never end the turn with a question in text, such as "Reply **Export to Excel**". The row count, the rows with no values and the data warnings go in the question, not in text before it: the host shows text between tool calls only as a one-line summary.
 
 **When the prompt specified details:**
 
@@ -234,7 +234,7 @@ Always check `stats` after running:
 - `skipped_formulas` non-empty → tell the user which formulas couldn't run (usually the source column wasn't included in the selection)
 - `warnings.unknown_sheets` present → a requested sheet is not in this report; name it and list `available`
 - `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty → say which sheet's rows are missing from the merged tab (wording in the `carta-reporting` Error Handling table)
-- `warnings.data_quality` present → tell the user with the wording in step 4d of `carta-reporting`, and handle "show data warnings" the same way (rerun with `sheets` naming every sheet in `warnings.data_quality`)
+- `warnings.data_quality` present → put the sentence in the `warnings.data_quality` row of the `carta-reporting` Error Handling table in the Customization Checkpoint question, and add a `Show data warnings` option. When the user picks it or says "show data warnings", rerun with `sheets` naming every sheet in `warnings.data_quality`. Do not use the checkpoint text of `carta-reporting` step 4d: it is for ARTIFACT mode only
 - `empty_rows_dropped` > 0 → say so, with the wording in the `empty_rows_dropped` row of the `carta-reporting` Error Handling table
 - `filtered_row_count` = 0 → no rows matched; offer to relax the filter or change `as_of_date`
 - `displayed_row_count` < `kept_row_count` (section and `_t` rows not counted) → preview is active; re-run without `preview` for full results

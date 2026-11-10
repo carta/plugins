@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.10</carta-plugin>
 
 # Manage securities
 
@@ -73,7 +73,8 @@ is an `option_grant`. A prefix is only a first guess, not a type the user named:
 bootstrap again with that type. For a prefix with no other types listed (`CN-`, `SAFE-`, `RSU-`,
 `PIU-`), or when the user named the type, quote the `not_found` and stop.
 When neither a type word nor one of these prefixes gives the type (for example `CC-5`, or only a
-holder), ask once with `AskUserQuestion`. Never guess.
+holder), ask once with `AskUserQuestion`. Never guess. For "units", offer `certificate` (an LLC's
+common or preferred units), `piu`, `cbu` and `rsu`.
 
 ## Gates
 
@@ -137,7 +138,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    - `sections.securities`: never offer a row with `selectable: false`. When the user named a
      person and 2+ rows are selectable, ask which ones in one `AskUserQuestion`.
 3. **Collect the inputs** for the action. Use the user's words; ask only for what is missing,
-   in one `AskUserQuestion` with up to 4 questions. Dates are `YYYY-MM-DD`.
+   in one `AskUserQuestion` with up to 4 questions. Dates are `YYYY-MM-DD`. Every preview also
+   takes `company` and `security_type`, the same as the bootstrap that found the security.
    - **Edit:** `securities` (a list of ids; the other previews take `security`). See
      [references/change-flow.md](references/change-flow.md) for fields, reason,
      note, Rule 144 and the Change page. The field formats are in
@@ -156,14 +158,17 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    `status: blocked` (no `plan_id`): quote each failed check, ask for the fix, ask no approval.
 5. **Show the preview.** With `next_step` and the browser tool it names, follow it, then keep
    the chat to one line: the count, the fields, the reason, any problem and the full text of a
-   legend that changes. Else show a table in chat (security · field · before → after, or the
-   tranches for a partial cancel). Post every `companion_url` as
-   `[See it in Carta](<companion_url>)`, never as a bare address.
-6. **List the side effects.** Show every `side_effects` label before the approval question.
+   legend that changes. Else show a table with the header `| Security | Field | Before | After |`
+   (for a partial cancel, the tranches). Put the table in the `preview` of the **Apply** option
+   in step 7, never in the question and never as text before the question: the host shows text
+   between tool calls only as a one-line summary, so the user never sees a table there. When
+   step 7 shows the approval card, put the table in your last message, after `view_remote`.
+   Post every `companion_url` as `[See it in Carta](<companion_url>)`, never as a bare address.
+6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
    Name each one that cannot be undone, such as an email to a holder.
-7. **Approval.** Ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** and
-   **"Not now"**. When `how_to_reply` names an approval card, show that card with `view_remote`
-   instead. On "Not now", apply nothing and say so.
+7. **Approval.** Ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** (first,
+   with the step 5 table in its `preview`) and **"Not now"**. When `how_to_reply` names an
+   approval card, show that card with `view_remote` instead. On "Not now", apply nothing and say so.
 8. **Apply.** Call the named `cap_table__mutate__apply_plan` tool with `company`, the latest
    `plan_id` and its `summary` unchanged. If `ToolSearch` found no apply tool, apply nothing:
    *"Carta's apply tool isn't available in this chat, so nothing was changed. Reconnect Carta
@@ -189,7 +194,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 One approval applies one change: one action, one reason, one security type, and at most
 `limits.max_securities` securities for an edit. Cancels, partial cancels, reverse cancels and undone
 terminations take one security each. Run each change as its own pass through steps 1 to 8, and say the split
-first: *"These are two changes. I'll apply them one at a time, starting with CS-1."* Each pass
+first, with the type of each security: *"These are two changes, certificate CS-1 and option grant
+ES-12. I'll apply them one at a time, starting with CS-1."* Each pass
 opens its own page with its own bootstrap and sends that pass's `thread_id`, never an earlier
 pass's.
 

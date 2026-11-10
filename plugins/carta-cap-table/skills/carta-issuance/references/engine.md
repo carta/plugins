@@ -42,7 +42,8 @@ five bind on **this** path, because they govern building a surface and a payload
 1. **The field contract lives in [payload-reference.md](payload-reference.md).** Read it before
    constructing any payload. No invented keys.
 2. **Templates only — no custom payloads** for legends, vesting, acceleration, or exercise
-   periods: *"Custom \<thing\> isn't supported here. Save as draft and finish in the Drafts UI."*
+   periods: *"Custom \<thing\> isn't supported here. Set it up in the Drafts UI in the Carta
+   app."* Then stop. Do not save a draft for it unless the user asks for one.
 3. **No id sniffing.** Required values come from user input, the stakeholder roster this run
    resolved against, or a documented default — never scraped from another grant or certificate.
    If none of the three applies, ask via `AskUserQuestion`.
@@ -116,8 +117,9 @@ ask it before Step 1.
 Four steps, in order, **all before any user interaction and before gathering any input.** The
 surface is already selected ([SKILL.md](../SKILL.md#pick-the-surface)), and that selection is
 free; only Step 4's companion check changes it. These steps are the only round trips this preflight may spend: one `ToolSearch`, one
-`list_accounts` (plus at most three disambiguation probes), and one `issuance_init` that
-doubles as the account-level hard stop and as Phase 0.5's reference-data fetch.
+`list_accounts` (plus at most three disambiguation probes), one `issuance_init` that
+doubles as the account-level hard stop and as Phase 0.5's reference-data fetch, and one
+`get_current_user` for `BASE_URL`, in the same message as `issuance_init`.
 
 ### Step 1 — Load every tool in ONE ToolSearch call
 
@@ -201,7 +203,8 @@ there. `read_tool` and `call_tool` are the only surface
 `set_context`** — every command takes `corporation_id` as a direct param.
 
 **Record `BASE_URL` here**, from the session's `get_current_user` result — it returns `base_url`
-(e.g. `https://demo.carta.team`) alongside `environment`. Every Carta link this skill emits is
+(e.g. `https://demo.carta.team`) alongside `environment`. Call it on every run of this path,
+also when the environment check below needs nothing: every closing has a link. Every Carta link this skill emits is
 built from it, because a hardcoded host sends the user into a different environment than the one
 they just wrote to. Never derive it from the tool prefix. If it is genuinely absent, say the
 environment is unknown rather than assuming production.
@@ -824,7 +827,8 @@ Response `{draft_set_id, drafts:[{temp_id, draft_pk, status}]}` — no top-level
 (`save_drafts` skips it by design), **but each row's `status` still reflects its own save.**
 Check it:
 
-- **All success** → the *Saved as draft* [closing](issue-and-close.md#closing).
+- **All success** → the *Saved as draft* [closing](issue-and-close.md#closing). It always ends
+  with the link `[Drafts UI](<BASE_URL>/drafts/<security_type>/<CORP_ID>/draft/?draftSetPk=<draft_set_id>)`.
 - **Some errored** → surface verbatim per failing `draft_pk`, recover via
   [mutate-recovery.md](mutate-recovery.md#error-recovery), then re-call
   `save_drafts` (**not** `issue_securities`) with the same `draft_set_id` + each `draft_pk`.

@@ -17,9 +17,9 @@ when_to_use: >-
   Use when asked to show, pull, list or export many rows of one company's
   cap table: "show me the full cap table", "pull the current fully diluted
   cap table", "export the cap table to Excel", "list every shareholder with
-  5% or more", "make an Excel file of all our SAFEs", "all grants with
-  vesting and terminations", "build me a custom report", or "what reports
-  can I run".
+  5% or more", "show me convertible notes", "make an Excel file of all our
+  SAFEs", "all grants with vesting and terminations", "build me a custom
+  report", or "what reports can I run".
 model: sonnet
 allowed-tools:
   - ToolSearch
@@ -59,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.10</carta-plugin>
 
 # Custom Reports
 
@@ -86,8 +86,6 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - "Show me vesting schedules" (company-wide: see the vesting note in step 3)
 - "Show me preferred holders"
 - "What's the liquidation seniority stack?"
-- "Show me rights and preferences"
-- "How's our equity issuance looking?"
 - "What's our round history?"
 - "Custom report", "build me a custom report", "I need a custom report", "what reports are available"
 - "Export all option grants in 2024 that are > 50% vested, with their exercise prices and vesting schedules"
@@ -500,7 +498,7 @@ Run each script only in the one-line form shown below, as its own command: write
    The payload is baked into the page, so it needs no `capabilities`. To refresh a report
    already published this session, pass that artifact's `url` so it redeploys in place.
 
-   **Present a customization checkpoint after the full report renders (or fails), and after every later rebuild — never for the preview artifact:**
+   **Present a customization checkpoint after the full report renders (or fails), and after every later rebuild — never for the preview artifact.** This checkpoint is for ARTIFACT mode only. In MARKDOWN mode, the `AskUserQuestion` checkpoint of `carta-reporting-markdown` replaces it.
 
    Compute `{elapsed}` as the output of `date +%s` (run on its own, one line, no shell arithmetic) minus `_report_start_time`, rounded to the nearest whole second.
    Set `{environment}` to ` (Sandbox)` (the environment's name in parentheses) when `_carta_environment` is set and is not Production, otherwise to nothing.
@@ -524,7 +522,7 @@ Run each script only in the one-line form shown below, as its own command: write
    >
    > _(When the answer combined more than one report type, or used a formula, totals other than a `summary_table`, a date window, picked people, plans, securities or share classes, or data from outside the reports, write instead:)_ Or say **Save this as a custom report**: a custom report keeps one report's sheets, columns, filters, sort and totals by group, so I'll tell you what it would keep before I save anything.
 
-   When `warnings.data_quality` is non-empty, add one sentence with a clause for each sheet in it: "Carta flagged {N} securities with data warnings" ({N} is the "Data Warnings" count) and "{M} defective securities" ({M} is the "Defective Securities" count), then "Say **show data warnings** to see them." When the user says **show data warnings**, rerun `report_processor.py` with `sheets` naming every sheet in `warnings.data_quality`, keeping the sheets already in the report in `sheets`, and rebuild the report.
+   When `warnings.data_quality` is non-empty, add the sentence in the `warnings.data_quality` row of the Error Handling table, then "Say **show data warnings** to see them." When the user says **show data warnings**, rerun `report_processor.py` with `sheets` naming every sheet in `warnings.data_quality`, keeping the sheets already in the report in `sheets`, and rebuild the report.
 
    If the dataset is large (> 300 rows), append: "This report has {N} rows — you may want to filter before exporting." (For a preview: "The preview already has {N} rows.")
 
@@ -659,7 +657,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `unsupported_filters` non-empty | A `>`, `<`, `>=` or `<=` filter named a text column, which has no order, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't apply '[Column] [op] [value]' — '[Column]' is text, so these rows are unfiltered on it." Offer `=`, `!=` or `contains` instead, or a numeric or date column. |
 | `structural_rows_dropped` > 0 | The sheet has section headings or total rows, and a filter, sort, column pick, formula or aggregation was applied, which cannot keep them in place. | "Section headings and totals were left out because of the filters/sort — say so if you want them back unsorted." |
 | `warnings.unknown_sheets` present | A name in `warnings.unknown_sheets.requested` is not in this report, so it was left out. | "This report has no sheet called '[Name]'. Its sheets are: […]" (list `warnings.unknown_sheets.available`) Offer to re-run with a real sheet. |
-| `warnings.data_quality` present | The report has data-quality sheets (`{sheet name: row count}`); they are left out of `data` unless `sheets` names them. | Use the checkpoint wording in step 4d. |
+| `warnings.data_quality` present | The report has data-quality sheets (`{sheet name: row count}`); they are left out of `data` unless `sheets` names them. | One sentence with a clause for each sheet in `warnings.data_quality`: "Carta flagged {N} securities with data warnings" ({N} is the "Data Warnings" count) and "{M} defective securities" ({M} is the "Defective Securities" count). |
 | `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty | A sheet to merge was missing (`warnings.merge_sources_missing[].source`), or its columns differ (`schema_warnings`), so its rows are not in the merged tab. | Name the sheet that was left out and why; never present the merged tab as complete. |
 | `filtered_row_count` == `original_row_count` with filters set | The filters matched every row. Legitimate, but confirm it is not a mis-typed filter before presenting. | State plainly that the filter matched all N rows. |
 
