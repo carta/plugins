@@ -48,7 +48,7 @@ CARTA_BUDGET_ID = "carta"
 ACTUALS_ONLY_ID = "_actuals-only"
 
 # The budget["source"] an actuals-only report's build input carries, read back by
-# build_manco_datadir._read_monthly_crosstab_budget to tell it apart from a plain
+# manco_budgets._read_monthly_crosstab_budget to tell it apart from a plain
 # monthly-crosstab budget (an uploaded workbook, or one shared with you), which always
 # resolves as "excel-workbook" regardless of its own stated source.
 ACTUALS_ONLY_SOURCE = "actuals-only"
@@ -118,7 +118,7 @@ def _actuals_only_input() -> Dict[str, Any]:
     cut here — just an empty by-account shell for the custom-report machinery (derive,
     edit_custom) to carry its view/pivot and gl_codes on, the same way carta_budget_input
     stands in for a real workbook. `source: ACTUALS_ONLY_SOURCE` marks it so
-    build_manco_datadir._read_monthly_crosstab_budget resolves it as itself rather than as
+    manco_budgets._read_monthly_crosstab_budget resolves it as itself rather than as
     "excel-workbook" like every other monthly-crosstab budget. It still can't be shared —
     the share contract (report_payload.validate) refuses a budget with no rows, same as any
     other; that needs its own change, not this one."""

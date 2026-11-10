@@ -23,7 +23,7 @@ def tree_roots(rows: list) -> list:
     one place this is worked out, so a reader of the totals tree
     (`_totals_readout` in parse_budget_workbook.py) and a consumer that
     sums a total from the tree (`_section_total` in
-    build_manco_datadir.py) always agree on what a child id resolves to.
+    manco_budgets.py) always agree on what a child id resolves to.
     """
     total_keys = {r.get("total_key") for r in rows if r.get("total_key")}
     named = {cid for r in rows for cid in (r.get("children") or [])

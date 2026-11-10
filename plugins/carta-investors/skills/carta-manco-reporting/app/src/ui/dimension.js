@@ -96,7 +96,7 @@ function inlineCase(label) {
 // which callers derive from their own tag_value/carta_tags plus the
 // firm's aliases.
 //
-// Mirrors the Python build's own precedence (build_manco_datadir.py's
+// Mirrors the Python build's own precedence (manco_variance.py's
 // `scoped_total`, which prefers a line's own `scopes` over the configured
 // dimension) so the outline and the variance chart agree on which rows are
 // department-wide and which are narrower than that.

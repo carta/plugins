@@ -17,7 +17,7 @@ const hasBudgetFigures = (b) =>
 //
 // Handles both snapshot shapes: hosted (`snapshot.budget` is `null` with no
 // budget) and local (`snapshot.budget.budgets` is `[]`). Never test
-// `snapshot.budget` for truthiness directly — see build_manco_datadir.py's
+// `snapshot.budget` for truthiness directly — see manco_budgets.py's
 // read_budgets vs. worker.js's buildBudget.
 export function renderableBudgets(snapshot) {
   const budgets = snapshot?.budget?.budgets;
