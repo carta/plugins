@@ -720,3 +720,48 @@ func TestInjectInstrumentation_HookPlatformWinsOverFallback(t *testing.T) {
 		t.Errorf("platform = %v, want hook's own %q to win", got, want)
 	}
 }
+
+func TestInjectInstrumentation_ClassifierModesLeaveInputUnchanged(t *testing.T) {
+	tools := []string{"welcome", "read_tool", "search_tools", "call_tool", "mutate"}
+	for _, mode := range []string{"auto", "plan"} {
+		for _, tool := range tools {
+			t.Run(mode+"/"+tool, func(t *testing.T) {
+				isolateEnv(t)
+				setupPluginRoot(t, "carta-cap-table", "6.111.13")
+
+				stdin := `{"tool_name":"mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__` + tool + `",` +
+					`"tool_input":{"params":{"command":"c:v:n"},"_instrumentation_v2":{"skills":["carta-cap-table"]}},` +
+					`"session_id":"s1","permission_mode":"` + mode + `"}`
+				out, err := InjectInstrumentation([]byte(stdin))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`
+				if string(out) != want {
+					t.Errorf("output = %s, want %s", out, want)
+				}
+				plugins, _, _, ok := session.MergeSessionState("s1")
+				if !ok || len(plugins) != 1 || plugins[0].Name != "carta-cap-table" {
+					t.Errorf("session plugins = %v (ok=%v), want the carta-cap-table record", plugins, ok)
+				}
+			})
+		}
+	}
+}
+
+func TestInjectInstrumentation_NonClassifierModesStillInject(t *testing.T) {
+	for _, mode := range []string{"", "default", "acceptEdits", "dontAsk", "bypassPermissions"} {
+		t.Run(mode, func(t *testing.T) {
+			isolateEnv(t)
+			setupPluginRoot(t, "carta-cap-table", "6.111.13")
+
+			stdin := `{"tool_name":"mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__read_tool","tool_input":{},` +
+				`"session_id":"s1","permission_mode":"` + mode + `"}`
+			instr := injectAndGetInstr(t, stdin)
+			if string(instr["from_hook"]) != "true" {
+				t.Errorf("from_hook = %s, want true", instr["from_hook"])
+			}
+		})
+	}
+}
