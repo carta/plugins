@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.10</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.11</carta-plugin>
 
 # Manage securities
 
@@ -154,7 +154,9 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 4. **Preview.** Every change goes through the preview in [§ Actions](#actions), never
    `cap_table__mutate__modify_issuable`, which keeps no Change page. Send this pass's
    `thread_id` (see [§ Several changes](#several-changes)). A rework is one new preview on
-   the same thread.
+   the same thread. That holds after the cap table changed under a preview too (the page says
+   so, or apply answers `plan_stale`): preview again with the same `thread_id`, never a new
+   bootstrap, so the page shows the next revision.
    `status: blocked` (no `plan_id`): quote each failed check, ask for the fix, ask no approval.
 5. **Show the preview.** With `next_step` and the browser tool it names, follow it, then keep
    the chat to one line: the count, the fields, the reason, any problem and the full text of a
@@ -175,7 +177,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    and ask again."*
    - A `task` comes back: read `cap_table__get__task` until `done` is true, at most 3 times.
      Then say the job is still running in Carta.
-   - `plan_stale`: say the security changed in Carta after the preview, and offer a new one.
+   - `plan_stale`: say the security changed in Carta after the preview, and offer a new one on
+     the same `thread_id`.
    - `plan_expired`: preview again, then ask for approval again.
 
 ## Error Handling
