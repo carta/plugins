@@ -9,9 +9,21 @@ const NEG = "var(--ink-color-global-feedback-negative-strong)";
 
 /** Ribbon "View: <name>" trigger and its saved-views panel. The tab owns what a
  *  view stores and says so in `hint`. `dirty` shows the • and offers Revert.
- *  `radioName` keeps two tabs' radio groups apart. */
-export default function ViewControl({ views, viewId, dirty, onApply, onUpdate, onDelete, saving, setSaving, newName, setNewName, onSave, radioName, hint }) {
+ *  `radioName` keeps two tabs' radio groups apart. `onRename(name)` renames the
+ *  selected view. */
+export default function ViewControl({ views, viewId, dirty, onApply, onUpdate, onRename, onDelete, saving, setSaving, newName, setNewName, onSave, radioName, hint }) {
   const [open, setOpen] = useState(false);
+  // The name being typed while renaming the selected view; null = not renaming.
+  const [renameText, setRenameText] = useState(null);
+  const renaming = renameText != null && !!viewId;
+  const stopRename = () => setRenameText(null);
+  const commitRename = () => {
+    if (!renameText || !renameText.trim()) return;
+    onRename(renameText);
+    stopRename();
+  };
+  const toggleOpen = () => { setOpen((o) => !o); stopRename(); };
+  const apply = (id) => { stopRename(); onApply(id); };
   const ref = useRef(null);
   const panelRef = useRef(null);
   useDismissable(open, setOpen, [ref, panelRef]);
@@ -22,7 +34,7 @@ export default function ViewControl({ views, viewId, dirty, onApply, onUpdate, o
   const label = current ? current.name : "Default";
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
-      <button onClick={() => setOpen((o) => !o)} className={`dd-trigger${open ? " is-open" : ""}`}
+      <button onClick={toggleOpen} className={`dd-trigger${open ? " is-open" : ""}`}
         style={{ ...ddTriggerStyle({ minWidth: 170 }), cursor: "pointer" }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           View: {label}{dirty && <span title="Unsaved changes" style={{ fontWeight: 700 }}> •</span>}
@@ -38,12 +50,22 @@ export default function ViewControl({ views, viewId, dirty, onApply, onUpdate, o
             <div style={{ ...sans, fontWeight: 600, fontSize: FS.bodyLg }}>Select from your Saved Views</div>
             {viewId && (
               <span style={{ display: "flex", gap: 8, flex: "none" }}>
-                {dirty && <Btn kind="link" style={{ fontSize: FS.small }} onClick={() => onApply(viewId)} title="Discard changes and restore the saved view">Revert</Btn>}
+                {dirty && <Btn kind="link" style={{ fontSize: FS.small }} onClick={() => apply(viewId)} title="Discard changes and restore the saved view">Revert</Btn>}
                 <Btn kind="link" style={{ fontSize: FS.small }} onClick={onUpdate} title="Overwrite this view with the current filters">Update</Btn>
-                <Btn kind="link" style={{ fontSize: FS.small, color: NEG }} onClick={onDelete}>Delete</Btn>
+                {onRename && <Btn kind="link" style={{ fontSize: FS.small }} onClick={() => setRenameText(current?.name || "")} title="Change this view's name">Rename</Btn>}
+                <Btn kind="link" style={{ fontSize: FS.small, color: NEG }} onClick={() => { stopRename(); onDelete(); }}>Delete</Btn>
               </span>
             )}
           </div>
+          {renaming && (
+            <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+              <TextInput aria-label="New view name" placeholder="View name…" value={renameText} onChange={(e) => setRenameText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { e.stopPropagation(); stopRename(); } }}
+                autoFocus onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 120 }} />
+              <Btn kind="primary" onClick={commitRename} disabled={!renameText.trim()}>Save</Btn>
+              <Btn onClick={stopRename}>Cancel</Btn>
+            </span>
+          )}
           {viewId && dirty && (
             <div style={{ ...sans, fontSize: FS.micro, color: MICRO, marginBottom: 8 }}>
               Unsaved changes — Update saves them to this view, Revert discards them.
@@ -55,12 +77,12 @@ export default function ViewControl({ views, viewId, dirty, onApply, onUpdate, o
                 event, so re-picking the current view/Default must still re-apply it
                 and discard any manual edits made since. */}
             <label style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", fontSize: FS.value, cursor: "pointer" }}
-              onClick={() => onApply(null)}>
+              onClick={() => apply(null)}>
               <input type="radio" name={radioName} checked={viewId == null} readOnly /> Default
             </label>
             {views.map((v) => (
               <label key={v.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", fontSize: FS.value, cursor: "pointer" }}
-                onClick={() => onApply(v.id)}>
+                onClick={() => apply(v.id)}>
                 <input type="radio" name={radioName} checked={viewId === v.id} readOnly /> {v.name}
               </label>
             ))}

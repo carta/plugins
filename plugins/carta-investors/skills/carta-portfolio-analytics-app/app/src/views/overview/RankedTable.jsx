@@ -9,6 +9,7 @@ import { buildOverviewRow } from "../../model/overviewRow.js";
 import { companyOf } from "../../model/kpi.js";
 import { readColumns, DEFAULT_COLUMNS, columnLabel, metricColumnValue, positionColumnValue, columnSortValue, columnCategories, entityKindLabel } from "../../model/overviewColumns.js";
 import { signalHitsByCompany } from "../../model/signals.js";
+import { rulesOf } from "../../model/rules.js";
 import { filterFor } from "../../model/overviewFilters.js";
 import { openCompany } from "../../state/focus.js";
 import { trackClick } from "../../analytics.js";
@@ -258,7 +259,7 @@ export default function RankedTable({ rows = [], data, dashboard, filterApi, exp
   );
 
   const columns = dashboard ? readColumns(dashboard.doc, data) : DEFAULT_COLUMNS;
-  const rules = dashboard?.doc?.rules;
+  const rules = rulesOf(dashboard?.doc);
   const hitsByCompany = useMemo(() => (data ? signalHitsByCompany(data, rules || []) : {}), [data, rules]);
   // One sparkline domain per spark column, measured across the rows on screen.
   // Per-row scaling made every series fill its own box, so magnitude was invisible.

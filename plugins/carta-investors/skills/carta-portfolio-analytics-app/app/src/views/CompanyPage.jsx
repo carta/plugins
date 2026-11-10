@@ -21,7 +21,7 @@ import {
   isQualitative, isCharted, numericMetrics, MONTHS_TO_SUFFIX, ltmValue,
 } from "../model/kpi.js";
 import { signalsForCompany } from "../model/signals.js";
-import { customSignalsForCompany } from "../model/rules.js";
+import { customSignalsForCompany, rulesOf } from "../model/rules.js";
 import { hasCapTable, soiLines, holdingsSource, capTotals, soiHistory, hasSoiHistory, hasSoiProceeds, soiRealizationMark, soiProceedsSteps, capTableAbsence, ownershipFunds } from "../model/captable.js";
 import { CompanyTags } from "../ui/tags.jsx";
 import { FavoriteStar } from "../ui/favorites.jsx";
@@ -734,7 +734,7 @@ function ConfigureKpis({ data, company, dashboard, defaultKeys, onClose }) {
 }
 
 function RiskBlock({ data, company, dashboard }) {
-  const rules = dashboard?.doc?.rules || [];
+  const rules = rulesOf(dashboard?.doc);
   const useBuiltin = dashboard?.doc?.builtinSignals !== false;
   const signals = [...(useBuiltin ? signalsForCompany(data, company) : []), ...customSignalsForCompany(data, company, rules)];
   const runway = runwayLatest(data, company);

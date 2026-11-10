@@ -7,7 +7,7 @@ import { fmtVal } from "../../ui/charts.jsx";
 import { metricOptions, metricOf, metricKeyByLabel, numericMetrics } from "../../model/kpi.js";
 import { settledQuarter, isStillFiling, quartersOf, coverageAt, whatChanged } from "../../model/review.js";
 import { portfolioSignals } from "../../model/signals.js";
-import { customPortfolioSignals } from "../../model/rules.js";
+import { customPortfolioSignals, rulesOf } from "../../model/rules.js";
 import { openCompany } from "../../state/focus.js";
 
 const QT = { "03": "Q1", "06": "Q2", "09": "Q3", "12": "Q4" };
@@ -89,7 +89,7 @@ export default function WhatChanged({ data, dashboard }) {
 
   const breaches = useMemo(() => {
     const built = portfolioSignals(data);
-    const custom = customPortfolioSignals(data, dashboard?.doc?.rules || []);
+    const custom = customPortfolioSignals(data, rulesOf(dashboard?.doc));
     return [...built, ...custom];
   }, [data, dashboard?.doc?.rules]);
 

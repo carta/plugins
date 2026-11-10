@@ -16,8 +16,8 @@ import EditableValue, { CELL_INDICATORS } from "../ui/EditableValue.jsx";
 import { editTarget, addTarget, stageEdit, canEditCompany } from "../model/pendingEdits.js";
 import { currencyActive, DEFAULT_CURRENCY } from "../model/currency.js";
 import { useCanPublish } from "../state/usePublish.js";
-import { customSignalsForCompany, OPS } from "../model/rules.js";
-import { signalsForCompany, BUILTIN_SIGNALS, knownSignals } from "../model/signals.js";
+import { customSignalsForCompany, OPS, rulesOf } from "../model/rules.js";
+import { signalsForCompany, knownSignals, signalOptions as buildSignalOptions } from "../model/signals.js";
 import { availablePositionMetrics, positionMetricOptions, positionMetricOf } from "../model/position.js";
 import { cellFormat, formatSummary, isGrowthBasis, isRowScope, statsOf, SCALES, RULE_COLORS } from "../model/cellFormat.js";
 import { allTags, tagId, tagsFor, companyMatchesTags, hasCartaTags } from "../model/tags.js";
@@ -36,7 +36,6 @@ import { withCommas } from "../ui/format.js";
 import { openCorrections } from "../ui/correctionEvents.js";
 import { groupRows, useRowWindow } from "../ui/rowWindow.js";
 
-const EMPTY_RULES = [];
 const NEG = "var(--ink-color-global-feedback-negative-strong)";
 const PIVOT_VIEW_HINT = "A view saves your KPI selection and order, fund, companies, tags, favorites, signals, Configure options and conditional formatting.";
 const NO_FORMATS = {};
@@ -226,7 +225,7 @@ export default function PivotDashboard({ data, dashboard }) {
     });
   };
   const onWindow = (v) => { trackClick("PortfolioAnalytics.Pivot.SetWindow"); setWindow(v); };
-  const viewSignals = (v) => knownSignals(v.signals, dashDoc?.rules);
+  const viewSignals = (v) => knownSignals(v.signals, rulesOf(dashDoc));
   // Conditional formatting belongs to the view. Default (no view) keeps the firm's
   // own formatting, saved as you edit it; a view saved before formatting was part
   // of views opens with that same firm formatting.
@@ -340,6 +339,13 @@ export default function PivotDashboard({ data, dashboard }) {
     if (!viewId) return;
     dashboard.update((doc) => { doc.views = (doc.views || []).map((v) => (v.id === viewId ? { ...v, ...snapshot() } : v)); return doc; });
   };
+  // Name only — the view's saved filters are untouched, so this never dirties it.
+  const renameView = (nextName) => {
+    const nm = (nextName || "").trim();
+    const v = views.find((x) => x.id === viewId);
+    if (!v || !nm || nm === v.name) return;
+    dashboard.update((doc) => { doc.views = (doc.views || []).map((x) => (x.id === viewId ? { ...x, name: nm } : x)); return doc; });
+  };
   const deleteView = () => {
     if (!viewId) return;
     dashboard.update((doc) => { doc.views = (doc.views || []).filter((v) => v.id !== viewId); return doc; });
@@ -362,10 +368,9 @@ export default function PivotDashboard({ data, dashboard }) {
   const saveFormat = (key, fmt) => editFormats((c) => ({ ...c, [key]: fmt }));
   const removeFormat = (key) => editFormats((c) => { const n = { ...c }; delete n[key]; return n; });
 
-  // Built-in signals lead, then custom rules.
-  // A stable fallback, not `[]` — a fresh array each render would defeat
-  // the hitsByCompany memo below whenever the doc has no rules yet.
-  const rules = dashboard?.doc?.rules || EMPTY_RULES;
+  // Built-in signals lead, then custom rules. rulesOf returns the same array
+  // until the rules change, so the hitsByCompany memo below holds.
+  const rules = rulesOf(dashboard?.doc);
   const hitsByCompany = useMemo(() => {
     const m = {};
     for (const c of data.companies || []) {
@@ -744,21 +749,9 @@ export default function PivotDashboard({ data, dashboard }) {
     }
     return m;
   }, [data, dashDoc]);
-  // Custom-rule signals that fire for at least one company — the Filters
-  // panel's "Signals" section, one checkbox per rule with a live company count.
-  const signalOptions = useMemo(() => {
-    const counts = new Map(), labels = new Map();
-    // Built-ins list unconditionally (0 count if nothing currently fires);
-    // custom rules only appear once at least one company trips them.
-    for (const s of BUILTIN_SIGNALS) { const id = `builtin:${s.id}`; counts.set(id, 0); labels.set(id, s.tag); }
-    for (const hits of Object.values(hitsByCompany)) {
-      for (const h of hits) {
-        counts.set(h.ruleId, (counts.get(h.ruleId) || 0) + 1);
-        labels.set(h.ruleId, h.tag);
-      }
-    }
-    return [...counts.keys()].map((id) => ({ id, label: labels.get(id), count: counts.get(id) }));
-  }, [hitsByCompany]);
+  // The Filters panel's "Signals" section: one checkbox per built-in and per
+  // custom rule, with a live company count.
+  const signalOptions = useMemo(() => buildSignalOptions(data, rules, hitsByCompany), [data, rules, hitsByCompany]);
   // Companies grouped by fund (dimensions order), alphabetical within each fund.
   // Listed once under the first fund so option ids stay unique.
   const companyOpts = useMemo(() => {
@@ -864,7 +857,7 @@ export default function PivotDashboard({ data, dashboard }) {
         <div style={{ position: "absolute", top: 0, bottom: 0, left: 0,
           width: wrapMaxW ?? "100%", background: "var(--ink-color-global-surface-background-default)" }} />
         <div style={{ position: "relative", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <ViewControl views={views} viewId={viewId} dirty={dirty} onApply={applyView} onUpdate={updateView} onDelete={deleteView}
+          <ViewControl views={views} viewId={viewId} dirty={dirty} onApply={applyView} onUpdate={updateView} onRename={renameView} onDelete={deleteView}
             saving={saving} setSaving={setSaving} newName={newName} setNewName={setNewName} onSave={saveView}
             radioName="pivot-view" hint={PIVOT_VIEW_HINT} />
           <SearchInput placeholder="Search companies…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 200 }} />

@@ -24,7 +24,8 @@ import { planViewsPerTag } from "../model/viewsPerTag.js";
 import { allTags, tagId, tagsFor, companyMatchesTags } from "../model/tags.js";
 import { STATUS_CAT } from "../model/status.js";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
-import { signalHitsByCompany, BUILTIN_SIGNALS, knownSignals } from "../model/signals.js";
+import { signalHitsByCompany, knownSignals, signalOptions } from "../model/signals.js";
+import { rulesOf } from "../model/rules.js";
 import { Heatmap } from "../ui/charts.jsx";
 import { metricOptions, metricOf, pointsFor, cartaFirmUrl } from "../model/kpi.js";
 import {
@@ -165,7 +166,7 @@ function Completeness({ data, dashboard }) {
     metrics: v.metricKeys ? new Set(v.metricKeys) : defaultMetrics,
     companies: new Set(v.companyIds || []), tags: new Set(v.tags || []), statuses: new Set(v.statuses || []),
     gapsOnly: !!v.gapsOnly, win: v.window ?? 8, includeFiling: !!v.includeFiling,
-    signals: knownSignals(v.signals, dashboard?.doc?.rules), favOnly: !!v.favOnly,
+    signals: knownSignals(v.signals, rulesOf(dashboard?.doc)), favOnly: !!v.favOnly,
   });
   const savedViews = useSavedViews({ dashboard, docKey: "reportingViews", cfg, setCfg, defaults, encode: encodeView, decode: decodeView });
   // Functional updates: FilterMenu's Apply calls several setters back to back.
@@ -179,7 +180,7 @@ function Completeness({ data, dashboard }) {
   const [search, setSearch] = useState("");
 
   const dashDoc = dashboard?.doc;
-  const rules = dashDoc?.rules;
+  const rules = rulesOf(dashDoc);
   const hitsByCompany = useMemo(() => signalHitsByCompany(data, rules), [data, rules]);
   const tagGroups = useMemo(() => allTags(data), [data]);
 
@@ -330,13 +331,10 @@ function Completeness({ data, dashboard }) {
     for (const c of data.companies || []) for (const t of tagsFor(c)) { const id = tagId(t.cat, t.value); m.set(id, (m.get(id) || 0) + 1); }
     return m;
   }, [data]);
-  // Built-in signals always list; a custom rule lists once a company trips it.
+  // Every built-in and every custom rule lists, with a 0 count when nothing fires.
   const signalOpts = useMemo(() => {
-    const counts = new Map(), labels = new Map();
-    for (const b of BUILTIN_SIGNALS) { counts.set(`builtin:${b.id}`, 0); labels.set(`builtin:${b.id}`, b.tag); }
-    for (const hits of Object.values(hitsByCompany)) for (const h of hits) { counts.set(h.ruleId, (counts.get(h.ruleId) || 0) + 1); labels.set(h.ruleId, h.tag); }
-    return [...counts.keys()].map((id) => ({ id, label: labels.get(id), sub: counts.get(id) }));
-  }, [hitsByCompany]);
+    return signalOptions(data, rules, hitsByCompany).map((o) => ({ id: o.id, label: o.label, sub: o.count }));
+  }, [data, rules, hitsByCompany]);
   const hasFavorites = favoriteCount(dashDoc) > 0 || favOnly;
   // One section per tag category. Each edits only its own category's ids in the
   // shared tag set, so Apply can run every section's onChange in turn.

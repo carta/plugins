@@ -1,7 +1,7 @@
 // Rule-based risk signals per company — shared by the Portfolio "Signals" tab and
 // the Company page so the two never drift. Pure functions over kpi.json.
 import { latest, growth, metricKeyByLabel } from "./kpi.js";
-import { customSignalsForCompany } from "./rules.js";
+import { customSignalsForCompany, ruleCondition } from "./rules.js";
 import { fmtVal } from "../ui/charts.jsx";
 import { withCommas } from "../ui/format.js";
 
@@ -20,6 +20,27 @@ function growth2(company, key) {
 export const BUILTIN_SIGNALS = [
   { id: "revenue-declining", tag: "Revenue declining" },
 ];
+
+/** The Filters panel's "Signals" options: every built-in, then every custom
+ *  rule, each with the number of companies it currently flags. A signal that
+ *  flags nobody right now still lists with a 0 count, so a saved rule never
+ *  vanishes from the filter. `rules` must have unique ids (see rulesOf);
+ *  `hitsByCompany` is signalHitsByCompany's result. Returns [{ id, label, count }]. */
+export function signalOptions(data, rules, hitsByCompany) {
+  const opts = new Map();
+  for (const s of BUILTIN_SIGNALS) opts.set(`builtin:${s.id}`, { id: `builtin:${s.id}`, label: s.tag, count: 0 });
+  for (const r of rules || []) {
+    if (!r.metricKey || opts.has(r.id)) continue;
+    opts.set(r.id, { id: r.id, label: r.name || ruleCondition(data, r), count: 0 });
+  }
+  for (const hits of Object.values(hitsByCompany || {})) {
+    for (const id of new Set(hits.map((h) => h.ruleId))) {
+      const o = opts.get(id);
+      if (o) o.count += 1;
+    }
+  }
+  return [...opts.values()];
+}
 
 /** A saved view's signal ids, minus any signal deleted since it was saved — a
  *  stale id would match no company and empty the page. `rules` are the firm's

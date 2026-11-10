@@ -9,7 +9,7 @@ import { metricOf, latest, growth, qoqChange, metricOptions,
   numericMetrics, isCharted } from "../model/kpi.js";
 import { allTags, tagId, companyMatchesTags } from "../model/tags.js";
 import { portfolioSignals } from "../model/signals.js";
-import { MEASURES, OPS, TONES, measureOf, opOf, ruleCondition, customPortfolioSignals, newRuleId } from "../model/rules.js";
+import { MEASURES, RULE_OPS, TONES, measureOf, ruleOpOf, ruleIsComplete, ruleCondition, customPortfolioSignals, newRuleId, rulesOf } from "../model/rules.js";
 import { openCompany, takePendingPortfolioMode, PORTFOLIO_MODE_EVENT } from "../state/focus.js";
 import Benchmarks from "./Benchmarks.jsx";
 import { trackClick } from "../analytics.js";
@@ -235,7 +235,7 @@ function Quadrant({ data, dashboard }) {
 /* ---------- Signals / watchlist ---------- */
 function Signals({ data, dashboard }) {
   const doc = dashboard?.doc;
-  const rules = doc?.rules || [];
+  const rules = rulesOf(doc);
   const useBuiltin = doc?.builtinSignals !== false; // default on
 
   const order = { negative: 0, warning: 1, info: 2 };
@@ -290,7 +290,9 @@ function Signals({ data, dashboard }) {
 }
 
 /* ---------- Custom-rule builder (conditional formatting for KPIs) ---------- */
-const BLANK_RULE = { name: "", metricKey: "", measure: "latest", op: "lt", threshold: "", tone: "warning" };
+const BLANK_RULE = { name: "", metricKey: "", measure: "latest", op: "lt", threshold: "", threshold2: "", tone: "warning" };
+// Keeps what a number box accepts: digits, a decimal point, a minus sign.
+const numberOnly = (v) => v.replace(/[^0-9.\-]/g, "");
 
 function RulesEditor({ data, dashboard, rules, useBuiltin }) {
   const [open, setOpen] = useState(false);
@@ -302,24 +304,31 @@ function RulesEditor({ data, dashboard, rules, useBuiltin }) {
   const set = (fields) => setDraft((d) => ({ ...d, ...fields }));
   const reset = () => { setDraft(BLANK_RULE); setEditId(null); };
 
-  const valid = draft.metricKey && draft.threshold !== "" && Number.isFinite(Number(draft.threshold));
+  const isRange = !!ruleOpOf(draft.op).range;
+  const valid = ruleIsComplete(draft);
   const save = () => {
     if (!valid) return;
+    // A rule that is not a range keeps no upper bound, so switching away from
+    // "between" never leaves a stale one in the saved doc.
+    const { threshold2, ...rest } = draft;
+    const saved = isRange ? draft : rest;
     dashboard.update((doc) => {
-      const list = [...(doc.rules || [])];
+      // rulesOf first: a doc saved with two rules under one id gets them split
+      // apart, so this edit lands on the rule picked and the fix is saved.
+      const list = [...rulesOf(doc)];
       if (editId) {
         const i = list.findIndex((r) => r.id === editId);
-        if (i >= 0) list[i] = { ...list[i], ...draft };
+        if (i >= 0) { const { threshold2: _old, ...prev } = list[i]; list[i] = { ...prev, ...saved }; }
       } else {
-        list.push({ ...draft, id: newRuleId() });
+        list.push({ ...saved, id: newRuleId() });
       }
       doc.rules = list;
       return doc;
     });
     reset();
   };
-  const edit = (r) => { setDraft({ name: r.name || "", metricKey: r.metricKey, measure: r.measure, op: r.op, threshold: String(r.threshold), tone: r.tone }); setEditId(r.id); setOpen(true); };
-  const remove = (id) => dashboard.update((doc) => { doc.rules = (doc.rules || []).filter((r) => r.id !== id); return doc; });
+  const edit = (r) => { setDraft({ name: r.name || "", metricKey: r.metricKey, measure: r.measure, op: r.op, threshold: String(r.threshold ?? ""), threshold2: r.threshold2 == null ? "" : String(r.threshold2), tone: r.tone }); setEditId(r.id); setOpen(true); };
+  const remove = (id) => dashboard.update((doc) => { doc.rules = rulesOf(doc).filter((r) => r.id !== id); return doc; });
   const setBuiltin = (on) => dashboard.update((doc) => { doc.builtinSignals = on; return doc; });
 
   return (
@@ -361,6 +370,7 @@ function RulesEditor({ data, dashboard, rules, useBuiltin }) {
           <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", lineHeight: 1.5 }}>
             Flag a company when <strong>{"{KPI}"}</strong>’s <strong>{"{measure}"}</strong> is <strong>{"{operator}"}</strong> your threshold —
             e.g. <em>Runway · Latest value · &lt; · 12</em> or <em>Revenue · QoQ growth % · &lt; · 10</em>.
+            Pick <strong>between</strong> to flag a range, e.g. <em>Annualized Revenue · Latest value · between · 300000000 and 500000000</em>; both ends count.
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <FieldCol label="If KPI">
@@ -370,12 +380,18 @@ function RulesEditor({ data, dashboard, rules, useBuiltin }) {
               <Dropdown options={MEASURES.map((m) => ({ id: m.id, label: m.label }))} value={draft.measure} onChange={(id) => set({ measure: id })} minWidth={150} />
             </FieldCol>
             <FieldCol label="Is">
-              <Dropdown options={OPS.map((o) => ({ id: o.id, label: o.sym }))} value={draft.op} onChange={(id) => set({ op: id })} minWidth={70} />
+              <Dropdown options={RULE_OPS.map((o) => ({ id: o.id, label: o.sym }))} value={draft.op} onChange={(id) => set({ op: id })} minWidth={70} />
             </FieldCol>
-            <FieldCol label={`Threshold${measureOf(draft.measure).pct ? " (%)" : ""}`}>
-              <TextInput inputMode="decimal" placeholder="12" value={draft.threshold}
-                onChange={(e) => set({ threshold: e.target.value.replace(/[^0-9.\-]/g, "") })} style={{ width: 110 }} />
+            <FieldCol label={`${isRange ? "From" : "Threshold"}${measureOf(draft.measure).pct ? " (%)" : ""}`}>
+              <TextInput inputMode="decimal" placeholder={isRange ? "300" : "12"} value={draft.threshold} aria-label={isRange ? "From" : "Threshold"}
+                onChange={(e) => set({ threshold: numberOnly(e.target.value) })} style={{ width: 110 }} />
             </FieldCol>
+            {isRange && (
+              <FieldCol label={`To${measureOf(draft.measure).pct ? " (%)" : ""}`}>
+                <TextInput inputMode="decimal" placeholder="500" value={draft.threshold2 ?? ""} aria-label="To"
+                  onChange={(e) => set({ threshold2: numberOnly(e.target.value) })} style={{ width: 110 }} />
+              </FieldCol>
+            )}
             <FieldCol label="Severity">
               <Segmented small options={TONES} value={draft.tone} onChange={(id) => set({ tone: id })} />
             </FieldCol>

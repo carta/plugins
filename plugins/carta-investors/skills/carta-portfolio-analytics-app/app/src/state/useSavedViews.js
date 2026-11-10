@@ -36,11 +36,17 @@ export function useSavedViews({ dashboard, docKey, cfg, setCfg, defaults, encode
   const onUpdate = () => {
     if (current) write((list) => list.map((v) => (v.id === viewId ? { ...v, ...encode(cfg) } : v)));
   };
+  // Renames the selected view only; its filters stay as saved, so it never goes dirty.
+  const onRename = (nextName) => {
+    const name = (nextName || "").trim();
+    if (!current || !name || name === current.name) return;
+    write((list) => list.map((v) => (v.id === viewId ? { ...v, name } : v)));
+  };
   const onAddMany = (list) => write((prev) => [...prev, ...list]);
   const onDelete = () => {
     if (!current) return;
     write((list) => list.filter((v) => v.id !== viewId));
     setViewId(null);
   };
-  return { views, viewId: current ? viewId : null, dirty, onApply, onSave, onUpdate, onDelete, onAddMany, saving, setSaving, newName, setNewName };
+  return { views, viewId: current ? viewId : null, dirty, onApply, onSave, onUpdate, onRename, onDelete, onAddMany, saving, setSaving, newName, setNewName };
 }

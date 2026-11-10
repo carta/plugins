@@ -8,10 +8,9 @@ import { columnCatalog, columnValueType, readColumns, setColumnVisible } from ".
 import { trackClick } from "../../analytics.js";
 import { readFilters, setFilter, removeFilter, clearFilters, filterPredicate, filterLabel, filterFor, specKey, isEmptyCond } from "../../model/overviewFilters.js";
 import { signalHitsByCompany } from "../../model/signals.js";
+import { rulesOf } from "../../model/rules.js";
 import { ColumnFilterBody, emptyCond } from "./ColumnFilterPopover.jsx";
 import ColumnsPane from "./ColumnsPane.jsx";
-
-const EMPTY_RULES = [];
 
 /** Owns the Overview's filter state: persisted `doc.filters` plus the
  *  session-only Companies pick. Returns the predicate, the `filterApi` the
@@ -19,7 +18,7 @@ const EMPTY_RULES = [];
 export function useOverviewFilter(data, dashboard) {
   const dashDoc = dashboard?.doc;
   const allFunds = data.dimensions?.funds || [];
-  const rules = dashDoc?.rules || EMPTY_RULES;
+  const rules = rulesOf(dashDoc);
   const [selCompanies, setSelCompanies] = useState(() => new Set()); // company ids; empty = all
 
   const hitsByCompany = useMemo(() => signalHitsByCompany(data, rules), [data, rules]);
