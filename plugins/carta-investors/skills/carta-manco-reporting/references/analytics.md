@@ -170,6 +170,9 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.ReportMenu.Rename` | click | Rename dialog → Save. |
 | `MancoReporting.ReportMenu.Hide` | click | Report menu → Hide. |
 | `MancoReporting.ReportMenu.Delete` | click | "Delete this copy" / "Remove from my reports" confirmed. |
+| `MancoReporting.ReportMenu.Sync` | click | Report menu (⋯) → Sync to hosted app. |
+| `MancoReporting.ReportMenu.SyncSignIn` | click | "Sign in to Claude" shown under a failed Sync to hosted app coded `not_logged_in`. |
+| `MancoReporting.ReportMenu.SyncCopyFixPrompt` | click | Copy on the Claude install/sign-in prompt shown under a failed Sync to hosted app whose error names the `claude` CLI itself as the problem. |
 | `MancoReporting.ReportNotice.Duplicate` | click | "Duplicate" on a report shared with you. |
 | `MancoReporting.ReportNotice.ShareUpdate` | click | The cloud-upload icon (tooltip "Share update") beside "Changes not shared yet" — pushes the changes to the same people without opening the Share dialog. |
 | `MancoReporting.ShareDialog.View` | render | The Share panel opened, for a new or an already shared report. |

@@ -846,6 +846,8 @@ async function farFetchRequests({ keepOnFailure = false } = {}) {
   // A seeded build's period card comes from a second read, so the queue paints first
   // and it joins. The opening tab waits for it: it can be the only work on the GP.
   await frtAttachPeriodRows().catch(e => { console.error('[frt] tracker cards —', e); return false; });
+  // KYC forms come from their own reads, so they join after the task list has painted.
+  await kycAttachRows().catch(e => { console.error('[kyc] KYC cards —', e); return false; });
   farPickFirstTab();
   renderFarSection();
   // Hydration only improves titles, so it stays outside the try above — sharing
@@ -1066,6 +1068,7 @@ function farOpenTaskApp(app) {
 // in Carta. A row with neither is shown but opens nothing.
 function farOpenAction(r) {
   if (r.app) return () => farOpenTaskApp(r.app);
+  if (r.kyc) return () => kycOpenInChat(r.kyc);
   if (r.ccr) return () => openCapitalCallReview(r.ccr, r.title);
   if (r.frt) return () => openFinancialReportingTracker(r.frt, r.title);
   if (r.thread) return () => openFarThread(r.id);
@@ -1154,8 +1157,8 @@ function farItemShell(r, cls) {
   return { el, external: false };
 }
 
-// Marks a card that leaves the page: a new Claude chat, whose prompt is also copied to the
-// clipboard, or Carta in a new tab.
+// Marks a card that leaves the page: a task app's new Claude chat, whose prompt is also copied
+// to the clipboard, or Carta in a new tab. A KYC card carries no mark.
 function farOutLabel(r, external) {
   if (r.app) return `<span class="far-item-out">Copy ${FAR_COPY_ICON}</span>`;
   if (external) return `<span class="far-item-out">Carta ${FAR_OUT_ICON}</span>`;
@@ -1176,7 +1179,8 @@ function farCard(r, withTime) {
     <span class="far-card-footer">
       <span class="far-card-date">${escHtml(farDateLine(r, withTime))}</span>
       ${farOutLabel(r, external)}
-    </span>`;
+    </span>
+    ${r.detail ? `<span class="far-card-detail">${escHtml(r.detail)}</span>` : ''}`;
   return el;
 }
 
@@ -1213,7 +1217,8 @@ function farListRow(r, withTime) {
   const { el, external } = planned
     ? { el: Object.assign(document.createElement('div'), { className: 'far-row far-row-planned' }), external: false }
     : farItemShell(r, 'far-row');
-  const meta = [r.subtitle, farDateLine(r, withTime)].filter(Boolean).join(' · ');
+  // A KYC row's own line leads the date, so the row's ellipsis cuts the date, not the reason.
+  const meta = [r.subtitle, r.detail, farDateLine(r, withTime)].filter(Boolean).join(' · ');
   el.innerHTML = `
     ${farDisplayGroupIcon(r.displayGroup.id, 20)}
     <span class="far-row-title">${escHtml(r.title ?? 'Request to Carta')}</span>

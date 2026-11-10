@@ -15,9 +15,11 @@ CARTA_BUCKETS = frozenset({
     "investor-service-eu-west-1-prod",
     "investor-service-demo",
     # Carta Document Service, where kyc-service's KYC form uploads land
-    # (terraform: production, sandbox, and the test and demo dev buckets).
+    # (terraform: production, sandbox, the test and demo dev buckets, and the bucket
+    # the TEST environment presigns for).
     "carta-cds-prod",
     "cds-sandbox",
+    "carta-cds-test",
     "carta-cds-dev-test",
     "carta-cds-dev-demo",
 })

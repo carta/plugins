@@ -32,7 +32,6 @@
       "body": "Turns Carta fund and investor data into an interactive filing guide and Excel file, counting each LP once and flagging what you enter by hand."
     }
   },
-  "carta-kyc-fill-form": null,
   "carta-partner-rollforward": null,
   "carta-consolidating-financial-reports": {
     "category": "fund-accounting",

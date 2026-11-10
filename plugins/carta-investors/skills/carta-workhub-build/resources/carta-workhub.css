@@ -728,6 +728,15 @@ HvkPz+rKZ6Wq+ELmAQAAAA==") format("woff2");
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Why a KYC form is back and what it still lacks, under its status line. It wraps, so the
+   reopen reason is never cut off. */
+.far-card-detail {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink-color-global-text-subtle);
+}
+
 .far-card-footer {
   display: flex;
   align-items: baseline;

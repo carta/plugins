@@ -50,22 +50,49 @@ new uuid upstream if the report vanishes under it, and forget deletes
 whatever uuid remove() actually dismissed, which can differ from the uuid
 forget already deleted if a push stamped a new one in between.
 
-main() additionally serializes every *sweep* on one dashboard behind a
-cross-process lock (`.own-sync.lock`, same O_EXCL scheme as
-report_store._FileLock, `observe_stale=True`): a build that finishes while
-the same dashboard's previous sweep is still running would otherwise spawn a
-second one, and two sweeps racing the same report would each call
-fa__create__budget_report for it, with record_own_sync's last write winning
-and the other's uuid orphaned in Carta with nothing local pointing at it any
-more. For as long as a sweep holds the lock, a background heartbeat thread
-refreshes its mtime on a fixed interval, independent of how long any single
-Carta call inside the sweep takes — a bridge turn can run well past any one
-timeout (a relay turn, a retry, a reset), so staleness must track whether
-the holding *process* is still alive, never how long one call or how many
-reports a sweep has. A waiter blocks until the holder either releases the
-lock or its heartbeat thread stops (the process crashed) for
-`_SWEEP_LOCK_STALE_AFTER`, timed on the waiter's own monotonic clock
-(`_FileLock`'s `observe_stale` explains why).
+main() additionally serializes every *sweep* on one dashboard — and serve.py's
+`_run_own_sync` (the dashboard's own Sync control, the "sync" share-op) does the same for
+its own push — behind a cross-process lock (`.own-sync.lock`, same O_EXCL scheme as
+report_store._FileLock, `observe_stale=True`): a build that finishes while the same
+dashboard's previous sweep is still running would otherwise spawn a second one, and two
+pushers racing the same report would each call fa__create__budget_report for it, with
+record_own_sync's last write winning and the other's uuid orphaned in Carta with nothing
+local pointing at it any more. For as long as either holds the lock (`_locked`, below — never
+the bare `_sweep_lock`, which neither refreshes on its own), a background heartbeat thread
+refreshes its mtime on a fixed interval, independent of how long any single Carta call
+inside the push takes — a bridge turn can run well past any one timeout (a relay turn, a
+retry, a reset), so staleness must track whether the holding *process* is still alive, never
+how long one call or how many reports a sweep has. A waiter blocks until the holder either
+releases the lock or its heartbeat thread stops (the process crashed) for
+`_SWEEP_LOCK_STALE_AFTER`, timed on the waiter's own monotonic clock (`_FileLock`'s
+`observe_stale` explains why).
+
+Three things push: the detached sweep above, `_run_own_sync` above, and a Claude session's
+own --plan/--record (references/serve-and-update.md's Step 5.2). The sweep and
+`_run_own_sync` hold `_sweep_lock` (with its heartbeat, through `_locked`) for their whole
+push. A session takes it only for --plan; --record/--retire (main()'s own direct calls to
+record_session_push/retire_session_push, no `_sweep_lock` at all) write reports.json under
+ReportStore's own short-lived lock and unlink the plan file only once that write has landed
+(`record_session_push`'s own `finally`, after `_record_push`) — so a plan file's *absence*
+always means the push is recorded, never a race to be read the wrong way: `_run_own_sync`
+finding no plan file either sees a report with no session push pending, or one whose push
+already landed, in which case own_sync.plan_push reads the uuid record_session_push just
+wrote and updates that mirror rather than creating a second one. The plan file's *presence*
+is what `_run_own_sync` checks for, under the lock, before pushing — a push planned but not
+yet recorded, so pushing ahead of it risks the orphaned-uuid race a second sweep would cause.
+
+That plan file usually means the push really is still in flight, moments from --record or
+--retire clearing it. It can also outlive an interrupted session: one that errors on a
+refused push, hits a conflict, or is cancelled before finishing never reaches --record or
+--retire for that report, and the file sits until the *next* --plan — which clears the whole
+plan directory (`shutil.rmtree`, in `_plan` below) before writing fresh ones, unless that
+--plan itself is a --recreate, which touches only the one report it names and leaves every
+other plan alone — or until references/serve-and-update.md's own Step 5.2 does the same
+right after its sub-agent returns, success or not. `_run_own_sync`'s refusal in that window
+is a false positive, not a bug: there is no way to tell "still running" from "abandoned and
+not yet cleaned up" from the file alone, so it errs toward refusing a concurrent create
+instead of risking one. Its own error message names the way out (asking Claude to push
+again, which plans and clears fresh).
 
 A pushed payload's optional `variance_by_category` (the Top Categories of
 Variance chart's data, trimmed to this one report) needs fund-admin's
@@ -210,10 +237,18 @@ def push_if_changed(
     report_id: str,
     user_id: int,
     emit: Emit,
+    *,
+    create: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Push `report_id`'s current payload and name to Carta as a report visible to
     nobody but `user_id`, when either has moved since the last successful push for
     this report (plan_push decides what, if anything, to send).
+
+    `create`, like main()'s own `--recreate`, plans a fresh create even for a report whose
+    own-sync was retired (the hosted app's own Delete) — the one way a retired report's
+    own-sync starts again. The sweep itself never passes this; it is for a caller acting on
+    one specific report an operator asked to sync (the dashboard's own Sync control), who
+    means to restart a mirror that was deliberately removed.
 
     Returns the report's metadata (report_store.ReportStore.metadata shape,
     including its `own_sync` field) after a push, or None when nothing
@@ -225,7 +260,7 @@ def push_if_changed(
     returns None, but the uuid Carta just created or updated is deleted upstream
     first — it is never left live with nothing local claiming it.
     """
-    plan = plan_push(store, data_dir, report_id, user_id)
+    plan = plan_push(store, data_dir, report_id, user_id, create=create)
     if plan is None:
         return None
     response = None
@@ -477,24 +512,30 @@ def _record_blocked(data_dir: Path, reason: str, detail: str, user_id: Optional[
     manco_paths.write_own_sync_status(data_dir, reason if due else None, due if due else None)
 
 
-# A sweep's lock counts as stale only once the *process* holding it has
-# stopped running, never because one Carta call or the sweep as a whole is
-# slow: a single bridge turn can legitimately run well past any one timeout
-# (a relay turn, a retry, a reset to a fresh session), so nothing about how
-# long a call or a sweep takes can bound how long the lock may need to stay
-# held. main()'s heartbeat thread refreshes it every
-# _SWEEP_LOCK_HEARTBEAT_INTERVAL for as long as a sweep holds it (a --plan holds it only
-# for write_plans, with no heartbeat); only a crash stops that before the release, and _SWEEP_LOCK_STALE_AFTER is a fixed multiple of the
-# interval so a waiter reclaims a lock a crashed holder left behind.
+# This lock's two kinds of holder (see the module doc above): the sweep and serve.py's
+# _run_own_sync hold it continuously, with a heartbeat, for their whole push — never the
+# bare lock, always through _locked below; --plan takes it bare, only for its own quick
+# write_plans, with no heartbeat, since it's never slow enough to need one. --record and
+# --retire never take this lock at all — see the module doc for why that's still safe.
+#
+# A heartbeat-held lock counts as stale only once the *process* holding it has stopped
+# running, never because one Carta call or the push as a whole is slow: a single bridge
+# turn can legitimately run well past any one timeout (a relay turn, a retry, a reset to a
+# fresh session), so nothing about how long a call takes can bound how long the lock may
+# need to stay held. The heartbeat thread refreshes it every _SWEEP_LOCK_HEARTBEAT_INTERVAL
+# for as long as its holder runs; only a crash stops that before the release, and
+# _SWEEP_LOCK_STALE_AFTER is a fixed multiple of the interval so a waiter reclaims a lock a
+# crashed holder left behind.
 _SWEEP_LOCK_HEARTBEAT_INTERVAL = 30.0
 _SWEEP_LOCK_STALE_AFTER = 4 * _SWEEP_LOCK_HEARTBEAT_INTERVAL
 
 
 def _heartbeat(lock_path: Path, interval: float, stop: threading.Event) -> None:
-    """Keep `lock_path`'s mtime fresh on its own thread for as long as a sweep
-    holds it, so a sweep's lock never looks abandoned while the process holding
-    it is still alive — independent of how long any
-    single Carta call inside the sweep it's guarding takes."""
+    """Keep `lock_path`'s mtime fresh on its own thread for as long as its holder — the
+    sweep, or serve.py's _run_own_sync, the two callers that go through `_locked` below —
+    holds it, so the lock never looks abandoned while the process holding it is still
+    alive — independent of how long any single Carta call inside the push it's guarding
+    takes."""
     while not stop.wait(interval):
         try:
             os.utime(lock_path, None)
@@ -503,11 +544,15 @@ def _heartbeat(lock_path: Path, interval: float, stop: threading.Event) -> None:
 
 
 def _sweep_lock(data_dir: Path) -> "report_store._FileLock":
-    """The one lock that serializes a dashboard's sweeps and --plan, so neither ever writes
-    reports.json at the same time as the other. A sweep holds it for its whole run, the
-    `claude` CLI probe included. An abandoned lock frees itself once it goes stale, so
-    there's nothing a finite wait would gain over the lock's own staleness check: wait as
-    long as it takes for the holder to either finish or stop refreshing it."""
+    """The lock serializing a dashboard's sweep, serve.py's own-sync Sync control
+    (_run_own_sync), and --plan, so none of the three ever writes reports.json at the same
+    time as another. A sweep or _run_own_sync holds it for its whole run (the `claude` CLI
+    probe included, for a sweep) — always through `_locked` below, which adds the heartbeat;
+    --plan takes this same lock directly, bare, for only as long as its own quick
+    write_plans takes. See the module doc for why --record/--retire need none of this. An
+    abandoned lock frees itself once it goes stale, so there's nothing a finite wait would
+    gain over the lock's own staleness check: wait as long as it takes for the holder to
+    either finish or stop refreshing it."""
     return report_store._FileLock(manco_paths.own_sync_lock_file(data_dir), timeout=float("inf"),
                                   stale_after=_SWEEP_LOCK_STALE_AFTER, observe_stale=True)
 

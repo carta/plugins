@@ -12,6 +12,7 @@
     "app/fund-admin-requests.js",
     "app/capital-call-review.js",
     "app/financial-reporting-tracker.js",
+    "app/kyc-tasks.js",
     "app/version-check.js"
   ],
   "pdfjs_marker": "__PDFJS_VENDOR_JS__",

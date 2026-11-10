@@ -1,25 +1,47 @@
 ---
 name: carta-workhub-build
-description: >
-  Builds or rebuilds the Carta Workhub live artifact — a standalone Cowork view of the work
-  a firm shares with its Carta fund admin team. Shows a request composer over the GP tasks it
-  has a panel for, in tabs for Drafts, Needs Action (waiting on you), With Carta and Completed,
-  grouped as on the Firm Dash — capital calls, distributions, financial reporting and more — with a
-  thread view for each request, the capital call review and the reporting tracker. The artifact auto-detects the active firm
-  from the Carta MCP context — no hardcoded firm name needed. Use this skill whenever the
-  user asks to "build the carta workhub artifact", "rebuild carta workhub", "set up carta
-  workhub", "deploy carta workhub", "show my Carta workhub", "rebuild carta tasks",
-  "show my Carta task board", or "pin my Carta requests".
-model: sonnet
+description: >-
+  Builds or rebuilds the Carta Workhub live artifact: a Cowork view of the work a firm shares
+  with its Carta fund admin team: a request composer and the GP's tasks in Drafts, Needs Action,
+  With Carta and Completed tabs, grouped as on the Firm Dash, with request threads, the capital
+  call review, the reporting tracker and the KYC forms waiting on the user. Use for "build the
+  carta workhub artifact", "rebuild carta workhub", "set up carta workhub", "deploy carta
+  workhub", "show my Carta workhub", "rebuild carta tasks", "show my Carta task board" or "pin
+  my Carta requests". Also fills in the user's own Carta KYC form from their documents, an
+  investor's task or a GP's fund KYC, from a Workhub KYC card or when asked: "help me fill in my
+  KYC form", "what does my KYC form still need", "complete my identity verification from these
+  documents", "do my KYC from my passport", "help with my KYC task on Carta", "fill in our
+  fund's KYC". NOT FOR firm Documents uploads, configuring an LP KYC form, or Carta's own KYC
+  review.
+model: inherit
 allowed-tools:
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build/scripts/build_artifact.py" *)
   - Artifact
+  # The KYC branch (references/kyc-fill-form.md)
+  - mcp__carta__call_tool
+  - mcp__carta__read_tool
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - AskUserQuestion
+  - Read
+  - Bash(ls -l *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.31.19</carta-plugin>
+<carta-plugin>carta-investors:7.32.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
+
+## KYC forms
+
+If the prompt is a Carta Workhub KYC card's (it names this skill's KYC branch and an
+`evaluation_reference_id`), or the user asks to fill in their own KYC form or their fund's, read
+`${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build/references/kyc-fill-form.md` (this skill's own
+`references/`; read it by that exact path, don't search for it) and follow it instead of the
+steps below. Everything else on this page builds the Workhub.
 
 # Carta Workhub — Build / Redeploy
 
@@ -93,7 +115,7 @@ not inside a fund-data dashboard.
   `resources/carta-workhub.config.js`: requests (`request-generic`), capital activities (`request-capital-activity`), financial packages
   (`publish-financial-package`), expense payments (`prepare-and-pay-expense`), management fee
   reviews (`review-management-fees`), cash reconciliation (`cash-reconciliation`, one workflow per bank
-  transaction) SOI reviews (`review-soi-v2`) and missing audit documents (`missing-audit-documents`, the GP's upload task for a fund's audit year). No panel opens the last five, so each is a Carta link under
+  transaction), SOI reviews (`review-soi-v2`) and missing audit documents (`missing-audit-documents`, the GP's upload task for a fund's audit year). No panel opens the last five, so each is a Carta link under
   Expense payments, Management fees, Cash reconciliation, SOI review or Audit, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out, except the audit upload task, which GPs also see on the web; add a template to that list once a panel opens its tasks. Completed reads the same list,
   so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
   shows, including the ones no panel opens (a capital call With Carta or Completed), as a
@@ -285,8 +307,8 @@ not inside a fund-data dashboard.
   has the prompt name that skill too, so Claude drives the page with its commands and rules: the
   Financial Report column's package pages name `carta-investors:financial-package-companion`,
   cash reconciliation `carta-investors:carta-gp-cash-reconciliation`, a management fee review
-  card `carta-investors:review-management-fees`, and an SOI review card
-  `carta-investors:open-soi-review`. A queue row names no firm, so the firm the Workhub shows
+  card `carta-investors:review-management-fees`, an SOI review card
+  `carta-investors:open-soi-review`. KYC cards open their chat themselves (see KYC cards). A queue row names no firm, so the firm the Workhub shows
   fills `firm_uuid` (the SOI review read takes it). An artifact cannot post
   into a chat or render an app itself, so neither runs inside the Workhub. `openClaudeChat` in
   `carta-workhub.app.js` opens `claude://claude.ai/new?q=<prompt>` and also tries to put the
@@ -313,6 +335,36 @@ not inside a fund-data dashboard.
   registry, not a change here, and needs nothing new in the publish grant: the read or
   the view's tool is called by Claude in the chat, never by the artifact. The early paint waits
   for this read too, since it decides what each card does.
+- **KYC cards** — the KYC forms waiting on the viewer, in a **KYC compliance** group
+  (`TASK_GROUP_KYC`), from two reads in `resources/app/kyc-tasks.js` rather than the task list:
+  `kyc:list:tasks`, the viewer's own KYC tasks (an invited fund's KYC, an LP's identity
+  verification, an entity's), and `fa:list:fund-kyc-task`, the active firm's fund KYC tasks
+  (fund-admin's `review-kyc`, "Complete KYC due diligence") assigned to the viewer. That is why
+  `review-kyc` stays out of `TASK_TEMPLATES_WITH_TILES`: the fund read already lists it, with the
+  status the card shows. Both reads sit behind carta-mcp's KYC flag, so each runs only when
+  `search_tools` offers it (`mcpCommandAvailable`); one that is not offered, refused or fails leaves
+  its cards out and nothing else, and is never a page error. The two lists merge on
+  `evaluation_reference_id`, so a fund KYC both return is one card, the fund's row, which names the
+  fund. A card is the task's name, the entity it is for, a date line with the form's status
+  (`completion_status`), and under it a line of its own, which wraps rather than ending in an
+  ellipsis: why the form was reopened (`completion_reopen`, e.g. "Reopened for periodic review"),
+  then, for an open form not yet complete, what it still lacks, from
+  `kyc:get:evaluation_completion` (read only when `search_tools` offers it,
+  `KYC_COMPLETION_READS_AT_ONCE` at a time): "Missing 4 answers · 2 documents" from each party's
+  `missing` entries (a `fieldId` is an answer, a `fileType` or `anyOf` a document), "1 party to add
+  or fix" for each roster, ownership or role shortfall, or, for an `IN_PROGRESS` form reopened with
+  every list empty, "Open the form to see what the reviewer asked"; the parts join with " · ". It
+  shows counts only, never a label, since each label names a party's field. A read that is not
+  offered, refused (a v1 form) or fails leaves the reopen reason alone on the line, or no line. In
+  the list view the line comes before the date, so a narrow row cuts the date first. A submitted form is out of
+  the viewer's hands: it waits under **With Carta** and opens nothing. Any other card opens a new
+  chat (`kycOpenInChat`), its prompt copied to the clipboard as a companion card's is, though the
+  card shows no **Copy** mark. The prompt names this skill's KYC branch,
+  the evaluation and, for a fund task, its fund, and the read whose `companion_url` to open beside
+  the chat: `fa:list:fund-kyc-task` on the fund for a fund task (its form, per its `next_step`), or
+  `kyc:list:tasks` on the task's `evaluation_id` for the viewer's own (that task's form, per its
+  `next_step`). Every load
+  replaces the KYC cards, after the task list has painted, so a form finished elsewhere leaves.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
 
@@ -340,9 +392,10 @@ A card links out only when its row carries `_links.web_url` (set only when `url`
 ## Listing sources, in order
 
 1. `fa:list:gp-workhub-active-task` plus `fa:list:firm-workflow` — see Queue.
-2. Workflow ids this artifact recorded in `localStorage`.
+2. `kyc:list:tasks` plus `fa:list:fund-kyc-task`, when offered — see KYC cards.
+3. Workflow ids this artifact recorded in `localStorage`.
 
-Path 2 cannot see requests raised by email or phone, so the UI says so rather than implying
+Path 3 cannot see requests raised by email or phone, so the UI says so rather than implying
 the list is complete.
 
 ## MCP tools required inside the artifact
@@ -356,12 +409,12 @@ Every tool below must appear in the publish call's `capabilities.mcp` grant, or 
 rejects with `not_in_manifest`:
 
 - `list_contexts` / `set_context` — resolve and pin the firm
-- `read_tool` — every read: the lists, the thread, the review panel, the tracker, and
+- `read_tool` — every read: the lists, the KYC tasks and what each form lacks, the thread, the review panel, the tracker, and
   `plugin:get:version` for the update banner, run without asking the viewer
 - `call_tool` — sending a request, replying, uploading an attachment, and the review decision
 - `welcome` — re-initializes an expired MCP session
 - `search_tools` — asks whether this viewer may attach files, open the review panel, or read
-  task openings; a command is available only when its tool name comes back first
+  task openings, KYC tasks or KYC completions; a command is available only when its tool name comes back first
 - `get_current_user` — whose messages are whose in a thread
 - `track_ui_event` — relays the page's UI events to Snowplow, called by the vendored tracker
 
@@ -400,6 +453,7 @@ The cards stay on screen throughout, and a read that fails in any part keeps the
 | `resources/app/fund-admin-requests.js` | composer, queue, thread overlay — the whole feature |
 | `resources/app/capital-call-review.js` | the capital call review panel |
 | `resources/app/financial-reporting-tracker.js` | the Financial Reporting Tracker cards and panel |
+| `resources/app/kyc-tasks.js` | the KYC cards: both KYC reads, their merge, each form's lack line and each card's chat prompt |
 | `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`, `openClaudeChat`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
 | `resources/app/load-timing.js` | per-load record of each Carta call and boot milestone; first in the part order |

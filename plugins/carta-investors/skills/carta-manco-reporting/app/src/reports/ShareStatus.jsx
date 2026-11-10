@@ -8,6 +8,7 @@ const RUNNING = {
   [REPORT_ACTIONS.SHARE]: "Sharing your report…",
   [REPORT_ACTIONS.PUBLISH_AS_NEW]: "Sharing your report…",
   [REPORT_ACTIONS.DELETE]: "Stopping sharing…",
+  [REPORT_ACTIONS.SYNC]: "Syncing your report…",
 };
 
 // Floating status panel for sharing with Carta, the one carta-fund-modeling

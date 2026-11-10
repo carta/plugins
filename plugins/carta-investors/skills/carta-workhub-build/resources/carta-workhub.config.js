@@ -152,6 +152,7 @@ const TASK_GROUP_ICONS = {
   'management-fees': '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
   'soi-review': '<path d="M16 5H3"/><path d="M16 12H3"/><path d="M16 19H3"/><path d="M21 5h.01"/><path d="M21 12h.01"/><path d="M21 19h.01"/>',
   'financial-reporting': '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/>',
+  'kyc-compliance': '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
   'intercompany-payment': '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
 };
 // Other, and any group without an icon of its own.
@@ -163,3 +164,6 @@ const TASK_GROUP_DEFAULT_ICON = '<path d="M10.1 2.18a9.93 9.93 0 0 1 3.8 0"/><pa
 const TASK_GROUP_OTHER = { id: 'other', name: 'Other' };
 const TASK_GROUP_CAPITAL_CALLS = { id: 'capital-calls', name: 'Capital calls' };
 const TASK_GROUP_FINANCIAL_REPORTING = { id: 'financial-reporting', name: 'Financial reporting' };
+// KYC cards come from the KYC reads, not the task list; fund-admin files its fund KYC
+// workflow under the same group, at this order.
+const TASK_GROUP_KYC = { id: 'kyc-compliance', name: 'KYC compliance', order: 18 };

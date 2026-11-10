@@ -423,8 +423,10 @@ Step 6 is where the unresolved ones get resolved.
 
 **Not part of the default run.** Never push to the hosted app on your own after the dashboard
 launches. Run this step only when the user asks to put their reports on the hosted app (e.g.
-"push my reports to the hosted app", "sync this to the online app"), only when this run has a
-Carta MCP (`<SERVER>`), and only after Step 5 has emitted the URL. Step 4 always builds with
+"push my reports to the hosted app", "sync this to the online app") — including by accepting
+Step 6's own **Push to the hosted app** offer, the one place this flow invites it rather than
+waiting to be asked — only when this run has a Carta MCP (`<SERVER>`), and only after Step 5
+has emitted the URL. Step 4 always builds with
 `--no-sync-sweep`, so no sweep ever runs for a dashboard built this way, and `own_sync.py
 --plan` plans a push for every owned report that is new or changed unconditionally, without
 waiting on or deferring to one.
@@ -446,6 +448,16 @@ It prints `{"fund_uuid": "<fund_uuid>"}`. Then dispatch **one** fresh-context su
 (Agent tool, `subagent_type: general-purpose`, which inherits this session's tools, its
 Carta connector included) with the brief below, filling in `<SERVER>`, `<UV_BIN>`,
 `<dashboard_dir>` and `<fund_uuid>` verbatim, and wait for it to finish.
+
+**Once it returns — whatever it answered — remove the whole plan directory:**
+```bash
+rm -rf "<dashboard_dir>/.own-sync-plan"
+```
+A plan the brief's own step 4 or 5 already consumed (`--record`/`--retire`) is already gone;
+one it never got to (a refused or failed push the brief's own cap skipped, a `conflict`, or
+the sub-agent stopping early) would otherwise sit there and make the dashboard's own Sync
+control (`serve.py`'s `_run_own_sync`) refuse those reports until the next `--plan` clears
+it for you — skip this step and that refusal outlives this run.
 
 Sub-agent brief:
 
@@ -708,6 +720,32 @@ Add the **Undo the last dashboard update** option below only when `archives` is
 non-empty — an app-source update has to have actually happened (Step 4.8) for there to
 be anything to undo, so most invocations omit it.
 
+**Only when this run has a Carta MCP (`<SERVER>`)** — Step 5.2 can't run without one, so
+there's nothing to offer without it — also check whether a report already on the hosted
+app has moved since its last push. A plain read of reports.json, writing nothing and
+taking no lock (never `own_sync.py --plan`: that writes plan files under the dashboard
+dir and holds the own-sync lock for as long as a sweep or a session's own push might be
+using it, neither of which this is worth blocking on just to decide whether to ask a
+question):
+```bash
+uv run python3 -c "
+import json, pathlib
+reports = json.loads(pathlib.Path('<dashboard_dir>/reports.json').read_text()).get('reports', [])
+due = []
+for r in reports:
+    sync = r.get('own_sync') or {}
+    if sync.get('uuid') and not sync.get('retired') and (sync.get('dirty') or sync.get('pushed_name') != r['name']):
+        due.append(r['name'])
+print(json.dumps(due))
+"
+```
+These are exactly the fields the dashboard's own Sync control reads (`reportState.js`'s
+`ownSync()`) — a report whose own-sync has a uuid, isn't retired, and either came back
+`dirty` from the last build or was renamed locally since its last push. Add the **Push to
+the hosted app** option below whenever this prints a non-empty list. An empty list —
+every own-synced report already matches what's live, or none has ever been synced —
+means nothing to offer here; Step 5.2 remains reachable by asking for it directly.
+
 After the orientation line, ask a single `AskUserQuestion`. Actuals are
 re-pulled from the warehouse on every invocation (Step 2.5/Step 3, see
 [data-fetch.md](data-fetch.md)), so the menu has no data-refresh option. The
@@ -724,8 +762,12 @@ text before it, and the link must stay in view while the user decides.
 
 Order the options so the one most likely to be why the operator came back
 leads the list. `AskUserQuestion` takes at most four options: two are always
-present and two are conditional, and a run can show all four, so merge any new
-option into an existing one.
+present and the rest are conditional — mapping decisions, the hosted push, and the
+undo point below. Merge any new option into an existing one before showing a fifth;
+when all three conditionals apply in the same turn, drop **Undo the last dashboard
+update** for this turn (nothing about an archive goes stale, so it can wait) rather
+than widening past four, and still honor it through the free-text option if the
+operator asks for it by name.
 
 - **Resolve outstanding mapping decisions** *(only when Step 4's `gaps:`
   line reports budget lines that need a mapping decision or accounts that
@@ -743,6 +785,15 @@ option into an existing one.
   answer with `record_mapping.py` the same way Step 4.7 does (see
   [budget-unresolved.md](budget-unresolved.md)'s "Recording answers") and
   rebuild.
+- **Push to the hosted app** *(only when the check above printed a non-empty list)* —
+  next in line after mapping decisions: an operator back to resolve a
+  mapping gap and an operator back because something changed since their last push
+  are both reasons tied to data moving, so this and the option above are the two
+  most likely to be why someone returned. Mark it `← recommended` whenever it's the
+  only conditional option showing. Selecting it runs Step 5.2 (below) and reports
+  what it pushed — this is the one place in the flow that offers it; Step 5.2 itself
+  still only runs when asked, whether that ask comes from here or from the operator
+  naming it directly.
 - **Make an edit or customize the dashboard** → free text: ask what to
   change, then apply it under `<user_src_dir>` the same way "How the app
   is served" above describes — never to `app/src` or `raw/*`. No rebuild

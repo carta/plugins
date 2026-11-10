@@ -673,21 +673,49 @@ class ReportStore:
             return self.metadata(report)
 
     def mark_if_payload_moved(self, report_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Mark your shared report changed when the payload it would be shared with now
-        differs from the one last sent: a workbook re-import or a newly answered
-        mapping question moves its figures without anyone touching the report.
-        Returns the report's metadata, or None when it isn't one you shared."""
+        """Mark your shared report and/or own-sync mirror changed when the payload either
+        would now be sent with differs from the one last sent: a workbook re-import or a
+        newly answered mapping question moves its figures without anyone touching the
+        report. The two links are independent — a report can hold either, both, or
+        neither — so each is checked and stamped on its own.
+
+        The own-sync side compares budget_content_fingerprint, not payload_fingerprint:
+        `payload` here never carries variance_by_category (that's own_sync's own addition,
+        made only at push time), so the two agree for this comparison, but
+        budget_content_fingerprint is what record_own_sync stamped as `content_fingerprint`
+        and is what stays stable across days the dirty check must not be fooled by.
+
+        The two sides differ on *clearing* the flag, on purpose. `shared.dirty` only ever
+        sets here — an owner's own deliberate re-share (record_shared) is the one thing that
+        clears it, because recipients still don't have the sent-but-now-reverted copy until
+        the owner chooses to send it again. own_sync.dirty is recomputed both ways on every
+        call: a corrected import or a reverted mapping answer that moves a report's figures
+        back to exactly what's already live on the hosted app needs no further action from
+        the operator, so the dot has nothing left to ask them to do — unlike `shared`, there
+        is no second party whose copy is still stale once the content matches again.
+
+        Returns the report's metadata, or None when it's neither shared nor own-synced."""
         with self.transaction() as doc:
             try:
                 report = self.find(doc, report_id)
             except ReportEditError:
                 return None
             shared = report.get("shared") or {}
-            if not shared.get("is_owner"):
+            is_shared = bool(shared.get("is_owner"))
+            if is_shared:
+                sent = shared.get("payload_fingerprint")
+                if sent and sent != payload_fingerprint(payload):
+                    shared["dirty"] = True
+            sync = report.get("own_sync") or {}
+            is_synced = bool(sync) and not sync.get("retired")
+            if is_synced:
+                sent = sync.get("content_fingerprint")
+                if sent and sent != budget_content_fingerprint(payload):
+                    sync["dirty"] = True
+                else:
+                    sync.pop("dirty", None)
+            if not is_shared and not is_synced:
                 return None
-            sent = shared.get("payload_fingerprint")
-            if sent and sent != payload_fingerprint(payload):
-                shared["dirty"] = True
             return self.metadata(report)
 
     def record_own_sync(self, report_id: str, uuid: Optional[str], payload: Dict[str, Any],

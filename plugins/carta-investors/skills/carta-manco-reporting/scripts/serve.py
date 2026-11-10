@@ -565,7 +565,59 @@ def _share_job_state(job):
         return dict(finished) if finished else None
 
 
-SHARE_OPS = ("users", "share", "publish-as-new", "delete", "pull")
+SHARE_OPS = ("users", "share", "publish-as-new", "delete", "pull", "sync")
+
+
+def _run_own_sync(bridge, store, report_id, emit):
+    """Push one report's private own-sync mirror now, for the dashboard's own Sync control —
+    own_sync.py's detached sweep, and a Claude session's own --plan/--record (references/
+    serve-and-update.md's Step 5.2), are the other callers of push_if_changed over the same
+    reports.json; own_sync.py's module doc has the full account of how the three avoid
+    racing each other and what a plan file on disk means.
+
+    Raises report_store.ReportEditError("not_ready") when the report hasn't been built yet:
+    own_sync.plan_push swallows read_share_payload's own error there so the sweep's
+    best-effort pass keeps going past one unbuilt report, which this one-report,
+    user-initiated click must not silently do the same with — read_share_payload is called
+    here first, before anything else, purely to surface that.
+
+    `create=True` on the first attempt only when this report's own-sync was already retired
+    (the hosted app's own Delete) before this call started. If the first attempt's own push
+    answers `not_found` — the mirror was *just* retired, inside this very call — this retries
+    once more with `create=True`: own_sync.push_if_changed's own doc names a fresh create as
+    the one way a retired report's mirror starts again, and without this retry the operator's
+    click would silently do nothing while looking like it worked.
+
+    None back from the final attempt, with the report still not retired, means nothing had
+    moved since the last push — not an error, just nothing to send — so this returns the
+    report's current metadata either way."""
+    report = report_store.ReportStore.find(store.load(), report_id)
+    user_id = manco_paths.read_user_id(DATA_DIR)
+    if user_id is None:
+        raise share_bridge.ShareError(
+            "This dashboard hasn't recorded a Carta user yet — reload the page once it "
+            "finishes loading, then try again.", own_sync.BLOCKED_NO_USER_ID)
+    store.read_share_payload(report_id)
+    was_retired = bool((report.get("own_sync") or {}).get("retired"))
+
+    def push_locked():
+        # A plan file on disk = a session push not yet recorded (own_sync.py's module doc).
+        plan_file, _ = manco_paths.own_sync_plan_files(DATA_DIR, report_id)
+        if plan_file.exists():
+            raise share_bridge.ShareError(
+                "A push from your Claude session is still finishing for this report — "
+                "try again in a moment, or ask Claude to push to the hosted app.",
+                "sync_in_progress")
+        pushed = own_sync.push_if_changed(bridge, store, DATA_DIR, report_id, user_id, emit, create=was_retired)
+        if pushed is None:
+            now = report_store.ReportStore.find(store.load(), report_id)
+            if bool((now.get("own_sync") or {}).get("retired")) and not was_retired:
+                pushed = own_sync.push_if_changed(bridge, store, DATA_DIR, report_id, user_id, emit, create=True)
+        return pushed
+
+    # own_sync._locked, not the bare _sweep_lock — own_sync.py's module doc explains why.
+    pushed = own_sync._locked(DATA_DIR, push_locked)
+    return pushed or report_store.ReportStore.metadata(report_store.ReportStore.find(store.load(), report_id))
 
 
 def _run_share_op(op, params):
@@ -607,9 +659,14 @@ def _run_share_op(op, params):
                                               view=params.get("view"))
         elif op == "delete":
             result = share_ops.delete(bridge, store, DATA_DIR, params["report_id"], emit)
+        elif op == "sync":
+            result = {"status": "ok", "report": _run_own_sync(bridge, store, params["report_id"], emit)}
         else:
             result = share_ops.pull(bridge, store, DATA_DIR, emit)
-        if op != "users" and result.get("status") == "ok":
+        # "sync" never touches anything a rebuild would re-derive — own_sync.py's own sweep
+        # doesn't rebuild either — so a Sync click stays quick instead of waiting on a full
+        # dashboard rebuild for a change that only moved reports.json's own own_sync field.
+        if op not in ("users", "sync") and result.get("status") == "ok":
             emit("Updating the dashboard…")
             ok, message = _rebuild()
             result["rebuilt"] = ok
@@ -858,7 +915,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         op = body.get("op")
         if op not in SHARE_OPS:
             return self._send(400, {"error": "unknown_op"})
-        if op in ("share", "publish-as-new", "delete") and not isinstance(body.get("report_id"), str):
+        if op in ("share", "publish-as-new", "delete", "sync") and not isinstance(body.get("report_id"), str):
             return self._send(400, {"error": "report_id_required"})
         shared_with = body.get("shared_with")
         if shared_with is not None and not (isinstance(shared_with, list) and all(
