@@ -63,6 +63,14 @@ A card whose query answers with no rows is hidden instead of shown blank. A card
 | `CartaHome.Directory.Published` | render | The Skill Directory loaded its published list |
 | `CartaHome.Directory.View.<source>.<counts>` | render | The Skill Directory rendered (where its list came from, and its size) |
 | `CartaHome.Directory.<action>` | click | Used the Skill Directory |
+| `CartaHome.Directory.OpenCategory.<Category>` / `CloseCategory.<Category>` | click | Expanded or collapsed a category card |
+| `CartaHome.Directory.Search.Results<N>` | click | A search settled (800 ms after typing) and found N skills exactly (in their own words or, when none match, their category's name), or by a short last word (2–3 letters) read as the start of a word in the skill's text or its category's name. The typed words are never sent |
+| `CartaHome.Directory.Search.Related<N>` | click | A search settled and found N close matches but no exact one |
+| `CartaHome.Directory.Search.ZeroResults` | click | A search settled and found no skill; the empty state showed |
+| `CartaHome.Directory.Search.Clear` | click | Cleared the search with the X |
+| `CartaHome.Directory.Search.DidYouMean` | click | A search settled, found no skill, and the empty state offered a corrected spelling that does find one |
+| `CartaHome.Directory.DidYouMean.Accept` | click | Clicked the corrected spelling; the corrected search ran |
+| `CartaHome.Directory.AskClaude` | click | Copied the "Ask Claude about this" message from the empty state. The message holds the typed words but is not sent as a prompt |
 | `CartaHome.Directory.Copy.<skill>` | prompt | Copied a skill's prompt from the Skill Directory |
 | `CartaHome.WhatsNew.Select.<item>` | click | Picked a What's new item |
 | `CartaHome.WhatsNew.Copy.<item>` | prompt | Copied a What's new item's prompt or set-up command |

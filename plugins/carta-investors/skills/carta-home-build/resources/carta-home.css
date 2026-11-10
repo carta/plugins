@@ -421,10 +421,10 @@
       transition: opacity .2s, transform .3s cubic-bezier(.34, 1.56, .64, 1);
     }
     .cap-copied-tip { right: 0; bottom: calc(100% + 4px); transform: translateY(0); }
-    .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip, .soi-new-fund-copy.copied .cap-copied-tip { opacity: 1; transform: translateY(-8px); }
+    .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip, .dir-ask.copied .cap-copied-tip, .soi-new-fund-copy.copied .cap-copied-tip { opacity: 1; transform: translateY(-8px); }
     @media (prefers-reduced-motion: reduce) {
       .cap-copied-tip, .wn-copied-tip { transition: none; }
-      .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip, .soi-new-fund-copy.copied .cap-copied-tip { transform: none; }
+      .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip, .dir-ask.copied .cap-copied-tip, .soi-new-fund-copy.copied .cap-copied-tip { transform: none; }
       .cap-copy:active { transform: none; }
       .cap-box:hover:not(:focus-within) .cap-card-text::after { animation: none; }
     }
@@ -679,6 +679,44 @@
     .dir-link { background: none; border: none; padding: 0; font: inherit; font-size: 12px; cursor: pointer; color: var(--ink-color-global-link-default); }
     .dir-link:hover { text-decoration: underline; }
     .dir-link:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 2px; }
+
+    /* Search box. The browser's own clear button is hidden so the page's one X is the only one. */
+    .dir-search { position: relative; display: flex; align-items: center; margin-bottom: 24px; }
+    .dir-search[hidden] { display: none; }
+    .dir-search-icon { position: absolute; left: 12px; display: flex; color: var(--ink-color-global-text-subtle); pointer-events: none; }
+    .dir-search-input {
+      width: 100%; box-sizing: border-box; height: 36px; padding: 0 32px 0 34px;
+      font: inherit; font-size: 13px; color: var(--ink-color-global-text-default);
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+      border: 1px solid var(--ink-color-global-border-default); border-radius: var(--ink-size-global-radius-subtle);
+    }
+    .dir-search-input::-webkit-search-cancel-button, .dir-search-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+    .dir-search-input::placeholder { color: var(--ink-color-global-text-subtle); }
+    .dir-search-input:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 0; box-shadow: 0 0 4px 4px var(--ink-color-global-border-focus-light); }
+    .dir-search-clear { position: absolute; right: 6px; width: 24px; height: 24px; border: none; background: none; cursor: pointer; font-size: 18px; line-height: 1; color: var(--ink-color-global-text-subtle); }
+    .dir-search-clear:hover { color: var(--ink-color-global-text-default); }
+    .dir-search-clear:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 2px; }
+
+    /* Search results reuse the cards. The key-term bold is set ahead of time, not by what was typed,
+       so it would read as a match marker; results show plain prompts. */
+    .dir-plain .dir-term { font-weight: 400; }
+    .dir-res-note { margin: 0 0 12px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
+    .dir-best {
+      margin-left: 8px; padding: 0 8px; font-size: 11px; font-weight: 500; line-height: 16px;
+      color: var(--ink-color-global-text-default); background: var(--ink-color-global-feedback-positive-subtle);
+      border-radius: var(--ink-radius-pill);
+    }
+    .dir-empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 40px 8px 24px; }
+    .dir-empty-ic { color: var(--ink-color-global-text-subtle); margin-bottom: 4px; }
+    .dir-empty-state h3 { margin: 0; font-size: 17px; font-weight: 600; color: var(--ink-color-global-text-default); }
+    .dir-empty-state p { margin: 0 0 6px; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--ink-color-global-text-subtle); }
+    .dir-dym { font-size: inherit; font-weight: 600; }
+    .dir-ask {
+      position: relative; padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+      color: var(--ink-color-global-surface-background-default); background: var(--ink-color-global-text-default);
+      border: 1px solid var(--ink-color-global-text-default); border-radius: var(--ink-size-global-radius-subtle);
+    }
+    .dir-ask:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 2px; }
 
     /* Category cards: two independent columns, each card its own height. A card has no hover
        colour of its own, so the hover on a prompt row stands out. */

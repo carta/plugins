@@ -147,9 +147,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.34.0</carta-plugin>
+<carta-plugin>carta-investors:7.35.0</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — neither its fixed reply text nor (when hosted is asked for) the hosted app itself needs plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
 # ManCo Reporting Dashboard
 
@@ -215,9 +215,12 @@ Seven steps, cache-first: Step 0's local cache probe decides whether Steps 1,
 resolves identity from a local cache before ever touching the MCP. Step 3
 (limited to what Step 2.5's `needs_fetch` names) and Steps 4, 5 and 6 run on
 every invocation that reaches them — only a sandboxed session, or a local
-invocation that itself asks for the hosted app, never does: it replies with
-the hosted link and ends the turn before Step 0 runs at all. Never ask a local
-session whether to run hosted or local. See
+invocation that itself asks for the hosted app, never does: it replies and
+ends the turn before Step 0 runs at all. A sandboxed session's reply names
+the hosted app only when the invocation itself asked for it; otherwise it
+points to Claude Code on the user's own computer, with no hosted mention. A
+local invocation that asks for hosted always gets the hosted link. Never ask
+a local session whether to run hosted or local. See
 [firm-resolution.md](references/firm-resolution.md)'s Gate 0 and Gate 1 for
 the sandboxed exit and the asked-for hosted hand-off that sit before this table.
 

@@ -52,8 +52,9 @@ gets the opening line at the same moment the check begins, not after it.
 **There is no Bash tool in this session at all** (claude.ai chat, or another surface with
 none) → skip the uv prerequisite below and everything else in this gate — none of it can run
 without Bash. Go straight to the **`surface=sandboxed`** branch below, including its
-hosted-link hand-off, and treat its "Open the hosted app" step as the gate-file-unreadable
-case, which that section's "If that file can't be read" sentence covers. A Bash tool that IS present but whose
+hosted-or-not check; if the invocation asks for hosted, treat that branch's "Open the hosted
+app" step as the gate-file-unreadable case, which that section's "If that file can't be read"
+sentence covers. A Bash tool that IS present but whose
 `detect-surface` call fails ("No such file", a bad path) is a different case, covered further
 down where `detect-surface` is actually run.
 
@@ -240,34 +241,41 @@ it:**
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" detect-surface
 ```
 - `"surface": "sandboxed"` → **stop immediately.** Do **not** scan caches, resolve a
-  firm, touch the MCP, or launch `serve.py`. **Open the hosted app** with
-  **https://manco-reporting.carta.cloud** (see "Open the hosted app" below), then reply with
-  this message (substance verbatim),
-  then end the turn:
-  > This session is running in the cloud, where a local dashboard can't reach your
-  > browser — but you don't need it. **Carta also hosts this dashboard** at
-  > **https://manco-reporting.carta.cloud** — sign in with Carta and pick your firm, with
-  > nothing to build.
-  >
-  > - **Key Metrics, Monthly P&L, and Management Fee Income** by fund
-  > - **Budget vs Actuals**, with journal-entry drill-downs
-  > - Carta's own budget shows there automatically. A budget imported from your own
-  >   workbook reaches the hosted app through this skill's local workflow.
-  >
-  > **→ Open it now: https://manco-reporting.carta.cloud**
-  >
-  > **Want to import your own budget workbook from Excel, or customize what's shown?** That
-  > needs Claude Code running on your computer — open it there and ask, "open the ManCo
-  > dashboard for `<firm>`".
+  firm, touch the MCP, or launch `serve.py`.
 
-  If the invocation named a firm, add one line to that reply, after the "Open it now" line:
-  "You asked about **\<firm\>** — pick it from the firm chooser when the app opens, or use
-  **Switch firm** if it opens a different one." (No deep link here: a sandboxed session does
-  not reliably have the MCP.)
+  Check whether the invocation itself asks for the hosted app — it says "hosted" or
+  "online", or pastes the bare hosted-app URL (the same check Gate 1 uses below). Give the
+  hosted app's URL only in that case; otherwise don't mention it at all.
+
+  - **Hosted asked for** → **Open the hosted app** with **https://manco-reporting.carta.cloud**
+    (see "Open the hosted app" below), then reply with this message (substance verbatim), then
+    end the turn:
+    > **Carta hosts this dashboard** at **https://manco-reporting.carta.cloud** — sign in with
+    > Carta and pick your firm, with nothing to build.
+    >
+    > - **Key Metrics, Monthly P&L, and Management Fee Income** by fund
+    > - **Budget vs Actuals**, with journal-entry drill-downs
+    > - Carta's own budget shows there automatically. A budget imported from your own
+    >   workbook reaches the hosted app through this skill's local workflow.
+    >
+    > **→ Open it now: https://manco-reporting.carta.cloud**
+
+    If the invocation named a firm, add one line to that reply, after the "Open it now" line:
+    "You asked about **\<firm\>** — pick it from the firm chooser when the app opens, or use
+    **Switch firm** if it opens a different one." (No deep link here: a sandboxed session does
+    not reliably have the MCP.)
+  - **Hosted not asked for** (the default) → Do **not** open the hosted app, and do **not**
+    mention its URL. Reply with this message (substance verbatim), then end the turn:
+    > This session is running in the cloud, where a local dashboard can't reach your browser.
+    > To build the ManCo dashboard and import your own budget workbook from Excel, you need
+    > Claude Code running on your computer — open it there and ask, "open the ManCo dashboard
+    > for `<firm>`".
+
+    If the invocation named a firm, substitute it for `<firm>` in that line.
 
   This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to launch
   anyway, and do **not** fall back to another surface or tool. (Opening the hosted link in
-  the in-app browser is not a fallback; it is part of this reply.)
+  the in-app browser is not a fallback; where it's given, it's part of this reply.)
 - `"surface": "local"` (the normal case) → continue to **Gate 1** silently. Do not
   output any text — proceed directly with a tool call and nothing else.
 

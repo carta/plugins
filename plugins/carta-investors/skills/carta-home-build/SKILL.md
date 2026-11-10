@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.34.0</carta-plugin>
+<carta-plugin>carta-investors:7.35.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -236,7 +236,8 @@ need the full file in context. Edit the small source file for what you're changi
 |------|---------------|-------------|
 | `resources/carta-home.config.js` | `DIR_CATEGORIES` (id, name, tagline, optional `requires`), `NEWS_TAG`; `DASHBOARDS` launcher registry; `WHATS_NEW_MICROAPPS` featured microapps; `WHATS_NEW_SKILL_OUTPUTS` output kind per skill and per category | change which categories show, a category's entitlement gate, which Contentful tag feeds Plugin news, which cards launch a standalone dashboard, which microapps What's new features, or which output kind a new skill's preview shows |
 | `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"`), `requires`, `whatsNew` (`false` keeps the skill out of What's new) and `whatsNewCopy` (the headline and body What's new shows for the skill); `null` opts a skill out | add or change a skill's row or example prompts — no rebuild needed once published |
-| `resources/app/directory-views.js` | Skill directory tab: expandable category cards, prompt copy and the directory's tracking ids | change how the directory looks or tracks |
+| `resources/app/directory-search.js` | Skill directory search rules: which skills a typed search finds, close matches through the hand-kept `DIR_SYNONYMS` word groups, the best match | change what a search finds or add related words |
+| `resources/app/directory-views.js` | Skill directory tab: expandable category cards, the search box and its results and empty state, prompt copy and the directory's tracking ids | change how the directory looks or tracks |
 | `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`) when idle, validates it, and re-renders over the baked list | change how the published list is merged or when it loads |
 | `resources/carta-home.app.js` | shared/core runtime logic (`_mcp`, format helpers, `fetchLiveData` bootstrap, SOI, Fund Performance, the directory's data and `directoryCategories()`, tour) | change behavior / data fetching for anything not yet split into its own file below |
 | `resources/app/capital-activity.js` | Capital activity cards + detail overlay (fetch/render/dismiss) | change the capital call / distribution cards or their detail modal |
