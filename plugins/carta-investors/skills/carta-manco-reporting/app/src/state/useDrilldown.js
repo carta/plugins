@@ -48,9 +48,11 @@ export default function useDrilldown() {
   // budget-vs-actuals comparison, so the drawer has to be able to restate
   // that comparison rather than only the actual side of it, and it restates
   // the table's own numbers instead of recomputing them.
-  const openTagValueAccount = useCallback((tagValue, account, accountType, accountTypeAll, comment, cartaTags, cell, period, origin, excludedClaims, dimension, scopes, cellKey) => {
+  const openTagValueAccount = useCallback((tagValue, account, accountType, accountTypeAll, comment, cartaTags, cell, period, origin, excludedClaims, dimension, scopes, cellKey, periodYear) => {
     setSelection({
       kind: "department-account",
+      // The budget's year: the cell summed only that year's entries.
+      periodYear: periodYear || null,
       // Which cell the table holds lit while this panel is open.
       cellKey: cellKey || null,
       tag_value: tagValue, account,

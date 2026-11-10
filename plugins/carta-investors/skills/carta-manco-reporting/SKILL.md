@@ -3,7 +3,7 @@ name: carta-manco-reporting
 description: >-
   Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report ask under any verb (spin up, open, launch, build, create, run), firm named or not, or a ManCo financials ask naming a firm — ManCo P&L drill-down by account or fund, expenses, Budget vs Actuals (or Monthly Actuals by GL account with no budget), Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. ALSO a short follow-up only while a ManCo Budget vs Actuals dashboard is open (e.g. "refresh Budget vs Actuals"); a budget-workbook follow-up with no dashboard open → carta-manco. DISAMBIGUATION: "build" means render this dashboard, not draft a budget. NOT FOR: drafting or editing a budget, or a generic ManCo ask naming no firm and no visual surface (→ carta-manco); a named consolidated P&L, balance sheet or trial balance (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch → skill-dev:build-micro-app.
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
-version: 0.6.9
+version: 0.6.10
 # `version` gates delivery of app/src: each user runs their own copy, and a change
 # reaches it only when this number goes up. Bump it in every PR that changes a file
 # under app/src outside __tests__ — patch merges silently, minor/major asks the user
@@ -147,7 +147,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.32.0</carta-plugin>
+<carta-plugin>carta-investors:7.32.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
@@ -210,7 +210,7 @@ cache. If the user doesn't name a firm, ask via `AskUserQuestion` — do
 
 ## The flow
 
-Eight steps, cache-first: Step 0's local cache probe decides whether Steps 1,
+Seven steps, cache-first: Step 0's local cache probe decides whether Steps 1,
 1.5, and 2 need the Carta MCP at all, the same way `carta-fund-modeling`
 resolves identity from a local cache before ever touching the MCP. Step 3
 (limited to what Step 2.5's `needs_fetch` names) and Steps 4, 5 and 6 run on
@@ -239,7 +239,6 @@ the sandboxed exit and the asked-for hosted hand-off that sit before this table.
 | 5.3 | only when the user asks for the hosted app's link | Give the hosted app's link — a bare link to the firm itself, never a specific report | [serve-and-update.md](references/serve-and-update.md) |
 | 5.4 | only when the user asks to load reports shared with them | Load reports shared with you | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
-| 7 | only when the operator asks for a budget in the hosted app that the automatic sync didn't deliver to the audience they want (their own session, or colleagues), and the hosted Import budget button is enabled | Export the workbook budget as a bundle to upload | [serve-and-update.md](references/serve-and-update.md) |
 
 **Read the reference file for a step before running it.** They carry the
 match rules, the exact commands, and the reasoning. This page is the

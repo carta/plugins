@@ -14,7 +14,7 @@ import { FiltersMenu, FilterRibbon, PeriodDropdown } from "./BudgetPeriodControl
 import {
   rowBreakouts, defaultBreakout, breakoutBuckets, worthBreakingOut, opensAnything, childKey, childScope,
 } from "./accountBreakout.js";
-import { fundMatchRegex } from "./drilldown/util.js";
+import { entryInYear, fundMatchRegex } from "./drilldown/util.js";
 import { trackClick } from "../analytics.js";
 import {
   trueAsOfMonth, FREQUENCIES, MONTH_ABBR, monthsInRange, periodColumns,
@@ -93,7 +93,7 @@ export function outlineFrequency(budget, picked) {
 }
 
 export default function BudgetActualsOutline({ budget, accountsData, periodYear, drilldown,
-                                              dimension = null, asOf }) {
+                                              dimension = null, asOf, yearEntries }) {
   const rows = budget?.rows || [];
   const valueAliases = budget?.value_aliases || {};
   const tagValuesAvailable = dimensionValuesAvailable(accountsData);
@@ -403,7 +403,7 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
                 closingRow={isHeader ? closingRowByHeaderIdx.get(i) : undefined}
                 alignIndent={!isHeader ? closingRowIndent.get(row) : undefined}
                 breakout={breakout}
-                entries={accountsData?.entries}
+                entries={yearEntries}
                 dimension={dimension}
                 widened={widenedTotals.has(rowAggKey(row))}
                 elsewhere={row.key ? elsewhereByKey[row.key] : undefined}
@@ -1155,7 +1155,6 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
   const entries = accountsData?.entries || [];
   const fundFees = accountsData?.fund_fee_entries || [];
   const mancoFees = accountsData?.manco_fee_entries || [];
-  const yr = String(periodYear || "");
   // No JE this firm has carries a Department tag: a dept-scoped row would
   // sum to $0 forever, so treat it as firm-wide like an unscoped row.
   const tagValuesAvailable = dimensionValuesAvailable(accountsData);
@@ -1190,7 +1189,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
       const only = new Set(row.gl_codes || []);
       const mine = [];
       for (const e of feeRows) {
-        if (yr && String(e.yr ?? "") !== yr) continue;
+        if (!entryInYear(e, periodYear)) continue;
         if (!rx.test(e.fund || "")) continue;
         if (only.size && !only.has(e.acct_type)) continue;
         if (!monthBucket(e.mo)) continue;
@@ -1221,6 +1220,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
       const extra = (row.scopes || []).filter(sc => sc.source !== "reporting_tag");
       for (const e of entries) {
         if (!gls.has(e.acct_type)) continue;
+        if (!entryInYear(e, periodYear)) continue;
         const mo = monthBucket(e.mo);
         if (!mo) continue;
         const amt = Number(e.amount ?? 0) || 0;

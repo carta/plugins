@@ -49,27 +49,19 @@ everything only the form can (Step 2) and submits each form themselves.
   time-limited document, tell the user its date and that a reviewer may refuse one that is too
   old.
 
-## Step 1 — Open the tasks page and say what each task needs
+## Step 1 — List the tasks, then open the chosen task's form
 
 ```
 read_tool({"name": "kyc__list__tasks", "arguments": {}})
 ```
 
-The result leads with `companion_url`, the user's KYC tasks page: follow its `how_to_reply`
-and open it, so the user sees the same list beside the chat. Each task carries `task_type`,
-`evaluation_reference_id`, a fund, partner or entity name, `form_url` (the task's own form),
-`completion_status` and `completion_reopen`.
+The result holds `tasks` and `count`. Each task carries `task_type`, `evaluation_reference_id`,
+a fund, partner or entity name, `form_url` (the task's own form), `completion_status` and
+`completion_reopen`.
 
-A Carta Workhub KYC card's prompt names this read with one task's `evaluation_id`:
-
-```
-read_tool({"name": "kyc__list__tasks", "arguments": {"evaluation_id": "<evaluation_reference_id>"}})
-```
-
-Then the result leads with `next_step` and `companion_url`, that task's own form: open it beside
-the chat as `next_step` says, instead of the tasks page, and start with that task without asking
-which. When the list no longer holds it, say it is no longer waiting on them and go on with the
-rest.
+A Carta Workhub KYC card's prompt names one task's `evaluation_id`: that task is chosen, so
+read it by that id and open its form as below, and start with it without asking which. When the
+result no longer holds it, say it is no longer waiting on them and go on with the rest.
 
 Tell the user, task by task, by its fund or entity name (never the reference id):
 
@@ -85,8 +77,20 @@ When `completion_reopen` is set, say why the task is back with them under it, e.
 "reopened by compliance for periodic review" (`reason`, `reopenedByRole`).
 
 - No tasks: tell the user nothing is waiting on them, and stop.
+- One unfinished: that task is chosen.
 - Several unfinished: ask with `AskUserQuestion` which to start with, one option per task,
   leaving out any task already found not to be a v2 form.
+
+Once a task is chosen, by the card or by the user, open its form beside the chat. Read the task
+by its `evaluation_id`:
+
+```
+read_tool({"name": "kyc__list__tasks", "arguments": {"evaluation_id": "<evaluation_reference_id>"}})
+```
+
+The result leads with `next_step`, `companion_url` (that task's own form, `/kyc/task/<id>/`)
+and `how_to_reply`: open the `companion_url` beside the chat as `next_step` says, following
+`how_to_reply`.
 
 If `kyc__list__tasks` is not found, KYC through Claude is not available for this account
 yet. Tell the user to fill in the form on Carta, and stop.
@@ -129,7 +133,7 @@ read_tool({"name": "kyc__get__evaluation_completion",
            "arguments": {"evaluation_id": "<evaluation_reference_id>"}})
 ```
 
-This is the same reading the tasks page shows:
+It reads:
 
 | Part | What it says |
 | --- | --- |

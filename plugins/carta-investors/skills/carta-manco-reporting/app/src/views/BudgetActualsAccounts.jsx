@@ -61,10 +61,10 @@ export function pickBreakout(breakouts, accountsData, budget, key) {
 
 // Budget vs Actuals for a Carta-sourced budget. Carta's budget has no
 // department dimension, so the account is the only axis available.
-export default function BudgetActualsAccounts({ budget, entries, drilldown, accountsData, asOf }) {
+export default function BudgetActualsAccounts({ budget, entries, drilldown, accountsData, asOf, periodYear }) {
   const period = budget?.period;
   const monthly = hasMonthlyDetail(budget);
-  const year = budgetYear(budget, asOf);
+  const year = periodYear;
   // Never past the true as-of date, whatever the budget itself claims to cover.
   const statedLastMonth = Math.min(12, Math.max(1, period?.last_month ?? 12));
   const asOfMonth = Math.min(statedLastMonth, trueAsOfMonth(asOf));
@@ -246,6 +246,7 @@ export default function BudgetActualsAccounts({ budget, entries, drilldown, acco
               key={section.title} section={section} drilldown={drilldown} names={nameByGl}
               subCodes={subCodes} columns={columns} subCols={subCols} cellOf={cellOf}
               breakout={breakout} entries={entries} windowMonths={windowMonths}
+              periodYear={year}
             />
           ))}
         </tbody>
@@ -268,7 +269,7 @@ function windowBudget(row, months, monthly) {
 }
 
 function SectionRows({ section, drilldown, names, subCodes, columns, subCols, cellOf,
-                      breakout, entries, windowMonths }) {
+                      breakout, entries, windowMonths, periodYear }) {
   const [open, toggle] = useOpenRows("MancoReporting.BudgetVsActuals.AccountsExpandRow");
   const spanCols = 1 + columns.length * subCols.length;
   return (
@@ -288,6 +289,7 @@ function SectionRows({ section, drilldown, names, subCodes, columns, subCols, ce
         const onClick = drilldown
           ? (col) => drilldown.openAccount(r.label, {
               from: "budget-vs-actuals",
+              periodYear,
               budget: col ? cellOf(r, col).budget : r.budgeted,
               actual: col ? cellOf(r, col).actual : r.actual,
               polarity: section.polarity,
@@ -353,7 +355,7 @@ function SectionRows({ section, drilldown, names, subCodes, columns, subCols, ce
             <ChildRow
               key={`${key}-${childKey(c)}`} child={c} parent={r} columns={columns}
               subCols={subCols} breakout={breakout} polarity={section.polarity}
-              drilldown={drilldown} from="budget-vs-actuals"
+              drilldown={drilldown} from="budget-vs-actuals" periodYear={periodYear}
               label={{ cols: columns.filter((c) => !c.ytd), months: windowMonths }}
             />
           ))}
@@ -406,7 +408,7 @@ export function Chevron({ open, label, by, onClick }) {
 // has no budget at all (MonthlyActualsView). `from` names the page, for the
 // drawer's open event.
 export function ChildRow({ child, parent, columns, subCols, breakout, polarity, drilldown, from,
-                           label }) {
+                           label, periodYear }) {
   // The value this row IS, as a filter rather than a note. It used to ride
   // along as `breakout`, which nothing downstream read — so every child of
   // an account opened the same panel, totalling the whole account rather
@@ -418,6 +420,7 @@ export function ChildRow({ child, parent, columns, subCols, breakout, polarity, 
   const onClick = drilldown
     ? (col) => drilldown.openAccount(parent.label, {
         from,
+        periodYear,
         // No budget, not a zero one. The workbook budgets the account, not
         // the vendors inside it, and a zero here printed a variance equal to
         // the whole figure — the same invented comparison the outline's

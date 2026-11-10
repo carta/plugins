@@ -2,7 +2,7 @@
 // page wrote there itself (useLoadFirm.js's choose()). Every request this page sends to a
 // route whose firm comes from the server's requestedSlug — a read (/api/snapshot,
 // /api/accounts, /api/reports, /api/reports/share-status) or a write (/api/reports/*,
-// /api/reports/share-op, /api/budget-upload) — must agree on this firm, so they all go
+// /api/reports/share-op) — must agree on this firm, so they all go
 // through this one module rather than each reading window.location on its own. Without that,
 // a write could land on whatever firm another tab most recently loaded instead of the one
 // this page is showing (requestedSlug falls back to the session's active-firm, shared across

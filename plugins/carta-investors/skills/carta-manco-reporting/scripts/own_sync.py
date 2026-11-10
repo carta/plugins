@@ -112,7 +112,6 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
-import export_budget_bundle
 import manco_paths
 import preflight_claude
 import report_payload
@@ -139,6 +138,24 @@ def _is_unreachable(e: BaseException) -> bool:
 _VARIANCE_CATEGORY_FIELDS = ("name", "budget", "actual", "variance")
 
 
+def _own_variance(variance: Optional[Dict[str, Any]], own_ids: set) -> Optional[Dict[str, Any]]:
+    """varianceByCategory, limited to the budgets this push actually carries.
+
+    The build also computes a variance set for every report shared with you, so the
+    local dashboard can switch to it — those sets have no business leaving this
+    machine, same as the `report` metadata a pushed budget is stripped of.
+    """
+    if not variance:
+        return variance
+    kept = [b for b in (variance.get("budgets") or []) if b.get("id") in own_ids]
+    if not kept:
+        return None
+    default_id = variance.get("default_id")
+    if default_id not in own_ids:
+        default_id = kept[0].get("id")
+    return dict(variance, budgets=kept, default_id=default_id)
+
+
 def _variance_by_category_for(data_dir: Path, report_id: str) -> Optional[Dict[str, Any]]:
     """`report_id`'s own entry from the dashboard's snapshot.varianceByCategory (the Top
     Categories of Variance chart's data), for just this one report (own_sync pushes one
@@ -146,7 +163,7 @@ def _variance_by_category_for(data_dir: Path, report_id: str) -> Optional[Dict[s
     synced report can't support the drill-down fields (gl_codes, carta_tags, scopes,
     excluded_claims, monthly/quarterly_budget) any more than a shared-in report can.
     Everything else on the entry (period, budget_period, excluded, label) is carried as
-    the snapshot holds it, same as the manual-upload bundle.
+    the snapshot holds it.
 
     None when the snapshot has nothing for this report. push_if_changed is what decides
     whether the entry actually ships — it needs the whole payload to know whether adding
@@ -156,7 +173,7 @@ def _variance_by_category_for(data_dir: Path, report_id: str) -> Optional[Dict[s
         snapshot = json.loads((data_dir / "snapshot.json").read_text())
     except (OSError, ValueError):
         return None
-    variance = export_budget_bundle._own_variance(snapshot.get("varianceByCategory"), {report_id})
+    variance = _own_variance(snapshot.get("varianceByCategory"), {report_id})
     if not variance:
         return None
     own = variance["budgets"][0]

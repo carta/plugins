@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, microCaption, FS, RED, subheadRow, SUBHEAD_ICON_BTN } from "../ui/theme.js";
 import { H1, NoteIcon } from "../ui/components.jsx";
-import BudgetActualsAccounts, { hasMonthlyDetail } from "./BudgetActualsAccounts.jsx";
+import BudgetActualsAccounts, { hasMonthlyDetail, budgetYear } from "./BudgetActualsAccounts.jsx";
 import { glNameMap, glTooltip, childDisplayLabel, subAccountsByAccount, subCodeMap, subsOfAccounts } from "../ui/glNames.js";
+import { entryInYear } from "./drilldown/util.js";
 import { NEST_STEP } from "../ui/nesting.js";
 import { dimensionOf, dimensionValue, dimensionValuesAvailable,
          dimensionLabel, dimensionLabelPlural, rowTagScope } from "../ui/dimension.js";
@@ -172,10 +173,18 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   }, [throughToday, canExtendToToday, asOfMonth, budget]);
 
   const tagValuesAvailable = dimensionValuesAvailable(accountsData);
+  // The budget's year, decided once for every view. Only entries of that
+  // year count: a 2027 budget read against the ledger's 2026 entries would
+  // show 2026 spend as 2027 actuals.
+  const periodYear = budgetYear(budget, cutoffDate(snapshot));
+  const yearEntries = useMemo(
+    () => (accountsData?.entries || []).filter(e => entryInYear(e, periodYear)),
+    [accountsData, periodYear]
+  );
   const actualsByTagValue = useMemo(
-    () => computeActualsByTagValue(accountsData?.entries || [], byTagValue, effectivePeriod,
+    () => computeActualsByTagValue(yearEntries, byTagValue, effectivePeriod,
                                tagValuesAvailable, dimension),
-    [accountsData, byTagValue, effectivePeriod, tagValuesAvailable, dimension]
+    [yearEntries, byTagValue, effectivePeriod, tagValuesAvailable, dimension]
   );
 
   // {row key: {dept: actual}}. Leaf lines resolve from Carta by GL code;
@@ -200,9 +209,9 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
     return defaultBreakout(accountsData, breakouts, budget);
   }, [breakoutKey, breakouts, accountsData, budget]);
   const breakoutActuals = useMemo(
-    () => computeBreakoutActuals(accountsData?.entries || [], byTagValue, effectivePeriod,
+    () => computeBreakoutActuals(yearEntries, byTagValue, effectivePeriod,
                                  tagValuesAvailable, dimension, breakout),
-    [accountsData, byTagValue, effectivePeriod, tagValuesAvailable, dimension, breakout]
+    [yearEntries, byTagValue, effectivePeriod, tagValuesAvailable, dimension, breakout]
   );
   const [openRows, setOpenRows] = useState(() => new Set());
   const toggleRow = (key) => {
@@ -303,10 +312,11 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
       {isAccounts && (
         <BudgetActualsAccounts
           budget={budget}
-          entries={accountsData?.entries || []}
+          entries={yearEntries}
           drilldown={accountsData ? drilldown : null}
           accountsData={accountsData}
           asOf={cutoffDate(snapshot)}
+          periodYear={periodYear}
         />
       )}
 
@@ -321,7 +331,8 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
           dimension={dimension}
           budget={budget}
           accountsData={accountsData}
-          periodYear={budget?.period_year}
+          periodYear={periodYear}
+          yearEntries={yearEntries}
           drilldown={accountsData ? drilldown : null}
           asOf={snapshot?.asOf}
         />
@@ -400,6 +411,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
                   subCodes={subCodes}
                   subsByAccount={subsByAccount}
                   onDrill={drilldown?.openTagValueAccount}
+                  periodYear={periodYear}
                   period={effectivePeriod}
                   tagValuesAvailable={tagValuesAvailable}
                   dimension={dimension}
@@ -453,7 +465,7 @@ export const DEPT_SUB_COLS = [
 export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, labelByKey, onDrill, period, glNames, subCodes, subsByAccount,
                     tagValuesAvailable = true, breakout = null, breakoutActuals = null,
                     openRows = null, onToggleRow = null, dimension = null,
-                    hoverCell = null, onHoverCell = null, heldCell = null }) {
+                    hoverCell = null, onHoverCell = null, heldCell = null, periodYear = null }) {
   const kind = row.row_kind || "line";
   const label = row.label ?? row.account_name;
 
@@ -632,7 +644,7 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
           ? () => onDrill(col.tag_value, label, row.account_type,
                           row.account_type_all, comment, cartaTags,
                           { budget, actual, polarity, unmapped }, period,
-                          null, null, dimension, null, cellKey)
+                          null, null, dimension, null, cellKey, periodYear)
           : undefined;
         const cellKey = `${row.key || label}::${col.tag_value}`;
         return (

@@ -123,12 +123,21 @@ def _parse_tags(row):
     return [{"category": "", "value": v.strip()} for v in flat.split(",") if v.strip()]
 
 
+def _year_of(date):
+    """Calendar year of an ISO date string; None when it does not start with one."""
+    head = str(date)[:4]
+    return int(head) if head.isdigit() else None
+
+
 def norm_je_row(row, kind):
     """Normalize a JE-line dict from the standard SQL projection."""
     return {
         "id":          row["id"],
         "gluuid":      row.get("gluuid") or None,
         "date":        row["date"],
+        # Budget vs Actuals counts an entry only toward a budget of its own
+        # year, so the year travels with the month.
+        "yr":          _year_of(row["date"]),
         "mo":          int(row["mo"]),
         "account":     row["account"],
         "acct_type":   int(row["acct_type"]),

@@ -3,6 +3,12 @@ import { quarterLabel } from "../budgetPeriods.js";
 import { dimensionValue, noValueLabel, rowTagScope } from "../../ui/dimension.js";
 
 
+/** Whether a ledger entry falls in a budget's year. An entry without a `yr`
+ *  is kept, as is any entry when no year is given. */
+export function entryInYear(entry, periodYear) {
+  return !periodYear || entry.yr == null || Number(entry.yr) === Number(periodYear);
+}
+
 // A real fund name can carry regex metacharacters ("Fund II (Onshore), L.P.") —
 // escape it so they compare literally. Bounded by a word-char lookaround
 // rather than \b: a name ending in punctuation ("L.P.") has no trailing
@@ -106,12 +112,11 @@ export function filterFundFeeEntries(fundFeeEntries, sel) {
   if (sel?.kind === "outline-cell" && sel.fundMatch) {
     const rx = fundMatchRegex(sel.fundMatch);
     const months = outlineMonths(sel);
-    const yr = sel.periodYear ? Number(sel.periodYear) : null;
     // A fee and its offset are different accounts. Naming one reports one;
     // naming none is the fund's net — the same rule the row's figure uses.
     const only = new Set(sel.glCodes || []);
     const mine = fundFeeEntries.filter((e) => {
-      if (yr && Number(e.yr) !== yr) return false;
+      if (!entryInYear(e, sel.periodYear)) return false;
       if (months && !months.has(e.mo)) return false;
       if (only.size && !only.has(e.acct_type)) return false;
       return rx.test(e.fund || "");
@@ -185,6 +190,9 @@ function outlineMonths(sel) {
 // already have their own dedicated bars.
 export function filterEntries(entries, sel, topCategoryNames = []) {
   if (!sel || !entries) return [];
+  // A drawer opened from a budget cell lists what that cell summed, and the
+  // cell only sums entries of the budget's own year.
+  if (sel.periodYear) entries = entries.filter(e => entryInYear(e, sel.periodYear));
   if (sel.kind === "account") {
     // The cell that opened this can be narrower than the account: one
     // column of a period axis, one value of a breakout beneath the row, or

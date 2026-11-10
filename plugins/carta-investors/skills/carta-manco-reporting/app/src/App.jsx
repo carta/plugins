@@ -14,7 +14,6 @@ import DashboardView from "./views/DashboardView.jsx";
 import BudgetActualsView from "./views/BudgetActualsView.jsx";
 import CustomReportView from "./views/CustomReportView.jsx";
 import MonthlyActualsView from "./views/MonthlyActualsView.jsx";
-import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
@@ -576,7 +575,6 @@ export default function App() {
     // The ManCo's own books can stop earlier than the fetch date — see
     // Sidebar.jsx, which only prints this when it differs from asOf.
     lastPostedDate: snapshot?.lastPostedDate,
-    footerAction: snapshot && <BudgetImport hosted={hostedApp} budgetUpload={snapshot.budgetUpload} onChanged={fetchData} />,
     shared: (() => {
       const onPull = reportsApi.can(REPORT_ACTIONS.PULL) ? loadShared : null;
       const onShowHidden = hiddenReports.length > 0 && reportsApi.can(REPORT_ACTIONS.HIDE) ? unhideAll : null;
