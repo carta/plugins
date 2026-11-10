@@ -82,7 +82,6 @@ import os
 import shutil
 import sys
 import threading
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
@@ -300,26 +299,6 @@ def forget(
         share_ops.delete_upstream(bridge, share_ops.context(data_dir), dismissed, emit)
 
 
-def _parse_dt(value: Any) -> Optional[datetime]:
-    if not isinstance(value, str):
-        return None
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
-def _is_later(a: Any, b: Any) -> bool:
-    """Whether ISO timestamp `a` is strictly after `b` — Carta's own report
-    `updated_at` compared against this dashboard's. An unparsable or missing `a`
-    never wins; an unparsable or missing `b` always loses to a parsable `a`."""
-    parsed_a = _parse_dt(a)
-    if parsed_a is None:
-        return False
-    parsed_b = _parse_dt(b)
-    return parsed_b is None or parsed_a > parsed_b
-
-
 def _reconcile_one_name(store: report_store.ReportStore, report: Dict[str, Any], mirror: Dict[str, Any]) -> None:
     """Settle one report's name against its mirror's current name in Carta, by the
     three-way comparison reconcile_names documents: local name, mirror name, and
@@ -346,7 +325,7 @@ def _reconcile_one_name(store: report_store.ReportStore, report: Dict[str, Any],
         # only the mirror changed
         store.apply_synced_name(report["id"], mirror_name, expected_name=local_name, expected_pushed_name=pushed_name)
         return
-    if local_name != mirror_name and _is_later(mirror.get("updated_at"), report.get("updated_at")):
+    if local_name != mirror_name and share_ops._is_later(mirror.get("updated_at"), report.get("updated_at")):
         # both changed; Carta's is newer
         store.apply_synced_name(report["id"], mirror_name, expected_name=local_name, expected_pushed_name=pushed_name)
     # else: both changed and the local edit is newer (or they already match) —

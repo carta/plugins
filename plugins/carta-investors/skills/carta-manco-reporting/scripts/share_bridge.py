@@ -76,6 +76,18 @@ _INSTRUMENTATION_JSON = json.dumps(INSTRUMENTATION, separators=(",", ":"))
 _TOOLNAME_RE = re.compile(r"^mcp__(.+)__[a-z_]+$")
 
 
+def _tool_prefix(name: Optional[str]) -> str:
+    """A `system`/`init` event's `mcp_servers[].name` is the connector's **display**
+    name — for the native claude.ai-managed Carta connector that's literally
+    "claude.ai Carta" (a space, mixed case) — while `Bridge._servers` holds **tool-call
+    prefixes** like "claude_ai_Carta" (underscored, no space). Normalize a display name
+    to that prefix form before comparing it against `_servers`, or the exact case this
+    whole mechanism exists for (a production user's native connector token lapsing)
+    never matches. Mirrors `carta-compensation-app`'s `location_fetch._tool_prefix`,
+    which solves the same init-event-name-vs-tool-prefix problem."""
+    return re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9_-]", "_", name or "")).strip("_")
+
+
 BRIDGE_ENV = "MANCO_OWN_SYNC_BRIDGE"
 
 # The ShareError code for "no Carta connector answered": the `claude` CLI didn't start, or
@@ -85,12 +97,25 @@ UNREACHABLE = "unreachable"
 
 class ShareError(Exception):
     """A sharing failure the app shows. `code` is its typed state; `raw` keeps the
-    original tool error for the server log only."""
+    original tool error for the server log only. `configured`, set only for a `code ==
+    UNREACHABLE` error, names whichever of the Bridge's candidate servers the failed
+    session's init event showed configured — present (even signed out) rather than
+    missing entirely. serve.py's `_run_share_op` reads this to decide whether a
+    registration attempt is safe (see share_bridge.register_connector).
 
-    def __init__(self, message: str, code: str = "failed", raw: Optional[str] = None) -> None:
+    Entries are in **tool-prefix form** (e.g. "claude_ai_Carta"), not the init event's
+    raw display name (e.g. "claude.ai Carta") — `Bridge._probe_welcome` normalizes each
+    one with `_tool_prefix` before matching it against the Bridge's candidate servers,
+    since that's the form `_servers` is already in. The message text (built where the
+    error is raised) uses the original display name instead, since that's what `/mcp`
+    actually shows the operator."""
+
+    def __init__(self, message: str, code: str = "failed", raw: Optional[str] = None,
+                 configured: Tuple[str, ...] = ()) -> None:
         super().__init__(message)
         self.code = code
         self.raw = raw
+        self.configured = configured
 
 
 def candidate_servers(carta_environment: Optional[str], override: Optional[str]) -> Tuple[str, ...]:
@@ -98,6 +123,65 @@ def candidate_servers(carta_environment: Optional[str], override: Optional[str])
     if override:
         return (override,)
     return NONPROD_SERVERS if carta_environment == "nonprod" else PROD_SERVERS
+
+
+# Mirrors the entry-naming table in plugins/mcp-diagnostics/skills/carta-mcp-setup/SKILL.md
+# (Step 2) for the two environments read_carta_environment returns. register_connector
+# returns None for anything else rather than guessing a URL.
+CONNECTOR_REGISTRATION: Dict[str, Tuple[str, str]] = {
+    "production": ("carta_prod", "https://mcp.app.carta.com/mcp"),
+    "nonprod": ("carta_sandbox", "https://mcp.sandbox.carta.team/mcp"),
+}
+
+REGISTER_TIMEOUT = 10  # seconds — this only registers an entry, it doesn't complete OAuth
+
+
+def sign_in_steps(name: str) -> str:
+    """The sign-in instructions shown after a connector is named for re-auth or freshly
+    registered: run `claude`, type `/mcp`, choose it, and pick Authenticate. Built once and
+    shared by the re-auth message (`Bridge._connect`) and the registration-success message
+    (`serve.py`'s `_run_share_op`)."""
+    return "run `claude`, type `/mcp`, choose `%s` and pick Authenticate, then try sharing again." % name
+
+
+def register_connector(claude_bin: str, carta_environment: Optional[str],
+                       servers: Tuple[str, ...]) -> Optional[str]:
+    """One best-effort `claude mcp add` for this environment's connector. Called exactly
+    once, only from serve.py's `_run_share_op` (the UNREACHABLE branch), and only when
+    none of `servers` (the Bridge's own candidate servers) was seen configured at all in
+    the failed session's init event — a configured-but-signed-out connector is re-
+    authenticated by name instead; see share_bridge.Bridge._probe_welcome.
+
+    `servers` also covers an explicit pin: when a `--share-mcp-server` / `MANCO_SHARE_MCP_SERVER`
+    pin is set, `servers` is that pin alone, so an environment's registration entry that
+    isn't the pinned name is never written to the operator's real user-scope Claude config.
+
+    Returns the entry name (e.g. "carta_prod") when `claude mcp add` exits 0, or when it
+    fails only because the entry already exists (its output says "already exists") —
+    either way an entry is now there for the operator to sign in to by hand (running
+    `claude mcp add` alone never starts OAuth or opens a browser; it only writes the
+    config entry). The caller uses this returned name directly to build its message,
+    rather than re-deriving which entry was written from `CONNECTOR_REGISTRATION` itself
+    — two independent lookups could name different entries if one ever changed without
+    the other. Returns None when there was nothing to run (no known connector for this
+    environment, or the environment's entry isn't among `servers`), when the `claude`
+    binary couldn't be invoked, or when it exited non-zero for any other reason — so the
+    caller keeps its plain "Couldn't reach Carta" error rather than claiming an entry was
+    added."""
+    target = CONNECTOR_REGISTRATION.get(carta_environment or "production")
+    if not target or target[0] not in servers:
+        return None
+    entry_name, url = target
+    try:
+        result = subprocess.run(
+            [claude_bin, "mcp", "add", "--transport", "http", entry_name, url, "--scope", "user"],
+            capture_output=True, text=True, timeout=REGISTER_TIMEOUT, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode == 0:
+        return entry_name
+    output = "%s\n%s" % (result.stdout or "", result.stderr or "")
+    return entry_name if "already exists" in output.lower() else None
 
 
 def describe_target(carta_environment: Optional[str], override: Optional[str]) -> Dict[str, Any]:
@@ -364,9 +448,14 @@ class Bridge(object):
                  claude_bin: Optional[str] = None,
                  session_factory: Optional[Callable[[str, Tuple[str, ...]], Session]] = None) -> None:
         self._cwd = cwd
+        self._carta_environment = carta_environment
         self._servers = candidate_servers(carta_environment, override or os.environ.get(SERVER_ENV))
-        self._claude_bin = claude_bin
-        self._factory = session_factory or (lambda cwd, servers: Session(cwd, servers, claude_bin))
+        # Resolved once here, not re-derived at each call site (register_connector's
+        # caller in particular) — a second copy of this fallback drifting from this one
+        # would let registration write to a different `claude` binary's config than the
+        # one the session actually runs.
+        self._claude_bin = claude_bin or os.environ.get(CLAUDE_BIN_ENV, "claude")
+        self._factory = session_factory or (lambda cwd, servers: Session(cwd, servers, self._claude_bin))
         self._lock = threading.Lock()
         self._session: Optional[Session] = None
         self._call_tool: Optional[str] = None
@@ -376,17 +465,22 @@ class Bridge(object):
     def servers(self) -> Tuple[str, ...]:
         return self._servers
 
-    def _connect(self, emit: Callable[[str], None]) -> Tuple[Session, str]:
-        if self._session is not None and self._session.alive() and self._call_tool:
-            return self._session, self._call_tool
-        self.reset()
-        expect_command(self._cwd, "")
-        emit("Connecting to Carta…")
-        session = self._factory(self._cwd, self._servers)
-        try:
-            session.start()
-        except OSError:
-            raise ShareError("Couldn't start a Claude session for sharing — is Claude Code installed?", UNREACHABLE)
+    @property
+    def claude_bin(self) -> str:
+        return self._claude_bin
+
+    @property
+    def carta_environment(self) -> Optional[str]:
+        return self._carta_environment
+
+    def _probe_welcome(self, session: Session) -> Tuple[Optional[str], Tuple[str, ...], Tuple[str, ...]]:
+        """One welcome turn: ask the session to try each candidate server's welcome tool
+        in order. Returns (the server name that answered without error, or None; which of
+        `self._servers` the session's own `system`/`init` event showed configured at all,
+        normalized to tool-prefix form — present whether or not its welcome then
+        succeeded, so a signed-out connector is distinguishable from one that was never
+        set up; the matching entries' original, un-normalized display names, in the same
+        order, for the user-facing message)."""
         names = ", ".join("mcp__%s__welcome" % s for s in self._servers)
         session.send(
             "Call whichever ONE of these Carta welcome tools resolves — try them in order and call "
@@ -395,9 +489,22 @@ class Bridge(object):
         # The connector is the first whose welcome came back without an error: a failed
         # one (say, signed out) is followed by the next in the list.
         server, finished, pending = None, False, {}
+        configured: List[str] = []
+        configured_display: List[str] = []
         for ev in session.events(timeout=TURN_TIMEOUT):
             kind = ev.get("type")
-            if kind == "result":
+            if kind == "system" and ev.get("subtype") == "init":
+                for entry in ev.get("mcp_servers") or []:
+                    display_name = entry.get("name")
+                    # The init event reports the connector's display name ("claude.ai
+                    # Carta"), not the tool-call prefix `_servers` holds ("claude_ai_Carta")
+                    # — normalize before comparing, or a configured native connector never
+                    # matches at all.
+                    prefix = _tool_prefix(display_name)
+                    if prefix in self._servers and prefix not in configured:
+                        configured.append(prefix)
+                        configured_display.append(display_name)
+            elif kind == "result":
                 finished = True
             elif kind == "assistant":
                 for block in ev.get("message", {}).get("content", []):
@@ -411,8 +518,44 @@ class Bridge(object):
                             and not block.get("is_error") and block.get("tool_use_id") in pending):
                         server = pending[block["tool_use_id"]]
         # A welcome turn still running would answer the first call's prompt late.
-        if not server or not finished:
+        return (server if (server and finished) else None), tuple(configured), tuple(configured_display)
+
+    def _start_session(self) -> Session:
+        session = self._factory(self._cwd, self._servers)
+        try:
+            session.start()
+        except OSError:
+            raise ShareError("Couldn't start a Claude session for sharing — is Claude Code installed?", UNREACHABLE)
+        return session
+
+    def _connect(self, emit: Callable[[str], None]) -> Tuple[Session, str]:
+        """Connect, or raise ShareError(UNREACHABLE). Registration never happens here:
+        an immediate retry can't succeed for a connector that still needs its own OAuth
+        (`claude mcp add` only writes a config entry — see register_connector's
+        docstring), so the one place that may register a connector is serve.py's
+        `_run_share_op`, on a real share operation the operator started (not the
+        background sweep or the startup reconcile). The operator's next share attempt
+        is the de facto retry."""
+        if self._session is not None and self._session.alive() and self._call_tool:
+            return self._session, self._call_tool
+        self.reset()
+        expect_command(self._cwd, "")
+        emit("Connecting to Carta…")
+        session = self._start_session()
+        server, configured, configured_display = self._probe_welcome(session)
+        if not server:
             session.close()
+            if configured:
+                # One of this Bridge's own candidate servers is already configured but
+                # its welcome failed (signed out, most likely) — re-authenticate that
+                # one by name. Registering a second connector here would stack a
+                # duplicate Carta tool surface alongside it without fixing anything.
+                # The message uses the connector's real display name (what `/mcp` shows),
+                # not the tool-prefix form `configured` holds for internal matching.
+                names = ", ".join(configured_display)
+                raise ShareError(
+                    "Couldn't reach Carta — your %s connector needs you to sign in again: %s"
+                    % (names, sign_in_steps(names)), UNREACHABLE, configured=configured)
             raise ShareError(
                 "Couldn't reach Carta — sharing needs your Carta connector connected in Claude.",
                 UNREACHABLE)

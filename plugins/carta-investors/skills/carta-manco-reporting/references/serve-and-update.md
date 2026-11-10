@@ -553,7 +553,7 @@ Sub-agent brief:
 > On any other failure, stop after one try — never retry, never vary the call, never fall
 > back to another command — and answer exactly `failed: <the error's first line>`.
 > Otherwise, after step 4's `import` prints its counts, answer exactly one line: `pulled
-> added=<N> adopted=<N> updated=<N> removed=<N> skipped=<N>`.
+> added=<N> adopted=<N> updated=<N> removed=<N> skipped=<N> duplicate_dropped=<N>`.
 
 - **`not_enabled`** — one line: sharing isn't turned on for them yet.
 - **`pulled added=0 adopted=0 updated=0 ...`** — one line: no new or changed reports shared
@@ -561,6 +561,12 @@ Sub-agent brief:
 - **`pulled added=<N> adopted=<P> updated=<M> ...`** with `N`, `P` or `M` above 0 — one line:
   *"Loaded `<N+P+M>` reports — they're
   in the Budget vs Actuals sidebar (reload the tab if it's already open)."*
+- **`duplicate_dropped`** never changes which of those lines you say; it is a Carta-side
+  cleanup signal, not something this pull changed locally. It counts orphaned `is_owner`
+  budget_report rows this pull found that are exact mirrors of one already adopted (same
+  name, same payload) — it skipped the extras rather than creating a second local copy of the
+  same report, and recorded them locally so they count here once, on the pull where they're
+  first seen as duplicates, never again on a later pull.
 - **`failed: <reason>`** — one line: *"Couldn't load reports shared with you yet (`<reason>`)
   — use **Load shared reports** in the sidebar to retry."* Never retry it in this run.
 

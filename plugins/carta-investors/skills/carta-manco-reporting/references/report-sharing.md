@@ -168,6 +168,56 @@ Carta that mirrors your own reports privately, with no effect on Share.
   its button with "Still not signed in — try again." `not_installed` never gets this
   button — installing needs Step 0.5's confirmation, which this endpoint doesn't ask
   for.
+- When no candidate server's welcome resolves, the `claude` CLI session's own
+  `system`/`init` event (`--verbose` stream-json) tells `Bridge._probe_welcome`
+  (`scripts/share_bridge.py`) which of the Bridge's own candidate servers were configured
+  at all, whether or not their welcome then succeeded. The init event reports each
+  connector's **display name** — for the native claude.ai-managed Carta connector that's
+  literally `claude.ai Carta` (a space, mixed case), not the underscored **tool-call
+  prefix** (`claude_ai_Carta`) the Bridge's own candidate-server tuples hold. `_probe_welcome`
+  normalizes each init-event name with `_tool_prefix` (every run of characters outside
+  `[A-Za-z0-9_-]` becomes one underscore, trimmed at the ends — the same rule
+  `carta-compensation-app`'s `location_fetch._tool_prefix` uses for the identical problem)
+  before comparing it against the candidate servers — without this, the exact case this
+  whole mechanism exists for (a production user's native connector token lapsing) would
+  never be detected as "configured" at all. The normalized form is what `ShareError.configured`
+  carries; the original display name is kept alongside it for the user-facing message,
+  since that's what `/mcp` actually shows the operator to pick.
+  - One of them was configured: that connector is signed out, not missing. The error names
+    it, by its display name, and asks the operator to re-authenticate it by hand (run
+    `claude`, `/mcp`, pick it, choose Authenticate) — never registers a second one
+    alongside it. Stacking a second Carta connector would leave two Carta tool surfaces
+    active at once and still wouldn't fix the one that's actually broken.
+  - None of them were configured at all: `Bridge._connect` raises the plain "Couldn't
+    reach Carta — sharing needs your Carta connector connected in Claude." error with no
+    side effect. Registration only happens one layer up, in `serve.py`'s `_run_share_op`
+    (its `ShareError` `UNREACHABLE` branch) — the one place a real share operation the
+    operator started is in play (`users`, `share`, `publish-as-new`, `delete`, or `pull`),
+    never the background sweep (`own_sync.sweep`, run with nobody watching after every
+    build) or the startup reconcile (`_reconcile_own_sync_names_at_startup`). It makes
+    exactly one `claude mcp add --transport http <entry> <url> --scope user` call for the
+    cache's Carta environment (`share_bridge.register_connector`, whose
+    `CONNECTOR_REGISTRATION` table maps each environment to its entry name and URL) — but
+    only when that environment's entry is among the Bridge's own candidate servers, so a Bridge pinned
+    (`--share-mcp-server` / `MANCO_SHARE_MCP_SERVER`) to a server outside that table (a
+    local stack, say) never falls back to registering the environment's default connector
+    instead. An environment with no known connector (e.g. a local stack) skips
+    registration entirely rather than guessing a URL. `register_connector` returns the
+    entry name it wrote (or `None`), and `serve.py` builds its message from that returned
+    name directly rather than re-deriving it from `CONNECTOR_REGISTRATION` a second time —
+    two independent lookups could otherwise end up naming different entries. `claude mcp
+    add` only writes a config entry — it never starts OAuth or opens a browser — so the
+    message on a successful registration names the entry and tells the operator to sign in
+    themselves: "Added the Carta connector `<entry>` to Claude, but it still needs you to
+    sign in: run `claude`, type `/mcp`, choose `<entry>` and pick Authenticate, then try
+    sharing again." That trailing sign-in sentence is built once, by
+    `share_bridge.sign_in_steps(name)`, and shared verbatim by both this message and the
+    re-auth message above. The operator's next share attempt is the de facto retry; there is no
+    code-level one. Nothing to register (unknown environment, the entry isn't among the
+    Bridge's candidate servers, or `claude mcp add` failed for any reason other than the
+    entry already existing) leaves the plain "Couldn't reach Carta — sharing needs your
+    Carta connector connected in Claude."
+    error in place.
 
 When Carta hasn't turned the budget-report commands on for someone, the app says sharing
 isn't available yet.
@@ -232,9 +282,16 @@ in order, and nothing else. Do not search for the script; its path is below.
    <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/import_shared_reports.py" import --data-dir "<dashboard_dir>" --responses "<dashboard_dir>/.reports/pulled.json"
    ```
 
-   It prints the counts (`added`, `adopted`, `updated`, `removed`, `skipped`). A report whose
-   payload fails the contract — or whose size `fa:get:budget_report` offloaded to a document
-   URL instead of inlining — is skipped, never shown with wrong numbers.
+   It prints the counts (`added`, `adopted`, `updated`, `removed`, `skipped`,
+   `duplicate_dropped`). A report whose payload fails the contract — or whose size
+   `fa:get:budget_report` offloaded to a document URL instead of inlining — is skipped,
+   never shown with wrong numbers. When two or more of the user's own, unclaimed
+   `is_owner` reports share both a name and a payload — genuine mirrors of the same
+   report, not two reports a user happened to name alike — only the most recently updated
+   one is adopted as a local copy; the rest are left untouched in Carta for a person to
+   clean up, and recorded locally in the same step as the adoption so a later pull never
+   re-offers them. They are counted once in `duplicate_dropped`, on the pull where
+   they're first seen as duplicates, not on every later pull.
 
 5. Tell the user how many reports were added, adopted as their own, or updated, and to
    reload the dashboard page.

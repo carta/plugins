@@ -834,7 +834,8 @@ class ReportStore:
                 doc["reports"] = keep
         return counts
 
-    def adopt_own_sync(self, name: str, budget: Dict[str, Any], uuid: str, payload_fingerprint_value: str) -> Optional[Dict[str, Any]]:
+    def adopt_own_sync(self, name: str, budget: Dict[str, Any], uuid: str, payload_fingerprint_value: str,
+                        skip_uuids: Optional[Iterable[str]] = None) -> Optional[Dict[str, Any]]:
         """A private, is_owner budget_report share_ops.pull found with no local record at
         all. Materialized as an ordinary personal copy (state EDITED, origin "copy", no
         `from`: there is no local source behind it), with its own-sync link already
@@ -842,6 +843,15 @@ class ReportStore:
         (plan_push) never tries to create a second mirror for it, and the next local
         edit's payload_fingerprint comparison starts from what Carta actually holds, not
         from nothing.
+
+        `skip_uuids` are other Carta-side uuids share_ops._dedupe_to_adopt found to be
+        genuine mirrors of the same report as `uuid` — same name and payload fingerprint —
+        that lost to `uuid` as the most-recently-updated copy of the group. They are added
+        to `dismissed_uuids` inside this same transaction, win or lose: a later pull must
+        never re-offer them as adoption candidates, whether this call actually adopts
+        `uuid` or returns None because something else claimed it first. Nothing here
+        deletes them upstream — they are Carta-side orphans a separate cleanup tool finds
+        and lets a person decide on.
 
         Invariant: at most one local report claims a given Carta uuid — this and
         record_own_sync are its two writers, each enforcing it inside its own
@@ -852,6 +862,7 @@ class ReportStore:
         link or an explicit dismissal) or already shared under a `shared` link.
         """
         with self.transaction() as doc:
+            _dismiss(doc, *(skip_uuids or ()))
             if uuid in self.dismissed_uuids(doc) or any(self.shared_uuid(r) == uuid for r in doc["reports"]):
                 return None
             new_id = self._unique_id(doc, _slug(name))

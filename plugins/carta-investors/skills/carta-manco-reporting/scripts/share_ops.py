@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -379,6 +380,63 @@ def list_reports(bridge: Any, ctx: Dict[str, Any], emit: Emit) -> Optional[List[
     return trusted_reports(bridge.call("fa__get__budget_reports", {"fund_uuid": ctx["fund_uuid"]}, emit))
 
 
+def _parse_dt(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _is_later(a: Any, b: Any) -> bool:
+    """Whether ISO timestamp `a` is strictly after `b`. An unparsable or missing `a` never
+    wins; an unparsable or missing `b` always loses to a parsable `a`. Also used by
+    own_sync.py's name reconciliation."""
+    parsed_a = _parse_dt(a)
+    if parsed_a is None:
+        return False
+    parsed_b = _parse_dt(b)
+    return parsed_b is None or parsed_a > parsed_b
+
+
+def _dedupe_to_adopt(candidates: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
+    """Collapse `candidates` (each an adoption candidate: `meta`, `name`, `budget`, `uuid`,
+    `fingerprint`) that are genuine mirrors of one another — same name (stripped the way
+    own_sync.py compares names) AND the same `payload_fingerprint` — down to one winner per
+    group: the candidate whose listing `updated_at` is latest. A name shared by two
+    candidates with *different* fingerprints is left alone and both are kept, since that
+    can just as easily be two different reports a user happened to name the same thing;
+    collapsing on name alone risks losing real data.
+
+    Each returned winner carries an added `skip_uuids` key: the uuids of the other
+    candidates in its group, for the caller to pass into
+    report_store.ReportStore.adopt_own_sync so they are claimed in `dismissed_uuids`
+    inside the same transaction as the winner's own adoption — a later pull must never
+    re-offer them, this pull or any other.
+
+    Returns the winners to adopt, plus how many candidates were dropped as duplicates —
+    orphaned Carta-side rows this pull never adopted (and now never will again, once
+    adopt_own_sync dismisses them), surfaced by the caller as `duplicate_dropped` so a
+    person can go clean them up, not silently lost.
+    """
+    groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for candidate in candidates:
+        key = (candidate["name"].strip(), candidate["fingerprint"])
+        groups.setdefault(key, []).append(candidate)
+    winners: List[Dict[str, Any]] = []
+    duplicate_dropped = 0
+    for group in groups.values():
+        winner = group[0]
+        for candidate in group[1:]:
+            if _is_later(candidate["meta"].get("updated_at"), winner["meta"].get("updated_at")):
+                winner = candidate
+        skip_uuids = [c["uuid"] for c in group if c is not winner]
+        winners.append(dict(winner, skip_uuids=skip_uuids))
+        duplicate_dropped += len(group) - 1
+    return winners, duplicate_dropped
+
+
 def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emit) -> Dict[str, Any]:
     """Load the reports shared with you, adopt your own reports pushed from elsewhere, and
     refresh the ones you already have.
@@ -387,6 +445,17 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
     this user's own report with nothing here claiming it yet, adopted as a personal copy
     (adopt_own_sync) rather than filed under Shared Reports. Anything else is someone
     else's share and goes through upsert_pulled.
+
+    Several `is_owner` entries can be mirrors of the same report — Carta can end up with
+    more than one orphaned owned row of the same budget when a local own-sync link gets
+    lost and a later push re-creates the report instead of updating the original
+    (_dedupe_to_adopt, above). Only the most-recently-updated one of each genuine
+    duplicate group is adopted as a local copy; the rest are left in Carta untouched
+    (read-only here), claimed locally via `dismissed_uuids` in the same transaction as
+    the winner's adoption (report_store.ReportStore.adopt_own_sync's `skip_uuids`) so no
+    later pull ever re-offers them, and counted once — on this pull, the one where
+    they're first seen as duplicates — as `duplicate_dropped` so a person can go clean
+    them up by hand.
 
     Each payload is checked against the contract before it's stored; one that
     fails is skipped and counted, never rendered with wrong numbers.
@@ -439,6 +508,7 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
             "budget": canonical.budget_from_canonical(fetched["payload"], report_id="pending", name=info.get("name") or "Shared report"),
             "shared": _shared_meta(info),
         })
+    own_candidates = []
     for i, meta in enumerate(to_adopt, 1):
         emit("Loading your own report %d of %d…" % (i, len(to_adopt)))
         fetched = _fetch(meta)
@@ -447,11 +517,21 @@ def pull(bridge: Any, store: report_store.ReportStore, data_dir: Path, emit: Emi
             continue
         info = fetched["report"]
         name = info.get("name") or "Budget"
-        budget = canonical.budget_from_canonical(fetched["payload"], report_id="pending", name=name)
-        if store.adopt_own_sync(name, budget, info["uuid"], report_store.payload_fingerprint(fetched["payload"])) is not None:
+        own_candidates.append({
+            "meta": meta,
+            "name": name,
+            "uuid": info["uuid"],
+            "budget": canonical.budget_from_canonical(fetched["payload"], report_id="pending", name=name),
+            "fingerprint": report_store.payload_fingerprint(fetched["payload"]),
+        })
+    to_adopt_winners, duplicate_dropped = _dedupe_to_adopt(own_candidates)
+    for candidate in to_adopt_winners:
+        if store.adopt_own_sync(candidate["name"], candidate["budget"], candidate["uuid"], candidate["fingerprint"],
+                                skip_uuids=candidate["skip_uuids"]) is not None:
             adopted += 1
     upstream = {m.get("uuid") for m in reports if m.get("uuid")} if listing is not None else None
     counts = store.upsert_pulled(pulled, upstream)
     counts["adopted"] = adopted
     counts["skipped"] = skipped
+    counts["duplicate_dropped"] = duplicate_dropped
     return {"status": "ok", "counts": counts}

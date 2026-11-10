@@ -614,6 +614,25 @@ def _run_share_op(op, params):
             # /api/claude-status (and the next share attempt) reflect it without
             # waiting for the next time something happens to trigger a recheck.
             _refresh_claude_status_later()
+            if not e.configured:
+                # Nothing recognized was configured at all (a configured-but-failing
+                # connector raises with `configured` set instead, and never reaches
+                # here — see share_bridge.Bridge._probe_welcome). This is the only
+                # place a registration may run: a real share operation the operator
+                # started, never the background sweep or the startup reconcile. An
+                # immediate retry can't succeed for a freshly-registered entry that
+                # still needs its own OAuth, so the operator's next share attempt is the
+                # de facto retry. `bridge` is the one `_get_bridge()` returned in the try
+                # block above — the same one whose connect attempt just failed.
+                entry_name = share_bridge.register_connector(
+                    bridge.claude_bin, bridge.carta_environment, bridge.servers)
+                if entry_name:
+                    # Use the name register_connector actually wrote, not a second,
+                    # independent lookup into CONNECTOR_REGISTRATION — the two could
+                    # otherwise name different entries if one ever drifted from the other.
+                    e = share_bridge.ShareError(
+                        "Added the Carta connector `%s` to Claude, but it still needs you to sign in: %s"
+                        % (entry_name, share_bridge.sign_in_steps(entry_name)), share_bridge.UNREACHABLE)
         if e.raw:
             print("[serve] share %s failed: %s" % (op, e.raw[:500]), file=sys.stderr, flush=True)
         _finish_share_state(status="error", error={"code": e.code, "message": str(e)})
