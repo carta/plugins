@@ -8,11 +8,13 @@
 The config file (lp-summary-data.json, one per firm in that firm's own workdir) is the one place the brand lives, so a logo's base64 never
 passes through the model's context and the firm name never reaches the shell:
 
-  apply --config FILE [--logo PATH | --logo-url URL] [--accent #RRGGBB] [--font FAMILY]
+  apply --config FILE [--logo PATH | --logo-url URL] [--accent #RRGGBB] [--font FAMILY [--font-file PATH]]
       Sets config["brand"] = {firmName (the config's firm_name), logoDataUri, accentHex,
       displayFont, displayFontTtf}. The logo is embedded as a data: URI (artifacts cannot load
       external images). A display font is kept only if its static Regular TTF downloads from the
-      Google Fonts repository; otherwise it is left out and the summary says so in a "note".
+      Google Fonts repository, or comes from --font-file (the firm's own TrueType file, named by
+      --font); otherwise it is left out and the summary says so in a "note" and names the family in
+      "fontMissing", so the caller can ask for the file or try a close free font.
       Prints a summary without the base64.
   decline --config FILE
       Sets config["brand_declined"] = true: the user said no to branding when the build offered
@@ -33,7 +35,7 @@ passes through the model's context and the firm name never reaches the shell:
       without the base64, with a "note" for anything left out. The page and the PDF decide which
       colours and how many faces they can use.
 
-Exit codes: 0 done; 1 bad input (missing file, bad colour, logo too large or not an image).
+Exit codes: 0 done; 1 bad input (missing file, bad colour, malformed font name, logo too large or not an image, font file not TrueType or too large).
 """
 
 import argparse
@@ -54,6 +56,13 @@ LOGO_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", 
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 FAMILY = re.compile(r"^[A-Za-z0-9 ]{1,40}$")
 GOOGLE_FONTS_RAW = "https://raw.githubusercontent.com/google/fonts/main/{licence}/{dir}/{path}"
+
+
+def bad_family(name):
+    """The reason `name` cannot be a font family, or None."""
+    if name and not FAMILY.match(name.strip()):
+        return "font family must be letters, digits and spaces (up to 40): " + name
+    return None
 
 
 def log(msg):
@@ -97,6 +106,45 @@ def logo_data_uri(path=None, url=None):
     return data_uri(body, mime), None
 
 
+def ttf_data_uri(body, limit=MAX_FONT_BYTES):
+    """(data URI, None) for an embeddable TrueType body, or (None, reason)."""
+    if FONT_MAGIC.get(body[:4], (None,))[0] != "ttf":
+        return None, "font file must be a TrueType (.ttf) file; .otf, .woff and .woff2 files do not work in the PDF"
+    if len(body) > limit:
+        return None, "font file is larger than %d KB; use the Regular weight on its own" % (limit // 1000)
+    return data_uri(body, "font/ttf"), None
+
+
+def opens_as_font(body):
+    """True when `body` parses as a whole TrueType font. The first bytes only say a file claims to be one."""
+    try:
+        import io
+        from fontTools.ttLib import TTFont
+        font = TTFont(io.BytesIO(body))
+        font["head"], font["maxp"]
+        # A cut-off file keeps its table directory and first tables, so every table must lie inside the bytes read.
+        return "glyf" in font and all(t.offset + t.length <= len(body) for t in font.reader.tables.values())
+    except Exception:  # noqa: BLE001 — any parse failure means jsPDF would draw the standard face
+        return False
+
+
+def font_file_ttf(path):
+    """(data URI, None) for the firm's own TrueType file, or (None, reason).
+
+    A file that claims to be TrueType but does not open is refused: jsPDF swallows a broken font and
+    draws the standard face, while the summary would say the font was embedded.
+    """
+    p = Path(path)
+    if not p.is_file():
+        return None, "font file not found: " + str(p)
+    with p.open("rb") as f:
+        body = f.read(MAX_FONT_BYTES + 1)  # one byte over the limit is enough to refuse it, so a huge file is never loaded whole
+    uri, reason = ttf_data_uri(body)
+    if uri and not opens_as_font(body):
+        return None, "font file is damaged or is not a font; use the font's Regular .ttf file"
+    return uri, reason
+
+
 def display_font_ttf(family, limit=MAX_FONT_BYTES):
     """The family's static Regular TTF from the Google Fonts repository as a data URI, or None."""
     slug = family.lower().replace(" ", "")
@@ -107,8 +155,9 @@ def display_font_ttf(family, limit=MAX_FONT_BYTES):
                 body, _ = fetch(GOOGLE_FONTS_RAW.format(licence=licence, dir=slug, path=path), limit)
             except OSError:
                 continue
-            if len(body) <= limit and FONT_MAGIC.get(body[:4], (None,))[0] == "ttf":
-                return data_uri(body, "font/ttf")
+            uri, _ = ttf_data_uri(body, limit)
+            if uri:
+                return uri
     return None
 
 
@@ -203,7 +252,7 @@ def load_face(cache, faces, family, bold):
 
 def board_font(brand, faces, family, role, notes, cache):
     """Embeds `family` into brand: its faces for the page and Regular (and Bold) TrueType for the PDF."""
-    if not family or not FAMILY.match(family.strip()):
+    if not family:
         return
     family = family.strip()
     regular, bold = load_face(cache, faces, family, False), load_face(cache, faces, family, True)
@@ -249,6 +298,11 @@ def apply_board(args):
     if args.accent and not HEX.match(args.accent):
         log("accent must be #RRGGBB, got " + args.accent)
         return EXIT_INPUT
+    for name in (args.heading_font, args.body_font):
+        problem = bad_family(name)
+        if problem:
+            log(problem)
+            return EXIT_INPUT
     palette = board.get("brand_palette") if isinstance(board.get("brand_palette"), dict) else {}
     primary = args.accent.upper() if args.accent else top_colour(palette, "primary", "accent")
     secondary = top_colour(palette, "secondary", "accent")
@@ -294,8 +348,21 @@ def apply(args):
             return EXIT_INPUT
         brand["accentHex"] = args.accent.upper()
     font = None
-    if args.font and FAMILY.match(args.font.strip()):
-        ttf = display_font_ttf(args.font.strip())
+    problem = bad_family(args.font)
+    if problem:
+        log(problem)
+        return EXIT_INPUT
+    if args.font_file and not args.font:
+        log("--font-file needs --font with the family name")
+        return EXIT_INPUT
+    if args.font:
+        if args.font_file:
+            ttf, reason = font_file_ttf(args.font_file)
+            if reason:
+                log(reason)
+                return EXIT_INPUT
+        else:
+            ttf = display_font_ttf(args.font.strip())
         if ttf:
             font = args.font.strip()
             brand["displayFont"], brand["displayFontTtf"] = font, ttf
@@ -303,6 +370,7 @@ def apply(args):
     write_json(args.config, config)
     summary = {"logo": "logoDataUri" in brand, "accentHex": brand.get("accentHex"), "displayFont": font}
     if args.font and not font:
+        summary["fontMissing"] = args.font.strip()
         summary["note"] = "No static TTF for " + args.font.strip() + " on Google Fonts; the page and the PDF use the standard typeface."
     print(json.dumps(summary))
     return EXIT_OK
@@ -340,6 +408,7 @@ def main(argv):
     logo.add_argument("--logo-url")
     a.add_argument("--accent")
     a.add_argument("--font")
+    a.add_argument("--font-file")
     b = sub.add_parser("apply-board")
     b.add_argument("--config", required=True)
     b.add_argument("--board", required=True)

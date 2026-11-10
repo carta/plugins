@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.38.0</carta-plugin>
+<carta-plugin>carta-investors:7.38.2</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -281,13 +281,21 @@ When the user asks to brand their LP profiles, from their website or from a deck
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-summary/scripts/brand_assets.py" apply --config "$WORKDIR/lp-summary-data.json" --logo "<logo file path>" --accent "<#RRGGBB>" --font "<font family>"
    ```
-   Use `--logo-url "<https URL>"` instead of `--logo` for an extracted logo you have not saved. Leave out `--font` when the font is not on Google Fonts. RC 1 prints why (not an image, over 1 MB, a malformed colour); fix it and run again. When the summary it prints carries a `note`, the font could not be embedded: tell the user the PDF uses the standard typeface.
+   Use `--logo-url "<https URL>"` instead of `--logo` for an extracted logo you have not saved. Leave out `--font` when the extraction found no heading font. RC 1 prints why (not an image, over 1 MB, a malformed colour or font name, a font file that is damaged, not TrueType or too large); fix it and run again. For a malformed font name, run `apply` again with the name cut down to letters, digits and spaces (Söhne → Sohne, Suisse Int'l → Suisse Intl): `apply` then reports `fontMissing` and the font-file question follows. With `apply-board`, leave that font flag out and tell the user that text keeps the standard typeface.
+
+   When the summary `apply` prints carries `fontMissing`, that font is not on Google Fonts (a licensed font, or one Google only offers as a variable font) and the PDF would use the standard typeface. Ask once with `AskUserQuestion`: **"We couldn't use <font family>. How should we handle it?"** — *Add the font file* / *Use <close free font> instead* / *Keep the standard typeface*. Every rerun below is the same `apply` command with `--font` changed or `--font-file` added; `apply` rebuilds the brand from its flags, so always repeat `--logo` or `--logo-url` and `--accent`.
+   - **Add the font file:** ask the user to drop the font's Regular `.ttf` file from their brand kit in the chat, then run the same `apply` again with `--font "<font family>" --font-file "<font file path>"`. If it refuses the file (an `.otf`, `.woff` or `.woff2` file, one over 800 KB, or one that is damaged), say why in plain words and ask for the `.ttf` once more. You get at most 2 files: after the second refusal, offer only *Use <close free font> instead* and *Keep the standard typeface*.
+   - **Use a close free font:** name the Google Fonts family closest in style to <font family> in the option label (a serif for a serif, a geometric sans for a geometric sans), and run `apply` again with `--font "<that family>"`. You get at most 2 families. If the summary still carries `fontMissing` after the second, STOP: keep the standard typeface and tell the user. Do not try more names, other font sources or downloads outside the script.
+   - **Keep the standard typeface:** nothing more to do.
+
+   Whatever they choose, say in one line which typeface the PDF now uses.
+
    With a brand board, use `apply-board` instead: it embeds the board's primary, secondary and text colours, the heading and body fonts (the board's files, or Google Fonts for a family the board has none for; a file that is not TrueType is converted for the PDF) and the logo:
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-summary/scripts/brand_assets.py" apply-board --config "$WORKDIR/lp-summary-data.json" --board "<brand board JSON file>" --heading-font "<heading family>" --body-font "<body family>" --logo "<logo file path>"
    ```
    When the user chose a different colour at step 3, add `--accent "<#RRGGBB>"`; it replaces the board's primary colour.
-   Write the board to a file under `$WORKDIR` first (the `brand_board` value as JSON), so its contents never pass through the shell. A `note` in the summary names a font left out or one the PDF cannot use; tell the user which text then keeps the standard typeface.
+   Write the board to a file under `$WORKDIR` first (the `brand_board` value as JSON), so its contents never pass through the shell. A `note` in the summary names a font left out or one the PDF cannot use; tell the user which text then keeps the standard typeface. `apply-board` refuses a malformed font name (RC 1) as `apply` does, and has no `fontMissing` question: its `note` is the only report of a font left out.
 5. Render and republish to the same page (5c and 5e); the brand rides in the config, and 5b carries it to every later rebuild, so it is extracted once.
 
 What the brand changes. On the page: the heading font, when embedded, on the title, LP name, section titles and menu titles, and from a brand board the body font on all other text (a family with no file on the board or on Google Fonts keeps the page's own); the firm's logo beside "Powered by" and the Carta logo; its accent on the LP name (light page only, and only when it clears AA on white), the selected LP's edge, the called and exposure bars and the section lines (on each page only where it has 2:1 contrast, so bright colours like orange stay; otherwise the text colour) over a pale tint of its secondary colour. In the PDF, only when Branding is the firm: the firm's logo top-left in the header (max 32pt tall; the firm's name in text if the logo will not load); the accent on the LP name (only if it clears WCAG AA on white — otherwise it stays the text colour), the section rules and the called and exposure bars, the header band's last third in the secondary colour; the heading font on the LP name and the document title, the body font on everything else (Bold where the board has a Bold face), body text in the firm's text colour when it is dark enough to read (7:1 on white); a Powered by Carta lockup beside the page numbers. Table rules are never branded.

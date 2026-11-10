@@ -523,9 +523,10 @@
     .pos-head { padding: 8px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle); font: 400 var(--ink-font-global-size-body-1) var(--ink-font-global-family-base); color: var(--ink-color-global-text-subtle); }
     .pos-row { padding: 10px 0; border-bottom: 1px solid var(--local-color-wash); font: 400 var(--ink-font-global-size-body-1) var(--ink-font-global-family-base); }
     .pos-grid > .r { text-align: right; }
-    /* The fund's name truncates first; its vintage, a qualifier in secondary grey, stays whole. */
-    .pos-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; }
-    .pos-name > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    /* A long fund name wraps onto a second line, so a wider firm font never cuts it off; its vintage,
+       a qualifier in secondary grey, stays whole beside it. */
+    .pos-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .pos-name > span:first-child { min-width: 0; overflow-wrap: anywhere; }
     .pos-vintage { flex: none; color: var(--ink-color-global-text-subtle); }
     /* "Show N more": a light link on its list's name column (Fund positions starts at the row's
        edge; Exposure past its chevron column, where the Other row's name sits). */
