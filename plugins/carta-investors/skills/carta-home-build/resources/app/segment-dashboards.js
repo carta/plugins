@@ -71,6 +71,28 @@ function reportDashboardCards() {
   trackHome("click", "CartaHome.View.Cards", { value: shown.length ? shown.join(",") : "none" });
 }
 
+// Wording for a firm whose holdings are all in SPVs, so the cards don't call them funds. The
+// card titles stay as they are: they name the dashboards the cards open.
+const SPV_WORDING = {
+  "soi-card-desc":  "Every SPV's holding, with cost, value and gain/loss.",
+  "soi-fund-label": "SPVS",
+  "soi-col-name":   "SPV",
+  "lp-card-desc":   "Every investor's commitments and returns across your SPVs.",
+  "lp-col-name":    "LARGEST INVESTORS",
+};
+
+// True when every entity the SOI card lists is an SPV. Mixed or unknown keeps fund wording.
+function isSpvOnly(rows) {
+  return rows.length > 0 && rows.every(r => String(r.ENTITY_TYPE_NAME || "").toLowerCase() === "spv");
+}
+
+function applySpvWording() {
+  Object.entries(SPV_WORDING).forEach(([id, text]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  });
+}
+
 // From fetchUserEnrichment, once get_current_user answers.
 function segmentSetFundAdmin(flag) {
   _segment.fundAdmin = flag === true;

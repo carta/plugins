@@ -699,7 +699,7 @@ async function fetchLiveData() {
       const dwhRes = await _mcp("read_tool", {
         name: "dwh__execute__query",
         arguments: {
-          sql: `SELECT f.FUND_UUID, f.FUND_NAME, SUM(ai.REMAINING_VALUE) AS TOTAL_VALUE, SUM(ai.TOTAL_UNREALIZED_GAIN_LOSS) AS TOTAL_GL FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID WHERE ai.IS_ACTIVE_INVESTMENT = TRUE AND f.FIRM_ID = '${firmId}' GROUP BY f.FUND_UUID, f.FUND_NAME ORDER BY TOTAL_VALUE DESC NULLS LAST`,
+          sql: `SELECT f.FUND_UUID, f.FUND_NAME, f.ENTITY_TYPE_NAME, SUM(ai.REMAINING_VALUE) AS TOTAL_VALUE, SUM(ai.TOTAL_UNREALIZED_GAIN_LOSS) AS TOTAL_GL FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID WHERE ai.IS_ACTIVE_INVESTMENT = TRUE AND f.FIRM_ID = '${firmId}' GROUP BY f.FUND_UUID, f.FUND_NAME, f.ENTITY_TYPE_NAME ORDER BY TOTAL_VALUE DESC NULLS LAST`,
           format: 'ndjson',
           }
       });
@@ -721,6 +721,7 @@ async function fetchLiveData() {
         value: parseFloat(r.TOTAL_VALUE ?? 0),
         gl:    parseFloat(r.TOTAL_GL ?? 0),
       })));
+      if (isSpvOnly(dwhFundRows)) applySpvWording();
       renderSOIScope(soiScopeNote(await fetchRealFunds(firmId), dwhFundRows.map(r => r.FUND_UUID)));
     }
     settleDashboardCard("soi", dwhFundRows.length > 0);

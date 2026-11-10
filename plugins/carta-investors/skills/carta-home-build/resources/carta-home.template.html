@@ -64,13 +64,13 @@
         <div class="card-header">
           <div class="card-header-text">
             <div class="card-title">Schedule of investments</div>
-            <div class="card-desc">Every holding with cost, value and gain/loss.</div>
+            <div class="card-desc" id="soi-card-desc">Every holding with cost, value and gain/loss.</div>
           </div>
         </div>
         <div class="card-preview">
           <div class="tbl-label" id="soi-fund-label">FUNDS</div>
           <div class="tbl-row tbl-header">
-            <span class="tbl-col-name">FUND</span>
+            <span class="tbl-col-name" id="soi-col-name">FUND</span>
             <span class="tbl-col-val">TOTAL VALUE</span>
             <span class="tbl-col-gl">GAIN/LOSS</span>
           </div>
@@ -104,12 +104,12 @@
         <div class="card-header">
           <div class="card-header-text">
             <div class="card-title">LP summary</div>
-            <div class="card-desc">Every LP's commitments, returns and exposure across all funds.</div>
+            <div class="card-desc" id="lp-card-desc">Every LP's commitments, returns and exposure across all funds.</div>
           </div>
         </div>
         <div class="card-preview">
           <div class="tbl-row tbl-header">
-            <span class="tbl-col-name">LARGEST LPS</span>
+            <span class="tbl-col-name" id="lp-col-name">LARGEST LPS</span>
             <span class="tbl-col-lp">COMMITTED · TVPI</span>
           </div>
           <div id="lp-rows">

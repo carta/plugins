@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.19.10",
+    "version": "1.19.11",
     "headline": "A capital call partner with only a few dollars left to pay now reads as Paid, so you are not reminded to chase them. Rebuild to get it."
   },
   "carta-lp-summary": {
