@@ -9,7 +9,7 @@ Every hook dispatches to the shared Go hooks binary in `tools/hooks/` via
 
 | Event | Matcher | Command | Purpose |
 |-------|---------|---------|---------|
-| SessionStart | — | `dispatch.sh inject-context` | Inject skill-loading instruction |
+| SessionStart | — | `dispatch.sh inject-context` | Inject the welcome-first and skill-loading instruction |
 | SessionStart | — | `dispatch.sh prune-session-data` | Prune stale (>24h) session files from CLAUDE_PLUGIN_DATA/sessions |
 | SessionStart | — | `dispatch.sh capture-model` | Capture the active Claude model for later PreToolUse instrumentation |
 | PreToolUse | Skill | `dispatch.sh capture-active-skill` | Record which carta skills have been loaded this session |
