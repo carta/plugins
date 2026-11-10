@@ -15,7 +15,7 @@ export const CHAT_RAIL_TRANSITION_MS = 220;
 // its transcript, its model lock and its in-flight stream reader alive
 // across a close/reopen. ChatPanel is keyed by `sessionId`, so its state
 // lives exactly as long as that id does, matching the server session it's
-// bound to: a new id ("New conversation") remounts it empty. `inert`
+// bound to: a new id ("Reset chat") remounts it empty. `inert`
 // additionally blocks keyboard/assistive-tech focus into the closed rail
 // (pointerEvents/aria-hidden alone don't).
 export default function ChatRail({ open, onClose, ...chatPanelProps }) {

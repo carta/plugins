@@ -41,7 +41,7 @@ export function chatSessionId() {
 }
 
 // Starts this tab on a new session id, stored in place of the old one — what
-// "New conversation" does, since serve.py binds a session to its first model.
+// "Reset chat" does, since serve.py binds a session to its first model.
 export function newChatSessionId() {
   const id = newSessionId();
   write(SESSION_ID_KEY, id);

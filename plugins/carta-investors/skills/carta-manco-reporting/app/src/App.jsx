@@ -146,9 +146,19 @@ export default function App() {
 
   // Drops this session's saved transcript and moves the tab to a new id;
   // ChatRail remounts ChatPanel under it, empty and with the model unlocked.
-  const startNewConversation = () => {
-    clearTranscript(chatSession);
+  // Also closes the old session's claude subprocess server-side — otherwise
+  // it sits until MAX_CHAT_SESSIONS/idle eviction reclaims the slot.
+  // Best-effort: resetting the chat must never hang or fail because the
+  // network blipped.
+  const resetChat = () => {
+    const closingSession = chatSession;
+    clearTranscript(closingSession);
     setChatSession(newChatSessionId());
+    fetch("/api/chat/close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: closingSession }),
+    }).catch(() => {});
   };
 
   useEffect(() => {
@@ -767,7 +777,7 @@ export default function App() {
           open={chatOpen}
           onClose={closeChat}
           sessionId={chatSession}
-          onNewConversation={startNewConversation}
+          onResetChat={resetChat}
           onTurnEnd={onChatTurnEnd}
           anchor={anchor}
           onAnchorConsumed={() => setAnchor(null)}

@@ -186,6 +186,14 @@ def _chat_unavailable_body(code, message, fix_prompt):
     }
 
 
+def _chat_session_id(body):
+    """The _CHAT_SESSIONS registry key for a /api/chat* request body — one
+    fallback, used by _chat (which creates the entry), _chat_interrupt and
+    _chat_close (which both look it up), so the three can never disagree on
+    which session a request means."""
+    return body.get("sessionId") or "default"
+
+
 IDLE_TIMEOUT_DEFAULT = 86400  # 24h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
@@ -837,6 +845,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(status, result)
         if u.path == "/api/chat/interrupt":
             return self._chat_interrupt(body)
+        if u.path == "/api/chat/close":
+            return self._chat_close(body)
         if u.path == "/api/chat":
             return self._chat(body)
         m = _REPORT_ACTION_RE.match(u.path)
@@ -883,7 +893,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         of its real reply — the exact "late events bleed into the next turn"
         risk `_chat`'s own eviction handling guards against below.
         """
-        sid = body.get("sessionId") or "default"
+        sid = _chat_session_id(body)
         with _CHAT_SESSIONS_LOCK:
             entry = _CHAT_SESSIONS.get(sid)
         # A 404 here means the session is gone: its turn failed (see _chat),
@@ -896,12 +906,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(409, {"error": "not_interruptible"})
         return self._send(200, {"ok": True})
 
+    def _chat_close(self, body):
+        """Reset chat's own cleanup: close one session's claude subprocess
+        outright and drop it from the registry, instead of leaving it to sit
+        until MAX_CHAT_SESSIONS/idle eviction reclaims the slot.
+
+        An unknown or already-gone sessionId is a no-op, not an error —
+        App.jsx's resetChat calls this on every reset regardless of whether a
+        session still exists server-side (a pre-Claude error, for instance,
+        never created one). Unlike _chat_interrupt, this never checks the
+        turn lock: closing is terminate()-then-wait, which a turn in flight
+        would simply have cut short rather than corrupted, and the client
+        only resets a session that isn't mid-turn in the first place (the
+        header control is disabled then; the inline error button only ever
+        renders once the in-flight placeholder has been replaced by an
+        actual result).
+        """
+        sid = _chat_session_id(body)
+        with _CHAT_SESSIONS_LOCK:
+            entry = _CHAT_SESSIONS.pop(sid, None)
+        if entry is not None:
+            entry["session"].close()
+        return self._send(200, {"closed": entry is not None})
+
     def _chat(self, body):
         # Chat is NOT gated on a running rebuild/share: it is a separate claude
         # subprocess with no shared state with those.
         prompt = body.get("prompt")
         prompt = str(prompt).strip() if prompt is not None else ""
-        sid = body.get("sessionId") or "default"
+        sid = _chat_session_id(body)
         if not prompt:
             return self._send(400, {"error": "empty_prompt"})
 

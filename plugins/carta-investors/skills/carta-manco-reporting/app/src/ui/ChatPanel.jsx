@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { renderMarkdown } from "./markdown.jsx";
-import { CloseIcon, StopIcon } from "./components.jsx";
+import { Btn, CloseIcon, StopIcon } from "./components.jsx";
 import { FS, sans } from "./theme.js";
 import { trackClick } from "../analytics.js";
 import { capLabel } from "../pinpoint/capture.js";
@@ -180,7 +180,31 @@ function succeededCallIds(ev) {
     .map((b) => b.tool_use_id);
 }
 
-export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, onAnchorConsumed, pinMode, onTogglePinMode, models, defaultModel, onClose, onNewConversation }) {
+// A message that never reached Claude — any non-OK /api/chat response (a
+// 503/500 claude_unavailable, a 400/409/413, anything) or a rejected fetch(),
+// before any token streamed back. serve.py re-probes claude's availability on
+// the very next attempt, so restoring one of these after a reload would only
+// show stale text and an unnecessarily locked model; an error Claude actually
+// returned mid-conversation (a stream is_error frame, or any failure once
+// res.ok was true) has none of this flag and is persisted until the operator
+// reloads on purpose.
+function isPreClaudeError(m) {
+  return !!m && m.role === "assistant" && !!m.preClaudeError;
+}
+
+// What actually gets written to sessionStorage: every pre-Claude-failed turn
+// is dropped (both the user prompt and its error), not just hidden, wherever
+// it sits in the list — a resend that fails again, or an earlier failure in
+// a conversation that later succeeded, must not come back on reload either.
+// Nothing about such a turn reflects a real exchange with Claude worth
+// restoring, and keeping the user half alone would read as a question
+// nobody answered.
+function messagesToPersist(messages) {
+  return messages.filter((m, i) =>
+    !isPreClaudeError(m) && !(m.role === "user" && isPreClaudeError(messages[i + 1])));
+}
+
+export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, onAnchorConsumed, pinMode, onTogglePinMode, models, defaultModel, onClose, onResetChat }) {
   // What this tab saved for the session before a reload, read once on mount.
   const [saved] = useState(() => loadTranscript(sessionId));
   const [messages, setMessages] = useState(() => saved?.messages || []);
@@ -199,7 +223,9 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
   useEffect(() => {
     if (messages.length === 0) setModel(initialModel);
   }, [initialModel]);
-  const locked = messages.length > 0;
+  // A turn that never reached Claude shouldn't lock the model picker — nothing
+  // about it committed this session to a model the way a real turn does.
+  const locked = messages.some((m) => m.role === "assistant" && !isPreClaudeError(m));
 
   // Saved only between turns, and dropped while one is in flight: serve.py
   // closes a session whose page goes away mid-turn, so a transcript restored
@@ -208,8 +234,10 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
   // ends, App reloads from an effect of its own, which runs after this one in
   // the same commit, so the finished turn is saved before the page goes.
   useEffect(() => {
-    if (busy) clearTranscript(sessionId);
-    else saveTranscript(sessionId, { messages, model });
+    if (busy) return clearTranscript(sessionId);
+    const toSave = messagesToPersist(messages);
+    if (toSave.length === 0) clearTranscript(sessionId);
+    else saveTranscript(sessionId, { messages: toSave, model });
   }, [sessionId, messages, model, busy]);
 
   // Keep the transcript pinned to the newest text. `messages` gets a new identity
@@ -269,6 +297,14 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
     // what onTurnEnd reports, so App knows a screen changed under it.
     let edited = false;
     const editCalls = new Set();
+    // Whether the request ever got a successful response from serve.py — any
+    // non-OK response (503/500 claude_unavailable, 400/409/413, anything) or
+    // a fetch() rejection (network failure) leaves this false, since Claude's
+    // own subprocess never saw the prompt. isPreClaudeError()/
+    // messagesToPersist() use this to treat such a failure as something not
+    // worth restoring on reload or locking the model over, unlike an error
+    // Claude itself returns mid-stream below.
+    let reachedClaude = false;
     try {
       onTurnStart?.(); // inside try: a throw here still hits finally, so busy resets
       const res = await fetch("/api/chat", {
@@ -291,6 +327,7 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
         err.fixPrompt = data?.fixPrompt || null;
         throw err;
       }
+      reachedClaude = true;
       const reader = res.body.getReader();
       let buf = "";
       // Once we've seen a partial text_delta, the CLI's terminal full-message
@@ -355,6 +392,7 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
           text: "⚠️ " + (err && err.message ? err.message : "error"),
           code: (err && err.code) || null,
           fixPrompt: (err && err.fixPrompt) || null,
+          preClaudeError: !reachedClaude,
         };
         return copy;
       });
@@ -393,23 +431,27 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
     runTurn(last.prompt, last.anchor);
   }
 
+  // Shared by the header control and the inline button an error bubble shows
+  // (see isPreClaudeError below) — one place firing the event keeps the two
+  // call sites from drifting into separate ids for the same action.
+  function handleResetChat() {
+    trackClick("MancoReporting.Chat.ResetChat");
+    onResetChat?.();
+  }
+
   return (
     <div className="manco-chat" style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: sans.fontFamily }}>
       <style>{".manco-chat-input input:focus{box-shadow:0 0 0 3px var(--ink-color-global-border-focus-light);border-color:var(--ink-color-global-border-focus-default)}"}</style>
-      {(onClose || onNewConversation) && (
+      {(onClose || onResetChat) && (
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 4, flex: "none", marginBottom: 2 }}>
-          {/* The model locks with the first message and serve.py binds the
-              session to it, so a fresh session is the only way to switch
-              models or drop a thread. Not mid-turn: that stream would be
-              orphaned. */}
-          {onNewConversation && locked && (
-            <button onClick={() => { trackClick("MancoReporting.Chat.NewConversation"); onNewConversation(); }}
-              data-testid="chat-new" disabled={busy}
-              style={{ border: "none", borderRadius: 4, background: "transparent", padding: "4px 8px",
-                fontSize: FS.small, color: "var(--ink-color-global-text-subtle)",
-                cursor: busy ? "default" : "pointer" }}>
-              New conversation
-            </button>
+          {/* Shown whenever there's anything to reset, not only once the model
+              has actually locked — a pre-Claude error (isPreClaudeError) never
+              locks the model but still leaves a stuck composer to recover
+              from. Disabled mid-turn: resetting would orphan that stream. */}
+          {onResetChat && messages.length > 0 && (
+            <Btn small onClick={handleResetChat} disabled={busy} data-testid="chat-new">
+              Reset chat
+            </Btn>
           )}
           {onClose && <button onClick={onClose} data-testid="chat-close"
             title="Close chat" aria-label="Close chat"
@@ -451,6 +493,22 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
                     )}
                     {m.fixPrompt && (
                       <ClaudePrompt text={m.fixPrompt} event="MancoReporting.Chat.CopyFixPrompt" />
+                    )}
+                    {/* A pre-Claude failure (install/sign-in/session-start, or a
+                        network error) on a session with no real exchange yet
+                        leaves the composer otherwise unusable — the model
+                        never locked, but there's nothing to send into either.
+                        Put the way out right here instead of leaving it to the
+                        header control alone, which a reader focused on two
+                        stacked error lines can easily miss. Gated on !locked:
+                        once a real exchange has happened, resetting here would
+                        discard that conversation with no confirmation — the
+                        header control still covers that case, deliberately
+                        less prominent than this one. */}
+                    {!locked && i === messages.length - 1 && isPreClaudeError(m) && onResetChat && (
+                      <div style={{ marginTop: 8 }}>
+                        <Btn small onClick={handleResetChat} data-testid="chat-reset-inline">Reset chat</Btn>
+                      </div>
                     )}
                     {m.stopped && <StoppedMark hadText={m.text !== ""} />}
                     {/* Trails the partial text for the whole turn — the dots are
