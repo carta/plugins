@@ -2096,6 +2096,7 @@
 /* ── Segment dashboards: LP summary card ── */
 .dash-card[hidden] { display: none; }
 #dashboards-section[hidden] { display: none; }
+#ca-section-v2[hidden] { display: none; }
 .tbl-col-lp { width: 128px; white-space: nowrap; flex-shrink: 0; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); }
 .tbl-row.tbl-header .tbl-col-lp { font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--ink-color-global-text-subtle); }
 .lp-dot { margin: 0 4px; color: var(--ink-color-global-border-default); }
@@ -2105,3 +2106,48 @@
 .wn-prev-sheet > span:not(:nth-child(4n+1)) { text-align: right; }
 .wn-prev-sheet-h { background: #F1F1F1; font-weight: 600; color: #656B6B; }
 .wn-prev-sheet-t { font-weight: 600; }
+
+    /* ── Connection states (app/connection-states.js) ── */
+    .card-note {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 10px 12px; margin-top: 4px;
+      font-size: 12px; line-height: 18px;
+      color: var(--ink-color-global-text-default);
+      background: light-dark(#F6F5F2, #1F1F1F);
+      border-radius: var(--ink-size-global-radius-subtle);
+    }
+    .card-note-dot { width: 6px; height: 6px; margin-top: 6px; flex: none; border-radius: 50%; background: #E8A100; }
+    .card-note-action {
+      font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
+    }
+    /* A card's note leads its data area: lifted above the empty chart or table heading, which
+       keep their height, so the card's footer stays where it always is. */
+    .card-preview:has(> * > .card-note) { display: flex; flex-direction: column; }
+    .card-preview > :has(> .card-note) { order: -1; }
+    .card-preview:has(> * > .card-note) > :not(:has(> .card-note)) { visibility: hidden; }
+    .reconnect-panel { position: relative; margin: 8px 0 28px; }
+    .reconnect-ghost { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; filter: blur(3px); opacity: .8; }
+    .reconnect-ghost > div {
+      height: 300px; border: 1px solid var(--ink-color-global-border-subtle);
+      background: repeating-linear-gradient(180deg, transparent 0 40px, light-dark(#E2E3E3, #2F2F2F) 40px 49px), var(--ink-color-global-surface-background-default);
+    }
+    .reconnect-card {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: min(420px, calc(100% - 32px)); padding: 28px 32px; text-align: center;
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-default);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .12);
+    }
+    .reconnect-card h2 {
+      margin: 0 0 8px; font-family: var(--ink-font-global-family-prominent);
+      font-size: 24px; line-height: 30px; font-weight: 400; color: var(--ink-color-global-text-default);
+    }
+    .reconnect-card p { margin: 0 0 18px; font-size: 13px; color: var(--ink-color-global-text-subtle); }
+    .reconnect-card .reconnect-how { margin: 14px 0 0; color: var(--ink-color-global-text-default); }
+    .reconnect-btn {
+      font: inherit; font-size: 13px; font-weight: 600; padding: 9px 18px; border: 0; cursor: pointer;
+      border-radius: var(--ink-radius-pill);
+      background: var(--ink-color-global-brand-black); color: var(--ink-color-global-brand-white);
+    }

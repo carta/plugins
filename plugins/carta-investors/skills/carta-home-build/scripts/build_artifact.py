@@ -110,6 +110,7 @@ SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 # version-check.js). Add new feature files here as carta-home.app.js gets split further.
 APP_JS_PARTS = [
     "carta-home.app.js",
+    "app/connection-states.js",
     "app/capital-activity.js",
     "app/version-check.js",
     "app/live-content.js",

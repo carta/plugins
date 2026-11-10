@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.39.1</carta-plugin>
+<carta-plugin>carta-investors:7.39.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -348,7 +348,7 @@ its prompt is copied, `CartaHome.SOI.NewFund.Dismiss` (click) when it is dismiss
 Dashboard cards: a card whose query answers with no rows is hidden, never shown blank
 (`settleDashboardCard` in `app/segment-dashboards.js`), and fires `CartaHome.SOI.Empty`,
 `CartaHome.Perf.Empty` or `CartaHome.LP.Empty` (render). A card whose query fails keeps an
-error line and fires `CartaHome.SOI.LoadError`, `CartaHome.Perf.LoadError` or
+note and fires `CartaHome.SOI.LoadError`, `CartaHome.Perf.LoadError` or
 `CartaHome.LP.LoadError` (`failDashboardCard`). Once every card the firm gets has loaded or
 failed, `CartaHome.View.Cards` (click, `value` = the cards shown, a failed card included, e.g.
 `soi,perf`, or `none`) records which Home the firm got. The full list is in `USAGE_DATA.md`.

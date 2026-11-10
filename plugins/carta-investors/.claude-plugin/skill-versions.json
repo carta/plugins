@@ -4,8 +4,8 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.21.1",
-    "headline": "The Skill directory now has a search box: type what you want to do and it shows the matching skills, or says when none match. Rebuild to get it."
+    "version": "1.23.0",
+    "headline": "When Carta can't load, Home now says why and how to fix it, with a Try again or Check again button, instead of a red error. Rebuild to get it."
   },
   "carta-lp-summary": {
     "version": "1.4.0",

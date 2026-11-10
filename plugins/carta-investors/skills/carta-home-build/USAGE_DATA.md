@@ -10,6 +10,23 @@ accounts out of adoption numbers (`IS_STAFF_USER`, `IS_DEMO_ACCOUNT` on
 `CORE_MCP_TOOL_CALLED`, where these land as `track_ui_event` rows with interface
 `carta-home`).
 
+## Connection states
+
+A card whose data can't load shows a note in its data area naming the cause, with Try again or
+Check again. When the whole Carta connection is gone (signed out, not added, or no Carta in the
+view), one reconnect panel replaces the capital activity and dashboard sections. When the viewer
+is signed out, it says to reconnect in Settings → Connectors → Carta; when Carta was never added
+or isn't in the view, it says to add the Carta connector in Settings → Connectors. Both buttons
+reload Home. The page sends these over the Carta connection, so with the connection gone they
+arrive only when the host still relays UI events.
+
+| Event | Type | Meaning |
+|---|---|---|
+| `CartaHome.Reconnect.Shown` | render | The reconnect panel replaced the Carta-data sections |
+| `CartaHome.Reconnect.CheckAgain` | click | The viewer chose Check again on the reconnect panel |
+| `CartaHome.CardNote.TryAgain` | click | Try again on a card that failed to load. `value` = the card (`soi`, `perf`, `lp`) |
+| `CartaHome.CardNote.CheckAgain` | click | Check again on a card whose Carta tool is off, whose firm is missing, or whose Carta connector isn't chosen. `value` = the card |
+
 ## Page
 
 | Event | Type | Meaning |
@@ -17,27 +34,27 @@ accounts out of adoption numbers (`IS_STAFF_USER`, `IS_DEMO_ACCOUNT` on
 | `CartaHome.View` | render | Home loaded |
 | `CartaHome.View.Version` | click | `value` = the skill version the page was built with |
 | `CartaHome.View.First` | render | First load in this browser |
-| `CartaHome.View.Cards` | click | Every dashboard card the firm gets has loaded or failed, and the profile (`get_current_user`) has answered or failed. `value` = the cards shown, in order (`soi`, `perf`, `lp`, comma-separated), or `none`. A card whose query failed is shown with its error line, so it is in `value`; its `LoadError` event tells it apart from a card with data. Not sent when Carta isn't connected, there's no active firm, the profile never answers, or loading fails at the connector (`Unavailable.NoFirm`, `Unavailable.LoadError`) |
+| `CartaHome.View.Cards` | click | Every dashboard card the firm gets has loaded or failed, and the profile (`get_current_user`) has answered or failed. `value` = the cards shown, in order (`soi`, `perf`, `lp`, comma-separated), or `none`. A card whose query failed is shown with its note, so it is in `value`; its `LoadError` event tells it apart from a card with data. Not sent when Carta isn't connected, there's no active firm, the profile never answers, the reconnect panel is shown, or loading fails at the connector (`Unavailable.NoFirm`, `Unavailable.LoadError`) |
 | `CartaHome.Unavailable.NoFirm` | render | No active firm in the viewer's Carta context |
 | `CartaHome.Unavailable.LoadError` | render | Loading the firm's data failed at the connector |
 | `CartaHome.Tab.<tab>` | click | Switched tab (Recommended, Directory) |
 
 ## Dashboard cards
 
-A card whose query answers with no rows is hidden instead of shown blank. A card whose query fails stays, with an error line. Each sends one of these.
+A card whose query answers with no rows is hidden instead of shown blank. A card whose query fails stays, with a note. Each sends one of these.
 
 | Event | Type | Meaning |
 |---|---|---|
-| `CartaHome.SOI.Empty` | render | The investments query answered with no active investments, so the Schedule of investments card is hidden. Not sent when the query fails: the card stays with its error line and `SOI.LoadError` is sent |
-| `CartaHome.SOI.LoadError` | render | The investments query failed; the Schedule of investments card stays and shows an error |
+| `CartaHome.SOI.Empty` | render | The investments query answered with no active investments, so the Schedule of investments card is hidden. Not sent when the query fails: the card stays with its note and `SOI.LoadError` is sent |
+| `CartaHome.SOI.LoadError` | render | The investments query failed; the Schedule of investments card stays and shows a note |
 | `CartaHome.SOI.NewFund.Shown` | render | The SOI card's banner appeared for funds the published SOI page doesn't list. Sent once per page load for each different set of funds |
 | `CartaHome.SOI.NewFund.Copy` | prompt | The banner's update prompt was copied (a `trackPrompt`, source `dashboard`, skill `carta-soi`). Carries the fixed text "Update my Schedule of Investments to add new funds", never fund names |
 | `CartaHome.SOI.NewFund.Dismiss` | click | The banner was dismissed |
 | `CartaHome.SOI.PartialScope` | render | The Schedule of investments card shows the "Carta administers N of your M funds" note, so Carta administers only part of the firm's funds. Not sent when the fund lookup fails: the note is hidden |
-| `CartaHome.Perf.Empty` | render | The benchmark and fund metrics queries answered with no fund, so the Fund performance card is hidden. Not sent when either query fails without a fund to show: the card stays with its error line and `Perf.LoadError` is sent |
-| `CartaHome.Perf.LoadError` | render | No fund could be shown because the benchmark or fund metrics query failed; the Fund performance card stays and shows an error |
+| `CartaHome.Perf.Empty` | render | The benchmark and fund metrics queries answered with no fund, so the Fund performance card is hidden. Not sent when either query fails without a fund to show: the card stays with its note and `Perf.LoadError` is sent |
+| `CartaHome.Perf.LoadError` | render | No fund could be shown because the benchmark or fund metrics query failed; the Fund performance card stays and shows a note |
 | `CartaHome.LP.Empty` | render | A Fund Admin firm has no LPs to show, so the LP summary card is hidden |
-| `CartaHome.LP.LoadError` | render | The LP query failed; the LP summary card stays and shows an error |
+| `CartaHome.LP.LoadError` | render | The LP query failed; the LP summary card stays and shows a note |
 | `CartaHome.Dashboard.Open.<dashboard>` | click | Opened a built dashboard from its card |
 | `CartaHome.Dashboard.CopyPrompt.<dashboard>` | prompt | Copied a dashboard's prompt from its card |
 | `CartaHome.Customize.Open.<dashboard>` | click | Opened a card's customize options |

@@ -374,7 +374,7 @@ async function fetchBenchmarkData() {
     let hasData = false;
     try { hasData = await fetchBenchmarkFallback(); } catch(_) {}
     if (hasData) { settleDashboardCard("perf", true); return; }
-    renderBenchError("Can't load fund performance — something went wrong reaching Carta.");
+    renderBenchError(e?.code);
     failDashboardCard("perf");
   }
 }
@@ -461,18 +461,18 @@ function _renderBenchValueTable(items, asOf) {
 }
 
 // ── Static fallback data ──
-function populateFallback(reason) {
-  const noConnectorMsg = "Can't load your portfolio — add or allow Carta in Settings → Connectors, then reload.";
-  renderSOIError(reason || noConnectorMsg);
-
-  renderBenchError(reason || "Can't load fund performance — add or allow Carta in Settings → Connectors, then reload.");
+// No Carta in this view loses the whole page; a missing firm is a note on each card.
+function populateFallback(code = "no_connector") {
+  renderSOIError(code);
+  renderBenchError(code);
 }
 
-// The Fund performance card's error line, unless the card already shows something.
-function renderBenchError(msg) {
+// The Fund performance card's note, unless the card already shows something.
+function renderBenchError(code) {
   const benchMetrics = document.getElementById("benchmark-metrics");
   if (benchMetrics && !benchMetrics.textContent.trim()) {
-    benchMetrics.innerHTML = `<div style="font-size:11px;color:var(--ink-color-global-feedback-negative-strong);padding-top:8px;">${msg}</div>`;
+    const note = renderConnectionFailure("perf", code);
+    if (note) benchMetrics.innerHTML = note;
   }
 }
 
@@ -542,11 +542,12 @@ function renderSOIScope(note) {
   if (note) trackHome("render", "CartaHome.SOI.PartialScope");
 }
 
-function renderSOIError(msg) {
+function renderSOIError(code) {
   renderSOIScope(null);
+  const note = renderConnectionFailure("soi", code);
+  if (!note) return;
   document.getElementById("soi-fund-label").textContent = "—";
-  document.getElementById("soi-rows").innerHTML =
-    `<div class="loading-row" style="color:var(--ink-color-global-feedback-negative-strong); font-size:11px;">${msg}</div>`;
+  document.getElementById("soi-rows").innerHTML = note;
 }
 
 function fmtShort(v) {
@@ -680,7 +681,7 @@ async function fetchLiveData() {
 
     if (!firmId) {
       trackHome("render", "CartaHome.Unavailable.NoFirm");
-      populateFallback("Can't load your portfolio — no active firm in your Carta context.");
+      populateFallback("no_firm");
       return;
     }
 
@@ -711,11 +712,11 @@ async function fetchLiveData() {
       else {
         dwhFundRows = dwhRows(dwhRes, "FUND_UUID");
       }
-    } catch (e) { console.error('[DWH error]', e); soiFailed = true; }
+    } catch (e) { console.error('[DWH error]', e); soiFailed = e?.code || true; }
 
-    // Render SOI card. A failed query keeps the card with its error line, never hides it.
+    // Render SOI card. A failed query keeps the card with its note, never hides it.
     if (soiFailed) {
-      renderSOIError(SOI_LOAD_ERROR);
+      renderSOIError(soiFailed);
       failDashboardCard("soi");
       return;
     }
@@ -735,21 +736,10 @@ async function fetchLiveData() {
     console.error("Carta MCP fetch error:", err);
     // A connector-level failure can't relay this either; it lands when the bridge still works.
     trackHome("render", "CartaHome.Unavailable.LoadError");
-    // Connector-level codes rethrow from _mcp and land here. Each has a different fix,
-    // so name it — one generic banner hides the action that would repair the page.
-    renderSOIError(SOI_ERROR_BY_CODE[err?.code] || SOI_LOAD_ERROR);
+    // Connector-level codes rethrow from _mcp and land here; each code has its own fix.
+    renderSOIError(err?.code);
   }
 }
-
-const SOI_LOAD_ERROR = "Can't load your portfolio — something went wrong reaching Carta.";
-const SOI_ERROR_BY_CODE = {
-  needs_reauth:         "Can't load your portfolio — reconnect Carta in Settings → Connectors.",
-  server_not_connected: "Can't load your portfolio — add the Carta connector in Settings → Connectors.",
-  selection_required:   "Can't load your portfolio — choose which Carta connector to use.",
-  server_unavailable:   "Can't load your portfolio — Carta didn't respond. Reload to retry.",
-  blocked_by_policy:    "Can't load your portfolio — your organization's policy blocks this.",
-  approval_required:    "Can't load your portfolio — this needs approval from your organization.",
-};
 
 // ── Helpers ──
 function tryParse(str) { try { return JSON.parse(str); } catch { return null; } }

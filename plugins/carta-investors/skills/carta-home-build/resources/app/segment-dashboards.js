@@ -3,7 +3,7 @@
 // SOI and Fund performance are built for every firm, LP summary for Fund Admin firms. A card
 // whose query answers with no rows is hidden instead of showing a blank, and the grid sizes
 // itself to the cards left; with none left the whole section goes. A card whose query fails
-// stays, showing its error line.
+// stays, showing its note.
 const _segment = { fundAdmin: false, firmId: null, profileDone: false };
 
 const LP_CARD_ROWS = 3;
@@ -38,7 +38,8 @@ function layoutDashboards() {
     if (el) el.hidden = !layout.shown.includes(key);
   });
   const section = document.getElementById("dashboards-section");
-  if (section) section.hidden = layout.count === 0;
+  // Once the reconnect panel replaces the Carta-data sections, nothing brings them back.
+  if (section) section.hidden = _reconnectShown || layout.count === 0;
   // The tour is not loaded in every test page.
   if (section?.hidden && typeof tourSectionHidden === "function") tourSectionHidden("dashboards-section");
   reportDashboardCards();
@@ -52,7 +53,7 @@ function settleDashboardCard(key, hasData) {
   layoutDashboards();
 }
 
-// A card's query failed. The card stays with its error line, so it counts as shown.
+// A card's query failed. The card stays with its note, so it counts as shown.
 function failDashboardCard(key) {
   if (!(key in _cardState) || _cardState[key] !== "loading") return;
   _cardState[key] = "error";
@@ -61,10 +62,10 @@ function failDashboardCard(key) {
 }
 
 // Once every card this firm gets has settled (data, empty or error), record which ones it
-// saw (e.g. "soi,perf" or "none"): every card but the empty ones, so a card showing its error
-// line counts. Sent as a click because a render event can't carry a value.
+// saw (e.g. "soi,perf" or "none"): every card but the empty ones, so a card showing its note
+// counts. Sent as a click because a render event can't carry a value.
 function reportDashboardCards() {
-  if (_cardsReported || !_segment.profileDone) return;
+  if (_cardsReported || !_segment.profileDone || _reconnectShown) return;
   if (firmCards(_segment).some(key => _cardState[key] === "loading")) return;
   _cardsReported = true;
   const shown = dashboardLayout(_segment, _cardState).shown;
@@ -168,7 +169,8 @@ async function fetchLpSummary() {
   } catch (e) {
     console.error("[carta-home] LP summary failed", e);
     const el = document.getElementById("lp-rows");
-    if (el) el.innerHTML = `<div class="loading-row">Can't load your LPs right now.</div>`;
+    const note = renderConnectionFailure("lp", e?.code);
+    if (el && note) el.innerHTML = note;
     failDashboardCard("lp");
   }
 }
