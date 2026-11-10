@@ -5,6 +5,7 @@ import { FS, sans } from "./theme.js";
 import { trackClick } from "../analytics.js";
 import { capLabel } from "../pinpoint/capture.js";
 import { loadTranscript, saveTranscript, clearTranscript } from "./chatPersistence.js";
+import { DASHBOARD_EXPORT_ID } from "./exportIds.js";
 
 // Built-in fallback catalog, used when App's /api/models fetch hasn't
 // resolved (or failed) — keeps the model picker usable offline. This mirrors
@@ -116,6 +117,21 @@ function EmptyState() {
   );
 }
 
+// anchor.section is capture.js's last resort: the id of the nearest ancestor
+// with one, used when a pin lands on an area with no heading, text selection
+// or datum under it (e.g. empty space in DashboardView's whole-page export
+// container). That id is an internal export/DOM hook, never meant to be
+// read, so it needs a display name here rather than showing up verbatim in
+// the pin chip.
+//
+// TODO: BudgetActualsView, MonthlyActualsView and CustomReportView wrap their
+// pages in the same kind of export-container id and hit the same fallback —
+// add each one here, keyed on its own exportIds.js constant, when one of them
+// is seen leaking into a pin chip.
+const SECTION_DISPLAY_NAMES = {
+  [DASHBOARD_EXPORT_ID]: "ManCo Microapp",
+};
+
 export function pinLabel(anchor) {
   if (!anchor) return "";
   if (anchor.label) return anchor.label; // display label computed at capture time
@@ -123,7 +139,7 @@ export function pinLabel(anchor) {
   const t = (anchor.quotedText || "").trim();
   if (t) return capLabel(t);
   if (anchor.datum && anchor.datum.id) return (anchor.datum.type || "item") + " " + anchor.datum.id;
-  if (anchor.section) return anchor.section;
+  if (anchor.section) return SECTION_DISPLAY_NAMES[anchor.section] || anchor.section;
   const vf = anchor.source && anchor.source.viewFile;
   return vf ? vf.split("/").pop() : "element";
 }

@@ -23,8 +23,7 @@ import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import AskClaudeButton from "../ui/AskClaudeButton.jsx";
 import { exportPropsFor } from "../ui/exportHtml.js";
 import { trackClick, trackRender } from "../analytics.js";
-
-const DASHBOARD_EXPORT_ID = "manco-export-dashboard";
+import { DASHBOARD_EXPORT_ID } from "../ui/exportIds.js";
 
 // KPI summary strip — one bordered card holding all four stats, matching
 // carta-fund-modeling's MetricBar/StatBar "Summary" tile pattern exactly:
