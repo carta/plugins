@@ -256,9 +256,9 @@ it:**
   >
   > **→ Open it now: https://manco-reporting.carta.cloud**
   >
-  > **Want to import your own budget workbook, or customize what's shown?** Open a local
-  > Claude Code session (in Claude Desktop, switch from cloud to local) and ask, "open the
-  > ManCo dashboard for `<firm>`".
+  > **Want to import your own budget workbook from Excel, or customize what's shown?** That
+  > needs Claude Code running on your computer — open it there and ask, "open the ManCo
+  > dashboard for `<firm>`".
 
   If the invocation named a firm, add one line to that reply, after the "Open it now" line:
   "You asked about **\<firm\>** — pick it from the firm chooser when the app opens, or use
