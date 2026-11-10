@@ -145,8 +145,8 @@ export default function Sidebar({ firmName, canSwitchFirm, onChooseFirm, route, 
 
       <span style={{ flex: "0 0 10px" }} />
 
-      {/* Same horizontal inset (FOOTER_INSET_X) as the footer block below, so the budget
-          controls line up with the wordmark and date lines rather than sitting flush with the rail edge. */}
+      {/* Same horizontal inset (FOOTER_INSET_X) as the footer block below, so a footer
+          action lines up with the wordmark and date lines rather than sitting flush with the rail edge. */}
       <div style={styles.footerAction}>{footerAction}</div>
 
       {/* Same divider + wordmark/as-of layout as carta-fund-modeling's own sidebar
@@ -252,7 +252,7 @@ function formatAsOf(iso) {
 const SIDEBAR_WIDTH = 240; // Ink SideNav's own standard open width (--ink-sidenav-container-width-base-open)
 export const SIDEBAR_WIDTH_PX = SIDEBAR_WIDTH; // consumed by AppShell for main-column margin
 
-// Shared by footerAction and footer below, so the budget controls can't drift out of
+// Shared by footerAction and footer below, so a footer action can't drift out of
 // horizontal line with the wordmark/date block by one of the two paddings changing alone.
 const FOOTER_INSET_X = 2;
 

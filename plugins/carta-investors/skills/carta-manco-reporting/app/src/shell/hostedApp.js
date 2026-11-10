@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 // Whether this bundle is running as the hosted Worker app rather than the local
 // `scripts/serve.py` server: probes /api/app-config, which the Worker answers 200 before
 // any auth or firm check (server/worker.js's handleAppConfig), and the local server 404s
-// (serve.py has no such route). Unlike /api/snapshot, this never depends on a session
-// having an active firm yet, so it answers the same on a session's first load as on every
-// later one.
+// (serve.py has no such route). Unlike a route gated on a resolved firm (/api/snapshot,
+// /api/reports), this never depends on a session having an active firm yet, so it answers
+// the same on a session's first load as on every later one.
 //
 // Starts `null` (not yet known) until the probe settles. A truthy check reads
 // `null` as not hosted; chatFeature.js's useChatFeatureFlag() compares against

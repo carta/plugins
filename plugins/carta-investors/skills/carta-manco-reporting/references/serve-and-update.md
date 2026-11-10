@@ -831,4 +831,3 @@ Say one line — *"Rebuilt — refresh the page to see it"* after a rebuild,
 *"Done — refresh the page to see it"* after a UI-only edit. Then offer the
 same question again, so several changes can be made in one sitting, until
 the operator has nothing left to change.
-
