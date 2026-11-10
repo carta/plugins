@@ -28,16 +28,35 @@ locations, and the binary of the Claude Code session running this skill
 (`CLAUDE_CODE_EXECPATH`) — so a desktop or IDE user with nothing on PATH is still
 found, same as this skill's own session right now.
 
-- `claude_bin=<path>` → capture the path for Step 5b. No output to the user, whatever
-  `claude_auth=` says — a signed-out CLI only affects sharing, which reports its own
-  problem when the operator tries it.
+**`claude_source=session` means durable detection failed, even though `claude_bin`
+is set.** That path names a specific Claude Code version — in Claude Desktop it's
+the app's own bundled binary, which auto-update deletes. `serve.py` is long-lived
+(up to the 24h idle timeout) and outlives this session, so a binary only found this
+way will vanish under it later, breaking chat and sharing with no obvious cause.
+Treat `claude_source=session` the same as `claude_bin=none` for the install offer
+below — still pass the found path to Step 5b in the meantime (it works right now),
+but offer to install a durable copy so the dashboard doesn't silently break later.
+
+- `claude_bin=<path>` with `claude_source` anything but `session` → capture the path
+  for Step 5b. No output to the user, whatever `claude_auth=` says — a signed-out
+  CLI only affects sharing and chat, which report their own problem when the
+  operator tries them.
 - `claude_bin=none` → ask via `AskUserQuestion` before installing anything:
   > "Sharing reports from the dashboard needs the Claude Code CLI (`claude`), which
   > isn't installed here. Want me to install it? (runs Anthropic's installer)"
+- `claude_bin=<path>` with `claude_source=session` → same offer, worded for what's
+  actually true (a working CLI was found, it just won't last):
+  > "The Claude Code CLI is only available here as this Claude Code session's own
+  > copy, which an update can remove later and break sharing and chat. Want me to
+  > install a lasting copy? (runs Anthropic's installer)"
+
+  Both cases:
   - **Yes** → run `preflight_claude.py install`. It uses Anthropic's native installer
-    and falls back to npm. Then use the printed path. If it still prints
-    `claude_bin=none`, say the install didn't succeed and treat it as **No**.
-  - **No** → continue. The dashboard works; report sharing surfaces its own
+    and falls back to npm. Then use the printed path for Step 5b. If it still prints
+    `claude_bin=none` or `claude_source=session`, say the install didn't succeed and
+    treat it as **No**.
+  - **No** → continue (using the `claude_source=session` binary in the meantime,
+    if one was found). The dashboard works; report sharing surfaces its own
     "Couldn't start a Claude session for sharing — is Claude Code installed?"
     message until the operator installs and signs in.
 

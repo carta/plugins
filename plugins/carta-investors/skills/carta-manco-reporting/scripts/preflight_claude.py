@@ -40,6 +40,17 @@ REASON_NOT_LOGGED_IN = "not_logged_in"
 # share_bridge.py's Session, which reads this same name).
 CLAUDE_BIN_ENV = "MANCO_CLAUDE_BIN"
 
+# Where find_claude() located the binary. SOURCE_SESSION is the one source that
+# does not survive past this Claude Code session — Step 0.5 (serve-and-update.md)
+# uses this to decide whether to still offer installing a durable copy even
+# though a working binary was found just now. probe()/auth_status() don't care:
+# a session binary is a perfectly good binary to actually run commands with.
+SOURCE_ENV = "env"
+SOURCE_PATH = "path"
+SOURCE_KNOWN = "known_location"
+SOURCE_NVM = "nvm"
+SOURCE_SESSION = "session"
+
 
 def _is_executable(p):
     # type: (Path) -> bool
@@ -68,48 +79,63 @@ def _known_locations():
     ]
 
 
-def find_claude():
-    # type: () -> Optional[str]
-    """Return the absolute path to the claude binary, or None."""
+def find_claude_located():
+    # type: () -> tuple
+    """Return (path, source) for the claude binary, or (None, None).
+
+    `source` is one of the SOURCE_* constants above. SOURCE_SESSION is last on
+    purpose — every durable location (env, PATH, known install dirs, nvm) is
+    checked first, so a durable install is never reported as session-only just
+    because a session happens to be running too (nvm's own binary usually
+    isn't on PATH for a GUI-launched process, so it has to be checked for
+    explicitly before falling back to the session's own, non-durable, copy).
+    """
 
     # 1. Explicit override via env var (matches share_bridge.py's Session).
     env_bin = os.environ.get(CLAUDE_BIN_ENV, "").strip()
     if env_bin:
         p = Path(env_bin).expanduser().absolute()
         if _is_executable(p):
-            return str(p)
+            return str(p), SOURCE_ENV
 
     # 2. Standard PATH lookup.
     which = shutil.which(_BIN)
     if which:
-        return str(Path(which).absolute())
+        return str(Path(which).absolute()), SOURCE_PATH
 
     # 3. Well-known locations (native installer, npm global, Homebrew, manual).
     for c in _known_locations():
         if _is_executable(c):
-            return str(c.absolute())
+            return str(c.absolute()), SOURCE_KNOWN
 
-    # 4. The binary of the Claude Code session that launched this skill. Every user
-    #    of this skill is inside one, so this finds a working, logged-in CLI even
-    #    when nothing is on PATH (IDE and desktop installs). It comes after the
-    #    stable locations above because the path names a version: a Claude Code
-    #    auto-update can delete it while the dashboard is still running.
-    exec_path = os.environ.get("CLAUDE_CODE_EXECPATH", "").strip()
-    if exec_path:
-        p = Path(exec_path).expanduser().absolute()
-        if _is_executable(p):
-            return str(p)
-
-    # 5. NVM-managed Node installations (Unix only).
+    # 4. NVM-managed Node installations (Unix only).
     if not _WIN:
         home = Path.home()
         nvm_pattern = str(home / ".nvm" / "versions" / "node" / "*" / "bin" / _BIN)
         for match in sorted(glob.glob(nvm_pattern), reverse=True):
             p = Path(match)
             if _is_executable(p):
-                return str(p.absolute())
+                return str(p.absolute()), SOURCE_NVM
 
-    return None
+    # 5. The binary of the Claude Code session that launched this skill. Every user
+    #    of this skill is inside one, so this finds a working, logged-in CLI even
+    #    when nothing is on PATH (IDE and desktop installs). It comes after every
+    #    durable location above because the path names a version: a Claude Code
+    #    auto-update can delete it while the dashboard is still running.
+    exec_path = os.environ.get("CLAUDE_CODE_EXECPATH", "").strip()
+    if exec_path:
+        p = Path(exec_path).expanduser().absolute()
+        if _is_executable(p):
+            return str(p), SOURCE_SESSION
+
+    return None, None
+
+
+def find_claude():
+    # type: () -> Optional[str]
+    """Return the absolute path to the claude binary, or None. See
+    find_claude_located() for which location it came from."""
+    return find_claude_located()[0]
 
 
 def _get_version(claude_bin):
@@ -172,10 +198,11 @@ def probe(claude_bin=None):
 
 def cmd_check():
     # type: () -> int
-    found = find_claude()
+    found, source = find_claude_located()
     if found:
         version = _get_version(found)
         print("claude_bin=%s" % found)
+        print("claude_source=%s" % source)
         if version:
             print("claude_version=%s" % version)
         logged_in = auth_status(found)
