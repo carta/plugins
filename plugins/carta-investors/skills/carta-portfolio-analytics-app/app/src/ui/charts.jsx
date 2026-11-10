@@ -21,6 +21,8 @@ export const PALETTE = [
   "#285DA3", "#2D9E90", "#DDB31F", "#58B8BC", "#94B524",
   "#B29990", "#656B6B", "#E52431", "#1A1A1A", "#CECFCF",
 ];
+// Ink data-viz positive / negative / neutral marks as hex, for SVG fill attributes that can't read var().
+export const MARK_HEX = { positive: "#2D9E90", negative: "#E52431", neutral: "#9C9F9F" };
 export const colorAt = (i) => PALETTE[i % PALETTE.length];
 
 /** Color for series `i` under a resolved pref set: an explicit per-series
@@ -391,8 +393,8 @@ export default function Chart({ series = [], bands = [], gainLoss = null, lineSp
             Number.isFinite(uMap.get(d)) && Number.isFinite(dMap.get(d)));
           // Ink data-viz palette: --ink-color-global-data-viz-positive-3 / -negative-3.
           // Literal hex (not var()) — CSS custom properties don't resolve as an SVG fill.
-          const gain = gainLoss.gainColor || "#2D9E90";
-          const loss = gainLoss.lossColor || "#E52431";
+          const gain = gainLoss.gainColor || MARK_HEX.positive;
+          const loss = gainLoss.lossColor || MARK_HEX.negative;
           const op = gainLoss.opacity != null ? gainLoss.opacity : 0.13;
           const quad = (xa, ua, la, xb, ub, lb) =>
             `${xa} ${y(ua)} ${xb} ${y(ub)} ${xb} ${y(lb)} ${xa} ${y(la)}`;
@@ -438,17 +440,19 @@ export default function Chart({ series = [], bands = [], gainLoss = null, lineSp
         {clean.map((s, si) => {
           // a series may pin its own stroke color (e.g. cost basis as black)
           const c = s.color || seriesColor(prefs, si);
-          const pts = s.points.filter((p) => idxOf.has(p.d)).map((p) => ({ i: idxOf.get(p.d), v: p.v, cur: p.cur }));
+          const pts = s.points.filter((p) => idxOf.has(p.d)).map((p) => ({ i: idxOf.get(p.d), v: p.v, cur: p.cur, color: p.color }));
           if (isBar) {
             return pts.map((p) => {
               const bx = xBand(p.i) - barGroupW / 2 + si * barW;
               const showLbl = labels && (p.i % stepLbl === 0 || p.i === n - 1);
               return (
                 <g key={`${si}-${p.i}`}>
-                  <rect x={bx} y={Math.min(y(p.v), barBase)} width={Math.max(1, barW - 1)} height={Math.abs(y(p.v) - barBase)} fill={c} rx="1" />
+                  {/* A point may pin its own bar color, e.g. green/red by sign. It goes through
+                      `style`, so a theme-aware var(--…) resolves; an SVG fill attribute can't. */}
+                  <rect x={bx} y={Math.min(y(p.v), barBase)} width={Math.max(1, barW - 1)} height={Math.abs(y(p.v) - barBase)} fill={c} style={p.color ? { fill: p.color } : undefined} rx="1" />
                   {showLbl && (
                     <text x={bx + Math.max(1, barW - 1) / 2} y={p.v >= 0 ? Math.max(9, y(p.v) - 3) : y(p.v) + 9}
-                      textAnchor="middle" fontSize="9" fill={c} style={mono}>{fmtVal(p.v, unit, undefined, p.cur)}</text>
+                      textAnchor="middle" fontSize="9" fill={c} style={p.color ? { ...mono, fill: p.color } : mono}>{fmtVal(p.v, unit, undefined, p.cur)}</text>
                   )}
                 </g>
               );
@@ -1066,6 +1070,15 @@ export function StripPlot({ lanes = [], unit = "Number", cur, height, chartId, o
 }
 
 /* ---------- Heatmap (company × period, colored by value) ---------- */
+/** Readable text on a heat cell. The fills are the same in both themes, so the
+ *  theme's text token would put white digits on a pale cell in dark mode. */
+export function heatTextColor(bg) {
+  const m = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(bg || "");
+  if (!m) return "var(--ink-color-global-text-default)";
+  const [r, g, b] = m.slice(1).map(Number);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "var(--ink-color-global-brand-black)" : "var(--ink-color-global-brand-white)";
+}
+
 /** Diverging low→neutral→high around zero, scaled by `absMax`. `palette` names a
  *  HEAT_PALETTES entry (defaults to the historic red→green). */
 export function divergeColor(v, absMax, palette) {
@@ -1081,7 +1094,7 @@ export function divergeColor(v, absMax, palette) {
  * rows: [{ id, label, cells: { <colKey>: number } }]   cols: [{key,label}]
  * valueFmt(v) formats a cell; absMax caps the color scale (default = data max).
  */
-export function Heatmap({ rows = [], cols = [], valueFmt = (v) => fmtVal(v, "Number"), absMax, cellW = 92, labelW = 190, rowHeader = "Company", rowHeaderHint, title, subtitle, chartId, ribbonOffset = 0 }) {
+export function Heatmap({ rows = [], cols = [], valueFmt = (v) => fmtVal(v, "Number"), absMax, cellW = 92, labelW = 190, rowHeader = "Company", rowHeaderHint, title, subtitle, chartId, ribbonOffset = 0, invert = false, onRowClick, cellTip }) {
   const { prefs } = useChartPrefs(chartId);
   const wrapRef = useRef(null);
   const tableRef = useRef(null);
@@ -1120,11 +1133,17 @@ export function Heatmap({ rows = [], cols = [], valueFmt = (v) => fmtVal(v, "Num
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="no-row-hover">
-                <td className="frozen-col" style={{ position: "sticky", left: 0, zIndex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.label}</td>
+                <td className="frozen-col" style={{ position: "sticky", left: 0, zIndex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {onRowClick
+                    ? <button onClick={() => onRowClick(row.id)} style={{ ...sans, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontWeight: 600, fontSize: "inherit", color: "var(--ink-color-global-link-default)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{row.label}</button>
+                    : row.label}
+                </td>
                 {cols.map((c) => {
                   const v = row.cells[c.key];
+                  // `invert` colors a lower-is-better metric: under target reads green.
+                  const tone = v == null || !invert ? v : -v;
                   return (
-                    <td key={c.key} style={{ background: divergeColor(v, scale, prefs.heatPalette), textAlign: "center", color: "var(--ink-color-global-text-default)", ...mono }}>
+                    <td key={c.key} data-tip={cellTip ? cellTip(row, c, v) : undefined} style={{ background: divergeColor(tone, scale, prefs.heatPalette), textAlign: "center", color: heatTextColor(divergeColor(tone, scale, prefs.heatPalette)), ...mono }}>
                       {v == null || !prefs.heatValues ? "" : valueFmt(v)}
                     </td>
                   );

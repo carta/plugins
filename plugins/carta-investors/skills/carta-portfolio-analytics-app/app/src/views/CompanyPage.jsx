@@ -12,11 +12,11 @@ import { createPortal } from "react-dom";
 import { FS, sans, serif, mono, MICRO } from "../ui/theme.js";
 import { withCommas } from "../ui/format.js";
 import { H2, Dropdown, Segmented, TabBar, MultiSelect, KVTableRow, Badge, Btn, RollupNote, Toggle, Modal, PencilIcon, Z,
-  useStickyClone, StatusLine, useDismissable, useFocusOnOpen, MenuItem, SearchInput, POPOVER_SHADOW, filterByLabel, ChevronDownIcon, SectionHeader, Banner, bannerLink } from "../ui/components.jsx";
+  useStickyClone, StatusLine, BasisToggle, useDismissable, useFocusOnOpen, MenuItem, SearchInput, POPOVER_SHADOW, filterByLabel, ChevronDownIcon, SectionHeader, Banner, bannerLink } from "../ui/components.jsx";
 import Chart, { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W, InkKpiChart } from "../ui/charts.jsx";
 import {
   companyOf, metricOf, metricOptions, latest, pointsFor, metricsFor,
-  metricKeyByLabel, runwayLatest, forecastPoints, forecastMetricsFor, actualVsForecast,
+  metricKeyByLabel, runwayLatest, forecastMetricsFor,
   metricCadence, cadenceLabel, seriesPoints, latestPoint, quarterChange,
   isQualitative, isCharted, numericMetrics, MONTHS_TO_SUFFIX, ltmValue,
 } from "../model/kpi.js";
@@ -27,7 +27,7 @@ import { CompanyTags } from "../ui/tags.jsx";
 import { FavoriteStar } from "../ui/favorites.jsx";
 import { CapTable, Holdings, SECTION_GAP } from "./CapTable.jsx";
 import { rankOf, rankSinceInvestment, sinceInvestment } from "../model/peers.js";
-import { Auto, Revisions } from "./ForecastPanels.jsx";
+import { Auto, Revisions, VsActuals } from "./ForecastPanels.jsx";
 import { leverageForCompany, LEVERAGE_DEFS } from "../model/leverage.js";
 import { reportingHealth, dataQualityIssues, quartersOf, BUCKET_LABEL } from "../model/review.js";
 import { COMPANY_TABS, resolveCompanySub } from "../model/companyTabs.js";
@@ -769,27 +769,15 @@ function ForecastBlock({ data, company }) {
   const fcMetrics = forecastMetricsFor(data, company);
   const [mk, setMk] = useState(() => (metricKeyByLabel(data, /^revenue$/i) && fcMetrics.some((m) => /^revenue$/i.test(m.label)) ? metricKeyByLabel(data, /^revenue$/i) : (fcMetrics[0] || {}).key));
   const key = fcMetrics.some((m) => m.key === mk) ? mk : (fcMetrics[0] || {}).key;
-  const metric = metricOf(data, key);
-  const unit = metric ? metric.unit : "Number";
-  const v = actualVsForecast(company, key);
-  const series = [
-    { key: "actual", label: "Actual", points: pointsFor(company, key).map((p) => ({ d: p.d, v: p.v })) },
-    { key: "fc", label: "Company forecast", points: forecastPoints(company, key).map((p) => ({ d: p.d, v: p.v })), dashed: true },
-  ];
+  const [quarterly, setQuarterly] = useState(true);
   const hasVintages = (company.forecastVintages && Object.keys(company.forecastVintages).length) > 0;
   return (
-    <Section label="Forecast vs actual" right={<Dropdown options={fcMetrics.map((m) => ({ id: m.key, label: m.label }))} value={key} onChange={setMk} minWidth={200} />}>
-      <div className="card" style={{ padding: 16 }}>
-        <Chart chartId="company-forecast" type="line" unit={unit} height={230} series={series} showTitle={false}
-          title={`${company.name} — ${metric ? metric.label : "KPI"}: actual vs company forecast`}
-          subtitle="Solid = actual reported, dashed = latest forecast the company logged" />
-        {v && (
-          <div style={{ ...mono, fontSize: FS.small, marginTop: 8, color: "var(--ink-color-global-text-subtle)" }}>
-            {v.period}: actual <strong style={{ color: "var(--ink-color-global-text-default)" }}>{fmtVal(v.actual, unit)}</strong> vs forecast <strong style={{ color: "var(--ink-color-global-text-default)" }}>{fmtVal(v.forecast, unit)}</strong>
-            <span style={{ color: v.diff >= 0 ? POS : NEG }}> ({fmtPct(v.pct)})</span>
-          </div>
-        )}
-      </div>
+    <Section label="Forecast vs actual" right={
+      <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <BasisToggle quarterly={quarterly} onChange={setQuarterly} />
+        <Dropdown options={fcMetrics.map((m) => ({ id: m.key, label: m.label }))} value={key} onChange={setMk} minWidth={200} />
+      </span>}>
+      <VsActuals data={data} company={company} metricKey={key} quarterly={quarterly} onPickMetric={setMk} />
       {/* The vintage matrix follows the chart's KPI, so both read the same series. */}
       {hasVintages && <div style={{ marginTop: 36 }}><Revisions data={data} company={company} metricKey={key} /></div>}
     </Section>

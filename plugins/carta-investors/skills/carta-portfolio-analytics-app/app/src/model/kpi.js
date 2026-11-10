@@ -490,7 +490,7 @@ export function metricsFor(data, company) {
 export const numericMetrics = (metrics) => (metrics || []).filter((m) => !isQualitative(m));
 
 // ---- forecasts (Estimate instance_type) ----
-/** Latest-logged forecast points for a company+metric: [{d, v, asOf}]. */
+/** Latest-logged forecast points for a company+metric: [{d, v, asOf, cur?}]. */
 export const forecastPoints = (company, key) => (company && company.forecast && company.forecast[key]) || [];
 /** Every forecast vintage for a company+metric: [{asOf, points:[{d,v}]}]. */
 export const vintagesFor = (company, key) => (company && company.forecastVintages && company.forecastVintages[key]) || [];

@@ -2,15 +2,16 @@
 // "Forecast" = the company's own reported estimates (Data Collection), not a GP mark.
 import { useMemo, useState } from "react";
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
-import { Dropdown, Segmented, Slider, SectionHeader, StatusLine } from "../ui/components.jsx";
-import Chart, { fmtVal } from "../ui/charts.jsx";
+import { Dropdown, Segmented, Slider, SectionHeader, StatusLine, Badge } from "../ui/components.jsx";
+import Chart, { fmtVal, shortDate, MARK_HEX } from "../ui/charts.jsx";
 import { currencySymbol, withCommas } from "../ui/format.js";
 import {
   metricOf, forecastMetricsFor, pointsFor, forecastPoints, vintagesFor,
-  metricsFor, numericMetrics, metricOptions,
+  metricsFor, numericMetrics, metricOptions, seriesPoints, forecastSeriesPoints,
 } from "../model/kpi.js";
 import { METHODS, projectSeries, bestMethod, biasAdjustedForecast } from "../model/forecast.js";
 import { accuracyByCompany, accuracySummary } from "../model/accuracy.js";
+import { forecastVariance, varianceSummary, lowerIsBetter, STATUS, ON_FORECAST_BAND } from "../model/variance.js";
 
 const asPts = (arr) => (arr || []).map((p) => ({ d: p.d, v: p.v }));
 // Default to the plain "Revenue" metric; a looser match ("Average Revenue Per User")
@@ -232,7 +233,184 @@ export function Revisions({ data, company, metricKey }) {
   );
 }
 
-const linkBtn = { border: "none", background: "transparent", color: "var(--ink-color-global-link-default)", cursor: "pointer", fontSize: "inherit", padding: 0, fontWeight: 600, fontFamily: "inherit" };
+/* ---------- Forecast vs actuals (period-by-period variance) ---------- */
+
+// Bars set their fill through style, so they follow the theme; the gain/loss shading is an
+// SVG fill attribute and takes MARK_HEX.
+const STATUS_FILL = { ahead: "var(--local-mark-positive)", behind: "var(--local-mark-negative)", on: "var(--local-mark-neutral)" };
+const POS = "var(--ink-color-global-feedback-positive-strong)";
+const NEG = "var(--ink-color-global-feedback-negative-strong)";
+export const STATUS_INK = { ahead: POS, behind: NEG };
+
+/** Signed variance: "+10%", or "+2.0 pts" for a percentage metric. */
+export function fmtGap(gap, kind) {
+  if (gap == null || !Number.isFinite(gap)) return "—";
+  const shown = Math.abs(gap * 100).toFixed(kind === "pp" ? 1 : 0);
+  // Sign the rounded figure, so a −0.3% miss reads "0%", not "−0%".
+  const sign = Number(shown) === 0 ? "" : gap > 0 ? "+" : "−";
+  return sign + withCommas(shown) + (kind === "pp" ? " pts" : "%");
+}
+export const fmtRate = (r) => (r == null ? "—" : withCommas(Math.round(r * 100)) + "%");
+export const StatusBadge = ({ status }) =>
+  status ? <Badge tone={STATUS[status].tone}>{STATUS[status].label}</Badge> : <span style={{ color: MICRO }}>—</span>;
+
+// `table.ledger.sheet` carries Ink's table type, padding and row lines; cells only align.
+export const th = { textAlign: "right" };
+export const td = { textAlign: "right", whiteSpace: "nowrap", ...mono };
+/** "±5%": the band within which an actual counts as on forecast. */
+export const BAND_TEXT = `±${ON_FORECAST_BAND * 100}%`;
+
+/** The Company Forecast tab's "Actuals vs forecast" body for one KPI: scorecard,
+ *  actual-vs-forecast chart, variance bars, a period table and an every-KPI summary. */
+export function VsActuals({ data, company, metricKey, quarterly, onPickMetric }) {
+  const metric = metricOf(data, metricKey);
+  const unit = metric ? metric.unit : "Number";
+  const label = metric ? metric.label : "this KPI";
+  const lowerBetter = lowerIsBetter(metric);
+  const rows = useMemo(() => forecastVariance(company, metricKey, metric, { quarterly }), [company, metricKey, metric, quarterly]);
+  const sum = useMemo(() => varianceSummary(rows, metric), [rows, metric]);
+  const kind = rows[0]?.gapKind || (unit === "Percentage" || unit === "Percent" ? "pp" : "pct");
+  const periodWord = quarterly ? "quarter" : "period";
+
+  const series = [
+    { key: "actual", label: "Actual", points: seriesPoints(company, metricKey, metric, quarterly).map((p) => ({ d: p.d, v: p.v, cur: p.cur })) },
+    { key: "fc", label: "Company forecast", points: forecastSeriesPoints(company, metricKey, metric, quarterly).map((p) => ({ d: p.d, v: p.v, cur: p.cur })), dashed: true },
+  ];
+  // Shade green where the actual beat the forecast; a cost metric beats by coming in under.
+  const gainLoss = { upper: "actual", lower: "fc", ...(lowerBetter ? { gainColor: MARK_HEX.negative, lossColor: MARK_HEX.positive } : {}) };
+  const bars = [{ key: "gap", label: kind === "pp" ? "Variance vs forecast (points)" : "Variance vs forecast",
+    color: MARK_HEX.neutral, points: rows.filter((r) => r.gap != null).map((r) => ({ d: r.period, v: r.gap, color: STATUS_FILL[r.status] })) }];
+
+  const kpiRows = useMemo(() => numericMetrics(forecastMetricsFor(data, company)).map((m) => {
+    const rs = forecastVariance(company, m.key, m, { quarterly });
+    return { m, s: varianceSummary(rs, m), kind: rs[0]?.gapKind };
+  }).filter((r) => r.s.n > 0), [data, company, quarterly]);
+
+  const cum = sum.cumulative;
+  const scoreItems = sum.n ? [
+    { text: `${sum.ahead + sum.on} of ${sum.n} ${periodWord}${sum.n === 1 ? "" : "s"} at or ahead of forecast`,
+      hint: `Within ${BAND_TEXT} counts as on forecast.${lowerBetter ? ` For ${label}, coming in under forecast is the good outcome.` : ""}` },
+    { text: `Median ${fmtGap(sum.medianGap, kind)}`, hint: "The middle variance across every graded period." },
+    sum.last ? { text: `Latest (${shortDate(sum.last.period, quarterly)}) ${fmtGap(sum.last.gap, kind)}`, tone: STATUS[sum.last.status]?.tone } : null,
+    cum ? { text: `Last ${cum.n} ${periodWord}s: ${fmtVal(cum.actual, unit, undefined, cum.cur)} actual vs ${fmtVal(cum.forecast, unit, undefined, cum.cur)} forecast (${fmtGap(cum.gap, "pct")})`,
+      hint: `${shortDate(cum.from, quarterly)} to ${shortDate(cum.to, quarterly)}, summed.` } : null,
+  ] : [];
+
+  const newestFirst = [...rows].reverse();
+  const anyLate = rows.some((r) => r.late);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      {rows.length === 0 ? (
+        <Empty>No {label} forecast period has reported an actual yet{quarterly ? " (a partial quarter is not graded)" : ""}.</Empty>
+      ) : (
+        <StatusLine items={scoreItems} style={{ marginBottom: 0 }} />
+      )}
+      <div className="card" style={{ padding: 16 }}>
+        <Chart chartId="company-forecast" type="line" unit={unit} height={240} series={series} gainLoss={rows.length ? gainLoss : null} showTitle={false}
+          title={`${company.name} — ${label}: actual vs company forecast`}
+          subtitle={`Solid = actual reported, dashed = latest forecast the company logged · shaded green where it came in ${lowerBetter ? "under" : "over"} forecast, red where it did not`} />
+      </div>
+      {rows.length > 0 && (
+        <>
+          <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <SectionHeader>Variance by {periodWord}</SectionHeader>
+            <div className="card" style={{ padding: 16 }}>
+              <Chart chartId="company-forecast-variance" type="bar" unit="Percentage" height={200} series={bars} showTitle={false}
+                title={`${company.name} — ${label}: variance vs forecast`}
+                subtitle={`(actual − forecast) ÷ forecast${kind === "pp" ? ", in points" : ""} · green ahead, red behind, gray within ${BAND_TEXT}`} />
+            </div>
+          </section>
+          <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <SectionHeader>{label} by {periodWord}</SectionHeader>
+            <div style={{ overflow: "auto" }}>
+              <table className="ledger sheet" data-testid="variance-table" style={{ width: "100%", ...sans }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, textAlign: "left" }}>Period</th>
+                    <th style={th}>Actual</th>
+                    <th style={th}>Forecast</th>
+                    <th style={th}>Difference</th>
+                    <th style={th}>Variance</th>
+                    <th style={{ ...th, textAlign: "left" }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newestFirst.map((r) => (
+                    <tr key={r.period}>
+                      <td style={{ ...td, ...sans, textAlign: "left" }}>{shortDate(r.period, quarterly)}</td>
+                      <td style={td}>{fmtVal(r.actual, unit, undefined, r.cur)}</td>
+                      <td style={td} data-tip={r.loggedOn ? `Forecast logged ${fmtAsOf(r.loggedOn)}${r.late ? ", after this period had closed" : ""}` : undefined}>
+                        {fmtVal(r.forecast, unit, undefined, r.fcCur || r.cur)}{r.late && <span style={{ color: MICRO }}> †</span>}
+                      </td>
+                      <td style={td}>{r.diff == null ? "—" : fmtVal(Math.abs(r.diff), unit, undefined, r.cur)}</td>
+                      <td style={{ ...td, fontWeight: 600, color: STATUS_INK[r.status] || "var(--ink-color-global-text-default)" }}>{fmtGap(r.gap, r.gapKind)}</td>
+                      <td style={{ ...td, ...sans, textAlign: "left" }}><StatusBadge status={r.status} /></td>
+                    </tr>
+                  ))}
+                  {cum && (
+                    <tr className="totrow">
+                      <td style={{ ...td, ...sans, textAlign: "left" }}>Last {cum.n} {periodWord}s</td>
+                      <td style={td}>{fmtVal(cum.actual, unit, undefined, cum.cur)}</td>
+                      <td style={td}>{fmtVal(cum.forecast, unit, undefined, cum.cur)}</td>
+                      <td style={td}>{fmtVal(Math.abs(cum.diff), unit, undefined, cum.cur)}</td>
+                      <td style={{ ...td, color: STATUS_INK[cum.status] || "var(--ink-color-global-text-default)" }}>{fmtGap(cum.gap, "pct")}</td>
+                      <td style={{ ...td, ...sans, textAlign: "left" }}><StatusBadge status={cum.status} /></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ ...sans, fontSize: FS.small, color: MICRO }}>
+              <strong>{sum.n}</strong> {periodWord}{sum.n === 1 ? "" : "s"} compared. <strong>{sum.ahead}</strong> ahead, <strong>{sum.on}</strong> on forecast, <strong>{sum.behind}</strong> behind
+              {sum.mismatched ? <>, <strong>{sum.mismatched}</strong> not compared (forecast and actual in different currencies)</> : null}.
+              {" "}Forecast = the latest estimate the company logged for that {periodWord}; hover a forecast to see when.
+              {anyLate && <> † logged after the {periodWord} had closed.</>}
+            </div>
+          </section>
+        </>
+      )}
+      {kpiRows.length > 1 && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <SectionHeader>Every forecasted KPI</SectionHeader>
+          <div style={{ overflow: "auto" }}>
+            <table className="ledger sheet" data-testid="kpi-variance-table" style={{ width: "100%", ...sans }}>
+              <thead>
+                <tr>
+                  <th style={{ ...th, textAlign: "left" }}>KPI</th>
+                  <th style={th}>Latest period</th>
+                  <th style={th}>Actual</th>
+                  <th style={th}>Forecast</th>
+                  <th style={th}>Variance</th>
+                  <th style={th} data-tip={`Share of graded periods at or ahead of forecast (within ${BAND_TEXT} counts as on forecast).`}>Hit rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kpiRows.map(({ m, s, kind: k }) => {
+                  const active = m.key === metricKey;
+                  return (
+                    <tr key={m.key} aria-current={active ? "true" : undefined} style={active ? { background: "var(--row-selected)" } : undefined}>
+                      <td style={{ ...td, ...sans, textAlign: "left" }}>
+                        <button onClick={() => onPickMetric && onPickMetric(m.key)} style={{ ...linkBtn, fontWeight: active ? 700 : 600 }}>{m.label}</button>
+                      </td>
+                      <td style={{ ...td, ...sans }}>{s.last ? shortDate(s.last.period, quarterly) : "—"}</td>
+                      <td style={td}>{s.last ? fmtVal(s.last.actual, m.unit, undefined, s.last.cur) : "—"}</td>
+                      <td style={td}>{s.last ? fmtVal(s.last.forecast, m.unit, undefined, s.last.fcCur || s.last.cur) : "—"}</td>
+                      <td style={{ ...td, fontWeight: 600, color: STATUS_INK[s.last?.status] || "var(--ink-color-global-text-default)" }}>{fmtGap(s.last?.gap, k)}</td>
+                      <td style={td}>{fmtRate(s.hitRate)} <span style={{ color: MICRO }}>({s.n})</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ ...sans, fontSize: FS.small, color: MICRO }}>Click a KPI to chart it above.</div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+export const linkBtn = { border: "none", background: "transparent", color: "var(--ink-color-global-link-default)", cursor: "pointer", fontSize: "inherit", padding: 0, fontWeight: 600, fontFamily: "inherit" };
 const Empty = ({ children }) => (
   <div className="card" style={{ padding: 24, textAlign: "center", color: "var(--ink-color-global-text-subtle)", ...sans }}>{children}</div>
 );

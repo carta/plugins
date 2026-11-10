@@ -12,6 +12,7 @@ import { portfolioSignals } from "../model/signals.js";
 import { MEASURES, RULE_OPS, TONES, measureOf, ruleOpOf, ruleIsComplete, ruleCondition, customPortfolioSignals, newRuleId, rulesOf } from "../model/rules.js";
 import { openCompany, takePendingPortfolioMode, PORTFOLIO_MODE_EVENT } from "../state/focus.js";
 import Benchmarks from "./Benchmarks.jsx";
+import ForecastVsActuals from "./ForecastVsActuals.jsx";
 import { trackClick } from "../analytics.js";
 import { withCommas } from "../ui/format.js";
 
@@ -46,6 +47,12 @@ export default function Portfolio({ data, dashboard }) {
     window.addEventListener(PORTFOLIO_MODE_EVENT, take);
     return () => window.removeEventListener(PORTFOLIO_MODE_EVENT, take);
   }, []);
+  // Forecast vs actuals needs at least one logged forecast to grade.
+  const modes = [
+    { id: "quadrant", label: "Quadrant" }, { id: "signals", label: "Signals" }, { id: "benchmarks", label: "Benchmarks" },
+    ...(data.hasForecast ? [{ id: "forecast", label: "Forecast vs actuals" }] : []),
+  ];
+  const active = modes.some((m) => m.id === mode) ? mode : "quadrant";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
       {/* Title + mode switcher, kept tight against the mode's own intro prose —
@@ -54,11 +61,12 @@ export default function Portfolio({ data, dashboard }) {
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <H2>Insights</H2>
-          <Segmented options={[{ id: "quadrant", label: "Quadrant" }, { id: "signals", label: "Signals" }, { id: "benchmarks", label: "Benchmarks" }]} value={mode} onChange={(m) => { trackClick("PortfolioAnalytics.Portfolio.SetMode"); setMode(m); }} />
+          <Segmented options={modes} value={active} onChange={(m) => { trackClick("PortfolioAnalytics.Portfolio.SetMode"); setMode(m); }} />
         </div>
-        {mode === "quadrant" && <Quadrant data={data} dashboard={dashboard} />}
-        {mode === "signals" && <Signals data={data} dashboard={dashboard} />}
-        {mode === "benchmarks" && <Benchmarks data={data} />}
+        {active === "quadrant" && <Quadrant data={data} dashboard={dashboard} />}
+        {active === "signals" && <Signals data={data} dashboard={dashboard} />}
+        {active === "benchmarks" && <Benchmarks data={data} />}
+        {active === "forecast" && <ForecastVsActuals data={data} />}
       </section>
     </div>
   );

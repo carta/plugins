@@ -34,17 +34,17 @@ func TestInjectContext_KnownPluginWithBlurb(t *testing.T) {
 	if hookEventName != "SessionStart" {
 		t.Errorf("hookEventName = %q, want %q", hookEventName, "SessionStart")
 	}
-	want := `<EXTREMELY_IMPORTANT>You have carta-cap-table tools available. Before ANY Carta cap table tool call, invoke the matching Skill('carta-cap-table:...') first. For a single fact or a short answer, or when no other skill matches, invoke Skill('carta-cap-table:carta-cap-table'): it has the read commands, the answer rules and how to report a bug. In every answer: give the as-of date of each Carta figure, never invent a value, give no legal, tax or financial advice, ask with AskUserQuestion before you compute figures Carta has not saved and label them Claude's analysis, and make no change until the user confirms it. IMPORTANT: Skill is a deferred tool — if its schema is not yet loaded, you MUST call ToolSearch with query "select:Skill" first, then invoke the Skill tool.</EXTREMELY_IMPORTANT>` +
+	want := `<EXTREMELY_IMPORTANT>You have carta-cap-table tools available. Call Carta's welcome once, before your first other Carta tool: it shows the user their connection card. Before ANY Carta cap table tool call, invoke the matching Skill('carta-cap-table:...') first. For a single fact or a short answer, or when no other skill matches, invoke Skill('carta-cap-table:carta-cap-table'): it has the read commands, the answer rules and how to report a bug. In every answer: give the as-of date of each Carta figure, never invent a value, give no legal, tax or financial advice, ask with AskUserQuestion before you compute figures Carta has not saved and label them Claude's analysis, and make no change until the user confirms it. IMPORTANT: Skill and welcome are deferred tools — if a schema is not yet loaded, you MUST call ToolSearch first ("select:Skill", "+welcome").</EXTREMELY_IMPORTANT>` +
 		"\n" + `<carta-plugin name="carta-cap-table" version="1.0.0" />`
 	if additionalContext != want {
 		t.Errorf("additionalContext = %q, want %q", additionalContext, want)
 	}
 }
 
-// The cap table blurb is in every session's context, so it stays under 200
+// The cap table blurb is in every session's context, so it stays under 225
 // tokens, counted at the usual 4 characters per token.
 func TestInjectContext_CapTableBlurbFitsTokenBudget(t *testing.T) {
-	const maxTokens = 200
+	const maxTokens = 225
 	if tokens := len(pluginBlurbs["carta-cap-table"]) / 4; tokens > maxTokens {
 		t.Errorf("carta-cap-table blurb is about %d tokens, want at most %d", tokens, maxTokens)
 	}

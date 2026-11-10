@@ -133,6 +133,11 @@ export const GLOBAL_CSS = `
     --stripe-repriced: light-dark(var(--ink-color-global-brand-yellow-50), var(--ink-color-global-brand-yellow-70));
     --row-selected:    light-dark(rgba(40,93,163,.07), rgba(139,171,214,.12));
     --total-row-bg:    var(--ink-color-global-feedback-info-subtle);
+    /* Chart-mark fills for ahead / behind / on-target. Ink's feedback-*-strong tokens are tuned
+       for text (negative's dark arm is pale pink), so a fill takes the L2 ladder step on dark. */
+    --local-mark-positive: light-dark(#2D9E90, #32B0A0);  /* Positive L3 / L2 */
+    --local-mark-negative: light-dark(#E52431, #EF7171);  /* Negative L3 / L2 */
+    --local-mark-neutral:  #9C9F9F;                       /* Neutral L2 */
     --hue-up:          light-dark(var(--ink-color-global-brand-green-70), rgba(91,192,179,.85));
     --hue-down:        light-dark(var(--ink-color-global-brand-red-70), rgba(239,113,113,.85));
     --hue-ring-up:     light-dark(0 0 0 2px rgba(45,158,144,.18), 0 0 0 0 transparent);

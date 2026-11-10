@@ -659,7 +659,7 @@ def build(raw, out, meta, as_of_max=None):
 
     def build_forecast(by_key):
         """-> (latest_per_period, vintages) for one company's forecast metrics.
-        latest[key]   = [{d, v, asOf}]  — newest vintage's value per target period.
+        latest[key]   = [{d, v, asOf, cur?}]  — newest vintage's value per target period.
         vintages[key] = [{asOf, points:[{d,v}]}] — each vintage's full curve, asc."""
         latest, vintages = {}, {}
         for key, by_period in by_key.items():
@@ -667,12 +667,14 @@ def build(raw, out, meta, as_of_max=None):
             per_asof = {}  # asOf -> [(period, value)]
             for period, by_asof in by_period.items():
                 newest = max(by_asof)                       # latest logged vintage
-                v = by_asof[newest][0]
-                lp.append((period, v, newest))
+                v, c = by_asof[newest]
+                lp.append((period, v, newest, c))
                 for asof, (av, _c) in by_asof.items():
                     per_asof.setdefault(asof, []).append((period, av))
             lp.sort()
-            latest[key] = [{"d": p, "v": v, "asOf": a} for p, v, a in lp]
+            # `cur` rides along so a forecast in one currency is never netted against an actual in another.
+            latest[key] = [({"d": p, "v": v, "asOf": a, "cur": c} if c else {"d": p, "v": v, "asOf": a})
+                           for p, v, a, c in lp]
             vint = []
             for asof in sorted(per_asof):
                 pts = sorted(per_asof[asof])
