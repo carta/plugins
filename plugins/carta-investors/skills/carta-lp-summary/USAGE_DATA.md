@@ -25,6 +25,8 @@ ends in exactly one of `skill_finished` or `skill_failed`.
 | `skill_failed` | A build or refresh stopped after `skill_started` and before `skill_finished`, at any step. Stops before it (no connector, `welcome` fails) send nothing |
 | `brand_source_website` | Branding was taken from the firm's website |
 | `brand_source_deck` | Branding was taken from a deck the user dropped in |
+| `brand_font_kept` | After seeing the finished page, the user kept the firm's font (the headings, and with a brand board the body text too) |
+| `brand_font_dropped` | After seeing the finished page, the user went back to the standard typeface |
 
 ## Page events
 

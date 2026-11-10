@@ -4,8 +4,8 @@ Carta Workhub's KYC branch: `carta-workhub-build/SKILL.md` sends a Workhub KYC c
 a user who asks to fill in their KYC, here. Its steps run inside this skill.
 
 Help the signed-in user fill in **their own** KYC forms, the way a compliance analyst would:
-an investor's own KYC tasks, or, for a GP, the KYC of one of their firm's funds (Step 1b). Work
-in a loop: say what each open task still needs, read the documents the user shares against
+an investor's own KYC tasks, or, for a GP, the KYC of one of their firm's funds (Step 1b), one
+task or several in one chat (Batch mode). Work in a loop: say what each open task still needs, read the documents the user shares against
 what the form asks, save the answers the user confirms, and go round again until nothing is
 left that Claude can fill. Then, in a form reloaded after the last save, the user does
 everything only the form can (Step 2) and submits each form themselves.
@@ -18,8 +18,12 @@ everything only the form can (Step 2) and submits each form themselves.
 - "Here's my passport and our formation documents, can you do the KYC?"
 - "This isn't working, I want to give feedback on the KYC form."
 - "Help me complete our fund's KYC due diligence."
+- "Fill in all my KYC forms." / "Do all my KYC tasks." / "Help with these three KYC forms." (Batch mode)
 - A Carta Workhub KYC card's prompt, which names this skill's KYC branch and an
   `evaluation_reference_id`, with a `fund_uuid` for a fund's KYC.
+- A Carta Workhub **Fill all** or **Fill selected** prompt, which names this skill's KYC branch
+  in batch mode and either "every open KYC task" or several `evaluation_reference_id`s (Batch
+  mode).
 
 ## Rules
 
@@ -43,7 +47,8 @@ everything only the form can (Step 2) and submits each form themselves.
   whenever you list what they must do in it and when it opens beside the chat. The user acts
   in the form only at Step 9, after reloading it. Once Step 9 starts, save again only after
   the user says they have finished in the form, and ask them to reload it before they edit it
-  again.
+  again. In Batch mode this holds for every form in the batch: all of them are for looking only
+  until the hand-back.
 - **The form has the last word.** It runs checks nothing here can, such as a proof of address
   dated within the last six months, and an upload from here skips them. Before anyone uploads a
   time-limited document, tell the user its date and that a reviewer may refuse one that is too
@@ -78,8 +83,9 @@ When `completion_reopen` is set, say why the task is back with them under it, e.
 
 - No tasks: tell the user nothing is waiting on them, and stop.
 - One unfinished: that task is chosen.
-- Several unfinished: ask with `AskUserQuestion` which to start with, one option per task,
-  leaving out any task already found not to be a v2 form.
+- Several unfinished, asked in chat with no Workhub card: ask the scope first (Batch mode,
+  "Choose the scope"). On **Just one**, ask with `AskUserQuestion` which to start with, one
+  option per task, leaving out any task already found not to be a v2 form.
 
 Once a task is chosen, by the card or by the user, open its form beside the chat. Read the task
 by its `evaluation_id`:
@@ -121,10 +127,93 @@ evaluation's main entity, and its general partners and large investors are its p
 - No tasks: tell the user no fund KYC is waiting on them at this firm, and stop.
 - The user named a fund the result has no task for: tell them no fund KYC is waiting on them
   for that fund, and stop. Never start another fund's task in its place.
-- Several unfinished: ask with `AskUserQuestion` which fund to start with, one option per task,
-  by `fund_name`, leaving out any task already found not to be a v2 form.
+- Several unfinished, asked in chat with no Workhub card: ask the scope first (Batch mode,
+  "Choose the scope"). On **Just one**, ask with `AskUserQuestion` which fund to start with, one
+  option per task, by `fund_name`, leaving out any task already found not to be a v2 form.
 - `fa__list__fund-kyc-task` not found: KYC through Claude is not available for this account
   yet. Tell the user to fill in the fund's KYC on Carta, and stop.
+
+## Batch mode — several tasks in one chat
+
+Batch mode fills several KYC tasks in one chat. It starts in one of two ways:
+
+- **A Carta Workhub prompt.** **Fill all** names "every open KYC task" and no ids: list both
+  reads below and take every unfinished task. **Fill selected** names each task's
+  `evaluation_reference_id`, and `fund_uuid` for a fund task: take exactly those, matching ids
+  without regard to case. A named task neither read returns is no longer waiting on the user:
+  leave it out and say so in the hand-back. Ask no scope question.
+- **A chat ask with no card**, such as "help me fill in my KYC forms", once Step 1 has listed
+  more than one unfinished task: ask the scope ("Choose the scope", below).
+
+**The tasks.** Own tasks come from Step 1's read and fund tasks from Step 1b's read with no
+`fund_uuid`, which lists the active Carta firm's funds only. Read the fund list too when the
+prompt names `fa__list__fund-kyc-task`, the user asks about their funds' KYC, or Fill all sent
+the prompt. When it is not found or the user has no Carta firm, go on with Step 1's tasks; never
+set another firm to find more, and never mix in another firm's funds. A task both reads return
+is one task, the fund's. Leave out every submitted task.
+
+### Choose the scope
+
+Ask with `AskUserQuestion`: **All N unfinished tasks** (N the count) / **Choose which** /
+**Just one**.
+
+- **All N unfinished tasks:** every unfinished task listed.
+- **Choose which:** ask once more with `AskUserQuestion` (`multiSelect: true`), one option per
+  unfinished task by its fund or entity name (never the reference id). A question takes two to
+  four options, so split the tasks into as few questions as it takes (five tasks: three and two;
+  nine: four, three and two), and send up to four questions in one call, the rest in the next.
+  The batch is every task picked across them; none picked, ask what they would like to do.
+- **Just one:** Step 1's single-task flow.
+
+Leave out a task already found not to be a v2 form. With one task left, it is not a batch: go on
+as for one task.
+
+### Collect documents once per party
+
+Before asking for any document, read Step 2 for every task in the batch, paced as below. Then
+sort what is missing by party across the tasks, not by task: a person or entity that is a party
+in several tasks is asked for once, and each document they share is read once and answers every
+task where they are a party.
+
+Step 2 returns no names, so a task's main party is known by the task's fund or entity name, and
+a supporting party by what the user tells you. Treat two parties as the same only when they
+match exactly: an individual by name and date of birth, an entity by name and registration
+number, as a document or the user states them. When the match is not exact (a different
+spelling, a middle name on one, no date of birth or registration number to compare), ask with
+`AskUserQuestion` whether they are the same, naming both and the tasks they are in: **Same
+person** (or **Same entity**) / **Different**. Never assume.
+
+### Work one task at a time
+
+Go through the batch one task at a time, in the order listed. Start each task by opening its
+form beside the chat: read it by its `evaluation_id` as Step 1 does, or by its `fund_uuid` as
+Step 1b does for a fund task. Then run Steps 3 and 5–8 on that task alone:
+
+- **Save:** one Step 5 table per party and one **Save these answers** question per task, even
+  when the same answers go to several tasks. Never ask once for several tasks: each save is its
+  own confirmation.
+- **Upload:** ask Step 7's upload question per party in this task, for this task's form. A file
+  uploaded to one task's form is not on another's: ask again for the next task, naming that
+  task's form.
+- **Declined or stopped:** on **Stop** at a save question, save nothing more for that task; on
+  **Don't upload**, upload nothing for that party. Either way, keep the task in the hand-back
+  with what is left, and go on to the next task.
+- **Skipped:** a task found not to be a v2 form, refused, or no longer waiting on the user is
+  left out of the rest of the batch, with its reason kept for the hand-back. Go on to the next.
+
+**Pace and context.** Keep reads to at most 3 at once and writes to one task at a time: a bulk
+run of about 530 evaluations once used up the KYC database's connections. When a task is done,
+keep only a short note of it (the task, the fields saved, the documents uploaded, what is left
+in the form), not its documents' contents or its reads, so a long batch stays within the chat.
+Keep what each shared document states only while a task still to come needs it.
+
+### Hand back the batch
+
+When the last task is done, give one list of every task in the batch, by its fund or entity
+name, each with Step 9's summary and its `form_url`. List the skipped tasks with their reason
+(not a v2 form: fill it on Carta; refused; no longer waiting on you). Step 9's reload, finish
+and submit instructions, and its rule never to call a KYC done or submitted, hold for every form
+in the list.
 
 ## Step 2 — Read what the task still needs, and who can fill it
 
@@ -396,7 +485,8 @@ put the document on the Step 9 list.
 Read the task's completion again (Step 2) and tell the user what Claude can still fill or
 upload. Repeat Steps 4–7 until nothing is left that Claude can fill or upload, or the user
 stops. Then move to their next
-unfinished task (Step 1, or Step 1b for a fund's KYC).
+unfinished task (Step 1, or Step 1b for a fund's KYC), or in Batch mode the next task in the
+batch.
 
 ## Step 9 — The user finishes and submits each form themselves
 
@@ -417,7 +507,7 @@ submit it in the form.
 | Refusal | Do |
 | --- | --- |
 | not one of the user's open KYC tasks | go back to Step 1, or Step 1b for a fund's KYC |
-| not a v2 form (Step 2 or Step 3) | tell the user to fill that form on Carta, leave it out of the task choice, and move to their next unfinished task (Step 1, or Step 1b for a fund's KYC) |
+| not a v2 form (Step 2 or Step 3) | tell the user to fill that form on Carta, leave it out of the task choice, and move to their next unfinished task (Step 1, or Step 1b for a fund's KYC); in Batch mode, skip it and go on with the batch |
 | several roles (Step 3 or Step 6) | ask the user which role with `AskUserQuestion`, offering the investor's `supportingEntityRules` roles (Step 3) by name, then ask or save again with that rule's `relationType` as `relation_type`, and its `roleKey` as `role_key` when it isn't empty |
 | no access | the user cannot open this evaluation; stop |
 | refused these answers | a value's shape is wrong, or the form can no longer be edited; check the shape table, else stop |
@@ -460,7 +550,7 @@ call_tool({"name": "kyc__create__feedback",
 | --- | --- |
 | `requestType` | `bug`, or `feature_request` when the user needs something this skill cannot do |
 | `source` | `claude` when you file it on your own, `user` when the user asked to give feedback |
-| `step` | where it got stuck: `list_tasks` (Steps 1 and 1b), `read_completion` (Steps 2 and 8), `read_form_configuration` (Step 3), `read_documents` (Step 4), `propose_answers` (Step 5), `save_answers` (Step 6), `upload_documents` (Step 7), `finish_in_form` (Step 9), else `other` |
+| `step` | where it got stuck: `list_tasks` (Steps 1 and 1b), `read_completion` (Steps 2 and 8), `read_form_configuration` (Step 3), `read_documents` (Step 4), `propose_answers` (Step 5), `save_answers` (Step 6), `upload_documents` (Step 7), `finish_in_form` (Step 9), else `other`. In Batch mode, the step of the task it got stuck on: choosing the scope is `list_tasks`, the hand-back `finish_in_form` |
 | `problem` | `command_error`, `wrong_or_unusable_result`, `too_slow`, `cannot_do`, `unclear_instructions`, `user_unhappy` or `other` |
 | `command`, `errorCode` | the `kyc:` command involved and the error's code (an HTTP status or gRPC code name), when there is one |
 | `requestBody` | what went wrong, in up to 500 characters of general terms |

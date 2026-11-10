@@ -1280,10 +1280,20 @@ function farRenderGroups(groups, withLabels) {
     const section = document.createElement('div');
     section.className = 'far-display-group';
     section.dataset.farDisplayGroup = key;
-    if (withLabels) {
-      const label = document.createElement('div');
+    const label = withLabels ? document.createElement('div') : null;
+    if (label) {
       label.className = 'far-display-group-label';
       label.textContent = g.displayGroup.name;
+    }
+    // KYC compliance fills several forms in one chat, from buttons beside its name.
+    const actions = key === TASK_GROUP_KYC.id ? kycGroupActions(g.rows) : null;
+    if (actions) {
+      const head = document.createElement('div');
+      head.className = 'far-display-group-head';
+      if (label) head.appendChild(label);
+      head.appendChild(actions);
+      section.appendChild(head);
+    } else if (label) {
       section.appendChild(label);
     }
     const items = document.createElement('div');
@@ -1291,7 +1301,7 @@ function farRenderGroups(groups, withLabels) {
     const sameDay = farSameDayKeys(shown);
     shown.forEach(r => {
       const withTime = sameDay.has(farDayKey(farRowDate(r)));
-      items.appendChild(isList ? farListRow(r, withTime) : farCard(r, withTime));
+      items.appendChild(kycPickable(r, isList ? farListRow(r, withTime) : farCard(r, withTime)));
     });
     section.appendChild(items);
     if (hidden > 0) {

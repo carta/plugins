@@ -13,6 +13,9 @@ const KYC_COMPLETION_COMMAND = "kyc:get:evaluation_completion";
 // Completion reads out at once: enough to fill a page of cards quickly without a burst.
 const KYC_COMPLETION_READS_AT_ONCE = 3;
 const KYC_SKILL = "carta-investors:carta-workhub-build";
+// Every KYC chat prompt names the branch and how to open the form beside the chat in these words.
+const KYC_BRANCH = `the ${KYC_SKILL} skill's KYC branch`;
+const KYC_OPEN_FORM = "open its companion_url beside this chat as its next_step says.";
 // fund-admin's fund KYC workflow; its rows name the fund they are for.
 const KYC_FUND_TASK_TYPE = "review-kyc";
 const KYC_SUBMITTED = "EVALUATION_COMPLETION_STATUS_SUBMITTED";
@@ -148,15 +151,15 @@ function kycPrompt(k, firm) {
   const name = k.entity || "this KYC task";
   if (k.fundUuid) {
     const where = firm ? ` (${firm})` : "";
-    return `Fill in the Carta KYC form for ${name}${where} with the ${KYC_SKILL} skill's KYC branch, `
+    return `Fill in the Carta KYC form for ${name}${where} with ${KYC_BRANCH}, `
       + `on evaluation_reference_id "${k.evaluationId}" and fund_uuid "${k.fundUuid}": call read_tool with name `
       + `"${mcpToolName(KYC_FUND_TASKS_COMMAND)}" and arguments ${JSON.stringify({ fund_uuid: k.fundUuid })}, `
-      + "then open its companion_url beside this chat as its next_step says.";
+      + `then ${KYC_OPEN_FORM}`;
   }
-  return `Fill in the Carta KYC form for ${name} with the ${KYC_SKILL} skill's KYC branch, `
+  return `Fill in the Carta KYC form for ${name} with ${KYC_BRANCH}, `
     + `on evaluation_reference_id "${k.evaluationId}": call read_tool with name `
     + `"${mcpToolName(KYC_OWN_TASKS_COMMAND)}" and arguments ${JSON.stringify({ evaluation_id: k.evaluationId })}, `
-    + "then open its companion_url beside this chat as its next_step says.";
+    + `then ${KYC_OPEN_FORM}`;
 }
 
 // A queue card per task. A submitted form is out of the viewer's hands, so it waits With
@@ -198,7 +201,9 @@ async function kycFetchRows() {
   return rows;
 }
 
-// Every load replaces the KYC cards, so a task finished elsewhere leaves the queue.
+// Every load replaces the KYC cards, so a task finished elsewhere leaves the queue. A tick lasts
+// while its task is still an open KYC card: one that leaves drops out of Fill selected through
+// kycPickedTasks, which reads only the open cards.
 async function kycAttachRows() {
   const rows = await kycFetchRows();
   _farRows = (_farRows || []).filter(r => !String(r.id).startsWith("kyc-")).concat(rows);
@@ -208,4 +213,118 @@ async function kycAttachRows() {
 function kycOpenInChat(k) {
   trackWorkhub("click", "CartaWorkhub.Queue.OpenKycInChat");
   openClaudeChat(kycPrompt(k, _farFirmName));
+}
+
+// ── Filling several KYC tasks in one chat ──
+//
+// The KYC compliance header carries Fill all, and Fill selected once a card is ticked. Fill all
+// names no task: the skill reads both KYC lists itself, so its prompt stays short however many
+// tasks there are. Fill selected lists each ticked task, so it is capped: a fund task with a long
+// name adds about 180 characters to the claude:// link, and 20 keeps it within 4,200.
+const KYC_PICK_MAX = 20;
+let _kycPicked = new Set();   // evaluation ids ticked for Fill selected
+let _kycActions = null;       // the header's buttons, redrawn in place when a tick changes
+let _kycOpen = [];            // the open KYC cards the header counts, as kycQueueRow builds them
+
+function kycFillAllPrompt(firm) {
+  const funds = firm ? ` (${firm}'s fund KYC)` : "";
+  return `Fill in every open KYC task waiting on me on Carta with ${KYC_BRANCH}, `
+    + `in batch mode: call read_tool with name "${mcpToolName(KYC_OWN_TASKS_COMMAND)}" and with name `
+    + `"${mcpToolName(KYC_FUND_TASKS_COMMAND)}"${funds} to list them, then fill each one not yet submitted, `
+    + "one task at a time.";
+}
+
+// One picked task is the card's own prompt; several are listed by evaluation, with the fund for
+// a fund task, so the skill reads each one's form the way the card would.
+function kycPickedPrompt(ks, firm) {
+  if (ks.length === 1) return kycPrompt(ks[0], firm);
+  const where = firm ? ` (${firm})` : "";
+  const tasks = ks.map(k => `${k.entity || "KYC task"} (evaluation_reference_id "${k.evaluationId}"`
+    + (k.fundUuid ? `, fund_uuid "${k.fundUuid}")` : ")")).join("; ");
+  return `Fill in these ${ks.length} Carta KYC tasks${where} with ${KYC_BRANCH}, `
+    + `in batch mode, one task at a time: ${tasks}. For each, call read_tool with name `
+    + `"${mcpToolName(KYC_FUND_TASKS_COMMAND)}" on its fund_uuid for a fund task, else `
+    + `"${mcpToolName(KYC_OWN_TASKS_COMMAND)}" on its evaluation_id, and ${KYC_OPEN_FORM}`;
+}
+
+function kycPickedTasks() {
+  return _kycOpen.filter(k => _kycPicked.has(k.evaluationId));
+}
+
+function kycFillAll() {
+  trackWorkhub("click", "CartaWorkhub.Queue.FillAllKycInChat");
+  openClaudeChat(kycFillAllPrompt(_farFirmName));
+}
+
+function kycFillPicked() {
+  const picked = kycPickedTasks();
+  if (!picked.length || picked.length > KYC_PICK_MAX) return;
+  trackWorkhub("click", "CartaWorkhub.Queue.FillSelectedKycInChat");
+  openClaudeChat(kycPickedPrompt(picked, _farFirmName));
+}
+
+function kycDrawActions() {
+  const box = _kycActions;
+  if (!box) return;
+  box.innerHTML = "";
+  const n = kycPickedTasks().length;
+  // The primary button is the likelier choice: Fill selected once a card is ticked, else Fill all.
+  const [pickedCls, allCls] = n > 0 ? ["far-btn-primary", "far-btn-secondary"] : [null, "far-btn-primary"];
+  if (n > 0) {
+    const over = n > KYC_PICK_MAX;
+    if (over) {
+      const note = document.createElement("span");
+      note.className = "far-kyc-pick-note";
+      note.textContent = `Choose up to ${KYC_PICK_MAX} at a time, or fill all.`;
+      box.appendChild(note);
+    }
+    const picked = document.createElement("button");
+    picked.type = "button";
+    picked.className = `${pickedCls} far-kyc-fill-picked`;
+    picked.textContent = `Fill selected (${n})`;
+    picked.disabled = over;
+    picked.addEventListener("click", kycFillPicked);
+    box.appendChild(picked);
+  }
+  const all = document.createElement("button");
+  all.type = "button";
+  all.className = `${allCls} far-kyc-fill-all`;
+  all.textContent = `Fill all with Claude (${_kycOpen.length})`;
+  all.addEventListener("click", kycFillAll);
+  box.appendChild(all);
+}
+
+// The KYC compliance header's buttons, or null when none of the group's cards is open: a
+// submitted form is out of the viewer's hands, so it is never filled or counted.
+function kycGroupActions(groupRows) {
+  _kycOpen = groupRows.filter(r => r.kyc).map(r => r.kyc);
+  if (!_kycOpen.length) { _kycActions = null; return null; }
+  _kycActions = document.createElement("div");
+  _kycActions.className = "far-kyc-actions";
+  kycDrawActions();
+  return _kycActions;
+}
+
+function kycSetPicked(evaluationId, on) {
+  if (on) _kycPicked.add(evaluationId);
+  else _kycPicked.delete(evaluationId);
+  kycDrawActions();
+}
+
+// An open KYC card or row with its checkbox. The box sits beside the card, never inside it, so
+// ticking it never opens the card; it takes the group icon's place on top of the card.
+function kycPickable(r, item) {
+  if (!r.kyc) return item;
+  const wrap = document.createElement("div");
+  wrap.className = "far-kyc-item";
+  const label = document.createElement("label");
+  label.className = "far-kyc-pick";
+  const name = [r.title, r.kyc.entity].filter(Boolean).join(" for ");
+  label.innerHTML = `<input type="checkbox" class="far-kyc-pick-box" aria-label="${escHtml("Select " + name)}">`;
+  const box = label.querySelector("input");
+  box.checked = _kycPicked.has(r.kyc.evaluationId);
+  box.addEventListener("change", (e) => kycSetPicked(r.kyc.evaluationId, Boolean(e.target.checked)));
+  wrap.appendChild(item);
+  wrap.appendChild(label);
+  return wrap;
 }

@@ -668,16 +668,57 @@ HvkPz+rKZ6Wq+ELmAQAAAA==") format("woff2");
 .far-groups.far-tab-todo { --far-accent: #FF7D55; }
 .far-groups.far-tab-progress { --far-accent: #8BABD6; }
 
-.far-display-group { margin-top: 28px; }
+.far-display-group { --far-group-label-gap: 10px; margin-top: 28px; }
 
 .far-display-group-label {
-  padding-bottom: 10px;
+  padding-bottom: var(--far-group-label-gap);
   font-size: 14px;
   font-weight: 600;
   color: var(--ink-color-global-text-subtle);
 }
 
 .far-display-group-icon { flex: 0 0 auto; color: var(--far-accent); }
+
+/* KYC compliance: Fill selected and Fill all beside the group's name. */
+.far-display-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-bottom: var(--far-group-label-gap);
+}
+.far-display-group-head .far-display-group-label { padding-bottom: 0; }
+.far-kyc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-left: auto; }
+.far-kyc-pick-note { font-size: 13px; line-height: 20px; color: var(--ink-color-global-text-subtle); }
+/* The secondary of the two keeps a border, so it reads as a button beside the black primary. It
+   is the primary's size: its 1px border comes out of the primary's padding. */
+.far-kyc-actions .far-btn-secondary {
+  padding: 7px 17px;
+  color: var(--ink-color-global-text-default);
+  border: 1px solid var(--ink-color-global-border-default);
+  border-radius: var(--ink-size-global-radius-subtle);
+  white-space: nowrap;
+}
+.far-kyc-actions .far-btn-secondary:hover { border-color: var(--ink-color-global-brand-black); }
+
+/* An open KYC card's checkbox takes the group icon's place. It sits on top of the card, not
+   inside it, so ticking it never opens the card. */
+.far-kyc-item { position: relative; display: grid; }
+.far-kyc-item .far-display-group-icon { visibility: hidden; }
+.far-kyc-pick {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+}
+.far-rows .far-kyc-pick { top: 50%; right: auto; left: 4px; width: 20px; height: 20px; transform: translateY(-50%); }
+.far-kyc-pick-box { width: 16px; height: 16px; margin: 0; accent-color: var(--ink-color-global-brand-black); cursor: pointer; }
 
 .far-cards {
   display: grid;

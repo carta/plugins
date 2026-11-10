@@ -7,10 +7,10 @@ description: >-
   call review, the reporting tracker and the KYC forms waiting on the user. Use for "build the
   carta workhub artifact", "rebuild carta workhub", "set up carta workhub", "deploy carta
   workhub", "show my Carta workhub", "rebuild carta tasks", "show my Carta task board" or "pin
-  my Carta requests". Also fills in the user's own Carta KYC form from their documents, an
+  my Carta requests". Also fills in the user's own Carta KYC forms from their documents, an
   investor's task or a GP's fund KYC, from a Workhub KYC card or when asked: "help me fill in my
   KYC form", "what does my KYC form still need", "complete my identity verification from these
-  documents", "do my KYC from my passport", "help with my KYC task on Carta", "fill in our
+  documents", "fill in all my KYC forms", "help with my KYC task on Carta", "fill in our
   fund's KYC". NOT FOR firm Documents uploads, configuring an LP KYC form, or Carta's own KYC
   review.
 model: inherit
@@ -31,14 +31,17 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.38.2</carta-plugin>
+<carta-plugin>carta-investors:7.39.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 ## KYC forms
 
-If the prompt is a Carta Workhub KYC card's (it names this skill's KYC branch and an
-`evaluation_reference_id`), or the user asks to fill in their own KYC form or their fund's, read
+If the prompt is from a Carta Workhub KYC card (it names this skill's KYC branch and an
+`evaluation_reference_id`) or its **Fill all** or **Fill selected** button (it names this
+skill's KYC branch in batch mode, with "every open KYC task" or several
+`evaluation_reference_id`s), or the user asks to fill in their own KYC form, several of them
+("fill in all my KYC forms") or their fund's, read
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build/references/kyc-fill-form.md` (this skill's own
 `references/`; read it by that exact path, don't search for it) and follow it instead of the
 steps below. Everything else on this page builds the Workhub.
@@ -365,6 +368,22 @@ not inside a fund-data dashboard.
   `kyc:list:tasks` on the task's `evaluation_id` for the viewer's own (that task's form, per its
   `next_step`). Every load
   replaces the KYC cards, after the task list has painted, so a form finished elsewhere leaves.
+
+  **Several at once.** The KYC compliance header carries **Fill all with Claude (N)**, N being
+  its open cards in Needs Action (a submitted form under With Carta never counts; with no open
+  card there is no button). Each open card or list row has a checkbox in its group icon's place,
+  named "Select <task> for <entity>", which sits on top of the card rather than inside it, so
+  ticking it never opens the card. Once one is ticked, **Fill selected (n)** shows beside Fill
+  all and becomes the black primary button, and Fill all turns secondary; with nothing ticked,
+  Fill all is the primary. The secondary keeps a visible border. Both open a new chat as a card does (`openClaudeChat`, prompt copied). Fill all's prompt
+  names this skill's KYC branch and "every open KYC task", and has the skill read both KYC lists
+  itself, so it lists no ids and stays short however many tasks there are. Fill selected's lists
+  each ticked task's entity and `evaluation_reference_id`, with `fund_uuid` for a fund task; one
+  ticked task sends that card's own prompt. It is capped at `KYC_PICK_MAX` (20): each task adds
+  up to about 180 characters to the `claude://` link, so past 20 the button is turned off with
+  "Choose up to 20 at a time, or fill all." A tick lasts while its task is still an open KYC
+  card, through refreshes: a task that leaves the queue drops out of Fill selected
+  (`kycPickedTasks` reads only the open cards).
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
   An agent request (`request-gp-interactive-agentic`) opens here exactly as a `request-generic`
@@ -458,7 +477,7 @@ The cards stay on screen throughout, and a read that fails in any part keeps the
 | `resources/app/fund-admin-requests.js` | composer, queue, thread overlay — the whole feature |
 | `resources/app/capital-call-review.js` | the capital call review panel |
 | `resources/app/financial-reporting-tracker.js` | the Financial Reporting Tracker cards and panel |
-| `resources/app/kyc-tasks.js` | the KYC cards: both KYC reads, their merge, each form's lack line and each card's chat prompt |
+| `resources/app/kyc-tasks.js` | the KYC cards: both KYC reads, their merge, each form's lack line, each card's chat prompt, and Fill all / Fill selected |
 | `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`, `openClaudeChat`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
 | `resources/app/load-timing.js` | per-load record of each Carta call and boot milestone; first in the part order |

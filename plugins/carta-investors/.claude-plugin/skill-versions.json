@@ -16,7 +16,7 @@
     "headline": "SOI now has an Investment Cash Flows tab: every dated investment, proceed and terminal value behind Deal IRR, grouped by company and fund, following the same fund, as-of and exited filters."
   },
   "carta-workhub-build": {
-    "version": "1.12.1",
-    "headline": "Workhub now lists the KYC forms waiting on you under KYC compliance, so you can open each one from here. Rebuild to see them."
+    "version": "1.13.0",
+    "headline": "When KYC forms are waiting on you, you can now choose which ones Claude helps you fill in: one, several or all of them. Rebuild to get it."
   }
 }
