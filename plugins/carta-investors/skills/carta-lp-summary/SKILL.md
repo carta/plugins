@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.31.14</carta-plugin>
+<carta-plugin>carta-investors:7.31.15</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -65,7 +65,7 @@ allowed-tools:
 
 # LP Summary Skill
 
-Creates (or refreshes) a persistent Cowork artifact titled **`<firm_name> — LP Summary`**. The artifact **fetches its own rows from Carta every time it is opened**; the skill injects only configuration — the connector name, the firm and the table names. Never put a figure in the config or the page.
+Creates (or refreshes) a persistent Cowork artifact titled **`LP Summary`**. The artifact **fetches its own rows from Carta every time it is opened**; the skill injects only configuration — the connector name, the firm and the table names. Never put a figure in the config or the page.
 
 ## What the artifact shows
 
@@ -179,7 +179,7 @@ Do **not** put these numbers in the artifact. It re-fetches on open.
 { mcp_server: "<CARTA_MCP_SERVER>", firm_name: "<firm resolved in step 2>",
   firm_context_id: "<firm UUID from list_contexts>",
   firm_warehouse_id: "<firm_id from step 3>",
-  artifact_title: "<firm_name> — LP Summary",
+  artifact_title: "LP Summary",
   origin: "<home when Carta Home invoked this skill, otherwise chat>",
   home_url: "<Carta Home's URL when Carta Home gave you one, otherwise omit>",
   tables: { funds: "FUND_ADMIN.FUNDS", partners: "FUND_ADMIN.PARTNER_DATA",
@@ -233,14 +233,14 @@ If the RC=1 retry also fails, stop and offer to escalate rather than retrying fu
 
 **5d. Inline fallback** (only when the renderer does not resolve or the runtime blocks subprocess): load the template with `read_skill(file_path="references/artifact_template.html")`, escape the compact config JSON as the template's header comment documents (the `\uXXXX` form for `&` `<` `>` `'` — **not** HTML entities), replace the single `__LOAN_DATA__` placeholder, replace the single `__ARTIFACT_TITLE__` placeholder with the config's `artifact_title` (HTML-escaped), then publish. Leave the `/* __VENDOR_JS:jspdf.umd.min.js__ */` marker as it is: without the inlined jsPDF the page cannot make PDFs, and Export copies a table instead; leave `/* __MCP_UI_TRACKER_JS__ */` too: without the inlined tracker the page sends no usage analytics.
 
-**5e. Publish the artifact.** Unless Carta Home gave you a URL, call `Artifact({action: "list", scope: "mine"})`; if an artifact titled exactly **`<firm_name> — LP Summary`** is already published, keep its `url` and tell the user you are refreshing it in place before you publish over it. That is the title the rendered page's `<title>` carries, and the tag always wins over the `title` parameter, so looking for anything else publishes a duplicate every run. Another firm's page is not a match. Then publish:
+**5e. Publish the artifact.** Unless Carta Home gave you a URL, call `Artifact({action: "list", scope: "mine"})`; keep the `url` of this firm's existing page and tell the user you are refreshing it in place before you publish over it. Find it with `${CLAUDE_PLUGIN_ROOT}/references/firm-page-lookup.md` (the plugin's own `references/`, not this skill's; read it by that exact path, don't search for it): it is the page titled exactly **`LP Summary`**, and its firm-named title is exactly **`<firm_name> — LP Summary`**. `LP Summary` is the title the rendered page's `<title>` carries, and the tag always wins over the `title` parameter, so looking for anything else publishes a duplicate every run. Then publish:
 
 ```
 Artifact({
   file_path: "<path printed by the script>",
   url: "<url from the list or from Carta Home — omit entirely on a first publish>",
-  title: "<firm_name> — LP Summary",
-  description: "Limited partners side by side with each one's capital, performance, fund positions and exposure — fetched live from Carta.",
+  title: "LP Summary",
+  description: "<firm_name> — limited partners side by side with each one's capital, performance, fund positions and exposure — fetched live from Carta.",
   icon: "users",
   label: "Refreshed for <firm_name>",
   capabilities: {

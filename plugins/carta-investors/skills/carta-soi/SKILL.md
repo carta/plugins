@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.31.14</carta-plugin>
+<carta-plugin>carta-investors:7.31.15</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -255,7 +255,10 @@ First find an existing one:
 Artifact({action: "list", scope: "mine"})
 ```
 
-If a **<Firm Name> — Schedule of Investments** artifact is already published, keep its `url`.
+Keep the `url` of this firm's existing page, found with
+`${CLAUDE_PLUGIN_ROOT}/references/firm-page-lookup.md` (the plugin's own `references/`, not
+this skill's; read it by that exact path, don't search for it). Its title is **SOI** and its
+firm-named title is **<Firm Name> — Schedule of Investments**.
 
 **Before republishing over an existing page, keep the user's changes.** Users
 customize their Schedule of Investments by asking Claude to edit it, and this publish would
@@ -295,11 +298,9 @@ All five tools must be in the grant, or the page loads and the matching call rej
 **No `title` here, and do not add one.** The tool reads the title out of the file's
 `<title>` tag and uses its `title` parameter only when the file has none, so a `title`
 passed alongside a rendered page is silently dropped. The render script stamps
-`<Firm Name> — Schedule of Investments` into the tag from the firm name you pass it. If the
-artifact comes out named wrong, the render is wrong — check what Step 1 resolved, not this
-call. The name is also the key a caller matches on to find this firm's existing page, so a
-page published under a bare title is invisible to that lookup and the next run publishes a
-second one.
+`SOI` into the tag. If the artifact comes out named wrong, the render is wrong, not this
+call. The name, together with the firm at the start of the `description`, is how a caller
+finds this firm's existing page, so keep both as written here.
 
 Keep `favicon` stable across redeploys, and restate the whole `capabilities` object every
 time: a non-empty object replaces the stored grant, so a tool left out is revoked.

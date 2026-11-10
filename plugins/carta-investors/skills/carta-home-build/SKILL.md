@@ -26,7 +26,7 @@ allowed-tools:
   - mcp__carta__get_current_user
   - mcp__claude_ai_Carta__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
-  # Resolves the firm the published title names, and the firm handed to the
+  # Resolves the firm the page descriptions name, and the firm handed to the
   # dashboard skills so the fan-out doesn't re-ask.
   - mcp__carta__list_contexts
   - mcp__claude_ai_Carta__list_contexts
@@ -54,22 +54,22 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.31.14</carta-plugin>
+<carta-plugin>carta-investors:7.31.15</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 # Carta Home — Build / Redeploy / Open
 
-Deploys the `carta-home` live artifact, published as **`Carta Home - <firm>`**. It is
+Deploys the `carta-home` live artifact, published as **`Carta Home`**. It is
 **assembled** from source parts in this skill's `resources/` directory (template + CSS +
 config + app JS) by `scripts/build_artifact.py`, which also substitutes this session's
-Carta connector name and the firm the title names. You never need to read the assembled
+Carta connector name. You never need to read the assembled
 HTML — see "Source layout" below.
 
-The firm reaches the title through the build, because the published artifact takes its name
-from the page's own `<title>` tag. Nothing else about the bundle is firm-specific: the body
-still detects whichever firm is active at open time. One artifact per firm, so each has its
-own sidebar tile.
+The published artifact takes its name from the page's own `<title>` tag, which the build
+stamps as `Carta Home`. The body detects whichever firm is active at open time. One artifact
+per firm, so each has its own sidebar tile, found again by its title together with the firm
+at the start of its `description`.
 
 ## What the artifact does
 
@@ -415,17 +415,17 @@ If that firm is not already active, switch to it before going on:
 set_context({"firm_id": "<firm_uuid>"})
 ```
 
-The title must name the firm the page shows, and the page reads the active firm when it
-opens — the same `is_active` resolution `fetchLiveData()` does in `carta-home.app.js`. The
+Each page's description names the firm the page shows, and the page reads the active firm
+when it opens — the same `is_active` resolution `fetchLiveData()` does in `carta-home.app.js`. The
 switch keeps the two in step, and gives the dashboard skills Step 5 hands off to the same firm.
 
-**Capture the firm name and firm UUID.** The name is what Step 3's title and Step 2's lookup
-key are built from. Step 5 hands both to the dashboard skills so they do not re-ask the user
+**Capture the firm name and firm UUID.** The name is what Step 2's lookup and each page's
+`description` are built from. Step 5 hands both to the dashboard skills so they do not re-ask the user
 the same question — `carta-soi` explicitly reuses a firm list already in conversation context
 rather than calling `list_contexts` again.
 
 The published home artifact still auto-detects the firm at runtime. This step fixes the
-title and lets the fan-out run unattended; a switch also changes the user's active firm in
+firm the pages are found and described by, and lets the fan-out run unattended; a switch also changes the user's active firm in
 Carta, which is why it only happens when the firm is not already active.
 
 ### Step 2: Find what is already published
@@ -438,35 +438,26 @@ One call covers everything. Keep the `url` of each artifact below, matched on th
 its own skill publishes under — Steps 3 and 5 pass them so each page redeploys in place
 instead of claiming a second URL. Omit a `url` you did not find.
 
-| Artifact | Match the whole title | Scope |
-|---|---|---|
-| Home | `Carta Home - <Firm>` (hyphen) | this firm only |
-| Schedule of investments | `<Firm> — Schedule of Investments` (em dash) | this firm only |
-| Fund performance | `Fund Performance` | shared by every firm |
-| LP summary | `<Firm> — LP Summary` (em dash) | this firm only |
+| Artifact | Match the whole title |
+|---|---|
+| Home | `Carta Home` |
+| Schedule of investments | `SOI` |
+| Fund performance | `Fund Performance` |
+| LP summary | `LP Summary` |
 
-**A title is not an identity on its own.** The firm-scoped pages carry the firm in
-theirs, so one belonging to a *different* firm is not a match — reusing its `url` would
-republish over that firm's page. Match the whole title, never a fragment: every firm's SOI
-ends in the same three words.
+Find each page with `${CLAUDE_PLUGIN_ROOT}/references/firm-page-lookup.md` (the plugin's
+own `references/`, not this skill's; read it by that exact path, don't search for it). It
+is the only rule for reusing a `url`. The firm-named titles it takes are
+`Carta Home - <Firm>`, `<Firm> — Schedule of Investments` and `<Firm> — LP Summary`. The
+name only labels the page in the artifact switcher and pinned list; each page's own header
+still shows the firm.
 
-Fund performance is the deliberate exception. It carries no firm in its title because the
-page resolves the active firm when a viewer opens it, so one artifact serves everyone —
-adopting it is reuse, not a collision. Don't "correct" it into a per-firm match.
+Fund Performance is the exception: it resolves the firm when a viewer opens it, so one
+artifact serves every firm and its whole-title match is reuse, not a collision.
 
-**More than one match for the same title is a collision, not a choice.** It means some
-earlier run created a second artifact instead of redeploying over the first — most likely
-because that run's `url` was never passed through to the dashboard skill, or the artifact
-was published under a different session identity than this `scope: "mine"` listing sees.
-Do not silently pick the newest and move on: tell the user how many duplicates exist for
-that title and which URL you are about to redeploy over, so the stale ones can be cleaned
-up deliberately rather than accumulating further.
-
-A bare **Carta Home** with no firm suffix predates per-firm titling. Only adopt one whose
-favicon is **🏠** — that is this skill's page, so redeploy over it. A bare **Carta Home**
-carrying **📊** belongs to carta-cap-table's `carta-captable-home-build` and holds some
-company's cap table; leave it alone, publishing over it would replace that cap table with
-this firm's dashboard.
+A **Carta Home** carrying **📊** belongs to carta-cap-table's `carta-captable-home-build`
+and holds some company's cap table; leave it alone. Only a **🏠** one is this skill's, and
+it still has to pass the firm lookup above.
 
 ### Step 2b: Open instead of rebuilding
 
@@ -577,15 +568,15 @@ never write over each other's file. The bundle itself is firm-agnostic — the s
 keeps the paths apart.
 
 ```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --firm-name "<firm name from Step 1>" --dashboard-building soi --dashboard-building perf --dashboard-building lp --out <outputs-directory>/carta-home-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --dashboard-building soi --dashboard-building perf --dashboard-building lp --out <outputs-directory>/carta-home-<slug>.html
 ```
 
 For a dashboard Step 2c marked current or kept, swap its `--dashboard-building <key>` for
 `--dashboard-url <key>=<url from Step 2>`.
 
-`--firm-name` is stamped into the page's `<title>` as `Carta Home - <Firm>`, which is what
-names the published artifact. It is the only firm-specific thing in the bundle; the body
-still detects whichever firm is active when a viewer opens it.
+The build stamps `Carta Home` into the page's `<title>`, which is what names the published
+artifact. The page header still shows the firm, which the body detects when a viewer opens
+it.
 
 **This build runs twice.** On this pass, every entry with a `buildSkill` takes
 `--dashboard-building <key>` and nothing else, unless Step 2c marked it current or kept —
@@ -641,7 +632,7 @@ the only difference between a first publish and a redeploy.
 Artifact({
   file_path: "<outputs-directory>/carta-home-<slug>.html",
   url: "<Carta Home url from Step 2 — omit entirely on a first publish>",
-  description: "Dashboard home for <Firm> — SOI, Fund Performance, LP Summary, Capital Activity, and Skill Directory.",
+  description: "<Firm> — dashboard home: SOI, Fund Performance, LP Summary, Capital Activity, and Skill Directory.",
   favicon: "🏠",
   label: "Redeployed from skill bundle",
   capabilities: {
@@ -660,7 +651,7 @@ Artifact({
 > **No `title` here, and do not add one.** The tool reads the title out of the file's
 > `<title>` tag and uses its `title` parameter only when the file has none — so a `title`
 > passed alongside a built page is silently dropped. `build_artifact.py` stamps
-> `Carta Home - <Firm>` into the tag from `--firm-name`. If the artifact comes out named
+> `Carta Home` into the tag. If the artifact comes out named
 > wrong, the build is wrong: check what Step 1 printed, not this call.
 >
 > Anything the page calls that is missing from `tools` rejects with `not_in_manifest`.
@@ -676,13 +667,9 @@ Artifact({
 > new learns whether the firm has Data Collection; without it Portfolio Analytics never shows.
 >
 > Keep `favicon` stable across redeploys — users find the tab by its icon — and keep the
-> title stable **for a given firm**: it is the per-firm lookup key Step 2 matches on.
+> title and the description's firm prefix stable: Step 2 finds this firm's page by both.
 > Restate the whole `capabilities` object every time: a non-empty object replaces the
 > stored grant, so a tool you leave out is revoked.
->
-> The title is stamped once, at build; the **page** still follows whatever firm is active
-> in the viewer's Carta context when they open it. A viewer who switches firm sees a title
-> that no longer matches the body. Rebuild for that firm to fix it.
 
 ### Step 5: Publish the dashboard artifacts
 
@@ -786,7 +773,7 @@ message asking them to connect.
 
 ### Step 8: Confirm
 
-Give the user the artifact's URL, name the firm in its title, and tell them it is live. Tell
+Give the user the artifact's URL, say which firm it was built for, and tell them it is live. Tell
 them the first open asks them to allow the Carta connector. Describe only what they will see.
 Never say cards will look empty or are still loading: Home hides any card without data.
 When Step 2c read Home or a dashboard as `customized` or `no_baseline`, follow with one
@@ -827,7 +814,7 @@ drawn. Either way, send the text below as the whole reply, with nothing before o
 <style>.l{fill:var(--p);font-size:14px}.s{fill:var(--s);font-size:13px}.box{fill:none;stroke:var(--t);stroke-width:1.5}.bar{fill:var(--t);opacity:.3}</style>
 <rect x="20" y="20" width="640" height="260" rx="12" class="box"/>
 <rect x="36" y="34" width="250" height="30" rx="8" fill="var(--bg2)" stroke="var(--text-accent)" stroke-width="1.5"/>
-<text x="50" y="54" class="l">Carta Home - Your Firm  ⌄</text>
+<text x="50" y="54" class="l">Carta Home  ⌄</text>
 <rect x="36" y="74" width="190" height="186" rx="10" fill="var(--bg2)" stroke="var(--t)"/>
 <rect x="50" y="90" width="120" height="7" rx="3" class="bar"/>
 <rect x="50" y="110" width="100" height="7" rx="3" class="bar"/>

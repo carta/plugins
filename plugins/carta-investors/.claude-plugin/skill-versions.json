@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.20.0",
+    "version": "1.20.1",
     "headline": "The Schedule of Investments card now flags funds you have in Carta that aren't on your SOI page yet, with a prompt to add them. Rebuild to get it."
   },
   "carta-lp-summary": {
@@ -12,7 +12,7 @@
     "headline": "When Carta Home opens the LP Summary, a Back to Home link at the top of the page takes you straight back."
   },
   "carta-soi": {
-    "version": "1.4.10",
+    "version": "1.4.11",
     "headline": "SOI now has an Investment Cash Flows tab: every dated investment, proceed and terminal value behind Deal IRR, grouped by company and fund, following the same fund, as-of and exited filters."
   },
   "carta-workhub-build": {

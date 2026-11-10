@@ -30,12 +30,11 @@ addresses a connector by. The Skill Directory's skills come from the plugin's .c
 carta-mcp for the published copy once it is idle. `{{FIRM}}` is left intact — it is a RUNTIME
 placeholder the artifact fills in from list_contexts.
 
-`{{PAGE_TITLE}}` is the one firm-specific thing baked in: it becomes the page's `<title>`,
-and so the published artifact's name, "Carta Home - <firm>". It has to come from the file —
-the Artifact tool reads `<title>` out of the HTML and only falls back to its own `title`
-parameter when the file carries none, so a template with a fixed title publishes every
-firm's page under that one name. The body stays firm-agnostic and still detects whichever
-firm is active when a viewer opens it.
+`{{PAGE_TITLE}}` becomes the page's `<title>`, and so the published artifact's name,
+"Carta Home". It has to come from the file — the Artifact tool reads `<title>` out of the
+HTML and only falls back to its own `title` parameter when the file carries none. The
+name carries no firm; the on-page header shows the firm, which the body detects when a
+viewer opens it.
 
 `{{DASHBOARD_URLS}}` (in carta-home.config.js) becomes a JSON object of the dashboard
 artifact URLs published earlier in the same build run, keyed by a DASHBOARDS entry. A key
@@ -53,7 +52,7 @@ can tell exactly what the user changed on the published copy.
 
 Usage:
   uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
-      --firm-name "<firm name>" --out <path>/carta-home-<slug>.html \
+      --out <path>/carta-home-<slug>.html \
       [--dashboard-url soi=https://… --dashboard-building perf] [--soi-page <soi.html>]
 """
 import argparse
@@ -62,7 +61,6 @@ import json
 import re
 import sys
 from datetime import datetime, timezone
-from html import escape
 from pathlib import Path
 
 _LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
@@ -133,19 +131,9 @@ VENDOR_MARKERS = {
 }
 APP_JS_MARKER = r"/\*\s*__CARTA_HOME_APP_JS__\s*\*/"
 
-# The published artifact's name, and the key SKILL.md Step 2 matches on to find this
-# firm's existing page. One firm per page, so one title per firm.
-TITLE_PREFIX = "Carta Home - "
-
-
-def page_title(firm_name):
-    """The `<title>` text for this firm's page.
-
-    Escapes only the three characters that would end the tag or start an entity —
-    a firm named `Ash & Rowe <Capital>` otherwise produces malformed HTML. Quotes are
-    left alone: this is element text, not an attribute.
-    """
-    return escape(TITLE_PREFIX + firm_name, quote=False)
+# The published artifact's name, and the key SKILL.md Step 2 matches on to find the
+# existing page.
+PAGE_TITLE = "Carta Home"
 
 
 def compute_build_id(template, parts):
@@ -286,7 +274,7 @@ def read_soi_fund_uuids(path):
     return sorted(set(uuids))
 
 
-def build(mcp_server, firm_name, dashboard_urls=None, soi_fund_uuids=None):
+def build(mcp_server, dashboard_urls=None, soi_fund_uuids=None):
     template = (RES / "carta-home.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
@@ -317,7 +305,7 @@ def build(mcp_server, firm_name, dashboard_urls=None, soi_fund_uuids=None):
     if "{{CARTA_MCP_SERVER}}" in out:
         sys.exit("ERROR: {{CARTA_MCP_SERVER}} still present after substitution")
 
-    out = out.replace("{{PAGE_TITLE}}", page_title(firm_name))
+    out = out.replace("{{PAGE_TITLE}}", PAGE_TITLE)
     if "{{PAGE_TITLE}}" in out:
         sys.exit("ERROR: {{PAGE_TITLE}} still present after substitution")
     out = out.replace("{{DASHBOARD_URLS}}", json.dumps(dashboard_urls or {}, sort_keys=True))
@@ -354,9 +342,6 @@ def main():
     ap = argparse.ArgumentParser(description="Assemble the carta-home artifact.")
     ap.add_argument("--mcp-server", required=True,
                     help="Carta connector display name (the {{CARTA_MCP_SERVER}} value)")
-    ap.add_argument("--firm-name", required=True,
-                    help="active firm's name — becomes 'Carta Home - <name>' in the "
-                         "page's <title>, and so the published artifact's name")
     ap.add_argument("--out", required=True, help="output HTML path")
     ap.add_argument("--dashboard-url", action="append", metavar="KEY=URL", default=[],
                     help="published dashboard artifact URL, keyed by a DASHBOARDS entry "
@@ -371,19 +356,15 @@ def main():
                          "list lets the SOI card flag funds the page does not list yet")
     args = ap.parse_args()
 
-    firm_name = args.firm_name.strip()
-    if not firm_name:
-        sys.exit("ERROR: --firm-name is empty")
-
-    html, build_id, version = build(args.mcp_server, firm_name, parse_dashboard_urls(args.dashboard_url, args.dashboard_building),
+    html, build_id, version = build(args.mcp_server, parse_dashboard_urls(args.dashboard_url, args.dashboard_building),
                                    read_soi_fund_uuids(args.soi_page))
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)
     print(
-        'wrote {} ({} bytes) — v{} build {} — publishes as "{}{}"'.format(
+        'wrote {} ({} bytes) — v{} build {} — publishes as "{}"'.format(
             out_path, len(html.encode("utf-8")), version, build_id,
-            TITLE_PREFIX, firm_name,
+            PAGE_TITLE,
         )
     )
 
