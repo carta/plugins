@@ -850,6 +850,14 @@ HvkPz+rKZ6Wq+ELmAQAAAA==") format("woff2");
 
 .far-panel-thread { width: min(620px, 94vw); }
 
+/* The Track request link sits on the title line, clear of the close button. */
+.far-thread-header { display: flex; align-items: baseline; gap: 12px; }
+.far-thread-header .far-panel-title { flex: 1; min-width: 0; }
+.far-track-request {
+  flex-shrink: 0; margin-right: 28px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  color: var(--ink-color-global-link-default); text-decoration: none;
+}
+
 .far-panel-header {
   padding: 16px 20px 12px;
   border-bottom: 1px solid var(--ink-color-global-border-subtle);

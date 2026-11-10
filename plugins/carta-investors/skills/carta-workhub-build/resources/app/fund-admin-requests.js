@@ -344,7 +344,7 @@ function farParseFields(text) {
   return { fields, lead, rest };
 }
 
-// request-generic is a DM workflow, so `subject` is always null. The opening
+// A request is a DM workflow, so `subject` is always null. The opening
 // message is the only human-readable label the thread has.
 function farTitleFrom(text) {
   const line = String(text ?? '').split('\n').find(l => l.trim()) ?? '';
@@ -420,13 +420,19 @@ function farTaskTitle(w) {
   return farUnwrap(w.display_name ?? w.workflow_display_name) || null;
 }
 
+// carta-mcp marks a row's link with this kind when it opens the request's tracker page.
+const FAR_TRACK_KIND = 'request_companion';
+
 // An open task carries pending_actor; a finished workflow carries status. The
 // request-only sources carry no template, so a row without one is a request.
 // `reviews` is whether this viewer may open the capital call review panel; `apps` are
 // carta-mcp's Workhub task apps, how each kind of task opens in a chat for this viewer.
 function farNormalizeWorkflow(w, reviews = true, apps = []) {
   const closed = FAR_FINISHED_STATUSES.includes(w.status);
-  const isRequest = (w.workflow_template ?? FAR_REQUEST_TEMPLATE) === FAR_REQUEST_TEMPLATE;
+  const isRequest = TASK_TEMPLATES_REQUEST.includes(w.workflow_template ?? FAR_REQUEST_TEMPLATE);
+  // A request's link to its tracker is offered once, as Track request, not as the Carta link.
+  // carta-mcp alone builds that link from fund-admin's path.
+  const tracked = isRequest && w._links?.kind === FAR_TRACK_KIND;
   // A review task opens in a chat when this viewer has an opening for it, else the
   // capital call panel, else Carta. Either way it is the GP's turn: the active-task list holds
   // only decisions the GP owes.
@@ -448,7 +454,8 @@ function farNormalizeWorkflow(w, reviews = true, apps = []) {
     requested: w.created_at ?? null,
     completed: w.completed_date ?? null,
     lastActivity: w.last_activity_at ?? w.created_at ?? null,
-    webUrl: farSafeHref(w._links?.web_url),
+    webUrl: tracked ? null : farSafeHref(w._links?.web_url),
+    trackUrl: tracked ? farSafeHref(w._links.web_url) : null,
     objectId: w.object_id ?? null,
     ccr,
     // A package task always opens the tracker for its period, never Carta.
@@ -728,7 +735,7 @@ function farQueueReads(onFail) {
     todo: farReadTab('todo', d => onFail('todo', d)),
     progress: farReadTab('progress', d => onFail('progress', d)),
     filed: farWalk('fa:list:firm-workflow', {
-      workflow_templates: [FAR_REQUEST_TEMPLATE, CCR_WORKFLOW_TEMPLATE],
+      workflow_templates: [...TASK_TEMPLATES_REQUEST, CCR_WORKFLOW_TEMPLATE],
       statuses: ['active'],
     }, { partialOk: true }).catch(() => null),
     done: farReadTab('done', d => onFail('done', d)),
@@ -1724,8 +1731,10 @@ async function openFarThread(workflowId) {
   const overlay = farEnsureOverlay('far-thread-overlay', 'far-overlay');
   overlay.innerHTML = `
     <div class="far-panel far-panel-thread">
-      <div class="far-panel-header">
+      <div class="far-panel-header far-thread-header">
         <span class="far-panel-title">${escHtml(row?.title ?? 'Request to Carta')}</span>
+        ${row?.trackUrl ? `<a class="far-track-request" href="${escHtml(row.trackUrl)}" target="_blank" rel="noopener noreferrer"`
+          + ` onclick="trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.TrackRequest')">Track request ↗</a>` : ''}
         <button class="far-panel-close" onclick="closeFarThread()" aria-label="Close">✕</button>
       </div>
       <div class="far-panel-body" id="far-thread-body">

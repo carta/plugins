@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.37.2</carta-plugin>
+<carta-plugin>carta-investors:7.37.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -112,7 +112,7 @@ not inside a fund-data dashboard.
   (`FAR_TAB_OPEN_ORDER`); after that only the viewer changes tabs. Each tab carries a count
   pill and a one-line description. The queue holds the workflows Workhub has a panel for, plus expense
   payments, management fee reviews, cash reconciliation, SOI reviews and missing audit documents, listed in `TASK_TEMPLATES_WITH_TILES` in
-  `resources/carta-workhub.config.js`: requests (`request-generic`), capital activities (`request-capital-activity`), financial packages
+  `resources/carta-workhub.config.js`: requests (`request-generic` and `request-gp-interactive-agentic`), capital activities (`request-capital-activity`), financial packages
   (`publish-financial-package`), expense payments (`prepare-and-pay-expense`), management fee
   reviews (`review-management-fees`), cash reconciliation (`cash-reconciliation`, one workflow per bank
   transaction), SOI reviews (`review-soi-v2`) and missing audit documents (`missing-audit-documents`, the GP's upload task for a fund's audit year). No panel opens the last five, so each is a Carta link under
@@ -367,6 +367,11 @@ not inside a fund-data dashboard.
   replaces the KYC cards, after the task list has painted, so a form finished elsewhere leaves.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
+  An agent request (`request-gp-interactive-agentic`) opens here exactly as a `request-generic`
+  one does: both are in `TASK_TEMPLATES_REQUEST`. When fund-admin follows the request on its
+  tracker page, the panel heading carries a **Track request** link to it: the row's `_links.web_url` when its `_links.kind` is
+  `request_companion`. carta-mcp alone builds that link; the app never builds one from
+  `request_companion_url`. A row without it shows no link.
 
   Bodies render as **paragraphs**, taken from `content_html` — `content_text` is the same
   message flattened, and preferring it threw away the structure the author wrote. Tags are

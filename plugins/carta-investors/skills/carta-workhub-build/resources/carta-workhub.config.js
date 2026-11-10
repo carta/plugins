@@ -108,6 +108,10 @@ const TASK_PRESETS = [
 
 // The templates the queue routes on; the app files read these names.
 const TASK_TEMPLATE_REQUEST = 'request-generic';
+// An agent request (filed by an agent for the GP) is a DM thread like request-generic: it
+// shares its tasks and opens the same thread panel. Every request check reads this list.
+const TASK_TEMPLATE_AGENT_REQUEST = 'request-gp-interactive-agentic';
+const TASK_TEMPLATES_REQUEST = [TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_AGENT_REQUEST];
 const TASK_TEMPLATE_CAPITAL_ACTIVITY = 'request-capital-activity';
 const TASK_TEMPLATE_PACKAGE = 'publish-financial-package';
 const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
@@ -125,7 +129,7 @@ const TASK_CAPITAL_ACTIVITY_CHANGES = 'review-capital-activity-changes';
 // tabs, so finished work never shows a kind of task the open tabs leave out. Any
 // other template stays out until a panel opens it.
 const TASK_TEMPLATES_WITH_TILES = [
-  TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE,
+  ...TASK_TEMPLATES_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE,
   TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES, TASK_TEMPLATE_CASH_RECONCILIATION,
   TASK_TEMPLATE_SOI_REVIEW, TASK_TEMPLATE_AUDIT_DOCUMENTS,
 ];

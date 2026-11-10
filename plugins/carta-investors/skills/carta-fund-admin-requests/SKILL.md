@@ -50,7 +50,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.37.2</carta-plugin>
+<carta-plugin>carta-investors:7.37.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -211,11 +211,19 @@ Age comes from `last_activity_at`, falling back to `created_at`.
 Do not build a URL yourself. A row links out only through `_links.web_url`; a row
 with an empty `url` has no page and no link.
 
+**Track request.** When a row's `_links.kind` is `request_companion`, its
+`_links.web_url` is the request's tracker page, where the user follows it in
+Carta. Show it as `[Track request](<web_url>)` after the label, and leave the
+label itself unlinked. The link can sit on the request's row from step 1 or on its
+task from step 2; use whichever carries it. Never turn `request_companion_url`,
+an in-app path, into a link yourself. A row with no such link shows none.
+
 Render each group as its own table, `#` first so the user can open one by number:
 
 | # | Request | Status | Age |
 |---|---|---|---|
 | 1 | [Split the Q3 capital call](<web_url>) | Ready for you | 2d |
+| 2 | Restate the August accrual · [Track request](<web_url>) | Working | 1d |
 
 `request-generic` and `request-gp-interactive-agentic` are DM workflows, so they
 have **no subject**. Take the request label from `display_name` when it names a
