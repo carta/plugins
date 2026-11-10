@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.9</carta-plugin>
+<carta-plugin>carta-crm:1.20.10</carta-plugin>
 
 ## Overview
 
