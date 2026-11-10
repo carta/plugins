@@ -37,7 +37,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import build_manco_datadir as build  # noqa: E402
+import manco_fees  # noqa: E402
+import manco_gaps  # noqa: E402
 import manco_mapping_store as mapping_store  # noqa: E402
 
 
@@ -227,7 +228,7 @@ def _decision_fields(prior):
     if prior is None:
         return {}
     if not isinstance(prior, dict):
-        prior = build.fund_answer(prior)
+        prior = manco_fees.fund_answer(prior)
     return {k: v for k, v in prior.items() if k not in _STAMP_KEYS}
 
 
@@ -293,7 +294,7 @@ def known_row_addrs(dashboard_dir):
 
 def open_inference(accounts, key):
     """The mapping-table row for an inference nobody has answered yet."""
-    addr = build.INFERENCE_ADDR_PREFIX + key
+    addr = manco_gaps.INFERENCE_ADDR_PREFIX + key
     return next((r for r in query_inferences(accounts) if r.get("addr") == addr), None)
 
 

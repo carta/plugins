@@ -206,7 +206,7 @@ column invented from a plausible-sounding name (e.g. a `COMMITTED_CAPITAL` on
 `JOURNAL_ENTRIES` or `MANAGEMENT_FEE_SCHEDULES`) fails as a Snowflake compilation
 error, not a graceful empty result, and the error surfaces to the user as an
 opaque `DataWarehouseError`. Committed capital specifically is never fetched by
-SQL: `build_manco_datadir.py`'s `_build_fee_projections` infers it from the latest
+SQL: `manco_fees.py`'s `_build_fee_projections` infers it from the latest
 actual quarterly management fee divided by that period's rate, and that inference
 is already wired into the build. If a figure genuinely isn't covered
 by Queries A–F, that's a real product gap, not something to work around with a new

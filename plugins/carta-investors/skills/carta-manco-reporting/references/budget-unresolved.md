@@ -23,7 +23,7 @@ is true:
   `{"declined": true}` from an earlier invocation.
 - `accountsData.nativeMapping.needsMappingFile` is false.
 
-`nativeMapping` (`build_manco_datadir.py`'s `native_mapping_coverage`)
+`nativeMapping` (`manco_gaps.py`'s `native_mapping_coverage`)
 counts every budget line against how many the build could actually resolve
 (`resolved`) or pre-fill a candidate for (`proposed` — a `mappingTable`
 row Step 4.7 lets the operator confirm in one tap). `needsMappingFile` is

@@ -288,7 +288,7 @@ def _scan_rows(ws, wsf, dept_blocks, first_data_row: int, gl_col: int | None = 1
         if kind == "section_header":
             section = label.strip()
 
-        # Raw formula only; build_manco_datadir.py resolves it once every
+        # Raw formula only; manco_gl_matching.py resolves it once every
         # sibling row's own GL identity has settled, not before.
         source_formula = (
             _formula_for_row(wsf, row_ix, dept_blocks)

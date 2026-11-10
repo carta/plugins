@@ -35,7 +35,7 @@ Join hints per row so the UI can resolve actuals:
                     NOT set here: this adapter has no view of the ManCo's
                     real fund roster, so a workbook's own fund shorthand
                     ("Fund II") can't be told apart from an ordinary income
-                    line at parse time. build_manco_datadir.py's
+                    line at parse time. manco_fees.py's
                     `backfill_fund_match_from_roster` resolves it afterward,
                     once the real fund names are known.
   - `gl_codes`    — Carta GL account_type list; resolved via coa-mapping,
@@ -535,7 +535,7 @@ def _formula_for_row(wsf, layout, row_ix):
     """This row's own value formula, or None for a hard-coded figure.
 
     The total column when the sheet has one, else the first period column
-    holding one — build_manco_datadir.py resolves it later, once every
+    holding one — manco_gl_matching.py resolves it later, once every
     sibling row's own GL identity has settled.
     """
     cols = [layout["total_col"]] if layout.get("total_col") else list(layout["period_cols"])
