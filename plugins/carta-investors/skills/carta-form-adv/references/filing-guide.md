@@ -5,8 +5,9 @@
      fallbacks that silently fail on Windows (sys.executable points to a uv-managed shim
      without a writable pip environment) and required users to navigate to a /tmp file path.
 
-     v2 (current): HTML artifact as the primary output — zero Python dependencies, opens
-     automatically in Claude Desktop's preview panel, works identically on macOS and Windows.
+     v2 (current): HTML artifact as the primary output — zero Python dependencies, saved
+     to the temp dir with its path surfaced so the user opens it in a browser, works identically on
+     macOS and Windows.
      Blue/orange badge system (Carta-filled vs. must-enter-in-IARD) is interactive in HTML.
 
      Excel is back (v2.1): form_adv_excel_generator.py uses PEP 723 inline metadata so
@@ -50,17 +51,11 @@ Use actual query result values — no placeholders. *Lowercase all JSON keys* �
 > `reporting_currency` column on every fund row; keep it in the `funds` array (it comes
 > through automatically when you copy all columns).
 >
-> **Known limitation (mirror divergence from `carta-form-adv`):** The current generators
-> (`generate_form_adv_artifact.py`, `form_adv_excel_generator.py`) format all amounts with
-> a USD `$` symbol regardless of the fund's `reporting_currency`. If your firm's funds use
-> non-USD currencies, verify that the reported amounts match your fund administrator's records
-> before filing — the currency symbol in the artifacts will show `$` even for EUR, GBP, or
-> other currencies.
->
-> **Mirror maintenance:** When the `carta-form-adv` generators are updated to read each
-> fund's reporting currency instead of hardcoding USD, re-mirror this file from the updated
-> `carta-form-adv/references/filing-guide.md` — at that point the generators will be
-> multi-currency aware and this limitation note should be replaced with the upstream note.
+> **Known limitation:** The generators (`generate_form_adv_artifact.py`,
+> `form_adv_excel_generator.py`) format all amounts with a USD `$` symbol regardless of the
+> fund's `reporting_currency`. If your firm's funds use non-USD currencies, verify that the
+> reported amounts match your fund administrator's records before filing — the currency
+> symbol in the artifacts will show `$` even for EUR, GBP, or other currencies.
 
 > **Why `firm_aggregates` is required:** The artifact generators read firm-level distinct-LP counts (Items 5.D, 5.H) directly from this block. Without it, both generators fall back to summing per-fund counts, which double-counts any LP committed to multiple funds. If `firm_aggregates` is missing, the artifacts will emit a visible "⚠ Counts may be inflated (LPs committed to multiple funds are double-counted)" banner.
 
@@ -68,7 +63,7 @@ Use actual query result values — no placeholders. *Lowercase all JSON keys* �
 
 ```bash
 TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/scripts/generate_form_adv_artifact.py \
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_artifact.py \
   --data "${TMPDIR}/form_adv_data.json" \
   --title "<FirmName> — Form ADV <Year>" \
   --out "${TMPDIR}/FormADV_<FirmName>_<Year>.html"
@@ -80,7 +75,7 @@ Run immediately after Step 2 (reuses the same JSON data file):
 
 ```bash
 TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/scripts/form_adv_excel_generator.py \
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_generator.py \
   --data "${TMPDIR}/form_adv_data.json" \
   --title "<FirmName> — Form ADV <Year>" \
   --out "${TMPDIR}/FormADV_<FirmName>_<Year>.xlsx"

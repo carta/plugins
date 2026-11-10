@@ -20,7 +20,7 @@
       "body": "Pulls colors, fonts, logos and imagery from your website into an HTML, PDF or slide brand board, then saves it to Carta for future decks."
     }
   },
-  "carta-compliance-routing": {
+  "carta-form-adv": {
     "category": "compliance",
     "name": "Form ADV",
     "order": 10,

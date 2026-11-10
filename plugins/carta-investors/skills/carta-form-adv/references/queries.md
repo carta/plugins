@@ -251,9 +251,7 @@ fund_detail AS (
         -- Per-fund reporting currency. Every amount in this row is denominated in it.
         -- NULL means the fund admin hasn't set a currency in Carta — surface as-is so
         -- the LLM can prompt the user to set it rather than silently labeling it USD.
-        -- Mirror divergence: carta-form-adv/references/form-adv-queries.md
-        -- uses COALESCE(..., 'USD') here; this mirror intentionally omits it per
-        -- CLAUDE.md rule "never hardcode or default to USD".
+        -- Do not COALESCE to 'USD': never hardcode or default to USD.
         f.reporting_currency                                                             AS reporting_currency,
         f.entity_type_name                                                              AS entity_type,
         f.legal_structure,
