@@ -8,7 +8,6 @@ import { Btn, ScenarioMarker, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS,
 import { fmtAsOf, setDisplayCurrency } from "./ui/format.js";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import useShare from "./state/useShare.js";
-import useRecentScenarios from "./state/useRecentScenarios.js";
 import { ShareControls, SharePopover } from "./ui/ScenarioSharing.jsx";
 import { isShared, isHidden, scenariosInTileOrder } from "./model/slices.js";
 import Overview from "./views/Overview.jsx";
@@ -144,8 +143,6 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   const { snapshot, doc, slice, selectSlice, sliceIds, createSlice, renameSlice, forkSlice, deleteSlice, hideShared, showHidden, unshareSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
     usePortfolio(firm, { onLockedEdit: () => warn(BASELINE_LOCKED_MSG) });
   const share = useShare();
-  // the scenarios opened in this firm, newest first — the sidebar menu shows the latest
-  const recentIds = useRecentScenarios(firm, slice?.id);
   // Current user's Carta id, for the owner-only Delete on a shared scenario (self-vs-other).
   const [userId, setUserId] = useState(null);
   useEffect(() => {
@@ -424,7 +421,7 @@ export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
       {/* hidden on Plan New Fund, where no scenario applies */}
       {!scenariosOff && (
         <div style={{ padding: "0 0 12px" }}>
-          <ScenarioMenu {...tileProps} activeName={slice.name} recentIds={recentIds} onShowAll={() => setTab(SCENARIOS_PAGE)} />
+          <ScenarioMenu {...tileProps} activeName={slice.name} onShowAll={() => setTab(SCENARIOS_PAGE)} />
         </div>
       )}
       <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>

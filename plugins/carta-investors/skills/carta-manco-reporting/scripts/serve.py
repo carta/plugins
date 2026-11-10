@@ -1045,10 +1045,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _report_action(self, report_id, action, body):
         """One change to a local report, then a rebuild so the app shows it."""
-        import build_manco_datadir  # only needed for writes; keeps a read-only launch light
+        import manco_mapping_store  # only needed for writes; keeps a read-only launch light
         store = report_store.ReportStore(DATA_DIR)
         expected = self.headers.get("If-Match")
-        copy_mapping = functools.partial(build_manco_datadir.copy_budget_mapping, DATA_DIR)
+        copy_mapping = functools.partial(manco_mapping_store.copy_budget_mapping, DATA_DIR)
         try:
             if action == "rename":
                 result = store.rename(report_id, body.get("name"), expected_etag=expected)

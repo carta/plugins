@@ -3,8 +3,8 @@ import { FS, sans } from "../ui/theme.js";
 import { ScenarioTiles } from "../ui/ScenarioMenu.jsx";
 import { isShared } from "../model/slices.js";
 
-/** Every scenario as a tile — the sidebar's scenario menu shows Baseline and the
- *  latest viewed, and its "View all" link opens this page. Your own scenarios come
+/** Every scenario as a tile, with room for more than the sidebar's scrolling scenario
+ *  menu, whose "View all" link opens this page. Your own scenarios come
  *  first; scenarios shared with you follow in their own section. Its "Update data"
  *  link loads the firm's latest: in the header once any are loaded (beside one that
  *  shows hidden ones), and inside the empty-state sentence until then.

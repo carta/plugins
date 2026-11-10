@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_manco_datadir as build  # noqa: E402
+import manco_mapping_store as mapping_store  # noqa: E402
 
 
 def _read_json(path):
@@ -249,7 +250,7 @@ def answer_fields(prior, gl_codes=None, net=False, fund=None, budget_only=False,
         for key in _LINE_DECISION_KEYS:
             fields.pop(key, None)
         if budget_only or remove:
-            fields["status"] = build.REMOVED if remove else build.VOID
+            fields["status"] = mapping_store.REMOVED if remove else mapping_store.VOID
         else:
             if fund:
                 fields["fund"] = fund
@@ -283,9 +284,9 @@ def known_row_addrs(dashboard_dir):
     A decision recorded under any other address is never applied, so it is
     refused instead of written."""
     out = set()
-    for budget in build._last_build_own_budgets(dashboard_dir):
+    for budget in mapping_store._last_build_own_budgets(dashboard_dir):
         rows = [dict(r) for r in budget.get("rows") or []]
-        build.assign_row_addresses(rows, budget_id=budget.get("id"))
+        mapping_store.assign_row_addresses(rows, budget_id=budget.get("id"))
         out.update(r["addr"] for r in rows)
     return out
 
@@ -356,14 +357,14 @@ def plan_write(args, dashboard_dir):
             # checked, or as a restatement of one already confirmed. A
             # rejected inference scopes no line, so no rebuild brings its
             # count back: it stays rejected (scope the lines instead).
-            if confirming and row is None and _decision_fields(prior) != {"status": build.CONFIRMED}:
+            if confirming and row is None and _decision_fields(prior) != {"status": mapping_store.CONFIRMED}:
                 _refuse(f"{args.key!r} is not open in the last build, so its line "
                         f"count can't be shown; it can't be confirmed")
             if confirming and row is not None:
                 refusal = inference_ack_refusal(row, args.lines)
                 if refusal:
                     _refuse(refusal)
-            return {"status": build.CONFIRMED if confirming else build.REJECTED}
+            return {"status": mapping_store.CONFIRMED if confirming else mapping_store.REJECTED}
 
         return ("inferences",), args.key, decide, {"line_count": (row or {}).get("line_count")}
 
@@ -371,7 +372,7 @@ def plan_write(args, dashboard_dir):
         section = ("fund_attribution", "by_id" if args.entry else "by_memo")
         return section, args.entry or args.memo, lambda prior: {"fund": args.fund}, {}
 
-    return ("accounts",), str(args.gl), lambda prior: {"status": build.NOT_EXPECTED}, {}
+    return ("accounts",), str(args.gl), lambda prior: {"status": mapping_store.NOT_EXPECTED}, {}
 
 
 def record(args):
@@ -387,7 +388,7 @@ def record(args):
     recorded = {}
 
     def compute(mapping):
-        prior = build.mapping_section(mapping, section).get(key)
+        prior = mapping_store.mapping_section(mapping, section).get(key)
         fields = decide(prior)
         if prior is not None and _decision_fields(prior) == fields:
             recorded["answer"] = prior
@@ -396,7 +397,7 @@ def record(args):
         return {key: recorded["answer"]}
 
     try:
-        changed = build.update_mapping(dashboard_dir, section, compute)
+        changed = mapping_store.update_mapping(dashboard_dir, section, compute)
     except RuntimeError as e:
         _refuse(e)
     return {"section": ".".join(section), "key": key, "answer": recorded["answer"],
@@ -411,7 +412,7 @@ def _add_write_command(commands, name, help_text):
     parser = commands.add_parser(name, help=help_text)
     _add_dashboard_dir_arg(parser)
     parser.add_argument(
-        "--source", required=True, choices=build.MAPPING_SOURCES,
+        "--source", required=True, choices=mapping_store.MAPPING_SOURCES,
         help="'operator' for an answer the operator gave; 'operator-delegated' "
              "for one made on their behalf ('do your best')")
     return parser

@@ -13,7 +13,7 @@ user who asks to share needs to do nothing: a colleague who opens the same firm 
 - **Shared with you** — a section of the Scenarios page (the **Scenario** switcher at the top of the sidebar → **View all**).
   Its header's **Update data** link pulls the firm's shared scenarios (until any are loaded, the section reads
   "Update data to check for any new shared scenarios", the same link); they render there and, with a **Shared** tag, in the
-  sidebar menu when recently viewed. Hidden ones come back from its "N hidden · Show" link.
+  sidebar menu too. Hidden ones come back from its "N hidden · Show" link.
 - **Publish** — a local scenario → shared with the firm. In the **Scenario** switcher at the top of the sidebar, open the
   scenario tile's **⋯** menu and choose Publish (in a narrow window, the row of buttons under the scenario
   chips has it for the active scenario).

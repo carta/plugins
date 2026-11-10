@@ -22,6 +22,10 @@ export const SCENARIO_TILE_STYLE = { ...TILE_STYLE, position: "relative", gap: 0
 const RADIO_GAP = 6;
 const RADIO_POS = { top: TILE_PAD_Y + (TILE_CONTROL - RADIO_SIZE) / 2, right: TILE_PAD_X };
 const KEBAB_RIGHT = TILE_PAD_X + RADIO_SIZE + RADIO_GAP;
+// The add control appears twice (the Scenarios page's tile, the menu's button): one label,
+// glyph and tracked click for both.
+const ADD_LABEL = "Add new scenario", ADD_GLYPH = "+";
+const addScenario = (onNew) => { trackClick("FundModeling.ScenarioMenu.AddScenario"); onNew(); };
 const SUBTLE = "var(--ink-color-global-text-subtle)";
 // FIRM_METRICS stack under the name as label | figure | move rows: labels at the left,
 // figures and moves at the right edge, the moves in one column so their carets line up.
@@ -102,7 +106,7 @@ function ScenarioTile({ slice, firm, active, onPick, actions }) {
 
 /** Scenarios as tiles in the order given (scenariosInTileOrder: Baseline, own, shared),
  *  ending in an add tile when there is an `onNew`: rows of TILE_COLUMNS, or `stacked` in
- *  one column (the sidebar menu's panel). Clicking a tile switches the whole app
+ *  one column (the sidebar menu's panel, which has its own add button). Clicking a tile switches the whole app
  *  to that scenario. Each tile's figures come from its raw slice, as the active
  *  scenario's fundStates do, so the active tile ties out to the Companies sidebar's Firm impact; they are
  *  computed here, so only while tiles are on screen. */
@@ -126,53 +130,36 @@ export function ScenarioTiles({ slices, snapshot, activeSliceId, onPick, onNew, 
       {/* the grid without an add tile is a section of scenarios you can't add to */}
       {onNew && (
         <button type="button" className="scenario-tile is-add" data-testid="scenario-tile-add"
-        onClick={() => { trackClick("FundModeling.ScenarioMenu.AddScenario"); onNew(); }}
+        onClick={() => addScenario(onNew)}
         style={{ ...TILE_STYLE, alignItems: "center", justifyContent: "center",
           color: "var(--ink-button-background-color-primary-base-default)" }}>
-          <span aria-hidden style={{ fontSize: 40, fontWeight: 300, lineHeight: 1 }}>+</span>
-          <span style={{ fontSize: FS.bodyLg, fontWeight: 600 }}>Add new scenario</span>
+          <span aria-hidden style={{ fontSize: 40, fontWeight: 300, lineHeight: 1 }}>{ADD_GLYPH}</span>
+          <span style={{ fontSize: FS.bodyLg, fontWeight: 600 }}>{ADD_LABEL}</span>
         </button>
       )}
     </div>
   );
 }
 
-// Besides Baseline, the menu's panel shows this many scenarios: the ones viewed most
-// recently. Its "View all" link opens the Scenarios page with every one.
-export const MENU_RECENT_COUNT = 3;
-
-/** The scenarios the menu shows: Baseline, then the MENU_RECENT_COUNT others viewed most
- *  recently (`recentIds`, newest first), topped up in tile order when fewer were viewed. */
-export function menuScenarios(slices, recentIds, count = MENU_RECENT_COUNT) {
-  const others = slices.filter((s) => !s.locked);
-  const viewed = recentIds.map((id) => others.find((s) => s.id === id)).filter(Boolean);
-  return [...slices.filter((s) => s.locked), ...[...new Set([...viewed, ...others])].slice(0, count)];
-}
-
 // The floating panel: PANEL_OFFSET from the trigger's right edge clears the sidebar's
 // padding and border; it is PANEL_W wide (one column of tiles), and keeps PANEL_MARGIN
-// from the window's right and bottom edges.
+// from the window's right and bottom edges. Past that height the tiles scroll between
+// the fixed heading and the add button.
 const PANEL_OFFSET = 18, PANEL_W = 380, PANEL_MARGIN = 16;
 // The trigger fills the sidebar's width and, at shadcn's large sidebar-button height,
 // holds its two lines.
 const TRIGGER_STYLE = { width: "100%", height: 48, padding: "6px 12px" };
 
-/** The Scenario switcher at the top of the sidebar: a trigger that opens the scenario tiles in a floating
- *  panel beside it, to the right of the sidebar. Picking a tile switches the scenario and leaves
- *  the panel open, so the page under it updates while you compare; the tiles (Baseline
- *  and the scenarios viewed most recently, see menuScenarios) stay the set the panel
- *  opened with, so the scenario you left is still there. Adding a
- *  scenario, choosing a tile action or following "View all" closes it; so do
+/** The Scenario switcher at the top of the sidebar: a trigger that opens every scenario's tile in a
+ *  scrollable floating panel beside it, to the right of the sidebar. Picking a tile switches the
+ *  scenario and leaves the panel open, so the page under it updates while you compare. Adding a
+ *  scenario, choosing a tile action or following "View all" (the Scenarios page) closes it; so do
  *  Escape and a click outside. */
-export default function ScenarioMenu({ slices, snapshot, activeSliceId, activeName, recentIds = [], onPick, onNew, onRename, onPublish, onDelete, publishBusy, onShowAll }) {
+export default function ScenarioMenu({ slices, snapshot, activeSliceId, activeName, onPick, onNew, onRename, onPublish, onDelete, publishBusy, onShowAll }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
   useDismissable(open, setOpen, [triggerRef, panelRef]);
-  // The panel's tiles are picked when it opens and hold while it stays open: a pick
-  // reorders the recently viewed list, and the tile you left should stay put.
-  const [openedWith, setOpenedWith] = useState([]);
-  const shown = useMemo(() => openedWith.map((id) => slices.find((s) => s.id === id)).filter(Boolean), [openedWith, slices]);
   // The panel floats beside the trigger, fixed to the window: the sidebar scrolls its
   // own overflow, which would clip anything hanging out of it. Measured before paint.
   const [anchor, setAnchor] = useState(null);
@@ -182,7 +169,7 @@ export default function ScenarioMenu({ slices, snapshot, activeSliceId, activeNa
     setAnchor({ top: r.top, left: r.right + PANEL_OFFSET });
   }, [open]);
   const toggle = () => {
-    if (!open) { trackClick("FundModeling.ScenarioMenu.Open"); setOpenedWith(menuScenarios(slices, recentIds).map((s) => s.id)); }
+    if (!open) trackClick("FundModeling.ScenarioMenu.Open");
     setOpen((o) => !o);
   };
   return (
@@ -203,7 +190,7 @@ export default function ScenarioMenu({ slices, snapshot, activeSliceId, activeNa
           style={{ position: "fixed", zIndex: 30, top: anchor?.top ?? 0, left: anchor?.left ?? 0,
             width: anchor ? `min(${PANEL_W}px, calc(100vw - ${anchor.left + PANEL_MARGIN}px))` : undefined,
             maxHeight: anchor ? `calc(100vh - ${anchor.top + PANEL_MARGIN}px)` : undefined,
-            visibility: anchor ? undefined : "hidden", boxSizing: "border-box", padding: "20px 24px 24px", overflowY: "auto",
+            visibility: anchor ? undefined : "hidden", boxSizing: "border-box", padding: "20px 24px 24px", display: "flex", flexDirection: "column",
             background: "var(--ink-color-global-surface-background-default)", border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 6,
             boxShadow: POPOVER_SHADOW, transformOrigin: "top left" }}>
           {/* headed like a dashboard card: title, then "View all →" to the Scenarios page */}
@@ -215,12 +202,19 @@ export default function ScenarioMenu({ slices, snapshot, activeSliceId, activeNa
               View all →
             </Btn>
           </div>
-          <ScenarioTiles stacked slices={shown} snapshot={snapshot} activeSliceId={activeSliceId}
+          {/* only the tiles scroll; the 2px padding with a matching negative margin keeps a
+              focused or pressed tile's outline from being clipped at the scroller's edge */}
+          <div data-testid="scenario-menu-tiles" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: 2, margin: -2 }}>
+          <ScenarioTiles stacked slices={slices} snapshot={snapshot} activeSliceId={activeSliceId}
             onPick={onPick}
-            onNew={() => { setOpen(false); onNew(); }}
             onRename={(s) => { setOpen(false); onRename(s); }}
             onPublish={onPublish && ((s) => { setOpen(false); onPublish(s); })}
             onDelete={(s) => { setOpen(false); onDelete(s); }} publishBusy={publishBusy} />
+          </div>
+          <Btn kind="primary" data-testid="scenario-menu-add" size="comfortable" style={{ marginTop: 12, width: "100%", flex: "none" }}
+            onClick={() => addScenario(() => { setOpen(false); onNew(); })}>
+            <span aria-hidden style={{ fontSize: FS.bodyLg, lineHeight: 1 }}>{ADD_GLYPH}</span> {ADD_LABEL}
+          </Btn>
         </div>
       )}
     </>

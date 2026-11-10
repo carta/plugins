@@ -510,7 +510,7 @@ class ReportStore:
         expected_etag: Optional[str] = None,
     ) -> Dict[str, Any]:
         """A private, editable copy. It keeps the source's mapping answers, which are
-        re-recorded under the copy's own id (see build_manco_datadir.copy_budget_mapping)."""
+        re-recorded under the copy's own id (see manco_mapping_store.copy_budget_mapping)."""
         with self.transaction(expected_etag) as doc:
             source = self.find(doc, report_id)
             data, mapping_from = self._copy_budget(source)
