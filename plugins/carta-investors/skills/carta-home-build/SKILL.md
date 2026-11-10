@@ -14,6 +14,8 @@ description: >
   home use carta-crm's carta-crm-home-build.
 model: sonnet
 allowed-tools:
+  # Step 2c's current check: the HOME_URL and CARTA_MCP_SERVER lines (output_mode content), not the page.
+  - Grep
   # The only source for a connector's name
   - list_connectors
   # Carta MCP — the connector check's observed call, the entitlement read, and the firm
@@ -52,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.31.0</carta-plugin>
+<carta-plugin>carta-investors:7.31.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -524,6 +526,32 @@ and 8 depend on it. Note which dashboards read `customized` or `no_baseline` too
 builds those one at a time, because each may stop to ask about a conflict. If the script
 can't be run at all, follow the reference's one up-front question for each page.
 
+**Then mark each dashboard in the table above that is already current.** A dashboard is
+current when all of these hold:
+
+- Step 2 found this firm's Home, its live file was saved, and the `diff` read `unmodified`
+  or `customized`.
+- Its `version` equals the `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skill-versions.json`
+  version of the entry's first `buildSkill` candidate in `resources/carta-home.config.js`.
+- One Grep of its live file for the pattern `const HOME_URL|const CARTA_MCP_SERVER`, with
+  `output_mode: "content"` (do not read the page), shows:
+  - a `const HOME_URL = "…";` line whose artifact id (the part after the last `/`) equals
+    the artifact id of Home's Step 2 URL. Publish and list can return different URL forms
+    (`claude.ai/artifact/` or `claude.ai/code/artifact/`), so compare only the id.
+  - for a page that has a `const CARTA_MCP_SERVER = '…';` line (Schedule of Investments),
+    that name equals this run's connector name from Step 0. A page built for another
+    connector cannot reach Carta from this one.
+
+The home-link check matters for Fund Performance, one page shared by every firm: a page
+another firm's build last published links back to that firm's Home, so it is not current.
+LP Summary has no live file above and carries no version, so it is always rebuilt.
+Rebuilding a current dashboard republishes the same page — the user's changes are already
+on it — and is most of a rebuild's time and Claude usage, so Steps 3 and 5 keep it as it
+is. A `no_baseline` page, a live file that couldn't be saved, a missing version, or a
+version that differs is not current. Nothing is current when the user asked to start
+fresh, or asked to rebuild that dashboard or every page by name; "rebuild everything",
+"rebuild all dashboards" and the like name every page.
+
 ### Step 3: Build the self-contained artifact (no need to read any HTML)
 
 Run the build script — it assembles CSS + config + app into one file and substitutes the
@@ -547,26 +575,31 @@ keeps the paths apart.
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --firm-name "<firm name from Step 1>" --dashboard-building soi --dashboard-building perf --dashboard-building lp --out <outputs-directory>/carta-home-<slug>.html
 ```
 
+For a dashboard Step 2c marked current or kept, swap its `--dashboard-building <key>` for
+`--dashboard-url <key>=<url from Step 2>`.
+
 `--firm-name` is stamped into the page's `<title>` as `Carta Home - <Firm>`, which is what
 names the published artifact. It is the only firm-specific thing in the bundle; the body
 still detects whichever firm is active when a viewer opens it.
 
 **This build runs twice.** On this pass, every entry with a `buildSkill` takes
-`--dashboard-building <key>` and nothing else — including one whose artifact Step 2
-already found. Step 5 rebuilds that artifact too, so linking to it now would point at the
-page this run is about to replace. Drop `--dashboard-building lp` for a firm that does not count as Fund Administration
+`--dashboard-building <key>` and nothing else, unless Step 2c marked it current or kept —
+including one whose artifact Step 2 already found. Step 5 rebuilds that artifact, so
+linking to it now would point at the page this run is about to replace. Never pass both
+flags for one key: the building marker wins over the URL. Drop `--dashboard-building lp` for a firm that does not count as Fund Administration
 (the `requires` rule above): Step 5 skips it and the card is hidden. Step 6 runs the same command again with the URLs Step 5
 returns, and the cards become launchers.
 
-**An existing URL is not a reason to skip Step 5.** Every entry with a `buildSkill` is
-rebuilt on every run, so the dashboards carry the current version of their skill rather
-than whatever shipped whenever they were last published — with the user's own changes
-carried over by the dashboard's skill. Step 2's URL tells the dashboard
-skill where to redeploy; it never stands in for building.
+**An existing URL alone is not a reason to skip Step 5.** Every entry with a `buildSkill`
+is rebuilt unless Step 2c marked it current, so the dashboards carry the current version of
+their skill rather than whatever shipped whenever they were last published — with the
+user's own changes carried over by the dashboard's skill. Step 2's URL tells the dashboard
+skill where to redeploy; it never stands in for building an out-of-date page.
 
-**A dashboard the user chose to keep as it is is the exception** (only possible when the
-script could not run, Step 2c): pass its Step 2 URL as `--dashboard-url <key>=<url>` now,
-since nothing will replace that page.
+**A dashboard Step 2c marked current, or one the user chose to keep as it is** (only
+possible when the script could not run), is the exception: pass its Step 2 URL as
+`--dashboard-url <key>=<url>` on both passes, this one and Step 6, since nothing will
+replace that page.
 
 **Omit both flags for an entry with no `buildSkill`** — do not pass an empty value or a
 guessed URL. An omitted key leaves that card on its copyable prompt, which is the intended
@@ -582,7 +615,7 @@ this returns**; Step 6 redeploys over it.
 **Skip this publish when Step 2c read Home as `customized` or `no_baseline`.** This build
 does not carry the user's changes yet, so publishing it would take them off their page for
 the length of the fan-out. Their current page stays up, changes intact, and Step 6 publishes the merged
-one over it. Go straight to Step 5. The same holds when every dashboard was kept as it is:
+one over it. Go straight to Step 5. The same holds when every dashboard was current or kept as it is:
 there is nothing to fill in behind home, so Step 6 is the only publish.
 
 One call either way. `action` defaults to `"publish"`, so it is omitted below; `url` is
@@ -648,12 +681,12 @@ Artifact({
 
 ### Step 5: Publish the dashboard artifacts
 
-**This step always runs** for every dashboard not kept as it is in Step 2c. Home is
+**This step always runs** for every dashboard Step 2c did not mark current or keep as it is. Home is
 live by now with its cards marked as building, and this is what fills them in. Skipping it because a card already points somewhere leaves the
 starter pack unbuilt and every dashboard on whatever version it was last published from.
 
 For each `DASHBOARDS` entry in `resources/carta-home.config.js` that has a `buildSkill`
-and that was not kept as it is, skip it when the firm does not meet its `requires` rule
+and that was not current or kept as it is, skip it when the firm does not meet its `requires` rule
 (the `requires` row of the field table) — that firm never sees the card. Otherwise work down its candidates in order and invoke the **first one that resolves**, keeping the
 artifact URL it returns, keyed by the entry's `key`. A candidate that is not installed is
 not a failure — move to the next one. Once a candidate returns a URL, stop; do not invoke
@@ -713,7 +746,8 @@ working affordance, not a failure. Never block the home build on a dashboard.
 ### Step 6: Redeploy home with the dashboard links
 
 Run Step 3's build command again, this time passing `--dashboard-url <key>=<url>` for every
-dashboard Step 5 published, and dropping `--dashboard-building` for those keys. Keep
+dashboard Step 5 published, plus every one Step 2c marked current or kept (with its Step 2
+URL), and dropping `--dashboard-building` for those keys. Keep
 `--dashboard-building` only for an entry that was meant to build and did not, so its card
 still explains itself.
 
@@ -755,6 +789,10 @@ lines each dashboard skill returned, grouped by page:
 > - Schedule of Investments: <plain line>
 >
 > Want to undo any of them, or start fresh? Your previous pages are saved.
+
+A dashboard Step 2c marked current that read `customized` gets its own line under "Kept
+your changes": its changes stayed as they were, untouched, because the page was already
+on the latest version.
 
 Undo and start fresh work as the reference describes; for a dashboard, hand the request to
 its skill with the page's URL.

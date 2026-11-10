@@ -452,7 +452,7 @@ function _renderBenchValueTable(items, asOf) {
         const shortName = String(it.name).replace(/, L\.P\.$/, "").replace(/, LP$/, "").split(" ").slice(-2).join(" ");
         return `<div style="display:flex;gap:4px;justify-content:space-between;padding:2px 0;">
           <span style="font-size:10px;color:var(--ink-color-global-text-default);flex:2;display:flex;align-items:center;gap:5px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${it.color};flex-shrink:0;"></span>${shortName}
+            <span style="width:8px;height:8px;border-radius:50%;background:${it.color};flex-shrink:0;"></span>${escHtml(shortName)}
           </span>
           <span style="font-size:10px;color:var(--ink-color-global-text-default);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${fmtCurrency(it.value, it.currency)}</span>
         </div>`;
@@ -486,7 +486,7 @@ function renderFundSummaryCard(fundRows) {
     const valFmt = typeof f.value === 'number' ? fmtShort(f.value) : (f.value ?? "—");
     return `
     <div class="tbl-row">
-      <span class="tbl-col-name">${f.name}</span>
+      <span class="tbl-col-name">${escHtml(f.name)}</span>
       <span class="tbl-col-val">${valFmt}</span>
       <span class="tbl-col-gl ${glCls}">${glTxt}</span>
     </div>`;
