@@ -111,6 +111,15 @@ Render the markdown table as your own response text *before* the
 `mappingTable` to asking the question. Don't compose it by hand — the
 script renders both, split and columned as below:
 
+A prose sentence naming the matches — *"The build matched three budget
+lines to Carta accounts by name: Rent & Occupancy to Rent (7120), Marketing
+to Marketing expenses (7125), and LP / Investor Relations to LP meeting
+expenses (7060)."* — is the exact failure this rule exists to catch, not a
+lighter-weight stand-in for the table. It reads as reasonable prose and is
+still wrong: the operator asked to "confirm the mappings above" has nothing
+above to check a row against. The table itself, not a description of it, is
+what has to appear.
+
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" query tables "<dashboard_dir>" --part current
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" query tables "<dashboard_dir>" --part input

@@ -262,7 +262,7 @@ export const BAND_TEXT = `±${ON_FORECAST_BAND * 100}%`;
 
 /** The Company Forecast tab's "Actuals vs forecast" body for one KPI: scorecard,
  *  actual-vs-forecast chart, variance bars, a period table and an every-KPI summary. */
-export function VsActuals({ data, company, metricKey, quarterly, onPickMetric }) {
+export function VsActuals({ data, company, metricKey, quarterly, onPickMetric, afterChart = null }) {
   const metric = metricOf(data, metricKey);
   const unit = metric ? metric.unit : "Number";
   const label = metric ? metric.label : "this KPI";
@@ -310,6 +310,7 @@ export function VsActuals({ data, company, metricKey, quarterly, onPickMetric })
           title={`${company.name} — ${label}: actual vs company forecast`}
           subtitle={`Solid = actual reported, dashed = latest forecast the company logged · shaded green where it came in ${lowerBetter ? "under" : "over"} forecast, red where it did not`} />
       </div>
+      {afterChart}
       {rows.length > 0 && (
         <>
           <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>

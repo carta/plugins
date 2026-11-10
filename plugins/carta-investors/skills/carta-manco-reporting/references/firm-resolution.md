@@ -26,22 +26,11 @@ eligibility gate, and the ManCo picker that a warm reopen has no use for.
 **The very first thing you output, before any tool call** — before Gate 0's
 surface check, before Step 0.1's argument capture, before anything else.
 
-Output this fixed paragraph verbatim, preserving its own line as a plain
-paragraph, flush left — no Markdown blockquote prefix, matching the
-`carta-investors:carta-fund-modeling` house style:
-
-Welcome to Carta Management Company Reporting. This skill builds a local
-React microapp surfacing a management company's financial picture and
-budgeting processes. You can import your own budgeting workbook, so the
-microapp can map that against financials in Carta for deeper budget
-monitoring. You'll also have access to a dashboard covering Key Metrics,
-Monthly P&L, Management Fee Income Projections, and Expense analytics
-broken out by vendor and variances. Reports and charts extend to a side
-panel drill downs with insights and underlying journal entry details.
-
-Do NOT prefix it with a preface like *"I'll launch the dashboard..."* or
-*"Let me start by connecting..."* — this paragraph itself IS the opener, and
-nothing runs before it.
+Output `SKILL.md`'s "Step 0.0 — Say this first, verbatim, before any tool
+call" paragraph exactly as written there — that copy is the one you already
+have in context without reading anything, which is the whole point. Do not
+paraphrase or summarize it, and do not reach for this file to find it: by the
+time you'd read this sentence, the paragraph should already be on screen.
 
 Issue Gate 0's first tool call in the **same assistant message** as this
 paragraph, so the check starts without waiting on a round-trip — the reader

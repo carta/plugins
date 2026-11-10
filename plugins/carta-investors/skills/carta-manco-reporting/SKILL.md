@@ -145,7 +145,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.36.0</carta-plugin>
+<carta-plugin>carta-investors:7.37.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — neither its fixed reply text nor (when hosted is asked for) the hosted app itself needs plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
@@ -198,6 +198,29 @@ here, whatever the verb, and specifically **not** to either of these two neighbo
 - Scaffolding or retheming a brand-new local microapp skill with no ManCo/firm context
   (e.g. "build a microapp for tracking my personal expenses") — that is a developer
   scaffolding job, not this dashboard.
+
+## Step 0.0 — Say this first, verbatim, before any tool call
+
+This paragraph lives here, in `SKILL.md`, rather than in a `references/` file,
+because it has to be on screen **before the first tool call** — including the
+`Read` that would otherwise be needed to learn it. Everything else about when
+and how to say it (the surface check that follows, the sandboxed/hosted
+exits) is in [firm-resolution.md](references/firm-resolution.md)'s Step 0.0.
+
+Output this fixed paragraph verbatim, preserving its own line as a plain
+paragraph, flush left — no Markdown blockquote prefix, matching the
+`carta-investors:carta-fund-modeling` house style. Do NOT prefix it with a
+preface like *"I'll launch the dashboard..."* or summarize it instead of
+quoting it — this paragraph itself IS the opener, and nothing runs before it:
+
+Welcome to Carta Management Company Reporting. This skill builds a local
+React microapp surfacing a management company's financial picture and
+budgeting processes. You can import your own budgeting workbook, so the
+microapp can map that against financials in Carta for deeper budget
+monitoring. You'll also have access to a dashboard covering Key Metrics,
+Monthly P&L, Management Fee Income Projections, and Expense analytics
+broken out by vendor and variances. Reports and charts extend to a side
+panel drill downs with insights and underlying journal entry details.
 
 ## No demo data — real firm required
 

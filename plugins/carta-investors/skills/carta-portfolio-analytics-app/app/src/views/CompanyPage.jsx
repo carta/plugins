@@ -777,9 +777,9 @@ function ForecastBlock({ data, company }) {
         <BasisToggle quarterly={quarterly} onChange={setQuarterly} />
         <Dropdown options={fcMetrics.map((m) => ({ id: m.key, label: m.label }))} value={key} onChange={setMk} minWidth={200} />
       </span>}>
-      <VsActuals data={data} company={company} metricKey={key} quarterly={quarterly} onPickMetric={setMk} />
-      {/* The vintage matrix follows the chart's KPI, so both read the same series. */}
-      {hasVintages && <div style={{ marginTop: 36 }}><Revisions data={data} company={company} metricKey={key} /></div>}
+      {/* The vintage matrix sits under the line chart and follows its KPI, so both read the same series. */}
+      <VsActuals data={data} company={company} metricKey={key} quarterly={quarterly} onPickMetric={setMk}
+        afterChart={hasVintages ? <Revisions data={data} company={company} metricKey={key} /> : null} />
     </Section>
   );
 }
