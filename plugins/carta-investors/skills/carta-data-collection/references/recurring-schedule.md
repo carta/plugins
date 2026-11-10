@@ -253,6 +253,7 @@ The response gives `created` and `requested` counts:
 Each created row carries its `next_send`. Say the next send date in plain words — it is the one
 thing the user cannot work out from the rules alone.
 
-Then offer the recurring-requests dashboard, using the link the firm settings response carries —
-see `references/deep-link.md`. A URL written by hand lands the user on the wrong environment's
-sign-in page.
+Then open the companion on the Schedules tab, per `references/companion.md`; when that tab is not
+available, offer the recurring-requests dashboard, using the link the firm settings response
+carries — see `references/deep-link.md`. A URL written by hand lands the user on the wrong
+environment's sign-in page.

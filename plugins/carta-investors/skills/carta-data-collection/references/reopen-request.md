@@ -111,8 +111,9 @@ click it. The reminder replaces the email body stored on the request, as it alwa
 
 ## Step 7 — Report it
 
-Say the request is open again and, when a message went, that the company was emailed. Then offer
-the sent-requests link per `references/deep-link.md`.
+Say the request is open again and, when a message went, that the company was emailed. Then open
+the companion on the Track tab for that company and the request's period, per
+`references/companion.md`.
 
 **If the reopen failed**, nothing changed. Say so, say why in plain words, and offer to try again.
 

@@ -212,7 +212,8 @@ read_tool({"name": "data_collection__get__request",
 **The report is not the end of the reply.** A user looking at two past-due companies and two that
 were never sent is one question away from acting on either, and stopping at the counts makes them
 open a new request to say so. Offer the next step **in the reply itself, below the report** — a
-short list, one line per option, one of them marked "(Recommended)" — and end with the question.
+short list, one line per option, at most one of them marked "(Recommended)" — and, when any option
+is listed, end with the question.
 Not `AskUserQuestion`: the report and the options belong in one reply, the review option carries a
 link a question tool cannot, and the surfaces this skill runs on do not all have that tool. Only
 the options the report earned:
@@ -223,11 +224,13 @@ the options the report earned:
 | Anything is `requested` and not yet due | Chase the not-yet-due ones too | Step 4 |
 | Anything is in Not sent yet | Send requests | `references/send-request.md` |
 | Anything is in Closed without data | Reopen it so the company can still submit | `references/reopen-request.md` |
-| Always | Review what has come in | `references/deep-link.md`, sent requests |
+| Only when the companion link is absent | Review what has come in | The sent-requests link, `references/deep-link.md` |
 
 **Five is the ceiling and this list is exactly five**, so every option has to be one the report
 earned. Drop the ones with no rows behind them rather than offering an action against an empty set,
-and never add a sixth.
+and never add a sixth. When the companion link is present, the review option is not offered: the
+companion was already opened on the Track tab with the report, per `references/companion.md`. Leave
+that slot empty rather than filling it with an option the report did not earn.
 
 **Every count in an option is the count that action will actually email.** Only `requested` and
 `overdue` can be chased at all, so an option offering to follow up on six when four are reachable is
@@ -239,13 +242,14 @@ Outstanding table — both are waiting on the company — but chasing them is no
 Step 4: a company whose deadline has not arrived is being nudged early, not chased late, and folding
 the two into "follow up on 4" emails people who have done nothing wrong.
 
-**Mark one recommended, from what the report showed:**
+**Mark at most one recommended, from what the report showed:**
 
 | The report showed | Recommend |
 |---|---|
 | Anything past due | Follow up on the past-due ones |
 | Otherwise, anything in Not sent yet | Send requests |
-| None of those | Review what has come in |
+| None of those, and the companion link is absent | Review what has come in |
+| None of those, and the companion link is present | Mark none |
 
 Past due outranks never sent. A missed deadline is the one state where the firm is already late on
 something it promised somebody else, and a reminder is the cheapest way to move it. Sending a
@@ -260,25 +264,26 @@ The recommendation is one action, not a ranking of the tables. Not sent yet stil
 because a never-asked company is the thing most easily missed while reading; what to do first once
 it has been read is a different question.
 
-**The review option is a link or the tracker, not a re-read.** Offer the sent-requests link per
-`references/deep-link.md`, in Claude's browser or the user's own. Do not re-read the requests you have just listed and
-present that as a review. When the user wants to see *what* arrived per company — which documents
+**The review is the companion or the tracker, not a re-read.** When the companion link is
+present, open the companion with the report, per `references/companion.md`, and offer no review
+option: the page is already open. When it is absent, the review option is the sent-requests link.
+Do not re-read the requests you have just listed and present that as a review. When the user wants to see *what* arrived per company — which documents
 came in, which are missing — that is `references/submissions.md`, a different read with the
 per-item answer this route does not carry.
 
-**The link is the firm's whole dashboard, never one company.** It is the sent-requests page for the
-firm — every company, every request in the window — which is what a user reviewing what came in is
+**When the companion link is absent, the sent-requests link is the firm's whole dashboard, never
+one company.** It is the page for the firm — every company, every request in the window — which is what a user reviewing what came in is
 asking for. Send them there once, after the tables. Do not build a link per row, per section, or
 per company: the server returns no company-scoped link, so a per-company URL would be guessed,
 and a guessed URL is the thing that file exists to prevent.
 
 **Company names in these tables are not links.** The rule that firm and fund names anchor a link
 covers dashboards those names have a page for. A portfolio company in a status table has none here,
-so leave the names as text and let the one dashboard link carry the navigation.
+so leave the names as text and let the one companion or dashboard link carry the navigation.
 
-End the reply with the question and wait. The question itself writes nothing and needs no
-confirmation gate — but the follow-up branch leads straight to a send, which takes the gate in
-Step 4.
+When at least one option is listed, end the reply with the question and wait; otherwise end with
+the report. The question itself writes nothing and needs no confirmation gate — but the follow-up
+branch leads straight to a send, which takes the gate in Step 4.
 
 ## Step 4 — Chase
 
@@ -375,6 +380,9 @@ question.
 Send them one at a time and report by name which were emailed. If one fails, say which succeeded
 before it — a caller who reports "done" after three of five leaves the user believing two companies
 were chased when they were not.
+
+Then open the companion on the Track tab, for the period chased and filtered to the statuses you
+chased, per `references/companion.md`.
 
 A request the firm does not own returns 404. One that was never sent returns 400, and there is
 nothing to remind anyone about.
