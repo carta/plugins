@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.11</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.12</carta-plugin>
 
 # Manage securities
 
@@ -177,20 +177,36 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    and ask again."*
    - A `task` comes back: read `cap_table__get__task` until `done` is true, at most 3 times.
      Then say the job is still running in Carta.
-   - `plan_stale`: say the security changed in Carta after the preview, and offer a new one on
-     the same `thread_id`.
-   - `plan_expired`: preview again, then ask for approval again.
+   - An error, or a task that ends `failed` or `partially_failed`: follow
+     [§ Error Handling](#error-handling).
 
 ## Error Handling
+
+Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 
 | Situation | What to do |
 |---|---|
 | Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 | 403, `role_required` or access denied | Say the user's role on this company cannot make this change. Do not retry. |
 | `scope_required` | Ask the user to grant access as its `fix` says. Call again only after they confirm. |
+| `workflow_unavailable` | Say to make this change in the Carta web app. Stop. Do not retry, and never use `cap_table__mutate__modify_issuable`. |
+| `out_of_scope` | Say the user's access does not reach these securities or their plan. Stop. Do not retry. |
+| `not_found` on `thread_id` | Preview again with no `thread_id`. The page then has a new address: post the new `companion_url`. |
+| `not_found` on `security` or `securities` | Call the bootstrap again to get the ids. Never guess an id. |
 | Bootstrap `not_found` on `label` | Make sure `label` is a list, one label per item. Then follow [§ Actions](#actions). |
 | Bootstrap "Unknown field in `fields`" | `fields` picks bootstrap sections, not the fields to edit. Leave it out. |
 | Preview `unknown_param` or `reason_why` too long | Do what its `fix` says (for example `notes` → `note`, `reason_why` at most 140 characters), then preview again once. |
+| `invalid_argument` | Say which `field` it names. Ask the user for a new value, then preview again once. Never pick a value yourself. |
+| `summary_mismatch` | Call the apply tool again once, with the `summary` of the latest preview copied with no change. |
+| `too_large` on `security` | Split the change as Carta's `message` says, one pass per part ([§ Several changes](#several-changes)). |
+| `too_large`: "The response is larger than the token budget" | Read again with fewer securities or fewer `fields`. |
+| `throttled` | Say Carta is busy. Wait, then call again once. If it fails again, stop. |
+| `internal_error` on apply | Call the apply tool again once with the same `plan_id` and `summary`: a plan applies only once, and a second call returns the stored result. If it fails again, say Carta has a temporary problem and the change may or may not have been applied. Read the securities before any new preview. |
+| `internal_error` on a read or preview | Follow the error's `fix`. If it has no `fix`, call again once. If it fails again, say Carta has a temporary problem. Stop. |
+| `plan_stale`: "The cap table changed after the preview." | Say a security changed in Carta after the preview. Preview again on the same `thread_id`, then ask for approval of the new preview. |
+| `plan_stale`: "Revision N of this preview replaced this plan." | A newer preview on the thread replaced this plan. Apply nothing. Show the summary of revision N, then apply its `plan_id` only after the user approves it. If you do not hold revision N's `plan_id` and `summary`, preview again on the same `thread_id` and ask for approval of that preview. |
+| `plan_expired` | Preview again on the same `thread_id`, then ask for approval again. |
+| Task `failed` or `partially_failed` | Name each security that did not change and quote its row `error`. Do not apply the same plan again. Offer a new preview of only those securities, after the user fixes what the error names. |
 
 ## Several changes
 
