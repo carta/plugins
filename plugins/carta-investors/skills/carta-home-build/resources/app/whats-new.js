@@ -360,7 +360,7 @@ function _wnPanelHtml(it) {
     <p class="wn-headline">${escHtml(it.headline)}</p>
     <p class="wn-desc">${escHtml(it.description)}</p>
     <div class="wn-ctas">${cta}${help}
-      <span class="wn-copied-tip" role="status">${escHtml(it.copiedTip)}</span>
+      <span class="wn-copied-tip" role="status"></span>
     </div>`;
 }
 
@@ -368,7 +368,7 @@ function _wnPreviewHtml(it) {
   const body = it.kind === "skill" ? skillPreviewHtml(it) : WHATS_NEW_PREVIEWS[it.preview];
   // A locked preview is only a picture: nothing to copy.
   return it.locked ? body : `<button class="wn-preview-btn" aria-label="Copy ${escHtml(it.copyLabel)}" onclick="wnCopy(this)">${body}</button>
-    <span class="wn-copied-tip wn-copied-tip--preview" role="status">${escHtml(it.copiedTip)}</span>`;
+    <span class="wn-copied-tip wn-copied-tip--preview" role="status"></span>`;
 }
 
 function _wnRenderPanel() {
@@ -460,6 +460,8 @@ function wnCopy(btn) {
   const tip = btn.parentElement.querySelector(".wn-copied-tip");
   writeClipboard(it.copyText, () => {
     if (!tip) return;
+    // Filled only on copy, so a screen reader hears it then, not while browsing.
+    tip.textContent = it.copiedTip;
     tip.classList.add("show");
     clearTimeout(tip._timer);
     tip._timer = setTimeout(() => tip.classList.remove("show"), COPIED_TIP_MS);

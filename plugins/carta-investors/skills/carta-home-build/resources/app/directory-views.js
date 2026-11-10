@@ -72,8 +72,14 @@ function dirTrackView() {
 }
 
 // ── Copying ──
-// The confirmation tip is inside the control that was used, styled like the prompt cards'.
+// The visual tip is inside the control that was used, styled like the prompt cards'. A
+// role="button" row hides its children from screen readers, so the announcement goes to
+// the one live region beside the list. Both start empty and get their text here, on copy.
 function dirShowCopied(control) {
+  const tip = control.querySelector && control.querySelector(".cap-copied-tip");
+  if (tip) tip.textContent = control.dataset.tip || "";
+  const status = document.getElementById("dir-copied-status");
+  if (status) status.textContent = control.dataset.tip;
   control.classList.add("copied");
   clearTimeout(control._copiedTimer);
   control._copiedTimer = setTimeout(() => control.classList.remove("copied"), COPIED_TIP_MS);
@@ -110,7 +116,7 @@ function dirPromptRow(s, prompt, rank) {
               data-skill="${escHtml(s.skill)}" data-rank="${rank}" data-prompt="${escHtml(text)}" data-template="${escHtml(template)}"
               onclick="dirCopyPrompt(this)" onkeydown="dirRowKey(event, this)">
               <span class="dir-skill-prompt-text">“${dirPromptHtml(prompt, _dirFirm)}”</span>
-              <span class="dir-copy" aria-hidden="true">${CAP_COPY_SVG}<span class="cap-copied-tip" role="status">${tip}</span></span>
+              <span class="dir-copy" data-tip="${escHtml(tip)}">${CAP_COPY_SVG}<span class="cap-copied-tip"></span></span>
             </div>`;
 }
 
@@ -169,7 +175,7 @@ function dirEmptyHtml(query, didYouMean) {
   return `<div class="dir-empty-state">${DIR_EMPTY_ICON}
       <h3>No skill matches “${escHtml(shown)}”</h3>
       <p>This search isn’t covered by a skill in the directory.</p>
-      <button type="button" class="dir-ask" onclick="dirAskClaude(this)">Ask Claude about this<span class="cap-copied-tip" role="status">${DIR_ASK_COPIED_TIP}</span></button>
+      <button type="button" class="dir-ask" data-tip="${escHtml(DIR_ASK_COPIED_TIP)}" onclick="dirAskClaude(this)">Ask Claude about this<span class="cap-copied-tip"></span></button>
     </div>`;
 }
 

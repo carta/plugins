@@ -1052,7 +1052,7 @@ function capCardHtml(prompt, meta = {}) {
         <div class="cap-card-text" contenteditable="true" spellcheck="false" role="textbox" aria-label="Prompt">${body}</div>
         <div class="cap-actions">
           <button class="cap-copy" data-track="CartaHome.Capabilities.CopyPrompt"${attrs} onclick="capCopy(this)"><span class="cap-copy-label">Copy</span>${CAP_COPY_SVG}</button>
-          <span class="cap-copied-tip" role="status">${PROMPT_COPIED_TIP}</span>
+          <span class="cap-copied-tip" role="status"></span>
         </div>
       </div>
     </div>`;
@@ -1204,6 +1204,9 @@ function capCopy(btn) {
   const text = box.querySelector(".cap-card-text").innerText.trim();
   const feedback = () => {
     btn.querySelector(".cap-copy-label").textContent = "Copied";
+    // The live region starts empty and is filled on copy, so a screen reader hears
+    // "Copied" only after a copy, not while browsing the page.
+    box.querySelector(".cap-copied-tip").textContent = PROMPT_COPIED_TIP;
     box.classList.add("copied");
     clearTimeout(btn._copiedTimer);
     btn._copiedTimer = setTimeout(() => {

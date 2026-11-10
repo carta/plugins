@@ -1,7 +1,8 @@
 // ── SOI card: funds the published Schedule of Investments does not list yet ──
 // Depends on core.js (carta-home.app.js): escHtml(), writeClipboard(), custCopyFeedback(),
 // CUST_COPY_LABEL, PROMPT_COPIED_TIP, trackHome(), trackPrompt(), PROMPT_SOURCE; on directory-views.js:
-// dirShowCopied(), the shared "Copied" popover; config: SOI_FUND_UUIDS, DASHBOARD_URLS.
+// dirShowCopied(), the shared "Copied" popover, which writes the wrapper's data-tip into its
+// empty tip only once a copy succeeds; config: SOI_FUND_UUIDS, DASHBOARD_URLS.
 //
 // The SOI page bakes its fund list in when it is built, and a Home rebuild can keep a
 // current SOI page as it is. SOI_FUND_UUIDS is that page's list, stamped in by
@@ -60,7 +61,7 @@ function renderSoiNewFund(rows) {
   slot.innerHTML =
     `<div class="soi-new-fund" data-key="${escHtml(key)}">` +
       `<span class="soi-new-fund-text">${escHtml(headline)}</span>` +
-      `<span class="soi-new-fund-copy">` +
+      `<span class="soi-new-fund-copy" data-tip="${escHtml(PROMPT_COPIED_TIP)}">` +
         `<button class="cust-copy-btn" data-prompt="${escHtml(prompt)}" onclick="copySoiNewFund(this)">${CUST_COPY_LABEL}</button>` +
         `<span class="cap-copied-tip" role="status"></span>` +
       `</span>` +
@@ -78,8 +79,6 @@ function copySoiNewFund(btn) {
   soiNewFundForget(btn);
   writeClipboard(text, () => {
     custCopyFeedback(btn);
-    // The tip renders empty so the live region speaks only once a copy has succeeded.
-    btn.parentElement.querySelector(".cap-copied-tip").textContent = PROMPT_COPIED_TIP;
     dirShowCopied(btn.parentElement);
   });
 }
