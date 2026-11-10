@@ -286,8 +286,7 @@ The last two rows matter even when the user never raised them. Both have default
 silently, and the summary is the only place to change one before it goes out.
 
 Labels are the ones the file and metric lists carry — "Balance sheet", not "Balance Sheet" or
-"BS". Before the closing question, open the companion on the Send tab for the period, per
-`references/companion.md`, so the user can see what each company will be asked for. Close with **`Send this?`** on its own line, that exact question: it is what the user's
+"BS". Close with **`Send this?`** on its own line, that exact question: it is what the user's
 "yes" answers, and a different closing line ("Confirm to send", "let me know") leaves the reply
 open-ended about what happens next.
 
@@ -375,5 +374,6 @@ a request id, and never bridge rows with a range or an arrow: the user knows the
 Carta's ids, and the dashboard link below is where the ids live. An older server returns
 `request_ids` alone; then name the companies from the send you just made and say nothing about ids.
 
-Then open the companion on the Track tab for the period sent, per `references/companion.md`. A URL
-written by hand lands the user on the wrong environment's sign-in page.
+Then offer the sent-requests dashboard, using the link the firm settings response carries — see
+`references/deep-link.md`. A URL written by hand lands the user on the wrong environment's sign-in
+page.

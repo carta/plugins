@@ -85,9 +85,6 @@ The response is the request as it now stands. Compare its files, metrics and doc
 what A2 showed and what the user asked to change. If anything the user did not change is missing —
 a document type especially — say so plainly rather than reporting success.
 
-Then open the companion on the Track tab for that company and the request's period, per
-`references/companion.md`.
-
 ## B — Change or stop a schedule
 
 ### B1 — Find it
@@ -159,6 +156,3 @@ Then say the consequence in one sentence, and make it the right one:
 
 Ask the confirmation question, end your reply, and wait. Never write in the same reply as the
 question.
-
-After a schedule change or stop succeeds, open the companion on the Schedules tab, per
-`references/companion.md`, which also says what stands in for it when that tab is not available.

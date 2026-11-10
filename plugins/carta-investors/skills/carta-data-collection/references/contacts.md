@@ -38,9 +38,7 @@ copied is a firm contact.
 ## When the setup form sent you here
 
 The request setup form refuses to go on while a selected company has nobody the chosen audience
-reaches. Its "Add contacts" button posts a message into the conversation (from the companion page
-it arrives as a paste — `references/request-setup-view.md`, "When the form asks for contacts") that
-opens with
+reaches. Its "Add contacts" button posts a message into the conversation that opens with
 "N of the companies I selected for this data request have no ... contacts", names them, and lists
 everything the user picked: companies, one-time or recurring with its date or cadence, and either
 the files and metrics or "each company's saved configuration".
@@ -49,8 +47,8 @@ Do two things, in order:
 
 1. Add the missing contacts with Steps 1 to 4 below. Ask for the names and emails; the message
    never carries them and you never invent a recipient.
-2. Reopen the form following `references/request-setup-view.md`, "Open it" (the setup link
-   first, else `data_collection:view:request_setup`), and translate the message into that view's own param names:
+2. Reopen the form with `data_collection:view:request_setup`, following
+   `references/request-setup-view.md`, and translate the message into that view's own param names:
 
 | The message says | Send |
 |:---|:---|
@@ -215,5 +213,3 @@ all firm-managed does not.
 
 A failure is per company and safe to retry after fixing the payload — the companies that succeeded
 stay written, so a retry should name only the ones that failed.
-
-When any company succeeded, open the companion on the Contacts tab, per `references/companion.md`.

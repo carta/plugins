@@ -37,17 +37,12 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
-  - mcp__remote-devices__Claude_Browser__tabs_context
-  - mcp__Claude_Browser__tabs_context
-  - mcp__ccd_view__show_pane
-  - enable__mcp__remote-devices__Claude_Browser
-  - ToolSearch
   - AskUserQuestion
   - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.32.1</carta-plugin>
+<carta-plugin>carta-investors:7.32.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -72,9 +67,7 @@ answer to the front. And when the firm itself is not among the unknowns, fire St
 resolution in the same reply as the question, so the wait costs nothing.
 
 **A form asks better than you do, so never ask for what one collects.** A send or a schedule
-opens the request setup form — the companion page when
-`data_collection__get__request_setup_link` answers `enabled: true`, else
-`data_collection:view:request_setup` (see `references/request-setup-view.md`, "Open it") — and a requirements change opens
+opens `data_collection:view:request_setup`, and a requirements change opens
 `data_collection:view:requirements_edit`. Those forms own **one-off or recurring**,
 the companies, the period and due date, the cadence and date rules, and the files and metrics — and
 they show the firm's actual roster, vocabulary and open periods, which a question cannot. "Set up
@@ -179,7 +172,7 @@ opens with — take it from there rather than from however the user happened to 
 | The user wants to | Read and follow |
 |---|---|
 | Set up data collection, collect from companies, send or schedule — and has not said one-off or recurring | `references/request-setup-view.md`. Do not ask which; the card's Type row offers both. With no companies named, open it with no company params; the roster comes up with every company ticked |
-| Send or schedule to companies picked by a figure the roster cannot filter — amount invested, ownership, stage | Say Carta cannot pick companies by that; it can by name, fund or tag. Open the request setup form empty, as `references/request-setup-view.md`, "Open it", says. Never derive the list from fund data |
+| Send or schedule to companies picked by a figure the roster cannot filter — amount invested, ownership, stage | Say Carta cannot pick companies by that; it can by name, fund or tag. Open `data_collection:view:request_setup` empty. Never derive the list from fund data |
 | Send requests for a period — one-off | `references/request-setup-view.md` first, then `references/send-request.md` |
 | Set up recurring collection | `references/request-setup-view.md` first, then `references/recurring-schedule.md` |
 | Send or schedule, having already dictated the whole request | `references/send-request.md` from Step 1, or `references/recurring-schedule.md` from "The contract" |
@@ -205,7 +198,6 @@ opens with — take it from there rather than from however the user happened to 
 | Know who is contacted about a company | `references/contacts.md`, Step 1 alone |
 | Ask why a contact seems to be missing, or who a company's request is addressed to | `references/contacts.md`, Step 1 alone |
 | Change who is contacted, on any number of companies | `references/contacts.md`, from Step 1 |
-| Know whether the submitted numbers look right — "does anything look wrong", "check the numbers" | `references/period-comparison.md` |
 | Get numbers out of a newsletter, deck or email a company already sent | Not this skill — see "Extraction is not collection" below |
 
 **Extraction is not collection.** Reading numbers out of a newsletter, a board deck or an email a
@@ -247,16 +239,12 @@ diverge immediately; there it is already in what they said.
 
 ### Shared references
 
-Three are read alongside an action's own reference rather than instead of it:
+Two are read alongside an action's own reference rather than instead of it:
 
 - `references/files-and-metrics.md` — the eight file codes, their user-facing labels, and how to
   read a firm's metric vocabulary. Any action that touches data requirements needs it.
 - `references/deep-link.md` — read before offering any link into Carta. The links come ready-made
   from the firm settings response; a URL written by hand sends the user to the wrong sign-in page.
-- `references/companion.md` — read at each moment its "When to open it" table lists: before a
-  send, after a request write (a send, a reminder, a reopen or a request update), after a
-  schedule or contacts change, after a status read, and after a period comparison. It says which companion tab to open, how to open it in
-  Claude's browser pane, and the only query params the skill may add to its link.
 
 **Read the action's reference before asking the user for anything.** It carries the field shapes,
 the rules the API enforces, and what the confirmation must contain — none of which are repeated
@@ -266,16 +254,6 @@ Each reference opens by saying what it covers and what it is easily confused wit
 table above is enough to choose one.
 
 ## Applies to every action
-
-**Read the current state before answering or confirming.** Requests, schedules, contacts and data
-requirements can change outside this chat — in Carta, on the companion page, or by someone else at
-the firm — and the chat does not see it. So before answering about any of them, and before any
-write (before the confirmation that gates it, so the user approves what is there now), read it
-again through the MCP. Never answer from a list read in an earlier turn, and write only what the
-confirmation showed: the read just before it is the one the write uses, so do not read again
-between the user's yes and the write. When the state changed since the last read, say so in one
-plain sentence — *"Two reminders were sent since we last looked."* — and do not say who made the
-change: the read does not tell you.
 
 **A send emails people outside Carta and cannot be recalled.** Ask the confirmation question, end
 your reply, and wait. Never write in the same reply as the question — the action's reference says
@@ -341,5 +319,4 @@ reference lists rather than assuming an absent field takes a default.
 `send_follow_up: false` means no reminders.
 
 **Never write a Carta URL yourself.** Use the `_links` the firm settings response carries, per
-`references/deep-link.md`. The companion link alone takes query params, and only the ones
-`references/companion.md` lists.
+`references/deep-link.md`.

@@ -17,14 +17,10 @@ carries a `_links` block, resolved for the current environment:
 |---|---|
 | `_links.requests.web_url` | The firm's sent-requests dashboard |
 | `_links.schedules.web_url` | The firm's recurring-requests dashboard |
-| `_links.companion.web_url` | The firm's data collection companion page |
 
-Use each `web_url` **verbatim**. Do not edit it, append to it, or rebuild it from parts. The
-requests and schedules links are firm-wide: there is no company-scoped link, so never derive one
-per company or per row.
-
-The companion link is the one exception: it takes the query params `references/companion.md`
-lists, and nothing else. That file says when to open it.
+Use each `web_url` **verbatim**. Do not edit it, append to it, or rebuild it from parts. Both
+links are firm-wide: there is no company-scoped link, so never derive one per company or per
+row.
 
 Hold the Step 2 response for the whole session — it is read once, and these links are one more
 reason not to call for it again.
@@ -36,10 +32,6 @@ An older server returns no `_links`. Then there is no link to give: say the page
 their own Carta. Do not offer a URL of any kind in its place.
 
 ## Presenting a link
-
-**The companion link is not offered: it is opened.** For `_links.companion`, follow
-`references/companion.md` — open it in Claude's browser pane yourself, without asking. The rest of
-this section covers every other link.
 
 Offer the link after the data, never instead of it. Opening it in Claude's in-app browser needs a
 sign-in the first time, because that browser does not inherit the desktop session — so say it can

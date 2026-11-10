@@ -25,13 +25,10 @@ A skill that uses this gate lists all thirteen tools and `ToolSearch` in its own
 cannot include a file.
 
 `fa-tax`'s `tax-agent-companion.md` keeps its own copy of this detection; change it with this
-file. `carta-data-collection`'s `references/companion.md` keeps its own copy too (it probes only the
-`Claude_Browser` families plus `show_pane`, leaves Claude in Chrome out, and does not pre-approve
-`preview_start` or `navigate`); change it with this file. `carta-cap-table`'s
-`references/open-the-companion-page.md` (Claude in Chrome step only) copies both this detection and
-the "Open a link" steps below; change it with this file too. `carta-cap-table`'s
-`carta-issuance-companion/references/companion-run.md` copies the Claude in Chrome tool names and
-their order; change it with this file too.
+file. `carta-cap-table`'s `references/open-the-companion-page.md` (Claude in Chrome step
+only) copies both this detection and the "Open a link" steps below; change it with this file
+too. `carta-cap-table`'s `carta-issuance-companion/references/companion-run.md` copies the
+Claude in Chrome tool names and their order; change it with this file too.
 
 ## Open a link
 

@@ -72,34 +72,6 @@ that the form asks for beside another field.
 
 ## Open it
 
-**First ask for the companion link.** With the same params you would pass the view, read the
-setup link:
-
-```
-read_tool({"name": "data_collection__get__request_setup_link",
-           "arguments": {"organization_pk": "<org_pk>",
-                         "kind": "recurring",
-                         "company_names": ["Acme, Inc.", "Meetly"],
-                         "cadence": "quarters",
-                         "due_date": "2026-11-15",
-                         "file_names": ["balance sheet"],
-                         "metric_names": ["headcount"],
-                         "required_names": ["balance sheet"]}})
-```
-
-| It answers | Do this |
-|---|---|
-| `enabled: true` | Open its `companion_url` beside the chat as `references/companion.md`, "Opening it", says, following its `next_step`. Do **not** also call `view_remote`: two open forms could each send. What the form collects, the rule about saying what it actually shows, and "What comes back: nothing" hold for the page the same way. Its contacts message: see "When the form asks for contacts" |
-| `enabled: false`, or the command is not found | Call `view_remote` as below. This is the normal path for most firms |
-
-Take `companion_url` exactly as returned: never add, drop or change a query param, and never
-build a setup URL yourself. The response carries the same `selectedEntityIds`, `selectedFiles`
-and `selectedMetrics` the view reports, so the rule below about saying what the form actually
-shows applies to it unchanged. A selection too long for a link answers `enabled: false`, so the
-view opens instead and carries it.
-
-Otherwise, open the view:
-
 ```
 view_remote({"name": "data_collection:view:request_setup",
              "params": {"organization_pk": "<org_pk>",
@@ -282,10 +254,9 @@ cannot see what they did in it. Three rules for that turn:
    Believe it, then verify: `data_collection__list__requests` for the firm, `include_requirements:
    false`, and pick the rows whose `sent_date` is after the moment you opened the form. Report
    them — how many companies, which period, the due date — in the same shape as
-   `references/send-request.md` Step 5's table, and open the companion on the Track tab for the
-   period, per `references/companion.md`. A schedule shows in `data_collection__list__schedules`
-   instead, by its `created` time; report it as `references/recurring-schedule.md`'s last step
-   does, and open the companion on the Schedules tab per `references/companion.md`. If the read shows nothing new, say that a send did not reach Carta and
+   `references/send-request.md` Step 5's table, and offer the sent-requests link per
+   `references/deep-link.md`. A schedule shows in `data_collection__list__schedules` instead, by
+   its `created` time. If the read shows nothing new, say that a send did not reach Carta and
    offer to open the form again; never say it before reading.
 2. **Never say that nothing was sent because no message arrived.** None is expected. That
    sentence, said to a user who has just seen "Requests sent", is the failure this section exists
@@ -363,27 +334,20 @@ roster, a vocabulary or a set of open periods behind it, which a question cannot
 
 ## Where it will not render
 
-The companion page opens in a browser, so a client that cannot render a view can still show it
-when the setup link answers `enabled: true` and a browser route in `references/companion.md` works.
-
-A terminal client cannot render a view. Do not decide that in advance: whenever the setup link
-did not answer `enabled: true`, call `view_remote` first, every time. When the host cannot render it, the call returns a text list of what to ask for
+A terminal client cannot render a view. Do not decide that in advance: call `view_remote` first,
+every time. When the host cannot render it, the call returns a text list of what to ask for
 instead, and that list — nothing else — is your signal to fall back to the questions in
 `references/send-request.md` Step 4 or the single batched question in
 `references/recurring-schedule.md`, "The contract". Never skip the call because a tool looks
 missing, and never open with questions "instead of" a form you have not tried to open.
 
-If the host renders the view but cannot post the reply, the form shows the user the text to send and
-they paste it. Either way the answers reach you as a message, so handle it the same. The companion
-page sends from inside itself; for its contacts message, see "When the form asks for contacts".
+If the host renders the form but cannot post the reply, the form shows the user the text to send and
+they paste it. Either way the answers reach you as a message, so handle it the same.
 
 ## When the form asks for contacts
 
 The form also posts a message when a selected company has nobody to send to: "N of the companies I
-selected ... have no company contacts", with everything picked so far. The view posts it into the
-chat; the companion page shows it for the user to copy, so on the page path it arrives only as a
-paste, and a user may instead just say the page wanted contacts — ask them to paste the message the
-page shows, since it names the companies and every pick they made there, then go on the same way. Add the contacts with `references/contacts.md`, then reopen the form as "Open it"
-says — the setup link first, else this view — with the picks under the param names in the table
+selected ... have no company contacts", with everything picked so far. Add the contacts with
+`references/contacts.md`, then reopen this view with the picks under the param names in the table
 above — `company_names`, `kind`, `due_date` or `cadence`, and the file and metric names. The
 message's own wording ("Companies:", "one-time") is for the user; the params are not.

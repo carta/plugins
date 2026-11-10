@@ -93,9 +93,8 @@ send endpoints reject duplicates on entity + period + requirements, and it is ch
 know first than to unpick a 409's `duplicate_entities`.
 
 Then confirm exactly as `references/send-request.md` requires — companies by count and
-name, the period, the due date, who gets emailed, what changed against last period, and the
-companion opened on the Send tab per `references/companion.md` — **end the reply**, and on yes make one `data_collection__send__request` call per entry in `sends`. Each
+name, the period, the due date, who gets emailed, and what changed against last period —
+**end the reply**, and on yes make one `data_collection__send__request` call per entry in `sends`. Each
 returns `{sent, requested, results}`, with one `results` entry per request and its company's
 `entity_id`; sum `sent` across the calls, report it against the plan's company count, and name
-the companies from the roster — never their request ids. Then open the companion on the Track tab
-for the period, per `references/companion.md`.
+the companies from the roster — never their request ids.
