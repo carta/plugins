@@ -3,7 +3,7 @@
 # requires-python = ">=3.9"
 # dependencies = ["fonttools", "brotli"]
 # ///
-"""Firm branding for the LP Summary (the page and its PDF export), written into the page config.
+"""Firm branding for the LP Summary page and its PDF export, written into the page config.
 
 The config file (lp-summary-data.json, one per firm in that firm's own workdir) is the one place the brand lives, so a logo's base64 never
 passes through the model's context and the firm name never reaches the shell:
@@ -303,7 +303,7 @@ def apply(args):
     write_json(args.config, config)
     summary = {"logo": "logoDataUri" in brand, "accentHex": brand.get("accentHex"), "displayFont": font}
     if args.font and not font:
-        summary["note"] = "No static TTF for " + args.font.strip() + " on Google Fonts; the PDF uses the standard typeface."
+        summary["note"] = "No static TTF for " + args.font.strip() + " on Google Fonts; the page and the PDF use the standard typeface."
     print(json.dumps(summary))
     return EXIT_OK
 
@@ -331,7 +331,7 @@ def carry(args):
 
 
 def main(argv):
-    ap = argparse.ArgumentParser(description="Firm branding for the LP Summary page and PDF export.")
+    ap = argparse.ArgumentParser(description="Firm branding for the LP Summary page and its PDF export.")
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("apply")
     a.add_argument("--config", required=True)

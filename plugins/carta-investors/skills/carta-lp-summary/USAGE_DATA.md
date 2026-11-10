@@ -64,8 +64,16 @@ without the tracker sends nothing.
 | `LPSummary.Table.OpenLP` | click | Opened an LP's detail from the table |
 | `LPSummary.Export.Open` | click | Opened the Export dialog (value: LPs already ticked) |
 | `LPSummary.Export.SelectAll` | click | Ticked every LP in the dialog |
-| `LPSummary.Export.Template.<template>` | click | Switched the PDF template (firm or Carta) |
+| `LPSummary.Export.Template.<firm\|carta>` | click | Switched the PDF template (firm or Carta) |
 | `LPSummary.Export.Go` / `.GoCombined` | click | Exported separate PDFs / one combined PDF (value: LP count) |
 | `LPSummary.Export.Done` / `.Failed` / `.Declined` | render | The export finished / failed / was refused by the host |
 | `LPSummary.Export.Close` | click | Closed the dialog without exporting |
-| `LPSummary.Brand.CopyPrompt` | click | Copied the "Brand my LP profiles" setup prompt |
+| `LPSummary.Brand.CopyPrompt` | prompt | Copied the setup prompt from *Set up with Claude* |
+| `LPSummary.Template.Open` | click | The viewer opened the logo's Branding menu |
+| `LPSummary.Template.Coachmark.Open` | click | The viewer opened the Branding menu from the first-visit bar inviting a firm to add its branding |
+| `LPSummary.Template.Coachmark.Dismiss` | click | The viewer closed the first-visit bar with its X |
+| `LPSummary.Template.Pick.<firm\|carta>` | click | The viewer switched the page to their firm's look (`firm`) or the Carta look (`carta`) |
+| `LPSummary.Brand.EditPrompt` | prompt | The viewer copied the *Edit branding* prompt from the Branding menu |
+
+A pick of the template already showing sends nothing. A template picked inside the Export
+dialog keeps its own event, `LPSummary.Export.Template.<firm|carta>`.

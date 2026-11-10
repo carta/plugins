@@ -27,7 +27,8 @@
     :root {
       color-scheme: light dark;
       /* The header's fold timing; the LP list's spacer eases away on the same curve. */
-      --fold: 150ms ease-out;
+      --fold-time: 150ms;
+      --fold: var(--fold-time) ease-out;
       --ink-color-global-text-default:                light-dark(#1A1A1A, #EDEDED);
       --ink-color-global-text-subtle:                 light-dark(#656B6B, #A7AAAA);
       --ink-color-global-text-inverse:                light-dark(#FFFFFF, #1A1A1A);
@@ -113,9 +114,56 @@
     .back-to-home:hover { color: var(--ink-color-global-text-default); }
     .back-to-home[hidden] { display: none; }
     .carta-logo { display: block; width: 64px; height: 32px; color: var(--ink-color-global-text-default); }
-    .is-branded #firm-name::after { content: ' · Powered by Carta'; }
-    /* The firm's own logo in the Carta mark's place once its brand is set up; a light plate keeps a dark logo readable in dark mode. */
-    .firm-logo { display: block; height: 32px; width: auto; max-width: 160px; object-fit: contain; padding: 2px 6px; border-radius: 4px; background: light-dark(transparent, #fff); }
+    /* The logo is the Branding menu's button. Open, the header's logo row lets the menu and the
+       first-visit hint spill out of its fold; folded, it clips them. */
+    .top:not(.is-collapsed) .brand-fold > div { overflow: visible; }
+    .brand-row { display: flex; align-items: center; gap: 12px; }
+    .brand-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px; margin: -4px -6px; border-radius: var(--ink-size-global-radius-subtle); }
+    .brand-btn:hover, .brand-btn[aria-expanded="true"] { background: var(--local-color-row-hover); }
+    .brand-btn:focus-visible { box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
+    .brand-btn > svg:last-child { color: var(--ink-color-global-text-subtle); transition: transform var(--fold); }
+    .brand-btn[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+    .firm-brand { display: none; }
+    .firm-logo { display: block; max-width: 160px; height: 32px; object-fit: contain; object-position: left; }
+    /* On the dark page a logo that is mostly see-through, or too dark to see there, is drawn solid white
+       (brightness(0) makes it black, invert(1) white), so a dark logo stays visible without a box. A logo
+       that is mostly solid and shows up on the dark page (a JPEG, a PNG on white, a light round badge) keeps
+       its own colours, since the filter would turn it into a blank shape. It starts as is-opaque and loses
+       the class once under half its box is seen to be solid, or nothing in it is seen to be visible there. */
+    @media (prefers-color-scheme: dark) {
+      .firm-logo:not(.is-opaque) { filter: brightness(0) invert(1); }
+    }
+    .firm-mark { display: block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 var(--ink-font-global-size-heading-3)/32px var(--brand-display, var(--ink-font-global-family-prominent)); }
+    .carta-credit { display: none; align-items: center; gap: 6px; white-space: nowrap; padding-left: 12px; border-left: 1px solid var(--ink-color-global-border-subtle); font: 400 var(--ink-font-global-size-small-1)/16px var(--ink-font-global-family-base); color: var(--ink-color-global-text-subtle); }
+    .carta-credit .carta-logo { width: 30px; height: 15px; }
+    .menu.template-menu { right: auto; left: 0; width: 320px; max-width: calc(100vw - 32px); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+    /* A first-visit bar pointing at the logo, until the viewer opens the menu or closes it. Dark on a
+       light page, light on a dark one, so it stands out in both. */
+    #brand-chip-slot { position: relative; align-self: stretch; }
+    .brand-chip { position: absolute; z-index: 20; left: 12px; top: 50%; margin-top: -16px; display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 4px 0 12px; border-radius: var(--ink-size-global-radius-subtle); --chip-bg: light-dark(var(--ink-color-global-surface-darkgray-default), #F2F2F2); --chip-fg: var(--ink-color-global-text-inverse); background: var(--chip-bg); color: var(--chip-fg); box-shadow: 0 4px 12px rgb(0 0 0 / 0.16); font: 500 var(--ink-font-global-size-small-1)/1 var(--ink-font-global-family-base); white-space: nowrap; }
+    .brand-chip::before { content: ''; position: absolute; left: -5px; top: 50%; margin-top: -5px; border: 5px solid transparent; border-left: 0; border-right-color: var(--chip-bg); }
+    .brand-chip button { all: unset; cursor: pointer; border-radius: var(--ink-size-global-radius-subtle); }
+    .brand-chip button:focus-visible { box-shadow: 0 0 0 2px var(--chip-fg); }
+    .brand-chip-x { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; opacity: .72; }
+    .brand-chip-x:hover { opacity: 1; }
+    /* The firm's look: its logo and Carta's credit; its display font on the headings (page title, LP
+       name, section titles, menu titles); its accent on the LP name (light page only, and only when it
+       clears AA on white), the selected LP's edge, the called and exposure bars, and the section and
+       Exposure heading rules, over a pale tint of its secondary colour. Wire pills keep their colours;
+       figures, body text, tables and pills keep Carta's typeface unless a brand board's body font is
+       set, which sets all of them. */
+    body.is-firm .brand-btn .carta-logo { display: none; }
+    body.is-firm .firm-brand { display: block; }
+    body.is-firm .carta-credit { display: inline-flex; }
+    /* The display font is sized by x-height (--brand-size-adjust), so a face with small letters is not
+       dwarfed by Carta's. */
+    body.is-firm.has-brand-font h1, body.is-firm.has-brand-font .d-name, body.is-firm.has-brand-font .section-title, body.is-firm.has-brand-font .x-title h2, body.is-firm.has-brand-font .menu-title { font-family: var(--brand-display); font-size-adjust: var(--brand-size-adjust); }
+    body.is-firm .d-name { color: light-dark(var(--brand-accent-text, var(--ink-color-global-text-default)), var(--ink-color-global-text-default)); }
+    body.is-firm .lp-item[aria-current="true"] { border-left-color: var(--brand-accent, var(--ink-color-global-text-default)); }
+    body.is-firm .called-bar div div, body.is-firm .called .bar-fill, body.is-firm .x-bar div, body.is-firm .bar-fill { background: var(--brand-accent, var(--ink-color-global-text-default)); }
+    body.is-firm .section-title { border-bottom: 1px solid var(--brand-accent, var(--ink-color-global-border-subtle)); }
+    body.is-firm .x-head { padding-bottom: 8px; border-bottom: 1px solid var(--brand-accent, var(--ink-color-global-border-subtle)); }
+    body.is-firm .called-bar div, body.is-firm .x-bar, body.is-firm .bar-track { background: light-dark(var(--brand-track, var(--local-color-wash)), var(--local-color-wash)); }
     #update-banner-slot:empty { display: none; }
     .title-row { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; transition: margin var(--fold), gap var(--fold); }
     .title-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; }
@@ -123,7 +171,7 @@
     h1 { margin: 0; font: var(--ink-font-global-weight-heading-1) var(--ink-font-global-size-display-1)/40px var(--ink-font-global-family-prominent); transition: font-size var(--fold), line-height var(--fold); }
     .top-tools { grid-column: 10 / 13; justify-self: end; display: flex; align-items: center; }
     /* A block that folds away when the header collapses: its row eases from full height to none. */
-    .fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--fold), opacity var(--fold); }
+    .fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--fold), opacity var(--fold), visibility 0s; }
     .fold > div { min-height: 0; overflow: hidden; }
     /* Overview: up to four figures under the title, Export on their right. */
     /* The header's 12-column grid: the figures share the first 9 columns, Export the last 3. */
@@ -143,7 +191,8 @@
        figures step down the type scale, and the figures stay in view. */
     /* The folded logo keeps its 12px flex gap, so 4px of padding puts the title 16px down. */
     .top.is-collapsed { padding-top: 4px; gap: 12px; box-shadow: inset 0 -1px 0 var(--ink-color-global-border-subtle), 0 2px 8px rgb(0 0 0 / 0.06); }
-    .top.is-collapsed .fold { grid-template-rows: 0fr; opacity: 0; }
+    /* Visibility goes after the fade, so the folded logo button is out of the tab order and the screen reader's reach. */
+    .top.is-collapsed .fold { grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows var(--fold), opacity var(--fold), visibility 0s linear var(--fold-time); }
     /* Folded by an LP pick alone, the header opens again on a click, and a Show overview button
        offers the same to the keyboard. */
     .top.is-collapsed.is-pinned { cursor: pointer; }
@@ -217,7 +266,7 @@
     .ink-modal__close { width: 32px; height: 32px; }
     .ink-modal__body { flex: 1; min-height: 0; overflow: auto; padding: 20px 24px; }
     .ink-modal__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; padding: 16px 24px; border-top: 1px solid var(--ink-color-global-border-subtle); }
-    /* Export dialog: Profiles and Template on the left, the first page's live preview on the right. */
+    /* Export dialog: Profiles and Branding on the left, the first page's live preview on the right. */
     .export-body { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; }
     .export-left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
     .export-group { display: flex; flex-direction: column; gap: 8px; }
@@ -235,7 +284,7 @@
     .export-list { max-height: 240px; overflow: auto; }
     .export-list.is-faded { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
     .export-list .empty { padding: 24px 12px; }
-    /* Template: Ink SelectableList cards; the whole card is the control. */
+    /* Branding: Ink SelectableList cards; the whole card is the control. */
     .template-card { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--ink-color-global-border-default); border-radius: var(--ink-size-global-radius-subtle); }
     .template-card[aria-checked="true"] { border-color: var(--ink-color-global-text-default); box-shadow: inset 0 0 0 1px var(--ink-color-global-text-default); }
     .template-card:hover { border-color: var(--ink-color-global-border-active); }
@@ -254,7 +303,7 @@
     /* The firm's slot before its branding is set up: not selectable; it offers the setup prompt. */
     .template-slot { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px dashed var(--ink-color-global-border-default); border-radius: var(--ink-size-global-radius-subtle); }
     .template-slot > div { display: flex; align-items: center; gap: 12px; }
-    .template-slot .ink-btn-secondary { justify-content: center; width: 100%; height: 32px; }
+    .template-slot .ink-btn-secondary, .template-update { justify-content: center; width: 100%; height: 32px; }
     .export-stage { display: flex; align-items: flex-start; justify-content: center; padding: 20px; border-radius: var(--ink-size-global-radius-subtle); background: var(--local-color-row-hover); }
     /* Copying a table: no preview, so the left column has the dialog to itself. */
     #export-dialog:has(.export-stage[hidden]) { width: min(440px, calc(100vw - 32px)); }
@@ -656,10 +705,15 @@
     <header class="top">
       <div id="update-banner-slot"></div>
       <a class="back-to-home" id="back-to-home" hidden>&larr; Back to Home</a>
-      <div class="fold"><div><svg class="carta-logo" role="img" aria-label="Carta" width="64" height="32" viewBox="0 0 64 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <div class="fold brand-fold"><div><div class="brand-row menu-wrap" id="brand">
+        <button class="brand-btn" type="button" data-menu="template" aria-haspopup="dialog" aria-expanded="false" aria-label="Branding: Carta"><svg class="carta-logo" role="img" aria-label="Carta" width="64" height="32" viewBox="0 0 64 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
         <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
-      </svg></div></div>
+      </svg><span class="firm-brand" id="firm-brand"></span><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></button>
+        <span class="carta-credit" id="carta-credit">Powered by</span>
+        <span id="brand-chip-slot"></span>
+        <div id="template-slot"></div>
+      </div></div></div>
       <div class="title-row">
         <div class="fold"><div><div class="eyebrow" id="firm-name"></div></div></div>
         <div class="title-line">
@@ -745,7 +799,7 @@
             </div>
           </div>
           <div class="export-group">
-            <span class="export-label" id="template-label">Template</span>
+            <span class="export-label" id="template-label">Branding</span>
             <div class="template-cards" id="dialog-templates" role="radiogroup" aria-labelledby="template-label"></div>
           </div>
         </section>
@@ -763,6 +817,7 @@
       <span class="copied-tip" id="copied-tip" role="status" aria-live="polite"></span>
     </dialog>
   </div>
+  <span class="copied-tip" id="page-copied-tip" role="status" aria-live="polite"></span>
   <script>/* __VENDOR_JS:jspdf.umd.min.js__ */</script>
   <script>/* __MCP_UI_TRACKER_JS__ */</script>
   <script>
@@ -1626,6 +1681,9 @@
 
     // ── firm branding (the page and the PDF export) ──
     const BRAND_LOGO = /^data:image\/(png|jpe?g|webp|gif|svg\+xml)[;,]/i;
+    // A TrueType file's first bytes (00 01 00 00, or "true") in base64, so a corrupt or non-font file never switches the headings.
+    const BRAND_TTF_FILE = /^data:font\/ttf;base64,(?:AAEAAA|dHJ1Z)[A-Za-z0-9+\/=]*$/;
+    // A page font may be any font type the page's own @font-face can load.
     const BRAND_FONT_FILE = /^data:[a-z0-9.+\/-]+;base64,[A-Za-z0-9+\/=]+$/i;
 
     function hexRgb(hex) {
@@ -1633,11 +1691,25 @@
       return m ? [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16)) : null;
     }
 
+    // Relative luminance of an sRGB colour (WCAG).
+    function luminance(rgb) {
+      const lin = c => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+    }
+
     // WCAG contrast of a colour against white.
     function contrastOnWhite(rgb) {
-      const lin = c => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-      const L = 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
-      return 1.05 / (L + 0.05);
+      return 1.05 / (luminance(rgb) + 0.05);
+    }
+
+    // The dark page's background, and the contrast a mark (a bar, a rule, a row's edge) needs on
+    // either page. 2:1 keeps a bright brand colour such as orange on the bars (it is 2.65:1 on white) and
+    // drops only colours that nearly vanish. Marks are not the only way to read a figure: the bars sit
+    // beside their numbers ("Called · 73%").
+    const PAGE_DARK_SURFACE = [18, 18, 18];
+    const MARK_CONTRAST = 2;
+    function contrastOnDark(rgb) {
+      return (luminance(rgb) + 0.05) / (luminance(PAGE_DARK_SURFACE) + 0.05);
     }
 
     // The page data's brand ({firmName, logoDataUri, accentHex, secondaryHex?, inkHex?, displayFont?,
@@ -1650,14 +1722,14 @@
     const BRAND_FAMILY = /^[A-Za-z0-9 ]{1,40}$/;
     const BRAND_MAX_WEB_FONTS = 4;
     const BRAND_INK_CONTRAST = 7;
-    const BRAND_BAR_CONTRAST = 3;
     const BRAND_TRACK_TINT = 0.8;
 
     const brandFamily = value => (typeof value === 'string' && BRAND_FAMILY.test(value.trim()) ? value.trim() : null);
     const brandFontFile = value => (typeof value === 'string' && BRAND_FONT_FILE.test(value) ? value : null);
+    const brandTtfFile = value => (typeof value === 'string' && BRAND_TTF_FILE.test(value) ? value : null);
 
     function brandPdfFont(family, ttf) {
-      const name = brandFamily(family), file = brandFontFile(ttf);
+      const name = brandFamily(family), file = brandTtfFile(ttf);
       return name && file ? { family: name, ttf: file } : null;
     }
 
@@ -1668,7 +1740,7 @@
       const accent = hexRgb(raw.accentHex);
       const ink = hexRgb(raw.inkHex);
       const body = brandPdfFont(raw.bodyFont, raw.bodyFontTtf);
-      const boldTtf = brandFontFile(raw.bodyFontBoldTtf);
+      const boldTtf = brandTtfFile(raw.bodyFontBoldTtf);
       const display = brandPdfFont(raw.displayFont, raw.displayFontTtf || (raw.displayFont === raw.bodyFont ? raw.bodyFontTtf : null));
       const families = raw.fontFamilies && typeof raw.fontFamilies === 'object' ? raw.fontFamilies : {};
       const pageFonts = { heading: brandFamily(families.heading), body: brandFamily(families.body) };
@@ -1696,13 +1768,52 @@
       };
     }
 
+    // The look a viewer sees, 'firm' or 'carta': with a brand on file the firm's, unless this viewer
+    // picked Carta (`saved`, their stored choice). The page and Export share this choice.
+    function pageBrand(brand, saved) {
+      return brand && saved !== 'carta' ? 'firm' : 'carta';
+    }
+
+    // The first-visit bar inviting a firm with no brand on file to add one, until the viewer opens
+    // the Branding menu or closes the bar.
+    function brandHintDue(brand, dismissed) {
+      return !brand && !dismissed;
+    }
+
+    // Display faces differ in x-height (a small-eyed face looks a size too small beside Carta's), so
+    // headings in the firm's font are sized to this x-height as a share of the font size: between
+    // Inter's .54 and the .45-.50 of typical serif display faces.
+    const BRAND_X_HEIGHT = 0.5;
+
+    // The CSS properties the firm's look reads. The accent colours text only where it clears AA
+    // on white; the display font only once it is embedded (normalizeBrand checks both).
+    function brandPageVars(brand) {
+      const vars = {};
+      if (!brand) return vars;
+      if (brand.accent) {
+        const rgb = 'rgb(' + brand.accent.join(',') + ')';
+        // A mark the accent can't be seen on takes the text colour on that page instead.
+        const ink = 'var(--ink-color-global-text-default)';
+        const light = contrastOnWhite(brand.accent) >= MARK_CONTRAST ? rgb : ink;
+        const dark = contrastOnDark(brand.accent) >= MARK_CONTRAST ? rgb : ink;
+        vars['--brand-accent'] = light === dark ? light : 'light-dark(' + light + ', ' + dark + ')';
+        if (brand.accentText) vars['--brand-accent-text'] = rgb;
+      }
+      if (brand.secondary) vars['--brand-track'] = rgbCss(brandTrack(brand.secondary));
+      if (brand.displayFont) {
+        vars['--brand-display'] = '"BrandDisplay", var(--ink-font-global-family-prominent)';
+        vars['--brand-size-adjust'] = String(BRAND_X_HEIGHT);
+      }
+      return vars;
+    }
+
     const rgbCss = c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
     const tint = (c, k) => c.map(v => Math.round(v + (255 - v) * k));
     const brandTrack = c => tint(c, BRAND_TRACK_TINT);
 
-    // The page's own look under the firm's brand: its fonts, and its colours on the progress bars
-    // (the accent where it reads as a graphic on white, the secondary's pale tint for the track).
-    // Dark mode keeps the page's own colours. '' when the brand has nothing to change.
+    // The firm's page fonts, as the faces the page loads and the font properties it sets while the
+    // firm's look is on (body.is-firm), so choosing Carta puts the page's own fonts back. '' when the
+    // brand has no page fonts.
     function brandThemeCss(brand) {
       if (!brand) return '';
       const css = [];
@@ -1711,19 +1822,13 @@
       const vars = [];
       if (has(brand.pageFonts.body)) vars.push('--ink-font-global-family-base: "' + brand.pageFonts.body + '", var(--local-font-base-stack);');
       if (has(brand.pageFonts.heading)) vars.push('--ink-font-global-family-prominent: "' + brand.pageFonts.heading + '", var(--local-font-prominent-stack);');
-      if (vars.length) css.push(':root { ' + vars.join(' ') + ' }');
-      if (brand.accent && contrastOnWhite(brand.accent) >= BRAND_BAR_CONTRAST) {
-        css.push('.called-bar div div, .x-bar div, .bar-fill { background: light-dark(' + rgbCss(brand.accent) + ', var(--ink-color-global-text-default)); }');
-      }
-      if (brand.secondary) {
-        css.push('.called-bar div, .x-bar, .bar-track { background: light-dark(' + rgbCss(brandTrack(brand.secondary)) + ', var(--local-color-wash)); }');
-      }
+      if (vars.length) css.push('body.is-firm { ' + vars.join(' ') + ' }');
       return css.join('\n');
     }
 
-    // What the dialog's "Copy setup prompt" copies for the viewer to paste in chat, what the tip
+    // What "Set up with Claude" and "Edit branding" copy for the viewer to paste into Claude, what the tip
     // says after a copy, and how long it stays up.
-    const COPIED_PROMPT = 'Copied. Paste in chat.';
+    const COPIED_PROMPT = 'Copied. Paste it into Claude.';
     const COPIED_TIP_MS = 2200;
     const COPY_FAILED = 'Could not copy';
     const copiedNote = ok => (ok ? COPIED_PROMPT : COPY_FAILED);
@@ -2089,7 +2194,7 @@
     const WELCOME_TOOL = 'welcome';
     const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-lp-summary'], from_ui: true };
     // Matches .claude-plugin/skill-versions.json; the update banner compares it to the published one.
-    const ARTIFACT_VERSION = '1.3.1';
+    const ARTIFACT_VERSION = '1.4.0';
 
     // Config values land in SQL, so only plain identifiers are accepted.
     const IDENT = /^[A-Za-z0-9_.]+$/;
@@ -2511,13 +2616,14 @@
     // every column's sort icon at rest until one is clicked (ui.sortKey stays null till then).
     const DEFAULT_SORT = { key: 'commit', dir: 'desc' };
     const tableSort = () => (ui.sortKey ? { key: ui.sortKey, dir: ui.sortDir } : DEFAULT_SORT);
-    // menu: the one open popover ('contacts', 'x-fund' or 'filter'), or null.
+    // menu: the one open popover ('contacts', 'x-fund', 'filter' or 'template'), or null.
     const ui = {
       view: 'list', q: '', sel: null, showDetail: false, menu: null,
       // exportBusy: an export is running (the Export button shows its progress, and the controls
-      // that start an export wait); exportNote: the last one's outcome beside it; exportBrand: the viewer's
-      // branding choice.
-      exportBusy: '', exportNote: '', exportNoteError: false, exportBrand: 'carta',
+      // that start an export wait); exportNote: the last one's outcome beside it; exportBrand: the
+      // template the Export dialog is on (it opens on pageBrand, the viewer's look, 'firm' or 'carta');
+      // brandHint: the first-visit coachmark by the logo still shows.
+      exportBusy: '', exportNote: '', exportNoteError: false, exportBrand: 'carta', pageBrand: 'carta', brandHint: false,
       // tableChecked: LP rows ticked in the table, which the Export dialog opens with ticked.
       // dlg: the export dialog's picks, search and progress while it is open.
       tableChecked: new Set(), dlg: null,
@@ -2564,6 +2670,8 @@
       expandAll: 'M1 7h12M7 5V1M5 2.5L7 .5 9 2.5M7 9v4M5 11.5L7 13.5 9 11.5',
       collapseAll: 'M1 7h12M7 1v4M5 3.5L7 5.5 9 3.5M7 13V9M5 10.5L7 8.5 9 10.5',
     };
+    // The close icon at the size of a chip's remove button.
+    ICON.closeSmall = ICON.close.replace('width="20" height="20"', 'width="14" height="14"');
 
     const SEP = '<span class="sep" aria-hidden="true">·</span>';
 
@@ -2706,7 +2814,7 @@
         </div>`;
       const label = 'Filter Limited Partners' + (dot ? ', ' + c.wires + ' with wire issues' : '') + (active ? ', filters on' : '');
       box.innerHTML = `<button class="filter-btn${active ? ' is-active' : ''}" type="button" data-menu="filter" aria-haspopup="menu" aria-expanded="${open}" aria-label="${label}" title="Filter">${FILTER_ICON}${dot ? '<span class="wire-dot filter-dot" aria-hidden="true"></span>' : ''}</button>${menu}`;
-      const chip = (text, attrs) => `<span class="f-chip">${text}<button type="button" ${attrs} aria-label="Remove ${text} filter">${ICON.close.replace('width="20" height="20"', 'width="14" height="14"')}</button></span>`;
+      const chip = (text, attrs) => `<span class="f-chip">${text}<button type="button" ${attrs} aria-label="Remove ${text} filter">${ICON.closeSmall}</button></span>`;
       chips.innerHTML = (ui.wires ? chip('Wire issues', 'data-chip-wires') : '')
         + ui.funds.map(k => chip(esc(fundLabel(k)), `data-chip-fund="${esc(k)}"`)).join('');
     }
@@ -2865,6 +2973,8 @@
       if (collapsed === ui.collapsed) return;
       ui.collapsed = collapsed;
       top.classList.toggle('is-collapsed', collapsed);
+      // The logo folds away, so its Branding menu closes with it.
+      if (collapsed && ui.menu === 'template') closeMenu();
     }
 
     function renderView() {
@@ -2938,20 +3048,25 @@
       if (open) { renderDialogList(); $('dialog-q').focus(); }
     }
 
-    // Template cards: Carta always; the firm's once its branding is set up, else a dashed slot
-    // that copies the setup prompt for the viewer to paste in chat. A copied table has no
-    // template, so the cards show only where the PDF can be saved.
-    function renderTemplates() {
-      const card = (key, thumb, title, sub) => `<button class="template-card" type="button" role="radio" aria-checked="${ui.exportBrand === key}" data-template="${key}">${thumb}<span class="template-text"><strong>${esc(title)}</strong><span>${esc(sub)}</span></span></button>`;
+    // Template cards, the same in the Export dialog and the logo's Branding menu: Carta always;
+    // the firm's once its branding is set up, else a dashed slot that copies the setup prompt for
+    // the viewer to paste into Claude. `selected` is the checked card's key.
+    function templateCardsHtml(selected) {
+      const card = (key, thumb, title, sub) => `<button class="template-card" type="button" role="radio" aria-checked="${selected === key}" data-template="${key}">${thumb}<span class="template-text"><strong>${esc(title)}</strong>${sub ? `<span>${esc(sub)}</span>` : ''}</span></button>`;
       const lines = '<i></i><i style="width:70%"></i><i style="width:50%"></i>';
-      // With no accent the thumbnail keeps the stylesheet's default ink.
+      // The thumbnail is a miniature of the PDF's white page, so it takes the accent the PDF prints,
+      // in either mode. With no accent it keeps the stylesheet's default ink.
       const accent = BRAND && BRAND.accent ? ` style="--thumb-accent:rgb(${BRAND.accent.join(',')})"` : '';
       const firm = !BRAND ? '' : `<span class="template-thumb"${accent}><i></i>${BRAND.logoDataUri ? `<img src="${esc(BRAND.logoDataUri)}" alt="">` : '<span class="mark"></span>'}<i style="width:70%"></i></span>`;
-      $('dialog-templates').innerHTML = !downloads ? '<span class="note">Copied as a table, with no template.</span>'
-        : card('carta', `<span class="template-thumb">${lines}</span>`, 'Carta', 'Standard layout')
-          + (BRAND ? card('firm', firm, BRAND.firmName, 'Your logo and colors')
-            : `<div class="template-slot"><div><span class="template-thumb is-empty"></span><span class="template-text"><strong>Your firm</strong><span>Logo and colors, set up in Claude</span></span></div>
-                <button class="ink-btn-secondary" type="button" data-brand-prompt>Copy setup prompt</button></div>`);
+      return card('carta', `<span class="template-thumb">${lines}</span>`, 'Carta')
+        + (BRAND ? card('firm', firm, BRAND.firmName)
+          : `<div class="template-slot"><div><span class="template-thumb is-empty"></span><span class="template-text"><strong>Add your branding</strong><span>Your logo and colors</span></span></div>
+              <button class="ink-btn-secondary" type="button" data-brand-prompt>Set up with Claude</button></div>`);
+    }
+
+    // A copied table has no template, so the dialog's cards show only where the PDF can be saved.
+    function renderTemplates() {
+      $('dialog-templates').innerHTML = !downloads ? '<span class="note">Copied as a table, with no template.</span>' : templateCardsHtml(ui.exportBrand);
     }
 
     function renderDialogFoot() {
@@ -3585,6 +3700,7 @@
 
     function renderMenu(id) {
       if (id === 'filter') renderFilter();
+      else if (id === 'template') renderBrand();
       else renderDetail();
     }
 
@@ -3594,7 +3710,8 @@
       if (was && was !== id) renderMenu(was);
       renderMenu(id);
       // Opening moves focus into the menu; closing returns it to the trigger.
-      if (ui.menu) refocus(`[data-menu-for="${id}"] input, [data-menu-for="${id}"] button:not(:disabled), [data-menu-for="${id}"] a`);
+      // The Branding menu opens on its selected card, so only that one reads as chosen.
+      if (ui.menu) refocus(id === 'template' ? '[data-menu-for="template"] [aria-checked="true"]' : `[data-menu-for="${id}"] input, [data-menu-for="${id}"] button:not(:disabled), [data-menu-for="${id}"] a`);
       else refocus(`[data-menu="${id}"]`);
     }
 
@@ -3615,36 +3732,17 @@
     }
 
     // ── export ──
-    // The firm's brand from the page data (the skill embeds it on request).
+    // The firm's brand from the page data (the skill embeds it on request), for the page and Export.
     const BRAND = normalizeBrand(CONFIG.brand);
-    // The brand's fonts and bar colours apply to the page itself, and its logo replaces the Carta
-    // mark (the eyebrow keeps Carta's credit).
-    function applyBrandToPage() {
-      const css = brandThemeCss(BRAND);
-      if (css) {
-        const style = document.createElement('style');
-        style.id = 'brand-theme';
-        style.textContent = css;
-        document.head.appendChild(style);
-      }
-      const mark = document.querySelector('.carta-logo');
-      if (BRAND && BRAND.logoDataUri && mark) {
-        const img = new Image();
-        img.className = 'firm-logo';
-        img.alt = BRAND.firmName;
-        img.src = BRAND.logoDataUri;
-        mark.replaceWith(img);
-        document.documentElement.classList.add('is-branded');
-      }
-    }
-    applyBrandToPage();
-    const EXPORT_BRAND_KEY = 'cartaLpSummarySplit.exportBrand';
+    // The viewer's saved look ('firm' or 'carta'), shared by the page and Export. Written only on a branded page,
+    // so it always records a choice between two real looks.
+    const BRAND_CHOICE_KEY = 'cartaLpSummarySplit.pageBrand';
+    const BRAND_HINT_KEY = 'cartaLpSummarySplit.brandHintSeen';
     // Powered by Carta (plugins/carta-investors/assets/powered_by_carta.svg), dark ink for a white page.
     const POWERED_BY_SVG = '<svg width="572" height="101" viewBox="0 0 572 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M370.228 0V100.61H571.448V0H370.228ZM567.423 96.5856H374.252V4.0244H567.423V96.5856ZM396.623 52.2674C396.623 42.1817 405.138 36.2615 412.777 36.2615C418.246 36.2615 423.347 38.3119 426.076 43.0367L420.967 45.9988C420.087 44.6697 418.883 43.5796 417.472 42.8341C416.057 42.0885 414.48 41.6995 412.878 41.7116C408.386 41.7116 403.042 45.2167 403.042 52.162C403.042 59.1074 408.151 62.6732 413.304 62.6732C416.888 62.6732 419.864 60.6756 421.628 57.5919L426.85 60.0029C423.894 65.3193 418.611 68.1517 412.477 68.1517C404.761 68.1436 396.623 62.2154 396.623 52.2633V52.2674ZM445.493 68.1517C449.738 68.1517 453.748 66.2796 455.816 63.5607V67.3008H462.125V37.0436H455.816V40.7918C453.85 38.0485 449.746 36.2615 445.493 36.2615C436.2 36.2615 429.701 43.0245 429.701 52.2066C429.701 61.3887 436.261 68.1517 445.493 68.1517ZM446.101 41.9993C451.932 41.9993 455.934 46.3472 455.934 52.2066C455.934 58.066 451.928 62.4139 446.101 62.4139C440.275 62.4139 436.139 58.0052 436.139 52.0851C436.139 46.1649 440.271 41.9993 446.101 41.9993ZM496.029 43.0488H489.481V37.0071H496.09V29.1217H502.59V37.0071H509.195V43.0488H502.59V67.2886H496.029V43.0488ZM527.315 68.1517C531.568 68.1517 535.578 66.2796 537.646 63.5607V67.3008H543.963V37.0436H537.646V40.7918C535.679 38.0485 531.576 36.2615 527.315 36.2615C518.03 36.2615 511.53 43.0245 511.53 52.2066C511.53 61.3887 518.086 68.1517 527.315 68.1517ZM527.931 41.9993C533.753 41.9993 537.767 46.3472 537.767 52.2066C537.767 58.066 533.753 62.4139 527.931 62.4139C522.108 62.4139 517.969 58.0052 517.969 52.0851C517.969 46.1649 522.1 41.9993 527.931 41.9993ZM476.409 67.2602H469.849V37.0031H475.858V42.6355C477.346 39.2885 479.58 37.1084 483.213 36.9261C483.963 36.9139 484.709 36.9261 485.459 37.0071L485.359 43.061C480.14 43.061 476.413 45.8569 476.413 53.6532V67.2643L476.409 67.2602Z" fill="#1A1A1A"/><path d="M0 67.2018V65.4679L2.60086 65.0633C4.62375 64.7743 4.97053 64.3119 4.97053 61.9422V28.6512C4.97053 26.2816 4.62375 25.8192 2.60086 25.5302L0 25.1256V23.3917H19.8243C28.3205 23.3917 37.4524 25.4146 37.4524 35.1245C37.4524 42.9849 30.0544 47.3774 19.8821 47.3774H10.9814V62C10.9814 64.3119 11.3282 64.7743 13.3511 64.9477L17.6858 65.3523V67.2018H0ZM10.9814 27.0907V44.8922H20.5179C26.76 44.8922 30.6323 42.0601 30.6323 35.2979C30.6323 28.5356 26.76 25.7036 20.5179 25.7036H13.8713C11.4438 25.7036 10.9814 25.877 10.9814 27.0907Z" fill="#1A1A1A"/><path d="M54.8109 67.8953C46.3725 67.8953 39.6681 61.8844 39.6681 52.5791C39.6681 43.2738 46.3725 37.263 54.8109 37.263C63.2492 37.263 69.9536 43.2738 69.9536 52.5791C69.9536 61.8844 63.2492 67.8953 54.8109 67.8953ZM54.8109 65.6412C59.6658 65.6412 64.0006 61.7111 64.0006 52.5791C64.0006 43.4472 59.6658 39.5171 54.8109 39.5171C49.9559 39.5171 45.6212 43.4472 45.6212 52.5791C45.6212 61.7111 49.9559 65.6412 54.8109 65.6412Z" fill="#1A1A1A"/><path d="M87.6815 67.8375L76.6423 42.2335C76.1221 41.0776 75.8331 40.6152 73.8102 40.1528L72.0763 39.7482V38.1877H86.41V39.7482L84.5604 40.1528C82.5376 40.6152 81.9596 41.0776 82.4798 42.2335L90.2823 60.6129L96.4088 46.6261L92.8832 38.1877H104.385V39.7482L102.535 40.1528C100.512 40.6152 99.9922 41.0776 100.455 42.2335L107.853 60.6129L115.655 42.2335C116.175 41.0776 115.771 40.6152 113.748 40.1528L111.898 39.7482V38.1877H122.995V39.7482L121.261 40.1528C119.239 40.6152 118.95 41.0776 118.429 42.2335L107.332 67.8375H105.252L97.7381 49.8627L89.7622 67.8375H87.6815Z" fill="#1A1A1A"/><path d="M139.946 67.8953C130.988 67.8953 125.15 61.4221 125.15 52.7525C125.15 43.0427 132.433 37.263 139.599 37.263C146.824 37.263 152.43 41.7711 153.644 49.9205H130.641C130.641 50.0939 130.641 50.2673 130.641 50.4407C130.641 59.0524 135.091 64.2541 141.911 64.2541C146.073 64.2541 150.465 62.6936 152.257 56.4515H154.106C152.488 64.0229 147.518 67.8953 139.946 67.8953ZM139.484 39.4015C135.265 39.4015 131.739 42.2335 130.872 47.6086H147.575C147.113 41.7133 143.818 39.4015 139.484 39.4015Z" fill="#1A1A1A"/><path d="M159.249 67.2018V65.6412L161.099 65.2367C163.122 64.7743 163.469 64.4275 163.469 63.156V42.8693C163.469 41.5977 163.122 41.251 161.099 40.7886L159.249 40.384V38.8235L168.67 37.4942V44.7188C170 39.806 174.045 37.4364 177.282 37.4364C179.594 37.4364 181.443 38.5345 181.443 40.9042C181.443 42.8115 179.998 44.083 178.265 44.083C175.837 44.083 175.201 41.7133 172.889 41.7133C170.924 41.7133 168.67 44.5454 168.67 48.2444V63.156C168.67 64.4275 169.017 64.8321 171.04 65.1211L174.045 65.5257V67.2018H159.249Z" fill="#1A1A1A"/><path d="M199.407 67.8953C190.448 67.8953 184.611 61.4221 184.611 52.7525C184.611 43.0427 191.893 37.263 199.06 37.263C206.285 37.263 211.891 41.7711 213.105 49.9205H190.102C190.102 50.0939 190.102 50.2673 190.102 50.4407C190.102 59.0524 194.552 64.2541 201.372 64.2541C205.533 64.2541 209.926 62.6936 211.718 56.4515H213.567C211.949 64.0229 206.978 67.8953 199.407 67.8953ZM198.945 39.4015C194.725 39.4015 191.2 42.2335 190.333 47.6086H207.036C206.574 41.7133 203.279 39.4015 198.945 39.4015Z" fill="#1A1A1A"/><path d="M232.581 67.8953C225.241 67.8953 218.884 62.1156 218.884 52.9837C218.884 43.794 225.415 37.263 233.911 37.263C237.494 37.263 239.806 38.7657 241.193 40.095V26.6861C241.193 25.4146 240.846 24.8944 238.823 24.6055L235.818 24.2009V22.6404L246.395 21.311V62.2312C246.395 63.5028 246.742 63.8495 248.765 64.3119L250.614 64.7165V66.277L241.193 67.4329V63.7339C240.153 64.8899 237.205 67.8953 232.581 67.8953ZM235.298 64.6587C238.246 64.6587 240.095 63.6184 241.193 62.6936V41.3666C239.517 40.3262 237.841 39.7482 235.356 39.7482C229.229 39.7482 224.663 44.372 224.663 51.9434C224.663 59.8038 229.171 64.6587 235.298 64.6587Z" fill="#1A1A1A"/><path d="M286.714 67.8953C283.131 67.8953 280.53 66.3926 279.143 65.0633L274.635 67.8375H274.23V26.6861C274.23 25.4146 273.883 25.0678 271.86 24.6055L270.011 24.2009V22.6404L279.432 21.311V41.4244C280.472 40.2684 283.42 37.263 288.043 37.263C295.384 37.263 301.741 43.0427 301.741 52.1746C301.741 61.3643 295.21 67.8953 286.714 67.8953ZM285.327 40.4996C282.379 40.4996 280.53 41.5399 279.432 42.4647V63.7917C281.108 64.8321 282.784 65.4101 285.269 65.4101C291.396 65.4101 295.962 60.7863 295.962 53.2149C295.962 45.3545 291.453 40.4996 285.327 40.4996Z" fill="#1A1A1A"/><path d="M311.899 81.8244C310.107 81.8244 309.067 80.495 309.067 79.1657C309.067 77.6052 310.223 76.2759 312.65 75.2933C314.789 74.4264 315.771 74.0218 316.812 71.6521L319.124 66.5082L308.662 42.2335C308.142 41.0776 307.853 40.6152 305.83 40.1528L304.096 39.7482V38.1877H318.43V39.7482L316.581 40.1528C314.558 40.6152 313.98 41.0776 314.5 42.2335L322.071 60.0927L330.105 42.2335C330.625 41.0776 330.221 40.6152 328.198 40.1528L326.348 39.7482V38.1877H337.445V39.7482L335.711 40.1528C333.688 40.6152 333.4 41.0776 332.879 42.2335L317.39 76.3915C315.482 80.6106 313.575 81.8244 311.899 81.8244Z" fill="#1A1A1A"/></svg>';
 
-    function savedExportBrand() {
-      if (!BRAND) return 'carta';
-      try { return localStorage.getItem(EXPORT_BRAND_KEY) === 'carta' ? 'carta' : 'firm'; } catch (_) { return 'firm'; }
+    function savedPageBrand() {
+      try { return pageBrand(BRAND, localStorage.getItem(BRAND_CHOICE_KEY)); } catch (_) { return pageBrand(BRAND, null); }
     }
 
     // An image as a PNG fitted to `box`, drawn through a canvas so SVG, WebP or GIF logos reach
@@ -3782,7 +3880,8 @@
     function openExportDialog() {
       ui.menu = null;
       renderExport();
-      // Picks and search start fresh each time; the branding choice is kept.
+      // Picks and search start fresh each time; the template starts on the page's look.
+      ui.exportBrand = ui.pageBrand;
       ui.dlg = { pick: new Set(defaultPicks().map(f => f.key)), q: '', busy: '', error: '', profilesOpen: false };
       $('dialog-q').value = '';
       $('profiles-panel').hidden = true;
@@ -3809,23 +3908,150 @@
       renderExport();
     }
 
+    // The tooltip for a button: the dialog's own inside a dialog, since an open modal dialog
+    // covers the page; the page's anywhere else.
+    function copiedTipFor(button) {
+      const dialog = button.closest('dialog');
+      return dialog ? dialog.querySelector('.copied-tip') : $('page-copied-tip');
+    }
+
     // Copies the setup prompt; a brief dark tooltip, centred above the button, confirms it and
     // the button stays as it is.
     async function copyBrandPrompt(button) {
       const ok = await copyText(brandPrompt(data.firmName));
-      const tip = $('copied-tip');
+      const tip = copiedTipFor(button);
       const r = button.getBoundingClientRect();
       tip.style.left = (r.left + r.width / 2) + 'px';
       tip.style.top = r.top + 'px';
       tip.textContent = copiedNote(ok);
+      if (copyBrandPrompt.tip && copyBrandPrompt.tip !== tip) copyBrandPrompt.tip.classList.remove('is-on');
+      copyBrandPrompt.tip = tip;
       tip.classList.add('is-on');
       clearTimeout(copyBrandPrompt.timer);
       copyBrandPrompt.timer = setTimeout(() => tip.classList.remove('is-on'), COPIED_TIP_MS);
     }
 
+    // A picked template's key: the firm's only once its branding is set up.
+    const templateKey = key => (key === 'firm' && BRAND ? 'firm' : 'carta');
+
+    // Export's own pick, for this export only; the page's choice stays as it is.
     function setExportBrand(key) {
-      ui.exportBrand = key === 'firm' && BRAND ? 'firm' : 'carta';
-      try { localStorage.setItem(EXPORT_BRAND_KEY, ui.exportBrand); } catch (_) {}
+      ui.exportBrand = templateKey(key);
+    }
+
+    // ── page branding ──
+    // The firm's look applies to the whole page through body.is-firm and the --brand-* properties.
+    // What depends only on the brand is set once; renderBrand redraws the choice, menu and hint.
+    // True when the logo keeps its own colours on the dark page: at least half of its box is solid (alpha 255)
+    // and at least one solid pixel reaches MARK_CONTRAST against the dark page, drawn small so any size
+    // reads the same. A round badge or rounded app icon has see-through corners but is mostly solid, so it
+    // is kept; a transparent wordmark covers well under half its box. A dark mostly-solid mark (a navy tile
+    // with knocked-out lettering) has nothing visible on the dark page, so it is whitened. Where the image
+    // cannot be read it is kept. Only a fully solid pixel can show the logo is visible: canvas pixels are stored
+    // premultiplied by alpha, so a faint pixel (an anti-aliased rim) reads back with a much brighter colour than it has.
+    const LOGO_SAMPLE = 16;
+    function logoIsOpaque(img) {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = LOGO_SAMPLE;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, LOGO_SAMPLE, LOGO_SAMPLE);
+        const px = ctx.getImageData(0, 0, LOGO_SAMPLE, LOGO_SAMPLE).data;
+        let solid = 0, visible = false;
+        for (let i = 3; i < px.length; i += 4) {
+          if (px[i] === 255) solid++;
+          if (px[i] === 255 && contrastOnDark([px[i - 3], px[i - 2], px[i - 1]]) >= MARK_CONTRAST) visible = true;
+        }
+        return solid >= (LOGO_SAMPLE * LOGO_SAMPLE) / 2 && visible;
+      } catch (_) { return true; }
+    }
+
+    // A logo that is mostly see-through, or too dark to see on the dark page (see logoIsOpaque), loses is-opaque and
+    // so gets the dark page's white filter.
+    function markOpaqueLogo(img) {
+      img.classList.toggle('is-opaque', logoIsOpaque(img));
+    }
+
+    function setupPageBrand() {
+      $('carta-credit').append(document.querySelector('.brand-btn .carta-logo').cloneNode(true));
+      if (!BRAND) return renderBrand();
+      const vars = brandPageVars(BRAND);
+      for (const [name, value] of Object.entries(vars)) document.body.style.setProperty(name, value);
+      const theme = brandThemeCss(BRAND);
+      if (theme) {
+        const style = document.createElement('style');
+        style.id = 'brand-theme';
+        style.textContent = theme;
+        document.head.appendChild(style);
+      }
+      document.body.classList.toggle('has-brand-font', '--brand-display' in vars);
+      if (BRAND.displayFont) {
+        const face = document.createElement('style');
+        face.textContent = `@font-face { font-family: "BrandDisplay"; src: url(${JSON.stringify(BRAND.displayFont.ttf)}); font-weight: 100 900; font-display: swap; }`;
+        document.head.appendChild(face);
+      }
+      $('firm-brand').innerHTML = BRAND.logoDataUri ? `<img class="firm-logo is-opaque" src="${esc(BRAND.logoDataUri)}" alt="${esc(BRAND.firmName)}">` : `<span class="firm-mark">${esc(BRAND.firmName)}</span>`;
+      const logo = $('firm-brand').querySelector('img');
+      if (logo) {
+        if (logo.complete && logo.naturalWidth) markOpaqueLogo(logo); else logo.addEventListener('load', () => markOpaqueLogo(logo));
+      }
+      renderBrand();
+    }
+
+    function renderBrand() {
+      const firm = ui.pageBrand === 'firm';
+      const open = ui.menu === 'template';
+      document.body.classList.toggle('is-firm', firm);
+      const btn = document.querySelector('[data-menu="template"]');
+      btn.setAttribute('aria-expanded', String(open));
+      btn.setAttribute('aria-label', 'Branding: ' + (firm ? BRAND.firmName : 'Carta'));
+      $('template-slot').innerHTML = open
+        ? `<div class="menu template-menu" role="dialog" aria-labelledby="template-menu-title" data-menu-for="template">
+            <div class="menu-title" id="template-menu-title">Branding</div>
+            <div class="template-cards" role="radiogroup" aria-labelledby="template-menu-title">${templateCardsHtml(ui.pageBrand)}</div>
+            ${BRAND ? '<button class="ink-btn-secondary template-update" type="button" data-brand-prompt="update">Edit branding</button>' : ''}
+          </div>`
+        : '';
+      $('brand-chip-slot').innerHTML = ui.brandHint && !open ? `<div class="brand-chip"><button type="button" data-brand-chip>Add your firm’s branding</button><button class="brand-chip-x" type="button" data-brand-chip-close aria-label="Dismiss">${ICON.closeSmall}</button></div>` : '';
+      // Opening the menu answers the coachmark, so it retires.
+      if (open && ui.brandHint) dismissBrandHint();
+    }
+
+    // The viewer's look for the page; Export opens on it next time.
+    function setPageBrand(key) {
+      ui.pageBrand = ui.exportBrand = templateKey(key);
+      if (BRAND) { try { localStorage.setItem(BRAND_CHOICE_KEY, ui.pageBrand); } catch (_) {} }
+      renderBrand();
+    }
+
+    // A template card's pick: in the logo's Branding menu it sets the viewer's page look; in the
+    // Export dialog, the template for this export only.
+    function pickTemplate(card) {
+      const key = card.dataset.template;
+      if (card.closest('[data-menu-for="template"]')) {
+        if (key !== ui.pageBrand) track('click', 'Template.Pick.' + trackLabel(key));
+        setPageBrand(key);
+        refocus(`[data-menu-for="template"] [data-template="${ui.pageBrand}"]`);
+        return;
+      }
+      if (key !== ui.exportBrand) track('click', 'Export.Template.' + trackLabel(key));
+      setExportBrand(key);
+      renderTemplates();
+      renderPreview();
+      refocus(`[data-template="${ui.exportBrand}"]`);
+    }
+
+    // The viewer's look and the first-visit hint, from their storage.
+    function initPageBrand() {
+      ui.pageBrand = ui.exportBrand = savedPageBrand();
+      // Where storage is blocked the hint can't be remembered, so it shows on each visit.
+      try { ui.brandHint = brandHintDue(BRAND, localStorage.getItem(BRAND_HINT_KEY)); } catch (_) { ui.brandHint = brandHintDue(BRAND, null); }
+    }
+
+    function dismissBrandHint() {
+      ui.brandHint = false;
+      try { localStorage.setItem(BRAND_HINT_KEY, '1'); } catch (_) {}
+      if (ui.menu !== 'template') renderBrand();
     }
 
     async function copyEmail(button) {
@@ -3844,7 +4070,7 @@
       if (ui.menu && !menuBtn && !t.closest('.menu')) closeMenu();
       if (menuBtn) {
         if (!menuBtn.disabled) {
-          if (ui.menu !== menuBtn.dataset.menu) { if (menuBtn.dataset.menu === 'contacts') track('click', 'Detail.Contacts.Open'); else if (menuBtn.dataset.menu === 'filter') track('click', 'Filter.Open'); else track('click', 'Exposure.Fund.Open'); }
+          if (ui.menu !== menuBtn.dataset.menu) { if (menuBtn.dataset.menu === 'contacts') track('click', 'Detail.Contacts.Open'); else if (menuBtn.dataset.menu === 'filter') track('click', 'Filter.Open'); else if (menuBtn.dataset.menu === 'template') track('click', 'Template.Open'); else track('click', 'Exposure.Fund.Open'); }
           toggleMenu(menuBtn.dataset.menu);
         }
         return;
@@ -3926,10 +4152,12 @@
       if (fundChip) { track('click', 'Filter.Fund.Remove'); setFilters(ui.wires, ui.funds.filter(x => x !== fundChip.dataset.chipFund)); refocus('#pane-chips button, [data-menu="filter"]'); return; }
       if (t.closest('[data-export-dialog]')) { track('click', 'Export.Open', ui.tableChecked.size || undefined); openExportDialog(); return; }
       const brandPromptBtn = t.closest('[data-brand-prompt]');
-      if (brandPromptBtn) { trackPrompt('Brand.CopyPrompt', brandPrompt('<firm>')); copyBrandPrompt(brandPromptBtn); return; }
+      if (brandPromptBtn) { trackPrompt(brandPromptBtn.dataset.brandPrompt === 'update' ? 'Brand.EditPrompt' : 'Brand.CopyPrompt', brandPrompt('<firm>')); copyBrandPrompt(brandPromptBtn); return; }
       if (t.closest('[data-dialog-close]')) { $('export-dialog').close(); return; }
+      if (t.closest('[data-brand-chip-close]')) { track('click', 'Template.Coachmark.Dismiss'); dismissBrandHint(); refocus('[data-menu="template"]'); return; }
+      if (t.closest('[data-brand-chip]')) { track('click', 'Template.Coachmark.Open'); toggleMenu('template'); return; }
       const template = t.closest('[data-template]');
-      if (template) { if (template.dataset.template !== ui.exportBrand) track('click', 'Export.Template.' + trackLabel(template.dataset.template)); setExportBrand(template.dataset.template); renderTemplates(); renderPreview(); refocus(`[data-template="${ui.exportBrand}"]`); return; }
+      if (template) { pickTemplate(template); return; }
       if (t.closest('#profiles-trigger')) { setProfilesOpen(!ui.dlg.profilesOpen); if (!ui.dlg.profilesOpen) refocus('#profiles-trigger'); return; }
       if (t.closest('#dialog-go')) { dialogExport(false); return; }
       if (t.closest('[data-dialog-combined]')) { dialogExport(true); return; }
@@ -4225,8 +4453,9 @@
       } catch (e) { console.log('[carta-lp-summary] update check unavailable:', e && e.message); }
     }
 
+    initPageBrand();
+    setupPageBrand();
     // PDF export needs both the viewer's downloads capability and the inlined jsPDF.
-    ui.exportBrand = savedExportBrand();
     Promise.resolve(window.claude?.use?.('downloads') ?? null).catch(() => null)
       .then(d => { downloads = d && window.jspdf ? d : null; renderExport(); });
     init().then(() => setTimeout(checkForUpdate, 0));
