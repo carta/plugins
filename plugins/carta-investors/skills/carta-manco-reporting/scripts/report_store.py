@@ -23,7 +23,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 import manco_paths
 from report_payload import MAX_NAME_LENGTH, PayloadError, check_name, is_gl_code
@@ -133,6 +133,23 @@ def _actuals_only_input() -> Dict[str, Any]:
 def payload_fingerprint(payload: Dict[str, Any]) -> str:
     """A hash of a share payload, independent of key order."""
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def budget_content_fingerprint(payload: Dict[str, Any]) -> str:
+    """payload_fingerprint without `variance_by_category`, which own_sync rebuilds from each
+    build's snapshot (own_sync._variance_by_category_for), so the same report pushed on two
+    days fingerprints differently while its budget, period, currency and view are unchanged.
+    What says whether two of a user's own copies are the same report."""
+    return payload_fingerprint({k: v for k, v in payload.items() if k != "variance_by_category"})
+
+
+def duplicate_key(name: Optional[str], content_fingerprint: Optional[str]) -> Optional[Tuple[str, str]]:
+    """The key share_ops._dedupe_to_adopt groups own-sync copies by: the stripped name plus
+    budget_content_fingerprint. None when either part is missing (an own-sync record with no
+    `pushed_name` or no `content_fingerprint`), so such a record groups with nothing."""
+    if not isinstance(name, str) or not content_fingerprint:
+        return None
+    return name.strip(), content_fingerprint
 
 
 def _slug(text: str) -> str:
@@ -294,6 +311,27 @@ class ReportStore:
     def own_sync_uuid(report: Dict[str, Any]) -> Optional[str]:
         """The Carta uuid a report's private own-sync mirror is pushed under, or None."""
         return (report.get("own_sync") or {}).get("uuid")
+
+    @staticmethod
+    def held_duplicate_keys(doc: Dict[str, Any]) -> Set[Tuple[str, str]]:
+        """The duplicate_key of every local report's own-sync record: the name it was last
+        pushed or adopted under, plus that payload's budget_content_fingerprint. A pull never
+        adopts a copy whose key is in here, since a local report already is that report."""
+        keys = set()
+        for report in doc["reports"]:
+            sync = report.get("own_sync") or {}
+            key = duplicate_key(sync.get("pushed_name"), sync.get("content_fingerprint"))
+            if key is not None:
+                keys.add(key)
+        return keys
+
+    def dismiss(self, uuids: Iterable[str]) -> None:
+        """Add `uuids` to `dismissed_uuids` in one transaction, so no later pull offers them."""
+        uuids = [u for u in uuids if u]
+        if not uuids:
+            return
+        with self.transaction() as doc:
+            _dismiss(doc, *uuids)
 
     @staticmethod
     def _unique_id(doc: Dict[str, Any], base: str) -> str:
@@ -700,6 +738,7 @@ class ReportStore:
             report["own_sync"] = {
                 "uuid": uuid,
                 "payload_fingerprint": payload_fingerprint(payload),
+                "content_fingerprint": budget_content_fingerprint(payload),
                 "pushed_name": name,
                 "synced_at": _now(),
             }
@@ -835,6 +874,7 @@ class ReportStore:
         return counts
 
     def adopt_own_sync(self, name: str, budget: Dict[str, Any], uuid: str, payload_fingerprint_value: str,
+                        content_fingerprint_value: str,
                         skip_uuids: Optional[Iterable[str]] = None) -> Optional[Dict[str, Any]]:
         """A private, is_owner budget_report share_ops.pull found with no local record at
         all. Materialized as an ordinary personal copy (state EDITED, origin "copy", no
@@ -844,32 +884,33 @@ class ReportStore:
         edit's payload_fingerprint comparison starts from what Carta actually holds, not
         from nothing.
 
-        `skip_uuids` are other Carta-side uuids share_ops._dedupe_to_adopt found to be
-        genuine mirrors of the same report as `uuid` — same name and payload fingerprint —
-        that lost to `uuid` as the most-recently-updated copy of the group. They are added
-        to `dismissed_uuids` inside this same transaction, win or lose: a later pull must
-        never re-offer them as adoption candidates, whether this call actually adopts
-        `uuid` or returns None because something else claimed it first. Nothing here
-        deletes them upstream — they are Carta-side orphans a separate cleanup tool finds
-        and lets a person decide on.
+        `skip_uuids` are the other copies in `uuid`'s duplicate group
+        (share_ops._dedupe_to_adopt states the rule); they are dismissed in this same
+        transaction whether or not `uuid` is adopted.
 
         Invariant: at most one local report claims a given Carta uuid — this and
-        record_own_sync are its two writers, each enforcing it inside its own
-        transaction. Checked fresh here, not against whatever share_ops.pull saw when it
-        decided to call this — a sweep's own push (record_own_sync), or a second pull
-        running at the same time, can claim `uuid` in between. Returns None, adopting
-        nothing, when `uuid` is already claimed (dismissed_uuids: a report's own-sync
-        link or an explicit dismissal) or already shared under a `shared` link.
+        record_own_sync are its two writers, each enforcing it inside its own transaction.
+        Adoption also never adds a report whose duplicate_key a local report already holds.
+        Both are checked fresh here, not against whatever share_ops.pull saw, since a
+        sweep's push or a second pull can land in between. Returns None, adopting nothing,
+        when `uuid` is already claimed (dismissed_uuids: a report's own-sync link or an
+        explicit dismissal), already shared under a `shared` link, or its duplicate_key is
+        already held — in that last case `uuid` is dismissed too.
         """
         with self.transaction() as doc:
             _dismiss(doc, *(skip_uuids or ()))
             if uuid in self.dismissed_uuids(doc) or any(self.shared_uuid(r) == uuid for r in doc["reports"]):
                 return None
+            if duplicate_key(name, content_fingerprint_value) in self.held_duplicate_keys(doc):
+                _dismiss(doc, uuid)
+                return None
             new_id = self._unique_id(doc, _slug(name))
             report = {
                 "id": new_id, "name": name, "origin": dict(_ADOPTED_ORIGIN),
                 "state": EDITED, "budget": budget, "shared": None, "hidden": False, "updated_at": _now(),
-                "own_sync": {"uuid": uuid, "payload_fingerprint": payload_fingerprint_value, "pushed_name": name, "synced_at": _now()},
+                "own_sync": {"uuid": uuid, "payload_fingerprint": payload_fingerprint_value,
+                             "content_fingerprint": content_fingerprint_value, "pushed_name": name,
+                             "synced_at": _now()},
             }
             doc["reports"].append(report)
             return self.metadata(report)

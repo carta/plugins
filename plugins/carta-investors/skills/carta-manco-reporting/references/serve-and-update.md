@@ -562,11 +562,11 @@ Sub-agent brief:
   *"Loaded `<N+P+M>` reports — they're
   in the Budget vs Actuals sidebar (reload the tab if it's already open)."*
 - **`duplicate_dropped`** never changes which of those lines you say; it is a Carta-side
-  cleanup signal, not something this pull changed locally. It counts orphaned `is_owner`
-  budget_report rows this pull found that are exact mirrors of one already adopted (same
-  name, same payload) — it skipped the extras rather than creating a second local copy of the
-  same report, and recorded them locally so they count here once, on the pull where they're
-  first seen as duplicates, never again on a later pull.
+  cleanup signal, not something this pull changed locally. It counts the user's own
+  `is_owner` budget_report rows this pull found that are copies of a report already on the
+  dashboard, or of one it adopted just now (same name, same budget content). It skipped them
+  rather than adding a second local copy, and recorded them so they count here once, on
+  the pull that first sees them, never again on a later pull.
 - **`failed: <reason>`** — one line: *"Couldn't load reports shared with you yet (`<reason>`)
   — use **Load shared reports** in the sidebar to retry."* Never retry it in this run.
 

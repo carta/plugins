@@ -5,7 +5,7 @@ import { FS, sans } from "./theme.js";
 import { trackClick } from "../analytics.js";
 import { capLabel } from "../pinpoint/capture.js";
 import { loadTranscript, saveTranscript, clearTranscript } from "./chatPersistence.js";
-import { ClaudePrompt } from "./claudeFix.jsx";
+import { ClaudePrompt, ClaudeSignIn } from "./claudeFix.jsx";
 import { DASHBOARD_EXPORT_ID } from "./exportIds.js";
 
 // Built-in fallback catalog, used when App's /api/models fetch hasn't
@@ -256,16 +256,14 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
     }
   }
 
-  async function send() {
-    const prompt = input.trim();
-    if (!prompt || busy) return;
-    trackClick("MancoReporting.Chat.SendMessage");
-    // Submitting is an explicit "show me what happens next", so re-follow the
-    // tail even if the reader had scrolled up before sending.
-    stickToBottom.current = true;
-    const pin = anchor ? pinLabel(anchor) : null;
-    setMessages((m) => [...m, { role: "user", text: prompt, pin }, { role: "assistant", text: "" }]);
-    setInput(""); setBusy(true);
+  // The most recently sent turn's prompt/anchor, kept so a sign-in success
+  // (ClaudeSignIn's onSuccess, below) can replay it without the operator
+  // retyping — serve.py's own re-probe means the exact same request now
+  // succeeds, nothing about the prompt itself needs to change.
+  const lastTurnRef = useRef(null);
+
+  async function runTurn(prompt, anchorForTurn) {
+    setBusy(true);
     const decoder = new TextDecoder();
     // Whether a file-editing tool call finished without error this turn —
     // what onTurnEnd reports, so App knows a screen changed under it.
@@ -276,18 +274,20 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, sessionId, model, ...(anchor ? { anchor } : {}) }),
+        body: JSON.stringify({ prompt, sessionId, model, ...(anchorForTurn ? { anchor: anchorForTurn } : {}) }),
       });
       onAnchorConsumed?.();
       if (!res.ok) {
         // serve.py's claude_unavailable / session-start failures carry a
-        // readable `message` and a copy-paste `fixPrompt`; anything else
-        // (model_mismatch, turn_in_progress, a non-JSON body) falls back to
-        // the generic text below, with no fixPrompt box.
+        // readable `message`, a `code` (ClaudeSignIn's not_logged_in gate)
+        // and a copy-paste `fixPrompt`; anything else (model_mismatch,
+        // turn_in_progress, a non-JSON body) falls back to the generic text
+        // below, with no sign-in button or fixPrompt box.
         let data = null;
         try { data = await res.json(); } catch (e) { /* non-JSON body */ }
         const err = new Error(data?.message
           || ("chat request failed (" + res.status + (data?.error ? ": " + data.error : "") + ")"));
+        err.code = data?.code || null;
         err.fixPrompt = data?.fixPrompt || null;
         throw err;
       }
@@ -353,6 +353,7 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
         copy[copy.length - 1] = {
           role: "assistant",
           text: "⚠️ " + (err && err.message ? err.message : "error"),
+          code: (err && err.code) || null,
           fixPrompt: (err && err.fixPrompt) || null,
         };
         return copy;
@@ -362,6 +363,34 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
       setStopping(false);
       onTurnEnd?.({ edited });
     }
+  }
+
+  async function send() {
+    const prompt = input.trim();
+    if (!prompt || busy) return;
+    trackClick("MancoReporting.Chat.SendMessage");
+    // Submitting is an explicit "show me what happens next", so re-follow the
+    // tail even if the reader had scrolled up before sending.
+    stickToBottom.current = true;
+    const pin = anchor ? pinLabel(anchor) : null;
+    lastTurnRef.current = { prompt, anchor };
+    setMessages((m) => [...m, { role: "user", text: prompt, pin }, { role: "assistant", text: "" }]);
+    setInput("");
+    await runTurn(prompt, anchor);
+  }
+
+  // ClaudeSignIn's onSuccess for a `not_logged_in` error: the sign-in that
+  // just completed is exactly what the failed turn needed, so replay it
+  // instead of leaving the operator to retype and resend by hand.
+  function retrySignedInTurn() {
+    const last = lastTurnRef.current;
+    if (!last) return;
+    setMessages((m) => {
+      const copy = m.slice();
+      copy[copy.length - 1] = { role: "assistant", text: "" };
+      return copy;
+    });
+    runTurn(last.prompt, last.anchor);
   }
 
   return (
@@ -412,6 +441,14 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
               ? (
                   <>
                     {m.text !== "" && renderMarkdown(m.text)}
+                    {/* Sign-in button first, copy-paste prompt as fallback — only on
+                        the last message: an older, already-superseded error further
+                        up the transcript has nothing left to retry. hosted is always
+                        false here (chat is local-only, see shell/chatFeature.js). */}
+                    {i === messages.length - 1 && m.code === "not_logged_in" && (
+                      <ClaudeSignIn code={m.code} hosted={false}
+                        event="MancoReporting.Chat.SignIn" onSuccess={retrySignedInTurn} />
+                    )}
                     {m.fixPrompt && (
                       <ClaudePrompt text={m.fixPrompt} event="MancoReporting.Chat.CopyFixPrompt" />
                     )}

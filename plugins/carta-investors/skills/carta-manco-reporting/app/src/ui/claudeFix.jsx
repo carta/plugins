@@ -85,7 +85,13 @@ export function canSignIn(code, hosted) {
 // its own. Returns null outside that one case, so a caller can render it
 // unconditionally next to ClaudePrompt. `event` is the caller's own analytics id
 // for the button click — see references/analytics.md's catalogue.
-export function ClaudeSignIn({ code, hosted, event }) {
+// `onSuccess`, when given, fires once as soon as a poll confirms sign-in
+// worked — a caller that can retry on its own (ChatPanel.jsx resending the
+// turn that hit `not_logged_in`) doesn't need the operator to notice "Signed
+// in — try again." and act on it themselves. The Share dialogs don't pass it:
+// retrying a share is the operator's own click, not something to replay
+// automatically.
+export function ClaudeSignIn({ code, hosted, event, onSuccess }) {
   const [state, setState] = useState("idle"); // idle | opening | waiting | done | error
   const [message, setMessage] = useState(null);
   // Guards every state update made from inside an async callback (the POST's own
@@ -121,6 +127,7 @@ export function ClaudeSignIn({ code, hosted, event }) {
       if (!mountedRef.current) return;
       if (available) {
         setState("done");
+        onSuccess?.();
       } else if (Date.now() >= deadline) {
         setState("idle");
         setMessage("Still not signed in — try again.");

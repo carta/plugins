@@ -285,13 +285,13 @@ in order, and nothing else. Do not search for the script; its path is below.
    It prints the counts (`added`, `adopted`, `updated`, `removed`, `skipped`,
    `duplicate_dropped`). A report whose payload fails the contract — or whose size
    `fa:get:budget_report` offloaded to a document URL instead of inlining — is skipped,
-   never shown with wrong numbers. When two or more of the user's own, unclaimed
-   `is_owner` reports share both a name and a payload — genuine mirrors of the same
-   report, not two reports a user happened to name alike — only the most recently updated
-   one is adopted as a local copy; the rest are left untouched in Carta for a person to
-   clean up, and recorded locally in the same step as the adoption so a later pull never
-   re-offers them. They are counted once in `duplicate_dropped`, on the pull where
-   they're first seen as duplicates, not on every later pull.
+   never shown with wrong numbers. Copies of the user's own report — same name and same
+   budget content (lines, amounts, period, currency and view; the variance-chart data each
+   build refreshes doesn't count) — become at most one local report: none when a local
+   report already is that report, otherwise only the most recently updated copy. Two
+   reports with the same name but different budget content are both kept. The other
+   copies stay in Carta untouched, are recorded locally so no later pull offers them
+   again, and are counted once in `duplicate_dropped`, on the pull that first sees them.
 
 5. Tell the user how many reports were added, adopted as their own, or updated, and to
    reload the dashboard page.
