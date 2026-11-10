@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { INK, FAINT, RED, SHADE, LINE, FS } from "../ui/theme.js";
-import { Btn } from "../ui/components.jsx";
+import { INK, FAINT, RED, SHADE, LINE, FS } from "./theme.js";
+import { Btn } from "./components.jsx";
 import { trackClick } from "../analytics.js";
 
 // The fix for each `claude` CLI status scripts/preflight_claude.py reports, worded to start a prompt.
@@ -11,12 +11,15 @@ export const CLAUDE_FIX_STEP = {
 
 // What to ask Claude to do when a ShareError's `code` names the `claude` CLI itself
 // as the reason report sharing couldn't run (scripts/preflight_claude.py's two
-// recoverable statuses, which scripts/serve.py's _CLAUDE_FIX_MESSAGES short-circuits
-// a share op with instead of letting it fail generically). Any other code gets no
-// prompt — asking Claude can't fix a Carta permissions error, a conflict, and so on.
-// The hosted Worker runs with no local `claude` session at all (it calls Carta
-// directly), so every caller passes `hosted`, and this is the one place that rule
-// lives rather than being repeated at each call site.
+// recoverable statuses, which scripts/serve.py's _CLAUDE_FIX_MESSAGE_TEMPLATES
+// short-circuits a share op with instead of letting it fail generically). Any
+// other code gets no prompt — asking Claude can't fix a Carta permissions
+// error, a conflict, and so on. The hosted Worker runs with no local `claude`
+// session at all (it calls Carta directly), so every caller passes `hosted`,
+// and this is the one place that rule lives rather than being repeated at
+// each call site. Sharing-specific: chat's own fix prompts are templated
+// server-side instead (serve.py's _CLAUDE_FIX_PROMPT_TEMPLATES) and never
+// call this function.
 const PROMPTS = {
   not_installed: `${CLAUDE_FIX_STEP.not_installed} so I can share reports from the ManCo reporting dashboard.`,
   not_logged_in: `${CLAUDE_FIX_STEP.not_logged_in} so I can share reports from the ManCo reporting dashboard.`,
@@ -26,9 +29,12 @@ export function claudeFixPrompt(code, hosted) {
   return hosted ? null : PROMPTS[code] || null;
 }
 
-// A prompt the operator copies into their own Claude session, where their Carta
-// connector is signed in (references/report-sharing.md). `event` is the caller's own
-// analytics id for the Copy click — see references/analytics.md's catalogue.
+// A prompt the operator copies into another Claude session — report sharing's
+// own Carta-connector prompt (references/report-sharing.md) via claudeFixPrompt
+// above, or chat's install/sign-in/session-start prompts (serve.py's
+// `fixPrompt`, which has nothing to do with the Carta connector) via
+// ChatPanel.jsx. `event` is the caller's own analytics id for the Copy click —
+// see references/analytics.md's catalogue.
 export function ClaudePrompt({ text, event }) {
   const [copied, setCopied] = useState(false);
   const textId = useId();

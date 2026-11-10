@@ -132,6 +132,60 @@ def _claude_fix_message(feature, reason):
     return template.format(feature=feature) if template else None
 
 
+# Chat-only: a copy-paste prompt the operator can hand to another Claude Code
+# session to fix the same two preflight reasons above, worded to ask before
+# acting (ChatPanel.jsx's Copy button, see references/analytics.md's
+# MancoReporting.Chat.CopyFixPrompt). Report sharing already has its own,
+# separate fix-prompt mechanism (ui/claudeFix.jsx's claudeFixPrompt(),
+# computed client-side from `code`) — not reused here, since it already works
+# and is independently tested; duplicating its text server-side would just be
+# a second place for the same sharing copy to drift. The install commands
+# themselves still come from preflight_claude.py — the one place either can
+# change — rather than being retyped here.
+_CLAUDE_FIX_PROMPT_TEMPLATES = {
+    preflight_claude.REASON_NOT_INSTALLED:
+        "Install the Claude Code CLI on this computer with Anthropic's official "
+        "installer (`%s`, or `%s` on Windows). Ask me before running it. Then "
+        "confirm `claude --version` works in a new terminal, and add "
+        "`~/.local/bin` to my PATH if it doesn't."
+        % (preflight_claude.NATIVE_INSTALL_SH_CMD, preflight_claude.NATIVE_INSTALL_PS1_CMD),
+    preflight_claude.REASON_NOT_LOGGED_IN:
+        "Check whether I'm signed in to the Claude Code CLI with `claude auth "
+        "status`. If I'm not, tell me to run `claude auth login` in a terminal "
+        "and sign in. Don't ask me for passwords or tokens.",
+}
+
+# A chat turn whose preflight check passed (claude is installed and signed in)
+# but whose subprocess still failed to start — a different, rarer failure than
+# the two reasons above, so it gets its own code/message/prompt rather than
+# forcing it through _CLAUDE_FIX_MESSAGE_TEMPLATES's {feature} template.
+CHAT_SESSION_FAILED = "session_failed"
+_CHAT_SESSION_FAILED_MESSAGE = "Chat couldn't start a Claude Code session."
+_CHAT_SESSION_FAILED_PROMPT = (
+    "My ManCo dashboard's chat can't start a Claude Code session. Run "
+    "`claude --version` and `claude auth status`, tell me what's wrong, and "
+    "fix it, asking me before installing anything."
+)
+
+
+def _claude_fix_prompt(reason):
+    """Chat's copy-paste prompt for `reason`, or None when there isn't one
+    (just "ok", or a reason no prompt is defined for)."""
+    return _CLAUDE_FIX_PROMPT_TEMPLATES.get(reason)
+
+
+def _chat_unavailable_body(code, message, fix_prompt):
+    """The /api/chat error body ChatPanel.jsx renders as `message` plus a Copy
+    box for `fixPrompt` — one shape, built once, for both the 503 (preflight
+    reasons) and 500 (session failed to start) call sites below."""
+    return {
+        "error": "claude_unavailable",
+        "code": code,
+        "message": message + " Then send your message again.",
+        "fixPrompt": fix_prompt,
+    }
+
+
 IDLE_TIMEOUT_DEFAULT = 86400  # 24h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
@@ -846,7 +900,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             reason = _CLAUDE_STATUS["reason"]
         fix_message = _claude_fix_message("Chat", reason)
         if fix_message:
-            return self._send(503, {"error": "claude_unavailable", "message": fix_message})
+            return self._send(503, _chat_unavailable_body(
+                reason, fix_message, _claude_fix_prompt(reason)))
 
         anchor = body.get("anchor")
         if anchor:
@@ -881,7 +936,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 try:
                     sess.start()
                 except Exception:
-                    return self._send(500, {"error": "claude_unavailable"})
+                    return self._send(500, _chat_unavailable_body(
+                        CHAT_SESSION_FAILED, _CHAT_SESSION_FAILED_MESSAGE,
+                        _CHAT_SESSION_FAILED_PROMPT))
                 # Only once the new subprocess is actually running do we make
                 # room for it: evicting first and then failing to start would
                 # both leak the victim's subprocess (nothing left in the

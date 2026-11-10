@@ -26,9 +26,13 @@ _WIN = sys.platform == "win32"
 _BIN = "claude.exe" if _WIN else "claude"
 
 # Anthropic's official installers. The native install is preferred over npm: it
-# needs no Node toolchain, which most of this skill's users do not have.
+# needs no Node toolchain, which most of this skill's users do not have. The
+# command strings are public (serve.py's chat fix-prompt quotes them verbatim
+# for the operator to run themselves) so this is the one place either changes.
 _NATIVE_INSTALL_SH = "https://claude.ai/install.sh"
 _NATIVE_INSTALL_PS1 = "https://claude.ai/install.ps1"
+NATIVE_INSTALL_SH_CMD = "curl -fsSL %s | bash" % _NATIVE_INSTALL_SH
+NATIVE_INSTALL_PS1_CMD = "irm %s | iex" % _NATIVE_INSTALL_PS1
 
 # Why sharing cannot run. Only these reach the browser (via /api/claude-status);
 # anything more specific goes to the server log.
@@ -239,10 +243,10 @@ def _native_installer_argv():
         shell = shutil.which("powershell") or shutil.which("pwsh")
         if not shell:
             return None
-        return [shell, "-NoProfile", "-Command", "irm %s | iex" % _NATIVE_INSTALL_PS1]
+        return [shell, "-NoProfile", "-Command", NATIVE_INSTALL_PS1_CMD]
     if not (shutil.which("curl") and shutil.which("bash")):
         return None
-    return ["bash", "-c", "curl -fsSL %s | bash" % _NATIVE_INSTALL_SH]
+    return ["bash", "-c", NATIVE_INSTALL_SH_CMD]
 
 
 def cmd_install():

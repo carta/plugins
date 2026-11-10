@@ -1,7 +1,7 @@
 import { sans, INK, PAPER, LINE, FAINT, FS } from "../ui/theme.js";
 import { Btn, POPOVER_SHADOW } from "../ui/components.jsx";
 import { REPORT_ACTIONS } from "../state/useReports.js";
-import { ClaudePrompt, ClaudeSignIn, claudeFixPrompt } from "./claudeFix.jsx";
+import { ClaudePrompt, ClaudeSignIn, claudeFixPrompt } from "../ui/claudeFix.jsx";
 
 const RUNNING = {
   [REPORT_ACTIONS.PULL]: "Loading shared reports…",
@@ -26,7 +26,7 @@ export default function ShareStatus({ notice, progress, firmName, hosted, onDism
     );
   } else {
     // A failed pull whose code names the `claude` CLI itself as the problem
-    // (scripts/serve.py's _CLAUDE_FIX_MESSAGES) gets the matching install/sign-in
+    // (scripts/serve.py's _CLAUDE_FIX_MESSAGE_TEMPLATES) gets the matching install/sign-in
     // prompt instead of the generic one below. Only pull notices ever carry this
     // code here: share, publish-as-new, delete and the people lookup show their own
     // error inline in ShareDialog instead of reaching this panel. A failed pull with

@@ -712,7 +712,9 @@ class ReportStore:
         this itself, and a Claude session's own push calls it through own_sync.retire_session_push
         (`own_sync.py --retire`) — both instead of creating a fresh mirror.
 
-        This is the one place `retired` is set, and the uuid/fingerprint already on the report
+        This is the one place `retired` is set on a live dashboard (the demo packager,
+        tools/manco-reporting-packaging, also seeds its copied reports as `{"retired": True}`
+        so a demo install never pushes them), and the uuid/fingerprint already on the report
         are kept, not cleared, for two readers that still need the dead uuid: forget() (so a
         later local removal still retires whatever upstream link remains, even a stale one) and
         dismissed_uuids() (so a pull never re-imports this mirror as if someone else had shared

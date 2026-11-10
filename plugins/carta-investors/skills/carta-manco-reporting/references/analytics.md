@@ -239,6 +239,7 @@ that toolbar; `MancoReporting.MonthlyActuals.View` tells the two pages apart.
 | `MancoReporting.Chat.Pin` | click | An element picked while in Pinpoint mode. |
 | `MancoReporting.Chat.Unpin` | click | The pinned-chip ✕ cleared the anchor. |
 | `MancoReporting.Chat.NewConversation` | click | "New conversation" started an empty chat on a new session (and unlocked the model). |
+| `MancoReporting.Chat.CopyFixPrompt` | click | Copy on the Claude install/sign-in/session-start-failed prompt shown in a chat error (names no error detail, no customer data). |
 
 ### Composed ids
 

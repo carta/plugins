@@ -5,6 +5,7 @@ import { FS, sans } from "./theme.js";
 import { trackClick } from "../analytics.js";
 import { capLabel } from "../pinpoint/capture.js";
 import { loadTranscript, saveTranscript, clearTranscript } from "./chatPersistence.js";
+import { ClaudePrompt } from "./claudeFix.jsx";
 import { DASHBOARD_EXPORT_ID } from "./exportIds.js";
 
 // Built-in fallback catalog, used when App's /api/models fetch hasn't
@@ -279,9 +280,16 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
       });
       onAnchorConsumed?.();
       if (!res.ok) {
-        let detail = "";
-        try { detail = (await res.json()).error || ""; } catch (e) { /* non-JSON body */ }
-        throw new Error("chat request failed (" + res.status + (detail ? ": " + detail : "") + ")");
+        // serve.py's claude_unavailable / session-start failures carry a
+        // readable `message` and a copy-paste `fixPrompt`; anything else
+        // (model_mismatch, turn_in_progress, a non-JSON body) falls back to
+        // the generic text below, with no fixPrompt box.
+        let data = null;
+        try { data = await res.json(); } catch (e) { /* non-JSON body */ }
+        const err = new Error(data?.message
+          || ("chat request failed (" + res.status + (data?.error ? ": " + data.error : "") + ")"));
+        err.fixPrompt = data?.fixPrompt || null;
+        throw err;
       }
       const reader = res.body.getReader();
       let buf = "";
@@ -342,7 +350,11 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
     } catch (err) {
       setMessages((m) => {
         const copy = m.slice();
-        copy[copy.length - 1] = { role: "assistant", text: "⚠️ " + (err && err.message ? err.message : "error") };
+        copy[copy.length - 1] = {
+          role: "assistant",
+          text: "⚠️ " + (err && err.message ? err.message : "error"),
+          fixPrompt: (err && err.fixPrompt) || null,
+        };
         return copy;
       });
     } finally {
@@ -400,6 +412,9 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
               ? (
                   <>
                     {m.text !== "" && renderMarkdown(m.text)}
+                    {m.fixPrompt && (
+                      <ClaudePrompt text={m.fixPrompt} event="MancoReporting.Chat.CopyFixPrompt" />
+                    )}
                     {m.stopped && <StoppedMark hadText={m.text !== ""} />}
                     {/* Trails the partial text for the whole turn — the dots are
                         "still going", not "waiting to start". */}
