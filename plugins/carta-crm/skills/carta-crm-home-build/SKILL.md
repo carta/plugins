@@ -39,7 +39,7 @@ version: 1.0.0
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.7</carta-plugin>
+<carta-plugin>carta-crm:1.20.8</carta-plugin>
 
 # Carta CRM Home — publish
 
@@ -177,7 +177,7 @@ Look for one titled exactly **`Carta CRM Home - <Organization>`**. If it is ther
 An artifact for a **different organization is not a match** — reusing its `url` would replace
 that organization's page with this one.
 
-Two neighbours to leave alone. **`Carta Home - <firm>`** (favicon 🏠) belongs to
+Two neighbours to leave alone. **`Carta Home`** (favicon 🏠) belongs to
 carta-investors' `carta-home-build`. **`Carta Home - <company>`** (favicon 📊) belongs to
 carta-cap-table's `carta-captable-home-build`. Neither is a CRM Home, and publishing over one
 would replace a colleague's dashboard.
