@@ -19,7 +19,10 @@ cutting tokens and latency.
 Usage:
     uv run render-artifact.py <output> <artifact_id> \\
         <mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid> \\
-        [--home-url <carta_home_url>]
+        [--home-url <carta_home_url>] [--excluded <fund_uuid>,<fund_uuid>]
+
+--excluded lists the uuids the skill left out of the funds file on purpose (churned
+funds, dead duplicate records), so Carta Home does not flag them as missing from this page.
 
 --home-url is the Carta Home artifact that built this page; it becomes the
 "Back to Home" link. Without it the link stays hidden.
@@ -43,8 +46,10 @@ The tempfile bridge eliminates that hazard.
 Embedded state block (in the rendered HTML, consumed at runtime by artifact.html):
     <script type="application/json" id="soi-funds-state">
     {"firm_uuid": "...", "firm_name": "...", "funds": [{"uuid": "...", "name": "...",
-    "currency": "...", "vintage_date": "..."}]}
+    "currency": "...", "vintage_date": "..."}], "excluded": ["<fund_uuid>", ...]}
     </script>
+`excluded` holds the --excluded uuids (empty when none). Carta Home reads `funds` and
+`excluded` together as the funds this page knows about.
 
 On success, one line is printed to stdout: the absolute output path. The calling
 skill publishes it with the Artifact tool, passing the existing artifact's `url`
@@ -191,15 +196,21 @@ def load_funds(funds_file: Path) -> "list | None":
 
 def main() -> int:
     args = sys.argv[1:]
-    home_url = ""
-    if len(args) == 9 and args[7] == "--home-url":
-        home_url = args.pop()
-        args.pop()
+    flags = {"--home-url": "", "--excluded": ""}
+    while len(args) >= 9 and args[-2] in flags:
+        value = args.pop()
+        flag = args.pop()
+        # Repeated --excluded flags add up rather than the first one winning.
+        if flag == "--excluded" and flags[flag]:
+            value = value + "," + flags[flag]
+        flags[flag] = value
+    home_url = flags["--home-url"]
+    excluded = [u.strip() for u in flags["--excluded"].split(",") if u.strip()]
     if len(args) != 7:
         print(
             "usage: render-artifact.py <output> <artifact_id> "
             "<mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid> "
-            "[--home-url <carta_home_url>]",
+            "[--home-url <carta_home_url>] [--excluded <fund_uuid>,<fund_uuid>]",
             file=sys.stderr,
         )
         return 2
@@ -209,6 +220,11 @@ def main() -> int:
 
     if home_url and not CLAUDE_ARTIFACT_URL_RE.match(home_url):
         print(f"error: --home-url is not a claude.ai artifact URL: {home_url!r}", file=sys.stderr)
+        return 1
+
+    bad = [u for u in excluded if not UUID_RE.match(u)]
+    if bad:
+        print(f"error: --excluded holds a non-UUID: {bad[0]!r}", file=sys.stderr)
         return 1
 
     if not UUID_RE.match(firm_uuid):
@@ -280,6 +296,7 @@ def main() -> int:
         "firm_uuid": firm_uuid,
         "firm_name": firm_name,
         "funds": funds,
+        "excluded": excluded,
     }
 
     # First, so a firm or fund name that spells a placeholder is never substituted.

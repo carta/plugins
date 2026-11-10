@@ -725,6 +725,7 @@ async function fetchLiveData() {
         value: parseFloat(r.TOTAL_VALUE ?? 0),
         gl:    parseFloat(r.TOTAL_GL ?? 0),
       })));
+      renderSoiNewFund(dwhFundRows);
       if (isSpvOnly(dwhFundRows)) applySpvWording();
       renderSOIScope(soiScopeNote(await fetchRealFunds(firmId), dwhFundRows.map(r => r.FUND_UUID)));
     }
@@ -881,7 +882,7 @@ function openCustomize(source) {
     ${items.map(p => `
       <div class="cust-prompt-card">
         <div class="cust-prompt-text">${escHtml(p.split('. Update the ')[0] + '.')}</div>
-        <button class="cust-copy-btn" data-prompt="${escHtml(p)}" onclick="copyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy</button>
+        <button class="cust-copy-btn" data-prompt="${escHtml(p)}" onclick="copyPrompt(this)">${CUST_COPY_LABEL}</button>
       </div>
     `).join('')}
   `).join('');
@@ -917,18 +918,21 @@ function writeClipboard(text, feedback) {
   }
 }
 
+// A `.cust-copy-btn`'s resting label, and its "✓ Copied" beat after a copy.
+const CUST_COPY_LABEL = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy';
+function custCopyFeedback(btn) {
+  btn.textContent = '✓ Copied';
+  btn.classList.add('copied');
+  setTimeout(() => {
+    btn.innerHTML = CUST_COPY_LABEL;
+    btn.classList.remove('copied');
+  }, 2000);
+}
+
 function copyPrompt(btn) {
   const text = btn.dataset.prompt || '';
   trackPrompt("CartaHome.Customize.CopyPrompt." + (customizeSource === "perf" ? "Perf" : "SOI"), text, PROMPT_SOURCE.STATIC);
-  const feedback = () => {
-    btn.textContent = '✓ Copied';
-    btn.classList.add('copied');
-    setTimeout(() => {
-      btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy';
-      btn.classList.remove('copied');
-    }, 2000);
-  };
-  writeClipboard(text, feedback);
+  writeClipboard(text, () => custCopyFeedback(btn));
 }
 
 // Static prompts used to pad "Suggested for you" when the user has fewer than 4

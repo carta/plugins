@@ -43,13 +43,18 @@ passed to --dashboard-building carries the string "building" instead, so home ca
 before its dashboards exist and redeploy over itself once they do. A key absent from both
 leaves that card on its copyable prompt.
 
+`{{SOI_FUND_UUIDS}}` (in carta-home.config.js) becomes a JSON array of the fund uuids a
+saved SOI page knows about (--soi-page): the funds it lists plus the ones it left out on
+purpose (`excluded`, e.g. churned funds). `null` when no page was passed, its state is
+unreadable, or it has no `excluded` list (a page rendered before carta-soi wrote one). The SOI card flags a fund in neither.
+
 The finished page carries a baseline of itself (lib/live_artifact_render/customizations.py), so a later rebuild
 can tell exactly what the user changed on the published copy.
 
 Usage:
   uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
       --firm-name "<firm name>" --out <path>/carta-home-<slug>.html \
-      [--dashboard-url soi=https://… --dashboard-building perf]
+      [--dashboard-url soi=https://… --dashboard-building perf] [--soi-page <soi.html>]
 """
 import argparse
 import hashlib
@@ -114,6 +119,7 @@ APP_JS_PARTS = [
     "app/skill-directory.js",
     "app/whats-new.js",
     "app/segment-dashboards.js",
+    "app/soi-new-fund.js",
 ]
 
 MARKERS = {
@@ -209,10 +215,14 @@ def read_skill_directory():
     return entries
 
 
+def script_json(value, **kw):
+    """json.dumps for inlining into the page's one <script>: `<` is escaped so no value
+    can close the script tag early."""
+    return json.dumps(value, **kw).replace("<", "\\u003c")
+
+
 def directory_json(entries):
-    """JSON for inlining into the page's one <script>: `<` is escaped so no prompt can
-    close the script tag early."""
-    return json.dumps(entries, ensure_ascii=False).replace("<", "\\u003c")
+    return script_json(entries, ensure_ascii=False)
 
 
 BUILDING = "building"
@@ -243,7 +253,40 @@ def parse_dashboard_urls(pairs, building=None):
     return urls
 
 
-def build(mcp_server, firm_name, dashboard_urls=None):
+SOI_STATE_RE = re.compile(
+    r'<script[^>]*\bid=["\']soi-funds-state["\'][^>]*>(.*?)</script>', re.DOTALL | re.IGNORECASE
+)
+
+
+def read_soi_fund_uuids(path):
+    """The fund uuids a saved SOI page knows about, from its `soi-funds-state` JSON, or None.
+
+    Known = `funds` it lists plus `excluded` (funds carta-soi left out on purpose, like
+    churned ones), so a fund counts as new only when it is in neither. A page with no
+    `excluded` list cannot say which funds it dropped on purpose, so it reads as None too.
+
+    None (no banner) rather than a failed build: the banner is a hint, and a page whose
+    state cannot be read should not block Home from publishing.
+    """
+    if not path:
+        return None
+    try:
+        match = SOI_STATE_RE.search(Path(path).read_text())
+        state = json.loads(match.group(1)) if match else None
+    except (OSError, ValueError) as e:
+        print(f"warning: --soi-page {path} could not be read ({e}); the SOI new-fund banner is off", file=sys.stderr)
+        return None
+    if not isinstance(state, dict):
+        return None
+    funds, excluded = state.get("funds"), state.get("excluded")
+    if not isinstance(funds, list) or not isinstance(excluded, list):
+        return None
+    uuids = [f["uuid"] for f in funds if isinstance(f, dict) and isinstance(f.get("uuid"), str)]
+    uuids += [u for u in excluded if isinstance(u, str)]
+    return sorted(set(uuids))
+
+
+def build(mcp_server, firm_name, dashboard_urls=None, soi_fund_uuids=None):
     template = (RES / "carta-home.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
@@ -280,6 +323,9 @@ def build(mcp_server, firm_name, dashboard_urls=None):
     out = out.replace("{{DASHBOARD_URLS}}", json.dumps(dashboard_urls or {}, sort_keys=True))
     if "{{DASHBOARD_URLS}}" in out:
         sys.exit("ERROR: {{DASHBOARD_URLS}} still present after substitution")
+    out = out.replace("{{SOI_FUND_UUIDS}}", script_json(soi_fund_uuids))
+    if "{{SOI_FUND_UUIDS}}" in out:
+        sys.exit("ERROR: {{SOI_FUND_UUIDS}} still present after substitution")
 
     out = out.replace("{{SKILL_DIRECTORY_JSON}}", skill_directory)
     if "{{SKILL_DIRECTORY_JSON}}" in out:
@@ -320,13 +366,17 @@ def main():
                     help="mark a DASHBOARDS key as still being built (repeatable). The "
                          "tile says so and keeps its prompt until a redeploy passes the "
                          "real --dashboard-url for that key.")
+    ap.add_argument("--soi-page", metavar="PATH",
+                    help="saved SOI page (carta-soi output) that stays published; its fund "
+                         "list lets the SOI card flag funds the page does not list yet")
     args = ap.parse_args()
 
     firm_name = args.firm_name.strip()
     if not firm_name:
         sys.exit("ERROR: --firm-name is empty")
 
-    html, build_id, version = build(args.mcp_server, firm_name, parse_dashboard_urls(args.dashboard_url, args.dashboard_building))
+    html, build_id, version = build(args.mcp_server, firm_name, parse_dashboard_urls(args.dashboard_url, args.dashboard_building),
+                                   read_soi_fund_uuids(args.soi_page))
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)

@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.31.4</carta-plugin>
+<carta-plugin>carta-investors:7.31.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -198,6 +198,8 @@ If any fund in the firm has a `fund_family_name`, the artifact automatically gro
 
 The dropdown (and each family's members) sorts by `vintage_date` descending — most recent vintage first, undated funds last. This is the default for every firm, not just fund-of-funds ones; there's nothing to opt into.
 
+Keep the uuids of every fund Step 2 dropped on purpose (churned funds, dead duplicate placeholders) for 4c's `--excluded`. They stay out of the funds file; the script writes them into the page as `excluded`, so Carta Home does not flag them as new funds missing from this schedule.
+
 **4b.** Locate the script:
 
 The script is `${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py`. Bash reaches that path on every surface, Cowork included, so do not search for it.
@@ -205,8 +207,10 @@ The script is `${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py
 **4c.** Render. Run it on one line, exactly as written below. `allowed-tools` matches the command text, so a shell variable, a different path, or a line break fails the allowlist and the call has to be approved by hand each time:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" "<CWD>/<firm-slug>-fund-soi-collection.html" "<firm-slug>-fund-soi-collection" "<CARTA_MCP_SERVER>" "<FIRM_UUID>" "<FIRM_NAME>" "<CWD>/<firm-slug>-funds.json" "<INITIAL_FUND_UUID>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" "<CWD>/<firm-slug>-fund-soi-collection.html" "<firm-slug>-fund-soi-collection" "<CARTA_MCP_SERVER>" "<FIRM_UUID>" "<FIRM_NAME>" "<CWD>/<firm-slug>-funds.json" "<INITIAL_FUND_UUID>" --excluded "<EXCLUDED_FUND_UUIDS>"
 ```
+
+`<EXCLUDED_FUND_UUIDS>` is 4a's dropped uuids joined with commas, no spaces. Drop `--excluded` and its value when none were dropped.
 
 If `uv run` fails because the script file does not exist (not on a validation
 error), bash could not reach the plugin mount but `Read` can. Copy both files into

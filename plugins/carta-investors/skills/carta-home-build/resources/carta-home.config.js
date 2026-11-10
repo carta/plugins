@@ -54,6 +54,10 @@ const DASH_BUILDING = 'building';
 // than "still working" until it actually does.
 const DASH_BUILDING_TIMEOUT_MS = 5 * 60 * 1000;
 const DASHBOARD_URLS = {{DASHBOARD_URLS}};
+// Fund uuids the published SOI page knows about — the funds it lists plus those it left out
+// on purpose (e.g. churned funds) — baked in by build_artifact.py --soi-page. `null` when
+// unknown — the SOI card's new-fund banner (app/soi-new-fund.js) then never shows.
+const SOI_FUND_UUIDS = {{SOI_FUND_UUIDS}};
 
 // ── Skill directory categories ──
 // Categories, in display order. The skills inside each one are not listed here: they live

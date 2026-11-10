@@ -421,10 +421,10 @@
       transition: opacity .2s, transform .3s cubic-bezier(.34, 1.56, .64, 1);
     }
     .cap-copied-tip { right: 0; bottom: calc(100% + 4px); transform: translateY(0); }
-    .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip { opacity: 1; transform: translateY(-8px); }
+    .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip, .soi-new-fund-copy.copied .cap-copied-tip { opacity: 1; transform: translateY(-8px); }
     @media (prefers-reduced-motion: reduce) {
       .cap-copied-tip, .wn-copied-tip { transition: none; }
-      .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip { transform: none; }
+      .cap-box.copied .cap-copied-tip, .dir-copy.copied .cap-copied-tip, .soi-new-fund-copy.copied .cap-copied-tip { transform: none; }
       .cap-copy:active { transform: none; }
       .cap-box:hover:not(:focus-within) .cap-card-text::after { animation: none; }
     }
@@ -564,6 +564,17 @@
       transition: border-color 0.12s, color 0.12s; white-space: nowrap;
     }
     .cust-copy-btn:hover { border-color: var(--ink-color-global-border-default); color: var(--ink-color-global-text-default); }
+    .soi-new-fund {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding: 6px 6px 6px 10px;
+      background: var(--ink-color-global-feedback-info-subtle); border-radius: var(--ink-size-global-radius-subtle);
+      font-size: 13px;
+    }
+    .soi-new-fund-text { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; color: var(--ink-color-global-text-default); }
+    .soi-new-fund-copy { position: relative; display: inline-flex; flex-shrink: 0; }
+    .soi-new-fund-dismiss {
+      flex-shrink: 0; width: 20px; height: 20px; padding: 0; border: none; background: none; cursor: pointer;
+      color: var(--ink-color-global-text-subtle); font-family: inherit; line-height: 1;
+    }
     .cust-copy-btn.copied { border-color: var(--ink-color-global-feedback-positive-strong); color: var(--ink-color-global-feedback-positive-strong); }
     /* ── Tab switcher ── */
     .tab-bar {

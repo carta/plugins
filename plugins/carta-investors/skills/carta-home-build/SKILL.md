@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.31.4</carta-plugin>
+<carta-plugin>carta-investors:7.31.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -244,6 +244,7 @@ need the full file in context. Edit the small source file for what you're changi
 | `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |
 | `resources/app/segment-dashboards.js` | LP summary card: which firms get it, its warehouse query, and the 2/3-card grid | change who sees that card or what it shows |
 | `resources/app/whats-new.js` | What's new carousel: featured microapps (locked by product flag, linked in-app or to a carta.com demo page or not at all; the Data Collection lookup behind Portfolio Analytics), one new skill from Contentful (only one the current Skill Directory lists, skipping `whatsNew: false` and featured microapps' own skills, visual outputs first) with a preview of its output (`WHATS_NEW_SKILL_OUTPUTS` in the config file), rotation, and the microapp preview mockups (microapp list lives in `WHATS_NEW_MICROAPPS` in the config file above) | change which microapps are featured or how they lock, how many new skills join, or the carousel's behaviour |
+| `resources/app/soi-new-fund.js` | SOI card banner for funds the published SOI page does not list yet (fund list from `--soi-page`), its copy prompt and dismissal | change when that banner shows or what it says |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/carta-home.css` | styles (Ink tokens) | change appearance |
 | `resources/carta-home.template.html` | HTML skeleton + injection markers | change page structure |
@@ -338,6 +339,10 @@ batch size — which only a click carries; a `render` keeps just its ID.
 
 Every event the page sends, and when it fires, is listed in `USAGE_DATA.md` beside this
 file. Add a row there whenever you add an event.
+
+SOI card new-fund banner (app/soi-new-fund.js): `CartaHome.SOI.NewFund.Shown` (render) when
+a different set of funds first shows in a page load, `CartaHome.SOI.NewFund.Copy` (a `trackPrompt`, source `dashboard`) with fixed prompt text, never fund names, when
+its prompt is copied, `CartaHome.SOI.NewFund.Dismiss` (click) when it is dismissed.
 
 Dashboard cards: a card whose query answers with no rows is hidden, never shown blank
 (`settleDashboardCard` in `app/segment-dashboards.js`), and fires `CartaHome.SOI.Empty`,
@@ -750,6 +755,10 @@ dashboard Step 5 published, plus every one Step 2c marked current or kept (with 
 URL), and dropping `--dashboard-building` for those keys. Keep
 `--dashboard-building` only for an entry that was meant to build and did not, so its card
 still explains itself.
+
+Pass `--soi-page "<SOI live file from Step 2c>"` when Step 2c marked SOI current or the user
+kept it as it is, so the SOI card can flag funds that page does not list yet. Never pass it
+when Step 5 returned an SOI URL this run.
 
 **Carry the user's changes over** when Step 2c read Home as `customized` or `no_baseline`,
 before publishing: follow keep-customizations.md steps 3–5 with this build as the new build
