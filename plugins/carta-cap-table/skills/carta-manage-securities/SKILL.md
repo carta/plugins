@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.17</carta-plugin>
 
 # Manage securities
 
@@ -77,7 +77,8 @@ bootstrap again with that type. For a prefix with no other types listed (`CN-`, 
 `PIU-`), or when the user named the type, quote the `not_found` and stop.
 When neither a type word nor one of these prefixes gives the type (for example `CC-5`, or only a
 holder), ask once with `AskUserQuestion`. Never guess. For "units", offer `certificate` (an LLC's
-common or preferred units), `piu`, `cbu` and `rsu`.
+common or preferred units), `piu`, `cbu` and `rsu`. Send only the type the user picks, also after a
+`not_found`: never try the other types.
 
 ## Gates
 
@@ -131,8 +132,9 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    list), `security` (ids) or `holder` (the name exactly as the user wrote it). To reverse a
    cancellation or undo a termination, send `label` or `security`: `holder` finds only
    securities held now. For an
-   edit, always send `look_first: true` on the first type's bootstrap, so the Change page opens
-   before the first preview
+   edit, and when the user asks to see the security before a change ("show me first", "something
+   looks wrong"), always send `look_first: true` on the first type's bootstrap, so the Change page
+   opens before the first preview. With no field named, ask which field in one `AskUserQuestion`
    ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)).
 2. **Read the bootstrap.**
    - `blockers`: for `hard_stop`, quote `message` and `fix`, then stop. Ask about each
@@ -173,6 +175,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    between tool calls only as a one-line summary, so the user never sees a table there. When
    step 7 shows the approval card, put the table in your last message, after `view_remote`.
    Post every `companion_url` as `[See it in Carta](<companion_url>)`, never as a bare address.
+   Put the link of the latest page in your last message: after the answer to a question, after
+   a blocked preview and after a `look_first` bootstrap. A link in a question is not a link.
 6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
    Name each one that cannot be undone, such as an email to a holder.
 7. **Approval.** Ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** (first,
@@ -235,6 +239,7 @@ End the run with one short message and nothing after it:
 - One line: what was done and on which company.
 - One bullet per security that changed: label, field, before → after.
 - One bullet per change that was not applied.
+- The page link as `[See it in Carta](<companion_url>)`.
 - One line only for something that cannot be undone or is still running, such as an email to a
   holder or a job still in progress.
 

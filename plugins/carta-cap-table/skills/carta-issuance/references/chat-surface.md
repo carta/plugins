@@ -73,7 +73,8 @@ a file that said something specific. Full obligations:
 
 ## 2. Review — in the confirm's preview
 
-The review is the resolved, **already-saved-and-validated** rows as markdown. Put it in the
+The review is the resolved, **already-saved-and-validated** rows as a markdown table, never
+`Label: value` lines, even for one row. Put it in the
 `preview` of the confirm's first option (`"Issue N <type> now"`), in the §3 call. If the
 confirm has no `preview` field, put it in the question text.
 

@@ -11,7 +11,7 @@ a connection.
 The engine is this file: resolve `security_type` → fetch reference data → run the gates →
 collect → assemble rows → `save_drafts` / `validate_drafts` / issue preview and apply → recovery.
 
-Three more reads, each at its own moment:
+Four more reads, each at its own moment:
 
 - **[chat-surface.md](chat-surface.md)** — the collect, the review and the confirm, plus the
   computable defaults you must never ask for. Read it **in parallel with the first Carta
@@ -27,6 +27,10 @@ Three more reads, each at its own moment:
   [certificate-fields.md](certificate-fields.md), *or* [piu-fields.md](piu-fields.md) once that
   resolves — exactly one, and never before. Loading the wrong one is pure cost, and a grant run
   has no use for Rule 144.
+- **[chat-review.md](chat-review.md) and [issue-and-close.md](issue-and-close.md)** — the
+  review's labels and the issue. Read both in one message **once Phase 1.5 is clean**, on every
+  run, before you write the review. A review written without chat-review.md renames and drops
+  columns.
 
 The path ends at the named `apply_plan` call
 ([Phase 3](issue-and-close.md#phase-3--on-confirmation-apply-the-plan)). The host's

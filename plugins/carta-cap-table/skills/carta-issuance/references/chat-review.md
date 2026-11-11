@@ -13,9 +13,10 @@ customer consents to defaults too). All date columns in `MM/DD/YYYY`.
 The chat review has no header bar or KPI strip to carry batch-level values, and no earlier
 screen the user can go back to, so it keeps the **full** list below.
 
-**Use each name below as its label, word for word.** Render one column per name, or a
-two-column `Field | Value` table with one row per name. A tag goes in the value cell, never in
-a third column. `Type` is the stakeholder type (`INDIVIDUAL` or `ORGANIZATION`), in its own
+**Use each name below as its label, word for word.** Render a markdown table: one column per
+name, or a two-column `| Field | Value |` table with one row per name. Never `Label: value`
+lines and never another label (`Holder`, `Vesting`, `Expiration`). A tag goes in the value
+cell, never in a third column. `Type` is the stakeholder type (`INDIVIDUAL` or `ORGANIZATION`), in its own
 cell, never folded into `Stakeholder`.
 
 - **Certificate — always (13):** Stakeholder · Type · Email · Relationship · Share class
@@ -80,7 +81,7 @@ uniform batch: 30 grantees at the same terms produces ~300 lines of near-duplica
 When every row genuinely shares the same terms, collapse the review instead of repeating
 them per person.
 
-**When to compress.** After [Phase 1.5](engine.md#phase-15--save--validate-before-review-or-save-only)
+**When to compress.** Only a batch of 2 or more rows. One row is always the full table. After [Phase 1.5](engine.md#phase-15--save--validate-before-review-or-save-only)
 saves and validates the batch, compare every row's non-personal terms:
 
 - **Option grant** — `exercise_price`, `issue_date`, `vesting_template`, `document_set_id`,
@@ -97,8 +98,8 @@ saves and validates the batch, compare every row's non-personal terms:
 
 **Compressed layout** (target: under 25 lines of markdown):
 
-1. **Shared terms, once** — one small block (not a table; a short list) stating every
-   always-column value from the [full spec](#chat-review-content) that's now identical across
+1. **Shared terms, once** — one `| Field | Value |` table stating every always-column value
+   from the [full spec](#chat-review-content), with the same labels, that's now identical across
    the batch, each still tagged `(default)` / `(autofill — <so_type> rule)` / `(from existing
    record)` exactly as the per-row table would — compressing the layout must never compress
    away a default's disclosure (Voice & defaults' rule that every skill-chosen value stays

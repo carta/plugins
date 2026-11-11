@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.17</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -83,8 +83,13 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
   guess command names or arguments.
 - For every row of a list, a table, a report or a file, load carta-reporting.
 - To compare the user's spreadsheet, HR export or register with Carta, call `read_tool`
-  with `cap_table__compute__reconciliation` once per security type with the rows. Do not
-  page through holders to compare them yourself.
+  with `cap_table__compute__reconciliation` once per security type with all the rows. Do
+  not page through holders to compare them yourself. The company goes in `company` as a
+  number, and each value is a decimal string:
+
+  ```
+  read_tool({"name": "cap_table__compute__reconciliation", "arguments": {"company": <corporation_id>, "type": "option", "rows": [{"holder": "<holder>", "label": "<label>", "quantity": "<quantity>"}]}})
+  ```
 - Vesting of one grant, valuations (409A, FMV), round history and issuance have their own
   skills. Load the matching skill. To edit or cancel an issued security, load
   carta-manage-securities: it shows a preview before any change.
@@ -112,7 +117,8 @@ one cap table alone.
 
 - Give the as-of date of every Carta figure, in the words "as of <date>": `meta.as_of` when
   the response has it, else the record's own date (for example a valuation's effective
-  date), else today's date as the date of the read.
+  date), else today's date: "as of <today>, the date I read it". Always write the words
+  "as of", also when Carta gives no date.
 - Give the unit and currency of every amount: "$12,400", "1,200 shares". Read the
   currency from each row. Never assume USD and never add amounts in different currencies.
 - Never round without saying so. Never fill in a missing value: if Carta has no figure,

@@ -15,7 +15,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.17</carta-plugin>
 
 # Transform Configuration
 
@@ -234,8 +234,8 @@ Always check `stats` after running:
 - `skipped_formulas` non-empty → tell the user which formulas couldn't run (usually the source column wasn't included in the selection)
 - `warnings.unknown_sheets` present → a requested sheet is not in this report; name it and list `available`
 - `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty → say which sheet's rows are missing from the merged tab (wording in the `carta-reporting` Error Handling table)
-- `warnings.data_quality` present → put the sentence in the `warnings.data_quality` row of the `carta-reporting` Error Handling table in the Customization Checkpoint question, and add a `Show data warnings` option. When the user picks it or says "show data warnings", rerun with `sheets` naming every sheet in `warnings.data_quality`. Do not use the checkpoint text of `carta-reporting` step 4d: it is for ARTIFACT mode only
-- `empty_rows_dropped` > 0 → say so, with the wording in the `empty_rows_dropped` row of the `carta-reporting` Error Handling table
+- `warnings.data_quality` present → add a `Show data warnings` option, and put this sentence word for word in the Customization Checkpoint question. One sentence with a clause for each sheet in `warnings.data_quality`: "Carta flagged {N} securities with data warnings" ({N} is the "Data Warnings" count) and "{M} defective securities" ({M} is the "Defective Securities" count). When the user picks it or says "show data warnings", rerun with `sheets` naming every sheet in `warnings.data_quality`. Do not use the checkpoint text of `carta-reporting` step 4d: it is for ARTIFACT mode only
+- `empty_rows_dropped` > 0 → put this sentence word for word in the Customization Checkpoint question: "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets)
 - `filtered_row_count` = 0 → no rows matched; offer to relax the filter or change `as_of_date`
 - `displayed_row_count` < `kept_row_count` (section and `_t` rows not counted) → preview is active; re-run without `preview` for full results
 

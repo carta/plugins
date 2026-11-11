@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.17</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -156,7 +156,9 @@ Before you fetch data or compute, call `AskUserQuestion` (never plain text) with
 
 **Format**: Benchmark tables grouped by metric
 
-**BLUF lead**: Lead with the number of companies analyzed and the most notable finding (e.g., "median option pool is 12.5% across 14 companies").
+**BLUF lead**: Lead with the number of companies analyzed and the most notable finding (e.g., "median option pool is 12.5% across 14 of your portfolio companies").
+
+**Heading**: Put the heading `**Portfolio Benchmarks (N companies)**` word for word above the tables, also when you show one metric or a sample of the portfolio.
 
 **Sort order**: By metric name (Option Pool, SAFE Caps, Round Sizes).
 

@@ -47,7 +47,7 @@ retry and do not re-authenticate: a fresh token for the same user grants no prod
 
 ## The subscription message
 
-Send it on **FAIL — no subscription**.
+Send it on **FAIL — no subscription**, verbatim. Keep "your company" or "your firm": do not put the corporation name or id in its place.
 
 - Determine whether the user has cap table access: `read_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
 - If `corporations[]` is **non-empty**, tell the user:

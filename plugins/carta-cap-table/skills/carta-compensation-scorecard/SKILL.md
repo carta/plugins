@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.17</carta-plugin>
 
 # CTC Scorecard
 
@@ -557,7 +557,7 @@ If `compensation:get:subscription_status` returns `has_ctc_access: false`, OR a 
 
 > *"Your account doesn't have a CTC role for this corporation, contact a company admin for access"*
 
-If `compensation:get:subscription_status` returns `has_ctc_access: true` and `is_subscribed: false`, stop and reply with one of the two subscription messages below.
+If `compensation:get:subscription_status` returns `has_ctc_access: true` and `is_subscribed: false`, stop and reply with one of the two subscription messages below, verbatim. Keep "your company" or "your firm": do not put the corporation name or id in its place.
 
 Choose between them by whether the user has cap table access: `read_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
 
