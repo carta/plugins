@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.17</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.18</carta-plugin>
 
 # Manage securities
 
@@ -97,7 +97,9 @@ only the `reason` and write the note from the user's words, and you show both.
 2. **Ids only.** Previews take security ids. Get each id from the bootstrap, or from
    `cap_table__get__security` / `cap_table__list__securities`. Never send a label to a preview.
 3. **The server decides.** Offer only actions, securities and fields the bootstrap marks as
-   available, selectable or eligible. For anything else, quote its `why_not.message`.
+   available, selectable or eligible. For anything else, quote its `why_not.message`. A
+   `single_security_only` field still changes, one security per change
+   ([change-flow.md § Several securities](references/change-flow.md#several-securities)).
 4. **Quote Carta's messages word for word**: blockers, failed checks and errors.
 5. **Follow the result.** When a result has `next_step` or `how_to_reply`, do what it says. Do
    not open a page any other way, and never build a Carta URL.
@@ -179,7 +181,9 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    a blocked preview and after a `look_first` bootstrap. A link in a question is not a link.
 6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
    Name each one that cannot be undone, such as an email to a holder.
-7. **Approval.** Ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** (first,
+7. **Approval.** When the email side effect counts more emails than holders, first ask **"Send these N
+   emails?"** as [change-flow.md § Several securities](references/change-flow.md#several-securities)
+   **Emails** says, also before an approval card. Ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** (first,
    with the step 5 table in its `preview`) and **"Not now"**. When `how_to_reply` names an
    approval card, show that card with `view_remote` instead. On "Not now", apply nothing and say so.
 8. **Apply.** Call the named `cap_table__mutate__apply_plan` tool with `company`, the latest
@@ -207,9 +211,9 @@ Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 | Bootstrap `not_found` on `label` | Make sure `label` is a list, one label per item. Then follow [§ Actions](#actions). |
 | Bootstrap "Unknown field in `fields`" | `fields` picks bootstrap sections, not the fields to edit. Leave it out. |
 | Preview `unknown_param` or `reason_why` too long | Do what its `fix` says (for example `notes` → `note`, `reason_why` at most 140 characters), then preview again once. |
-| `invalid_argument` | Say which `field` it names. Ask the user for a new value, then preview again once. Never pick a value yourself. |
+| `invalid_argument` | Do what its `fix` says (for example, get ids from the bootstrap, or send `changes` alone). Ask the user only for a value that only the user knows, such as a quantity, a date or a name. Never pick a value yourself. Then preview again once. |
 | `summary_mismatch` | Call the apply tool again once, with the `summary` of the latest preview copied with no change. |
-| `too_large` on `security` | Split the change as Carta's `message` says, one pass per part ([§ Several changes](#several-changes)). |
+| `too_large` on `security` | Split the securities into parts of the size Carta's `message` names, one change per part ([change-flow.md § Several securities](references/change-flow.md#several-securities) step 4). |
 | `too_large`: "The response is larger than the token budget" | Read again with fewer securities or fewer `fields`. |
 | `throttled` | Say Carta is busy. Wait, then call again once. If it fails again, stop. |
 | `internal_error` on apply | Call the apply tool again once with the same `plan_id` and `summary`: a plan applies only once, and a second call returns the stored result. If it fails again, say Carta has a temporary problem and the change may or may not have been applied. Read the securities before any new preview. |

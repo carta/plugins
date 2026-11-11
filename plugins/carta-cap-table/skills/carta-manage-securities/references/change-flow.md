@@ -56,6 +56,13 @@ Offer only the fields in `sections.form` with `eligible: true`. Send each one un
   Then say they can also type the field.
 - In Claude Code, where `sendPrompt` does nothing, or with no `show_widget`, ask one
   `AskUserQuestion` with up to 4 eligible fields.
+- **Several types** ("Update ES-123 (Shares) and PIU-456"): bootstrap each type first. Then ask
+  one `AskUserQuestion`, also when you have `show_widget`, with one question for each type, up to
+  4 per call. Each question names that type's securities and offers up to 4 fields that its own
+  bootstrap marks eligible. Do not offer only the fields that the types share: each row of
+  `changes` takes its own fields. Use each answer only for the rows of that type.
+- **One eligible field:** a question needs 2 options, so ask no field question for that type.
+  Name its one field and ask for the value.
 - Never ask in free text, and never guess a field.
 
 ## Several securities
@@ -71,17 +78,29 @@ of several types, make **one** preview with `changes` instead of `security_type`
    the next 4 only after the answers come back, and apply each answer to every row with that
    prefix. Never guess.
 2. **Bootstrap each type** with that type's labels. Send `look_first: true` on the first one
-   only, and send its `thread_id` with the preview. Offer only fields that each type's bootstrap
-   marks `eligible`.
+   only, and send its `thread_id` with the preview. Offer each type only the fields that its own
+   bootstrap marks `eligible`. When the user named no field, ask as **Several types** in
+   [§ Fields and values](#fields-and-values) says.
 3. **Preview.** Send `changes`: one item per row, `{security_type, security: <id>, fields}`, with
    one `reason`, `note` and `send_email` for all rows.
-4. **More rows than `limits.max_securities`:** split them into parts in row order and run each
-   part as its own change, saying *"Part 1 of 3"* before each. Each part has its own bootstrap,
-   page, preview and approval.
+4. **More rows than `limits.max_securities`**, or a bootstrap `too_large` whose `message` names
+   the limit: split them into parts in row order and run each part as its own change, saying
+   *"Part 1 of 3"* before each. Each part has its own bootstrap, page, preview and approval.
 
-Carta changes the [single-security fields](field-contract.md#rules-users-trip-on) on one security
-at a time, so a plan that sends one of them on 2 or more securities is blocked: quote the check
-and run each of those securities as its own change.
+**Single-security fields.** Carta changes a
+[single-security field](field-contract.md#rules-users-trip-on) on one security per plan. A
+bootstrap of 2 or more securities marks it `single_security_only`, and a bootstrap of one security
+does not. When the user sends one of these fields to 2 or more securities, with one value or with a
+value for each, do this before step 2:
+
+- Make each security that gets the field its own change, with a bootstrap of that one security.
+- Put the other rows in one change, as steps 2 to 4 say.
+- Say the split first, as [SKILL.md § Several changes](../SKILL.md#several-changes) says: *"Carta
+  changes Quantity on one security at a time, so these are 3 changes: option grant ES-1, option
+  grant ES-2, and then option grants ES-3 and ES-4 together. I'll apply them one at a time,
+  starting with ES-1."*
+
+When a preview is blocked by this check, quote it and split the same way.
 
 **Emails.** Each type and value set of the plan sends its own modification email, so a holder
 with securities in two rows of different values can get 2 emails. When the email side effect

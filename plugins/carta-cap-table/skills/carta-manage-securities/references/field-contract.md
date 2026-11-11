@@ -43,7 +43,9 @@ is false (see the table above).
 
 - **Single-security fields.** `quantity`, `option_plan`, `custom_label`, `grant_number`, `label`,
   `number`, `prefix_label`, `prefix_number`, `grant` and `note_to_convert` change on one security
-  at a time. With 2+ securities the bootstrap marks them `single_security_only`.
+  at a time. With 2+ securities the bootstrap marks them `single_security_only`. Do not stop: change
+  each security on its own, as
+  [change-flow.md § Several securities](change-flow.md#several-securities) says.
 - **Post-termination exercise periods** are not changed by this skill. Send the user to Carta.
 - **Documents** are not edited here (`why_not.code: documents`). Send the user to Carta.
 - **`dividend_accrual_start_date`** is share-class gated: Carta rejects a value that does not fit
