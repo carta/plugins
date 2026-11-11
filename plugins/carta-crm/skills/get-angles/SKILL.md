@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.11</carta-plugin>
+<carta-plugin>carta-crm:1.20.12</carta-plugin>
 
 ## Overview
 
@@ -293,6 +293,7 @@ call it a network, graph, domain or server problem: each reason below is a norma
 | `emptyReason` | Say | Then |
 |---|---|---|
 | `domain_not_found` | "<domain> is not linked to a company in your CRM." | Only when Step 1 confirmed a `source: "external"` match, go to "When the company is not in the CRM" instead of saying this. Otherwise stop. |
+| `company_not_loaded` | "<Company> is saved in your CRM but has not been opened yet. Open it once in the CRM, then ask again." | Stop. Do not add the company again: it is already saved. |
 | `company_not_found` | "The CRM could not load the record for <Company>." | Stop. Ask the user to check the company in the CRM. |
 | `contact_pool_above_threshold` | "Your contact network is too large for this search to run in full." | Stop. Do not retry: the same call stops at the same point. |
 | `no_shared_employers` | "Nobody in your CRM has worked at the same company as anyone at <Company>." | Stop. |
