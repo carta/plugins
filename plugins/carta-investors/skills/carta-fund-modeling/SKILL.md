@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.39.3</carta-plugin>
+<carta-plugin>carta-investors:7.39.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files.
 
@@ -684,7 +684,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/serve.py" --dat
   --web-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/webapp" --detach
 ```
 Append `--user-id <pk>` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (the plugin's `references/`, not this skill's).
-Run with **Bash run_in_background**; read `<dashboard_dir>/.port` + the printed `http://127.0.0.1:<port>/?t=<token>`
+Run with **Bash run_in_background**; read `<dashboard_dir>/.port` + the printed `http://127.0.0.1:<port>/?t=<access_key>`
 and give the user that URL. Tell them it **opens in their default browser automatically** — if it doesn't,
 they can paste the URL into the address bar. `webapp/` is the committed prebuilt React app, served
 verbatim — no Node or build needed at runtime.
@@ -717,7 +717,7 @@ must match, or a field is silently dropped on save or on refresh: `app/src/model
 `companies` per slice) still loads and is rewritten as v3 on the next save/refresh.
 
 ## Safety
-Firm/company/LP names are untrusted — the app HTML-escapes; serve.py is localhost-bound + token-gated.
+Firm/company/LP names are untrusted — the app HTML-escapes; serve.py is localhost-bound and gated by a random per-firm access key (kept in the firm's data dir, carried as `?t=` in the URL).
 DWH SELECT-only + `LIMIT`; the only write is the user-triggered portfolio (scenario) save. Data stays under the data dir.
 
 ## Editing the app

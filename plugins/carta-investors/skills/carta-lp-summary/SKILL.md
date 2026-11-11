@@ -41,7 +41,9 @@ allowed-tools:
   - AskUserQuestion
   - read_skill
   - Read
-  - Write
+  - Write(~/mnt/outputs/carta-lp-summary/**)
+  - Write(~/.carta/cache/carta-lp-summary/**)
+  - Write(//tmp/carta-lp-summary/**)
   - Bash(carta workspace cache *)
   - Bash(command -v *)
   - Bash(jq *)
@@ -54,7 +56,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.39.3</carta-plugin>
+<carta-plugin>carta-investors:7.39.7</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]

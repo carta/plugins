@@ -15,7 +15,6 @@ allowed-tools:
   - Edit
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_website.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_deck.py" *)
-  - WebFetch
   - mcp__claude_ai_carta__welcome
   - mcp__claude_ai_carta__list_contexts
   - mcp__claude_ai_carta__set_context
@@ -39,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.39.3</carta-plugin>
+<carta-plugin>carta-investors:7.39.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
