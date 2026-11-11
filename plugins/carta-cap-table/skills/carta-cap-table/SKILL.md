@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.19</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -170,7 +170,7 @@ Do not send the same failed call again with the same arguments.
 The command is `fa:create:feedback`. The only way to call it is
 `call_tool({"name": "fa__create__feedback", "arguments": {…}})`, with `requestType`
 (`"bug"` or `"feature_request"`) and `requestBody`; optional `flowSummary`, `context`,
-`affectedSkill` and `source`. There is no feedback skill.
+`affectedSkill` and `source`. There is no feedback skill. Never call `mutate` for it.
 
 - The command is feature-flagged. Before the first call, run
   `search_tools("report a bug feedback")` once per session, and call only if
