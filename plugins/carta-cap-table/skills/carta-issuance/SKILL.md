@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
 
 # Issue Securities
 
@@ -394,7 +394,7 @@ closing line. `documents` gives each attached file's `status`: name any that isn
 | `status` | What it means | What you do |
 |---|---|---|
 | *not found* | not finished. The normal state | Answer whatever they asked. Not an error, never reported as one |
-| `issued` | **the page is done**. `pending_board` counts option grants held for a board consent: drafts, not issued | Close per [issue-and-close.md § On success](references/issue-and-close.md#on-success): signatories were notified to sign; once they sign, securities go to stakeholders. With `pending_board`, add that those grants await board approval and the page links to the consent in Carta. **Never call `issue_securities` or send a consent** — that issues twice |
+| `issued` | **the page is done**. `pending_board` counts option grants held for a board consent: drafts, not issued | Close per [issue-and-close.md § On success](references/issue-and-close.md#on-success): signatories were notified to sign; once they sign, securities go to stakeholders. With `pending_board`, add that those grants await board approval and the page links to the consent in Carta. **Never issue the set again or send a consent** — that issues twice |
 | `draft` | saved, not validated, not issued | Report it per [issue-and-close.md § Say what is live](references/issue-and-close.md#say-what-is-live-after-every-write), then **stop**. A saved draft isn't an approval to issue |
 | `needs_claude` | the page tried and couldn't finish | Read `reason`: `duplicates` → [mutate-recovery.md § Duplicate resolution](references/mutate-recovery.md#duplicate-resolution); `unknown_outcome` → **read the set's state before any write**, rows may already be issued; `partly_issued` → some rows are issued: read the set's state, never issue it again; `rows_removed` → the named `rows` were deleted from their document set and not saved back: have the user retry or re-save them; `nothing_issued` → [mutate-recovery.md](references/mutate-recovery.md) |
 
@@ -429,23 +429,14 @@ irreversible write so the host's own confirmation prompt fires. **The artifact s
 issues from the page instead** — its Confirm sheet is that gate, so you report the result
 and never re-issue ([§ 4](#4-the-page-issues-you-report)).
 
-```
-mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
-  "draft_set_id": <draft_set_id>}})
-```
-
-`call_tool` takes `name` + `arguments`; the wire name carries **double underscores** —
-`cap_table:mutate:issue_securities` is the prose form, never the argument.
-
-**No `drafts` key** ([hard rule 6](#hard-rules)).
-
-**Don't call `validate_drafts` again first.** The surface already validated, and
-`issue_securities` re-validates server-side before writing.
-
-Then read [references/issue-and-close.md](references/issue-and-close.md) for the response
-branches, what to say per holder, and the closing lines. On a rejection a re-call can't
-clear, read [references/mutate-recovery.md](references/mutate-recovery.md).
+The chat issue is one flow: preview the issue of the saved set
+(`cap_table__compute__issue_draft_set_preview`) before the review, put its `summary` in the
+review's confirm, and once confirmed apply the plan with the **named**
+`cap_table__mutate__apply_plan` tool and follow its job with `cap_table__get__task`.
+[references/issue-and-close.md](references/issue-and-close.md) has each call, each result, what
+to say per holder and the closing lines; on a refusal, read
+[references/mutate-recovery.md](references/mutate-recovery.md). Never call `issue_securities`
+here, and send no `drafts` ([hard rule 6](#hard-rules)).
 
 ## Say what is live after every write
 
@@ -468,7 +459,7 @@ Every surface.
    stacked on an open page** ([§ What not to do on this path](#what-not-to-do-on-this-path)).
    Recovery questions after a server short-circuit are unrestricted.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from
-   each type's first mutate on that type's later `issue_securities`, `save_drafts`, `load_drafts`,
+   each type's first mutate on that type's later issue preview, `save_drafts`, `load_drafts`,
    `validate_drafts`, `resolve_duplicate_stakeholder`: omit it and the server mints a
    *second* draft set of the same incomplete rows. Put each row's `draft_pk` from its first
    save on every retry, plus *every* required field: omit it and the row inserts instead of
@@ -478,11 +469,10 @@ Every surface.
 4. **The server is the source of truth.** Don't mirror its validation; surface its messages
    verbatim.
 5. **Never delegate to a background agent.** The gates require interactive HITL.
-6. **Issue what was validated, not a copy of it.** When the draft set already holds the rows
-   the user approved, issue with `draft_set_id` and **no `drafts` key**. Re-sent rows are only
-   *probably* identical to the reviewed ones — one transposed digit issues terms nobody
-   approved, and no later gate compares the two. Resend rows only to change them, each with
-   its `draft_pk` attached.
+6. **Issue what was validated, not a copy of it.** The preview reads the saved draft set by
+   `draft_set_id`, so the plan issues the rows the user reviewed. Re-sent rows are only
+   *probably* identical — one transposed digit issues terms nobody approved. Resend rows only
+   to change them, each with its `draft_pk`, then validate and preview again.
 7. **Never substitute the certificate flow for a PIU.** Server-side a PIU *is* a certificate
    row with `type="PIU"`, so that path looks like a fallback when a PIU call is refused. It
    isn't — it issues a plain unit certificate with no threshold value, a different security.
@@ -502,7 +492,7 @@ for them: on several hosts `Glob`/`find` can't reach the plugin mount and return
 In their `uv run` commands, swap the root variable for the path above; keep one line.
 
 - `references/chat-surface.md` — the last-resort path: its phases, and what it reads.
-- `references/issue-and-close.md` — the mutate's response branches and the closing lines.
+- `references/issue-and-close.md` — the issue's result branches and the closing lines.
 - `references/mutate-recovery.md` — on a server rejection a re-call can't clear.
 - `references/resume-flow.md` — *"resume draft set 472"*.
 - `references/incidents.md` — before weakening or arguing with any rule.

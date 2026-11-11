@@ -1,8 +1,8 @@
 # Mutate recovery
 
-What to do when a mutate comes back short-circuited. Read this when
-[Run the issue securities mutate](issue-and-close.md#run-the-issue-securities-mutate)'s response
-table sends you here — not on a clean success.
+What to do when a save, a validation, the issue preview or the issue job comes back refused.
+Read this when [issue-and-close.md](issue-and-close.md) or
+[save-validate-flow.md](save-validate-flow.md) sends you here — not on a clean success.
 
 Two rules govern every branch below:
 
@@ -17,8 +17,8 @@ Two rules govern every branch below:
 - **Send only the rows you actually changed.** Recovery is the case where a `drafts` payload is
   right — you are editing values, so they must go back. Rows you did not touch are already
   correct on the server; resending them re-opens the divergence [hard rule
-  6](../SKILL.md#hard-rules) exists to close. Once the set is clean, the issue re-call needs no
-  rows at all.
+  6](../SKILL.md#hard-rules) exists to close. Once the set is clean, preview the issue again
+  ([issue-and-close.md § Phase 2](issue-and-close.md#phase-2--the-review-gate)).
 
 ---
 
@@ -33,8 +33,8 @@ Find the missing value in this order, and stop at the first that applies:
 3. `AskUserQuestion` for that field.
 
 Never scrape a value from another grant or certificate ([engine rule
-3](engine.md#engine-hard-rules)). Then re-call `issue_securities` with the same `draft_set_id` and
-each `draft_pk`.
+3](engine.md#engine-hard-rules)). Then save the changed rows with the same `draft_set_id` and
+each `draft_pk`, validate, and preview the issue again.
 
 **Canonical rewrite.** The server's *"Email may be from the company's domain"* becomes:
 *"Heads-up: this email uses the company's domain. Review the Carta best practices for
@@ -56,7 +56,7 @@ mcp__carta__call_tool({"name": "cap_table__mutate__resolve_duplicate_stakeholder
              {"id": <draft_pk>}]}})                                    # create as new
 ```
 
-Then re-call `issue_securities`.
+Then validate again, and preview the issue.
 
 ---
 
@@ -64,31 +64,45 @@ Then re-call `issue_securities`.
 
 | Server message | Action |
 |---|---|
-| *"Fair market value is required for …"* | Surface verbatim. `AskUserQuestion`: `"Update FMV in Carta UI"` / `"Cancel"`. This skill cannot update FMV. Point a non-US corp (a resolved jurisdiction other than `US`, or an EMI/CSOP valuation source) at the international valuations dashboard, `/corporations/<CORP_ID>/valuations/international/` — the 409A ledger is the wrong place for a company that prices from an EMI or CSOP valuation. |
+| *"Fair market value is required for …"* | Surface verbatim, then follow [§ Fix it in this chat](#fix-it-in-this-chat): its first row says which companies get the 409A offer. |
 | Custom label clash | Re-render the row; ask for a new label or clear it (the server auto-generates one). Re-call with `draft_pk`. |
 | *"Vesting start date is required"* | Collect `MM/DD/YYYY`, re-call with `draft_pk`. |
 | *"Custom vesting must sum to total quantity"* | Route to the app: *"Custom vesting was set outside the skill. Finish in the Drafts UI."* |
 
-Quantity and option-pool overflows are surfaced verbatim, like every other server message.
+Quantity and option-pool overflows are surfaced verbatim, like every other server message. For
+an option-pool overflow, offer [the pool increase](#fix-it-in-this-chat).
 
 ---
 
-## Atomic issue failure
+## Fix it in this chat
 
-Errors are keyed at three levels: `errors.drafts` (per-row), `errors.corporation`
-(issuer-level — authorized-share or option-pool overflow), and `errors.issuance` (global).
+Two blockers have a fix Carta can make in this chat. Offer it once, in one line, and do the fix
+only when the user says yes:
 
-Surface them verbatim, with the rollback note:
+| Blocker | Offer | Preview |
+|---|---|---|
+| No live FMV (`valuation.no_active_fmv`, or *"Fair market value is required for …"*), on a company whose resolved jurisdiction is `US` with no EMI, CSOP or share-price signal ([engine.md](engine.md#option-grant-resolve-the-fmv-and-the-jurisdiction)). Every other company gets no offer: send it to the international valuations page, `/corporations/<CORP_ID>/valuations/international/` | *"Enter the company's 409A valuation here?"* | `cap_table:compute:add_409a_valuation_preview` |
+| The plan's pool is too small for the grants | *"Add shares to the \<plan name\> pool here?"* | `cap_table:compute:increase_equity_plan_pool_preview` |
 
-> *"Issue failed for N of M rows. The successful rows did **not** issue — Carta rolls back the
-> entire batch."*
+Ask the user for each value the preview's help names; never pick a value yourself. The fix is
+its own change: preview, one `AskUserQuestion` with its `summary` and `side_effects`, the named
+`cap_table__mutate__apply_plan`, then `cap_table__get__task`, as in [issue-and-close.md § Apply
+the plan](issue-and-close.md#apply-the-plan). Then read `issuance_init` again for a new FMV,
+save the changed rows, validate, and preview the issue again. On "no", or a `role_required`
+refusal, say the fix is in the Carta app.
 
-For a pool overflow, add:
+---
 
-> *"The \<plan name\> doesn't have enough available shares. Reduce a row's quantity or expand
-> the pool in the Carta app."*
+## Issue job failed
 
-If the error names required fields, drop into [Error recovery](#error-recovery).
+`cap_table:get:task` ended `failed` or `partially_failed`. Quote the job's `error` and each
+failed row's `error` word for word. Never apply the same plan again.
+
+- **`failed`** — no row issued. Fix the cause per [Error recovery](#error-recovery), then
+  preview the issue again. For an option-pool overflow, offer [the pool
+  increase](#fix-it-in-this-chat).
+- **`partially_failed`** — some rows issued, so the preview refuses the set. Name the rows that
+  did not issue, and send the user to the Drafts page in Carta to issue them.
 
 ---
 
@@ -104,7 +118,7 @@ If the error names required fields, drop into [Error recovery](#error-recovery).
 | Situation | What to do |
 |---|---|
 | Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
-| 403, `role_required` or access denied | Say the user's role on this company cannot draft or issue. Do not retry. On `issue_securities`, use [§ 403](#403). |
+| 403, `role_required` or access denied | Say the user's role on this company cannot draft or issue. Do not retry. On the issue preview or apply, use [§ 403](#403). |
 | "Nothing was saved" with `Unknown draft field` | For a type out of scope (see [§ Resolve `security_type`](../SKILL.md#resolve-security_type)), route to the Drafts UI. Else rename each field as the message says and save again with the same `draft_set_id`. |
 | "Draft set not found" | The set is deleted or the id is wrong. Call `cap_table:list:draft_sets` with `security_type` once and ask which set. Never start a new set without telling the user. |
 | "requires security_type" | Send `security_type` (`certificate`, `option_grant` or `piu`) and call again once. |

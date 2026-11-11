@@ -58,6 +58,38 @@ Offer only the fields in `sections.form` with `eligible: true`. Send each one un
   `AskUserQuestion` with up to 4 eligible fields.
 - Never ask in free text, and never guess a field.
 
+## Several securities
+
+When the securities take different values (a spreadsheet, or "ES-1 to 3/1, ES-2 to 4/1"), or are
+of several types, make **one** preview with `changes` instead of `security_type`, `securities` and
+`fields`.
+
+1. **Rows.** Read the request or the spreadsheet into rows: one row per security, with its
+   type, its label and its own fields and values. Take each type as
+   [SKILL.md § Actions](../SKILL.md#actions) says. When rows have no type, ask one question per
+   label prefix (a row with no prefix is its own question), up to 4 per `AskUserQuestion`, asking
+   the next 4 only after the answers come back, and apply each answer to every row with that
+   prefix. Never guess.
+2. **Bootstrap each type** with that type's labels. Send `look_first: true` on the first one
+   only, and send its `thread_id` with the preview. Offer only fields that each type's bootstrap
+   marks `eligible`.
+3. **Preview.** Send `changes`: one item per row, `{security_type, security: <id>, fields}`, with
+   one `reason`, `note` and `send_email` for all rows.
+4. **More rows than `limits.max_securities`:** split them into parts in row order and run each
+   part as its own change, saying *"Part 1 of 3"* before each. Each part has its own bootstrap,
+   page, preview and approval.
+
+Carta changes the [single-security fields](field-contract.md#rules-users-trip-on) on one security
+at a time, so a plan that sends one of them on 2 or more securities is blocked: quote the check
+and run each of those securities as its own change.
+
+**Emails.** Each type and value set of the plan sends its own modification email, so a holder
+with securities in two rows of different values can get 2 emails. When the email side effect
+counts more emails than holders (`1 holder gets 2 modification emails`), say the count and ask one
+`AskUserQuestion` before the approval: **"Send these N emails?"**, options **"Send"** and **"No
+emails"**. On "No emails", preview again with `send_email: false`. Then ask for approval
+([SKILL.md § Flow](../SKILL.md#flow) step 7) on the latest preview.
+
 ## Reason, note and Rule 144
 
 **Reason.** Take it from the user's words:

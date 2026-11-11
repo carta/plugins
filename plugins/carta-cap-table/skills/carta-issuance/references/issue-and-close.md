@@ -1,6 +1,6 @@
 # Phase 2 to Closing — review, issue, close
 
-The tail of the engine: the review gate, the confirmation branch, the `issue_securities` call,
+The tail of the engine: the issue preview, the review gate, the confirmation branch, the apply,
 and every terminal message. Referenced from [engine.md](engine.md#phase-2--closing).
 
 **Read this when you reach Phase 2** — after [Phase
@@ -17,7 +17,25 @@ real Carta prefix ([engine.md Step
 ## Phase 2 — the review gate
 
 Phase 1.5 has already saved and validated these rows, so this is a **read-only** confirmation
-before the irreversible `issue_securities` call, not another save.
+before the irreversible apply, not another save.
+
+### First, preview the issue
+
+```
+mcp__carta__read_tool({"name": "cap_table__compute__issue_draft_set_preview", "arguments": {
+  "company": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
+  "draft_set_id": <draft_set_id>}})
+```
+
+Add `"publish_board_consent": true` only on option grants, and only when the user asked Carta to
+create the board consent and send it to the board. Without it, grants that need board approval
+stay drafts until a board consent approves them, and the preview's `summary` says so.
+
+| Preview | Do |
+|---|---|
+| `status: draft` | Keep `plan_id` and `summary`. Put in the review the `summary`, every `side_effects` label, the Phase 1.5 warnings and the `message` of each check whose `state` is not `ok`, word for word. Name each side effect that can't be undone, such as an email to a holder |
+| `status: blocked` (no `plan_id`) | Quote each `checks[].message` word for word and ask no approval. Fix the rows per [mutate-recovery.md](mutate-recovery.md), then Phase 1.5 and this preview again. *"The draft set is already issued"*, *"An issue of this draft set is in progress"* or *"waits for its board consent"*: issue nothing, and say what it says |
+| 403 or `role_required` | [mutate-recovery.md § 403](mutate-recovery.md#403) |
 
 Confirm with one `AskUserQuestion` whose first option carries the review as markdown in its
 `preview` — [chat-surface.md §2–3](chat-surface.md#2-review--in-the-confirms-preview). Never
@@ -26,9 +44,9 @@ summary. The full always/conditional/optional column spec, the
 default-explanation text, the confirm prompt, and the compressed format for identical-term
 batches are in [references/chat-review.md](chat-review.md).
 
-> **Tool pre-load:** `call_tool` must already be loaded (Phase 0 batched it) before you show
-> the review. Do not `ToolSearch` here — it adds serial latency after the user has confirmed. If
-> for any reason it isn't loaded, load it now, *before* rendering the review.
+> **Tool pre-load:** the named `cap_table__mutate__apply_plan` tool must already be loaded
+> (Phase 0 batched it) before you show the review. Do not `ToolSearch` after the user confirmed —
+> it adds serial latency. If it isn't loaded, load it now (`+apply_plan`), *before* the review.
 
 ### Say what confirming actually does — it differs by type
 
@@ -47,124 +65,79 @@ the review's preview.
 
 ---
 
-## Phase 3 — On confirmation, run the mutate
+## Phase 3 — On confirmation, apply the plan
 
 You reach Phase 3 when the confirm comes back. **The confirmation already happened — do not
 re-ask.** Branch directly on the answer:
 
 | Answer | Do |
 |---|---|
-| `"Issue … now"` / any free-text affirmative | [Run the issue securities mutate](#run-the-issue-securities-mutate) |
+| `"Issue … now"` / any free-text affirmative | [Apply the plan](#apply-the-plan) |
 | `"Save as draft"` | [Save as draft](engine.md#save-as-draft-escape-hatch) |
 | `"Edit a row"` | re-ask for that row's changed fields, then Phase 1.5 and Phase 2 again |
 | `"Cancel"` | stop — *Canceled* closing |
 
-### First: do you need a payload at all?
-
-**Usually not.** [Phase 1.5](engine.md#phase-15--save--validate-before-review-or-save-only) already saved
-and validated these rows, and the review is read-only with nothing to merge back — so the server
-is already holding exactly what the user just approved. Issue *those* rows:
-
-```
-mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
-  "draft_set_id": <draft_set_id>}})     # no `drafts` key at all
-```
-
-`drafts` is optional. Given `draft_set_id` and no rows, the server skips the save entirely and
-validates and issues what is already persisted on that set. Everything else is unchanged — the
-same blocking validation, the same duplicate detection, the same corporation-signatory check, the
-same atomic issue, the same response shape.
-
-This is the **correctness** path, not just the cheap one ([hard rule 6](../SKILL.md#hard-rules)):
-re-serializing rows between validation and issue means the payload that commits is not
-provably the one that was validated and shown to the user, and nothing downstream catches the
-divergence. Sending no rows makes it impossible.
-
-**Build a `drafts` payload only when the rows aren't already on the server:**
-
-- **Rows changed after Phase 1.5 saved them** — an error-retry that edited a value, or an
-  *Edit a row* round trip. Send the changed rows **with their `draft_pk`s** so they update
-  rather than insert (SKILL.md hard rule 3), then the set is current again.
-- **No `draft_set_id`** — nothing was ever saved, so there is no set to issue from. Rare on this
-  path: Phase 1.5 runs before the review by design, so reaching Phase 3 without one means an
-  earlier step was skipped.
-
-If either applies, build the payload per the rules below. Otherwise skip to
-[Run the issue securities mutate](#run-the-issue-securities-mutate).
-
 ---
 
-## Run the issue securities mutate
-
-One mutate runs save → validate → check duplicates → issue, atomically. The save step is skipped
-when you send no rows.
+## Apply the plan
 
 ```
-# The normal case, every security type — the set already holds the reviewed rows
-mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
-  "draft_set_id": <draft_set_id>}})
+mcp__carta__cap_table__mutate__apply_plan({"company": <corporation_id>,
+  "plan_id": "<plan_id>", "summary": "<summary, unchanged>"})
 ```
 
-Only when the rows must change, or no set exists yet ([above](#first-do-you-need-a-payload-at-all)):
+The named tool only: `call_tool` and `mutate` refuse `apply_plan`. Send the `plan_id` and
+`summary` of the **latest** preview the user approved, and no rows. When `ToolSearch` found no
+apply tool, apply nothing: *"Carta's apply tool isn't available in this chat, so nothing was
+issued. Reconnect Carta and ask again."*
 
-```
-mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
-  "drafts": [ ...rows of that type, each with its draft_pk when the set exists... ],
-  "draft_set_id": <draft_set_id when one exists>,
-  "draft_set_name": <optional label, ≤30 chars>,
-  "equity_plan_id": <equity_plan_id>}})  # option_grant ONLY, and only on the FIRST save
-                                         # of a new set. NEVER on a PIU — a PIU's plan is
-                                         # the per-row `option_plan` field.
-```
-
-An unknown `draft_set_id` sent with no `drafts` returns a descriptive error rather than quietly
-creating a new set — so a stale id fails loudly instead of issuing into the wrong place.
-
-**Response:** `{draft_set_id, drafts:[{temp_id, draft_pk, status}], validation:{status, success,
-errors, warnings}, duplicates:{has_duplicates, count, results}, issued:[{id}]|null}`. **Always
-capture `draft_set_id` and each `draft_pk`**, even on success — a follow-up may retry this
-conversation. On the no-rows path `drafts` comes back `[]` (nothing was saved); the `draft_pk`s
-you already hold from Phase 1.5 stay valid.
-
-| Response state | Action |
+| Apply answer | Do |
 |---|---|
-| `issued` non-empty | Committed — render the table per [On success](#on-success) |
-| `validation.errors` | [mutate-recovery.md § Error recovery](mutate-recovery.md#error-recovery) |
-| `duplicates.has_duplicates` | [mutate-recovery.md § Duplicate resolution](mutate-recovery.md#duplicate-resolution) |
-| Only `validation.warnings` (`issued: null`) | Surface verbatim; `AskUserQuestion`: `"Acknowledge and issue"` / `"Edit a row"`; re-call on acknowledge |
-| Issue failed / 403 | [mutate-recovery.md § Atomic issue failure](mutate-recovery.md#atomic-issue-failure) |
+| `task` comes back | Read the job (below) |
+| `plan_stale` or `plan_expired` | The draft set changed, or the plan is too old. Apply nothing; preview again and ask the approval again with the new `summary` |
+| `summary_mismatch` | Apply once more with the latest preview's `summary` copied with no change |
+| Any other error | Quote its `message`; [mutate-recovery.md § Errors on any call](mutate-recovery.md#errors-on-any-call) |
 
-Every re-call carries `draft_set_id` + each `draft_pk` (SKILL.md hard rule 3).
+**Read the job:**
+
+```
+mcp__carta__read_tool({"name": "cap_table__get__task", "arguments": {
+  "company": <corporation_id>, "task_id": "<task.task_id>"}})
+```
+
+Call it again after `poll_after_seconds` until `done` is true, at most 3 times. Then:
+
+| Job | Do |
+|---|---|
+| `succeeded` | Issued — [On success](#on-success) |
+| `failed` or `partially_failed` | [mutate-recovery.md § Issue job failed](mutate-recovery.md#issue-job-failed) |
+| `running` after 3 reads | Say the issue is still running in Carta. Never apply again |
+| `not_found` | Another issue held the draft set, so this one started nothing. Preview again: the preview says when the other issue is done |
+
+Keep `draft_set_id` and each `draft_pk` for any later save (SKILL.md hard rule 3).
 
 ### On success
 
 Lead with what happens next, in the Carta app's words: **Signatories were notified to sign
 options** (certificates, PIUs), then *"Once signatories sign, securities will be sent to
-stakeholders."* When the response carries `board_approval`, the rows in
-`pending_board_approval` are drafts awaiting a board consent, not issued: say so and link
-`board_approval.url` — `create_consent` is where the user creates it, `ask_board_admin` means a
-board admin has to, `view_consent` means it was sent. Prefer `issued_ledger_url` over the
-ledger link built below.
+stakeholders."* When the preview's `summary` said rows need board approval, those rows are
+drafts held for a board consent, not issued: say so, and say Carta sent the consent to the
+board only when you sent `publish_board_consent: true`. Prefer the apply's `meta.web_url` over
+the ledger link built below.
 
-Render a short table using `MM/DD/YYYY`. Add a `Label` or `Grant number` column only when
-`issued[]` actually carried one for every row — the list is documented as security pks, and
-some builds return a `label` (`ES-28`) alongside. Never synthesise the value or guess the next
-number in a sequence: a wrong grant number is worse than an absent column.
+Render a short table of the reviewed rows using `MM/DD/YYYY`, with no label or grant number
+column: the apply and the job don't give one per security, and a guessed grant number is worse
+than none. The apply's `labels` name the draft set; never show them as security labels.
 
-**Don't read the securities back to confirm the issue.** A non-empty `issued` *is* the
-confirmation, and there is no read that would add to it. A server that names what it wrote
-puts `label`, `quantity` and `stakeholder_name` on each entry already; one that does not
-leaves ids, and a read cannot close that gap either —
+**Don't read the securities back to confirm the issue.** A `succeeded` job *is* the
+confirmation, and there is no read that would add to it —
 the only per-security lookups are `cap_table__get__piu`, `cap_table__get__certificate` and
 `cap_table__get__option_grant`, each of which needs a label or id you don't have. They are
 **single-security** lookups: `corporation_id` **plus exactly one** of `label` or
 `security_id`, and neither (or both) is rejected with *"Provide exactly one of security_id or
 label"*. None of them is a lister, and there is no PIU lister at all — the only listers are
 `cap_table__list__certificates` and `cap_table__list__grants`, both `search=<holder name>`.
-So a read-back for a PIU has nowhere to go; report the mutate's own result instead. And never
+So a read-back for a PIU has nowhere to go; report the job's own result instead. And never
 lift a command name out of a log or a tool-name dump: the name resolves, the arguments don't,
 and the failed call is the only thing the user sees for it.
 
@@ -207,7 +180,7 @@ issue, the issue date in long form (`Month D, YYYY`).
 | Canceled, **no real draft set** | *"Issuance canceled on \<company\> — nothing was saved to Carta."* (no link — there is nothing to open) |
 
 A draft set is **real** when this batch was resumed from an existing one, **or** at least one
-row from a `save_drafts` / `issue_securities` call this session came back with a success
+row from a `save_drafts` call this session came back with a success
 `status` and therefore a saved `draft_pk`. It is **not** real when `draft_set_id` is still the
 initial `"new"` placeholder, or when every row's `status` came back an error.
 

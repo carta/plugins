@@ -1,7 +1,6 @@
 # Payload reference
 
-Authoritative shape for the `drafts` payload on `issue_securities` and
-`save_drafts`. Read this before constructing any payload — no invented keys.
+Authoritative shape for the `drafts` payload on `save_drafts`. Read this before constructing any payload — no invented keys.
 Unknown keys fail with `Unknown draft field` or are dropped silently.
 
 This is the **final mutate** contract. What the collect gathers is an earlier-stage shape whose
@@ -330,8 +329,8 @@ Unknown camelCase or snake_case typos fail with `UsageError: Unknown draft field
 
 ## Timeouts & retries
 
-Each mutate has a different server-side ceiling (`validate_drafts` 90s, `save_drafts` and
-`issue_securities` up to 600s for large batches) — a timeout on any of them is a real
+Each mutate has a different server-side ceiling (`validate_drafts` 90s, `save_drafts` up to
+600s for large batches) — a timeout on any of them is a real
 possibility for a big batch, not an edge case. **The wrong retry re-sends the call with the
 wrong params and creates a duplicate draft set or double-issues** — the retry contract
 below exists to prevent that. Never blindly repeat the exact call that just timed out; the
@@ -339,8 +338,7 @@ draft set may already have been created or updated server-side even though the r
 never came back.
 
 - **`validate_drafts` timeout** — retry with `draft_set_id` only, no `drafts` (the
-  `draft_set_id`-only path — see [Run the issue securities
-  mutate](issue-and-close.md#run-the-issue-securities-mutate) and [Validate without
+  `draft_set_id`-only path — see [Validate without
   issuing](engine.md#validate-without-issuing)). The rows are already saved server-side
   from the preceding `save_drafts` call in this same phase, so re-sending them isn't
   necessary and the smaller payload is also less likely to time out again. Never fall back
@@ -354,18 +352,12 @@ never came back.
   `draft_pk` (this is their first save) go in the retry with their full payload, unchanged.
   Never retry a timed-out `save_drafts` by omitting `draft_set_id` — that mints a **second**
   draft set with the same rows (SKILL.md hard rule 3), doubling the draft clutter on the corp.
-- **`issue_securities` timeout** — the highest-stakes case: the mutate may have already
-  issued live securities before the response was lost. **Never blindly re-call
-  `issue_securities`** on a timeout — check the draft set's real state first via
-  `cap_table:get:load_drafts` — wire `cap_table__get__load_drafts` — with `corporation_id`,
-  `security_type`, `draft_set_id`. If the
-  loaded rows show securities already issued (or the corp's ledger reflects the new
-  certificates/grants), the call succeeded despite the timeout — report success, don't
-  re-issue. If the rows are still in draft state, the call never completed server-side —
-  safe to retry `issue_securities` with the same `draft_set_id` and each row's `draft_pk`,
-  same as any other retry (SKILL.md hard rule 3). This check is a mandatory gate before any
-  post-timeout `issue_securities` retry, not an optional precaution — issuing the same
-  batch twice creates duplicate live securities with no automatic undo.
+- **`apply_plan` timeout** — the highest-stakes case: the issue may have started before the
+  response was lost. **Never apply the same plan again.** Preview the issue again: an issue that
+  started blocks the preview, and its check says so (issued, in progress, or waiting for its
+  board consent) — report that. A clean preview means nothing started: ask the approval again
+  with the new `summary`. Issuing the same batch twice creates duplicate live securities with
+  no automatic undo.
 
 ## Gotchas
 

@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
 
 # Manage securities
 
@@ -63,12 +63,15 @@ hold), send the user to the termination flow in the Carta app.
 `cbu`, `piu` or `warrant`. Take it from the user's words first: "RSU" or "restricted stock unit" is
 `rsu`, "RSA" or "restricted stock award" is `rsa`, "SAR", "UAR" or "stock appreciation right" is
 `sar`, "CBU", "cash bonus unit" or "phantom equity" is `cbu`, "PIU", "profits interest" or
-"incentive unit" is `piu`, and "warrant" is `warrant`. "Units" alone is not a type word. With no
+"incentive unit" is `piu`, "warrant" is `warrant`, and "certificate", "share certificate" or
+"stock certificate" is `certificate`, and so are "shares" or "stock" when they name the security
+itself (as in "ES-123 (Shares)"), never as a count ("100 shares") or inside another type's name
+("stock option", "restricted stock unit"). "Units" alone is not a type word. With no
 type word, a `CN-` or `SAFE-` label is a `convertible_note`, an `RSU-` label is an `rsu`, a `PIU-`
 label is a `piu`, a `SAR-` or `UAR-` label is a `sar`, a `CBU-` label is a `cbu` and an `ES-` label
 is an `option_grant`. A prefix is only a first guess, not a type the user named: `CBU-3` starts as
-`cbu`. Other types share these prefixes: `ES-` (RSU, SAR, CBU), `SAR-` (CBU), `UAR-` (PIU, CBU) and
-`CBU-` (PIU, certificate). When the type came only from a prefix and the bootstrap answers
+`cbu`. Other types share these prefixes: `ES-` (RSU, SAR, CBU, certificate), `SAR-` (CBU), `UAR-`
+(PIU, CBU) and `CBU-` (PIU, certificate). When the type came only from a prefix and the bootstrap answers
 `not_found`, ask once which type it is, with the types listed for that prefix, then call the
 bootstrap again with that type. For a prefix with no other types listed (`CN-`, `SAFE-`, `RSU-`,
 `PIU-`), or when the user named the type, quote the `not_found` and stop.
@@ -123,12 +126,13 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 
 ## Flow
 
-1. **Bootstrap.** Call it once per change (twice only for the label retry in [§ Actions](#actions)),
-   after any earlier apply, with `company`, `security_type` and `label` (a list), `security`
-   (ids) or `holder` (the name exactly as the user wrote it). To reverse a
+1. **Bootstrap.** Call it once per change and type (twice only for the label retry in
+   [§ Actions](#actions)), after any earlier apply, with `company`, `security_type` and `label` (a
+   list), `security` (ids) or `holder` (the name exactly as the user wrote it). To reverse a
    cancellation or undo a termination, send `label` or `security`: `holder` finds only
    securities held now. For an
-   edit, always send `look_first: true`, so the Change page opens before the first preview
+   edit, always send `look_first: true` on the first type's bootstrap, so the Change page opens
+   before the first preview
    ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)).
 2. **Read the bootstrap.**
    - `blockers`: for `hard_stop`, quote `message` and `fix`, then stop. Ask about each
@@ -139,8 +143,11 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
      person and 2+ rows are selectable, ask which ones in one `AskUserQuestion`.
 3. **Collect the inputs** for the action. Use the user's words; ask only for what is missing,
    in one `AskUserQuestion` with up to 4 questions. Dates are `YYYY-MM-DD`. Every preview also
-   takes `company` and `security_type`, the same as the bootstrap that found the security.
-   - **Edit:** `securities` (a list of ids; the other previews take `security`). See
+   takes `company` and `security_type`, the same as the bootstrap that found the security. A
+   preview with `changes` sends `security_type` in each item instead.
+   - **Edit:** `securities` (a list of ids; the other previews take `security`), or `changes` for
+     securities with different values or of several types
+     ([change-flow.md § Several securities](references/change-flow.md#several-securities)). See
      [references/change-flow.md](references/change-flow.md) for fields, reason,
      note, Rule 144 and the Change page. The field formats are in
      [references/field-contract.md](references/field-contract.md).
@@ -210,11 +217,14 @@ Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 
 ## Several changes
 
-One approval applies one change: one action, one reason, one security type, and at most
-`limits.max_securities` securities for an edit. Cancels, partial cancels, reverse cancels and undone
-terminations take one security each. Run each change as its own pass through steps 1 to 8, and say the split
-first, with the type of each security: *"These are two changes, certificate CS-1 and option grant
-ES-12. I'll apply them one at a time, starting with CS-1."* Each pass
+One approval applies one change: one action and one reason. An edit can change securities of
+several types, each with its own values, in one preview with `changes`, up to
+`limits.max_securities` securities
+([change-flow.md § Several securities](references/change-flow.md#several-securities)). Cancels,
+partial cancels, reverse cancels and undone terminations take one security each. Different
+reasons are separate changes. Run each change as its own pass through steps 1 to 8, and say the
+split first, with the type of each security: *"These are two changes, an edit of certificate CS-1
+and a cancel of option grant ES-12. I'll apply them one at a time, starting with CS-1."* Each pass
 opens its own page with its own bootstrap and sends that pass's `thread_id`, never an earlier
 pass's.
 

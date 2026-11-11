@@ -5,12 +5,12 @@ Full mechanics for [engine.md § Phase
 you've reached Phase 1.5 — i.e. immediately after Phase 1 resolves every row. Phase 1 runs
 identically whichever of the two branches below fires.
 
-`cap_table:mutate:validate_drafts` runs nearly the same field/integration-level checks
-`issue_securities` does — option-pool headroom, share-class headroom, custom-label uniqueness,
+`cap_table:mutate:validate_drafts` runs nearly the same field/integration-level checks the
+issue preview does — option-pool headroom, share-class headroom, custom-label uniqueness,
 vesting-template/share-class validity, issue-date/FMV checks, quantity precision, document-set
-requirement — everything except the corp-level missing-signatory check that only
-`issue_securities` itself can catch. It needs an existing `draft_set_id`, so validating early
-means saving early too. The incident that put this before the review rather than after is in
+requirement. Only `validate_drafts` reports each row's field errors and the duplicates: the
+issue preview gives neither. It needs an existing `draft_set_id`, so validating early means
+saving early too. The incident that put this before the review rather than after is in
 [incidents.md § Silent data loss](incidents.md#silent-data-loss).
 
 ## The assertion is not advisory
@@ -68,14 +68,14 @@ The user asked to save and stop, rather than to review and issue.
      fold it into the same per-row bucket as `validate_drafts`'s errors (below).
    - **Clean is `validation.success === true`, never an empty `validation.errors`.** Three
      kinds of refusal never appear in that map: `banner_errors` (a refused or vanished
-     draft set), `corporation_errors` (`{field: [msgs]}` — the missing-signatory refusal
-     `issue_securities` raises and `validate_drafts` does not), and `issuance_errors`
+     draft set), `corporation_errors` (`{field: [msgs]}`, such as a missing
+     signatory), and `issuance_errors`
      (flat strings). A failed workflow reports only a `success` that is not `true` and
      names nothing at all. Reading the map alone called every one of these clean.
-   - `validate_drafts`'s `duplicates` is **intentionally not checked here** — duplicate
-     resolution stays at `issue_securities` time (Phase 3), unchanged; folding a 3-way
-     `AskUserQuestion` triage into this retry loop, on top of the error reporting below, is
-     scope this phase doesn't need.
+   - **`duplicates.has_duplicates`** → [mutate-recovery.md § Duplicate
+     resolution](mutate-recovery.md#duplicate-resolution), then validate again.
+   - **`validation.warnings`** → keep each one word for word. They don't block: the Phase 2
+     review quotes every one above its table.
    - **Clean** → proceed to [Phase
      2](issue-and-close.md#phase-2--the-review-gate).
    - **Not clean** → [Re-ask with the server's errors](#re-ask-with-the-servers-errors).
@@ -134,7 +134,7 @@ response onward ([hard rule 3](../SKILL.md#hard-rules)):
 
 | Track | From | Goes on |
 |---|---|---|
-| `draft_set_id` | the first mutate response of its security type | every subsequent call of that type: `issue_securities`, `save_drafts`, `load_drafts`, `validate_drafts`, `resolve_duplicate_stakeholder` |
+| `draft_set_id` | the first mutate response of its security type | every subsequent call of that type: the issue preview, `save_drafts`, `load_drafts`, `validate_drafts`, `resolve_duplicate_stakeholder` |
 | each row's `draft_pk` | that row's first save | that row on every retry, alongside *every* required field |
 | each row's `row_key` | the key you assigned the row when you collected it | the key you match `draft_pk` back by |
 

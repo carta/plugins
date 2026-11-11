@@ -81,7 +81,8 @@ confirm has no `preview` field, put it in the question text.
 only as a one-line summary. A confirm that reaches the user without the terms means they
 approved an irreversible issuance blind. Tool input reaches the user word for word, so the
 preview holds the whole review: the table, the one-line default explanations,
-the draft set the rows were saved into, and the type's confirm sentence
+the draft set the rows were saved into, the issue preview's `summary` and `side_effects`
+([SKILL.md § Issue](../SKILL.md#issue)), and the type's confirm sentence
 ([issue-and-close.md](issue-and-close.md#say-what-confirming-actually-does--it-differs-by-type)).
 The question stays short and names only the choice.
 

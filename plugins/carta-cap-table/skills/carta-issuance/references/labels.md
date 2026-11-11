@@ -39,6 +39,6 @@ Document sets, vesting schedules, option plans, legends, unit classes, draft set
 stakeholders are always referred to **by name**. Their ids are an internal payload concern —
 including a PIU's `option_plan`, which carries a plan pk despite being a text field.
 
-This table cannot be exhaustive against every field `validate_drafts` / `issue_securities`
+This table cannot be exhaustive against every field `validate_drafts` / the issue preview
 might name. For anything not listed, apply the mechanical rule — never surface the raw
 `snake_case` key verbatim, including when echoing server `banner_errors` back.

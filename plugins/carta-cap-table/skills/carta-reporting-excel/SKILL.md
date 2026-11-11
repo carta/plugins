@@ -23,7 +23,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.111.15</carta-plugin>
 
 # Excel Export
 

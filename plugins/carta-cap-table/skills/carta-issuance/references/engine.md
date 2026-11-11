@@ -9,7 +9,7 @@ unavailable, never offer to start a dev server, and never say it is blocked on a
 a connection.
 
 The engine is this file: resolve `security_type` → fetch reference data → run the gates →
-collect → assemble rows → `save_drafts` / `validate_drafts` / `issue_securities` → recovery.
+collect → assemble rows → `save_drafts` / `validate_drafts` / issue preview and apply → recovery.
 
 Three more reads, each at its own moment:
 
@@ -28,9 +28,9 @@ Three more reads, each at its own moment:
   resolves — exactly one, and never before. Loading the wrong one is pure cost, and a grant run
   has no use for Rule 144.
 
-The path ends at the `issue_securities` mutate
-([Phase 3](issue-and-close.md#phase-3--on-confirmation-run-the-mutate)). The host's
-confirmation prompt on that mutate is the final, irreversible gate — never the review gate.
+The path ends at the named `apply_plan` call
+([Phase 3](issue-and-close.md#phase-3--on-confirmation-apply-the-plan)). The host's
+confirmation prompt on that call is the final, irreversible gate — never the review gate.
 
 ---
 
@@ -47,7 +47,7 @@ five bind on **this** path, because they govern building a surface and a payload
 3. **No id sniffing.** Required values come from user input, the stakeholder roster this run
    resolved against, or a documented default — never scraped from another grant or certificate.
    If none of the three applies, ask via `AskUserQuestion`.
-4. **Pre-save assertion.** Before *any* `save_drafts` or `issue_securities` call, walk every row
+4. **Pre-save assertion.** Before *any* `save_drafts` call, walk every row
    and confirm each `always` field (per [Row templates](#row-templates)) holds a non-null value.
    If one is missing, recover **before** the call, in order: (a) the row template's documented
    default; (b) re-run the stakeholder lookup (`detail=full`) and re-stamp
@@ -124,7 +124,7 @@ doubles as the account-level hard stop and as Phase 0.5's reference-data fetch, 
 ### Step 1 — Load every tool in ONE ToolSearch call
 
 ```
-ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user,mcp__carta__cap_table__get__draft_set_companion,mcp__carta__view_remote"
+ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user,mcp__carta__cap_table__get__draft_set_companion,mcp__carta__cap_table__mutate__apply_plan,mcp__carta__view_remote"
 ```
 
 `mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
@@ -140,7 +140,8 @@ genuinely gone: say so and stop. Everything else that looks like an answer is no
 
 One call, the complete set for the run. `view_remote` is there for the
 [companion surface](companion-surface.md); `cap_table__get__draft_set_companion` matches only when Carta offers the
-companion, so no match is the normal case, never a connection signal.
+companion, so no match is the normal case, never a connection signal. `cap_table__mutate__apply_plan` is the issue
+([SKILL.md § Issue](../SKILL.md#issue)).
 **`read_tool` and `call_tool` are loaded here, up front**, so Phase 2 never has to load them after the user confirms — that would be serial latency at the worst
 possible moment.
 
@@ -181,7 +182,8 @@ way; `arguments`, never `params`. Names this skill once got wrong are marked.
 | `cap_table:get:cap_table_by_share_class` — context math only | `cap_table__get__cap_table_by_share_class` |
 | `cap_table:mutate:save_drafts` | `cap_table__mutate__save_drafts` |
 | `cap_table:mutate:validate_drafts` | `cap_table__mutate__validate_drafts` |
-| `cap_table:mutate:issue_securities` | `cap_table__mutate__issue_securities` |
+| `cap_table:compute:issue_draft_set_preview` | `cap_table__compute__issue_draft_set_preview` |
+| `cap_table:get:task` | `cap_table__get__task` |
 | `cap_table:mutate:resolve_duplicate_stakeholder` | `cap_table__mutate__resolve_duplicate_stakeholder` |
 
 There is no `cap_table:get:cap_table_summary` and no `cap_table:get:draft_set_init`. Don't
@@ -242,7 +244,7 @@ gateway error, HTML body or timeout is transient and gets **one** retry
 ([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
 **The retry cap is one, and it is a hard cap.** It counts **the failing operation, not the
-call**: if `save_drafts` fails twice, a follow-up `issue_securities` against the same draft set
+call**: if `save_drafts` fails twice, a follow-up issue preview against the same draft set
 is not a fresh attempt — it is the third try at the same write, and a traced run burned three
 500s that way. A second failure means waiting: re-running the same call against a 502 cannot
 succeed, and repeated attempts are the inner-loop thrash this skill's budgets exist to prevent.
@@ -483,10 +485,10 @@ The keys:
 
 | Key | Severity | Means |
 |---|---|---|
-| `option_plan.none_selectable` | `hard_stop` | No plan this grant could issue from — every one expired, or none with shares available |
+| `option_plan.none_selectable` | `hard_stop` | No plan this grant could issue from — every one expired, or none with shares available: for a live plan, offer [the pool increase](mutate-recovery.md#fix-it-in-this-chat) |
 | `grant_expiration.before_issue_date` | `hard_stop` | The plan-derived expiry lands before the issue date, so the server rejects the grant |
 | `grant_expiration.unchecked_no_issue_date` | `informational` | No `issue_date` was passed, so the server did not run the check above; carries each plan's derived expiry instead. Compare each expiry with `knowns_seed.today_iso`: an expiry before it is the `before_issue_date` hard stop |
-| `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from |
+| `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from: [mutate-recovery.md § Fix it in this chat](mutate-recovery.md#fix-it-in-this-chat) says what to offer |
 | `valuation.multiple_active_same_class` | `needs_decision` | An HMRC report's AMV and UMV are both live — the admin picks; leave the exercise price unanswered until they do |
 | `jurisdiction.unresolved_conflict` | `needs_decision` | Competing signals and **deliberately no verdict** |
 
@@ -503,8 +505,8 @@ mutate, so a corporation with no plan this grant could issue from cannot issue a
 nothing downstream says so. The account-setup gate reads `document_sets` and passes, the collect
 gathers every field, and the run dies at `save_drafts` after the admin has answered everything.
 `option_plan.none_selectable` is the mechanism: it catches expired plans **and** plans with no
-available shares. Stop with its message, naming the plan and its date so the admin knows what to
-fix:
+available shares. For an expired plan, stop with its message, naming the plan and its date so
+the admin knows what to fix:
 
 > *"\<Company\>'s only equity plan, \<name\>, expired on \<MM/DD/YYYY\>. Carta can't issue an
 > option grant without a live plan — adopt a new one or extend that one in the Carta app, then
@@ -685,9 +687,8 @@ never sent to the mutate.
 ## Phase 1.5 — Save + validate before review (or save-only)
 
 Reached immediately after Phase 1 resolves every row. Saving and validating *before* the review
-exists is deliberate: `validate_drafts` runs nearly every check `issue_securities` does — all but
-the corp-level missing-signatory check — and it needs an existing `draft_set_id`, so validating
-early means saving early too. Reviewing an unvalidated summary means the user first learns of a
+exists is deliberate: `validate_drafts` reports what the issue preview cannot
+([save-validate-flow.md](save-validate-flow.md)), and it needs an existing `draft_set_id`, so validating early means saving early too. Reviewing an unvalidated summary means the user first learns of a
 rejection at the final confirm, after a draft row has already been created.
 
 Full mechanics — the save-only branch, translating server errors into something sayable,
@@ -765,13 +766,13 @@ never sent to the mutate.
 ## Pre-mutate checklist
 
 Tick before any mutate — Phase 1.5's `save_drafts` / `validate_drafts` included, not just the
-final `issue_securities`:
+final apply:
 
 - [ ] `security_type` resolved and passed on every call
 - [ ] Every row's `issue_date_relationship`, `email`, `stakeholder_kind` and `stakeholder_id` came from the `issuance_init` `stakeholders` section (or the Phase 1 `names=` lookup), not from the collect alone
 - [ ] **Cert:** share class resolved → `prefix`. **Grant:** option plan resolved, `so_type` autofills applied (`currency`, `exemption`). **PIU:** unit class resolved → `prefix`, `threshold_value` and `threshold_value_type` both set, equity plan resolved **or deliberately empty**
 - [ ] Every `always` field populated per the row template; pre-save assertion passed (engine rule 4)
-- [ ] **For `issue_securities` only:** the review was printed and confirmed (Phase 2 → 3). Phase 1.5's calls precede the review by design, so this doesn't apply to them
+- [ ] **For the apply only:** the review, with the latest preview's `summary`, was confirmed (Phase 2 → 3). Phase 1.5's calls precede the review by design, so this doesn't apply to them
 - [ ] If retry: `draft_set_id` + each row's `draft_pk` in the payload ([SKILL.md hard rule 3](../SKILL.md#hard-rules))
 
 ---
@@ -831,7 +832,7 @@ Check it:
   with the link `[Drafts UI](<BASE_URL>/drafts/<security_type>/<CORP_ID>/draft/?draftSetPk=<draft_set_id>)`.
 - **Some errored** → surface verbatim per failing `draft_pk`, recover via
   [mutate-recovery.md](mutate-recovery.md#error-recovery), then re-call
-  `save_drafts` (**not** `issue_securities`) with the same `draft_set_id` + each `draft_pk`.
+  `save_drafts` with the same `draft_set_id` + each `draft_pk`.
 - **All failed** → surface verbatim; *"No drafts saved. Fix the errors above and re-try."* — no
   Drafts-UI link, since there is nothing there to open.
 
@@ -858,7 +859,7 @@ report.
 
 Everything from the review gate to the closing line lives in
 [issue-and-close.md](issue-and-close.md): Phase 2's review and its single confirmation, Phase 3's
-branch table, the `issue_securities` call and its response handling, the success rendering,
+branch table, the preview, the apply and its results, the success rendering,
 draft-row cleanup, and every closing template.
 
 **Read it when you reach Phase 2**, not before — after Phase 1.5 returns clean, or straight

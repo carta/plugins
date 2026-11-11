@@ -24,7 +24,7 @@ Carta pages are opened only from a Carta-returned address. Never build one.
 
 **First rule: save what you know, record its sources, then ask.**
 
-Load `view_remote` with one `ToolSearch`. The browser tools load as
+Load `view_remote` and the named `cap_table__mutate__apply_plan` with one `ToolSearch`. The browser tools load as
 [§ 4](#4-open-the-page-at-once)'s procedure says.
 
 - A **pane host** is a host where that procedure opens the page beside this chat.
@@ -140,8 +140,8 @@ again unless stuck.
 
 **On a pane host where the page opened**, the page's Issue is the one gate. Once no input is
 open and the check is clean, say: "All set. Review the draft set on the right and issue it there
-with the type's Issue button at the bottom of the page." Never call
-`cap_table:mutate:issue_securities` there; point to that button.
+with the type's Issue button at the bottom of the page." Never issue it from the chat there;
+point to that button.
 
 **Once you told them to issue on the page**, call `cap_table:get:draft_set_companion` once with
 `wait_for_issue: true`. `issue_state` `done`: say how many issued, then `issue_summary.sentence`,
@@ -149,13 +149,16 @@ then [§ 10](#10-follow-through). `failed`: say the page shows why. `running`: s
 still issuing. Null: if `status` is `issued`, `partially_issued` or `pending_board_approval`,
 close on it with § 10; otherwise say Issue is not pressed yet.
 
-**Elsewhere**, ask one `AskUserQuestion` naming the latest revision: "Issue revision 7?". Its
+**Elsewhere**, read `cap_table:get:draft_set_companion`, then call
+`cap_table:compute:issue_draft_set_preview` with `company`, `security_type`, `draft_set_id`,
+and the read's `version` when it has one. A blocked preview: say each failed check, and issue
+nothing. Else ask one `AskUserQuestion` naming the preview's `revision`: "Issue revision 7?". Its
 Issue option's `preview` holds the review, with `issue_summary`'s agreement, signatories and
-holders to email from `cap_table:get:draft_set_companion`. Never print the review as prose
-before the question: the host shows that prose only as a one-line summary. Once confirmed, read it again; if its status is `issued`,
-`partially_issued` or `pending_board_approval`, close on it. Otherwise call
-`cap_table:mutate:issue_securities` with `corporation_id`, `security_type` and `draft_set_id`,
-and no `drafts`.
+holders to email from the read, and the preview's `summary`. Never print the review as prose
+before the question: the host shows that prose only as a one-line summary. Once confirmed, apply
+the plan and follow its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says, then read `cap_table:get:draft_set_companion` and
+close on its `status`. A save after the preview makes
+the plan stale: preview and confirm again.
 
 **Each turn on this set**, before any write, read `cap_table:get:draft_set_companion`. Its
 `status`: `issued` or `partially_issued`, close; `pending_board_approval`, say the set is held
@@ -243,8 +246,8 @@ save, and the issue is the chat confirm below. Run the issuance in the chat as
 still go through its import, and the review is still printed in the chat before the confirm.
 Opening the page is not building a form or HTML of your own: chat is still the surface.
 
-From the first save on, `save_drafts`, `validate_drafts`, `issue_securities` and `load_drafts`
-results carry `companion_url` and `revision`. Keep the latest `revision`.
+From the first save on, `save_drafts`, `validate_drafts` and `load_drafts` results carry
+`companion_url` and `revision`. Keep the latest `revision`.
 
 **Open the page after the first save.** After the save and validate, post `companion_url` and
 open it as [§ 4](#4-open-the-page-at-once) says, with `companion_url` as the address. A sign-in
@@ -257,14 +260,18 @@ then the review again. Don't open or navigate the browser again unless the user 
 stuck or wrong, and never start a second draft set for an edit. A resume reads `companion_url`
 and `revision` from `load_drafts` and follows the same rules.
 
-**The confirm names the revision.** The confirm is the chat surface's one `AskUserQuestion`, with
-the latest `revision` in the question and the issue option, and its other options as they are:
+**The confirm names the revision.** Before the confirm, call
+`cap_table:compute:issue_draft_set_preview` with `company`, `security_type` and `draft_set_id`.
+A blocked preview: say each failed check, and issue nothing. The confirm is the chat surface's
+one `AskUserQuestion`, with the preview's `revision` in the question and the issue option, its
+`summary` in the review, and its other options as they are:
 
 > *"Issue revision 3?"* · issue option `"Issue revision 3 now"`
 
 It's the number the page shows, so the user approves what they reviewed. Name only a `revision`
-a Carta result returned in this run, never one you worked out. A save after the review mints a
-new revision: review and confirm again with that number.
+a Carta result returned in this run, never one you worked out. A save after the preview mints a
+new revision: preview and confirm again with that number. Once confirmed, apply the plan and
+follow its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says.
 
 **Follow-through.** Close as the skill does, then one line naming 2 or 3 next steps, such as
 reminding the signatory to sign or showing the updated cap table. Until it's issued, say "the

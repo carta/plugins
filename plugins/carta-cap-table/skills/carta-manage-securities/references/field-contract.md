@@ -41,8 +41,9 @@ is false (see the table above).
 
 ## Rules users trip on
 
-- **Single-security fields.** `quantity`, `option_plan`, `custom_label` and `prefix_label` change
-  on one security at a time. With 2+ securities the bootstrap marks them `single_security_only`.
+- **Single-security fields.** `quantity`, `option_plan`, `custom_label`, `grant_number`, `label`,
+  `number`, `prefix_label`, `prefix_number`, `grant` and `note_to_convert` change on one security
+  at a time. With 2+ securities the bootstrap marks them `single_security_only`.
 - **Post-termination exercise periods** are not changed by this skill. Send the user to Carta.
 - **Documents** are not edited here (`why_not.code: documents`). Send the user to Carta.
 - **`dividend_accrual_start_date`** is share-class gated: Carta rejects a value that does not fit
