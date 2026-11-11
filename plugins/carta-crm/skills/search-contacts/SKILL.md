@@ -7,6 +7,8 @@ description: >
   "list contacts", "find people at [company]", "search people", or "/search-contacts".
   Returns contact details including ID, name, email, title, company, and tags.
   The contact ID returned can be used with the update-contact skill.
+  Not for warm introductions: "who do I know at [company]", "find connections at [company]"
+  and "how do I reach [company]" go to get-angles.
 allowed-tools:
   - mcp__carta__crm_view_tool
   - mcp__carta__crm_call_tool
@@ -19,7 +21,7 @@ model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.12</carta-plugin>
+<carta-plugin>carta-crm:1.20.13</carta-plugin>
 
 ## Overview
 
