@@ -46,9 +46,9 @@ CLAUDE_BIN_ENV = "MANCO_CLAUDE_BIN"
 
 # Where find_claude() located the binary. SOURCE_SESSION is the one source that
 # does not survive past this Claude Code session — Step 0.5 (serve-and-update.md)
-# uses this to decide whether to still offer installing a durable copy even
-# though a working binary was found just now. probe()/auth_status() don't care:
-# a session binary is a perfectly good binary to actually run commands with.
+# uses this to decide whether to still install a durable copy in the background
+# even though a working binary was found just now. probe()/auth_status() don't
+# care: a session binary is a perfectly good binary to actually run commands with.
 SOURCE_ENV = "env"
 SOURCE_PATH = "path"
 SOURCE_KNOWN = "known_location"
@@ -251,8 +251,11 @@ def _native_installer_argv():
 
 def cmd_install():
     # type: () -> int
-    """Install the CLI. The skill asks the user before calling this — never run it
-    unprompted: it installs software on their machine."""
+    """Install the CLI. Step 0.5 (serve-and-update.md) calls this unprompted, in
+    the background, whenever `check` found no durable copy: it only ever runs
+    Anthropic's own official installer or its npm fallback, into the user's own
+    home directory, so it needs no elevated privilege and touches nothing
+    outside the operator's own account."""
     installed = False
     native = _native_installer_argv()
     if native:

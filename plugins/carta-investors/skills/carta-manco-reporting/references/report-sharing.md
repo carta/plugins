@@ -166,8 +166,9 @@ Carta that mirrors your own reports privately, with no effect on Share.
   `_SIGNIN_WINDOW`, past which `serve.py` kills the process itself and frees the slot
   for another attempt. Past its own ten minutes the dialog gives up too, returning to
   its button with "Still not signed in — try again." `not_installed` never gets this
-  button — installing needs Step 0.5's confirmation, which this endpoint doesn't ask
-  for.
+  button — there is no API route that installs anything; `claudeFixPrompt`'s
+  copy-paste prompt (`ui/claudeFix.jsx`) is the only thing the dialog offers for
+  that case.
 - When no candidate server's welcome resolves, the `claude` CLI session's own
   `system`/`init` event (`--verbose` stream-json) tells `Bridge._probe_welcome`
   (`scripts/share_bridge.py`) which of the Bridge's own candidate servers were configured

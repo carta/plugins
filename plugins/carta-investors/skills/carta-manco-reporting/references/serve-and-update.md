@@ -14,10 +14,12 @@ Claude Code binary, from Anthropic — installed and signed in. Detect it now, b
 the data-fetch wait in Steps 2.5-3, so a missing CLI is resolved up front rather than
 surfacing as a sharing failure much later.
 
-**This step never fails the skill.** The dashboard itself needs none of this — only
-report sharing does. A launch without a working `claude` CLI still proceeds; sharing
-just won't work until it's fixed, which `serve.py` and the dashboard surface on their
-own (see [report-sharing.md](report-sharing.md)).
+**This step never fails the skill, never adds its own wait to the launch, and is
+silent.** The dashboard itself needs none of this — only report sharing does. A
+launch without a working `claude` CLI still proceeds, same as a launch where one was
+found; sharing just won't work until it's fixed, which `serve.py` and the dashboard
+surface on their own, with their own install prompt (see
+[report-sharing.md](report-sharing.md)).
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/preflight_claude.py" check
@@ -33,32 +35,43 @@ is set.** That path names a specific Claude Code version — in Claude Desktop i
 the app's own bundled binary, which auto-update deletes. `serve.py` is long-lived
 (up to the 24h idle timeout) and outlives this session, so a binary only found this
 way will vanish under it later, breaking chat and sharing with no obvious cause.
-Treat `claude_source=session` the same as `claude_bin=none` for the install offer
-below — still pass the found path to Step 5b in the meantime (it works right now),
-but offer to install a durable copy so the dashboard doesn't silently break later.
+Treat `claude_source=session` the same as `claude_bin=none` below — still pass the
+found path to Step 5b in the meantime (it works right now), but still try to land a
+durable copy so the dashboard doesn't silently break later.
 
 - `claude_bin=<path>` with `claude_source` anything but `session` → capture the path
   for Step 5b. No output to the user, whatever `claude_auth=` says — a signed-out
   CLI only affects sharing and chat, which report their own problem when the
   operator tries them.
-- `claude_bin=none` → ask via `AskUserQuestion` before installing anything:
-  > "Sharing reports from the dashboard needs the Claude Code CLI (`claude`), which
-  > isn't installed here. Want me to install it? (runs Anthropic's installer)"
-- `claude_bin=<path>` with `claude_source=session` → same offer, worded for what's
-  actually true (a working CLI was found, it just won't last):
-  > "The Claude Code CLI is only available here as this Claude Code session's own
-  > copy, which an update can remove later and break sharing and chat. Want me to
-  > install a lasting copy? (runs Anthropic's installer)"
+- `claude_bin=none`, or `claude_bin=<path>` with `claude_source=session` → start the
+  installer **in the background** right away, with no question asked and nothing
+  printed to the user either way:
+  ```bash
+  uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/preflight_claude.py" install
+  ```
+  Use the Bash tool's `run_in_background` for this call. It uses Anthropic's native
+  installer and falls back to npm, which together can take up to 10 minutes
+  (`preflight_claude.py`'s own 300s timeout on each) — running it in the foreground
+  here would add that wait to every launch on a machine where it keeps failing (no
+  WARP, a sandboxed machine, egress blocked). In the background it overlaps the
+  Steps 2.5-3 data fetch instead, so the launch takes the same time either way.
+  Until it finishes, carry forward the path `check` already found above — `none`, or
+  the `claude_source=session` path, which still works right now even though it
+  isn't durable.
 
-  Both cases:
-  - **Yes** → run `preflight_claude.py install`. It uses Anthropic's native installer
-    and falls back to npm. Then use the printed path for Step 5b. If it still prints
-    `claude_bin=none` or `claude_source=session`, say the install didn't succeed and
-    treat it as **No**.
-  - **No** → continue (using the `claude_source=session` binary in the meantime,
-    if one was found). The dashboard works; report sharing surfaces its own
-    "Couldn't start a Claude session for sharing — is Claude Code installed?"
-    message until the operator installs and signs in.
+  **Read the install's result just before Step 5b needs `--claude-bin`, not before**
+  — check the backgrounded shell's output with `BashOutput`:
+  - Still running → go to Step 5b without `--claude-bin`. Never wait for it:
+    `serve.py` runs the same search itself when the flag is omitted, so a durable
+    copy that lands after this launch is picked up the next time the dashboard
+    searches, not lost.
+  - Finished, now printing `claude_bin=<path>` with `claude_source` anything but
+    `session` → pass that path to Step 5b instead of the one carried forward above.
+  - Finished, still printing `claude_bin=none` or still `claude_source=session` →
+    the install didn't land a durable copy. Pass the carried-forward path to Step
+    5b, or omit `--claude-bin` when it is `none`, and continue; nothing to say to
+    the operator. Report sharing surfaces its own install prompt the next time they
+    actually try to share (see [report-sharing.md](report-sharing.md)).
 
 ## How the app is served — no build step for app edits
 
@@ -350,10 +363,11 @@ nohup python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.
 
 `<user_src_dir>` is the `user_src_dir` value from Step 4.8's `check` output.
 
-Append `--claude-bin "<path>"` only when Step 0.5 found one (`claude_bin=<path>`,
-not `none`). `serve.py` runs the same search itself when it's omitted, and finds
-the binary again if the given path disappears (a Claude Code auto-update deletes
-old versions), so the flag is a hint rather than a requirement.
+Append `--claude-bin "<path>"` with the path Step 0.5 settled on (see its last
+bullets); omit it when Step 0.5 says to. `serve.py` runs the same search itself
+when it's omitted, and finds the binary again if the given path disappears (a
+Claude Code auto-update deletes old versions), so the flag is a hint rather than
+a requirement.
 
 To test report sharing with one particular connector (a test connector, say), add
 `--share-mcp-server <connector_name>` so shares use only that one — see

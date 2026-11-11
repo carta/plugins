@@ -4,8 +4,12 @@ import { Btn } from "./components.jsx";
 import { trackClick } from "../analytics.js";
 
 // The fix for each `claude` CLI status scripts/preflight_claude.py reports, worded to start a prompt.
+// `not_installed` means no `claude` binary was found at all — Step 0.5 already tries a silent,
+// backgrounded install on launch (serve-and-update.md), so by the time an operator sees this
+// prompt that attempt has already run (or is still running, or never got a durable copy to
+// stick), which is why this names the official installer.
 export const CLAUDE_FIX_STEP = {
-  not_installed: "Install the Claude Code CLI (the `claude` command)",
+  not_installed: "Install the Claude Code CLI (the `claude` command) with Anthropic's official installer",
   not_logged_in: "Sign in to Claude Code (`claude auth login`)",
 };
 
@@ -82,11 +86,12 @@ export function canSignIn(code, hosted) {
 }
 
 // A one-click alternative to ClaudePrompt's copy-and-paste, for the one code a
-// button can actually fix here: signed out, not missing. A missing CLI needs
-// installing (Step 0.5's AskUserQuestion flow), which this never offers to do on
-// its own. Returns null outside that one case, so a caller can render it
-// unconditionally next to ClaudePrompt. `event` is the caller's own analytics id
-// for the button click — see references/analytics.md's catalogue.
+// button can actually fix here: signed out, not missing. A missing CLI is Step
+// 0.5's own backgrounded install to land (serve-and-update.md) — there is no
+// button here that can install one on the spot. Returns null outside that one
+// case, so a caller can render it unconditionally next to ClaudePrompt. `event`
+// is the caller's own analytics id for the button click — see
+// references/analytics.md's catalogue.
 // `onSuccess`, when given, fires once as soon as a poll confirms sign-in
 // worked — a caller that can retry on its own (ChatPanel.jsx resending the
 // turn that hit `not_logged_in`) doesn't need the operator to notice "Signed
