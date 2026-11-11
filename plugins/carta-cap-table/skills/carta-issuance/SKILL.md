@@ -53,9 +53,11 @@ allowed-tools:
   - mcp__remote-devices__Claude_Browser__preview_start
   - mcp__remote-devices__Claude_Browser__navigate
   - mcp__remote-devices__Claude_Browser__tabs_context
+  - mcp__remote-devices__Claude_Browser__tabs_create
   - mcp__Claude_Browser__preview_start
   - mcp__Claude_Browser__navigate
   - mcp__Claude_Browser__tabs_context
+  - mcp__Claude_Browser__tabs_create
   - mcp__ccd_view__show_pane
   - enable__mcp__remote-devices__Claude_Browser
   - mcp__Claude_in_Chrome__tabs_context_mcp
@@ -67,7 +69,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.111.19</carta-plugin>
+<carta-plugin>carta-cap-table:6.112.0</carta-plugin>
 
 # Issue Securities
 
