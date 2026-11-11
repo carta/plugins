@@ -32,7 +32,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.10</carta-plugin>
+<carta-plugin>carta-crm:1.20.11</carta-plugin>
 
 ## Overview
 

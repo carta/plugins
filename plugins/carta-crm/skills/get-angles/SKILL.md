@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.10</carta-plugin>
+<carta-plugin>carta-crm:1.20.11</carta-plugin>
 
 ## Overview
 
@@ -198,14 +198,60 @@ treat it as domain-level coverage rather than inferring from a name.
 
 ## Step 3 — Rank by route quality
 
-Order the headline answer this way:
+Order the headline answer this way, whatever the response shape:
 
 0. **The user is already a connector.** A path with `pathType: "direct"` means the acting user
    personally worked at the shared employer. The route is `You -> Target` with that employer as
    the hop, and the ask is a direct reach-out, not an intro request. It fills `recommended`
    differently — see **A direct route** under Step 5.
 1. A colleague of ours with live, target-matched history (Step 2).
-2. Warm routes, tiered below.
+2. Warm routes: the ranked shape or the classic shape below.
+
+Pick the shape once. When the response has `bestWayIn`, or any contact carries `tier`, it has
+the ranked shape. Otherwise it has the classic shape.
+
+### Ranked shape
+
+The server has already ranked these routes. Each contact and path carries `tier`, `band`,
+`confidence`, `reason`, `yourRelationship`, `insideTarget`, `employerIndustry` and
+`employerLocation`. **Use its order. Do not re-rank with the classic tiers.**
+
+**No strong route:** after cases 0 and 1 above, when `bestWayIn` is absent, or its introducer's
+`band` is `low`, say in two lines that there is no strong warm route, and stop. Do not fill `recommended` with
+that route.
+
+Otherwise, after cases 0 and 1 above, lead the warm-route answer with `bestWayIn`, in plain
+words, before the map:
+
+1. **Who to ask:** `bestWayIn.introducer.name`, and who they reach: `bestWayIn.reaches.name`
+   and `reaches.title`. When `reach` is more than 1, say how many people at the target they
+   reach.
+2. **Why:** quote `bestWayIn.why`. Add the introducer's role inside the target when
+   `insideTarget` is set (`board`: "sits on the board", `investor`: "is an investor",
+   `employee`: "works there"; `presence: "past"` makes it past tense). Add the shared
+   company and the overlap years from the path when they exist.
+3. **How strong:** the introducer's `band` as a word (`high`: "strong", `medium`: "good"),
+   and `yourRelationship`: "you have N interactions with them", or "you have no recorded
+   interactions with them" when `band` is `none`.
+4. **Next best:** `bestWayIn.next.introducer.name` and who they reach, in one line. Omit it
+   when `next` is absent.
+
+Then give a short ranked list, at most 4 people, grouped by tier in this order: 1 "Your
+teammates", 2 "People you know", 5 "Known by your colleagues", 3 "CRM contacts", 4 "Other
+contacts". Each line names the person, who they reach and the band word (`low`: "weak").
+
+Three rules:
+
+- **Never show a raw number.** No `confidence`, `score`, `bestPathScore`, `strength`, `weight`
+  or tier number reaches the user. The interaction count from `yourRelationship` is the only
+  number the answer states.
+- **Never offer a `hidden` route**, and never offer a `low` route as the recommendation.
+- `bestWayIn` fills `recommended` on the map (Step 5): the introducer is the connector and
+  `reaches` is the target. The alternates follow the server's order.
+
+### Classic shape
+
+Rank the warm routes with these rules, exactly as written.
 
 **Tiers — a route you can walk beats a grander one you cannot:**
 
