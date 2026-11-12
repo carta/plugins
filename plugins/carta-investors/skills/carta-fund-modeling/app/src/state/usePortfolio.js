@@ -55,7 +55,7 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     }
     if (notReady(s, pr) || !s?.funds || !Array.isArray(pr?.slices)) return;
     setSnapshot(s);
-    setTrackingFirm(s?.source?.firmId);
+    setTrackingFirm(s?.source?.firmId, firm);
     const fresh = hydrateDoc(pr);
     const shown = docRef.current?.activeSliceId;
     if (keepSelection && shown && shown !== fresh.activeSliceId && fresh.slices.some((x) => x.id === shown)) {

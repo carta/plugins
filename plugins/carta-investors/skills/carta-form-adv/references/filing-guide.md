@@ -21,13 +21,7 @@ Tell the user once at the start: *"Building your Form ADV interactive filing gui
 
 ### Step 1 — Build the data file
 
-Extract values from Query 1, Query 2, and Query 3. First resolve the system temp directory:
-
-```bash
-uv run python -c "import tempfile; print(tempfile.gettempdir())"
-```
-
-This returns `/tmp` on macOS/Linux or `C:\Users\…\AppData\Local\Temp` on Windows. Then use the `Write` tool to create `<resolved-tmpdir>/form_adv_data.json` — substitute the actual resolved path:
+Extract values from Query 1, Query 2, and Query 3. Use the `Write` tool to create `~/.cache/carta-form-adv/form_adv_data.json`:
 
 ```json
 {
@@ -64,7 +58,7 @@ Use actual query result values — no placeholders. *Lowercase all JSON keys* �
 ```bash
 TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
 uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_artifact.py \
-  --data "${TMPDIR}/form_adv_data.json" \
+  --data ~/.cache/carta-form-adv/form_adv_data.json \
   --title "<FirmName> — Form ADV <Year>" \
   --out "${TMPDIR}/FormADV_<FirmName>_<Year>.html"
 ```
@@ -76,7 +70,7 @@ Run immediately after Step 2 (reuses the same JSON data file):
 ```bash
 TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
 uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_generator.py \
-  --data "${TMPDIR}/form_adv_data.json" \
+  --data ~/.cache/carta-form-adv/form_adv_data.json \
   --title "<FirmName> — Form ADV <Year>" \
   --out "${TMPDIR}/FormADV_<FirmName>_<Year>.xlsx"
 ```

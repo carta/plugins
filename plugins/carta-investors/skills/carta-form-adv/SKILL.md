@@ -35,13 +35,13 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_artifact.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_generator.py *)
   - Bash(uv run python -c "import tempfile; print(tempfile.gettempdir())")
-  - Write
+  - Write(~/.cache/carta-form-adv/**)
   - Read
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.41.7</carta-plugin>
+<carta-plugin>carta-investors:7.41.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -115,7 +115,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/references/queries.md` for the
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/references/filing-guide.md` and execute its four sub-steps in order, every time:
 
-1. Build `form_adv_data.json` with the actual query result values (no placeholders).
+1. Build `~/.cache/carta-form-adv/form_adv_data.json` with the actual query result values (no placeholders).
 2. Run `generate_form_adv_artifact.py` → HTML artifact.
 3. Run `form_adv_excel_generator.py` → Excel filing reference.
 4. Surface the HTML file path so the user can open it in a browser.

@@ -11,8 +11,8 @@ description: >
   "brand guidelines from site", "analyze brand from website", "brand from this deck", "brand audit".
 allowed-tools:
   - Read
-  - Write
-  - Edit
+  - Write(./carta-brand-extraction/**)
+  - Edit(./carta-brand-extraction/**)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_website.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_deck.py" *)
   - mcp__claude_ai_carta__welcome
@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.41.7</carta-plugin>
+<carta-plugin>carta-investors:7.41.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -142,15 +142,17 @@ mcp__claude_ai_carta__read_tool({"name": "fa__get__brand_board"})
 
 ### Phase 2: Extract brand signals
 
+Every file this skill writes goes in the working folder, `./carta-brand-extraction/`: the saved analysis report, deck logo candidates, and the PDF or PPTX board. Create the folder before anything writes to it (`analyze_deck.py` and both board generators do; for the saved report, create it with a first `Write` there).
+
 Run the analysis script:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_website.py" <url>
 ```
 
-This returns a JSON report with raw extraction data. **Save the output** — you will reference it throughout composition.
+This returns a JSON report with raw extraction data. **Save the output** to `./carta-brand-extraction/analysis.json` — you will reference it throughout composition.
 
-**From a deck.** When the user gave a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF deck, run the deck reader on it (alongside the website analysis when there is a URL too), saving logo candidates in your working folder:
+**From a deck.** When the user gave a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF deck, run the deck reader on it (alongside the website analysis when there is a URL too), saving logo candidates in the working folder:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_deck.py" "<deck file path>" --out-dir "<working folder>"
@@ -238,12 +240,12 @@ Read the appropriate snippet template:
 **For PDF:**
 1. Read `snippets/brand_board_pdf.py`
 2. Construct the `data` dict with classified colors, fonts, logos, tokens
-3. Call `generate_brand_board_pdf(data, "brand_board.pdf", firm_name="...")`
+3. Call `generate_brand_board_pdf(data, "carta-brand-extraction/brand_board.pdf", firm_name="...")`
 
 **For PPTX:**
 1. Read `snippets/brand_board_pptx.py`
 2. Construct the `data` dict
-3. Call `generate_brand_board_pptx(data, "brand_board.pptx", firm_name="...")`
+3. Call `generate_brand_board_pptx(data, "carta-brand-extraction/brand_board.pptx", firm_name="...")`
 
 ### Phase 5: Save brand board to Carta (MANDATORY if newly extracted)
 

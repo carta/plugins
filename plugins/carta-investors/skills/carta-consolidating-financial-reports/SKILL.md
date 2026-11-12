@@ -47,14 +47,14 @@ allowed-tools:
   # local-file runtime (Cowork / desktop app / Claude Code). In the Claude for
   # Excel runtime the add-in supplies its own workbook tools, which are not
   # declared here — same as the source reports.
-  - Write
+  - Write(~/.cache/carta-consolidating-financial-reports/**)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py *)
   - Bash(test *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.41.7</carta-plugin>
+<carta-plugin>carta-investors:7.41.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

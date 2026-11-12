@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.41.7</carta-plugin>
+<carta-plugin>carta-investors:7.41.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files.
 
@@ -737,7 +737,8 @@ the upstream library changes, rebuild and overwrite that file.
 Every event carries a firm context (`{firmId}`) so telemetry joins on the real Carta id instead of a
 slugified firm name. The envelope (firm + environment) comes from `GET /api/telemetry-context`, which
 reads `snapshot.source` per request; `mountWithAuth` awaits it before rendering, so both documents
-have it before any event fires. So **capture `firmId` in Step 1 whenever the `#<digits>` token is
+have it before any event fires. On the hosted app the page then sends `?firm=<route firm>`, checked like any
+firm route; events wait up to 1.5 s for the answer. So **capture `firmId` in Step 1 whenever the `#<digits>` token is
 there** — when it is absent the context is dropped (that firm's events land with no firm attribution),
 and a placeholder id is never substituted. A refresh that resolves a previously missing `firmId` is
 picked up without a relaunch.

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import tempfile
+from pathlib import Path
 
 import requests
 from PIL import Image as PILImage
@@ -284,5 +285,6 @@ def generate_brand_board_pptx(
             p.font.size = Pt(12)
             p.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
 
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     prs.save(output_path)
     return output_path

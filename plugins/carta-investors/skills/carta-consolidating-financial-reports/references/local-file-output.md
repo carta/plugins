@@ -87,10 +87,11 @@ payload sets `"create_if_missing": true`.
 
 ## Writing — the payload, not Office.js
 
-Build the operations payload as JSON, then apply it in one call:
+Build the operations payload as JSON, save it with the `Write` tool under
+`~/.cache/carta-consolidating-financial-reports/` (for example `payload.json`), then apply it in one call:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py" <payload_json_path>
+uv run "${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py" ~/.cache/carta-consolidating-financial-reports/payload.json
 ```
 
 The payload shape and the full operation list are documented in the script's own

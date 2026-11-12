@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import tempfile
+from pathlib import Path
 
 import requests
 from PIL import Image as PILImage
@@ -83,6 +84,7 @@ def generate_brand_board_pdf(
         output_path: Where to save the PDF.
         firm_name: Company name for the header.
     """
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     c = Canvas(output_path, pagesize=landscape(A4))
     y = PAGE_H - MARGIN
 

@@ -33,17 +33,18 @@ allowed-tools:
   # Local execution
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" *)
   - Bash(pwd)
-  - Write
+  - Write(./*-funds.json)
   # Finds and carries the user's own changes into a rebuilt page (references/keep-customizations.md)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/customizations.py" *)
-  - Edit
+  - Write(./*-fund-soi-collection*.html)
+  - Edit(./*-fund-soi-collection*.html)
   # Interaction
   - AskUserQuestion
   - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.41.7</carta-plugin>
+<carta-plugin>carta-investors:7.41.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
