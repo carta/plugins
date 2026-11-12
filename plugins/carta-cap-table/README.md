@@ -34,10 +34,11 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-portfolio-alerts` | Detect red flags and time-sensitive issues |
 | `carta-reporting` | Custom cap table reports and files — filtered, sorted tables, Excel and markdown exports |
 | `carta-field-definitions` | Explain a column or field within a specific Carta report |
-| `carta-valuation-history` | 409A valuation history |
+| `carta-valuation-history` | Valuation and FMV history (409A, EMI, CSOP, share price) |
 | `carta-hmrc-limits` | UK HMRC EMI/CSOP limit usage — company allowance and per-holder headroom |
 | `carta-voting-rights-optimizer` | Legal tool — minimum stockholder coalition to pass a charter amendment or vote |
 | `carta-round-history` | Financing round history |
+| `carta-register-of-allotments` | UK register of allotments with SH01 filing status |
 | `carta-grant-vesting` | Vesting schedule for a specific option grant |
 | `carta-witness-signatures` | Status of witness and spousal-consent signature requests on awards |
 | `carta-conversion-calculator` | Calculate SAFE/note conversion into equity |
@@ -46,7 +47,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-compensation-benchmarks` | Carta Total Comp market benchmarks (salary, equity, total cash) for a role |
 | `carta-compensation-rolematcher` | Classify a job title into the CTC compensation taxonomy |
 | `carta-issuance` | Issue certificates, option grants and profits interest units; draft shares, grants or units, or resume from a draft set |
-| `carta-manage-securities` | Edit, cancel, partly cancel or reverse the cancellation of an issued security, with a preview first |
+| `carta-manage-securities` | Edit, cancel, partly cancel, reverse the cancellation of, transfer or buy back an issued security, record an option exercise, and approve or reject exercise requests, with a preview first |
 | `carta-start` | Get started: shows your company, what your role can do and three prompts to try, then sets up Carta Home |
 | `carta-captable-home-build` | Build or redeploy the `Carta Home - <company>` live artifact — ownership, fully diluted summary, option pool, stakeholders, drafts, and a skill directory for one company |
 

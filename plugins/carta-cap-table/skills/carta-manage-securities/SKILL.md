@@ -1,17 +1,22 @@
 ---
 name: carta-manage-securities
 description: >-
-  Edit or cancel an issued security, with a preview before anything changes. Covers
-  fixing, correcting, amending, cancelling, partly cancelling, uncancelling or undoing the
-  termination of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or
-  warrant. Not for terminating a person (cancelling everything they hold).
+  Edit, cancel, transfer or buy back (repurchase) an issued security, with a preview before
+  anything changes. Covers fixing, correcting, amending, cancelling, partly cancelling, uncancelling or
+  undoing the termination of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or
+  warrant; transferring shares, an RSA, a PIU, a warrant or a note; buying back shares;
+  recording an option exercise; and approving or rejecting exercise requests. Not for a
+  departure: someone who left and loses their unvested equity is a termination.
 when_to_use: >-
   Use when the user asks to change a security that is already on the cap table, often to
   match the signed documents: "fix the dates in Carta to match the paperwork", "change the
   issue date", "update the cost basis", "change the legend", "fix the exercise price",
   "fix the SAFE's cap or discount", "correct CS-12", "something looks wrong on CS-12, show me
-  first", "I need to fix something on ES-12", "cancel ES-12", "cancel part of this grant". To
-  issue new equity, use carta-issuance.
+  first", "I need to fix something on ES-12", "cancel ES-12", "cancel part of this grant",
+  "transfer CS-12 to her trust", "gift shares to my brother", "buy back the founder's unvested
+  shares", "repurchase CS-3", "record the
+  exercise of 5,000 options on ES-12", "approve the pending exercise requests". To issue new
+  equity, use carta-issuance. Not for a holder who exercises their own options.
 owner: carta-cap-table maintainers (#cap-table-eng)
 model: inherit
 allowed-tools:
@@ -40,14 +45,17 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.112.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.0</carta-plugin>
 
 # Manage securities
 
-Edit, cancel, partly cancel or uncancel an issued security, or undo its termination. Carta checks each change in a
+Edit, cancel, partly cancel, uncancel, transfer or buy back an issued security, undo its termination, record an
+option exercise, or approve or reject an exercise request. Carta checks each change in a
 **preview** and saves it as a plan; nothing changes until the user approves and you apply it. To
-issue new equity, use `carta-issuance`. To terminate a person (cancel or exercise everything they
-hold), send the user to the termination flow in the Carta app.
+issue new equity, use `carta-issuance`. This skill is not for a departure: when someone left and
+the user wants to stop their vesting, cancel their unvested equity or set exercise deadlines, that
+is a termination. Say so, send the user to the termination flow in the Carta app, and do not
+cancel their securities one by one here.
 
 ## Actions
 
@@ -58,9 +66,21 @@ hold), send the user to the termination flow in the Carta app.
 | Cancel part of an option grant or CBU | `cap_table__compute__partial_cancel_security_preview` |
 | Reverse a cancellation | `cap_table__compute__reverse_cancel_security_preview` |
 | Undo a termination | `cap_table__compute__undo_termination_preview` |
+| Transfer shares, an RSA or a PIU | `cap_table__compute__transfer_security_preview` |
+| Transfer a warrant or a convertible note | `cap_table__compute__transfer_other_security_preview` |
+| Buy back shares, an RSA or a PIU | `cap_table__compute__repurchase_security_preview` |
+| Record an option exercise | `cap_table__compute__record_exercise_preview` |
+| Approve an exercise request | `cap_table__compute__approve_exercise_request_preview` |
+| Reject an exercise request | `cap_table__compute__reject_exercise_request_preview` |
+
+The inputs of the transfer, buyback, exercise and exercise request previews are in
+[references/transfer-buyback-exercise.md](references/transfer-buyback-exercise.md).
 
 `security_type` is one of `certificate`, `option_grant`, `convertible_note`, `rsu`, `rsa`, `sar`,
-`cbu`, `piu` or `warrant`. Take it from the user's words first: "RSU" or "restricted stock unit" is
+`cbu`, `piu` or `warrant`. The action narrows it: a transfer or buyback of shares is
+`certificate`, `rsa` or `piu`, a warrant or note transfer is `warrant` or `convertible_note`, and
+a recorded exercise is `option_grant`. Offer only those types for that action. Take it from the
+user's words first: "RSU" or "restricted stock unit" is
 `rsu`, "RSA" or "restricted stock award" is `rsa`, "SAR", "UAR" or "stock appreciation right" is
 `sar`, "CBU", "cash bonus unit" or "phantom equity" is `cbu`, "PIU", "profits interest" or
 "incentive unit" is `piu`, "warrant" is `warrant`, and "certificate", "share certificate" or
@@ -82,32 +102,40 @@ common or preferred units), `piu`, `cbu` and `rsu`. Send only the type the user 
 
 ## Gates
 
-**Required inputs**: the company, the security (label, id or holder) and the action. Each
+**Required inputs**: the company, the security (label, id or holder) or the exercise request,
+and the action. Each
 action's own inputs are in [§ Flow](#flow) step 3. Ask only for what is missing.
 
-**AI computation**: No. Carta computes every before and after value in the preview. You choose
-only the `reason` and write the note from the user's words, and you show both.
+**AI computation**: No. Carta computes every before and after value in the preview. For an
+edit, you choose only the `reason` and write the note from the user's words, and you show both.
+For a buyback priced per share, you work out `cost` as
+[transfer-buyback-exercise.md § Buy back](references/transfer-buyback-exercise.md#buy-back-shares-an-rsa-or-a-piu)
+says. You pick no other value.
 
 **Confirmation**: see [Hard rule 1](#hard-rules).
 
 ## Hard rules
 
 1. **Preview, then approval, then apply.** Never apply without the user's approval of the
-   **latest** preview. Never retry `apply_plan` with an old plan.
-2. **Ids only.** Previews take security ids. Get each id from the bootstrap, or from
+   **latest** preview. Apply only the `plan_id` of the latest preview.
+2. **Ids only.** Previews take security ids, never labels. Get each id from the bootstrap, or from
    `cap_table__get__security` / `cap_table__list__securities`. Never send a label to a preview.
 3. **The server decides.** Offer only actions, securities and fields the bootstrap marks as
    available, selectable or eligible. For anything else, quote its `why_not.message`. A
    `single_security_only` field still changes, one security per change
    ([change-flow.md § Several securities](references/change-flow.md#several-securities)).
 4. **Quote Carta's messages word for word**: blockers, failed checks and errors.
-5. **Follow the result.** When a result has `next_step` or `how_to_reply`, do what it says. Do
-   not open a page any other way, and never build a Carta URL.
-6. **No local files, no Bash.** This skill writes no files and runs no scripts or shell
-   commands. When the host saves a large result to a file, read that file with `Read`.
+5. **Follow the result.** When a result has `next_step` or `how_to_reply`, do what it says.
+   Open or post a Carta page only from `next_step`, `companion_url` or a `cap_table__get__*_link`
+   result. Never build a Carta URL.
+6. **No shell, no local files.** Never call Bash, and write no files. The one exception is the
+   agreement upload in
+   [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements),
+   after the user gave the file. When the host saves a large result to a file, read that file
+   with `Read`. Take today's date from the bootstrap's `today`.
 7. **Never hand this skill to a background agent.** It needs the user at each approval.
-8. **Plain words.** No ids in the text, dates as `MM/DD/YYYY`, a one-line reason for each value
-   you chose, and the full text of a legend that changes.
+8. **Plain words.** No ids in the text. Show dates as `MM/DD/YYYY`. Give a one-line reason for
+   each value you chose, and the full text of a legend that changes.
 
 ## Calls
 
@@ -121,16 +149,19 @@ Use whichever Carta connector is present. The keys are `name` and `arguments`.
 |---|---|---|
 | Company | `list_accounts(search="<company name>")` | — |
 | Bootstrap | `read_tool` | `cap_table__get__security_change_bootstrap` |
+| Exercise requests | `read_tool` | `cap_table__list__company_exercise_requests` |
 | Preview | `read_tool` | the preview in [§ Actions](#actions) |
 | Apply | the **named** `cap_table__mutate__apply_plan` tool | — |
 | Job | `read_tool` | `cap_table__get__task` |
 
 `list_accounts` returns `id: "corporation_pk:<n>"`; send `<n>` as `company`. With no Carta tool,
-stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
+stop: *"I can't reach Carta. Connect Carta in your connector settings, then try again."*
 
 ## Flow
 
-1. **Bootstrap.** Call it once per change and type (twice only for the label retry in
+1. **Bootstrap.** For an exercise request, read the requests instead
+   ([transfer-buyback-exercise.md § Exercise requests](references/transfer-buyback-exercise.md#exercise-requests)).
+   Else call the bootstrap once per change and type (twice only for the label retry in
    [§ Actions](#actions)), after any earlier apply, with `company`, `security_type` and `label` (a
    list), `security` (ids) or `holder` (the name exactly as the user wrote it). To reverse a
    cancellation or undo a termination, send `label` or `security`: `holder` finds only
@@ -138,7 +169,8 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    edit, and when the user asks to see the security before a change ("show me first", "something
    looks wrong"), always send `look_first: true` on the first type's bootstrap, so the Change page
    opens before the first preview. With no field named, ask which field in one `AskUserQuestion`
-   ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)).
+   ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)). Which
+   preview takes this bootstrap's `thread_id` is in step 4.
 2. **Read the bootstrap.**
    - `blockers`: for `hard_stop`, quote `message` and `fix`, then stop. Ask about each
      `needs_decision`. Say each `informational` once.
@@ -147,9 +179,13 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    - `sections.securities`: never offer a row with `selectable: false`. When the user named a
      person and 2+ rows are selectable, ask which ones in one `AskUserQuestion`.
 3. **Collect the inputs** for the action. Use the user's words; ask only for what is missing,
-   in one `AskUserQuestion` with up to 4 questions. Dates are `YYYY-MM-DD`. Every preview also
-   takes `company` and `security_type`, the same as the bootstrap that found the security. A
-   preview with `changes` sends `security_type` in each item instead.
+   in one `AskUserQuestion` with up to 4 questions. When more inputs are missing, ask again for
+   the rest. Send dates as `YYYY-MM-DD`. Turn a relative date ("last Friday") into a date from
+   the bootstrap's `today`, and show it. Every preview takes
+   `company`. The modify, cancel, partial cancel, reverse cancel, undo termination and
+   `transfer_other_security_preview` previews also take `security_type`, the same as the
+   bootstrap that found the security. The other previews refuse it. A preview with `changes` sends
+   `security_type` in each item instead.
    - **Edit:** `securities` (a list of ids; the other previews take `security`), or `changes` for
      securities with different values or of several types
      ([change-flow.md § Several securities](references/change-flow.md#several-securities)). See
@@ -163,9 +199,12 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
    - **Reverse cancel:** `security` and `reason`. `notes` is required when the reason is
      `Other - describe below`.
    - **Undo termination:** `security` only.
+   - **Transfer, buy back, record an exercise, or an exercise request:** see
+     [references/transfer-buyback-exercise.md](references/transfer-buyback-exercise.md).
 4. **Preview.** Every change goes through the preview in [§ Actions](#actions), never
-   `cap_table__mutate__modify_issuable`, which keeps no Change page. Send this pass's
-   `thread_id` (see [§ Several changes](#several-changes)). A rework is one new preview on
+   `cap_table__mutate__modify_issuable`, which keeps no Change page. Send the bootstrap's
+   `thread_id` only to `modify_securities_preview`. Every other preview sends no `thread_id` on
+   its first call, then the `thread_id` its own preview returned. A rework is one new preview on
    the same thread. That holds after the cap table changed under a preview too (the page says
    so, or apply answers `plan_stale`): preview again with the same `thread_id`, never a new
    bootstrap, so the page shows the next revision.
@@ -173,11 +212,13 @@ stop: *"I can't reach Carta. Connect the Carta MCP server and try again."*
 5. **Show the preview.** With `next_step` and the browser tool it names, follow it, then keep
    the chat to one line: the count, the fields, the reason, any problem and the full text of a
    legend that changes. Else show a table with the header `| Security | Field | Before | After |`
-   (for a partial cancel, the tranches). Put the table in the `preview` of the **Apply** option
+   (for a partial cancel, the tranches; for the actions in transfer-buyback-exercise.md, the
+   preview's `summary` word for word). Put the table in the `preview` of the **Apply** option
    in step 7, never in the question and never as text before the question: the host shows text
    between tool calls only as a one-line summary, so the user never sees a table there. When
    step 7 shows the approval card, put the table in your last message, after `view_remote`.
-   Post every `companion_url` as `[See it in Carta](<companion_url>)`, never as a bare address.
+   When a result has a `companion_url`, post it as `[See it in Carta](<companion_url>)`, never as
+   a bare address.
    Put the link of the latest page in your last message: after the answer to a question, after
    a blocked preview and after a `look_first` bootstrap. A link in a question is not a link.
 6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
@@ -209,6 +250,8 @@ Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 | `out_of_scope` | Say the user's access does not reach these securities or their plan. Stop. Do not retry. |
 | `not_found` on `thread_id` | Preview again with no `thread_id`. The page then has a new address: post the new `companion_url`. |
 | `not_found` on `security` or `securities` | Call the bootstrap again to get the ids. Never guess an id. |
+| `not_found` on `recipients[N].stakeholder` | Say this person is not a stakeholder of the company. Ask for the name or email as Carta shows it, or say to add the person in Carta first. |
+| `invalid_argument` on a file key | Never write a key. Upload the file as [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements) says, then preview again once. |
 | Bootstrap `not_found` on `label` | Make sure `label` is a list, one label per item. Then follow [§ Actions](#actions). |
 | Bootstrap "Unknown field in `fields`" | `fields` picks bootstrap sections, not the fields to edit. Leave it out. |
 | Preview `unknown_param` or `reason_why` too long | Do what its `fix` says (for example `notes` → `note`, `reason_why` at most 140 characters), then preview again once. |
@@ -230,21 +273,25 @@ One approval applies one change: one action and one reason. An edit can change s
 several types, each with its own values, in one preview with `changes`, up to
 `limits.max_securities` securities
 ([change-flow.md § Several securities](references/change-flow.md#several-securities)). Cancels,
-partial cancels, reverse cancels and undone terminations take one security each. Different
+partial cancels, reverse cancels, undone terminations, transfers, buybacks and recorded exercises
+take one security each, and an approval or a rejection one exercise request. Different
 reasons are separate changes. Run each change as its own pass through steps 1 to 8, and say the
 split first, with the type of each security: *"These are two changes, an edit of certificate CS-1
 and a cancel of option grant ES-12. I'll apply them one at a time, starting with CS-1."* Each pass
-opens its own page with its own bootstrap and sends that pass's `thread_id`, never an earlier
-pass's.
+has its own bootstrap and its own thread, as [§ Flow](#flow) step 4 says, never an earlier
+pass's. Each exercise request is its own pass too, from the same list.
 
 ## Closing
 
 End the run with one short message and nothing after it:
 
 - One line: what was done and on which company.
-- One bullet per security that changed: label, field, before → after.
+- One bullet per security that changed: label, field, before → after. For a transfer, buyback
+  or exercise: label, what happened and the quantity, for example `CS-12 · 100 shares
+  transferred to the Smith Family Trust`. For an exercise request: the holder, the grant label
+  and approved or rejected.
 - One bullet per change that was not applied.
-- The page link as `[See it in Carta](<companion_url>)`.
+- The page link as `[See it in Carta](<companion_url>)`, when a result gave one.
 - One line only for something that cannot be undone or is still running, such as an email to a
   holder or a job still in progress.
 

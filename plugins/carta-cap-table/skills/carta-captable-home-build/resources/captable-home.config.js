@@ -147,6 +147,7 @@ const WHATS_NEW_MICROAPPS = [
 // newer chat answer (rankWhatsNew in app/whats-new.js).
 const WHATS_NEW_SKILL_OUTPUTS = {
   bySkill: {
+    'carta-field-definitions': 'rows',
     'carta-reporting': 'spreadsheet',
     'carta-reporting-excel': 'spreadsheet',
     'carta-issuance': 'document',

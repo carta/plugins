@@ -63,6 +63,19 @@
       "body": "Reads every SAFE and note on your Carta cap table and works out each one's conversion shares at your round price, caps and discounts included."
     }
   },
+  "carta-field-definitions": {
+    "category": "reporting",
+    "name": "Report column definitions",
+    "order": 50,
+    "prompts": [
+      "What does the Quantity Outstanding column on the securities ledger report mean?",
+      "On the vesting details report, what does Total vested during the period mean?"
+    ],
+    "whatsNewCopy": {
+      "headline": "Understand any column on your Carta cap table reports",
+      "body": "Explains a column on a Carta cap table report in chat, with its meaning, its data type and the report tabs that show it."
+    }
+  },
   "carta-grant-vesting": {
     "category": "equity",
     "name": "Vesting progress",
@@ -94,15 +107,16 @@
   },
   "carta-manage-securities": {
     "category": "issuance",
-    "name": "Fix or cancel a security",
+    "name": "Fix, cancel, transfer or buy back a security",
     "order": 20,
     "prompts": [
       "Correct the exercise price on option grant [grant label] for {{COMPANY}}",
-      "Cancel [employee name]'s option grant on {{COMPANY}}"
+      "Cancel [employee name]'s option grant on {{COMPANY}}",
+      "Transfer certificate [certificate label] to [stakeholder name] on {{COMPANY}}"
     ],
     "whatsNewCopy": {
-      "headline": "Fix, cancel or uncancel issued equity",
-      "body": "Edits, cancels, uncancels or undoes the termination of an issued security on your Carta cap table. Shows a preview of every change before saving."
+      "headline": "Transfer, buy back and exercise issued equity",
+      "body": "Transfers or buys back shares, records option exercises, and approves or rejects exercise requests. Shows a preview of every change before saving."
     }
   },
   "carta-market-benchmarks": {

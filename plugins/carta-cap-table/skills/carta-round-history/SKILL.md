@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.112.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -46,12 +46,9 @@ Fetch the company's financing history, one row per share class, and present it a
 
 ## When to Use
 
-- "Show me the funding history"
-- "What rounds has this company raised?"
-- "How much capital was raised in the Series A?"
-- "List all financing rounds"
+- "Show me the funding history" / "List all financing rounds"
+- "How much capital was raised in the Series A?" / "What was the price per share for the seed?"
 - "Who invested in each round?"
-- "What was the price per share for the seed?"
 
 ## Prerequisites
 
@@ -77,30 +74,11 @@ Each entry in `share_class_financings[]`:
 - `post_money`: post-money valuation
 - `fully_diluted`: fully diluted shares after the round
 - `currency`: the share class's currency
+- `note_block_id`: set only on a row of SAFEs or convertible notes, not a priced round
 
 Top level: `total_cash_raised_by_currency` — the per-currency totals across all rows.
 
-Any numeric field can be `null`, meaning Carta has no value for it. `null` is not `0` — show it as "—", never as $0.
-
-### Response Format
-
-```json
-{
-  "share_class_financings": [
-    {
-      "name": "Series Seed Preferred",
-      "closing_date": "2013-06-30",
-      "original_issue_price": 0.265,
-      "cash_raised_by_currency": {"USD": 383379.57},
-      "shares_issued": 1602438.0,
-      "post_money": 4000000.0,
-      "fully_diluted": 15094339.0,
-      "currency": "USD"
-    }
-  ],
-  "total_cash_raised_by_currency": {"USD": 383379.57}
-}
-```
+Any numeric field can be `null`, meaning Carta has no value for it. `null` is not `0` — show it as "—", never as 0.
 
 ## Workflow
 
@@ -117,7 +95,7 @@ read_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_i
 ```
 
 - Each row carries `name` (holder), `quantity`, `share_class_name`, `issue_date`, and `status_explanation`. Group matching rows by holder and sum `quantity`.
-- Fetch successive pages until you have `total` rows, **at most 10 pages**. If the sweep is still incomplete at 10 pages, show what you have, say the list is partial, and point the user to the round's page in Carta.
+- Fetch the page in `next` (its `page` and `page_size`) until `has_next` is false, **at most 10 pages**. If the sweep is still incomplete at 10 pages, show what you have, say the list is partial, and point the user to the round's page in Carta.
 - Certificates carry no cash paid. Report each investor's shares only. Do not multiply shares by the issue price to produce a per-investor dollar amount — say that per-investor cash isn't available here.
 
 ## Gates
@@ -130,41 +108,40 @@ read_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_i
 
 **Format**: Table + ASCII bar chart
 
-**BLUF lead**: Lead with the number of rounds that raised cash and the total raised, from `total_cash_raised_by_currency`.
+**BLUF lead**: Lead with the number of priced rounds that raised cash and the total raised, from `total_cash_raised_by_currency`.
 
 **Sort order**: By `closing_date` ascending (the order the tool returns).
 
 **Date format**: MMM d, yyyy (e.g. "Jan 15, 2026").
 
-**Currency**: Label every amount with its own currency. When `total_cash_raised_by_currency` has more than one key, show one total per currency — never add amounts across currencies, and never assume USD.
+**Currency**: Label every amount with its own currency. When `total_cash_raised_by_currency` has more than one key, show one total per currency — never add amounts across currencies, and never assume USD. Put the ISO code before every amount (`USD 383,380`), also when all rows are in USD. Do not use a currency symbol such as `$`.
 
 | Round | Close Date | Price/Share | Shares Issued | Cash Raised | Post-Money |
 |-------|-----------|-------------|---------------|-------------|------------|
-| Series Seed Preferred | Jun 30, 2013 | $0.27 | 1,602,438 | $383,380 | $4.0M |
-| Series A Preferred | Nov 15, 2013 | $0.44 | 3,697,191 | $1,645,250 | $12.0M |
+| Series Seed Preferred | Jun 30, 2013 | USD 0.27 | 1,602,438 | USD 383,380 | USD 4.0M |
+| Series A Preferred | Nov 15, 2013 | USD 0.44 | 3,697,191 | USD 1,645,250 | USD 12.0M |
 
-After the table, render an ASCII bar chart of cash raised per round (chronological order).
-Scale bars to max width 40 chars. Leave out rows whose `cash_raised_by_currency` is empty (e.g. common stock). If the company raised in more than one currency, draw one chart per currency.
+After the table, render an ASCII bar chart of cash raised per round (chronological order). Scale bars to max width 40 chars. Leave out rows whose `cash_raised_by_currency` is empty (e.g. common stock). If the company raised in more than one currency, draw one chart per currency.
 
 ```
 Cash Raised by Round
 
-Series Seed Preferred  ████                                     $383K
-Series A Preferred     ████████████████                         $1.6M
-Series B Preferred     ████████████████████████████████████████ $3.7M
+Series Seed Preferred  ████                                     USD 383K
+Series A Preferred     ████████████████                         USD 1.6M
+Series B Preferred     ████████████████████████████████████████ USD 3.7M
 ```
 
-Each bar width = (cash_raised / max_cash_raised) * 40, rounded to nearest integer.
-Format large numbers as $XM or $XK for readability.
+Each bar width = (cash_raised / max_cash_raised) * 40, rounded to nearest integer. Format large numbers as K or M after the ISO code (e.g. `USD 1.6M`).
 
 ## Error Handling
 
 | Situation | What to do |
 |---|---|
 | `share_class_financings` is empty | Say the company has no financing history recorded in Carta. Do not call other tools looking for rounds. |
-| 403 / access denied | Say the user's role can't see this company's financing history. Do not retry. |
+| 403, `role_required` or access denied | Say the user's role can't see this company's financing history. Do not retry. |
+| Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Caveats
 
 - Rows are per share class. A round that issued more than one class (e.g. Series A and Series A-1) appears as separate rows — present them as Carta reports them.
-- SAFEs and convertible notes are not share classes and do not appear here until they convert; for those, prefer the matching instrument-list skill.
+- A row with `note_block_id` is a block of SAFEs or convertible notes, not a priced round: it has no price, post-money or fully diluted, and `shares_issued` is 0. Label it as SAFEs/notes and do not count it as a round. `total_cash_raised_by_currency` includes its cash. For the instruments, prefer the matching instrument-list skill.
