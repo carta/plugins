@@ -2,13 +2,13 @@
 // Images MUST be data: URIs: the Cowork sandbox CSP is img-src 'self' data:, so
 // a ctfassets URL (and client fetch() to it) is blocked — marketing:get:asset_data
 // returns the bytes over the MCP bridge instead. The server rewrites any tagged
-// blogPost to its parent webPage, so the client only adapts event/webPage/caseStudy.
+// blogPost to its parent webPage, so the client adapts event/webPage/caseStudy/flexPage.
 // Depends on core.js (carta-home.app.js): _mcp(), escHtml(), trackHome().
 // `NEWS_TAG` comes from carta-home.config.js — the curated tag is content, not logic.
 const NEWS_COUNT = 3; // cards rendered
 const NEWS_FETCH = 12; // entries pulled before filter/dedupe/truncate
 const NEWS_TAG_SOURCE = "metadata";
-// content_type intentionally UNSET so the query spans event/webPage/caseStudy/blogPost.
+// content_type intentionally UNSET so the query spans every tagged type; ADAPTERS picks the renderable ones.
 
 // Unwrap an MCP call_tool result into the plain object the command returned.
 // The command's output is {result: <entry|asset>}; prefer the structured payload,
@@ -63,7 +63,7 @@ async function _resolveAsset(link) {
 }
 
 // ── seo helpers ── the linked seo entry carries eyebrow/description/image for
-// event and webPage; it is resolved by id from the `entries` map.
+// event, webPage and flexPage; it is resolved by id from the `entries` map.
 function _seoEntry(f, entries) {
   const id = f?.seo?.sys?.id;
   return (id && entries[id]?.fields) || {};
@@ -102,6 +102,14 @@ function _richText(rt) {
   return "";
 }
 
+// A Contentful page path ("learn/x" or "/learn/x/") → its carta.com URL, or "" when
+// empty. The path keeps its inner slashes, so only the outer ones are trimmed and it
+// is not encodeURIComponent'd.
+function _cartaPageUrl(path) {
+  const slug = String(path || "").replace(/^\/|\/$/g, "");
+  return slug ? `https://carta.com/${slug}/` : "";
+}
+
 // Null-safe timestamp: a missing/bad date sorts to 0 (end of the row).
 const _ts = (s) => { const t = Date.parse(s); return Number.isNaN(t) ? 0 : t; };
 
@@ -118,9 +126,10 @@ function _dateLabel(sortDate) {
   }
 }
 
-// ── adapters ── content_type id → normalized card. Each is pure (no I/O);
-// image links are resolved later, after truncation. `webPage` also serves every
-// tagged blogPost, which the server rewrote to its parent webPage.
+// ── adapters ── content_type id → normalized card. Each is pure (no I/O) and
+// takes (fields, entries, item); image links are resolved later, after truncation.
+// `webPage` also serves every tagged blogPost, which the server rewrote to its
+// parent webPage.
 const ADAPTERS = {
   caseStudy(f, entries) {
     const date = f.displayDate || "";
@@ -160,15 +169,13 @@ const ADAPTERS = {
   },
   webPage(f, entries) {
     const date = f.displayDate || "";
-    // fullSlug is already path-prefixed (e.g. "learn/equity/stock-options");
-    // keep its slashes, so trim only leading/trailing ones — no encodeURIComponent.
-    const slug = String(f.fullSlug || "").replace(/^\/|\/$/g, "");
     return {
       contentType: "webPage",
       eyebrow: _seoField(f, entries, "eyebrow"),
       headline: (f.displayTitle || "").trim(),
       snippet: _plainSnippet(_seoField(f, entries, "description")),
-      url: slug ? `https://carta.com/${slug}/` : "",
+      // fullSlug is the page path, e.g. "learn/equity/stock-options".
+      url: _cartaPageUrl(f.fullSlug),
       ctaLabel: "Read more",
       sortDate: date,
       dateLabel: _dateLabel(date),
@@ -176,6 +183,29 @@ const ADAPTERS = {
       logoImageLink: null,
       seoImageLink: _seoLink(f, entries, "image"),
       _required: [f.displayTitle, f.fullSlug],
+    };
+  },
+  flexPage(f, entries, item) {
+    // displayDate when Content sets one, else the last publish (sys.updatedAt, which
+    // the server lists as the item's updated_at).
+    const date = f.displayDate || item?.updated_at || "";
+    const headline = (f.title || "").trim() || _seoField(f, entries, "title");
+    return {
+      contentType: "flexPage",
+      eyebrow: _seoField(f, entries, "eyebrow"),
+      headline,
+      snippet: _plainSnippet(_seoField(f, entries, "description")),
+      // url is the page path, e.g. "/learn/ai-fundamentals/".
+      url: _cartaPageUrl(f.url),
+      ctaLabel: "Read more",
+      sortDate: date,
+      dateLabel: _dateLabel(date),
+      // The seo image is a flexPage's only image. The server's fallback featuredImage
+      // is not read, so a flexPage without one shows the title tile.
+      featuredImageLink: null,
+      logoImageLink: null,
+      seoImageLink: _seoLink(f, entries, "image"),
+      _required: [headline, f.url],
     };
   },
 };
@@ -187,7 +217,7 @@ function _buildCards(items, entries) {
   return items
     .map((e) => {
       const adapt = e && e.fields && ADAPTERS[e.content_type];
-      return adapt ? adapt(e.fields, entries) : null; // unmapped/unknown → dropped
+      return adapt ? adapt(e.fields, entries, e) : null; // unmapped/unknown → dropped
     })
     .filter(Boolean)
     .filter((c) => !c.headline.toLowerCase().startsWith("[archived]"))
