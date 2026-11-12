@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.13</carta-plugin>
+<carta-plugin>carta-crm:1.20.14</carta-plugin>
 
 ## Overview
 
@@ -155,10 +155,12 @@ One confident match proceeds. **Several plausible matches go to `AskUserQuestion
 silently take the first result, which is how a `.co.uk` company or a similarly-named portfolio
 company becomes the wrong target.
 
-**The route graph covers only companies saved in this organization's CRM.** Each match carries
-a `source`. Prefer a match with `source: "crm"`. A match with `source: "external"` is a real
-company that nobody has saved yet, and `get_company_angles` returns no routes for it. Do not run
-the fetch plan on an external match: go to "When the company is not in the CRM" below.
+Each match carries a `source`. Prefer a match with `source: "crm"`. A match with
+`source: "external"` is a company that nobody saved in the CRM, but the route graph can still
+know it: the CRM keeps a company profile for every company someone opened. So run the fetch plan
+on an external match with its domain, the same as on a `crm` match. Offer to add the company
+only when that call returns `domain_not_found`: see "When the company is not in the CRM" below.
+An external match with routes is a normal answer: show the routes and never offer to add it.
 
 **At most 2 resolution attempts.** After the second, stop and ask the user for the domain.
 Do **not**:
@@ -304,7 +306,8 @@ add the company below. Do not retry with `www.`, a different suffix or a guessed
 
 ### When the company is not in the CRM
 
-This section runs only for a `source: "external"` match the user confirmed in Step 1. A domain
+This section runs only when the fetch plan returned `domain_not_found` for a `source: "external"`
+match the user confirmed in Step 1. A domain
 the user typed, or a `source: "crm"` match, never leads here: there is no name to take, or the
 record already exists.
 
