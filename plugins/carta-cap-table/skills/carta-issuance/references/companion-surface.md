@@ -14,7 +14,7 @@ file decides what to do with them.
 | Field | Where | Use |
 |---|---|---|
 | `companion.available` | `issuance_init` | `true` selects this surface |
-| `companion.issuance_url` | `issuance_init` (every type but PIU) | the page to open before any set exists |
+| `companion.issuance_url` | `issuance_init` | the page to open before any set exists |
 | `field_spec` | `issuance_init` with `include_bootstrap: true` | this company's draft fields, the `cap_table:get:issuable_field_manifest` result: the gaps [§ 5](#5-build-the-draft-set) finds, the choices [§ 6](#6-ask-whats-missing-once) offers and the optional columns [§ 8](#8-issue) offers |
 | `companion_url`, `revision` | draft set results | the page for one set, and the revision it shows |
 | `dropped` | `draft_set_sources` results | the cells not stored, each with the key to use, for [§ 11](#11-when-a-command-is-refused) |
@@ -45,15 +45,15 @@ The steps below say "the type's" where these differ.
 
 | | `certificate` | `option_grant` | `piu` |
 |---|---|---|---|
-| Page | issuance page | issuance page | read-only page for one set, no Issue button; [§ PIU](#piu) |
-| Account gate | none | stop when the company has no live option plan or `document_sets` is empty, as [engine.md § Account-setup gate](engine.md#account-setup-gate-option-grant-and-piu) says | the same gate's PIU rows |
-| `company_setup` picks | share class, legend, vesting template | 409A, plan, vesting template | — |
-| Summary adds | price and where it comes from, share class room left | exercise price and its 409A, pool room left | — |
-| `set_label` | `Certificates #<draft_set_id>` | `Options #<draft_set_id>` | — |
-| Issue button | **Issue certificates** | **Issue option grants** | none |
-| `cap_table:list:securities` `type` | `certificate` | `option` | — |
-| Library `document_type` | `Stock Purchase Agreement`, `Board Consent`, `Equity Agreement` | `Option Agreement`, `Board Consent`, `Equity Plan` | — |
-| Never recommend; for every type also a jurisdiction or exemption, which person a name means, which company | a share class, a price that follows a valuation | a share class, a price that follows a valuation | — |
+| Page | issuance page | issuance page | issuance page when `issuance_init` gives `companion.issuance_url`; else read-only page for one set, no Issue button: [§ PIU](#piu) |
+| Account gate | none | stop when the company has no live option plan or `document_sets` is empty, as [engine.md § Account-setup gate](engine.md#account-setup-gate-option-grant-and-piu) says | the same gate's PIU rows. Each row's `prefix` is its unit class; set `option_plan` only when the files or prompt name a plan |
+| `company_setup` picks | share class, legend, vesting template | 409A, plan, vesting template | unit class, plan, vesting template, acceleration, document set |
+| Summary adds | price and where it comes from, share class room left | exercise price and its 409A, pool room left | the threshold, and the plan or unit class room left |
+| `set_label` | `Certificates #<draft_set_id>` | `Options #<draft_set_id>` | `PIUs #<draft_set_id>` |
+| Issue button | **Issue certificates** | **Issue option grants** | **Issue PIUs** |
+| `cap_table:list:securities` `type` | `certificate` | `option` | `piu` |
+| Library `document_type` | `Stock Purchase Agreement`, `Board Consent`, `Equity Agreement` | `Option Agreement`, `Board Consent`, `Equity Plan` | `PIU Award Agreement`, `Board Consent`, `Equity Plan` |
+| Never recommend; for every type also a jurisdiction or exemption, which person a name means, which company | a share class, a price that follows a valuation | a share class, a price that follows a valuation | a unit class, a plan, a threshold |
 
 ## 3. Start
 
@@ -401,8 +401,10 @@ approval. No ids in your text except `set_label`: the link carries them.
 
 ## PIU
 
-For `piu` the page is read-only and has no Issue button, so every change goes through you as a
-save, and the issue is the chat confirm below. Run the issuance in the chat as
+A PIU with `companion.issuance_url` runs as every other type, from [§ 4](#4-open-the-page-at-once),
+and the admin issues it with **Issue PIUs** on the page. This section is only for a PIU with no
+`companion.issuance_url`: its page is read-only and has no Issue button, so every change goes
+through you as a save, and the issue is the chat confirm below. Run the issuance in the chat as
 [the chat surface](chat-surface.md) does: every phase, budget and gate there still binds, files
 still go through its import, and the review is still printed in the chat before the confirm.
 Opening the page is not building a form or HTML of your own: chat is still the surface.
