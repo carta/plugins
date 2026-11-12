@@ -125,12 +125,17 @@ review is waiting on you and every 15 seconds otherwise, stops once the review i
 it again reads it once more), and pauses after 30 minutes without a prompt. A new read starts only after the
 previous one finishes, or once it has run for 60 seconds.
 
+**What `command.run` does with the calls it sees.** It sees each slash command you type and acts on `/soi-review`
+only. It runs no shell command, tool or process itself: it returns text and, on the desktop app, queues the one
+prompt described below.
+
 **What it sends, and where.** Only to that Carta MCP server, which you have already connected, and nothing
 anywhere else: `firm_uuid`, `soi_report_id`, `include_baseline` (true on the first read only), and
 `_instrumentation_v2: {"from_hook": true}`, which marks the read as the plugin's own rather than Claude's
 usage. The module runs no shell commands and starts no processes. It reads no files, environment variables
 or credentials. Between events it keeps only the review's `firm_uuid` and `soi_report_id` and the Carta MCP
 server name, all taken from Carta's own `view_remote` result, the time of the last prompt, and what the read returns.
+The surface name and the prompt times stay in the module and are never sent anywhere.
 
 **What it shows.** From each read, it keeps the report label, status, period, fair value, each position's
 company name and value, and the companion page link for the session. It uses them for a status line
@@ -147,6 +152,28 @@ approve positions. On the desktop app, `/soi-review` has Claude open it in the b
 conversation, so you don't copy the link by hand. You start it by typing `/soi-review`; the mod never opens
 the page on its own. The prompt holds only the link from Carta's response, never your conversation.
 
+## Command hooks and the compiled binary
+
+Besides the SOI module, the plugin runs these command hooks, listed in `hooks/hooks.json`. They run on your
+machine when Claude Code fires the event, and none of them blocks or changes a call except where noted.
+
+| Event | What runs | What it does |
+|-------|-----------|--------------|
+| SessionStart | `hooks/dispatch.sh inject-context` | Adds the instruction to load a Carta skill before a Carta tool call. |
+| SessionStart | `hooks/dispatch.sh prune-session-data` | Deletes session files older than 24 hours from two folders: `CLAUDE_PLUGIN_DATA/sessions` (when that variable is set) and the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder), which other Carta plugins also use. |
+| SessionStart, PostModelSwitch | `hooks/dispatch.sh capture-model`, `capture-model-switch` | Records the active Claude model in a per-session file in the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder). |
+| PreToolUse (Skill) | `hooks/dispatch.sh capture-active-skill` | Records which of this plugin's skills were loaded: the name in `CLAUDE_PLUGIN_DATA/sessions`, the latest one in the shared session folder. Makes no decision. |
+| PreToolUse (Carta MCP) | `hooks/dispatch.sh inject-instrumentation` | Adds a usage record (`_instrumentation_v2`) to Carta MCP calls. In `auto` and `plan` permission modes it changes nothing. |
+| PreToolUse (Carta MCP `call_tool`) | `node scripts/hooks/guard-own-sync-push.js` | Denies a budget-report push that differs from the plan `own_sync.py` wrote; otherwise prints nothing. |
+| UserPromptSubmit | `hooks/dispatch.sh capture-slash-skill` | Records skills you invoke with a slash command, in the same two places. |
+| PostToolUse (Carta MCP `execute_query`) | `node scripts/hooks/warn-empty-query.js` | Tells Claude when a query returned no rows. |
+
+`dispatch.sh` runs a compiled Go program from `hooks/bin/` (one file per platform), which a code scan cannot
+read. Its source is in `hooks/src/`, it uses only the Go standard library, and the build is reproducible.
+To check the binaries against the hashes in `hooks/bin/SHA256SUMS`, run `sh hooks/src/verify-checksums.sh`. To
+rebuild them from source and compare, run `GOTOOLCHAIN=go$(cat hooks/src/.go-version) sh hooks/src/build.sh --check`, which needs the Go version in `hooks/src/.go-version` (details in `hooks/bin/SOURCE.md`).
+The hooks read no credentials. `hooks/README.md` gives each hook's exact output.
+
 ## Credentials
 
 The plugin does not read tokens, API keys or other credentials from your machine. Carta MCP calls go
@@ -155,6 +182,22 @@ Elsewhere, "token" in the plugin's files means design tokens (colors and spacing
 access key of a dashboard that runs on your own machine (`127.0.0.1`): a random key generated locally, stored
 in that firm's local data folder and carried as `?t=` in the dashboard's link. It is not a Carta credential and
 is never sent to Carta.
+
+**ManCo reporting starts your own `claude` CLI.** Sharing a report from the ManCo dashboard
+(`carta-manco-reporting`), and the dashboard's chat, run a headless `claude` session (Claude Code) as a child
+process of the dashboard's local server. The child inherits your environment, which is how it finds your own
+Claude and Carta sign-in; the plugin reads no credential from it and sends none anywhere. The sharing session
+may call only `welcome` and `call_tool` on the Carta MCP connectors known for your Carta environment
+(production or sandbox), with every other Carta connector denied. It has Bash and file-write tools denied, and a
+hook checks each `call_tool` against the one command it was started for. The chat session may read and edit only
+the dashboard's own view-source folder, and read the data files its views display. The skill also:
+- looks for the `claude` CLI and, when none is installed, installs it without asking, in your own home
+  directory, by running Anthropic's own install script for Claude Code from `claude.ai` (the shell script on
+  macOS and Linux, the PowerShell script on Windows) or, if that is not possible, installing the
+  `@anthropic-ai/claude-code` package with npm;
+- when you try to share and no Carta connector is registered for that CLI, runs `claude mcp add --transport http
+  <carta_prod or carta_sandbox> <Carta MCP URL> --scope user` once. This writes a connector entry to your user
+  Claude configuration; you still sign in to it yourself.
 
 ## Data & Privacy
 

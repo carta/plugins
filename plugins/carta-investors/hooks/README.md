@@ -11,15 +11,15 @@ under node, dispatches to the shared Go hooks binary in `tools/hooks/` via
 The published plugin ships the compiled binaries in `hooks/bin/` and their Go
 source in `hooks/src/`. `hooks/bin/SOURCE.md` explains how to check the
 binaries against `hooks/bin/SHA256SUMS` (`sh hooks/src/verify-checksums.sh`)
-and how to rebuild them from source and compare (`sh hooks/src/build.sh --check`).
+and how to rebuild them from source and compare (`GOTOOLCHAIN=go$(cat hooks/src/.go-version) sh hooks/src/build.sh --check`).
 
  **Windows:** `dispatch.sh` is a POSIX shell script, so hooks won't fire unless Bash or Git Bash is installed.
 
 | Event | Matcher | Command | Purpose |
 |-------|---------|---------|---------|
 | SessionStart | — | `dispatch.sh inject-context` | Inject skill-loading instruction |
-| SessionStart | — | `dispatch.sh prune-session-data` | Prune stale session files from CLAUDE_PLUGIN_DATA/sessions |
-| SessionStart | — | `dispatch.sh capture-model` | Capture the active Claude model for later PreToolUse instrumentation |
+| SessionStart | — | `dispatch.sh prune-session-data` | Prune session files older than 24 hours from CLAUDE_PLUGIN_DATA/sessions (when that variable is set) and from the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder) |
+| SessionStart | — | `dispatch.sh capture-model` | Capture the active Claude model, in the shared session folder, for later PreToolUse instrumentation |
 | PreToolUse | Skill | `dispatch.sh capture-active-skill` | Record which carta skills have been loaded this session |
 | PreToolUse | Carta MCP | `dispatch.sh inject-instrumentation` | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise). In `auto` and `plan` permission modes it leaves the input unchanged, because auto mode refuses a call a hook rewrote |
 | PreToolUse | Carta MCP `call_tool` | guard-own-sync-push.js | Deny a budget-report create/update that belongs to a carta-manco-reporting own-sync plan but differs from it |
@@ -33,8 +33,8 @@ PreToolUse hooks print one JSON object. Their source is in `hooks/src/`.
 
 | Hook | Output |
 |------|--------|
-| `capture-active-skill` | Always `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`: no decision, so Claude Code's normal permission flow applies. It records the name of each of this plugin's skills that Claude loads, in a small per-session file under `CLAUDE_PLUGIN_DATA/sessions` (`/tmp/claude-carta-investors` when that is unset). It never blocks or edits a call. |
-| `inject-instrumentation` | `updatedInput`: the tool call's input plus an `_instrumentation_v2` object (inside `params` for `fetch` and `mutate`, where a JSON-string `params` is rewritten as an object). The object holds the plugin names and versions, skill names, session, prompt and agent ids, permission mode, effort, model, surface, platform, the session's token total (read from the transcript) and `from_hook: true`. It writes a small per-session record under `CLAUDE_PLUGIN_DATA/sessions`. When it cannot tell which plugin it belongs to, it prints the bare object above and changes nothing. In `auto` and `plan` permission modes it also prints the bare object and leaves the input unchanged: auto mode refuses a call whose input a hook changed after review. It never allows or denies a call, and only runs for Carta MCP tools (see the matcher below). |
+| `capture-active-skill` | Always `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`: no decision, so Claude Code's normal permission flow applies. It records the name of each of this plugin's skills that Claude loads, in a small per-session file under `CLAUDE_PLUGIN_DATA/sessions` (`/tmp/claude-carta-investors` when that is unset), and the latest one in the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder). It never blocks or edits a call. |
+| `inject-instrumentation` | `updatedInput`: the tool call's input plus an `_instrumentation_v2` object (inside `params` for `fetch` and `mutate`, where a JSON-string `params` is rewritten as an object). The object holds the plugin names and versions, skill names, session, prompt and agent ids, permission mode, effort, model, surface, platform, the session's token total (read from the transcript) and `from_hook: true`. It writes a small per-session record in the shared session folder. When it cannot tell which plugin it belongs to, it prints the bare object above and changes nothing. In `auto` and `plan` permission modes it also prints the bare object and leaves the input unchanged: auto mode refuses a call whose input a hook changed after review. It never allows or denies a call, and only runs for Carta MCP tools (see the matcher below). |
 
 `guard-own-sync-push.js` is plain node source. It prints a `deny` decision with a reason only when a budget
 report push differs from the plan `own_sync.py` wrote; otherwise it prints nothing.
