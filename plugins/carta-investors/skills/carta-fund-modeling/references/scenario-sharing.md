@@ -4,9 +4,9 @@ Firm admins can share Fund Modeling scenarios across their firm. Sharing is **bu
 local app** (`serve.py`) — there is no chat/prompt flow. If a user asks to share, publish, or
 pull scenarios, point them at the in-app controls below.
 
-On the hosted app, scenarios and fund plans are stored for the firm, so everyone who opens that
-firm sees and edits the same copy; there is no Publish step and none of these controls. A hosted
-user who asks to share needs to do nothing: a colleague who opens the same firm already sees it.
+On the hosted app, each user's scenarios and fund plans are private to them: a colleague who opens
+the same firm sees only their own. The hosted app has no Publish step and none of these controls
+yet, so a hosted user who asks to share can't share a scenario from it.
 
 ## In the app
 

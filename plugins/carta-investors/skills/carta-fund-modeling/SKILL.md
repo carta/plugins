@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.41.16</carta-plugin>
+<carta-plugin>carta-investors:7.42.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files.
 
@@ -696,8 +696,8 @@ After giving the URL, add one short post-launch line (not a menu):
 In the local build, firm admins publish/pull scenarios across the firm — **built into the app** (a Shared
 with you section on the Scenarios page to load shared scenarios, Publish in a scenario tile's ⋯ menu, and Update / Duplicate / Hide /
 Delete in the top bar for the active shared scenario). It is button-driven with no
-prompt flow; if a user asks to share, point them at those controls. On the hosted app, scenarios are already
-stored for the firm, so colleagues who open the same firm see them with no publish step. See
+prompt flow; if a user asks to share, point them at those controls. On the hosted app, each user's scenarios and
+plans are private to them, and there is no publish step yet. See
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/references/scenario-sharing.md`.
 
 ## Refresh / edits

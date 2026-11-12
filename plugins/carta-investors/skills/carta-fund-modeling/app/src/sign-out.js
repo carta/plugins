@@ -16,9 +16,13 @@ function outermostSameOriginWindow() {
   return w;
 }
 
-export async function signOut() {
+async function endSession() {
   const res = await fetch("/auth/logout", { cache: "no-store" });
   if (!res.ok) throw new Error(`Sign out failed: ${res.status}`);
+}
+
+export async function signOut() {
+  await endSession();
   try {
     // The logout page clears the remembered firm with a script; a fetch does not run it, and
     // without this the next sign-in reopens that firm.
@@ -27,4 +31,17 @@ export async function signOut() {
     // no localStorage (private mode, blocked in a frame)
   }
   outermostSameOriginWindow().location.replace("/");
+}
+
+// The `action` of the Worker's 401 that asks the user to sign in again.
+export const REAUTHENTICATE = "reauthenticate";
+
+/** Whether an /api answer asks the user to sign in again: their session expired, or Fund Modeling couldn't tell who they are. */
+export const asksToSignInAgain = (status, body) => status === 401 && body?.action === REAUTHENTICATE;
+
+// Ends the session and reloads the outermost same-origin window where it is, so it comes back to the sign-in page, whose
+// link returns to this page and which handles signing in inside Claude's frame. Keeps the remembered firm.
+export async function signInAgain() {
+  await endSession();
+  outermostSameOriginWindow().location.reload();
 }

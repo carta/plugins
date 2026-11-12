@@ -75,7 +75,7 @@ export function watchForOutsideChanges({ currentQuery, seen, writes, untracked, 
 }
 
 /** The one scenario `after` has that `before` lacks, or null when there are none or several (a
- *  colleague's scenarios arriving with it would make "the new one" a guess). */
+ *  scenario from another tab arriving with it would make "the new one" a guess). */
 export function newScenarioId(before, after) {
   const had = new Set(before);
   const added = after.filter((id) => !had.has(id));

@@ -1,3 +1,5 @@
+import { asksToSignInAgain } from "../sign-out.js";
+
 export const CONNECTING_STEP = "Connecting to Carta…";
 export const SETTING_CONTEXT_STEP = "Setting firm context";
 export const QUERYING_STEP = "Querying fund data";
@@ -34,7 +36,7 @@ export async function runFirmLoad(firm, onStep = () => {}, { force = false } = {
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw Object.assign(new Error(body?.message || body?.error || `Load failed (${res.status})`),
-      { code: body?.error, retryAfter: body?.retryAfter });
+      { code: body?.error, retryAfter: body?.retryAfter, signInAgain: asksToSignInAgain(res.status, body) });
   }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

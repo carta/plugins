@@ -13,12 +13,14 @@ import { parseRoute, navigate, subscribeNav, isFirmId } from "./route.js";
 import { postToOuter } from "./bridge-client.js";
 import { FirmAccess } from "./firm-access.js";
 import { runFirmLoad, stepProgress, CONNECTING_STEP } from "./state/firmLoad.js";
+import { asksToSignInAgain, signInAgain } from "./sign-out.js";
 
 export default function Root({ features }) {
   // The URL path is the source of truth for the selected firm.
   const firm = useSyncExternalStore(subscribeNav, () => parseRoute().firm, () => null);
   const [extras, setExtras] = useState(null); // { slug, pacing, ownership, lpBase, gpBase, feeHistory, expenseHistory, opsBenchmarks } for `firm`
   const [error, setError] = useState(null);
+  const [signInNeeded, setSignInNeeded] = useState(false);
   const [loadingStep, setLoadingStep] = useState(null); // SSE step from /api/load-firm
   const [autoOpen, setAutoOpen] = useState(true); // false once the user leaves a firm, so the chooser doesn't reopen it
   const [canSwitchFirm, setCanSwitchFirm] = useState(false);
@@ -30,6 +32,7 @@ export default function Root({ features }) {
     setShownFirm(firm);
     setExtras(null);
     setError(null);
+    setSignInNeeded(false);
     setLoadingStep(null);
   }
 
@@ -69,7 +72,12 @@ export default function Root({ features }) {
 
     async function loadExtras() {
       // Check if snapshot data exists for this session
-      const snap = await fetch(`/api/snapshot${q}`).then((r) => r.json());
+      const snapRes = await fetch(`/api/snapshot${q}`);
+      const snap = await snapRes.json();
+      if (asksToSignInAgain(snapRes.status, snap)) {
+        if (live) setSignInNeeded(true);
+        return;
+      }
       if (snap?.error === "not_ready") {
         // No data yet — fetch from MCP via SSE stream
         setLoadingStep(CONNECTING_STEP);
@@ -78,7 +86,8 @@ export default function Root({ features }) {
         } catch (e) {
           if (live) {
             setLoadingStep(null);
-            setError(e.message);
+            if (e.signInAgain) setSignInNeeded(true);
+            else setError(e.message);
           }
           return;
         }
@@ -113,9 +122,22 @@ export default function Root({ features }) {
 
   if (!firm) return <FundChooser onPick={choose} autoOpen={autoOpen} />;
 
+  const messageScreen = { ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" };
+  // A button, never a redirect: a lookup that keeps failing would otherwise loop through sign-in.
+  if (signInNeeded && !error) {
+    return (
+      <div style={messageScreen}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: FS.bodyLg }}>Sign in again to keep working.</div>
+          <button onClick={() => signInAgain().catch((e) => setError(e.message))} style={{ ...sans, marginTop: 12, cursor: "pointer" }}>Sign in again</button>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
-      <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" }}>
+      <div style={messageScreen}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: FS.bodyLg }}>Couldn’t load “{firm}”: {error}</div>
           <button onClick={() => choose(null)} style={{ ...sans, marginTop: 12, cursor: "pointer" }}>← Back to firms</button>
