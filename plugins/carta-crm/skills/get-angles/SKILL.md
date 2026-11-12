@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.20.14</carta-plugin>
+<carta-plugin>carta-crm:1.20.15</carta-plugin>
 
 ## Overview
 
@@ -216,7 +216,8 @@ the ranked shape. Otherwise it has the classic shape.
 
 The server has already ranked these routes. Each contact and path carries `tier`, `band`,
 `confidence`, `reason`, `yourRelationship`, `insideTarget`, `employerIndustry` and
-`employerLocation`. **Use its order. Do not re-rank with the classic tiers.**
+`employerLocation`. A contact can also carry `knownTo`, an array of the names of the colleagues
+who know them. **Use its order. Do not re-rank with the classic tiers.**
 
 **No strong route:** after cases 0 and 1 above, when `bestWayIn` is absent, or its introducer's
 `band` is `low`, say in two lines that there is no strong warm route, and stop. Do not fill `recommended` with
@@ -225,9 +226,26 @@ that route.
 Otherwise, after cases 0 and 1 above, lead the warm-route answer with `bestWayIn`, in plain
 words, before the map:
 
-1. **Who to ask:** `bestWayIn.introducer.name`, and who they reach: `bestWayIn.reaches.name`
-   and `reaches.title`. When `reach` is more than 1, say how many people at the target they
-   reach.
+The server ranks people at the target by their value for a deal conversation with a PE
+investor or buyer: the CEO or founder first, then the CFO, then corporate development or M&A,
+then the board, then other C-level people. Then it picks the best route to that person, with a
+teammate route first among the routes to that person.
+
+`bestWayIn` has one of two forms, and `bestWayIn.next` has the same two forms:
+
+- **Route answer:** `reaches` is present. The introducer is a contact who can introduce the
+  user to `reaches`, a person at the target.
+- **Talk-to answer:** `reaches` is absent. The introducer is a person at the target, and is the
+  person to talk to. `why` starts with "Talk to <name>, <title> at <company>." There is no
+  second person, so never ask the introducer for an introduction and never invent a `reaches`.
+
+1. **Who to ask:** for a route answer, `bestWayIn.introducer.name`, and who they reach:
+   `bestWayIn.reaches.name` and `reaches.title`. When `reach` is more than 1, say how many
+   people at the target they reach. For a talk-to answer, write "Talk to <name>, <title>"
+   with the introducer's name and their title from `insideTarget.title`, else the matching
+   `targetEmployees[].title`, else leave the title out. Then say whose contact they are from
+   `knownTo`, and leave that out when `knownTo` is absent or empty. Then add the relationship
+   line from point 3.
 2. **Why:** quote `bestWayIn.why`. Add the introducer's role inside the target when
    `insideTarget` is set (`board`: "sits on the board", `investor`: "is an investor",
    `employee`: "works there"; `presence: "past"` makes it past tense). Add the shared
@@ -235,8 +253,9 @@ words, before the map:
 3. **How strong:** the introducer's `band` as a word (`high`: "strong", `medium`: "good"),
    and `yourRelationship`: "you have N interactions with them", or "you have no recorded
    interactions with them" when `band` is `none`.
-4. **Next best:** `bestWayIn.next.introducer.name` and who they reach, in one line. Omit it
-   when `next` is absent.
+4. **Next best:** `bestWayIn.next.introducer.name` and who they reach, in one line. When
+   `next` has no `reaches`, write "talk to <name>, <title>" instead. Omit it when `next` is
+   absent.
 
 Then give a short ranked list, at most 4 people, grouped by tier in this order: 1 "Your
 teammates", 2 "People you know", 5 "Known by your colleagues", 3 "CRM contacts", 4 "Other
@@ -249,7 +268,9 @@ Three rules:
   number the answer states.
 - **Never offer a `hidden` route**, and never offer a `low` route as the recommendation.
 - `bestWayIn` fills `recommended` on the map (Step 5): the introducer is the connector and
-  `reaches` is the target. The alternates follow the server's order.
+  `reaches` is the target. A talk-to answer fills it as **A direct route** (Step 5), with the
+  introducer as the target and the target company as the hop. The alternates follow the
+  server's order.
 
 ### Classic shape
 
@@ -344,6 +365,13 @@ Keep it short enough to read on a phone. Two guards:
 For a direct reach-out (Step 3, case 0) the message goes to the target instead, and it opens
 on the shared employer rather than on an ask for an introduction.
 
+For a talk-to answer (a `bestWayIn` with no `reaches`, Step 3) the message is a direct outreach
+to the introducer. It opens on the relationship (whose contact they are from `knownTo`, only when `knownTo` is present and not empty, and the last
+interaction with them from Step 2, only when Step 2 matched one to this person; otherwise leave
+the date out), says what we want to talk about, and gives an easy out. It never asks them for an
+introduction. It is a draft only, like every other draft here: nothing is sent without the
+user's yes.
+
 ## Step 5 — Render the route map
 
 **Copy the artifact, do not retype it.** Re-emitting it from memory drifts the CSS between
@@ -420,6 +448,10 @@ you, the shared employer, the target — and the middle hop reads `Reach out dir
 
 **Never invent a connector to fill the five-column shape.** A direct route has none, and the
 board draws without one.
+
+A talk-to answer (Step 3) draws on the same board: `target` is the introducer, the hop is the
+target company, and `sender` is the acting user. The top-up wave fetches the introducer with
+`fetch_contact_by_id`, for the photo, the title and the email address.
 
 **Pictures: pass every URL through verbatim.** `contacts[].photoUrl`,
 `targetEmployees[].photoUrl` and a company's `image` are usually populated; the example DATA
@@ -572,6 +604,9 @@ numbered list with one marked `<- recommended`, via `AskUserQuestion`. Never fir
    `DATA.draft.to` is a display name rather than an address — take the address from the
    connector's `email_detail.email` on their `fetch_contact_by_id` record, or `contact.email`
    on the relation row.
+
+   **On a talk-to answer the recipient is the introducer** (Step 4), and the address comes from
+   their `fetch_contact_by_id` record, as for a connector.
 
    **On a direct route the recipient is the target, not the connector** (Step 4). Their address
    is `targetEmployees[].email` where the CRM holds one, and often it holds none — that is the
