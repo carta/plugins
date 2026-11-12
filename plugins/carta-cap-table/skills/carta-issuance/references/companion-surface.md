@@ -124,7 +124,10 @@ answers, the reply is these parts, in this order, and no other text:
    board consent covers it yet" when none does), the type's summary items. A check message on a
    cell is an item, never a line here. A thing that needs the user and is on no cell (a banner error, a
    possible duplicate stakeholder, a file you could not read) adds one line here.
-2. "N things need you, in the card above.", with N the number of items. The text names no item,
+2. "N things need you, in the card above.", with N the number of items. When the set has an empty
+   optional column ([§ 8](#the-optional-columns-once-per-set) step 1), add " Ask me if you also
+   want optional details." to that line: the card never posts when it is done, so the user may
+   go straight to Issue. The text names no item,
    no field of an item and no value an item asks about: the card holds them, once.
 3. The reply's page line, as [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)
    says, alone: no line about the browser before it. It is the last line of the reply.
@@ -216,7 +219,7 @@ for it.
 comes with the user's next message. It lists values the card already saved, with their
 sources. Don't save those values and don't call `draft_set_sources` for them: make one
 `cap_table:mutate:validate_drafts` call, keep the revision it returns, then go on to the other
-items and § 8. The card's `Carry on` message comes after it saved every item: go on to § 8.
+items and § 8.
 
 **Any other answer re-saves the same set**: an answer in the chat, or a card message that lists
 values the card did not save, one line per value with its row, column key and save key. Card
@@ -241,7 +244,7 @@ again unless it is stuck or the user asks to see it. The reply still ends as
 ### The optional columns, once per set
 
 The first time no input is open on a set (after the build, after a `Saved in the card` context,
-after the card's `Carry on` message, or after the last answer in the chat), offer the set's empty
+or after the last answer in the chat), offer the set's empty
 optional columns, one time per set:
 
 1. The **empty optional columns** are the `field_spec` fields with `required` false, not
@@ -265,8 +268,14 @@ optional columns, one time per set:
    answers as § 7 says, with `added_by_you` sources. An optional row left empty is no open
    input: after these answers, go on to the review.
 
+**Asked for optional details.** When the user asks for optional details, answer with the
+question in step 2, also while card items are still open: it is the set's one offer. With no
+empty optional column, say there are none. While card items are open, any answer leaves the
+user to answer them: a picked column's items join the open items in one `need_input` card, and
+the review waits until none is open.
+
 Before the user answers the question, write no text of the review. Never offer a set's optional
-columns again, also after a later `Saved in the card` context or `Carry on` message.
+columns again, also after a later `Saved in the card` context.
 
 ### The review
 
