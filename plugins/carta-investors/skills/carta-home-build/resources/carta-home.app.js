@@ -480,18 +480,116 @@ function renderBenchError(code) {
 // Render fund-level summary rows in the home card (value + gain/loss only, no shares)
 function renderFundSummaryCard(fundRows) {
   document.getElementById("soi-fund-label").textContent = "FUNDS";
-  document.getElementById("soi-rows").innerHTML = fundRows.slice(0, 3).map(f => {
+  document.getElementById("soi-rows").innerHTML = fundRows.slice(0, SOI_CARD_ROWS).map(f => {
     const glVal = typeof f.gl === 'number' ? f.gl : parseFloat(f.gl ?? 0);
     const glCls = glVal > 0 ? "gl-pos" : glVal < 0 ? "gl-neg" : "";
-    const glTxt = glVal === 0 ? "—" : (glVal > 0 ? "+" : "") + fmtShort(Math.abs(glVal));
-    const valFmt = typeof f.value === 'number' ? fmtShort(f.value) : (f.value ?? "—");
+    const glTxt = glVal === 0 ? "—" : (glVal > 0 ? "+" : "") + fmtCurrency(Math.abs(glVal), f.currency);
+    const valFmt = typeof f.value === 'number' ? fmtCurrency(f.value, f.currency) : (f.value ?? "—");
     return `
     <div class="tbl-row">
       <span class="tbl-col-name">${escHtml(f.name)}</span>
-      <span class="tbl-col-val">${valFmt}</span>
-      <span class="tbl-col-gl ${glCls}">${glTxt}</span>
+      <span class="tbl-col-val">${escHtml(valFmt)}</span>
+      <span class="tbl-col-gl ${glCls}">${escHtml(glTxt)}</span>
     </div>`;
   }).join("");
+}
+
+// ── Fund of funds ──
+// A fund of funds' own funds hold little but stakes in outside funds, so the SOI card lists
+// those outside funds instead. Funds Carta administers in this firm are left out: they are
+// its own feeders and parallels. The full SOI drills into what each outside fund holds.
+const FOF_MIN_FUNDS = 3;
+// Share of the firm's active value that must sit in outside funds.
+const FOF_MIN_SHARE = 0.5;
+// Rows the SOI card shows.
+const SOI_CARD_ROWS = 3;
+// A position in its fund's own currency reads the native columns; a foreign one reads its value
+// converted to the fund's reporting currency, NULL when there is none.
+const SAME_CURRENCY = "ai.BASE_CURRENCY_CODE IS NULL OR ai.CURRENCY_CODE = ai.BASE_CURRENCY_CODE";
+const AI_VALUE = `IFF(${SAME_CURRENCY}, ai.REMAINING_VALUE, ai.BASE_CURRENCY_REMAINING_VALUE)`;
+const AI_GL = `IFF(${SAME_CURRENCY}, ai.TOTAL_UNREALIZED_GAIN_LOSS, ai.BASE_CURRENCY_UNREALIZED_GAIN_LOSS)`;
+
+// The firm's largest outside funds in each reporting currency, plus how many there are and
+// their total value in that currency. Never summed across currencies. A foreign position is
+// read at its converted value. A fund with no converted value is neither counted nor shown with a value. Only a firm that runs
+// at least one fund qualifies, so SPV-, GP- and ManCo-only firms keep their own funds. An outside
+// fund named like one of the firm's own funds is its own vehicle and is left out.
+// A failed query answers [] so the card keeps the firm's own funds.
+async function fetchUnderlyingFunds(firmId) {
+  try {
+    const res = await _mcp("read_tool", {
+      name: "dwh__execute__query",
+      arguments: {
+        // FIRM_VALUE, the share test's base, leaves out stakes in the firm's own Carta funds
+        // (a feeder's stake in its main fund), the same rows the outside funds leave out.
+        sql: `WITH by_issuer AS (
+                SELECT MAX(ai.ISSUER_NAME) AS ISSUER_NAME, f.REPORTING_CURRENCY AS CURRENCY,
+                       BOOLOR_AGG(ai.IS_INVESTMENT_IN_FUND IS TRUE) AS IN_FUND,
+                       SUM(${AI_VALUE}) AS TOTAL_VALUE,
+                       SUM(${AI_GL}) AS TOTAL_GL,
+                       SUM(SUM(${AI_VALUE})) OVER (PARTITION BY f.REPORTING_CURRENCY) AS FIRM_VALUE
+                FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID
+                WHERE f.FIRM_ID = '${firmId}' AND ai.IS_ACTIVE_INVESTMENT
+                  AND ai.IS_INVESTMENT_IN_CARTA_FUND_ENTITY IS NOT TRUE
+                  AND EXISTS (SELECT 1 FROM FUND_ADMIN.FUNDS t
+                              WHERE t.FIRM_ID = '${firmId}' AND t.ENTITY_TYPE_NAME = 'Fund')
+                GROUP BY COALESCE(ai.GENERAL_LEDGER_ISSUER_ID::string, ai.ISSUER_NAME), f.REPORTING_CURRENCY)
+              SELECT ISSUER_NAME, CURRENCY, TOTAL_VALUE, TOTAL_GL, FIRM_VALUE,
+                     COUNT(*) OVER (PARTITION BY CURRENCY) AS FUND_COUNT,
+                     SUM(TOTAL_VALUE) OVER (PARTITION BY CURRENCY) AS ALL_VALUE
+              FROM by_issuer b WHERE IN_FUND AND TOTAL_VALUE IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM FUND_ADMIN.FUNDS o WHERE o.FIRM_ID = '${firmId}'
+                  AND REGEXP_REPLACE(LOWER(o.FUND_NAME), '[[:space:]]+', '')
+                    = REGEXP_REPLACE(LOWER(b.ISSUER_NAME), '[[:space:]]+', ''))
+              QUALIFY ROW_NUMBER() OVER (PARTITION BY CURRENCY ORDER BY TOTAL_VALUE DESC NULLS LAST) <= ${SOI_CARD_ROWS}
+              ORDER BY CURRENCY, TOTAL_VALUE DESC NULLS LAST`,
+        format: 'ndjson',
+        response_mode: 'inline',
+      }
+    });
+    return res.isError ? [] : dwhRows(res, "ISSUER_NAME");
+  } catch (e) {
+    console.error("[carta-home] underlying funds lookup failed", e);
+    return [];
+  }
+}
+
+// One SOI card row from a warehouse row's value and gain/loss.
+function toCardRow(name, r) {
+  return { name, value: r.TOTAL_VALUE == null ? null : parseFloat(r.TOTAL_VALUE), gl: parseFloat(r.TOTAL_GL ?? 0), currency: r.CURRENCY };
+}
+
+// The SOI card for a fund of funds, or null when the firm isn't one: the top rows of the one
+// qualifying currency with the most outside funds, plus the other qualifying currencies. The
+// share test runs per currency, against the firm's value in that currency (FIRM_VALUE), so no
+// amount is added across currencies.
+function fofSummaryRows(underlying) {
+  const cur = r => String(r.CURRENCY ?? "");
+  const byCurrency = {};
+  underlying.forEach(r => (byCurrency[cur(r)] = byCurrency[cur(r)] || []).push(r));
+  const count = g => parseInt(g[0].FUND_COUNT, 10);
+  const qualifying = Object.keys(byCurrency).filter(c => {
+    const g = byCurrency[c];
+    const firmValue = parseFloat(g[0].FIRM_VALUE ?? 0);
+    return count(g) >= FOF_MIN_FUNDS && firmValue > 0
+      && parseFloat(g[0].ALL_VALUE ?? 0) / firmValue >= FOF_MIN_SHARE;
+  }).sort((a, b) => count(byCurrency[b]) - count(byCurrency[a]) || a.localeCompare(b));
+  if (!qualifying.length) return null;
+  const rows = byCurrency[qualifying[0]].slice()
+    .sort((a, b) => parseFloat(b.TOTAL_VALUE ?? 0) - parseFloat(a.TOTAL_VALUE ?? 0))
+    .slice(0, SOI_CARD_ROWS).map(r => toCardRow(r.ISSUER_NAME, r));
+  return { rows, alsoCurrencies: qualifying.slice(1) };
+}
+
+// The line under a fund of funds' rows naming the currencies the card had no room for.
+function renderFofNote(currencies) {
+  const el = document.getElementById("soi-fof-note");
+  if (!el) return;
+  const list = currencies.length > 1
+    ? currencies.slice(0, -1).join(", ") + " and " + currencies[currencies.length - 1]
+    : currencies[0];
+  el.textContent = currencies.length ? `Also invests in ${list} funds` : "";
+  el.hidden = !currencies.length;
 }
 
 // A firm whose funds Carta administers only in part must not read its SOI totals as the
@@ -590,7 +688,8 @@ function fmtCurrency(v, curr) {
   if (isNaN(num)) return "—";
   const abs = Math.abs(num);
   const sym = curr === "USD" || !curr ? "$" : curr + " ";
-  const fmt = abs >= 1e6 ? (sym + (abs / 1e6).toFixed(1) + "M")
+  const fmt = abs >= 1e9 ? (sym + (abs / 1e9).toFixed(1) + "B")
+             : abs >= 1e6 ? (sym + (abs / 1e6).toFixed(1) + "M")
              : abs >= 1e3 ? (sym + (abs / 1e3).toFixed(1) + "K")
              : (sym + abs.toFixed(2));
   return num < 0 ? "(" + fmt + ")" : fmt;
@@ -718,11 +817,13 @@ async function fetchLiveData({ final = true } = {}) {
     // Step 2: single DWH query — fund names + portfolio values (no set_context or fa:list:entities needed)
     let dwhFundRows = [];
     let soiFailed = false;
+    // Runs beside the main query; it never rejects (a failure answers []).
+    const underlyingP = fetchUnderlyingFunds(firmId);
     try {
       const dwhRes = await _mcp("read_tool", {
         name: "dwh__execute__query",
         arguments: {
-          sql: `SELECT f.FUND_UUID, f.FUND_NAME, f.ENTITY_TYPE_NAME, SUM(ai.REMAINING_VALUE) AS TOTAL_VALUE, SUM(ai.TOTAL_UNREALIZED_GAIN_LOSS) AS TOTAL_GL FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID WHERE ai.IS_ACTIVE_INVESTMENT = TRUE AND f.FIRM_ID = '${firmId}' GROUP BY f.FUND_UUID, f.FUND_NAME, f.ENTITY_TYPE_NAME ORDER BY TOTAL_VALUE DESC NULLS LAST`,
+          sql: `SELECT f.FUND_UUID, f.FUND_NAME, f.ENTITY_TYPE_NAME, f.REPORTING_CURRENCY AS CURRENCY, SUM(${AI_VALUE}) AS TOTAL_VALUE, SUM(${AI_GL}) AS TOTAL_GL FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID WHERE ai.IS_ACTIVE_INVESTMENT = TRUE AND f.FIRM_ID = '${firmId}' GROUP BY f.FUND_UUID, f.FUND_NAME, f.ENTITY_TYPE_NAME, f.REPORTING_CURRENCY ORDER BY TOTAL_VALUE DESC NULLS LAST`,
           format: 'ndjson',
           }
       });
@@ -740,14 +841,18 @@ async function fetchLiveData({ final = true } = {}) {
       return "failed";
     }
     if (dwhFundRows.length > 0) {
-      renderFundSummaryCard(dwhFundRows.map(r => ({
-        name:  r.FUND_NAME ?? "Fund",
-        value: parseFloat(r.TOTAL_VALUE ?? 0),
-        gl:    parseFloat(r.TOTAL_GL ?? 0),
-      })));
-      renderSoiNewFund(dwhFundRows);
-      if (isSpvOnly(dwhFundRows)) applySpvWording();
-      renderSOIScope(soiScopeNote(await fetchRealFunds(firmId), dwhFundRows.map(r => r.FUND_UUID)));
+      const fof = fofSummaryRows(await underlyingP);
+      renderFundSummaryCard(fof ? fof.rows : dwhFundRows.map(r => toCardRow(r.FUND_NAME ?? "Fund", r)));
+      // The new-fund banner and the scope note describe the firm's own funds.
+      if (!fof) renderSoiNewFund(dwhFundRows);
+      if (isSpvOnly(dwhFundRows)) applyWording(SPV_WORDING);
+      // After the SPV wording: a fund of funds' labels win; SPV wording still names its LPs.
+      renderFofNote(fof ? fof.alsoCurrencies : []);
+      if (fof) {
+        applyWording(FOF_WORDING);
+        trackHome("render", "CartaHome.SOI.FundOfFunds");
+      }
+      renderSOIScope(fof ? null : soiScopeNote(await fetchRealFunds(firmId), dwhFundRows.map(r => r.FUND_UUID)));
     }
     settleDashboardCard("soi", dwhFundRows.length > 0);
     return "ok";

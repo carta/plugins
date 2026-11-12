@@ -88,8 +88,16 @@ function isSpvOnly(rows) {
   return rows.length > 0 && rows.every(r => String(r.ENTITY_TYPE_NAME || "").toLowerCase() === "spv");
 }
 
-function applySpvWording() {
-  Object.entries(SPV_WORDING).forEach(([id, text]) => {
+// Wording for a fund of funds, whose SOI card lists the outside funds it invests in.
+const FOF_WORDING = {
+  "soi-card-desc":  "Your largest fund investments, with value and gain/loss.",
+  "soi-fund-label": "FUNDS YOU INVEST IN",
+  "soi-col-name":   "UNDERLYING FUND",
+};
+
+// Writes each id's text; an id missing from the page is skipped.
+function applyWording(map) {
+  Object.entries(map).forEach(([id, text]) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
   });

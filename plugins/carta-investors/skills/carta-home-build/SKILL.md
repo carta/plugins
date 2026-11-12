@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.42.2</carta-plugin>
+<carta-plugin>carta-investors:7.43.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -80,6 +80,25 @@ at the start of its `description`.
   `FUND_ADMIN.FUNDS` once; a fund in that lookup counts toward N only if its
   `IS_ADMINISTERED_BY_CARTA` flag is set, and a card fund the lookup misses counts as administered. The card footer
   launches the standalone SOI dashboard; home holds no holdings table of its own.
+  Every firm's rows format with `fmtCurrency`: one decimal for K, M and B, cents under 1K. Amounts are in
+  the fund's reporting currency (`FUND_ADMIN.FUNDS.REPORTING_CURRENCY`): a foreign-currency position reads
+  `BASE_CURRENCY_REMAINING_VALUE` / `BASE_CURRENCY_UNREALIZED_GAIN_LOSS`, never a guessed value. An outside
+  fund with no converted value is neither counted nor shown with a value.
+  A fund of funds sees its outside funds instead, under "FUNDS YOU INVEST IN" with an "UNDERLYING FUND"
+  column and the description "Your largest fund investments, with value and gain/loss." (`fofSummaryRows`
+  in `carta-home.app.js`). A firm qualifies when it runs at least one entity whose
+  `FUND_ADMIN.FUNDS.ENTITY_TYPE_NAME` is `Fund` (SPV-, GP- and ManCo-only firms keep their own funds) and,
+  in one reporting currency, at least `FOF_MIN_FUNDS` outside
+  funds hold at least `FOF_MIN_SHARE` of its active value in that currency. Outside funds are
+  `IS_INVESTMENT_IN_FUND IS TRUE`, group by `GENERAL_LEDGER_ISSUER_ID` (or `ISSUER_NAME` when it has none),
+  and leave out any whose name matches one of the firm's own `FUND_NAME`s, ignoring case and spaces. The
+  share's base leaves out stakes in the firm's own Carta funds
+  (`IS_INVESTMENT_IN_CARTA_FUND_ENTITY IS NOT TRUE`), so a feeder's stake in its main fund doesn't count
+  twice. The card shows one currency: the qualifying one with the most outside funds, its top
+  `SOI_CARD_ROWS` by value; no amount is added across currencies. Any other qualifying currency gets a line
+  under the rows, e.g. "Also invests in EUR funds". The "Carta administers N of M" note and the new-fund banner stay hidden,
+  since they describe the firm's own funds. A failed lookup keeps the firm's own funds.
+  Fund-of-funds wording wins over SPV wording on this card; an SPV-only firm's LP card keeps SPV wording.
 - **Fund Performance** — Net IRR, TVPI, DPI summary chart vs. peer benchmarks. Pulled from
   `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` — queries all funds for the active firm
   automatically (no hardcoded fund names). When that table has no qualifying rows for

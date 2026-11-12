@@ -49,10 +49,11 @@ A card whose query answers with no rows is hidden instead of shown blank. A card
 |---|---|---|
 | `CartaHome.SOI.Empty` | render | The investments query answered with no active investments, so the Schedule of investments card is hidden. Not sent when the query fails: the card stays with its note and `SOI.LoadError` is sent |
 | `CartaHome.SOI.LoadError` | render | The investments query failed; the Schedule of investments card stays and shows a note |
+| `CartaHome.SOI.FundOfFunds` | render | The firm is a fund of funds: it runs at least one entity of type `Fund`, and in one of its funds' reporting currencies at least `FOF_MIN_FUNDS` outside funds (not named like its own funds) hold at least `FOF_MIN_SHARE` of its value in that currency, not counting stakes in its own Carta funds. The Schedule of investments card lists the top `SOI_CARD_ROWS` of those outside funds, in that reporting currency, instead of its own funds |
 | `CartaHome.SOI.NewFund.Shown` | render | The SOI card's banner appeared for funds the published SOI page doesn't list. Sent once per page load for each different set of funds |
 | `CartaHome.SOI.NewFund.Copy` | prompt | The banner's update prompt was copied (a `trackPrompt`, source `dashboard`, skill `carta-soi`). Carries the fixed text "Update my Schedule of Investments to add new funds", never fund names |
 | `CartaHome.SOI.NewFund.Dismiss` | click | The banner was dismissed |
-| `CartaHome.SOI.PartialScope` | render | The Schedule of investments card shows the "Carta administers N of your M funds" note, so Carta administers only part of the firm's funds. Not sent when the fund lookup fails: the note is hidden |
+| `CartaHome.SOI.PartialScope` | render | The Schedule of investments card shows the "Carta administers N of your M funds" note, so Carta administers only part of the firm's funds. Not sent when the fund lookup fails: the note is hidden. Not sent for a fund of funds either |
 | `CartaHome.Perf.Empty` | render | The benchmark and fund metrics queries answered with no fund, so the Fund performance card is hidden. Not sent when either query fails without a fund to show: the card stays with its note and `Perf.LoadError` is sent |
 | `CartaHome.Perf.LoadError` | render | No fund could be shown because the benchmark or fund metrics query failed; the Fund performance card stays and shows a note |
 | `CartaHome.LP.Empty` | render | A Fund Admin firm has no LPs to show, so the LP summary card is hidden |
