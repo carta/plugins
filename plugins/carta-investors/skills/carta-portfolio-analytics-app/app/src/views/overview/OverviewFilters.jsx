@@ -63,7 +63,8 @@ export function useOverviewFilter(data, dashboard) {
   return { filterCompanies, filterApi, filterProps };
 }
 
-const GF_PANEL_WIDTH = 600;
+const GF_PANEL_WIDTH = 630;
+const GF_NAV_WIDTH = 230; // room for a KPI name two levels deep (KPIs › statement › KPI)
 const COLUMNS = "__columns";
 const COMPANIES = "__companies";
 
@@ -78,6 +79,37 @@ const bubble = { display: "inline-flex", alignItems: "center", height: 18, paddi
 const checkRow = { ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" };
 const checkBox = { width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" };
 
+/** The KPIs group's second level: one chevron per financial statement, each
+ *  opening to its KPIs. A search opens every statement that has a match; a
+ *  group with a single statement skips the extra level's click. */
+function StatementNav({ fields, searching, activePane, openStatements, onToggle, draftCount, renderField }) {
+  const byStatement = new Map();
+  for (const o of fields) {
+    if (!byStatement.has(o.statement)) byStatement.set(o.statement, []);
+    byStatement.get(o.statement).push(o);
+  }
+  const single = byStatement.size === 1;
+  return [...byStatement].map(([statement, opts]) => {
+    const holdsActive = opts.some((o) => specKey(o) === activePane);
+    const open = searching || single || holdsActive || openStatements.has(statement);
+    const n = opts.reduce((s, o) => s + draftCount(o), 0);
+    return (
+      <div key={statement} data-statement={statement}>
+        <button onClick={() => onToggle(statement)} aria-expanded={open} disabled={searching || single}
+          style={{ ...navBtn(false), paddingLeft: 34, height: 32, cursor: searching || single ? "default" : "pointer" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{statement}</span>
+            <span style={{ color: MICRO, fontSize: FS.small }}>{opts.length}</span>
+          </span>
+          {n > 0 && <span style={bubble}>{n}</span>}
+        </button>
+        {open && opts.map((o) => renderField(o, 52))}
+      </div>
+    );
+  });
+}
+
 /** Ribbon "Filters & columns" control. Left nav: Columns (the table's stack, edited
  *  in place), Companies, then one expandable entry per catalog group; picking a
  *  field shows ColumnFilterBody on the right, where it can also be added as a
@@ -89,6 +121,8 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
   const [activePane, setActivePane] = useState(COLUMNS);   // COLUMNS | COMPANIES | "kind:key"
   const [openGroup, setOpenGroup] = useState(null);           // which catalog group is expanded
   const [groupSearch, setGroupSearch] = useState("");          // narrows the expanded group's fields
+  const [openStatements, setOpenStatements] = useState(() => new Set()); // KPI statements expanded inside the KPIs group
+  const toggleStatement = (s) => setOpenStatements((cur) => { const n = new Set(cur); n.has(s) ? n.delete(s) : n.add(s); return n; });
   const groupSearchRef = useFocusOnOpen(open && openGroup);
   const [draftCompanies, setDraftCompanies] = useState(selCompanies);
   const [draftFilters, setDraftFilters] = useState(filters);  // full working copy of doc.filters
@@ -108,7 +142,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
   // Re-seed drafts from the committed state whenever the panel closes.
   useEffect(() => {
     if (open) return;
-    setDraftCompanies(selCompanies); setDraftFilters(filters); setPaneSearch(""); setGroupSearch("");
+    setDraftCompanies(selCompanies); setDraftFilters(filters); setPaneSearch(""); setGroupSearch(""); setOpenStatements(new Set());
   }, [open, selCompanies, filters]);
 
   const byKey = useMemo(() => new Map(catalog.flatMap((g) => g.options.map((o) => [specKey(o), o]))), [catalog]);
@@ -161,6 +195,16 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
     return (data.companies || []).filter((c) => draftCompanies.size === 0 || draftCompanies.has(c.id)).filter(pred);
   };
 
+  const fieldBtn = (o, indent) => {
+    const k = specKey(o);
+    return (
+      <button key={k} onClick={() => { setActivePane(k); setPaneSearch(""); }} style={{ ...navBtn(activePane === k), paddingLeft: indent, height: 32 }}>
+        <MarqueeLabel hoverParent style={{ flex: 1 }}>{o.label}</MarqueeLabel>
+        {draftCount(o) > 0 && <span style={bubble}>1</span>}
+      </button>
+    );
+  };
+
   const tagChip = ({ key, label, clear, hidden }) => (
     <span key={key} title={hidden ? `${label} — not shown as a column` : undefined}
       style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 8px 6px 10px",
@@ -200,7 +244,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
           width: GF_PANEL_WIDTH, height: 440, background: "var(--ink-color-global-surface-background-default)",
           border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 8, boxShadow: POPOVER_SHADOW,
           zIndex: Z.popover, display: "flex", overflow: "hidden" }}>
-          <nav style={{ width: 200, background: GF_WARM_SURFACE, borderRight: `1px solid var(--ink-color-global-border-subtle)`,
+          <nav style={{ width: GF_NAV_WIDTH, background: GF_WARM_SURFACE, borderRight: `1px solid var(--ink-color-global-border-subtle)`,
             padding: "8px 0", overflowY: "auto", flex: "none" }}>
             <button onClick={() => { setActivePane(COLUMNS); setPaneSearch(""); }} style={navBtn(activePane === COLUMNS)}>
               <span>Columns</span>
@@ -219,7 +263,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
               const fields = searchable ? filterByLabel(g.options, groupSearch) : g.options;
               return (
                 <div key={g.group}>
-                  <button onClick={() => { setOpenGroup(expanded ? null : g.group); setGroupSearch(""); }} style={navBtn(false)} aria-expanded={expanded}>
+                  <button onClick={() => { setOpenGroup(expanded ? null : g.group); setGroupSearch(""); setOpenStatements(new Set()); }} style={navBtn(false)} aria-expanded={expanded}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                       {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}{g.group}
                     </span>
@@ -234,15 +278,11 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
                   {searchable && fields.length === 0 && (
                     <div style={{ ...sans, fontSize: FS.small, color: MICRO, padding: "4px 16px 8px 34px" }}>No matches</div>
                   )}
-                  {expanded && fields.map((o) => {
-                    const k = specKey(o);
-                    return (
-                      <button key={k} onClick={() => { setActivePane(k); setPaneSearch(""); }} style={{ ...navBtn(activePane === k), paddingLeft: 34, height: 32 }}>
-                        <MarqueeLabel hoverParent style={{ flex: 1 }}>{o.label}</MarqueeLabel>
-                        {draftCount(o) > 0 && <span style={bubble}>1</span>}
-                      </button>
-                    );
-                  })}
+                  {expanded && (fields.some((o) => o.statement) ? (
+                    <StatementNav fields={fields} searching={!!groupSearch} activePane={activePane}
+                      openStatements={openStatements} onToggle={toggleStatement} draftCount={draftCount}
+                      renderField={(o, indent) => fieldBtn(o, indent)} />
+                  ) : fields.map((o) => fieldBtn(o, 34)))}
                 </div>
               );
             })}

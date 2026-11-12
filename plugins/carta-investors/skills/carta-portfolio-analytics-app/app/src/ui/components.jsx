@@ -322,8 +322,9 @@ export function useFocusOnOpen(ready) {
  *  iterable), `options` = [{id,label}], `onChange` gets a new Set. `quickPicks`
  *  (optional) renders a row of suggestion chips under the search field —
  *  `[{label, ids}]`, each replacing the selection with that id list on click.
- *  `emptyLabel` (default "None") is the summary shown for an empty selection. */
-export function MultiSelect({ label, options, selected, onChange, minWidth = 200, quickPicks, emptyLabel = "None" }) {
+ *  `emptyLabel` (default "None") is the summary shown for an empty selection.
+ *  `collapsibleGroups` folds each `group` under a chevron (CollapsibleCheckGroups). */
+export function MultiSelect({ label, options, selected, onChange, minWidth = 200, quickPicks, emptyLabel = "None", collapsibleGroups }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef(null);
@@ -356,7 +357,14 @@ export function MultiSelect({ label, options, selected, onChange, minWidth = 200
   // rather than "None"; pickers where empty means nothing-chosen keep the default.
   const summary = sel.size === 0 ? emptyLabel : sel.size === options.length ? "All" : `${sel.size} of ${options.length}`;
   const toggle = (id) => { const n = new Set(sel); n.has(id) ? n.delete(id) : n.add(id); onChange(n); };
-  const linkBtn = { ...sans, border: "none", background: "transparent", color: "var(--ink-color-global-link-default)", cursor: "pointer", fontSize: FS.small, padding: 0 };
+  const row = (o) => (
+    <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "8px 4px", fontSize: FS.value, lineHeight: "20px", cursor: "pointer", color: "var(--ink-color-global-text-default)" }}>
+      <input type="checkbox" checked={sel.has(o.id)} onChange={() => toggle(o.id)} />
+      <span style={{ flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
+      {o.sub && <span style={{ flex: "none", color: "var(--ink-color-global-text-subtle)" }}>{o.sub}</span>}
+    </label>
+  );
+  const linkBtn ={ ...sans, border: "none", background: "transparent", color: "var(--ink-color-global-link-default)", cursor: "pointer", fontSize: FS.small, padding: 0 };
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button onClick={() => setOpen((o) => !o)} className="dd-trigger" style={{ ...ddTriggerStyle({ minWidth }), cursor: "pointer" }}>
@@ -383,20 +391,19 @@ export function MultiSelect({ label, options, selected, onChange, minWidth = 200
               onClick={() => onChange(new Set(options.map((o) => o.id)))}>Select all</button>
             <button type="button" onClick={() => onChange(new Set())} style={linkBtn}>Clear</button>
           </div>
-          {shown.map((o, i) => (
-            <Fragment key={o.id}>
-              {/* Optional `group` on an option draws a heading each time it changes,
-                  so a grouped list (tag categories) needs no separate component. */}
-              {o.group && o.group !== (shown[i - 1] || {}).group && (
-                <Eyebrow style={{ padding: "8px 4px 3px" }}>{o.group}</Eyebrow>
-              )}
-              <label style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "8px 4px", fontSize: FS.value, lineHeight: "20px", cursor: "pointer", color: "var(--ink-color-global-text-default)" }}>
-                <input type="checkbox" checked={sel.has(o.id)} onChange={() => toggle(o.id)} />
-                <span style={{ flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
-                {o.sub && <span style={{ flex: "none", color: "var(--ink-color-global-text-subtle)" }}>{o.sub}</span>}
-              </label>
-            </Fragment>
-          ))}
+          {collapsibleGroups
+            ? <CollapsibleCheckGroups options={shown} selected={sel} searching={!!q} renderOption={row} gap={0}
+                headingStyle={{ padding: "8px 4px" }} />
+            : shown.map((o, i) => (
+              <Fragment key={o.id}>
+                {/* Optional `group` on an option draws a heading each time it changes,
+                    so a grouped list (tag categories) needs no separate component. */}
+                {o.group && o.group !== (shown[i - 1] || {}).group && (
+                  <Eyebrow style={{ padding: "8px 4px 3px" }}>{o.group}</Eyebrow>
+                )}
+                {row(o)}
+              </Fragment>
+            ))}
           {shown.length === 0 && <div style={{ ...sans, fontSize: FS.small, color: MICRO, padding: 4 }}>No matches</div>}
         </div>,
         document.body,
@@ -714,9 +721,18 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
   const label = current ? current.label : (nullLabel ?? options[0]?.label);
   const hasSearch = searchable ?? (options.length > SEARCH_MIN && options.every((o) => typeof o.label === "string"));
   const shown = hasSearch ? filterByLabel(options, q) : options;
+  // Grouped options (`group` on an option) collapse under a chevron heading; each
+  // open starts with only the current value's group expanded.
+  const [openGroups, setOpenGroups] = useState(() => new Set());
   // Search state belongs to this one open/close cycle, not across it — a
   // stale filter from a prior open would otherwise hide the current value.
-  useEffect(() => { if (!open) setQ(""); }, [open]);
+  useEffect(() => {
+    if (!open) setQ("");
+    else setOpenGroups(new Set(current?.group ? [current.group] : []));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- seed once per open
+  const toggleGroup = (g) => setOpenGroups((cur) => { const n = new Set(cur); n.has(g) ? n.delete(g) : n.add(g); return n; });
+  const groupSize = new Map();
+  for (const o of shown) if (o.group) groupSize.set(o.group, (groupSize.get(o.group) || 0) + 1);
   const searchRef = useFocusOnOpen(open && hasSearch && (!portal || !!pos));
 
   const placement = portal
@@ -731,16 +747,36 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
           <SearchInput ref={searchRef} placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%" }} />
         </div>
       )}
-      {shown.map((o) => {
+      {shown.map((o, i) => {
         const on = o.id === value;
         // Group dividers only make sense over the whole list, not a search's matches.
         const sep = o.separatorBefore && !q;
+        const heading = o.group && o.group !== shown[i - 1]?.group;
+        // A search shows every match, so its headings are labels, not toggles.
+        const expanded = !o.group || !!q || openGroups.has(o.group);
         return (
-          <MenuItem key={o.id} onClick={() => { onChange(o.id); setOpen(false); }} selected={on} checkmark
-            style={{ borderTop: sep ? `1px solid var(--ink-color-global-border-subtle)` : "none",
-              marginTop: sep ? 4 : 0, paddingTop: sep ? 10 : 8 }}>
-            {o.label}
-          </MenuItem>
+          <Fragment key={o.id}>
+            {heading && (
+              <button type="button" className="menu-item" aria-expanded={expanded} data-group={o.group}
+                onClick={q ? undefined : () => toggleGroup(o.group)}
+                style={{ ...sans, display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left",
+                  padding: "8px 12px", minHeight: 36, border: "none", borderRadius: 4, boxSizing: "border-box",
+                  borderTop: i ? `1px solid var(--ink-color-global-border-subtle)` : "none",
+                  cursor: q ? "default" : "pointer", background: "transparent",
+                  fontSize: FS.value, lineHeight: "20px", fontWeight: 500, color: "var(--ink-color-global-text-default)" }}>
+                {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+                <span style={{ flex: 1 }}>{o.group}</span>
+                <span style={{ fontSize: FS.small, fontWeight: 400, color: MICRO }}>{groupSize.get(o.group)}</span>
+              </button>
+            )}
+            {expanded && (
+              <MenuItem onClick={() => { onChange(o.id); setOpen(false); }} selected={on} checkmark
+                style={{ borderTop: sep ? `1px solid var(--ink-color-global-border-subtle)` : "none",
+                  marginTop: sep ? 4 : 0, paddingTop: sep ? 10 : 8, paddingLeft: o.group ? 30 : 12 }}>
+                {o.label}
+              </MenuItem>
+            )}
+          </Fragment>
         );
       })}
       {hasSearch && shown.length === 0 && (
@@ -926,14 +962,67 @@ export function Checkbox({ checked, onChange, style, ...rest }) {
   );
 }
 
+/** Checkbox options folded under one chevron per `group` (e.g. KPIs by financial
+ *  statement), each heading counting its ticked options. Groups start closed; a
+ *  search (`searching`) opens every group with a match, and a list with a single
+ *  group shows it open. Ungrouped runs render flat. `renderOption(o)` draws one
+ *  keyed checkbox row. */
+export function CollapsibleCheckGroups({ options, selected, searching, renderOption, gap = 10, headingStyle }) {
+  const [openGroups, setOpenGroups] = useState(() => new Set());
+  const toggle = (g) => setOpenGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(g)) next.delete(g); else next.add(g);
+    return next;
+  });
+  const runs = [];
+  for (const o of options) {
+    const g = o.group || null;
+    const last = runs[runs.length - 1];
+    if (last && last.group === g) last.opts.push(o);
+    else runs.push({ group: g, opts: [o] });
+  }
+  const single = runs.filter((r) => r.group).length === 1;
+  return runs.map(({ group, opts }, i) => {
+    if (!group) return <Fragment key={`_flat${i}`}>{opts.map(renderOption)}</Fragment>;
+    const locked = searching || single;
+    const expanded = locked || openGroups.has(group);
+    const picked = opts.filter((o) => selected.has(o.id)).length;
+    return (
+      <div key={group} data-check-group={group} style={{ display: "flex", flexDirection: "column", gap }}>
+        <button type="button" onClick={() => toggle(group)} aria-expanded={expanded} disabled={locked}
+          style={{ ...sans, display: "flex", alignItems: "center", gap: 6, padding: 0, border: "none",
+            background: "transparent", textAlign: "left", fontSize: FS.small, fontWeight: 500,
+            letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-color-global-text-default)",
+            cursor: locked ? "default" : "pointer", ...headingStyle }}>
+          {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+          <span>{group}</span>
+          <span style={{ color: MICRO, fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>
+            {picked} of {opts.length} selected
+          </span>
+        </button>
+        {expanded && <div style={{ display: "flex", flexDirection: "column", gap, paddingLeft: 18 }}>{opts.map(renderOption)}</div>}
+      </div>
+    );
+  });
+}
+
 /** Checkbox-list pane content for a FilterMenu section. `options`:
  *  `[{id, label, sub?, group?}]` (a `group` change draws a heading); `selected`: a Set; `onChange(nextSet)`. Shows an
  *  inline search box once options exceed `searchMin` (a handful of options
- *  scan faster than they'd search). */
-export function FilterCheckboxList({ options, selected, onChange, searchMin = SEARCH_MIN, searchPlaceholder = "Search" }) {
+ *  scan faster than they'd search). `collapsibleGroups` folds each group under
+ *  a chevron (CollapsibleCheckGroups) instead of a plain heading. */
+export function FilterCheckboxList({ options, selected, onChange, searchMin = SEARCH_MIN, searchPlaceholder = "Search", collapsibleGroups }) {
   const [q, setQ] = useState("");
   const shown = filterByLabel(options, q);
   const toggle = (id) => { const n = new Set(selected); n.has(id) ? n.delete(id) : n.add(id); onChange(n); };
+  const row = (o) => (
+    <label key={o.id} style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10,
+      fontSize: FS.value, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+      <Checkbox checked={selected.has(o.id)} onChange={() => toggle(o.id)} style={{ marginTop: 2 }} />
+      <span style={{ flex: "1 1 auto" }}>{o.label}</span>
+      {o.sub != null && <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: FS.small }}>{o.sub}</span>}
+    </label>
+  );
   return (
     <>
       {options.length > searchMin && (
@@ -950,17 +1039,14 @@ export function FilterCheckboxList({ options, selected, onChange, searchMin = SE
         </div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {shown.map((o, i) => (
-          <Fragment key={o.id}>
-            {o.group && o.group !== shown[i - 1]?.group && <Eyebrow style={{ marginTop: i ? 6 : 0 }}>{o.group}</Eyebrow>}
-            <label style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10,
-              fontSize: FS.value, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
-              <Checkbox checked={selected.has(o.id)} onChange={() => toggle(o.id)} style={{ marginTop: 2 }} />
-              <span style={{ flex: "1 1 auto" }}>{o.label}</span>
-              {o.sub != null && <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: FS.small }}>{o.sub}</span>}
-            </label>
-          </Fragment>
-        ))}
+        {collapsibleGroups
+          ? <CollapsibleCheckGroups options={shown} selected={selected} searching={!!q} renderOption={row} />
+          : shown.map((o, i) => (
+            <Fragment key={o.id}>
+              {o.group && o.group !== shown[i - 1]?.group && <Eyebrow style={{ marginTop: i ? 6 : 0 }}>{o.group}</Eyebrow>}
+              {row(o)}
+            </Fragment>
+          ))}
         {shown.length === 0 && <p style={{ ...sans, fontSize: FS.bodyLg, color: MICRO, margin: 0 }}>No matches.</p>}
       </div>
     </>

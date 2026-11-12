@@ -694,7 +694,7 @@ function KpiSnapshot({ data, company, dashboard, basis, setBasis }) {
 function ConfigureKpis({ data, company, dashboard, defaultKeys, onClose }) {
   const doc = dashboard?.doc;
   const [scope, setScope] = useState("company"); // "company" | "global"
-  const options = useMemo(() => metricsFor(data, company).map((m) => ({ id: m.key, label: m.label })), [data, company]);
+  const options = useMemo(() => metricOptions(metricsFor(data, company)), [data, company]);
   // Seed the checkboxes from the scope being edited, falling back to what's on
   // screen (the resolved set) when that scope has no override yet.
   const storedSelected = useMemo(() => {
@@ -716,7 +716,7 @@ function ConfigureKpis({ data, company, dashboard, defaultKeys, onClose }) {
         <Segmented small value={scope} onChange={setScope}
           options={[{ id: "company", label: "This company" }, { id: "global", label: "All companies" }]} />
       </div>
-      <MultiSelect label="KPIs" options={options} selected={draft} onChange={setDraft} />
+      <MultiSelect label="KPIs" options={options} selected={draft} onChange={setDraft} collapsibleGroups />
       <div style={{ ...sans, fontSize: FS.micro, color: MICRO, marginTop: 10 }}>
         {scope === "company"
           ? "Saves for this company — overrides the firm-wide default."
@@ -775,7 +775,7 @@ function ForecastBlock({ data, company }) {
     <Section label="Forecast vs actual" right={
       <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         <BasisToggle quarterly={quarterly} onChange={setQuarterly} />
-        <Dropdown options={fcMetrics.map((m) => ({ id: m.key, label: m.label }))} value={key} onChange={setMk} minWidth={200} />
+        <Dropdown options={metricOptions(fcMetrics)} value={key} onChange={setMk} minWidth={200} />
       </span>}>
       {/* The vintage matrix sits under the line chart and follows its KPI, so both read the same series. */}
       <VsActuals data={data} company={company} metricKey={key} quarterly={quarterly} onPickMetric={setMk}

@@ -368,7 +368,7 @@ function Completeness({ data, dashboard }) {
     { key: "metrics", label: "KPIs", value: selMetrics, onChange: setSelMetrics, resetValue: defaultMetrics,
       count: (v) => v.size, pinned: true,
       chipLabel: (v) => `KPIs: ${v.size}`,
-      render: (v, setV) => <FilterCheckboxList options={metricOpts} selected={v} onChange={setV} searchPlaceholder="Search KPIs" /> },
+      render: (v, setV) => <FilterCheckboxList options={metricOpts} selected={v} onChange={setV} searchPlaceholder="Search KPIs" collapsibleGroups /> },
     { key: "companies", label: "Companies", value: selCompanies, onChange: setSelCompanies, resetValue: new Set(),
       count: (v) => v.size,
       chipLabel: (v) => `Companies (${v.size})`,

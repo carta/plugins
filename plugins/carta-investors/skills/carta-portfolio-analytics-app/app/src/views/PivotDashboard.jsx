@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 import { H2, Dropdown, FilterIcon, Segmented, Toggle, SearchInput, TextInput, Btn, Badge, Modal, Eyebrow, StickyRibbon,
-  ddTriggerStyle, ChevronDownIcon, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW,
+  ddTriggerStyle, ChevronDownIcon, CollapsibleCheckGroups, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW,
   GF_WARM_SURFACE, GF_NAV_ACTIVE_BG, GF_TAG_BORDER, GF_TAG_BG, GF_BUBBLE_BG } from "../ui/components.jsx";
 import { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W } from "../ui/charts.jsx";
 import { metricsFor, metricOptions, metricOf, pointNearMonthsBack, metricCadence,
@@ -1417,6 +1417,14 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
   const filteredMetricOpts = activePane === "__kpis"
     ? metricOpts.filter((o) => o.label.toLowerCase().includes(paneSearch.toLowerCase()))
     : [];
+  const kpiCheckbox = (o) => (
+    <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
+      fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+      <input type="checkbox" checked={draftMetrics.has(o.id)} onChange={() => toggleDraftMetric(o.id)}
+        style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
+      {o.label}
+    </label>
+  );
   const filteredPosOpts = activePane === "__posmetrics"
     ? posOpts.filter((o) => o.label.toLowerCase().includes(paneSearch.toLowerCase()))
     : [];
@@ -1630,14 +1638,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                         <p style={{ ...sans, fontSize: FS.bodyLg, color: MICRO, margin: 0 }}>No KPIs match "{paneSearch}".</p>
                       )}
                       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: showPaneSearch ? 12 : 0 }}>
-                        {filteredMetricOpts.map((o) => (
-                          <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
-                            fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
-                            <input type="checkbox" checked={draftMetrics.has(o.id)} onChange={() => toggleDraftMetric(o.id)}
-                              style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
-                            {o.label}
-                          </label>
-                        ))}
+                        <CollapsibleCheckGroups options={filteredMetricOpts} selected={draftMetrics} searching={!!paneSearch} renderOption={kpiCheckbox} />
                       </div>
                     </>
                   ) : activePane === "__posmetrics" ? (

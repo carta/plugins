@@ -1,7 +1,7 @@
 // doc.columns: ordered specs { id, kind: "metric"|"position"|"builtin"|"fund"|"tag"|"favorite"|"signal", key, spark?, delta? }.
 // doc.filters (model/overviewFilters.js) reads this same catalog — anything addable as a column is filterable.
 
-import { metricOf, metricKeyByLabel, latest, changeOverMonths, numericMetrics, metricOptions } from "./kpi.js";
+import { metricOf, metricKeyByLabel, latest, changeOverMonths, numericMetrics, metricsByStatement } from "./kpi.js";
 import { positionMetricOf, availablePositionMetrics, positionMetricOptions, POSITION_METRICS } from "./position.js";
 import { buildOverviewRow } from "./overviewRow.js";
 import { allTags, tagsFor } from "./tags.js";
@@ -259,8 +259,9 @@ export function columnCatalog(data, presentSpecs = [], ctx = {}) {
   const builtins = Object.keys(BUILTIN_LABELS)
     .filter((k) => k !== "entityKind" && !has("builtin", k)).map((k) => ({ kind: "builtin", key: k, label: BUILTIN_LABELS[k] }));
   const numeric = numericMetrics(data.metrics || []);
-  const kpis = metricOptions(numeric.filter((m) => !isCustom(m.key) && !m.injected))
-    .filter((o) => !has("metric", o.id)).map((o) => ({ kind: "metric", key: o.id, label: o.label }));
+  // Each KPI carries its statement so the Filters nav can nest one chevron per statement.
+  const kpis = metricsByStatement(numeric.filter((m) => !isCustom(m.key) && !m.injected && !has("metric", m.key)))
+    .flatMap((g) => g.metrics.map((m) => ({ kind: "metric", key: m.key, label: m.label, statement: g.statement })).sort(byLabel));
   const formulas = numeric.filter((m) => isCustom(m.key) && !has("metric", m.key))
     .map((m) => ({ kind: "metric", key: m.key, label: m.label }));
   const positions = positionMetricOptions(availablePositionMetrics(data))
@@ -275,7 +276,7 @@ export function columnCatalog(data, presentSpecs = [], ctx = {}) {
     { group: "Company facts", options: facts.filter((o) => !has(o.kind, o.key)).sort(byLabel) },
     { group: "Formulas", options: formulas.sort(byLabel) },
     { group: "Position facts", options: positions.sort(byLabel) },
-    { group: "KPIs", options: kpis.sort(byLabel) },
+    { group: "KPIs", options: kpis },
     { group: "Computed", options: builtins.sort(byLabel) },
   ].filter((g) => g.options.length);
 }
@@ -346,9 +347,14 @@ export function injectFormulaInputs(data) {
   return { ...data, metrics: [...(data.metrics || []), ...pseudo], companies };
 }
 
-/** Flatten a columnCatalog into MultiSelect options ({id:"kind:key", label, group}). */
+/** Flatten a columnCatalog into MultiSelect options ({id:"kind:key", label, group}).
+ *  A KPI's heading names its statement too ("KPIs · Balance sheet"). */
 export function catalogToOptions(catalog) {
   const out = [];
-  for (const g of catalog) for (const o of g.options) out.push({ id: `${o.kind}:${o.key}`, label: o.label, group: g.group });
+  for (const g of catalog) {
+    for (const o of g.options) {
+      out.push({ id: `${o.kind}:${o.key}`, label: o.label, group: o.statement ? `${g.group} · ${o.statement}` : g.group });
+    }
+  }
   return out;
 }

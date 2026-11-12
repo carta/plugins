@@ -74,8 +74,48 @@ export function orderMetrics(metrics) {
   const [qual, rec, rest] = groupMetrics(metrics);
   return [...qual, ...rec, ...rest];
 }
-/** Dropdown options for metrics, same order, with dividers between the groups. */
+
+/** The financial statement groups a KPI list is split into, in display order. */
+export const STATEMENTS = ["Profit & loss", "Balance sheet", "Cash flow", "KPIs", "Other"];
+// COMPANY_FINANCIALS.REPORT_TYPE spellings, lower-cased, mapped to their group.
+const STATEMENT_OF_REPORT_TYPE = {
+  "profit and loss": "Profit & loss", "profit & loss": "Profit & loss", "p&l": "Profit & loss",
+  "income statement": "Profit & loss",
+  "balance sheet": "Balance sheet",
+  "cash flow": "Cash flow", "cashflow": "Cash flow", "cash flow statement": "Cash flow",
+  "kpi": "KPIs", "kpis": "KPIs",
+};
+
+/** Which statement group a metric belongs to, from the `reportType` the builder
+ *  copies off the warehouse row. A metric with no report type is a firm-defined
+ *  custom KPI, so it joins "KPIs"; an unrecognised type goes to "Other". */
+export function statementOf(metric) {
+  const rt = String(metric?.reportType || "").trim().toLowerCase();
+  if (!rt) return "KPIs";
+  return STATEMENT_OF_REPORT_TYPE[rt] || "Other";
+}
+
+/** Split metrics into `[{statement, metrics}]`, STATEMENTS order, empty groups
+ *  dropped; each group keeps orderMetrics' order. */
+export function metricsByStatement(metrics) {
+  const by = new Map(STATEMENTS.map((s) => [s, []]));
+  for (const m of orderMetrics(metrics)) by.get(statementOf(m)).push(m);
+  return [...by].filter(([, ms]) => ms.length).map(([statement, ms]) => ({ statement, metrics: ms }));
+}
+
+/** Dropdown options for metrics. Spread across more than one statement, every
+ *  option carries its statement as `group` (the dropdowns draw a heading per
+ *  group); within one statement it is the flat list, with dividers between the
+ *  qualitative, recommended and alphabetical runs. */
 export function metricOptions(metrics) {
+  const groups = metricsByStatement(metrics);
+  if (groups.length > 1) {
+    return groups.flatMap((g) => g.metrics.map((m) => ({ id: m.key, label: m.label, group: g.statement })));
+  }
+  return flatMetricOptions(metrics);
+}
+
+function flatMetricOptions(metrics) {
   const [qual, rec, rest] = groupMetrics(metrics);
   // A leading group carries no separatorBefore key at all; later groups always
   // carry it, true on their first entry.
