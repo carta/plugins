@@ -51,12 +51,13 @@ There is no Carta UI for this — it only happens here.
 
 ```
 mcp__carta__call_tool({"name": "cap_table__mutate__resolve_duplicate_stakeholder", "arguments": {
-  "security_type": "<certificate|option_grant|piu>", "draft_set_id": <draft_set_id>,
+  "corporation_id": <corporation_id>, "security_type": "<the set's security_type>",
+  "draft_set_id": <draft_set_id>,
   "drafts": [{"id": <draft_pk>, "stakeholder_id": <stakeholder_id>},   # merge into existing
-             {"id": <draft_pk>}]}})                                    # create as new
+             {"id": <draft_pk>, "stakeholder_id": null}]}})             # create as new
 ```
 
-Then validate again, and preview the issue.
+Then validate again. On the chat surface, then preview the issue.
 
 ---
 
@@ -119,7 +120,9 @@ failed row's `error` word for word. Never apply the same plan again.
 |---|---|
 | Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 | 403, `role_required` or access denied | Say the user's role on this company cannot draft or issue. Do not retry. On the issue preview or apply, use [§ 403](#403). |
-| "Nothing was saved" with `Unknown draft field` | For a type out of scope (see [§ Resolve `security_type`](../SKILL.md#resolve-security_type)), route to the Drafts UI. Else rename each field as the message says and save again with the same `draft_set_id`. |
+| "Nothing was saved" with `Unknown draft field` | For a type this run does not serve (see [§ Resolve `security_type`](../SKILL.md#resolve-security_type)), route to the Drafts UI. Else rename each field as the message says and save again with the same `draft_set_id`. |
 | "Draft set not found" | The set is deleted or the id is wrong. Call `cap_table:list:draft_sets` with `security_type` once and ask which set. Never start a new set without telling the user. |
-| "requires security_type" | Send `security_type` (`certificate`, `option_grant` or `piu`) and call again once. |
+| "requires security_type" | Send the run's `security_type` for this set and call again once. |
+| `unauthenticated` ("The Carta session is not valid") | The Carta sign-in of this chat ended. This is Carta's answer, not a connection check. Say: *"Your Carta session ended. Reconnect Carta (Settings → Connectors, or `/mcp` in Claude Code), then say 'continue'."* Make no other Carta call in this turn. After the user replies, make the same call once more, with the same `draft_set_id` and each `draft_pk` ([hard rule 3](../SKILL.md#hard-rules)): what is saved stays saved. |
+| Any other `invalid_argument`, `unknown_param` or `ambiguous` | Carta refused a value you sent, not the surface. Fix what its `message`, `field` and `did_you_mean` name; ask the user with `AskUserQuestion` when only they know the value. Then make the same call once more, with the same `draft_set_id` and each `draft_pk` when it has them. Stay on the surface. |
 | "response too large" on `issuance_init` or `load_drafts` | Do not change the call to retry. Say Carta could not load it for this company, and send the user to the Drafts page in Carta. |

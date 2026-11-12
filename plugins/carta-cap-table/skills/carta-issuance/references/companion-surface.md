@@ -199,6 +199,17 @@ list of the open items, no field, no value, no check message.
 [Open the draft set in Carta](<address>)
 ```
 
+### Possible duplicate stakeholders
+
+A check whose `duplicates` has `has_duplicates` true, or a **Possible duplicate stakeholders**
+block on the page, means a row may be a holder already on the cap table. The set does not issue
+until each such row is resolved, and no Carta page resolves it: only this chat can. In the same
+turn as the items, after the card or the questions, ask it in the chat, never in the card, with
+the matches from `duplicates`, and resolve it as
+[mutate-recovery.md § Duplicate resolution](mutate-recovery.md#duplicate-resolution) says, on the
+same `draft_set_id`. Never pick for the user. A row not resolved is an open input, so § 8 waits
+for it.
+
 ## 7. Answers
 
 **Saved in the card.** Card context that starts `Saved in the card (draft set N, revision R):`
@@ -361,10 +372,13 @@ chat; no `get:draft_set_companion`, use the chat confirm in § 8. Send a refused
 `draft_set_sources` call again once, and each `dropped` cell again once, under the key its
 `problem` names.
 
+A refusal that has a row in [mutate-recovery.md § Errors on any call](mutate-recovery.md#errors-on-any-call)
+is not the companion being unavailable: stay on this page, and do what its row says.
+
 ## 12. End every turn that wrote with the way to the page
 
 A turn that wrote made at least one successful `prepare_drafts`, `save_drafts`,
-`validate_drafts`, `draft_set_sources` or `apply_plan` call. End its reply with one way back
+`validate_drafts`, `draft_set_sources`, `resolve_duplicate_stakeholder` or `apply_plan` call. End its reply with one way back
 to the page, as the open-the-page file of § 4 says in § The way back to the page: a user who
 steps away and comes back needs it.
 
@@ -377,8 +391,9 @@ The address:
    about: when the set that has open inputs or is ready to issue is not the one it shows,
    `navigate` the page tab to that set's `companion_url` as that file's § Open the address
    says, with its one retry, and the pane line names the `set_label` the page tab shows.
-   Elsewhere, one link per set, all at the end, each as
-   `[Open the draft set in Carta (<set_label>)](<companion_url>)`;
+   Elsewhere, the reply's one link is the `companion_url` of the set the reply is about, as
+   `[Open the draft set in Carta (<set_label>)](<companion_url>)`. A request to see another set
+   gets that set's link, as below;
 3. otherwise the `companion_url` of the latest draft set result;
 4. otherwise `companion.issuance_url`.
 
