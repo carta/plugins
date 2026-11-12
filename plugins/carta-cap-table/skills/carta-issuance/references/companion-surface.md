@@ -83,7 +83,8 @@ Once each:
    Leave out any unknown value; never guess or wait. Each field that `field_spec`, or one of its
    `conditionalRules`, requires for the row, not `hidden`, with no `default_value` and no
    given value, is a `needs_input` cell; so is the vesting schedule when nothing gives it.
-   `field_spec` comes from the § 3 `issuance_init` call: make no
+   No other field is a gap: with no given value, leave it out and Carta's default stands (a
+   grant with no board approval date waits for the board). `field_spec` comes from the § 3 `issuance_init` call: make no
    `cap_table:get:issuable_field_manifest` call.
 2. Up to 25 rows, `cap_table:mutate:prepare_drafts` with the rows in `drafts` and no
    `draft_set_id`. Over 25: one `cap_table:mutate:save_drafts` with every row, never
@@ -277,8 +278,9 @@ Issue option's `preview` holds the review, with `issue_summary`'s agreement, sig
 holders to email from the read, and the preview's `summary`. Never print the review as prose
 before the question: the host shows that prose only as a one-line summary. Once confirmed, apply
 the plan and follow its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says, then read `cap_table:get:draft_set_companion` and
-close on its `status`. A save after the preview makes
-the plan stale: preview and confirm again.
+close on its `status`. Not confirmed: say "The draft set is still a draft. Nothing is issued
+yet.", then the close; outside the turn that built the set, add no *What I drafted* block. A
+save after the preview makes the plan stale: preview and confirm again.
 
 **Each turn on this set**, before any write, read `cap_table:get:draft_set_companion`. Its
 `status`: `issued` or `partially_issued`, close; `pending_board_approval`, say the set is held
