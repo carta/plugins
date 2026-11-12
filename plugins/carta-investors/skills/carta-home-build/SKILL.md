@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.41.14</carta-plugin>
+<carta-plugin>carta-investors:7.41.15</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -387,7 +387,7 @@ work and tell the user:
 
 This is a live artifact: the rendered HTML calls Carta at runtime through `claude.use("mcp")`, so it needs both.
 
-**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `get_current_user`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). `welcome` confirms the connector actually answers — being listed is registry state, not proof — and publishing without one observed call earns the platform's "published against an unobserved interface" warning. `get_current_user` is not a second check; this skill needs its payload (see below). If either call errors, tell the user Carta isn't responding and stop — do not publish. If both succeed, say nothing about them and get on with the build.
+**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `get_current_user`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). `welcome` runs once per conversation: when you already called it in this conversation, do not call it again and call only `get_current_user`. An observed call confirms the connector actually answers — being listed is registry state, not proof — and publishing without one earns the platform's "published against an unobserved interface" warning. This skill also needs the `get_current_user` payload (see below). If either call errors, tell the user Carta isn't responding and stop — do not publish. If both succeed, say nothing about them and get on with the build.
 
 Keep `get_current_user`'s response: Step 4 grants that tool, and the Skill Directory's entitlement gate reads `has_tactyc` / `has_active_manco` from the same payload at runtime.
 
