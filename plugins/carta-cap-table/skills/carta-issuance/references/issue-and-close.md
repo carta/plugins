@@ -24,8 +24,11 @@ before the irreversible apply, not another save.
 ```
 mcp__carta__read_tool({"name": "cap_table__compute__issue_draft_set_preview", "arguments": {
   "company": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
-  "draft_set_id": <draft_set_id>}})
+  "draft_set_id": <draft_set_id>, "version": <version>}})
 ```
+
+Send `"version"` only on the companion surface: the `version` of your last
+`cap_table:get:draft_set_companion` read, when it has one.
 
 Add `"publish_board_consent": true` only on option grants, and only when the user asked Carta to
 create the board consent and send it to the board. Without it, grants that need board approval
@@ -111,7 +114,7 @@ Call it again after `poll_after_seconds` until `done` is true, at most 3 times. 
 |---|---|
 | `succeeded` | Issued — [On success](#on-success) |
 | `failed` or `partially_failed` | [mutate-recovery.md § Issue job failed](mutate-recovery.md#issue-job-failed) |
-| `running` after 3 reads | Say the issue is still running in Carta. Never apply again |
+| `running` after 3 reads | Say these words: *"The issue is still running in Carta."* Never apply again |
 | `not_found` | Another issue held the draft set, so this one started nothing. Preview again: the preview says when the other issue is done |
 
 Keep `draft_set_id` and each `draft_pk` for any later save (SKILL.md hard rule 3).

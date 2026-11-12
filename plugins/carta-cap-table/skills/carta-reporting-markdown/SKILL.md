@@ -15,7 +15,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.112.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.112.1</carta-plugin>
 
 # Transform Configuration
 
@@ -232,7 +232,7 @@ See **Script Reference** in `carta-reporting` for the full API (all fields, mult
 Always check `stats` after running:
 - `missing_columns` non-empty → list available column names from `data[sheet].columns` and ask the user which they meant, then re-run with the corrected name
 - `skipped_formulas` non-empty → tell the user which formulas couldn't run (usually the source column wasn't included in the selection)
-- `warnings.unknown_sheets` present → a requested sheet is not in this report; name it and list `available`
+- `warnings.unknown_sheets` present → a requested sheet is not in this report; write the `warnings.unknown_sheets` row's sentence word for word (`carta-reporting` Error Handling table)
 - `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty → say which sheet's rows are missing from the merged tab (wording in the `carta-reporting` Error Handling table)
 - `warnings.data_quality` present → add a `Show data warnings` option, and put this sentence word for word in the Customization Checkpoint question. One sentence with a clause for each sheet in `warnings.data_quality`: "Carta flagged {N} securities with data warnings" ({N} is the "Data Warnings" count) and "{M} defective securities" ({M} is the "Defective Securities" count). When the user picks it or says "show data warnings", rerun with `sheets` naming every sheet in `warnings.data_quality`. Do not use the checkpoint text of `carta-reporting` step 4d: it is for ARTIFACT mode only
 - `empty_rows_dropped` > 0 → put this sentence word for word in the Customization Checkpoint question: "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets)

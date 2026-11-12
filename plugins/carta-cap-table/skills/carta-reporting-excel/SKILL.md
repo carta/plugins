@@ -23,7 +23,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.112.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.112.1</carta-plugin>
 
 # Excel Export
 
@@ -127,7 +127,7 @@ Pass all of one report's sheets in one run using the `sheets` dict; with several
 UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json" --out "carta-reporting/result-<user_report_pk>.json"
 ```
 
-3. Check `carta-reporting/result-<user_report_pk>.json` before exporting: if its `warnings` is non-empty, or any sheet's `stats` has `schema_warnings`, tell the user which sheet was left out and why (wording: the `warnings.*` rows of the Error Handling table in `carta-reporting`), then export what is there. Never present a workbook with a missing sheet or merged rows as complete.
+3. Check `carta-reporting/result-<user_report_pk>.json` before exporting: if its `warnings` is non-empty, or any sheet's `stats` has `schema_warnings`, tell the user which sheet was left out and why (wording: the `warnings.*` rows of the Error Handling table in `carta-reporting`), then export what is there. For each sheet in `warnings.unknown_sheets.requested`, or a payload sheet that the report does not have, write the `warnings.unknown_sheets` row's sentence word for word. Never present a workbook with a missing sheet or merged rows as complete.
 
 4. Export the workbook:
 

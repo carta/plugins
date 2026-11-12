@@ -120,7 +120,8 @@ answers, the reply is these parts, in this order, and no other text:
 
 1. **What I drafted**: that heading, then 4 short lines or fewer: the files read, the holders
    matched ("2 existing, 5 new"), what you drafted and the board consent that covers it ("no
-   board consent covers it yet" when none does), the type's summary items. A thing that needs the user and is on no cell (a banner error, a
+   board consent covers it yet" when none does), the type's summary items. A check message on a
+   cell is an item, never a line here. A thing that needs the user and is on no cell (a banner error, a
    possible duplicate stakeholder, a file you could not read) adds one line here.
 2. "N things need you, in the card above.", with N the number of items. The text names no item,
    no field of an item and no value an item asks about: the card holds them, once.
@@ -169,17 +170,33 @@ item on that cell, and a check warning is a `pick_one` with only `Keep <current 
 
 Only where there is no card host, or it cannot draw the card: in place of the card, one
 `AskUserQuestion` with the first 4 items, one question each (up to 4 options each), and with more
-items, one more `AskUserQuestion` after its answers. Never ask one item per call. A `type_value` item, a check error with no
+items, one more `AskUserQuestion` after its answers. Never ask one item per call, and never put
+two items in one question. A `type_value` item, a check error with no
 value to propose included, offers no value of your own: its options are `I'll type it` and
 `Leave it for now`, and the user types the value as the free-text answer. A picked option label
 is never a value: `Leave it for now`, or `I'll type it` with nothing typed, is no answer, so save
 nothing for that item, and it stays open. Write no text before the first question, and never
-list the items in text. After the answers, save the real answers as § 7 says; the reply then is
-the *What I drafted* block, with one line "Saved your N answers." (N counts only the saved
-answers, and the line is left out with none) in place of the answers, then, while items are
-open, only "N things still need you. Say when, and I'll ask again.", else § 8, then the close.
-Outside § 8's review, it names no item either: the user just saw them in the questions, so no
+list the items in text. After the answers, save the real answers as § 7 says. The reply then is
+these parts, in this order, and no other text:
+
+1. The *What I drafted* block of [The reply](#the-reply).
+2. "Saved your N answers.", with N the saved answers only. With none, leave the line out.
+3. While items are open: "N things still need you. Say when, and I'll ask again." Else § 8.
+4. The close.
+
+Outside § 8's review, the reply names no item: the user just saw them in the questions. So no
 list of the open items, no field, no value, no check message.
+
+```
+**What I drafted**
+- 1 holder: Alex Rivera, an existing stakeholder.
+- 1 option grant on the 2024 plan; no board consent covers it yet.
+- Exercise price $1.50 from the 409A of 06/30/2026; 500,000 options left in the pool.
+
+4 things still need you. Say when, and I'll ask again.
+
+[Open the draft set in Carta](<address>)
+```
 
 ## 7. Answers
 
@@ -253,8 +270,8 @@ still issuing. Null: if `status` is `issued`, `partially_issued` or `pending_boa
 close on it with § 10; otherwise say Issue is not pressed yet.
 
 **Elsewhere**, read `cap_table:get:draft_set_companion`, then call
-`cap_table:compute:issue_draft_set_preview` with `company`, `security_type`, `draft_set_id`,
-and the read's `version` when it has one. A blocked preview: say each failed check, and issue
+`cap_table:compute:issue_draft_set_preview` with `company`, `security_type`, `draft_set_id` and
+`version`: copy the read's `version`, and leave it out only when the read has none. A blocked preview: say each failed check, and issue
 nothing. Else ask one `AskUserQuestion` naming the preview's `revision`: "Issue revision 7?". Its
 Issue option's `preview` holds the review, with `issue_summary`'s agreement, signatories and
 holders to email from the read, and the preview's `summary`. Never print the review as prose

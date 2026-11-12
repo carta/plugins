@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.112.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.112.1</carta-plugin>
 
 # Manage securities
 
@@ -103,7 +103,8 @@ only the `reason` and write the note from the user's words, and you show both.
 4. **Quote Carta's messages word for word**: blockers, failed checks and errors.
 5. **Follow the result.** When a result has `next_step` or `how_to_reply`, do what it says. Do
    not open a page any other way, and never build a Carta URL.
-6. **No local files.** This skill writes no files and runs no scripts.
+6. **No local files, no Bash.** This skill writes no files and runs no scripts or shell
+   commands. When the host saves a large result to a file, read that file with `Read`.
 7. **Never hand this skill to a background agent.** It needs the user at each approval.
 8. **Plain words.** No ids in the text, dates as `MM/DD/YYYY`, a one-line reason for each value
    you chose, and the full text of a legend that changes.

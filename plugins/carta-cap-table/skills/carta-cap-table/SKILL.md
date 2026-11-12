@@ -11,7 +11,8 @@ description: >-
   when no other carta-cap-table skill matches. Also answers total, indirect or
   look-through ownership through a holding entity (trust, Stichting, SPV, holdco or fund):
   "direct and indirect holders", "who ultimately owns 25%", "beneficial owners". For
-  every row of a list, a table, a report or a file, use carta-reporting.
+  every row of a list, a table, a report or a file, and for the liquidation seniority
+  stack, use carta-reporting.
 user-invocable: false
 model: inherit
 allowed-tools:
@@ -33,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.112.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.112.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

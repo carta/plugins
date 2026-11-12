@@ -18,8 +18,8 @@ when_to_use: >-
   cap table: "show me the full cap table", "pull the current fully diluted
   cap table", "export the cap table to Excel", "list every shareholder with
   5% or more", "show me convertible notes", "make an Excel file of all our
-  SAFEs", "all grants with vesting and terminations", "build me a custom
-  report", or "what reports can I run".
+  SAFEs", "all grants with vesting and terminations", "what's the liquidation
+  seniority stack", "build me a custom report", or "what reports can I run".
 model: sonnet
 allowed-tools:
   - ToolSearch
@@ -59,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.112.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.112.1</carta-plugin>
 
 # Custom Reports
 
@@ -404,7 +404,7 @@ Run each script only in the one-line form shown below, as its own command: write
    Do not emit this message more than once. Do not emit it if the preview file arrives during the first wait.
 
    Once data file(s) are ready, proceed based on output mode:
-   - **MARKDOWN mode (no `Artifact` tool):** invoke `Skill(carta-cap-table:carta-reporting-markdown)`. The following context is available in this session: data file path, `corporation_id`, `user_report_pk`.
+   - **MARKDOWN mode (no `Artifact` tool):** invoke `Skill(carta-cap-table:carta-reporting-markdown)`. The following context is available in this session: data file path, `corporation_id`, `user_report_pk`. Do this also when the prompt asks only to download or export the report: the downloaded data file is a working file, not the answer. Never stop at the data file.
    - **ARTIFACT mode (`Artifact` tool available):** build the artifact inline (no subskill invocation — see below).
 
    **Swap in the full report (when any data source was a preview).** After publishing the preview artifact, run the full-report wait in this same turn: for each corporation whose data came from its preview, run the full-report wait for its `carta_report_<pk>.json`. The wait is bounded by its 3 calls, and it ends at once when the 4b agent gives up, because the agent always writes an error file then. Then:

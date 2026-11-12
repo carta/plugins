@@ -103,7 +103,8 @@ The incidents behind these rules — including the ones that look redundant — 
 - **Show the full text of legally binding values** (e.g. the legend body), not just the
   template name.
 - **Dates display as `MM/DD/YYYY`** everywhere the user sees them. Payload formats follow
-  [payload-reference.md](payload-reference.md).
+  [payload-reference.md](payload-reference.md). Never quote a draft set's Carta name (such as
+  `Drafts 2026-11-12 06:18`): say "the draft set".
 - **Explain jargon on first use** (Rule 144 date, Section 4(a)(2), INDIVIDUAL, legend).
 - **No raw ids or payload field names in customer-facing text — ever**
   ([SKILL.md hard rule 8](../SKILL.md#hard-rules)). Humanize payload keys before surfacing
@@ -492,7 +493,7 @@ The keys:
 | `option_plan.none_selectable` | `hard_stop` | No plan this grant could issue from — every one expired, or none with shares available: for a live plan, offer [the pool increase](mutate-recovery.md#fix-it-in-this-chat) |
 | `grant_expiration.before_issue_date` | `hard_stop` | The plan-derived expiry lands before the issue date, so the server rejects the grant |
 | `grant_expiration.unchecked_no_issue_date` | `informational` | No `issue_date` was passed, so the server did not run the check above; carries each plan's derived expiry instead. Compare each expiry with `knowns_seed.today_iso`: an expiry before it is the `before_issue_date` hard stop |
-| `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from: [mutate-recovery.md § Fix it in this chat](mutate-recovery.md#fix-it-in-this-chat) says what to offer |
+| `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from. A company whose resolved jurisdiction is `US` with no EMI, CSOP or share-price signal gets the 409A offer in [mutate-recovery.md § Fix it in this chat](mutate-recovery.md#fix-it-in-this-chat). Every other company gets no offer: give the link to `BASE_URL/corporations/<CORP_ID>/valuations/international/`, where an admin adds the valuation |
 | `valuation.multiple_active_same_class` | `needs_decision` | An HMRC report's AMV and UMV are both live — the admin picks; leave the exercise price unanswered until they do |
 | `jurisdiction.unresolved_conflict` | `needs_decision` | Competing signals and **deliberately no verdict** |
 

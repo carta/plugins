@@ -81,7 +81,7 @@ only when the user says yes:
 
 | Blocker | Offer | Preview |
 |---|---|---|
-| No live FMV (`valuation.no_active_fmv`, or *"Fair market value is required for …"*), on a company whose resolved jurisdiction is `US` with no EMI, CSOP or share-price signal ([engine.md](engine.md#option-grant-resolve-the-fmv-and-the-jurisdiction)). Every other company gets no offer: send it to the international valuations page, `/corporations/<CORP_ID>/valuations/international/` | *"Enter the company's 409A valuation here?"* | `cap_table:compute:add_409a_valuation_preview` |
+| No live FMV (`valuation.no_active_fmv`, or *"Fair market value is required for …"*), on a company whose resolved jurisdiction is `US` with no EMI, CSOP or share-price signal ([engine.md](engine.md#option-grant-resolve-the-fmv-and-the-jurisdiction)). Every other company gets no offer: give the link to `BASE_URL/corporations/<CORP_ID>/valuations/international/`, where an admin adds the valuation | *"Enter the company's 409A valuation here?"* | `cap_table:compute:add_409a_valuation_preview` |
 | The plan's pool is too small for the grants | *"Add shares to the \<plan name\> pool here?"* | `cap_table:compute:increase_equity_plan_pool_preview` |
 
 Ask the user for each value the preview's help names; never pick a value yourself. The fix is
