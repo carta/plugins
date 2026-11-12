@@ -56,6 +56,8 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `firm-bulk-entity-update` | Takes a firm's monthly change file for its deal groups' firm-controlled entities, checks every row against Carta and shows a read-only review, asking each deal group's open items in the chat instead of one entity at a time. Writes nothing to Carta before a deal group is confirmed, and then only the new forecast book an entity needs. Internal-only. |
 | `staff-ilevel-data-collection-import` | Carta staff only. Import a firm's iLevel KPI history from the warehouse into the same firm's Data Collection in a sandbox or test Carta, then check the figures ValTool reads. Chat-driven, with Carta's own financials page open in the browser pane. Never writes to production. Internal-only. |
 
+**ManCo reporting sends Carta a copy of your own budget reports.** `carta-manco-reporting` sends Carta a private copy of the Budget vs Actuals reports you imported, so the hosted ManCo app can show them; only you can see the copy. It does this only when you ask Claude to push your reports to the hosted app, choose **Sync to hosted app** on a report in the dashboard, or run `build_manco_datadir.py` without `--no-sync-sweep` (which starts a background sync after the build). It sends only reports that changed since the last push.
+
 ### KYC
 
 | Skill | Description |
