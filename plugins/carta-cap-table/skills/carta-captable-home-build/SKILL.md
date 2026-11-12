@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.2</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -292,7 +292,7 @@ alongside the other plugin-wide references. They are *not* under this skill's ow
 
 This is a live artifact: the rendered HTML calls Carta at runtime through `claude.use("mcp")`, so it needs both.
 
-**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `list_accounts`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). This is the connector's mandated bootstrap and it is what makes the grant honest: publish without one observed call and the platform warns that the page is "published against an unobserved interface". It does **not** verify the display name — nothing in this session can — so the name still comes from `list_connectors`. If either call errors, see Error Handling. If both succeed, say nothing about them.
+**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `list_accounts`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). `welcome` runs once per conversation: when you already called it in this conversation, do not call it again and call only `list_accounts`. An observed call is what makes the grant honest: publish without one and the platform warns that the page is "published against an unobserved interface". It does **not** verify the display name — nothing in this session can — so the name still comes from `list_connectors`. If either call errors, see Error Handling. If both succeed, say nothing about them.
 
 **One connector answers the company and gets baked in — they must be the same one.**
 The page hard-codes two values that only work as a pair: the corporation pk, resolved
