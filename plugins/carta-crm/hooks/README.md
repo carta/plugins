@@ -13,7 +13,7 @@ Every hook dispatches to the shared Go hooks binary in `tools/hooks/` via
 | SessionStart | — | `dispatch.sh prune-session-data` | Prune stale session files from CLAUDE_PLUGIN_DATA/sessions |
 | SessionStart | — | `dispatch.sh capture-model` | Capture the active Claude model for later PreToolUse instrumentation |
 | PreToolUse | Skill | `dispatch.sh capture-active-skill` | Record which carta skills have been loaded this session |
-| PreToolUse | Carta MCP | `dispatch.sh inject-instrumentation` | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise). In `auto` and `plan` permission modes it leaves the input unchanged, because auto mode refuses a call a hook rewrote |
+| PreToolUse | Carta MCP | `dispatch.sh inject-instrumentation` | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise). Outside the `default`, `acceptEdits`, `dontAsk` and `bypassPermissions` permission modes it leaves the input unchanged, because auto mode (and so every cloud session) refuses a call a hook rewrote |
 | UserPromptSubmit | — | `dispatch.sh capture-slash-skill` | Record explicitly-invoked skills (bare `/skill` slash commands) |
 
 ## Carta MCP matcher

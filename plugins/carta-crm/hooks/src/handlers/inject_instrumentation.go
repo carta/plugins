@@ -26,9 +26,18 @@ var paramsTools = map[string]bool{"fetch": true, "mutate": true}
 // the hook has none. The hook stays authoritative for every other key.
 var fallbackPreserveFields = map[string]bool{"model": true, "surface": true}
 
-// Auto mode's classifier refuses a call whose input a hook changed after review.
-// Plan mode entered from auto mode keeps the classifier (useAutoModeDuringPlan).
-var classifierModes = map[string]bool{"auto": true, "plan": true}
+// rewriteSafeModes are the permission modes in which Claude Code accepts a hook that
+// changes a tool call's input. Any other mode leaves the input alone: auto mode's
+// classifier refuses a call whose input a hook changed after review (plan mode entered
+// from auto mode keeps the classifier), and a mode this list does not name may do the
+// same. An empty mode comes from a Claude Code too old to report one.
+var rewriteSafeModes = map[string]bool{
+	"":                  true,
+	"default":           true,
+	"acceptEdits":       true,
+	"dontAsk":           true,
+	"bypassPermissions": true,
+}
 
 type instrumentationV2 struct {
 	Plugins        []session.PluginRef `json:"plugins"`
@@ -70,7 +79,7 @@ func InjectInstrumentation(stdin []byte) ([]byte, error) {
 
 	skills := session.ReadSkills(ident.Name, evt.SessionID)
 	instr := buildInstrumentationV2(ident, evt, skills)
-	if classifierModes[evt.PermissionMode] {
+	if !rewriteSafeModes[evt.PermissionMode] {
 		return hookio.PreToolUseOK(), nil
 	}
 

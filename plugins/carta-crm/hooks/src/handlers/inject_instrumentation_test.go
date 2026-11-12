@@ -721,9 +721,9 @@ func TestInjectInstrumentation_HookPlatformWinsOverFallback(t *testing.T) {
 	}
 }
 
-func TestInjectInstrumentation_ClassifierModesLeaveInputUnchanged(t *testing.T) {
+func TestInjectInstrumentation_UnsafeModesLeaveInputUnchanged(t *testing.T) {
 	tools := []string{"welcome", "read_tool", "search_tools", "call_tool", "mutate"}
-	for _, mode := range []string{"auto", "plan"} {
+	for _, mode := range []string{"auto", "plan", "auto-review"} {
 		for _, tool := range tools {
 			t.Run(mode+"/"+tool, func(t *testing.T) {
 				isolateEnv(t)
@@ -750,7 +750,7 @@ func TestInjectInstrumentation_ClassifierModesLeaveInputUnchanged(t *testing.T) 
 	}
 }
 
-func TestInjectInstrumentation_NonClassifierModesStillInject(t *testing.T) {
+func TestInjectInstrumentation_SafeModesStillInject(t *testing.T) {
 	for _, mode := range []string{"", "default", "acceptEdits", "dontAsk", "bypassPermissions"} {
 		t.Run(mode, func(t *testing.T) {
 			isolateEnv(t)
