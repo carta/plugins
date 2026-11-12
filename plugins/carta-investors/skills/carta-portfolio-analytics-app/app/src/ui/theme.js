@@ -52,6 +52,17 @@ const ACCENT         = "var(--ink-button-background-color-primary-base-default)"
 const STRIPE         = "var(--ink-color-global-highlight-strong)";
 export const MICRO          = "var(--micro-text)"; // local override — Ink text-very-subtle dark (#394040) is near-invisible
 export const EASE           = "cubic-bezier(.2,.6,.2,1)";
+// Column-header filter funnel button size; the KPI column's fit-to-content reads it too.
+export const COL_FILTER_BTN_W = 20;
+// Column-resize cursor: Ink's expandAll glyph (ExpandAllIcon in components.jsx)
+// turned on its side — a dashed line with arrows out to both sides — outlined in
+// white so it reads on any background; falls back to the system col-resize cursor.
+const RESIZE_CURSOR_PATH = "M2 12h6M16 12h6M12 4V2M12 10V8M12 16v-2M12 22v-2M5 15l-3-3 3-3M19 15l3-3-3-3";
+const RESIZE_CURSOR_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'>"
+  + "<g fill='none' stroke-linecap='round' stroke-linejoin='round'>"
+  + `<path d='${RESIZE_CURSOR_PATH}' stroke='white' stroke-width='5'/>`
+  + `<path d='${RESIZE_CURSOR_PATH}' stroke='black' stroke-width='2.25'/></g></svg>`;
+export const RESIZE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(RESIZE_CURSOR_SVG)}") 8 8, col-resize`;
 export const EASE_OUT       = "cubic-bezier(.2,.7,.2,1)";
 
 // primary-button surface — flat brand-black (inverts to white on dark)
@@ -499,9 +510,17 @@ export const GLOBAL_CSS = `
   .ink-sort-btn { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 0; margin: -3px 0; background: transparent; border: 1px solid transparent; border-radius: 4px; font: inherit; color: ${INK}; cursor: pointer; white-space: nowrap; transition: background .1s ${EASE}; }
   .ink-sort-btn:hover { background: ${SHADE}; }
   .ink-sort-btn:focus-visible { border-color: ${BLUE}; box-shadow: var(--focus-ring); outline: none; }
+  /* Column resize grip on a cell's right edge: an 8px hit area in the header and
+     every row, so the whole edge drags. Hovering any part lights the full line
+     and shows the resize cursor; .col-resizing holds that cursor mid-drag. */
+  .col-resize-handle { position: absolute; top: 0; bottom: 0; right: 0; width: 8px; cursor: ${RESIZE_CURSOR}; z-index: 4; touch-action: none; outline: none; }
+  .col-resize-handle::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 2px; background: transparent; transition: background .1s ${EASE}; }
+  table:has(.col-resize-handle:hover) .col-resize-handle::after, table:has(.col-resize-handle.is-dragging) .col-resize-handle::after,
+  .col-resize-handle:focus-visible::after { background: ${BLUE}; }
+  html.col-resizing, html.col-resizing * { cursor: ${RESIZE_CURSOR} !important; user-select: none !important; }
   /* Column-header filter funnel: hidden until the header is hovered or focused,
      always shown (in the info colour) while that column has an active filter. */
-  .col-filter-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink-color-global-text-subtle); cursor: pointer; opacity: 0; transition: opacity .1s ${EASE}, background .1s ${EASE}; }
+  .col-filter-btn { display: inline-flex; align-items: center; justify-content: center; width: ${COL_FILTER_BTN_W}px; height: ${COL_FILTER_BTN_W}px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink-color-global-text-subtle); cursor: pointer; opacity: 0; transition: opacity .1s ${EASE}, background .1s ${EASE}; }
   th:hover .col-filter-btn, td.kpi-name:hover .col-filter-btn, .col-filter-btn:focus-visible, .col-filter-btn.is-active, .col-filter-btn.is-open { opacity: 1; }
   .col-filter-btn:hover { background: ${SHADE}; }
   .col-filter-btn.is-active { color: var(--ink-color-global-feedback-info-strong); }

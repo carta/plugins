@@ -3,7 +3,7 @@
 // company, period window, and granularity. Export to CSV.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { FS, sans, mono, MICRO } from "../ui/theme.js";
+import { FS, sans, mono, MICRO, COL_FILTER_BTN_W } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 import { H2, Dropdown, FilterIcon, Segmented, Toggle, SearchInput, TextInput, Btn, Badge, Modal, Eyebrow, StickyRibbon,
   ddTriggerStyle, ChevronDownIcon, CollapsibleCheckGroups, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW,
@@ -32,6 +32,7 @@ import ColumnFilterPopover from "./overview/ColumnFilterPopover.jsx";
 import { FavoriteStar } from "../ui/favorites.jsx";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
 import { openCompany } from "../state/focus.js";
+import { lsGet, lsSet } from "../state/storage.js";
 import { withCommas } from "../ui/format.js";
 import { openCorrections } from "../ui/correctionEvents.js";
 import { groupRows, useRowWindow } from "../ui/rowWindow.js";
@@ -48,6 +49,22 @@ const POS = "var(--ink-color-global-feedback-positive-strong)";
 // Sticky left-column widths — the KPI column's sticky offset must equal the
 // company column's width, so both read from these constants (no drift).
 const CO_W = 210, KPI_W = 240, POS_W = 104;
+// The KPI column is the one a viewer can widen (drag its edge, or double-click
+// to fit the longest name); the width is remembered per firm in this browser.
+const KPI_W_MIN = 160, KPI_W_MAX = 640;
+const clampKpiW = (w) => Math.round(Math.min(KPI_W_MAX, Math.max(KPI_W_MIN, w)));
+const kpiWidthKey = (slug) => `pa:pivotKpiWidth:${slug || "default"}`;
+// Room a KPI cell needs beyond its name. The cell's padding and the funnel's margin
+// read these same constants, so fit-to-content stays in step with the layout.
+const KPI_CELL_PAD_X = 14;
+const KPI_FUNNEL_GAP = 4;
+const KPI_CELL_EXTRA = 2 * KPI_CELL_PAD_X + KPI_FUNNEL_GAP + COL_FILTER_BTN_W;
+// Badges a KPI name can carry: the gap before each (the JSX reads it too), and each
+// badge's own width, measured from the default-size <Badge>.
+const BADGE_GAP = 6;
+const BADGE_CUSTOM_W = 58, BADGE_FORMULA_W = 20, BADGE_POS_W = 38;
+// Fit-to-content measures only this many of the widest-looking names exactly.
+const FIT_EXACT_N = 6;
 // Trend column: wide enough for the "Trend over time" header at 14px.
 const TREND_W = 152;
 // Chevron + gap + favorite star, reserved so a company's name starts at the
@@ -110,6 +127,9 @@ export default function PivotDashboard({ data, dashboard }) {
   // The saved doc carries your own tags; the tag filter and the row chips both
   // read it, so it has to be a dependency of the row memo.
   const dashDoc = dashboard?.doc;
+  const widthKey = kpiWidthKey(data.source?.slug);
+  const [kpiW, setKpiW] = useState(() => clampKpiW(Number(lsGet(widthKey)) || KPI_W));
+  const commitKpiW = useCallback((w) => { setKpiW(w); lsSet(widthKey, String(w)); }, [widthKey]);
   const companyById = useMemo(() => new Map((data.companies || []).map((c) => [c.id, c])), [data]);
   // The capability bit is the feature-flag stand-in: no publish capability, no pencils.
   const canPublish = useCanPublish();
@@ -771,6 +791,9 @@ export default function PivotDashboard({ data, dashboard }) {
     (showFc ? 1 : 0) + (fullFig ? 1 : 0) + (growthMode ? 1 : 0) +
     (Object.keys(formats).length ? 1 : 0);
 
+  // The KPI column's right edge drags from the header or from any row.
+  const kpiResize = { width: kpiW, onResize: setKpiW, onCommit: commitKpiW,
+    onFit: () => commitKpiW(fitKpiWidth(rows)) };
   // One header-column list, rendered both by the real <thead> and by its
   // floating clone (renderPivotHeadRow below) — keeps the two markups from drifting.
   const headColDefs = [
@@ -789,8 +812,11 @@ export default function PivotDashboard({ data, dashboard }) {
         <span style={{ marginLeft: NAME_INSET - 16 }}>Company</span>
       </span>
     ) },
-    { key: "kpi", frozen: true, left: CO_W, width: KPI_W, align: "left", lastFrozen: !showPos, content: selPos.size ? "KPI / position" : "KPI" },
-    ...(showPos ? [{ key: "pos", frozen: true, left: CO_W + KPI_W, width: POS_W, align: "right", cursor: "help", lastFrozen: true,
+    { key: "kpi", frozen: true, left: CO_W, width: kpiW, align: "left", lastFrozen: !showPos, content: (<>
+      {selPos.size ? "KPI / position" : "KPI"}
+      <ColumnResizeHandle {...kpiResize} label="Resize the KPI column" />
+    </>) },
+    ...(showPos ? [{ key: "pos", frozen: true, left: CO_W + kpiW, width: POS_W, align: "right", cursor: "help", lastFrozen: true,
         dataTip: "Current value of the position rows — ownership, returns and marks. These are point-in-time "
           + "facts with no period history, so they get their own column instead of pretending to belong to a quarter. "
           + "Hover a value for its as-of date.", content: "Current" }] : []),
@@ -1011,19 +1037,19 @@ export default function PivotDashboard({ data, dashboard }) {
                     </td>
                   )}
                   {!r.collapsed && (<>
-                  <td style={{ ...stickyCell, left: CO_W, maxWidth: KPI_W, zIndex: 1, color: "var(--ink-color-global-text-subtle)", ...sans,
+                  <td onMouseOver={showFullNameIfCut(r.metricLabel)} style={{ ...stickyCell, left: CO_W, maxWidth: kpiW, zIndex: 1, color: "var(--ink-color-global-text-subtle)", ...sans,
                       // Full string, not stickyCell's shorthand + a longhand paddingTop —
                       // React's style diff skips an unchanged shorthand, orphaning padding-top.
-                      padding: r.firstOfCompany ? `${GROUP_PAD_TOP}px 14px 9px` : "9px 14px",
+                      padding: r.firstOfCompany ? `${GROUP_PAD_TOP}px ${KPI_CELL_PAD_X}px 9px` : `9px ${KPI_CELL_PAD_X}px`,
                       ...(!showPos && { boxShadow: LAST_FROZEN_DIVIDER }),
                       ...(r.firstOfCompany && { borderTop: groupDivider }) }}
                     className={`pivot-frozen${!r.position && !r.isQual ? " kpi-name" : ""}`}>
                     {r.metricLabel}
                     {r.custom
-                      ? <Badge tone="info" title="Custom KPI (chart of accounts)" style={{ marginLeft: 6 }}>custom</Badge>
-                      : r.derived && <Badge tone="info" title="Custom formula" style={{ marginLeft: 6 }}>ƒ</Badge>}
+                      ? <Badge tone="info" title="Custom KPI (chart of accounts)" style={{ marginLeft: BADGE_GAP }}>custom</Badge>
+                      : r.derived && <Badge tone="info" title="Custom formula" style={{ marginLeft: BADGE_GAP }}>ƒ</Badge>}
                     {r.position && (
-                      <Badge tone="neutral" title={r.posTip} style={{ marginLeft: 6, cursor: "help" }}>POS</Badge>
+                      <Badge tone="neutral" title={r.posTip} style={{ marginLeft: BADGE_GAP, cursor: "help" }}>POS</Badge>
                     )}
                     {/* A Yes/No, date, text or position row has no threshold to filter on. */}
                     {!r.position && !r.isQual && (() => {
@@ -1032,12 +1058,13 @@ export default function PivotDashboard({ data, dashboard }) {
                         <button type="button" className={`col-filter-btn${on ? " is-active" : ""}${kpiPop?.key === r.metricKey ? " is-open" : ""}`}
                           aria-label={`Filter companies by ${r.metricLabel}`} aria-pressed={on}
                           title={on ? `Filtered — ${r.metricLabel}` : `Filter companies by ${r.metricLabel}`}
-                          style={{ marginLeft: 4, verticalAlign: "middle" }}
+                          style={{ marginLeft: KPI_FUNNEL_GAP, verticalAlign: "middle" }}
                           onClick={(e) => { e.stopPropagation(); openKpiFilter(r.metricKey, e.currentTarget.getBoundingClientRect()); }}>
                           <FilterIcon size={12} />
                         </button>
                       );
                     })()}
+                    <ColumnResizeHandle {...kpiResize} decorative />
                   </td>
                   {showPos && (
                     <td data-tip={r.position
@@ -1045,7 +1072,7 @@ export default function PivotDashboard({ data, dashboard }) {
                           + "\nA point-in-time value — it has no period history, which is why it sits outside the timeline."
                         : undefined}
                       className="pivot-frozen"
-                      style={{ ...stickyCell, left: CO_W + KPI_W, maxWidth: POS_W, zIndex: 1, textAlign: "right", whiteSpace: "nowrap",
+                      style={{ ...stickyCell, left: CO_W + kpiW, maxWidth: POS_W, zIndex: 1, textAlign: "right", whiteSpace: "nowrap",
                         fontWeight: r.position ? 600 : 400,
                         padding: r.firstOfCompany ? `${GROUP_PAD_TOP}px 14px 9px` : "9px 14px",
                         boxShadow: LAST_FROZEN_DIVIDER,
@@ -1915,6 +1942,98 @@ const stickyHead = {
   borderBottom: `1px solid var(--ink-color-global-border-default)`,
   fontFamily: "inherit",
 };
+/** Width the badges after a KPI row's name take, gaps included. */
+function kpiBadgeWidth(r) {
+  return (r.custom ? BADGE_GAP + BADGE_CUSTOM_W : r.derived ? BADGE_GAP + BADGE_FORMULA_W : 0)
+    + (r.position ? BADGE_GAP + BADGE_POS_W : 0);
+}
+
+/** KPI column width that fits the longest name, clamped. Like the period widths,
+ *  roughWidth ranks each distinct name once and exactWidth confirms the widest few. */
+function fitKpiWidth(rows) {
+  const extraByLabel = new Map();
+  for (const r of rows) {
+    if (!r?.metricLabel) continue;
+    extraByLabel.set(r.metricLabel, Math.max(extraByLabel.get(r.metricLabel) ?? 0, kpiBadgeWidth(r)));
+  }
+  const cands = [...extraByLabel].map(([label, extra]) => ({ label, extra, rough: roughWidth(label) + extra }));
+  cands.sort((a, b) => b.rough - a.rough);
+  let widest = 0;
+  for (const c of cands.slice(0, FIT_EXACT_N)) widest = Math.max(widest, exactWidth(c.label) + c.extra);
+  return clampKpiW(widest + KPI_CELL_EXTRA);
+}
+
+/** onMouseOver for a truncated cell: when its text is cut off, the cell carries
+ *  the full text as its tooltip (TooltipLayer reads data-tip on the same event,
+ *  after React's handler); when it fits, no tooltip repeats what is already shown. */
+const showFullNameIfCut = (text) => (e) => {
+  const td = e.currentTarget;
+  if (td.scrollWidth > td.clientWidth + 1) td.setAttribute("data-tip", text);
+  else td.removeAttribute("data-tip");
+};
+
+/** Drag handle on a cell's right edge. The header carries the labelled, focusable
+ *  one; every row's cell carries a `decorative` copy, so the column's whole edge
+ *  drags. Dragging resizes live (`onResize`) and saves on release (`onCommit`);
+ *  double-click fits (`onFit`); arrow keys step 16px when focused. Sticky cells
+ *  anchor the handle. No data-tip: TooltipLayer's help cursor would replace the
+ *  resize cursor. */
+function ColumnResizeHandle({ width, onResize, onCommit, onFit, label, decorative }) {
+  const [dragging, setDragging] = useState(false);
+  const endDrag = useRef(null);
+  useEffect(() => () => endDrag.current?.(), []);
+  const onPointerDown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    // Captured, the pointer stays on the handle mid-drag, so the neighbouring
+    // header's tooltip never opens as the edge sweeps past it.
+    const handle = e.currentTarget;
+    handle.setPointerCapture?.(e.pointerId);
+    const startX = e.clientX;
+    let last = width;
+    let ended = false;
+    setDragging(true);
+    const move = (ev) => { last = clampKpiW(width + ev.clientX - startX); onResize(last); };
+    // Release saves the new width; cancel, lost capture and unmount restore the start.
+    // Each ends the drag once, so the page never stays in resize mode.
+    const finish = (save) => {
+      if (ended) return;
+      ended = true;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", cancel);
+      handle.removeEventListener("lostpointercapture", cancel);
+      document.documentElement.classList.remove("col-resizing");
+      endDrag.current = null;
+      setDragging(false);
+      if (save) onCommit(last); else onResize(width);
+    };
+    const release = () => finish(true);
+    const cancel = () => finish(false);
+    endDrag.current = cancel;
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", cancel);
+    handle.addEventListener("lostpointercapture", cancel);
+    // Keeps the resize cursor (and blocks text selection) wherever the pointer goes mid-drag.
+    document.documentElement.classList.add("col-resizing");
+  };
+  const onKeyDown = (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    onCommit(clampKpiW(width + (e.key === "ArrowRight" ? 16 : -16)));
+  };
+  return (
+    <span {...(decorative ? { "aria-hidden": true } : {
+        role: "separator", "aria-orientation": "vertical", "aria-label": label, tabIndex: 0,
+        "aria-valuenow": width, "aria-valuemin": KPI_W_MIN, "aria-valuemax": KPI_W_MAX,
+        title: "Drag to resize. Double-click to fit the longest name." })}
+      className={`col-resize-handle${dragging ? " is-dragging" : ""}`}
+      onPointerDown={onPointerDown} onDoubleClick={(e) => { e.stopPropagation(); onFit(); }} onKeyDown={onKeyDown}
+      onClick={(e) => e.stopPropagation()} />
+  );
+}
+
 // No maxWidth here — each consumer sets its own from CO_W/KPI_W/POS_W, since a
 // shared hardcoded value silently stops matching once any of those diverge.
 const stickyCell = {
