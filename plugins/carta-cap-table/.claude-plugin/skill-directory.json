@@ -1,6 +1,20 @@
 {
   "carta-cap-table": null,
   "carta-captable-home-build": null,
+  "carta-company-users": {
+    "category": "setup",
+    "name": "Manage company users and access",
+    "order": 10,
+    "prompts": [
+      "Who has access to {{COMPANY}} in Carta?",
+      "Invite [name] ([email]) to {{COMPANY}} as a Company Editor",
+      "Remove [name]'s access to {{COMPANY}}"
+    ],
+    "whatsNewCopy": {
+      "headline": "Invite, change and remove company users in chat",
+      "body": "Lists who can use your Carta account and their access levels, then invites, changes or removes a person after you approve a preview."
+    }
+  },
   "carta-compensation-app": {
     "category": "compensation",
     "name": "Total Compensation app",
