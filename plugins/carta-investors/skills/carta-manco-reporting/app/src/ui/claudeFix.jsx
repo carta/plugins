@@ -4,12 +4,10 @@ import { Btn } from "./components.jsx";
 import { trackClick } from "../analytics.js";
 
 // The fix for each `claude` CLI status scripts/preflight_claude.py reports, worded to start a prompt.
-// `not_installed` means no `claude` binary was found at all — Step 0.5 already tries a silent,
-// backgrounded install on launch (serve-and-update.md), so by the time an operator sees this
-// prompt that attempt has already run (or is still running, or never got a durable copy to
-// stick), which is why this names the official installer.
+// `not_installed` means no `claude` binary was found at all. The skill never installs one
+// (Step 0.5 in serve-and-update.md only looks), so this tells the operator how to install it.
 export const CLAUDE_FIX_STEP = {
-  not_installed: "Install the Claude Code CLI (the `claude` command) with Anthropic's official installer",
+  not_installed: "Install the Claude Code CLI (the `claude` command) with Anthropic's official installer, then run `claude --version` to check it works",
   not_logged_in: "Sign in to Claude Code (`claude auth login`)",
 };
 
@@ -86,9 +84,8 @@ export function canSignIn(code, hosted) {
 }
 
 // A one-click alternative to ClaudePrompt's copy-and-paste, for the one code a
-// button can actually fix here: signed out, not missing. A missing CLI is Step
-// 0.5's own backgrounded install to land (serve-and-update.md) — there is no
-// button here that can install one on the spot. Returns null outside that one
+// button can actually fix here: signed out, not missing. No API route installs a
+// missing CLI; the operator installs it from the prompt above. Returns null outside that one
 // case, so a caller can render it unconditionally next to ClaudePrompt. `event`
 // is the caller's own analytics id for the button click — see
 // references/analytics.md's catalogue.

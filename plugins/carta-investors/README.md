@@ -133,10 +133,9 @@ may call only `welcome` and `call_tool` on the Carta MCP connectors known for yo
 (production or sandbox), with every other Carta connector denied. It has Bash and file-write tools denied, and a
 hook checks each `call_tool` against the one command it was started for. The chat session may read and edit only
 the dashboard's own view-source folder, and read the data files its views display. The skill also:
-- looks for the `claude` CLI and, when none is installed, installs it without asking, in your own home
-  directory, by running Anthropic's own install script for Claude Code from `claude.ai` (the shell script on
-  macOS and Linux, the PowerShell script on Windows) or, if that is not possible, installing the
-  `@anthropic-ai/claude-code` package with npm;
+- looks for the `claude` CLI (an explicit override, your PATH, the usual install locations, and the Claude Code
+  session running the skill) and never installs it. If none is found, sharing and chat tell you how to install it
+  yourself with Anthropic's official installer;
 - when you try to share and no Carta connector is registered for that CLI, runs `claude mcp add --transport http
   <carta_prod or carta_sandbox> <Carta MCP URL> --scope user` once. This writes a connector entry to your user
   Claude configuration; you still sign in to it yourself.

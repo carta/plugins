@@ -2,12 +2,16 @@
 # /// script
 # requires-python = ">=3.9"
 # ///
-"""Locate or install the `claude` CLI for report sharing (Step 0.5).
+"""Locate the `claude` CLI for report sharing (Step 0.5). Never installs it.
 
 serve.py uses find_claude() and probe() to decide whether sharing can run and which
 binary to use; share_bridge.py reads CLAUDE_BIN_ENV for the env-var override's name.
-Ported from carta-compensation-app's script of the same name — keep the two in sync
-by hand; there is no shared scripts/ directory across skills to import from (see
+Ported from carta-compensation-app's script of the same name. Keep probe() and
+auth_status() in sync with it by hand. The lookup (find_claude_located(), and
+find_claude() over it) is this copy's own, as is the absence of an `install` command:
+this copy only looks, because the plugin directory does not allow the skill to
+install software the user did not ask for. There is no shared scripts/ directory
+across skills to import from (see
 plugins/carta-investors/lib/README.md for the one that does exist, for live-artifact
 rendering only).
 """
@@ -25,10 +29,9 @@ from typing import Dict, List, Optional
 _WIN = sys.platform == "win32"
 _BIN = "claude.exe" if _WIN else "claude"
 
-# Anthropic's official installers. The native install is preferred over npm: it
-# needs no Node toolchain, which most of this skill's users do not have. The
-# command strings are public (serve.py's chat fix-prompt quotes them verbatim
-# for the operator to run themselves) so this is the one place either changes.
+# Anthropic's official installer commands. Nothing here runs them: serve.py's chat
+# fix-prompt quotes them verbatim for the operator to run themselves, so this is
+# the one place either changes.
 _NATIVE_INSTALL_SH = "https://claude.ai/install.sh"
 _NATIVE_INSTALL_PS1 = "https://claude.ai/install.ps1"
 NATIVE_INSTALL_SH_CMD = "curl -fsSL %s | bash" % _NATIVE_INSTALL_SH
@@ -45,10 +48,10 @@ REASON_NOT_LOGGED_IN = "not_logged_in"
 CLAUDE_BIN_ENV = "MANCO_CLAUDE_BIN"
 
 # Where find_claude() located the binary. SOURCE_SESSION is the one source that
-# does not survive past this Claude Code session — Step 0.5 (serve-and-update.md)
-# uses this to decide whether to still install a durable copy in the background
-# even though a working binary was found just now. probe()/auth_status() don't
-# care: a session binary is a perfectly good binary to actually run commands with.
+# does not survive past this Claude Code session: the path names a version that an
+# auto-update can delete while the server still runs (serve-and-update.md, Step 0.5).
+# probe()/auth_status() don't care: a session binary is a perfectly good binary to
+# actually run commands with.
 SOURCE_ENV = "env"
 SOURCE_PATH = "path"
 SOURCE_KNOWN = "known_location"
@@ -70,8 +73,7 @@ def _known_locations():
             # Where the native installer (install.ps1) puts claude.exe. It also adds
             # this directory to the user's PATH in the registry, but a process already
             # running (this one, and anything it launches) keeps its old PATH — so
-            # cmd_check right after cmd_install would otherwise report claude_bin=none
-            # for an install that actually succeeded.
+            # a CLI the operator just installed would otherwise report claude_bin=none.
             home / ".local" / "bin" / _BIN,
             home / "AppData" / "Roaming" / "npm" / _BIN,
             *([Path(appdata) / "npm" / _BIN] if appdata else []),
@@ -217,67 +219,13 @@ def cmd_check():
     return 1
 
 
-def _run_installer(argv, label):
-    # type: (List[str], str) -> bool
-    print("[preflight] installing Claude Code via %s …" % label, file=sys.stderr)
-    try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=300)
-    except subprocess.TimeoutExpired:
-        print("[preflight] %s install timed out" % label, file=sys.stderr)
-        return False
-    except OSError as exc:
-        print("[preflight] %s install error: %s" % (label, exc), file=sys.stderr)
-        return False
-    if result.returncode != 0:
-        print("[preflight] %s install failed (exit %d)" % (label, result.returncode),
-              file=sys.stderr)
-        if result.stderr.strip():
-            print(result.stderr.strip(), file=sys.stderr)
-        return False
-    return True
-
-
-def _native_installer_argv():
-    # type: () -> Optional[List[str]]
-    if _WIN:
-        shell = shutil.which("powershell") or shutil.which("pwsh")
-        if not shell:
-            return None
-        return [shell, "-NoProfile", "-Command", NATIVE_INSTALL_PS1_CMD]
-    if not (shutil.which("curl") and shutil.which("bash")):
-        return None
-    return ["bash", "-c", NATIVE_INSTALL_SH_CMD]
-
-
-def cmd_install():
-    # type: () -> int
-    """Install the CLI. Step 0.5 (serve-and-update.md) calls this unprompted, in
-    the background, whenever `check` found no durable copy: it only ever runs
-    Anthropic's own official installer or its npm fallback, into the user's own
-    home directory, so it needs no elevated privilege and touches nothing
-    outside the operator's own account."""
-    installed = False
-    native = _native_installer_argv()
-    if native:
-        installed = _run_installer(native, "the native installer")
-    if not installed:
-        npm = shutil.which("npm")
-        if npm:
-            installed = _run_installer(
-                [npm, "install", "-g", "@anthropic-ai/claude-code"], "npm")
-        elif not native:
-            print("[preflight] no installer available (needs curl+bash, PowerShell, or npm)",
-                  file=sys.stderr)
-    return cmd_check()
-
-
 def main():
     # type: () -> None
-    if len(sys.argv) < 2 or sys.argv[1] not in ("check", "install"):
-        print("usage: preflight_claude.py {check|install}", file=sys.stderr)
+    if sys.argv[1:] != ["check"]:
+        print("usage: preflight_claude.py check", file=sys.stderr)
         sys.exit(2)
 
-    sys.exit(cmd_check() if sys.argv[1] == "check" else cmd_install())
+    sys.exit(cmd_check())
 
 
 if __name__ == "__main__":

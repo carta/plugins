@@ -145,7 +145,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.42.0</carta-plugin>
+<carta-plugin>carta-investors:7.42.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — neither its fixed reply text nor (when hosted is asked for) the hosted app itself needs plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
@@ -248,7 +248,7 @@ the sandboxed exit and the asked-for hosted hand-off that sit before this table.
 | Step | Run it? | What it does | Detail |
 |---|---|---|---|
 | 0 | always, after Gate 0 (says hello, installs `uv`, surface check) — skipped only by a sandboxed surface or an invocation that asks for the hosted app (Gate 1) | Capture the firm, probe the local cache, finish the greeting | [firm-resolution.md](references/firm-resolution.md) |
-| 0.5 | always | Claude CLI preflight — find the `claude` CLI report sharing needs, installing a durable copy in the background if none is found, before the data-fetch wait | [serve-and-update.md](references/serve-and-update.md) |
+| 0.5 | always | Claude CLI preflight — look for the `claude` CLI report sharing needs, before the data-fetch wait; never installs it | [serve-and-update.md](references/serve-and-update.md) |
 | 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-lookup.md](references/firm-lookup.md) |
 | 1.5 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit (same condition as Step 1) | ManCo eligibility hard gate — confirms an active Fund Admin subscription and an active management company before proceeding | [firm-lookup.md](references/firm-lookup.md) |
 | 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-lookup.md](references/firm-lookup.md) |
