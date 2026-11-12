@@ -26,7 +26,7 @@ the fail-open shape for that hook event instead.
 
 | Name | Hook event | Reads | Effect |
 |---|---|---|---|
-| `inject-instrumentation` | PreToolUse | `tool_name`, `tool_input`, `session_id`, `prompt_id`, `permission_mode`, `effort`, `agent_id`, `transcript_path`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_REMOTE` | adds `_instrumentation_v2` to `tool_input`, incl. `cumulative_tokens` summed from the transcript and its subagent transcripts; each call reads only the bytes added since the previous call. In `auto` and `plan` permission modes it returns no `updatedInput` (see Fail-open rule) |
+| `inject-instrumentation` | PreToolUse | `tool_name`, `tool_input`, `session_id`, `prompt_id`, `permission_mode`, `effort`, `agent_id`, `transcript_path`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_REMOTE` | adds `_instrumentation_v2` to `tool_input`, incl. `cumulative_tokens` summed from the transcript and its subagent transcripts; each call reads only the bytes added since the previous call. Outside `default`, `acceptEdits`, `dontAsk` and `bypassPermissions` (and a Claude Code that reports no mode) it returns no `updatedInput` (see Fail-open rule) |
 | `capture-active-skill` | PreToolUse | `session_id`, `tool_input.skill` | records the active skill for the session |
 | `capture-slash-skill` | UserPromptSubmit | `session_id`, `prompt` | records a `/skill` invocation; always returns zero bytes |
 | `capture-model` | SessionStart | `session_id`, `model` | records the session's model |
@@ -70,10 +70,12 @@ A hook never blocks a tool call and never approves one. PreToolUse hooks return
 no `permissionDecision`, so Claude Code's normal permission flow decides. Every
 internal error returns the same shape a successful run would return.
 
-In `auto` and `plan` permission modes `inject-instrumentation` returns no
+`inject-instrumentation` rewrites the input only in the `default`, `acceptEdits`,
+`dontAsk` and `bypassPermissions` permission modes, or when Claude Code reports
+no mode. In any other mode (`auto`, `plan`, or one not yet known) it returns no
 `updatedInput`. Auto mode's classifier reviews the input the model wrote and
 refuses the call when a hook then changes it. Plan mode entered from auto mode
-keeps the classifier. The server then gets the `_instrumentation_v2` the model
+keeps the classifier, and Claude Code's cloud sessions run in auto mode. The server then gets the `_instrumentation_v2` the model
 wrote, without the hook's fields.
 
 ## Add a handler

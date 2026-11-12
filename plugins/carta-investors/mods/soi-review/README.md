@@ -1,10 +1,9 @@
 # SOI review module — carta-investors
 
-A Claude Code hooks module (`register.tsx`, declared in `hooks.json` beside it and named by the
-`hooks` entry of `.claude-plugin/plugin.json`) that needs Claude Code 2.1.308 or later. Builds older than
-2.1.286, and Cowork, skip it. Builds 2.1.286 to 2.1.307 load it, but it never learns a
-review, because the tool name they pass to `tool.call` does not include the server. Every
-build runs the command hooks in `hooks/hooks.json` (see `hooks/README.md`).
+A Claude Code hooks module (`register.tsx`, declared in `hooks.json` beside it) that needs Claude Code
+2.1.308 or later. The plugin manifest does not load it. Adding `"hooks": "./mods/soi-review/hooks.json"`
+to `.claude-plugin/plugin.json` loads it. Every build runs the command hooks in `hooks/hooks.json`
+(see `hooks/README.md`).
 
 When Claude opens an SOI review in the Update Investments view, the module learns the
 review from that `view_remote` result and polls Carta MCP's `fa__get__soi-review-state`
@@ -36,7 +35,7 @@ read through `read_tool`, on the same server the view came from. It shows
 - Tests: `claude plugin test plugins/carta-investors` runs `register.test.tsx`. In CI,
   validate.yml's plugin-tests job installs the claude CLI and runs
   `tests/plugin-mods/test_plugin_mod_suites.py`, which validates and tests every plugin
-  with a hooks module. The test file is held back from the public plugin by
+  whose manifest loads a hooks module. The test file is held back from the public plugin by
   `mods/*/*.test.tsx` in `public-plugins.json`.
 - The module lives apart from `hooks/` on purpose: Anthropic's plugin directory review holds
   a plugin whose commands or scripts point at a folder that also holds a module's files. Keep

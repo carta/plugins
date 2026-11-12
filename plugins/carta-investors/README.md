@@ -94,67 +94,9 @@ The Carta MCP server exposes these data warehouse tools:
 | `list_contexts` | See which firms you have access to |
 | `set_context` | Switch to a different firm |
 
-## SOI review companion (Claude Code)
-
-On Claude Code 2.1.308 or later, the plugin includes a small module (`mods/soi-review/`) that keeps a
-Schedule of Investments (SOI) review you opened in the Update Investments view in sight while you work.
-Other surfaces, such as Cowork, don't load it. It does nothing until Claude opens such a review.
-
-**When it runs.** At session start it adds a `/soi-review` command and starts a 5-second timer. The
-timer only checks whether there is a review to read.
-
-**Hooks.** The module hooks five events. It changes none of what passes through them:
-- `session.start` adds the `/soi-review` command and starts the timer.
-- `tool.call` reads the result of `view_remote` calls, then returns every result as it came.
-- `prompt.submit` stores the time of the prompt and passes the prompt on unchanged. It never stores or
-  reads the prompt text.
-- `command.run` answers `/soi-review` only; every other command is left alone.
-- `ui.render` draws the band above the prompt and keeps whatever else is in it.
-
-**What it reads.**
-- The result of each `view_remote` tool call. It looks for the Update Investments view and, if found,
-  takes the review's `firm_uuid` and `soi_report_id`. It passes every other tool's result through untouched.
-- Prompts: only the time each one was submitted, to pause polling after 30 minutes without a prompt.
-  It does not read or send your prompt text.
-- Which surface Claude is running on (`session.surfaces`), only to tell whether the desktop app is in use.
-
-**What it calls, and when.** One tool: `read_tool` for `fa__get__soi-review-state`, through `mcp.call`. It goes
-only to the same Carta MCP server whose `view_remote` result opened the review, and only after Claude has
-opened an SOI review. It never calls another server or another tool. It reads every 5 seconds while the
-review is waiting on you and every 15 seconds otherwise, stops once the review is approved or closed (opening
-it again reads it once more), and pauses after 30 minutes without a prompt. A new read starts only after the
-previous one finishes, or once it has run for 60 seconds.
-
-**What `command.run` does with the calls it sees.** It sees each slash command you type and acts on `/soi-review`
-only. It runs no shell command, tool or process itself: it returns text and, on the desktop app, queues the one
-prompt described below.
-
-**What it sends, and where.** Only to that Carta MCP server, which you have already connected, and nothing
-anywhere else: `firm_uuid`, `soi_report_id`, `include_baseline` (true on the first read only), and
-`_instrumentation_v2: {"from_hook": true}`, which marks the read as the plugin's own rather than Claude's
-usage. The module runs no shell commands and starts no processes. It reads no files, environment variables
-or credentials. Between events it keeps only the review's `firm_uuid` and `soi_report_id` and the Carta MCP
-server name, all taken from Carta's own `view_remote` result, the time of the last prompt, and what the read returns.
-The surface name and the prompt times stay in the module and are never sent anywhere.
-
-**What it shows.** From each read, it keeps the report label, status, period, fair value, each position's
-company name and value, and the companion page link for the session. It uses them for a status line
-(`SOI Q<n> <yyyy> · <status>`), toasts when a company's value or the review's status changes, and, on the
-desktop app, a band above the prompt.
-
-**The one prompt it submits.** `command.run` answers `/soi-review` only. It shows the companion page link. On
-the desktop app only, it also submits the prompt `Open <companion page link> in your built-in browser beside
-the chat.`, which Claude acts on with its own browser tool. The prompt contains only that link, which comes
-from Carta's response.
-
-**Why it opens the page for you.** The SOI review companion page is meant to sit next to the chat while you
-approve positions. On the desktop app, `/soi-review` has Claude open it in the built-in browser beside the
-conversation, so you don't copy the link by hand. You start it by typing `/soi-review`; the mod never opens
-the page on its own. The prompt holds only the link from Carta's response, never your conversation.
-
 ## Command hooks and the compiled binary
 
-Besides the SOI module, the plugin runs these command hooks, listed in `hooks/hooks.json`. They run on your
+The plugin runs these command hooks, listed in `hooks/hooks.json`. They run on your
 machine when Claude Code fires the event, and none of them blocks or changes a call except where noted.
 
 | Event | What runs | What it does |
@@ -163,7 +105,7 @@ machine when Claude Code fires the event, and none of them blocks or changes a c
 | SessionStart | `hooks/dispatch.sh prune-session-data` | Deletes session files older than 24 hours from two folders: `CLAUDE_PLUGIN_DATA/sessions` (when that variable is set) and the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder), which other Carta plugins also use. |
 | SessionStart, PostModelSwitch | `hooks/dispatch.sh capture-model`, `capture-model-switch` | Records the active Claude model in a per-session file in the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder). |
 | PreToolUse (Skill) | `hooks/dispatch.sh capture-active-skill` | Records which of this plugin's skills were loaded: the name in `CLAUDE_PLUGIN_DATA/sessions`, the latest one in the shared session folder. Makes no decision. |
-| PreToolUse (Carta MCP) | `hooks/dispatch.sh inject-instrumentation` | Adds a usage record (`_instrumentation_v2`) to Carta MCP calls. In `auto` and `plan` permission modes it changes nothing. |
+| PreToolUse (Carta MCP) | `hooks/dispatch.sh inject-instrumentation` | Adds a usage record (`_instrumentation_v2`) to Carta MCP calls. Outside the `default`, `acceptEdits`, `dontAsk` and `bypassPermissions` permission modes it changes nothing. |
 | PreToolUse (Carta MCP `call_tool`) | `node scripts/hooks/guard-own-sync-push.js` | Denies a budget-report push that differs from the plan `own_sync.py` wrote; otherwise prints nothing. |
 | UserPromptSubmit | `hooks/dispatch.sh capture-slash-skill` | Records skills you invoke with a slash command, in the same two places. |
 | PostToolUse (Carta MCP `execute_query`) | `node scripts/hooks/warn-empty-query.js` | Tells Claude when a query returned no rows. |
