@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.23.0",
+    "version": "1.23.1",
     "headline": "When Carta can't load, Home now says why and how to fix it, with a Try again or Check again button, instead of a red error. Rebuild to get it."
   },
   "carta-lp-summary": {

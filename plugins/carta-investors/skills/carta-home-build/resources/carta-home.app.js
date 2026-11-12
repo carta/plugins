@@ -129,7 +129,7 @@ function showPromptPopover(btn, prompt, skillId) {
   pop.innerHTML = `
     <p class="pop-subtitle">Paste this in chat to run the skill.</p>
     <div class="db-prompt-row">
-      <span class="db-prompt-text">${prompt}</span>
+      <span class="db-prompt-text">${escHtml(prompt)}</span>
       <button class="db-copy-btn" id="pop-copy"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy</button>
     </div>
   `;
