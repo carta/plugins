@@ -45,9 +45,10 @@ function layoutDashboards() {
   reportDashboardCards();
 }
 
-// A card's query has settled. Empty hides the card; data keeps it.
+// A card's query has settled. Empty hides the card; data keeps it. A failed card can still
+// settle when a later retry gets its data.
 function settleDashboardCard(key, hasData) {
-  if (!(key in _cardState) || _cardState[key] !== "loading") return;
+  if (!(key in _cardState) || !["loading", "error"].includes(_cardState[key])) return;
   _cardState[key] = hasData ? "data" : "empty";
   if (!hasData) trackHome("render", `CartaHome.${DASHBOARD_CARDS[key].event}.Empty`);
   layoutDashboards();
@@ -172,5 +173,7 @@ async function fetchLpSummary() {
     const note = renderConnectionFailure("lp", e?.code);
     if (el && note) el.innerHTML = note;
     failDashboardCard("lp");
+  } finally {
+    _lpLoading = false;
   }
 }

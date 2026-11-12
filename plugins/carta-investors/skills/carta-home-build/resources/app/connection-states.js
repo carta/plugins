@@ -46,18 +46,19 @@ function cardNoteFor(card, code) {
 }
 
 // Returns the note's markup. Every string comes from cardNoteFor, never from data, so it's
-// inserted as is. The button reloads Home, which re-runs every card's load.
+// inserted as is. The button carries data-home-retry, so pressing it loads Home again in place
+// (loadHome("button")) and records the note's event: cards that loaded stay, and every card
+// that ended on its error line loads again.
 function cardNoteHtml(card, code) {
   const note = cardNoteFor(card, code);
   const button = note.action
-    ? `<button type="button" class="card-note-action" data-card="${card}" data-event="${note.action.event}" onclick="cardNoteRetry(this)">${note.action.label}</button>`
+    ? `<button type="button" class="card-note-action" data-card="${card}" data-event="${note.action.event}" data-home-retry>${note.action.label}</button>`
     : "";
   return `<div class="card-note" role="status"><span class="card-note-dot" aria-hidden="true"></span><span>${note.text} ${button}</span></div>`;
 }
 
 function cardNoteRetry(btn) {
   trackHome("click", `CartaHome.CardNote.${btn.dataset.event}`, { value: btn.dataset.card });
-  reloadHome();
 }
 
 function reloadHome() { window.location.reload(); }

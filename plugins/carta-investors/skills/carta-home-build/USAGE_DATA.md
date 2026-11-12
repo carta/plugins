@@ -35,8 +35,10 @@ arrive only when the host still relays UI events.
 | `CartaHome.View.Version` | click | `value` = the skill version the page was built with |
 | `CartaHome.View.First` | render | First load in this browser |
 | `CartaHome.View.Cards` | click | Every dashboard card the firm gets has loaded or failed, and the profile (`get_current_user`) has answered or failed. `value` = the cards shown, in order (`soi`, `perf`, `lp`, comma-separated), or `none`. A card whose query failed is shown with its note, so it is in `value`; its `LoadError` event tells it apart from a card with data. Not sent when Carta isn't connected, there's no active firm, the profile never answers, the reconnect panel is shown, or loading fails at the connector (`Unavailable.NoFirm`, `Unavailable.LoadError`) |
-| `CartaHome.Unavailable.NoFirm` | render | No active firm in the viewer's Carta context |
-| `CartaHome.Unavailable.LoadError` | render | Loading the firm's data failed at the connector |
+| `CartaHome.Unavailable.NoFirm` | render | Once per page, the first time Home finds no active firm in the viewer's Carta context |
+| `CartaHome.Unavailable.LoadError` | render | Once per page, the first time loading the firm's data fails at the connector, after Home's quiet retries for a passing failure |
+| `CartaHome.Load.Recovered` | click | Home's data loaded after a failure. `value` = `<trigger>:<try>`: `open` (first open, after quiet retries), `focus` (the viewer came back to a Home that had failed) or `button` (Try again), and which try worked, e.g. `open:3`. A first-try load on open sends nothing |
+| `CartaHome.Load.Failed` | click | Home's load ended on an error the viewer can see. `value` = what started it (`open`, `focus`, `button`). Only arrives when the connector still carries events, so it undercounts connector failures |
 | `CartaHome.Tab.<tab>` | click | Switched tab (Recommended, Directory) |
 
 ## Dashboard cards

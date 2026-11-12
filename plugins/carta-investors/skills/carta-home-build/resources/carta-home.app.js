@@ -467,10 +467,11 @@ function populateFallback(code = "no_connector") {
   renderBenchError(code);
 }
 
-// The Fund performance card's note, unless the card already shows something.
+// The Fund performance card's note, unless the card already shows something other than an
+// earlier note.
 function renderBenchError(code) {
   const benchMetrics = document.getElementById("benchmark-metrics");
-  if (benchMetrics && !benchMetrics.textContent.trim()) {
+  if (benchMetrics && (!benchMetrics.textContent.trim() || benchMetrics.querySelector(".card-note"))) {
     const note = renderConnectionFailure("perf", code);
     if (note) benchMetrics.innerHTML = note;
   }
@@ -550,6 +551,10 @@ function renderSOIError(code) {
   document.getElementById("soi-rows").innerHTML = note;
 }
 
+function renderSOILoading() {
+  document.getElementById("soi-rows").innerHTML = `<div class="loading-row">Loading your portfolio…</div>`;
+}
+
 function fmtShort(v) {
   if (v == null || isNaN(v)) return "—";
   if (v >= 1e9) return "$" + (v/1e9).toFixed(1) + "B";
@@ -615,11 +620,14 @@ function dwhRows(res, ...keys) {
 }
 
 // ── Live data fetch from Carta MCP ──
-async function fetchLiveData() {
+// Resolves "ok", "failed" (a cause retrying can't fix, already on screen) or "retry" (a
+// passing failure, nothing rendered yet). With `final`, a passing failure renders as "failed".
+async function fetchLiveData({ final = true } = {}) {
   if (!(await mcpAvailable())) {
-    // No live connector in this view — use fallback
+    // No live connector in this view. Each try already waits for the bridge, so quiet retries
+    // would only stretch the wait: offer Try again, and coming back to Home retries too.
     populateFallback();
-    return;
+    return "failed";
   }
 
   try {
@@ -635,7 +643,10 @@ async function fetchLiveData() {
       await new Promise(r => setTimeout(r, 500));
       ctxRes = await _mcp("list_contexts", {});
     }
-    if (ctxRes.isError) throw new Error("context lookup failed");
+    if (ctxRes.isError) {
+      if (!final) return "retry";
+      throw new Error("context lookup failed");
+    }
 
     let firmId = null;
     let firmName = null;
@@ -680,9 +691,9 @@ async function fetchLiveData() {
     }
 
     if (!firmId) {
-      trackHome("render", "CartaHome.Unavailable.NoFirm");
+      trackUnavailable("CartaHome.Unavailable.NoFirm");
       populateFallback("no_firm");
-      return;
+      return "failed";
     }
 
     // Await set_context before firing DWH queries — the MCP server requires an active
@@ -691,11 +702,18 @@ async function fetchLiveData() {
       await _mcp("set_context", { firm_id: firmId });
     } catch (_) {}
 
-    _benchmarkFirmId = firmId;  // expose for benchmark fetch
-    fetchBenchmarkData();       // kick off in parallel — no await, independent card
-    fetchCapitalActivity();     // kick off in parallel — no await, pinned card
-    segmentSetFirm(firmId);     // LP summary card, for Fund Admin firms
-    if (firmName) wnCheckDataCollection(firmName); // no await: unlocks What's new's Portfolio Analytics
+    // A retry reaches here again with the same firm: cards still loading or loaded are left
+    // alone, and every dashboard card that ended on its error line loads again.
+    if (_benchmarkFirmId !== firmId) {
+      _benchmarkFirmId = firmId;  // expose for benchmark fetch
+      fetchBenchmarkData();       // kick off in parallel — no await, independent card
+      fetchCapitalActivity();     // kick off in parallel — no await, pinned card
+      segmentSetFirm(firmId);     // LP summary card, for Fund Admin firms
+      if (firmName) wnCheckDataCollection(firmName); // no await: unlocks What's new's Portfolio Analytics
+    } else {
+      if (_cardState.perf === "error") fetchBenchmarkData();
+      if (_cardState.lp === "error") fetchLpSummary();
+    }
 
     // Step 2: single DWH query — fund names + portfolio values (no set_context or fa:list:entities needed)
     let dwhFundRows = [];
@@ -716,9 +734,10 @@ async function fetchLiveData() {
 
     // Render SOI card. A failed query keeps the card with its note, never hides it.
     if (soiFailed) {
+      if (!final) return "retry";
       renderSOIError(soiFailed);
       failDashboardCard("soi");
-      return;
+      return "failed";
     }
     if (dwhFundRows.length > 0) {
       renderFundSummaryCard(dwhFundRows.map(r => ({
@@ -731,14 +750,69 @@ async function fetchLiveData() {
       renderSOIScope(soiScopeNote(await fetchRealFunds(firmId), dwhFundRows.map(r => r.FUND_UUID)));
     }
     settleDashboardCard("soi", dwhFundRows.length > 0);
+    return "ok";
 
   } catch (err) {
     console.error("Carta MCP fetch error:", err);
     // A connector-level failure can't relay this either; it lands when the bridge still works.
-    trackHome("render", "CartaHome.Unavailable.LoadError");
+    const passing = !err?.code || PASSING_ERROR_CODES.has(err.code);
+    if (passing && !final) return "retry";
+    trackUnavailable("CartaHome.Unavailable.LoadError");
     // Connector-level codes rethrow from _mcp and land here; each code has its own fix.
     renderSOIError(err?.code);
+    return "failed";
   }
+}
+
+// Connector codes a moment later can clear. The rest need the person to act first.
+const PASSING_ERROR_CODES = new Set(["server_unavailable"]);
+
+// Quiet retries before Home shows an error: Claude's connector bridge can come up late on a
+// first open, and a slow moment at Carta clears on its own.
+const LOAD_RETRY_DELAYS_MS = [1500, 4000];
+let _homeLoad = null;         // the load in flight, so focus and Try again never start a second
+let _homeLoadFailed = false;  // the last load ended on an error, so coming back should retry it
+
+// Load Home's data, retrying passing failures quietly. `trigger` (open, focus, button) says
+// what started it; a load that needed more than one try reports how it recovered.
+function loadHome(trigger) {
+  if (_homeLoad) return _homeLoad;
+  // Quiet retries are for the first open. A load the person started (focus, Try again) tries
+  // once, so a Home that keeps failing doesn't re-run a full cycle on every return.
+  const delays = trigger === "open" ? LOAD_RETRY_DELAYS_MS : [];
+  if (trigger !== "open") renderSOILoading();
+  _homeLoad = (async () => {
+    for (let attempt = 0; ; attempt++) {
+      const final = attempt >= delays.length;
+      const outcome = await fetchLiveData({ final });
+      if (outcome !== "retry") {
+        const recovered = outcome === "ok" && (attempt > 0 || trigger !== "open");
+        if (recovered) trackHome("click", "CartaHome.Load.Recovered", { value: `${trigger}:${attempt + 1}` });
+        if (outcome === "failed") trackHome("click", "CartaHome.Load.Failed", { value: trigger });
+        _homeLoadFailed = outcome === "failed";
+        // The reconnect panel hid the Carta sections; once Carta answers, rebuild the page.
+        if (outcome === "ok" && _reconnectShown) reloadHome();
+        return outcome;
+      }
+      renderSOILoading();
+      await new Promise(r => setTimeout(r, delays[attempt]));
+    }
+  })().finally(() => { _homeLoad = null; });
+  return _homeLoad;
+}
+
+// Coming back to Home after it failed (for example, after allowing the Carta connector in
+// Settings) loads it again, so nobody has to reopen it.
+function retryHomeOnReturn() {
+  if (_homeLoadFailed && document.visibilityState !== "hidden") loadHome("focus");
+}
+
+// Home's retries can reach the same unavailable state again; report it once per page.
+const _unavailableSent = new Set();
+function trackUnavailable(id) {
+  if (_unavailableSent.has(id)) return;
+  _unavailableSent.add(id);
+  trackHome("render", id);
 }
 
 // ── Helpers ──
@@ -1358,7 +1432,21 @@ console.log("[carta-home] build {{BUILD_ID}}");
 trackView();
 renderDashboardLaunchers();  // static — no firm context needed, so it paints before any fetch
 renderCapabilities([]);      // the static prompts paint first; get_current_user's recs replace them
-fetchLiveData();       // also triggers fetchBenchmarkData() once firmId is resolved
+loadHome("open");      // also triggers fetchBenchmarkData() once firmId is resolved
+window.addEventListener("focus", retryHomeOnReturn);
+document.addEventListener("visibilitychange", retryHomeOnReturn);
+// pointerdown as well as click: in an iframe, pressing Try again focuses the window first, and
+// that focus must join the button's load rather than start its own.
+// The event is sent here, not from the button's own click: pointerdown's load replaces the
+// card's markup, so the button is gone before its click arrives.
+const startLoadFromButton = e => {
+  const btn = e.target?.closest?.("[data-home-retry]");
+  if (!btn) return;
+  if (!_homeLoad && btn.dataset?.event) cardNoteRetry(btn);
+  loadHome("button");
+};
+document.addEventListener("pointerdown", startLoadFromButton);
+document.addEventListener("click", startLoadFromButton);
 fetchUserEnrichment(); // get_current_user → debug log + entitlement directory filter
 // Safety net: never leave the directory stuck on "Personalizing…" if enrichment hangs.
 setTimeout(markEnrichmentDone, 5000);
