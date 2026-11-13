@@ -383,7 +383,13 @@ async function fetchBenchmarkData(realFunds) {
     if (res.isError) throw new Error("DWH failed");
     const scoped = perfScope(await realFunds, dwhRows(res, "FUND_UUID"));
     const rows = scoped.rows;
-    if (!rows.length) { settleDashboardCard("perf", await fetchBenchmarkFallback(realFunds)); return; }
+    // No administered fund in the benchmarks: the fund metrics source may still have one.
+    if (rows.every(r => r.notAdministered)) {
+      let shown = false;
+      if (!rows.length) { settleDashboardCard("perf", await fetchBenchmarkFallback(realFunds)); return; }
+      try { shown = await fetchBenchmarkFallback(realFunds, true); } catch (_) {}
+      if (shown) { settleDashboardCard("perf", true); return; }
+    }
     renderPerfScope(scoped.note);
 
     // Build sorted date list
@@ -394,6 +400,7 @@ async function fetchBenchmarkData(realFunds) {
     // Per-fund IRR series
     const byFund = {};
     const byFundP50 = {};  // P50 peer cohort IRR per fund
+    const notAdministered = new Set(rows.filter(r => r.notAdministered).map(r => r.FUND_NAME));
     rows.forEach(r => {
       if (!byFund[r.FUND_NAME]) byFund[r.FUND_NAME] = {};
       byFund[r.FUND_NAME][r.PERFORMANCE_QUARTER_START_DATE] = r.NET_IRR;
@@ -415,10 +422,11 @@ async function fetchBenchmarkData(realFunds) {
     // and the resolved colour; the prefers-color-scheme listener re-resolves them.
     const fundDatasets = fundNames.map((name, idx) => ({
       label: shortName(name),
+      _notAdministered: notAdministered.has(name),
       data: sortedDates.map(d => byFund[name][d] ?? null),
       _colorToken: _benchToken(idx),
       borderColor: inkColor(_benchToken(idx), "#8C8C8C"),
-      borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5,
+      borderWidth: notAdministered.has(name) ? 1.5 : 2.5, pointRadius: 0, pointHoverRadius: 5,
       fill: false, tension: 0.4,
     }));
 
@@ -463,7 +471,7 @@ function _renderBenchLegend(fundDatasets, hasPeerMedian) {
   const metricsEl = document.getElementById("benchmark-metrics");
   if (!metricsEl) return;
   const items = fundDatasets.map(d => `
-    <span class="bench-legend-item"><span class="bench-legend-dot" style="background:var(${d._colorToken})"></span><span class="bench-legend-label" title="${escHtml(d.label)}">${escHtml(d.label)}</span></span>`);
+    <span class="bench-legend-item"><span class="bench-legend-dot" style="background:var(${d._colorToken})"></span><span class="bench-legend-label" title="${escHtml(d.label)}">${escHtml(d.label)}</span>${notAdministeredTag(d._notAdministered)}</span>`);
   if (hasPeerMedian) items.push(`
     <span class="bench-legend-item"><span class="bench-legend-dash"></span>Peer median</span>`);
   metricsEl.innerHTML = `<div class="bench-legend">${items.join("")}</div>`;
@@ -479,17 +487,12 @@ function _benchShowChartNote(msg) {
   wrap.innerHTML = `<div class="bench-chart-note">${msg}</div>`;
 }
 
-// When the benchmarks table has no qualifying rows, preview the detail page's
-// source (AGGREGATE_FUND_METRICS) instead of blanking. Returns false when no fund Carta
-// administers has data (no fund at all, or only funds it doesn't administer), so the caller
-// hides the card.
-async function fetchBenchmarkFallback(realFunds) {
+// When the benchmarks table has no rows for a fund Carta administers, preview the detail
+// page's source (AGGREGATE_FUND_METRICS) instead. Returns false when no fund has a value, so
+// the caller hides the card; with needAdministered it also returns false when every fund it
+// would show is not administered, so the caller draws the marked benchmark chart instead.
+async function fetchBenchmarkFallback(realFunds, needAdministered = false) {
   if (!(await mcpAvailable()) || !_benchmarkFirmId) return false;
-  const funds = await realFunds;
-  // The query skips the funds the lookup flags as not administered, so a large one can't take
-  // a top-3 slot. Only well-formed UUIDs from the lookup go into the SQL.
-  const skipped = (partialFundScope(funds)?.excluded || []).filter(u => UUID_RE.test(u));
-  const notIn = skipped.length ? `AND FUND_UUID NOT IN (${skipped.map(u => `'${u}'`).join(", ")})` : "";
   // IRR/TVPI/DPI are almost always null for these firms; TOTAL_VALUE is populated,
   // so the card previews that (with per-fund currency — never assume USD).
   const res = await _mcp("read_tool", {
@@ -497,19 +500,21 @@ async function fetchBenchmarkFallback(realFunds) {
     arguments: {
       sql: `SELECT FUND_NAME, FUND_UUID, TOTAL_VALUE, FUND_REPORTING_CURRENCY, ENDING_TOTAL_NAV, MONTH_END_DATE
             FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
-            WHERE FIRM_ID = '${_benchmarkFirmId}' ${notIn}
+            WHERE FIRM_ID = '${_benchmarkFirmId}'
             QUALIFY ROW_NUMBER() OVER (PARTITION BY FUND_UUID ORDER BY MONTH_END_DATE DESC NULLS LAST) = 1
-            ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST
-            LIMIT 3`,
+            ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST`,
       format: 'ndjson',
       response_mode: 'inline',
     }
   });
   if (res.isError) throw new Error("DWH fallback failed");
-  const scoped = perfScope(funds, dwhRows(res, "FUND_UUID"));
-  // A fund with no value previews as a blank row, so only funds with a value count.
-  const rows = scoped.rows.filter(r => parseFloat(r.TOTAL_VALUE || 0) !== 0);
-  if (!rows.length) return false;  // no fund Carta administers that has a value
+  // Order before the top 3 are taken, so a large fund Carta doesn't administer can't crowd
+  // out the ones it does. A fund with no value previews as a blank row, so only funds with a
+  // value count.
+  const scoped = perfScope(await realFunds, dwhRows(res, "FUND_UUID"));
+  const rows = scoped.rows.filter(r => parseFloat(r.TOTAL_VALUE || 0) !== 0).slice(0, 3);
+  if (!rows.length) return false;  // no fund has a value
+  if (needAdministered && rows.every(r => r.notAdministered)) return false;
   renderPerfScope(scoped.note);
 
   rows.forEach((r, i) => { _fundColorMap[r.FUND_NAME] = `var(${_benchToken(i)})`; });
@@ -521,6 +526,7 @@ async function fetchBenchmarkFallback(realFunds) {
     name: r.FUND_NAME,
     color: _fundColorMap[r.FUND_NAME],
     value: r.TOTAL_VALUE, currency: r.FUND_REPORTING_CURRENCY,
+    notAdministered: r.notAdministered,
   })), asOf);
   return true;
 }
@@ -531,7 +537,7 @@ function _renderBenchValueTable(items, asOf) {
   const metricsEl = document.getElementById("benchmark-metrics");
   if (!metricsEl || !items.length) return;
   metricsEl.innerHTML = `
-    <div style="margin-top:10px;border-top:1px solid var(--ink-color-global-border-subtle);padding-top:8px;">
+    <div class="bench-value-table" style="margin-top:10px;border-top:1px solid var(--ink-color-global-border-subtle);padding-top:8px;">
       <div style="display:flex;gap:4px;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-transform:uppercase;letter-spacing:.04em;flex:2;">Fund · ${asOf}</span>
         <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">Total Value</span>
@@ -540,7 +546,7 @@ function _renderBenchValueTable(items, asOf) {
         const shortName = String(it.name).replace(/, L\.P\.$/, "").replace(/, LP$/, "").split(" ").slice(-2).join(" ");
         return `<div style="display:flex;gap:4px;justify-content:space-between;padding:2px 0;">
           <span style="font-size:10px;color:var(--ink-color-global-text-default);flex:2;display:flex;align-items:center;gap:5px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${it.color};flex-shrink:0;"></span>${escHtml(shortName)}
+            <span style="width:8px;height:8px;border-radius:50%;background:${it.color};flex-shrink:0;"></span>${escHtml(shortName)}${notAdministeredTag(it.notAdministered)}
           </span>
           <span style="font-size:10px;color:var(--ink-color-global-text-default);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${fmtCurrency(it.value, it.currency)}</span>
         </div>`;
@@ -733,13 +739,27 @@ function soiScopeNote(funds) {
   return partialFundScope(funds)?.note ?? null;
 }
 
-// Fund performance for a partly administered firm drops the funds the lookup flags as not
-// administered (a fund the lookup misses still shows), so the chart never reads as the whole
-// firm; the note says so. The legend names each fund.
+// Fund performance for a partly administered firm lists the funds Carta administers first and
+// marks the funds the lookup flags as not administered (a fund the lookup misses shows unmarked).
 function perfScope(funds, rows) {
   const scope = partialFundScope(funds);
   if (!scope) return { rows, note: null };
-  return { rows: rows.filter(r => scope.keeps(r.FUND_UUID)), note: scope.note };
+  const mark = r => Object.assign({}, r, { notAdministered: !scope.keeps(r.FUND_UUID) });
+  const marked = rows.map(mark);
+  return {
+    rows: [...marked.filter(r => !r.notAdministered), ...marked.filter(r => r.notAdministered)],
+    note: scope.note,
+  };
+}
+
+const NOT_ADMINISTERED_TIP = "Carta doesn't administer this fund, so its numbers may be incomplete.";
+let _notAdminTipSeq = 0;
+
+// A caution icon after the fund's name; hover or keyboard focus opens the tip.
+function notAdministeredTag(notAdministered) {
+  if (!notAdministered) return "";
+  const id = `perf-not-admin-${++_notAdminTipSeq}`;
+  return ` <span class="bench-not-admin" tabindex="0" role="img" aria-label="Not administered by Carta" aria-describedby="${id}"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false"><path d="M8 1.5 15 14H1z" fill="currentColor"/><path d="M8 6v4M8 11.6v.4" stroke="var(--ink-color-global-brand-white)" stroke-width="1.6" stroke-linecap="round"/></svg><span class="ink-tip bench-not-admin-tip" role="tooltip" id="${id}">${NOT_ADMINISTERED_TIP}</span></span>`;
 }
 
 // One render rule for every card's scope note: shown and tracked only when there is one.

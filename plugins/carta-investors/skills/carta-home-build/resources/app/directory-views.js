@@ -104,7 +104,7 @@ function dirRowKey(event, row) {
 function dirAppTag(s, idSuffix) {
   if (s.tag !== APP_TAG) return "";
   const tipId = `dir-tip-${escHtml(dirSkillSlug(s.skill))}${idSuffix}`;
-  return ` <span class="dir-skill-tag" tabindex="0" aria-describedby="${tipId}">${APP_TAG_LABEL}<span class="dir-skill-tip" role="tooltip" id="${tipId}">${escHtml(APP_TAG_TIP)}</span></span>`;
+  return ` <span class="dir-skill-tag" tabindex="0" aria-describedby="${tipId}">${APP_TAG_LABEL}<span class="ink-tip dir-skill-tip" role="tooltip" id="${tipId}">${escHtml(APP_TAG_TIP)}</span></span>`;
 }
 
 // A whole row copies its prompt; the icon only draws the affordance.
