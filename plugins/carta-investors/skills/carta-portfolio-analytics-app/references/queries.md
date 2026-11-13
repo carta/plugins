@@ -70,7 +70,7 @@ SELECT legal_name, name, mnemonic, report_type, unit_type, currency,
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE instance_type = 'Actual'
   AND (float_value IS NOT NULL OR (string_value IS NOT NULL AND string_value <> ''))
-  AND as_of_date <= CURRENT_DATE          -- ignore forward-dated submissions
+  AND as_of_date::DATE <= CURRENT_DATE          -- ignore forward-dated submissions
   AND firm_id = '<firm_uuid>'             -- injected by --firm-uuid (see §0)
   -- OPTIONAL history window; add only when the user chose one (see SKILL Step 1b):
   -- AND period_end >= '<since>'
@@ -108,8 +108,10 @@ period_end`), so a September filing "as of 2026-06-30" would slip under any date
 2. **The latest *submission* is `MAX(as_of_date)`, never `is_latest`.** `is_latest`
    is deprecated and can be `true` on a stale row. It is not selected.
 3. **Drop forward-dated submissions.** A row can be stamped "as of" a date that has
-   not happened yet (a restatement artifact); `as_of_date <= CURRENT_DATE` removes
-   it so it cannot win the period.
+   not happened yet (a restatement artifact); `as_of_date::DATE <= CURRENT_DATE` removes
+   it so it cannot win the period. Keep the `::DATE` cast: `as_of_date` is a timestamp,
+   and a bare `as_of_date <= CURRENT_DATE` compares it to midnight, dropping every
+   submission saved today.
 4. **Page over a TOTAL order, and dedup in SQL.** `LIMIT/OFFSET` re-runs the query as an independent execution per page; the warehouse gives no stable physical order to rows that tie on the `ORDER BY`, so tied rows can silently overlap and gap across pages, dropping whole companies at the page seam. Order over a *total* key: because `QUALIFY` keeps exactly one row per `(legal_name, general_ledger_issuer_id, corporation_id, llc_entity_id, COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end)`, ordering by all seven of those columns fully determines row order, so OFFSET paging is repeatable. Ordering by fewer is not enough.
 **Row-scoped via `set_context` AND explicitly pinned with `firm_id = '<firm_uuid>'`**
 (emit with `--firm-uuid`; see §0 for why the context scope alone cannot be trusted).

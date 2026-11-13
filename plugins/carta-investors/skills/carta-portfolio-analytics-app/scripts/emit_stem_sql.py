@@ -114,7 +114,7 @@ _FINANCIALS_TEMPLATE = (
     "FROM FUND_ADMIN.COMPANY_FINANCIALS\n"
     "WHERE instance_type = 'Actual'\n"
     "  AND (float_value IS NOT NULL OR (string_value IS NOT NULL AND string_value <> ''))\n"
-    "  AND as_of_date <= CURRENT_DATE          -- ignore forward-dated submissions\n"
+    "  AND as_of_date::DATE <= CURRENT_DATE          -- ignore forward-dated submissions\n"
     "{firm_pred}"
     "{since_clause}"
     "{company_clause}"
