@@ -39,7 +39,8 @@
                     {
                         "type": "command",
                         "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-active-skill",
-                        "timeout": 8
+                        "timeout": 8,
+                        "onFailure": "continue"
                     }
                 ]
             },
@@ -49,7 +50,8 @@
                     {
                         "type": "command",
                         "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" inject-instrumentation",
-                        "timeout": 8
+                        "timeout": 8,
+                        "onFailure": "continue"
                     }
                 ]
             }

@@ -20,7 +20,10 @@ stdin and stdout. `main.go` looks up the handler by name in the registry. A
 handler reads stdin JSON and writes stdout JSON. Any error or panic returns
 the fail-open shape for that hook event instead.
 
-> **Windows:** `dispatch.sh` is a POSIX shell script, so hooks won't fire unless Bash or Git Bash is installed.
+> **Windows:** `dispatch.sh` is a POSIX shell script, so hooks don't run unless Git Bash is installed.
+> Without Git Bash, Claude Code 2.1.299+ blocks a call when its PreToolUse hook fails and leaves `onFailure` unset.
+> So each plugin's PreToolUse entries set `"onFailure": "continue"`: the call goes ahead, uninstrumented.
+> `validate-gating-hooks-declare-on-failure.py` requires published plugins to set `onFailure` on every such hook.
 
 ## Handlers
 

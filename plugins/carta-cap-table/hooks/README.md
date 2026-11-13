@@ -5,7 +5,7 @@
 Every hook dispatches to the shared Go hooks binary in `tools/hooks/` via
 `dispatch.sh`, except the carta-pe-bulk-issuance `PostToolUse` entry, which runs a Python script with `uv`.
 
-> **Windows:** `dispatch.sh` is a POSIX shell script, so hooks won't fire unless Bash or Git Bash is installed. The carta-pe-bulk-issuance entry also needs `uv` on the PATH.
+> **Windows:** See the Windows note in `tools/hooks/README.md`. The carta-pe-bulk-issuance entry also needs `uv` on the PATH.
 
 | Event | Matcher | Command | Purpose |
 |-------|---------|---------|---------|
