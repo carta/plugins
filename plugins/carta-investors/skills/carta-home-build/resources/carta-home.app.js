@@ -363,7 +363,7 @@ function _fmtQtr(dateStr) {
   return `Q${Math.ceil((dt.getMonth()+1)/3)}’${String(dt.getFullYear()).slice(2)}`;
 }
 
-async function fetchBenchmarkData() {
+async function fetchBenchmarkData(realFunds) {
   if (!(await mcpAvailable()) || !_benchmarkFirmId) return;
 
   try {
@@ -381,8 +381,10 @@ async function fetchBenchmarkData() {
       }
     });
     if (res.isError) throw new Error("DWH failed");
-    const rows = dwhRows(res, "FUND_UUID");
-    if (!rows.length) { settleDashboardCard("perf", await fetchBenchmarkFallback()); return; }
+    const scoped = perfScope(await realFunds, dwhRows(res, "FUND_UUID"));
+    const rows = scoped.rows;
+    if (!rows.length) { settleDashboardCard("perf", await fetchBenchmarkFallback(realFunds)); return; }
+    renderPerfScope(scoped.note);
 
     // Build sorted date list
     const dateSet = new Set(rows.map(r => r.PERFORMANCE_QUARTER_START_DATE));
@@ -449,7 +451,7 @@ async function fetchBenchmarkData() {
     // hiccup doesn't blank the card when the firm has real fund metrics. Without a fund to
     // show, the card keeps an error line: a failed query is never read as "no data".
     let hasData = false;
-    try { hasData = await fetchBenchmarkFallback(); } catch(_) {}
+    try { hasData = await fetchBenchmarkFallback(realFunds); } catch(_) {}
     if (hasData) { settleDashboardCard("perf", true); return; }
     renderBenchError(e?.code);
     failDashboardCard("perf");
@@ -478,10 +480,16 @@ function _benchShowChartNote(msg) {
 }
 
 // When the benchmarks table has no qualifying rows, preview the detail page's
-// source (AGGREGATE_FUND_METRICS) instead of blanking. Returns false when no fund
-// data exists anywhere, so the caller hides the card.
-async function fetchBenchmarkFallback() {
+// source (AGGREGATE_FUND_METRICS) instead of blanking. Returns false when no fund Carta
+// administers has data (no fund at all, or only funds it doesn't administer), so the caller
+// hides the card.
+async function fetchBenchmarkFallback(realFunds) {
   if (!(await mcpAvailable()) || !_benchmarkFirmId) return false;
+  const funds = await realFunds;
+  // The query skips the funds the lookup flags as not administered, so a large one can't take
+  // a top-3 slot. Only well-formed UUIDs from the lookup go into the SQL.
+  const skipped = (partialFundScope(funds)?.excluded || []).filter(u => UUID_RE.test(u));
+  const notIn = skipped.length ? `AND FUND_UUID NOT IN (${skipped.map(u => `'${u}'`).join(", ")})` : "";
   // IRR/TVPI/DPI are almost always null for these firms; TOTAL_VALUE is populated,
   // so the card previews that (with per-fund currency — never assume USD).
   const res = await _mcp("read_tool", {
@@ -489,7 +497,7 @@ async function fetchBenchmarkFallback() {
     arguments: {
       sql: `SELECT FUND_NAME, FUND_UUID, TOTAL_VALUE, FUND_REPORTING_CURRENCY, ENDING_TOTAL_NAV, MONTH_END_DATE
             FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
-            WHERE FIRM_ID = '${_benchmarkFirmId}'
+            WHERE FIRM_ID = '${_benchmarkFirmId}' ${notIn}
             QUALIFY ROW_NUMBER() OVER (PARTITION BY FUND_UUID ORDER BY MONTH_END_DATE DESC NULLS LAST) = 1
             ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST
             LIMIT 3`,
@@ -498,9 +506,11 @@ async function fetchBenchmarkFallback() {
     }
   });
   if (res.isError) throw new Error("DWH fallback failed");
+  const scoped = perfScope(funds, dwhRows(res, "FUND_UUID"));
   // A fund with no value previews as a blank row, so only funds with a value count.
-  const rows = dwhRows(res, "FUND_UUID").filter(r => parseFloat(r.TOTAL_VALUE || 0) !== 0);
-  if (!rows.length) return false;  // no fund with a value
+  const rows = scoped.rows.filter(r => parseFloat(r.TOTAL_VALUE || 0) !== 0);
+  if (!rows.length) return false;  // no fund Carta administers that has a value
+  renderPerfScope(scoped.note);
 
   rows.forEach((r, i) => { _fundColorMap[r.FUND_NAME] = `var(${_benchToken(i)})`; });
   // AGGREGATE_FUND_METRICS is a latest-month snapshot per fund, not a quarterly
@@ -551,6 +561,8 @@ function populateFallback(code = "no_connector") {
 function renderBenchError(code) {
   const benchMetrics = document.getElementById("benchmark-metrics");
   if (benchMetrics && (!benchMetrics.textContent.trim() || benchMetrics.querySelector(".card-note"))) {
+    // The failure note replaces the card's data, so the scope note goes with it.
+    renderPerfScope(null);
     const note = renderConnectionFailure("perf", code);
     if (note) benchMetrics.innerHTML = note;
   }
@@ -694,36 +706,60 @@ async function fetchRealFunds(firmId) {
   }
 }
 
-// Every FUND_UUID on the SOI card or in the lookup counts once toward the total. For a fund
-// the lookup returns, its IS_ADMINISTERED flag decides; only a card fund the lookup doesn't
-// return counts as administered by default. Null when Carta administers all of them, none of
-// them, or the lookup failed: no note at all. The note says "SPVs" only when the lookup
-// returns every counted entity and each is an SPV; any fund, or an entity the lookup
-// doesn't type, keeps "funds".
-function soiScopeNote(funds, cardFundUuids) {
+// Every scoped card prints the same note, counted from the FUND_ADMIN.FUNDS lookup alone: M is
+// the lookup's funds and N those it flags as administered. A card keeps a row unless the lookup
+// flags its fund as not administered, so a card fund the lookup misses still shows but isn't
+// counted; `excluded` lists the funds it flags as not administered. Null when Carta administers
+// all of them, none of them, or the lookup failed: the card is left as it is. The note says
+// "SPVs" when every fund in the lookup is an SPV.
+function partialFundScope(funds) {
   if (!funds) return null;
   const isAdministered = f => f.IS_ADMINISTERED === true || String(f.IS_ADMINISTERED).toLowerCase() === "true";
-  const flag = new Map(funds.filter(f => f.FUND_UUID).map(f => [f.FUND_UUID, isAdministered(f)]));
-  const all = new Set([...(cardFundUuids || []).filter(Boolean), ...flag.keys()]);
-  const covered = [...all].filter(u => flag.get(u) ?? true).length;
-  if (!covered || covered >= all.size) return null;
-  const types = new Map(funds.filter(f => f.FUND_UUID).map(f => [f.FUND_UUID, String(f.ENTITY_TYPE_NAME || "").toLowerCase()]));
-  const noun = [...all].every(u => types.get(u) === "spv") ? "SPVs" : "funds";
-  return `Carta administers ${covered} of your ${all.size} ${noun}`;
+  const listed = funds.filter(f => f.FUND_UUID);
+  const flag = new Map(listed.map(f => [f.FUND_UUID, isAdministered(f)]));
+  const administered = [...flag.values()].filter(Boolean).length;
+  if (!administered || administered === flag.size) return null;
+  const noun = isSpvOnly(listed) ? "SPVs" : "funds";
+  return {
+    keeps: uuid => flag.get(uuid) !== false,
+    excluded: [...flag].filter(([, adm]) => !adm).map(([uuid]) => uuid),
+    note: `Carta administers ${administered} of your ${flag.size} ${noun}`,
+  };
 }
 
-function renderSOIScope(note) {
-  const el = document.getElementById("soi-scope-note");
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function soiScopeNote(funds) {
+  return partialFundScope(funds)?.note ?? null;
+}
+
+// Fund performance for a partly administered firm drops the funds the lookup flags as not
+// administered (a fund the lookup misses still shows), so the chart never reads as the whole
+// firm; the note says so. The legend names each fund.
+function perfScope(funds, rows) {
+  const scope = partialFundScope(funds);
+  if (!scope) return { rows, note: null };
+  return { rows: rows.filter(r => scope.keeps(r.FUND_UUID)), note: scope.note };
+}
+
+// One render rule for every card's scope note: shown and tracked only when there is one.
+function renderScopeNote(elId, event, note) {
+  const el = document.getElementById(elId);
   if (!el) return;
   el.textContent = note || "";
   el.hidden = !note;
-  if (note) trackHome("render", "CartaHome.SOI.PartialScope");
+  if (note) trackHome("render", event);
 }
 
+function renderPerfScope(note) { renderScopeNote("perf-scope-note", "CartaHome.Perf.PartialScope", note); }
+
+function renderSOIScope(note) { renderScopeNote("soi-scope-note", "CartaHome.SOI.PartialScope", note); }
+
 function renderSOIError(code) {
-  renderSOIScope(null);
   const note = renderConnectionFailure("soi", code);
   if (!note) return;
+  // The failure note replaces the card's rows, so the scope note goes with them.
+  renderSOIScope(null);
   document.getElementById("soi-fund-label").textContent = "—";
   document.getElementById("soi-rows").innerHTML = note;
 }
@@ -881,16 +917,17 @@ async function fetchLiveData({ final = true } = {}) {
       await _mcp("set_context", { firm_id: firmId });
     } catch (_) {}
 
+    const realFunds = fetchRealFunds(firmId);  // shared by the SOI and Fund performance cards
     // A retry reaches here again with the same firm: cards still loading or loaded are left
     // alone, and every dashboard card that ended on its error line loads again.
     if (_benchmarkFirmId !== firmId) {
       _benchmarkFirmId = firmId;  // expose for benchmark fetch
-      fetchBenchmarkData();       // kick off in parallel — no await, independent card
+      fetchBenchmarkData(realFunds);  // kick off in parallel — no await, independent card
       fetchCapitalActivity();     // kick off in parallel — no await, pinned card
       segmentSetFirm(firmId);     // LP summary card, for Fund Admin firms
       if (firmName) wnCheckDataCollection(firmName); // no await: unlocks What's new's Portfolio Analytics
     } else {
-      if (_cardState.perf === "error") fetchBenchmarkData();
+      if (_cardState.perf === "error") fetchBenchmarkData(realFunds);
       if (_cardState.lp === "error") fetchLpSummary();
       if (_cardState.nda === "error") fetchNdaSummary();
     }
@@ -933,7 +970,7 @@ async function fetchLiveData({ final = true } = {}) {
         applyWording(FOF_WORDING);
         trackHome("render", "CartaHome.SOI.FundOfFunds");
       }
-      renderSOIScope(fof ? null : soiScopeNote(await fetchRealFunds(firmId), dwhFundRows.map(r => r.FUND_UUID)));
+      renderSOIScope(fof ? null : soiScopeNote(await realFunds));
     }
     settleDashboardCard("soi", dwhFundRows.length > 0);
     return "ok";

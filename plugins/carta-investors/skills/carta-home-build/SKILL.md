@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.44.22</carta-plugin>
+<carta-plugin>carta-investors:7.44.26</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -79,9 +79,10 @@ at the start of its `description`.
 - **Schedule of Investments (SOI)** — fund-level summary of the top 3 funds by value, with
   gain/loss coloring. Pulled from `FUND_ADMIN.AGGREGATE_INVESTMENTS`. When Carta
   administers only some of the firm's funds, a note under the card reads "Carta administers
-  N of your M funds". M counts each fund on the card or among the real funds in
-  `FUND_ADMIN.FUNDS` once; a fund in that lookup counts toward N only if its
-  `IS_ADMINISTERED_BY_CARTA` flag is set, and a card fund the lookup misses counts as administered. The card footer
+  N of your M funds". M is the real funds in `FUND_ADMIN.FUNDS` and N those with
+  `IS_ADMINISTERED_BY_CARTA` set, from that lookup alone, so every scoped card prints the same
+  note. A card fund the lookup misses still shows but isn't counted. The note says "SPVs"
+  instead of "funds" when every fund in the lookup is an SPV. The card footer
   launches the standalone SOI dashboard; home holds no holdings table of its own.
   Every firm's rows format with `fmtCurrency`: one decimal for K, M and B, cents under 1K. Amounts are in
   the fund's reporting currency (`FUND_ADMIN.FUNDS.REPORTING_CURRENCY`): a foreign-currency position reads
@@ -108,7 +109,10 @@ at the start of its `description`.
   the firm, the card falls back to `FUND_ADMIN.AGGREGATE_FUND_METRICS` and previews each
   fund's Total Value (per-fund currency) with a "no benchmark trend" note, instead of
   rendering blank. IRR/TVPI/DPI are near-always null for those firms, so Total Value is
-  what the card shows. The card footer launches the standalone Fund Performance dashboard.
+  what the card shows. For a firm Carta administers only in part (same `FUND_ADMIN.FUNDS`
+  lookup as the SOI note), both sources drop the funds the lookup flags as not administered
+  (a fund the lookup misses still shows) and the card says "Carta administers N of your M
+  funds". The card footer launches the standalone Fund Performance dashboard.
 - **Skill Directory** — categorized index of carta-investors skills with copyable prompts.
   Prompts auto-substitute the active firm name. Every category shows to every role.
   The skills come from the plugin's `.claude-plugin/skill-directory.json`, not the page:
