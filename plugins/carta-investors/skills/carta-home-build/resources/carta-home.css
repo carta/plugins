@@ -463,11 +463,14 @@
       position: fixed; z-index: 1000; pointer-events: none; overflow: hidden; opacity: 0; transition: opacity .12s;
       padding: 8px 12px; border-radius: 6px;
       background: var(--carta-surface-card-elevated, #2C3030); border: 1px solid rgba(255,255,255,0.08);
-      color: #FFFFFF; font: 11px/1.5 Inter, system-ui, sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+      color-scheme: dark; color: #FFFFFF; font: 11px/1.5 Inter, system-ui, sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
     }
-    .bench-tooltip-title { color: #9C9F9F; font-size: 10px; margin-bottom: 2px; }
-    .bench-tooltip-row { display: flex; align-items: flex-start; gap: 6px; }
-    .bench-tooltip-swatch { flex: none; width: 10px; height: 10px; margin-top: 3px; border-radius: 2px; }
+    .bench-tooltip-title { color: #9C9F9F; font-size: 11px; margin-bottom: 4px; }
+    .bench-tooltip-row { display: grid; grid-template-columns: 10px 1fr auto; align-items: start; gap: 6px; }
+    .bench-tooltip-row--median { padding-left: 16px; margin-bottom: 4px; color: #C9CCCC; }
+    .bench-tooltip-value { padding-left: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+    .bench-tooltip-swatch { width: 10px; height: 10px; margin-top: 3px; border-radius: 2px; background: var(--bench-swatch); }
+    .bench-tooltip-dash { width: 10px; margin-top: 7px; border-top: 2px dashed var(--bench-swatch); }
     @media (prefers-reduced-motion: reduce) { .bench-tooltip { transition: none; } }
     .bench-legend {
       display: grid;

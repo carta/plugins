@@ -248,6 +248,38 @@ function _hideBenchTooltip() {
   if (el) el.style.opacity = "0";
 }
 
+// Each fund with a value at the hovered quarter, highest first, followed by its own peer
+// median, so a reader never has to match a grey line to its fund by name.
+function _benchTooltipGroups(points) {
+  const valued = points.filter(p => p.parsed.y != null);
+  const medians = new Map(valued.filter(p => p.dataset._peerOf).map(p => [p.dataset._peerOf, p]));
+  return valued
+    .filter(p => !p.dataset._peerOf)
+    .sort((a, b) => b.parsed.y - a.parsed.y)
+    .map(fund => ({ fund, median: medians.get(fund.dataset.label) }));
+}
+
+const _fmtIrr = v => `${v < 0 ? "\u2212" : "+"}${Math.abs(v).toFixed(1)}%`;
+
+// The box is dark in both themes, so swatches take the dark-theme series colour; the
+// light-theme navy is under 1.5:1 against it.
+function _benchTooltipRow(name, value, token, isMedian) {
+  const row = document.createElement("div");
+  row.className = isMedian ? "bench-tooltip-row bench-tooltip-row--median" : "bench-tooltip-row";
+  const swatch = document.createElement("span");
+  swatch.className = isMedian ? "bench-tooltip-dash" : "bench-tooltip-swatch";
+  swatch.style.setProperty("--bench-swatch", `var(${token})`);
+  const label = document.createElement("span");
+  label.textContent = name;
+  const num = document.createElement("span");
+  num.className = "bench-tooltip-value";
+  num.textContent = _fmtIrr(value);
+  row.appendChild(swatch);
+  row.appendChild(label);
+  row.appendChild(num);
+  return row;
+}
+
 // Chart.js `external` tooltip: fixed to the viewport so no card clips it, placed above
 // the hovered point (below when there's no room) and kept on screen sideways.
 function renderBenchmarkTooltip({ chart, tooltip }) {
@@ -256,27 +288,20 @@ function renderBenchmarkTooltip({ chart, tooltip }) {
   el.replaceChildren();
   const title = document.createElement("div");
   title.className = "bench-tooltip-title";
-  title.textContent = (tooltip.title || []).join(" ");
+  title.textContent = `${(tooltip.title || []).join(" ")} · Net IRR`;
   el.appendChild(title);
-  tooltip.body.forEach((b, i) => {
-    const text = b.lines.join(" ").trim();
-    if (!text) return;
-    const row = document.createElement("div");
-    row.className = "bench-tooltip-row";
-    const swatch = document.createElement("span");
-    swatch.className = "bench-tooltip-swatch";
-    swatch.style.background = tooltip.labelColors[i]?.backgroundColor || "";
-    const label = document.createElement("span");
-    label.textContent = text;
-    row.appendChild(swatch);
-    row.appendChild(label);
-    el.appendChild(row);
+  _benchTooltipGroups(tooltip.dataPoints).forEach(({ fund, median }) => {
+    el.appendChild(_benchTooltipRow(fund.dataset.label, fund.parsed.y, fund.dataset._colorToken, false));
+    if (median) el.appendChild(_benchTooltipRow("Peer median", median.parsed.y, PEER_MEDIAN_CSS_VAR, true));
   });
   el.style.opacity = "1";
   const vw = document.documentElement.clientWidth || window.innerWidth;
   const vh = document.documentElement.clientHeight || window.innerHeight;
   el.style.maxWidth = `min(420px, ${vw - 2 * BENCH_TOOLTIP_GAP}px)`;
   el.style.maxHeight = `${vh - 2 * BENCH_TOOLTIP_GAP}px`;
+  // Measure at a neutral spot: a fixed box sized to fit shrinks to the room left of its last position.
+  el.style.left = "0px";
+  el.style.top = "0px";
   const box = chart.canvas.getBoundingClientRect();
   const w = el.offsetWidth, h = el.offsetHeight;
   const pointX = box.left + tooltip.caretX;
@@ -318,21 +343,10 @@ function drawBenchmarkChart(labels, datasets) {
       plugins: {
         legend: { display: false, labels: { color: textColor } },
         tooltip: {
-          // Drawn on the canvas, the tooltip is cut off at the chart's 100px height and
+          // Drawn on the canvas, the tooltip is cut off at the chart's height (`--dash-chart-height`) and
           // the card's overflow; a page-level box can grow past both.
           enabled: false, external: renderBenchmarkTooltip,
           mode: "index", intersect: false,
-          itemSort: (a, b) => b.parsed.y - a.parsed.y,
-          callbacks: {
-            label(item) {
-              if (item.parsed.y == null) return null;
-              const v = item.parsed.y;
-              return ` ${item.dataset.label}: ${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-            },
-            labelColor(item) {
-              return { borderColor: item.dataset.borderColor, backgroundColor: item.dataset.borderColor, borderWidth:2, borderRadius:2 };
-            },
-          },
         },
       },
       scales: {
@@ -415,6 +429,7 @@ async function fetchBenchmarkData() {
         if (!p50data.some(v => v != null)) return null;
         return {
           label: shortName(name) + ' peer median',
+          _peerOf: shortName(name),
           data: p50data,
           _colorToken: PEER_MEDIAN_CSS_VAR,
           borderColor: peerMedian,
