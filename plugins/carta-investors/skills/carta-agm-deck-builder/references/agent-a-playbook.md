@@ -7,7 +7,7 @@
 - **Do NOT call `search_tools` or `list_accounts`.** Every command you need is named below.
 - **Do NOT guess command names.**
 - **Call `welcome`, `list_contexts`, `set_context` exactly once each.** After `set_context` succeeds, do NOT re-call them.
-- **Total MCP tool calls: 4.** 3 connect calls + 1 `read_tool`. Do NOT fall back to the old multi-call pattern (`fa:list:saved_queries` → `fa:get:saved_query` → `dwh:execute:queries`) unless explicitly told to.
+- **Total MCP tool calls: 4 besides the checkpoints.** 3 connect calls + 1 `read_tool`. Do NOT fall back to the old multi-call pattern (`fa:list:saved_queries` → `fa:get:saved_query` → `dwh:execute:queries`) unless explicitly told to.
 
 ## Exact command names
 

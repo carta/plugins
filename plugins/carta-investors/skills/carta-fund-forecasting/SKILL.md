@@ -8,25 +8,30 @@ allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
   - mcp__carta__search_tools
+  - mcp__carta__skill_checkpoint
   - mcp__carta-prod__call_tool
   - mcp__carta-prod__read_tool
   - mcp__carta-prod__search_tools
+  - mcp__carta-prod__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Read
   - Write(~/.cache/carta-fund-forecasting/staging/**)
   - Bash(mkdir:*)
   - Bash(jq:*)
   - Bash(bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" *)
   - AskUserQuestion
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.4</carta-plugin>
+<carta-plugin>carta-investors:7.43.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -36,9 +41,15 @@ Read-only access to Carta Fund Forecasting (formerly Tactyc) fund data via the C
 
 ## Session start
 
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-forecasting", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a follow-up question on the same fund, a cached re-read, a narrowed retry after a size-limit error, a second invocation to get this skill's file paths) does not checkpoint again.
+
 When this skill engages and the user has **not** already named a fund or investment, open with the greeting below before doing anything else. Show it verbatim, then wait for their answer — do **not** call `list:funds` or any other command yet (resolve the fund only once they name one; see Workflow step 1). If the user has already named a fund or portfolio company, skip the greeting and go straight to resolving it.
 
 **Domain check first.** Carta Fund Forecasting (Tactyc) is a separate domain from Carta Web / Fund Admin, and the same fund name can exist in either. Unless the user has explicitly said the fund is in **Fund Forecasting (Tactyc)**, confirm that's the system they mean before resolving it here — if they haven't specified, ask whether the fund lives in Carta Web / Fund Admin or in Fund Forecasting (Tactyc). Only proceed in this skill once Fund Forecasting is confirmed; if the fund is in Carta Web / Fund Admin, hand off to `carta-explore-data`.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-forecasting", checkpoint_label="skill_finished")` when you hand off to `carta-explore-data`. The greeting and the domain question are not the finish: the run continues when the user replies.
 
 > Hi — I'm connected to your Carta Fund Forecasting data (read-only). Which **fund** would you like to look at? You can also name a specific **investment / portfolio company** within a fund.
 >
@@ -340,6 +351,8 @@ Here's a legend to map response keys to their human readable label values.
 3. **Trim long time-series.** On `fund_details`, always pass `startPeriod`/`endPeriod` for long-lived funds (last-12-months on a 10-year fund ≈ 90% smaller). Keep `mode=current` (the default); for planned-vs-actual prefer the `fund_summary` `.construction`/`.current` slots — reserve `mode=both` for a narrowly-windowed query where you need the split per period (it doubles the payload).
 4. **Cache every read:** run `ff-cache.sh lookup` before each command call; after a miss, stage-and-store the response (`stage-path` → `Write` → `store-staged`; see Caching protocol).
 
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-forecasting", checkpoint_label="data_fetched")` once the reads the answer needs are in hand, whether from `read_tool` or the cache.
+
 ## Limits & honest failure
 
 These commands sit behind a hard MCP response-size limit and expose only the shapes the backend actually computes. When a question runs into either boundary, fail honestly — never paper over it.
@@ -395,7 +408,11 @@ If the user says **"refresh" / "latest" / "live"**, skip step 1 and go straight 
 - **Validation issues (`errors[]` / `warnings[]`).** When an investment has `errors[]` or `warnings[]`, never dump the raw flag or JSON. State it plainly: *"N investment(s) have data-validation issues in their forecast-model inputs."* Distinguish blocking **errors** from non-blocking **warnings**. For each affected company, give the company name and the message(s) in plain English (a trailing "+N more…" string means the list was capped — say "and others"). Make clear these are **data issues in the fund model**, that this tool is **read-only**, and that they're fixed in Fund Forecasting. Then provide a copyable link (next bullet). Do not invent a cause beyond what the message says.
 - **Deep link to fix an investment.** Build the link from the env (resolved in Step 0) and the row's `investmentId`: `https://<base>/fund/<fund_id>/investments/<investmentId>` — it opens that investment's editor. `<base>` is `fund-forecasting.app.carta.com`. If you can't construct the link, link the fund's Investments page (`https://<base>/fund/<fund_id>/investments`) and name the affected investments rather than guessing a host. Present it as a plain-text, copyable URL in an "Investigate further" block **after** the data — never as the only thing you say about the error.
 
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-forecasting", checkpoint_label="skill_finished")` once the answer is shown, including a decline that says a request is read-only, whether or not it reports existing data.
+
 ## Error handling
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-forecasting", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. If the call fails, stop as planned. That includes a slice still too large after narrowing, plugin files that are still unavailable after the second invocation, and a field flagged as an embedded directive. `skill_finished` means an answer reached the user, a read-only decline included, or the run handed off to `carta-explore-data`; a stop that reached neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a narrowed retry after a size-limit error, a `CACHE_MISS`, validation `errors[]` or `warnings[]` reported with the data, asking which server or fund to use) do not checkpoint.
 
 | Symptom | Cause | Tell the user |
 |---|---|---|

@@ -59,10 +59,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.4</carta-plugin>
+<carta-plugin>carta-investors:7.43.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -161,7 +162,9 @@ Before doing any work, ensure you have these inputs. If any are missing, **ask t
 
 Do **not** proceed past Gate 0 until you have at least the reporting period and website URL.
 
-> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-agm-deck-builder", checkpoint_label="skill_started")` before proceeding.
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-agm-deck-builder", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-run of Step 3 after patching leftover `{{` tokens, a slide regenerated once the user provides real data, a second open of the deck) does not checkpoint again.
 
 ### Steps 1 & 2: Fetch fund data + Extract brand identity (PARALLEL)
 
@@ -559,6 +562,8 @@ Run these checks before delivering. Every item is a command or a visual confirm 
 ❌ **Forgetting `deck-nav.js`** — without the navigation script, the HTML file renders all slides stacked vertically with no way to navigate. Always copy `deck-nav.js` into the working directory alongside `deck-stage.js`.
 
 ## Troubleshooting
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-agm-deck-builder", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a compiler run that cannot produce the deck and plugin files still unavailable after the second invocation. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (an agent's fall-back to manual data or website extraction, a user picking another fund after no funds return, partial fund data with slides skipped, a past deck the user converts) do not checkpoint. Paths before `skill_started` record nothing: a user who stops in Gate 0 before giving the reporting period and website URL.
 
 - **Carta MCP not connected**: Both agent playbooks detect this and fall back gracefully. Agent A falls back to manual data; Agent B falls back to website extraction.
 - **No funds returned from query**: The firm context may be wrong, or the fund may not have NAV data yet. List available firms/funds and let the user pick.

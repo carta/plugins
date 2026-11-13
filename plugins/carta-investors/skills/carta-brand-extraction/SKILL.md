@@ -20,25 +20,30 @@ allowed-tools:
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__call_tool
   - mcp__claude_ai_carta__read_tool
+  - mcp__claude_ai_carta__skill_checkpoint
   - mcp__carta__welcome
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__call_tool
   - mcp__carta__read_tool
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.4</carta-plugin>
+<carta-plugin>carta-investors:7.43.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -84,6 +89,10 @@ The analysis script requires network access to fetch the website. Dependencies a
 - For PPTX output: `python-pptx`
 
 ## Workflow
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-extraction from the website after reusing a saved board, a board recomposed with the user's own assets in Phase 6, a second output format) does not checkpoint again.
 
 ### Phase 0: Check for saved brand board in Carta (MANDATORY — runs before any website extraction)
 
@@ -247,6 +256,8 @@ Read the appropriate snippet template:
 2. Construct the `data` dict
 3. Call `generate_brand_board_pptx(data, "carta-brand-extraction/brand_board.pptx", firm_name="...")`
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_finished")` once the brand board, in whichever format, has reached the user, or, when another skill invoked this one for the extracted brand, once that brand is handed back to it.
+
 ### Phase 5: Save brand board to Carta (MANDATORY if newly extracted)
 
 If brand data was freshly extracted in this session (i.e., `brand_board_source = "to_be_created"` — Phase 0 returned a 404), save it to Carta **automatically** after the user has seen the brand board output and not objected to the colors.
@@ -310,6 +321,8 @@ Before delivering the brand board:
 - [ ] Output format matches what the user requested (or defaults to HTML)
 
 ## Troubleshooting
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a run where neither the website nor a deck nor the user's own input gave enough to compose a board, a board generator that fails, and plugin files still unavailable after the second invocation. `skill_finished` means what the Phase 4 checkpoint says (the board reached the user, or the brand was handed back to the skill that invoked this one); a stop before that is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (a skipped Phase 0 when Carta is not connected, an error from the saved-board lookup treated as not found, a `WebFetch` fall-back, a screenshot or manual colours and fonts from the user, another deck after `analyze_deck.py` exits 1) do not checkpoint. Paths before `skill_started` record nothing: a request this skill should not fire on (see "When NOT to fire").
 
 - **Script returns empty colors**: The site may use CSS-in-JS or a framework that inlines styles at runtime. Try `WebFetch` to get the rendered HTML, or ask the user for a screenshot.
 - **No fonts detected**: The site may use system fonts only, or load fonts via JavaScript. Check for `@font-face` in the raw CSS or Google Fonts links.

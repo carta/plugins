@@ -23,6 +23,7 @@ allowed-tools:
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__view_remote
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
@@ -30,6 +31,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__view_remote
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
@@ -37,12 +39,14 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - AskUserQuestion
   - Read
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.4</carta-plugin>
+<carta-plugin>carta-investors:7.43.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -53,6 +57,10 @@ answer; Step 1 resolves the firm and Step 2 gates on its settings; all three app
 action. Step 3 routes to the action's own reference, which carries the procedure.
 
 ## Step 0 — Ask what reading cannot answer
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-data-collection", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (the read that checks what the user sent from a form, a second action in the same conversation, the form opened again) does not checkpoint again.
 
 Before any read, name the unknowns Carta cannot supply. If reading Carta could produce the
 answer — "last quarter", "our roster", "what we usually ask them for" — read; never ask for what
@@ -253,6 +261,8 @@ here. If the user is mid-answer on the firm, read it while you wait.
 Each reference opens by saying what it covers and what it is easily confused with, so the routing
 table above is enough to choose one.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-data-collection", checkpoint_label="skill_finished")` once the action's result has reached the user: the form is open, a send, schedule or change has been made and summarized, or the answer to a read is shown. A route this skill cannot do, such as extraction, finishes when its one-sentence answer and offer are shown.
+
 ## Applies to every action
 
 **A send emails people outside Carta and cannot be recalled.** Ask the confirmation question, end
@@ -320,3 +330,7 @@ reference lists rather than assuming an absent field takes a default.
 
 **Never write a Carta URL yourself.** Use the `_links` the firm settings response carries, per
 `references/deep-link.md`.
+
+## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-data-collection", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a user who picks `Cancel` after no firm of that name has data collection set up, a request that turns out not to be about data collection, a send or schedule the user declines at the confirmation, a command that fails with nothing written, and plugin files still unavailable after the second invocation. `skill_finished` means one of the results the Step 3 checkpoint lists reached the user; a stop before that, including a cancel, a declined send or a request that is not about data collection, is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (`Try a different firm`, a firm picked from four or more candidates, a candidate dropped for a 404 or permission error, the text questions when the form will not render, a corrected input the user gives) do not checkpoint.
