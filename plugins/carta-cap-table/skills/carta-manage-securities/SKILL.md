@@ -45,7 +45,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.11</carta-plugin>
 
 # Manage securities
 
@@ -75,6 +75,11 @@ cancel their securities one by one here.
 
 The inputs of the transfer, buyback, exercise and exercise request previews are in
 [references/transfer-buyback-exercise.md](references/transfer-buyback-exercise.md).
+
+Run only the actions in this table. A document change, such as a new stock purchase agreement, is
+not one of them: make no bootstrap, no preview and no upload. The bootstrap can offer other
+actions, such as a change to the post-termination exercise periods: make no preview for them, and
+never find their tools with `search_tools`. Say that this change is made in Carta, and stop.
 
 `security_type` is one of `certificate`, `option_grant`, `convertible_note`, `rsu`, `rsa`, `sar`,
 `cbu`, `piu` or `warrant`. The action narrows it: a transfer or buyback of shares is
@@ -130,9 +135,9 @@ says. You pick no other value.
    result. Never build a Carta URL.
 6. **No shell, no local files.** Never call Bash, and write no files. The one exception is the
    agreement upload in
-   [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements),
-   after the user gave the file. When the host saves a large result to a file, read that file
-   with `Read`. Take today's date from the bootstrap's `today`.
+   [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements)
+   for a transfer or an exercise, after the user gave the file. When the host saves a large
+   result to a file, read that file with `Read`. Take today's date from the bootstrap's `today`.
 7. **Never hand this skill to a background agent.** It needs the user at each approval.
 8. **Plain words.** No ids in the text. Show dates as `MM/DD/YYYY`. Give a one-line reason for
    each value you chose, and the full text of a legend that changes.
@@ -168,7 +173,8 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    securities held now. For an
    edit, and when the user asks to see the security before a change ("show me first", "something
    looks wrong"), always send `look_first: true` on the first type's bootstrap, so the Change page
-   opens before the first preview. With no field named, ask which field in one `AskUserQuestion`
+   opens before the first preview. With no field named, bootstrap each type first, then ask which
+   field in one `AskUserQuestion`, with one question for each type
    ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)). Which
    preview takes this bootstrap's `thread_id` is in step 4.
 2. **Read the bootstrap.**
@@ -277,7 +283,9 @@ partial cancels, reverse cancels, undone terminations, transfers, buybacks and r
 take one security each, and an approval or a rejection one exercise request. Different
 reasons are separate changes. Run each change as its own pass through steps 1 to 8, and say the
 split first, with the type of each security: *"These are two changes, an edit of certificate CS-1
-and a cancel of option grant ES-12. I'll apply them one at a time, starting with CS-1."* Each pass
+and a cancel of option grant ES-12. I'll apply them one at a time, starting with CS-1."* Put this
+sentence at the start of the first `AskUserQuestion` question, or of your message when there is no
+question: text before a tool call is hidden. Each pass
 has its own bootstrap and its own thread, as [§ Flow](#flow) step 4 says, never an earlier
 pass's. Each exercise request is its own pass too, from the same list.
 

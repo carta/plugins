@@ -16,7 +16,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.11</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -82,7 +82,7 @@ Apply any **LLC mode** substitutions to the user's query before searching (see b
 
 - **0 matches** → Scan the **Field** column across all reports for the 2–3 closest-spelling field names. Use `AskUserQuestion`: _"I didn't find '[query]' exactly — did you mean one of these?"_ listing the candidates. If the user picks one, re-search with that name and re-enter Step 2. If none fit, redirect to [support.carta.com](https://support.carta.com/kb/en/) and stop. Do not fabricate a definition.
 - **1 match** → Use that row directly; go to Step 3.
-- **>1 matches** → Before disambiguating, scan the **current prompt and prior conversation** for any report (and tab) context the user has already established (e.g., "I'm looking at the securities ledger", "on the cap table report", "I have the stakeholder ownership details open"). If the report (and tab, if given) context leaves **exactly one** match, **select that row silently** — do not ask the user to disambiguate. Then in Step 3, add a cross-report note: _"This field also appears on the [Other Report] report."_ — one sentence is enough. If no report context exists, none of the matches fit the established report, or two or more matches stay, use `AskUserQuestion` to disambiguate. Do not answer with the closest match instead. Present each candidate by **Field** name + its **Tabs** column so the user can tell them apart. **Two rows may share the same Field name but appear under different reports or tabs** — always include the report section heading and tabs in the option label. Once the user picks, use that specific row; go to Step 3.
+- **>1 matches** → Before disambiguating, scan the **current prompt and prior conversation** for any report (and tab) context the user has already established (e.g., "I'm looking at the securities ledger", "on the cap table report", "I have the stakeholder ownership details open"). If the report (and tab, if given) context leaves **exactly one** match, **select that row silently** — do not ask the user to disambiguate. Then in Step 3, add a cross-report note: _"This field also appears on the [Other Report] report."_ — one sentence is enough. If no report context exists, none of the matches fit the established report, or two or more matches stay, use `AskUserQuestion` to disambiguate. This includes one field on two or more tabs of the named report when the user did not name the tab. Do not answer with the closest match or with a list of all matches instead. Present each candidate by **Field** name + its **Tabs** column so the user can tell them apart. **Two rows may share the same Field name but appear under different reports or tabs** — always include the report section heading and tabs in the option label. Once the user picks, use that specific row; go to Step 3.
 
 ### Step 3 — Render the answer
 

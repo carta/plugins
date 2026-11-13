@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.11</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -124,7 +124,7 @@ Then present the results as in Presentation.
 
 Drop the Type and Source columns when every row shares the same values (a US-only company gets back its familiar 409A table). If multiple share classes exist, group by share class name.
 
-Do not render a bar chart: FMV values in mature companies cluster near the maximum, so every bar looks the same. After the table, add a one-line trend summary:
+Do not make a chart, also when the user asks for one: no text bars, no script and no file. FMV values in mature companies cluster near the maximum, so every bar looks the same. When the user asks for a chart, show the table and say in one sentence that this skill shows FMV history as a table. After the table, add a one-line trend summary:
 > FMV has grown **Nx since YYYY**, with [acceleration/steady growth] since [year].
 
 **Only compare like with like.** A growth multiple across two currencies, or one that mixes an AMV with a UMV, is meaningless. Compute the trend within a single currency *and* a single `valuation_type`; if the series spans more than one, give a line for each or omit the trend.

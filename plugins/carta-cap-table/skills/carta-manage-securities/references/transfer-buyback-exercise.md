@@ -69,7 +69,7 @@ Bootstrap with `security_type` `certificate`, `rsa` or `piu`. The action is
 - `operation_type`: a buyback because the holder left the company is `RELATIONSHIP_CHANGE`.
   Unvested shares from an early exercise, bought back when the holder leaves, are
   `EARLY_EXERCISE_TERMINATION`. A tender offer is `TENDER_OFFER`. Any other buyback is `BUYBACK`.
-  A forfeiture is not a buyback: ask the user which one they mean.
+  A forfeiture can be a buyback or a cancel: ask which one the user means, and offer both.
 - A certificate, RSA or PIU from an equity plan also takes `return_shares`: ask whether the
   shares go back to the plan pool. When you do not know if it is from a plan, ask.
 - `reduce_from`: `unvested` buys back the unvested shares first (a holder who left), `vested`
@@ -124,7 +124,9 @@ A key is needed for a warrant or note transfer, for a recorded exercise, and for
 PIU transfer when a failed check asks for it. When a key is needed, preview only after the
 upload gives it. A buyback goes on with no agreement.
 
-1. Ask for the signed agreement as a file. When a key is needed and this chat has no shell, or
+1. Bootstrap the security first ([SKILL.md § Flow](../SKILL.md#flow) step 1): a blocker or an
+   action that is not available comes before the file. Then ask for the signed agreement as a
+   file. When a key is needed and this chat has no shell, or
    the user has no file, apply nothing. For shares, an RSA or a PIU, give the `transfer_link`
    page; for an exercise, the `exercise_link` page (see the rules above). For a warrant or a note,
    say to transfer it in the Carta web app. Then stop.

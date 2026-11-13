@@ -69,7 +69,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.11</carta-plugin>
 
 # Issue Securities
 
@@ -91,6 +91,9 @@ corporation has no template for. Picking one it does have is in scope, and a gra
 schedule is the normal case, not a deflection.
 
 > *"This skill issues certificates, option grants and profits interest units today. For \<thing\>, use the Drafts UI in the Carta app."*
+
+Then stop. You can offer to issue a type this skill supports. Do not list the request's terms
+or the terms still to enter: the Drafts UI asks for them.
 
 ## Do not diagnose the Carta connection
 

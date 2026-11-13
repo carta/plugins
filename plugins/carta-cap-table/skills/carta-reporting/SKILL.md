@@ -18,8 +18,10 @@ when_to_use: >-
   cap table: "show me the full cap table", "pull the current fully diluted
   cap table", "export the cap table to Excel", "list every shareholder with
   5% or more", "show me convertible notes", "make an Excel file of all our
-  SAFEs", "all grants with vesting and terminations", "what's the liquidation
-  seniority stack", "build me a custom report", or "what reports can I run".
+  SAFEs", "all grants with vesting and terminations", "group fully diluted
+  ownership into founders, investors and employees, with vested and unvested",
+  "what's the liquidation seniority stack", "build me a custom report", or "what
+  reports can I run".
 model: sonnet
 allowed-tools:
   - ToolSearch
@@ -59,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.11</carta-plugin>
 
 # Custom Reports
 
