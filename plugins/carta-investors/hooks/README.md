@@ -13,7 +13,7 @@ source in `hooks/src/`. `hooks/bin/SOURCE.md` explains how to check the
 binaries against `hooks/bin/SHA256SUMS` (`sh hooks/src/verify-checksums.sh`)
 and how to rebuild them from source and compare (`GOTOOLCHAIN=go$(cat hooks/src/.go-version) sh hooks/src/build.sh --check`).
 
- **Windows:** `dispatch.sh` is a POSIX shell script, so hooks won't fire unless Bash or Git Bash is installed.
+ **Windows:** See the Windows note in `tools/hooks/README.md`.
 
 | Event | Matcher | Command | Purpose |
 |-------|---------|---------|---------|
