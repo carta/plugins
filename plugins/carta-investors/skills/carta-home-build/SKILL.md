@@ -21,8 +21,11 @@ allowed-tools:
   # Carta MCP — the connector check's observed call, the entitlement read, and the firm
   # resolution passed down to the dashboard skills.
   - mcp__carta__welcome
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - mcp__carta__get_current_user
   - mcp__claude_ai_Carta__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
@@ -54,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.2</carta-plugin>
+<carta-plugin>carta-investors:7.43.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -385,6 +388,10 @@ limit. That needs `track_ui_event` in the publish call's `capabilities.mcp` gran
 
 ## Deploy steps
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-home-build", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the Carta MCP server whose `skill_checkpoint` tool this session has. If there is none, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (the second invocation the plugin-files note asks for, Step 6's second build and publish, a follow-up such as "Show me how", an undo) does not checkpoint again.
+
 ### Step 0: Checks before building
 
 Run both checks before building, and stay quiet about them when they pass:
@@ -495,6 +502,8 @@ their attention away from it before they've opened it. Don't suggest a newer ver
 exists; the welcome card tells users when a rebuild is worth it, and "Rebuild Carta Home"
 still works if that's what they meant. If they then ask how to pin it, give "Keeping
 Carta Home handy" below.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-home-build", checkpoint_label="skill_finished")` once the link has reached the user.
 
 If Step 2 found no Home for this firm, say so and build it (Step 3 onward).
 
@@ -822,6 +831,8 @@ and `description` exactly as below:
 - label "Not now" · description "Just say 'Open Carta Home' anytime" → reply with that
   line.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-home-build", checkpoint_label="skill_finished")` once the URL has reached the user, in the same message as this question and before `AskUserQuestion` waits for the answer.
+
 ## Keeping Carta Home handy
 
 _Last verified: 2026-09-28._ Nothing can pin an artifact for the user, so show them where.
@@ -869,6 +880,8 @@ Keep the pin steps here; Step 2b's one-line tip must say the same thing. When th
 change, update the sketch and the text together and bump the date.
 
 ## If something fails
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-home-build", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes Step 0's stops (claude.ai chat, a connector check that errors), a firm that matches nothing in Step 1, a build or publish that fails, and plugin files still unavailable after the second invocation. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the one-time `find` for the build script, a redeploy that needs `force: true`, a dashboard Step 5 skips) do not checkpoint, and neither do the issues below that happen inside the published page after the run.
 
 - **DWH query timeout** — this happens inside the deployed artifact, not in this build
   session. Ask the user to reopen the artifact and retry; if it still times out, the firm

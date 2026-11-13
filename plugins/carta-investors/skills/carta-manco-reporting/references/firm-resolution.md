@@ -8,6 +8,12 @@ cache probe, and the rest of the greeting, with no question in between. Leading 
 reader has an answer to "what is this going to do" on screen while the checks behind it run,
 rather than a silent pause before anything appears.
 
+`skill_checkpoint` (SKILL.md's Checkpoint lines) is exempt from every "no MCP call / do not
+touch the MCP / nothing else after it" rule in this file. Record it right after the reply,
+before ending the turn. A failed checkpoint call never changes the route. Finding the server
+for it is the same tool-list scan Gate 1 uses — never a `welcome` call — and a session with no
+Carta MCP (a sandboxed surface often has none) simply skips the checkpoint.
+
 **Steps 1, 1.5, and 2 are the BUILD path and live in [firm-lookup.md](firm-lookup.md).**
 Read that file only when Step 0.2 classifies a **MISS**, when `<FORCE_REFRESH>` was set, or
 when Gate 1's "Hosted, firm named" branch resolves a firm outside the BUILD path proper (its
@@ -107,8 +113,8 @@ ask a follow-up ("Are you sure?", "Try another installer?"), whatever you
 read afterward.
 
 **"Not now" (or any answer other than "Install uv")** → reply with this one
-line and stop — no further tool calls, no `Read` of errors.md, no second
-question. Don't install, don't retry, don't suggest another installer:
+line, record `skill_failed` (SKILL.md), and stop — no other tool call, no `Read` of
+errors.md, no second question. Don't install, don't retry, don't suggest another installer:
 
 > No problem. When you're ready, install uv from https://docs.astral.sh/uv/getting-started/installation/ and ask for the dashboard again.
 
@@ -210,7 +216,8 @@ print it — it stays exactly as silent as the retry it stands in for.
 Only if that third attempt fails the same way as the first two — or the
 `Base directory for this skill:` line was never printed this invocation —
 does errors.md's escalation apply: one plain-English line about what's
-actually wrong, and nothing else in that message or after it — never the
+actually wrong, record `skill_failed` (SKILL.md), and nothing else in that message or
+after it — never the
 path or cache directory it failed on, never a menu of technical workarounds
 to choose from, and never `AskUserQuestion` for how to proceed. The fix
 (reinstall, update, re-run) is the user's to trigger, not yours to attempt
@@ -223,14 +230,15 @@ sessions in the cloud, which is the default) — the server runs inside a remote
 container the user can't reach, so the dashboard URL goes nowhere. Don't proceed
 there.
 
-**Right after 0.0's opening line — before any cache scan, MCP call, or the
-rest of the greeting — run the uv prerequisite above, then this, and route on
+**Right after 0.0's opening line — before any cache scan, any MCP call other than
+SKILL.md's `skill_started` checkpoint, or the rest of the greeting — run the uv prerequisite above, then this, and route on
 it:**
 ```bash
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" detect-surface
 ```
 - `"surface": "sandboxed"` → **stop immediately.** Do **not** scan caches, resolve a
-  firm, touch the MCP, or launch `serve.py`.
+  firm, touch the MCP other than for the checkpoints, or launch `serve.py`. A sandboxed
+  session with no Carta MCP skips the checkpoints.
 
   Check whether the invocation itself asks for the hosted app — it says "hosted" or
   "online", or pastes the bare hosted-app URL (the same check Gate 1 uses below). Give the
@@ -238,7 +246,7 @@ it:**
 
   - **Hosted asked for** → **Open the hosted app** with **https://manco-reporting.carta.cloud**
     (see "Open the hosted app" below), then reply with this message (substance verbatim), then
-    end the turn:
+    record `skill_finished` (SKILL.md) and end the turn:
     > **Carta hosts this dashboard** at **https://manco-reporting.carta.cloud** — sign in with
     > Carta and pick your firm, with nothing to build.
     >
@@ -254,7 +262,8 @@ it:**
     **Switch firm** if it opens a different one." (No deep link here: a sandboxed session does
     not reliably have the MCP.)
   - **Hosted not asked for** (the default) → Do **not** open the hosted app, and do **not**
-    mention its URL. Reply with this message (substance verbatim), then end the turn:
+    mention its URL. Reply with this message (substance verbatim), then record
+    `skill_finished` (SKILL.md) and end the turn:
     > This session is running in the cloud, where a local dashboard can't reach your browser.
     > To build the ManCo dashboard and import your own budget workbook from Excel, you need
     > Claude Code running on your computer — open it there and ask, "open the ManCo dashboard
@@ -298,9 +307,10 @@ at the bare link (see "Open the hosted app" above); the user signs in there and 
 app's own firm chooser (or its `?firm=` query param — see [DEPLOY.md](../DEPLOY.md)'s "Which
 firm opens") picks the firm, so the hosted path needs no local cache.
 
-- **Hosted, no firm named** → **Open the hosted app** with the bare link, then reply with it
-  and end the turn: "Open **https://manco-reporting.carta.cloud** in your browser, sign in
-  with Carta, and pick your firm." Do **not** scan caches, touch the Carta MCP, or launch
+- **Hosted, no firm named** → **Open the hosted app** with the bare link, then reply with it,
+  record `skill_finished` (SKILL.md), and end the turn: "Open
+  **https://manco-reporting.carta.cloud** in your browser, sign in with Carta, and pick your
+  firm." Do **not** scan caches, touch the Carta MCP other than for the checkpoints, or launch
   `serve.py`.
 - **Hosted, firm named** (name, or a pasted Carta firm URL/UUID) → resolve the firm's
   canonical name and uuid the same way Step 1 does ([firm-lookup.md](firm-lookup.md)),
@@ -311,8 +321,8 @@ firm opens") picks the firm, so the hosted path needs no local cache.
   **without `AskUserQuestion`** on an ambiguous or fuzzy result, and **never `set_context`**,
   which would change the user's active firm for no reason here. If the match leaves no single
   firm, or no Carta MCP is connected at all, fall back: **Open the hosted app** with the bare
-  link, then reply with it plus Gate 0's **Switch firm** line, naming the firm as typed, and
-  end the turn. Otherwise build the link:
+  link, then reply with it plus Gate 0's **Switch firm** line, naming the firm as typed,
+  record `skill_finished` (SKILL.md), and end the turn. Otherwise build the link:
   ```bash
   <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" hosted-url --firm-name "<canonical name>" --firm-uuid "<firm_uuid>"
   ```
@@ -331,7 +341,7 @@ firm opens") picks the firm, so the hosted path needs no local cache.
   name\>**'s dashboard, so no workbook budget has gone to the hosted app from here; unless one
   was added another way, it shows Carta's own budget." A match exists → say nothing extra.
   **Open the hosted app** with the link just built, then reply with it (plus the budget-data
-  note when it applies) and end the turn: "Open **\<link\>** and sign in with Carta to open
+  note when it applies), record `skill_finished` (SKILL.md), and end the turn: "Open **\<link\>** and sign in with Carta to open
   **\<canonical name\>**." Do **not** launch `serve.py`, run Step 1's eligibility gate, or
   fetch any Fund Admin data — this hand-off only resolves identity for a link.
 - **Local** → continue to **Step 0.1** silently.
@@ -340,9 +350,9 @@ firm opens") picks the firm, so the hosted path needs no local cache.
 
 Mirrors `carta-investors:carta-fund-modeling`'s "cache-first, MCP-lazy" launch
 order: resolve identity and check the local cache **before** touching the
-Carta MCP at all. A fresh, unambiguous cache hit reopens with no MCP call
-before Step 3's actuals pull, and with none at all when Carta can't be reached
-(Step 3's cached-actuals fallback) — Step 1, Step 1.5, and Step 2 below are the
+Carta MCP for anything but the checkpoints. A fresh, unambiguous cache hit reopens with no
+MCP call other than its checkpoints before Step 3's actuals pull, and with no other at all
+when Carta can't be reached (Step 3's cached-actuals fallback) — Step 1, Step 1.5, and Step 2 below are the
 BUILD path, reached only on a cache miss, an ambiguous local match, or an
 explicit refresh.
 
@@ -386,7 +396,8 @@ the BUILD path below regardless of what the cache probe finds.
 
 ### 0.2 — Local cache probe (before any MCP call)
 
-Everything here is a local dir scan + Read — **no MCP call yet.** Skip this
+Everything here is a local dir scan + Read — **no MCP call yet** other than the
+`skill_started` checkpoint. Skip this
 whole probe when `<FORCE_REFRESH>` is set (0.1) — go straight to the BUILD
 continuation of the greeting (0.3) and Step 1. Otherwise, run:
 
@@ -440,7 +451,8 @@ Classify the result:
   using `<FIRM_NAME_INPUT>` exactly as today.
 
 **No firm was typed, and at least one cached dashboard exists** — offer a
-**local-only** resume picker via `AskUserQuestion` (still no MCP): list up
+**local-only** resume picker via `AskUserQuestion` (still no MCP call other than the
+checkpoints): list up
 to 4 cached `(firm_name, manco_name)` pairs, each labeled with the names and
 (when available) `raw_age_days`, plus "Something else" for a new name.
 Picking a row is a WARM HIT on that row (skip Step 1/1.5/2, same as above);

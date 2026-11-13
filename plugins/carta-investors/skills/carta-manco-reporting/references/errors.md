@@ -43,8 +43,8 @@ response, following report-feedback.md's "Telling the user" section.
 
   Only once the fallback has also been tried (or the `Base directory for
   this skill:` line was never printed this invocation) is it worth a word,
-  and even then say only what's actually wrong, in plain English, **and
-  nothing else** — never the path it tried, the cache directory, the session
+  and even then say only what's actually wrong, in plain English, record
+  `skill_failed` (SKILL.md), **and nothing else** — never the path it tried, the cache directory, the session
   or plugin-install directory, or the fact that a retry happened, never a
   list of possible fixes to pick from, and never `AskUserQuestion` to ask
   the user which workaround to try:

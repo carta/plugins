@@ -25,6 +25,7 @@ allowed-tools:
   - mcp__carta__list_contexts
   - mcp__carta__get_current_user
   - mcp__carta__search_tools
+  - mcp__carta__skill_checkpoint
   - mcp__carta_production__welcome
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -32,6 +33,7 @@ allowed-tools:
   - mcp__carta_production__list_contexts
   - mcp__carta_production__get_current_user
   - mcp__carta_production__search_tools
+  - mcp__carta_production__skill_checkpoint
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
@@ -39,6 +41,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
@@ -46,6 +49,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Read
   - Write(~/.cache/carta-portfolio-analytics-app/**)
   - AskUserQuestion
@@ -58,7 +62,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.2</carta-plugin>
+<carta-plugin>carta-investors:7.43.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -74,9 +78,13 @@ skill fetches the data; the server only serves JSON + the built app.
 
 ## Gate 0 — Hosted or local (ask first)
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-analytics-app", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the Carta MCP server whose `skill_checkpoint` tool this session has. If there is none, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-fetch after a scope failure, a chat "Refresh KPI data" after launch, a relaunch) does not checkpoint again.
+
 Carta hosts this app at **https://analytics.carta.cloud**. The user signs in with Carta there and the app
-shows only the firms their Carta login can open, so the hosted path needs no firm name, no Carta MCP and no
-local cache. Before anything else — before the firm prompt, any cache scan or any MCP call — ask with
+shows only the firms their Carta login can open, so the hosted path needs no firm name, no Carta MCP beyond
+the checkpoints and no local cache. Before anything else — before the firm prompt, any cache scan or any MCP call other than the `skill_started` checkpoint — ask with
 `AskUserQuestion`:
 
 > **Header:** "Where to run"
@@ -92,11 +100,13 @@ Skip the question when the invocation already chose: "hosted", "online" or analy
 "refresh", or reopening a local dashboard → local. A pasted Carta firm URL chooses
 neither, so ask as usual.
 
-- **Hosted** → reply with the link, then end the turn: "Open **https://analytics.carta.cloud** in your
-  browser, sign in with Carta, and pick your firm." Do **not** ask for a firm, scan caches, touch the MCP or
-  launch `serve.py`.
+- **Hosted** → reply with the link, record the `skill_finished` checkpoint below, then end the turn: "Open **https://analytics.carta.cloud** in your
+  browser, sign in with Carta, and pick your firm." Do **not** ask for a firm, scan caches, touch the MCP beyond the
+  checkpoints or launch `serve.py`.
   A firm with more than 60,000 KPI rows loads only its latest years there (7, 5, 4, then at least 3),
   and the sidebar says "History from <date>". For the full history of such a firm, offer the local build.
+
+  > **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-analytics-app", checkpoint_label="skill_finished")` once the hosted link has been given.
 - **Local** → continue with the firm check below and Step 0.
 
 ## No demo data — an Investment Firm Account is required
@@ -118,8 +128,8 @@ Only proceed once a firm is chosen. This prompt is mandatory on every local buil
 that doesn't unambiguously name a firm — it follows the hosted-or-local choice.
 
 ## Launch order — cache-first, MCP-lazy
-Launching a warm cache needs **no MCP**. Resolve the firm name and check the local
-cache before touching any MCP; a fresh cache launches with no MCP call. Only a
+Launching a warm cache needs **no MCP call except its checkpoints**. Resolve the firm name and check the local
+cache before touching any MCP beyond the checkpoints; a fresh cache launches with no MCP call except its checkpoints. Only a
 build/refresh identifies the MCP and resolves the firm over it.
 
 ## Step 0 — Resolve identity + check the local cache
@@ -147,7 +157,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/fm_pa
 > build, "First run for this firm — give me a minute to pull the KPI data and build
 > the app."
 
-**Authorization on cache launch:** a cache launch never re-touches Carta; a refresh
+**Authorization on cache launch:** a cache launch never re-touches Carta beyond its checkpoints; a refresh
 goes through live MCP auth (the natural re-check).
 
 ## Step 1 — BUILD: identify the Carta MCP + resolve the firm
@@ -460,6 +470,8 @@ and **Formulas** — click any company name for its own deep-dive page with a PD
 Use the **Update data** button (top bar / sidebar) to check each dataset's freshness and
 refresh one dataset or all of them, or just say 'refresh data'."
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-analytics-app", checkpoint_label="skill_finished")` once the user has the dashboard URL and the line after it, whether the launch came from a cache hit or a build.
+
 ## Refresh / edits
 There are two ways to refresh, and they share the same downstream scripts:
 
@@ -488,6 +500,9 @@ the pinned `webapp/vendor/*` bundles (React + Sucrase); replace those files dire
 bump a version.
 
 ## Common failure modes
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-analytics-app", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a scope failure that happens twice, a stem that refuses to build, and a failed build or launch. `skill_finished` means a dashboard or link reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the first re-fetch after a scope failure, the stale-cache and did-you-mean pickers, asking for a firm or a re-entered name, 0 rows from `COMPANY_FINANCIALS`) do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
+
 | Situation | What to do |
 |---|---|
 | No Carta MCP connected | Exit: connect one; cached dashboards still open. |

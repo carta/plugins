@@ -69,24 +69,28 @@ allowed-tools:
   - mcp__carta__list_contexts
   - mcp__carta__get_current_user
   - mcp__carta__search_tools
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   - mcp__carta_production__get_current_user
   - mcp__carta_production__search_tools
+  - mcp__carta_production__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   # In-app browser, to open the hosted app's link for the user instead of only printing it —
   # see references/gate-in-app-browser.md (this plugin's own references/, shared with
   # carta-fund-modeling and others). Thirteen entries + ToolSearch, per that file's own rule.
@@ -145,7 +149,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.2</carta-plugin>
+<carta-plugin>carta-investors:7.43.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when there is no Bash tool in this session at all (Gate 0's first rule), or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — neither its fixed reply text nor (when hosted is asked for) the hosted app itself needs plugin files. A `detect-surface` that fails while Bash is present follows Gate 0's retry and escalation, not this exception.
 
@@ -222,6 +226,10 @@ Monthly P&L, Management Fee Income Projections, and Expense analytics
 broken out by vendor and variances. Reports and charts extend to a side
 panel drill downs with insights and underlying journal entry details.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-manco-reporting", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the Carta MCP server whose `skill_checkpoint` tool this session has. If there is none, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a Step 4 rebuild after mapping answers, a dashboard update after Step 6's offer, a Step 5.2 push or Step 5.4 load asked for later, a server relaunch, or this skill's second invocation from the plugin-files note at the top) does not checkpoint again.
+
 ## No demo data — real firm required
 
 **Never** fabricate or fall back to demo data. Every dashboard runs
@@ -232,12 +240,13 @@ cache. If the user doesn't name a firm, ask via `AskUserQuestion` — do
 ## The flow
 
 Seven steps, cache-first: Step 0's local cache probe decides whether Steps 1,
-1.5, and 2 need the Carta MCP at all, the same way `carta-fund-modeling`
-resolves identity from a local cache before ever touching the MCP. Step 3
+1.5, and 2 need the Carta MCP at all (the checkpoints aside), the same way
+`carta-fund-modeling` resolves identity from a local cache before any MCP call
+other than its checkpoints. Step 3
 (limited to what Step 2.5's `needs_fetch` names) and Steps 4, 5 and 6 run on
 every invocation that reaches them — only a sandboxed session, or a local
-invocation that itself asks for the hosted app, never does: it replies and
-ends the turn before Step 0 runs at all. A sandboxed session's reply names
+invocation that itself asks for the hosted app, never does: it replies, records
+`skill_finished`, and ends the turn before Step 0 runs at all. A sandboxed session's reply names
 the hosted app only when the invocation itself asked for it; otherwise it
 points to Claude Code on the user's own computer, with no hosted mention. A
 local invocation that asks for hosted always gets the hosted link. Never ask
@@ -267,6 +276,8 @@ the sandboxed exit and the asked-for hosted hand-off that sit before this table.
 **Read the reference file for a step before running it.** They carry the
 match rules, the exact commands, and the reasoning. This page is the
 sequence, not the instructions.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-manco-reporting", checkpoint_label="skill_finished")` once the run's output has reached the user: Step 5's `Dashboard: http://127.0.0.1:…` line on a local build, Gate 1's hosted link on a hosted hand-off, or Gate 0's fixed reply on a sandboxed surface.
 
 ### Parallel dispatch — Step 2.75b and Step 3
 
@@ -484,6 +495,8 @@ from chat" steps.
 
 See [errors.md](references/errors.md) for failure handling and the list of
 things deliberately not built yet.
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-manco-reporting", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That covers every stop in [errors.md](references/errors.md), a build crash, a Step 1.5 eligibility denial, and a "Not now" to the `uv` install. `skill_finished` means a dashboard, link or answer reached the user; a stop that delivered none is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the silent retry and its `PLUGIN_ROOT` fallback, the retried `uv` install, a re-run of Step 3 for a raw file it never saved, a budget-parse refusal re-run per [budget-workbook.md](references/budget-workbook.md)) do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
 
 **Hard gate: on a build crash, quote the exact error and stop.** When
 `build_manco_datadir.py` fails on its data — not an environment failure;
