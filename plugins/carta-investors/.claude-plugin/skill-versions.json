@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.24.0",
+    "version": "1.24.1",
     "headline": "For a fund of funds, the Schedule of investments card now lists the funds you invest in. Rebuild to get it."
   },
   "carta-lp-summary": {

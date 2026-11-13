@@ -4,7 +4,8 @@
 // whose query answers with no rows is hidden instead of showing a blank, and the grid sizes
 // itself to the cards left; with none left the whole section goes. A card whose query fails
 // stays, showing its note.
-const _segment = { fundAdmin: false, firmId: null, profileDone: false };
+// fundAdmin is null until get_current_user answers, so the LP query can start before then.
+const _segment = { fundAdmin: null, firmId: null, profileDone: false };
 
 const LP_CARD_ROWS = 3;
 
@@ -107,7 +108,9 @@ function applyWording(map) {
 function segmentSetFundAdmin(flag) {
   _segment.fundAdmin = flag === true;
   layoutDashboards();
-  if (_segment.fundAdmin && _segment.firmId) fetchLpSummary();
+  if (!_segment.fundAdmin) return;
+  if (_lpResult) applyLpResult();
+  else if (_segment.firmId) fetchLpSummary();
 }
 
 // From fetchUserEnrichment, once get_current_user has answered or failed, so whether the
@@ -118,9 +121,11 @@ function segmentProfileDone() {
 }
 
 // From fetchLiveData, once the firm is resolved and pinned with set_context.
+// The LP query starts here, beside the other cards, unless the profile already said no: waiting
+// for get_current_user would put it behind the profile call.
 function segmentSetFirm(firmId) {
   _segment.firmId = firmId;
-  if (_segment.fundAdmin) fetchLpSummary();
+  if (_segment.fundAdmin !== false) fetchLpSummary();
 }
 
 // ── LP summary ──
@@ -164,24 +169,37 @@ function renderLpRows(rows) {
   }).join("");
 }
 
+// What the LP query answered: { rows } or { error }. It is shown only for a Fund Admin firm, so
+// a query that finishes before the profile answers waits here instead of reaching the page.
+let _lpResult = null;
 let _lpLoading = false;
 async function fetchLpSummary() {
   if (_lpLoading) return;
   _lpLoading = true;
+  _lpResult = null;
   const firmId = _segment.firmId;
   try {
     const res = await _mcp("read_tool", { name: "dwh__execute__query", arguments: { sql: lpSummarySql(firmId), format: "ndjson" } });
     if (res.isError) throw new Error("LP summary query failed");
-    const rows = dwhRows(res, "FAMILY_ID", "FAMILY_NAME");
-    if (rows.length) renderLpRows(rows);
-    settleDashboardCard("lp", rows.length > 0);
+    _lpResult = { rows: dwhRows(res, "FAMILY_ID", "FAMILY_NAME") };
   } catch (e) {
     console.error("[carta-home] LP summary failed", e);
-    const el = document.getElementById("lp-rows");
-    const note = renderConnectionFailure("lp", e?.code);
-    if (el && note) el.innerHTML = note;
-    failDashboardCard("lp");
+    _lpResult = { error: e };
   } finally {
     _lpLoading = false;
   }
+  if (_segment.fundAdmin) applyLpResult();
+}
+
+function applyLpResult() {
+  const { rows, error } = _lpResult;
+  if (rows) {
+    if (rows.length) renderLpRows(rows);
+    settleDashboardCard("lp", rows.length > 0);
+    return;
+  }
+  const el = document.getElementById("lp-rows");
+  const note = renderConnectionFailure("lp", error?.code);
+  if (el && note) el.innerHTML = note;
+  failDashboardCard("lp");
 }
