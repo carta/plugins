@@ -14,6 +14,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__skill_checkpoint
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -21,6 +22,7 @@ allowed-tools:
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   - mcp__carta_production__search_tools
+  - mcp__carta_production__skill_checkpoint
   # Sandbox
   - mcp__carta_sandbox__call_tool
   - mcp__carta_sandbox__read_tool
@@ -28,6 +30,7 @@ allowed-tools:
   - mcp__carta_sandbox__set_context
   - mcp__carta_sandbox__list_contexts
   - mcp__carta_sandbox__search_tools
+  - mcp__carta_sandbox__skill_checkpoint
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -35,12 +38,14 @@ allowed-tools:
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__carta__search_tools
+  - mcp__carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - AskUserQuestion
   - read_skill
   - Read
@@ -51,10 +56,11 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py *)
   - Bash(test *)
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -349,14 +355,18 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`,
 **If multiple found:** ask which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — the server instructions require `welcome` as the first call.
 
+> **Checkpoint**: Once `welcome` succeeds, call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-consolidating-financial-reports", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the server you called `welcome` on above. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a report offered from the post-run menu, a retry after a timeout, the second invocation the note at the top of this file asks for) does not checkpoint again. The reports of an `all` batch record nothing on their own; the batch records `skill_finished` once, after its last report.
+
 ### The five Carta tools load lazily — a short tool list is not a missing tool
 
-Derive `<SERVER>` from the server name as shown above. After that, the six
-suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, and
-`search_tools` are exhaustive for every Carta MCP server regardless of environment. Call
+Derive `<SERVER>` from the server name as shown above. After that, the seven
+suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`,
+`search_tools`, and `skill_checkpoint` are exhaustive for every Carta MCP server regardless of environment. Call
 `mcp__<SERVER>__<suffix>` directly.
 
-**`list_contexts`, `read_tool` and `call_tool` load lazily. They will often NOT appear in
+**`list_contexts`, `read_tool`, `call_tool` and `skill_checkpoint` load lazily. They will often NOT appear in
 your tool list, and that is expected — they still exist and still work.** Only
 `welcome` and `set_context` are reliably visible up front; a server
 may also expose extras like `get_current_user` that this skill does
@@ -370,7 +380,7 @@ circumstances — not to discover the prefix, not to find `list_contexts`,
 subset, so it will appear to prove the lazy tools are missing when they are not.
 That false negative is the trap: it leads to abandoning the run and telling the
 user to re-authenticate a working connector. If you genuinely must search, use
-the connector's own `mcp__<SERVER>__search_tools`, never the generic search.
+the connector's own `mcp__<SERVER>__search_tools`, never the generic search. Loading a deferred tool by its exact name with `ToolSearch(query: "select:mcp__<SERVER>__<suffix>")` is not a search and is allowed; the `skill_started` checkpoint above uses it.
 [references/report-feedback.md](references/report-feedback.md)'s availability
 check is the one place this skill calls `search_tools` on its own initiative —
 once per session, to confirm `fa:create:feedback` before filing it.
@@ -572,6 +582,8 @@ Then load the matched report and follow it exactly:
 logic from memory** — each one carries exact SQL, Excel number-format strings,
 column maps, and approval gates that must not be paraphrased.
 
+> **Checkpoint**: When `<REPORT>` is a single report: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-consolidating-financial-reports", checkpoint_label="skill_finished")` once the report has written its tabs and reported the result to the user.
+
 ### `<REPORT>` is `all`
 
 Build all three, one after another, into the same target workbook. Gate 0 and
@@ -615,6 +627,8 @@ back to back. If one report fails or the user declines its approval gate, say
 so in one sentence and continue to the next report rather than aborting the
 whole batch.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-consolidating-financial-reports", checkpoint_label="skill_finished")` once the last report of the batch has run, if at least one of the three wrote its tabs. If none did, the run ends with `skill_failed` instead.
+
 **Why the data pull isn't shared.** The three reports query different
 account-type ranges and different time semantics — the P&L sums two date
 windows (period and YTD) over accounts `>= '4000'`, the balance sheet takes a
@@ -643,6 +657,8 @@ skill's directory.
 
 ## If Something Goes Wrong
 
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-consolidating-financial-reports", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a firm with only one entity, a timeout the user does not retry, a 403, a report that fails or whose approval the user declines, and plugin files still unavailable after the second invocation. `skill_finished` means a report was built and reached the user; a stop that built no report is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a corrected firm spelling, a retried query, a re-probed prefix, a lazily loaded tool, a silent re-send with `_instrumentation_v2`, one report of an `all` batch failing while the next runs) do not checkpoint. Paths before `skill_started` record nothing: the Router Gate's STOP redirects, and no Carta MCP server found.
+
 Out-of-scope topics are handled proactively by the STOP rows in the Router Gate
 — they never reach this table. This table covers issues that surface mid-flow.
 
@@ -654,7 +670,7 @@ given row also goes to Carta's team, per that contract.
 |---|---|---|
 | No Carta MCP server found | "I can't see your Carta connector. Open **Settings → Connectors** in Claude, enable Carta, then ask me again." | Don't file — the user's own connection, not a skill defect. |
 | `list_contexts` returns no firm | Echo the name back and ask for the correct spelling. Don't silently near-match. | Don't file — an input the user corrects in the same turn. |
-| Firm resolves but has only one entity | Say so plainly, and offer to run the single-entity report via `carta-investors:carta-explore-data` instead. A consolidating report over one entity is just that entity's statement. | Don't file — routing advice, not a failure. |
+| Firm resolves but has only one entity | Say so plainly, and offer to run the single-entity report via `carta-investors:carta-explore-data` instead. A consolidating report over one entity is just that entity's statement. | Don't file — routing advice, not a skill defect. |
 | The user asks for two (but not all three) reports at once | Build the first, then offer the second from the post-run menu. Do not run both in one pass. | Don't file — routing, not a failure. |
 | The user asks for all three reports | Route to `<REPORT> = all` — see "Build" above. Builds all three in one pass instead of offering them one at a time. | Don't file — routing, not a failure. |
 | Query times out | Tell the user it's slow and offer to retry — never auto-retry. | Don't file on the first timeout (it may just be slow). If the user asks you to retry and it times out again, file — a query that reliably times out is developer-actionable. |

@@ -13,14 +13,18 @@ allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
   - mcp__carta__welcome
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__claude_ai_carta__call_tool
   - mcp__claude_ai_carta__read_tool
+  - mcp__claude_ai_carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   # Publish (ToolSearch loads a deferred Artifact)
   - Artifact
   - ToolSearch
@@ -42,7 +46,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -67,6 +71,10 @@ send the same call again with it, without telling the user, and never count that
 the failures below.
 
 ## Steps
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lp-dashboard", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-render, a re-publish, a follow-up question about the dashboard, the second invocation the note at the top of this file asks for) does not checkpoint again.
 
 ### 1. Checks before building
 
@@ -173,3 +181,9 @@ Read `${CLAUDE_PLUGIN_ROOT}/references/publish-lp-dashboard.md` — the **plugin
 ### 5. Respond to the user
 
 Give the user the URL and say the dashboard loads fresh data from Carta each time it's opened, with their documents on its Documents tab. When the login holds several portfolios, say which one it opened on (the one you noted in Step 2) and that they can switch between them on the page; when the portfolio spans several firms or funds, say they can narrow it to any mix of firms and funds there too. Keep it brief.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lp-dashboard", checkpoint_label="skill_finished")` once the URL has reached the user.
+
+## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lp-dashboard", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a failed check in Step 1, every `NEEDS_HUMAN` stop in Steps 1b and 2, a render script that exits non-zero, a publish that fails, and plugin files still unavailable after the second invocation. `skill_finished` means the dashboard URL reached the user; a stop before that, including a `GP` or `NONE` redirect in Step 1b, is a failure, and counting it as finished makes failed runs look like fast successful ones. Steps that recover and continue (a call sent again with `_instrumentation_v2`, a staff login that skips Step 1b, a `no_match` that asks the user for another name within the lookup budget) do not checkpoint. A documents request comes before `## Steps` and records no checkpoint.

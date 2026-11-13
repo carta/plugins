@@ -33,6 +33,9 @@ allowed-tools:
   - mcp__carta__set_context
   - mcp__claude_ai_Carta__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__carta__skill_checkpoint
+  - mcp__claude_ai_Carta__skill_checkpoint
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Artifact
   - AskUserQuestion
   - read_skill
@@ -45,10 +48,11 @@ allowed-tools:
   - Bash(jq *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py" *)
   - Bash(mkdir -p *)
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -79,6 +83,10 @@ The in-app Partner Rollforward tab shows one fund at a time. This artifact opens
 ## Steps
 
 Steps 2–4 each carry a network round-trip. Post a one-line status after each — connecting, checking the data, rendering, publishing.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-partner-rollforward", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-run of the Step 3 query, a render retry, a refresh, a re-publish, the second invocation the note at the top of this file asks for) does not checkpoint again.
 
 ### 1. Identify the Carta connector
 Scan the tools available in the conversation (system-reminder blocks) for a `call_tool` that has a matching `welcome` from the same connector. Cowork and claude.ai name them `mcp__claude_ai_<connector>__call_tool`; the Claude desktop app names them `mcp__<connector_id>__call_tool`, where the id is opaque and the display name comes from the session's connector list or the server's instructions (Carta's is `Carta`). None found → tell the user you checked the conversation's tool list for a Carta connector (`call_tool` + matching `welcome`) and found none, point them to connect one via their claude.ai connector settings, and stop (error table: *No connector found*). Exactly one → use it. Multiple → ask the user which.
@@ -197,7 +205,9 @@ Artifact({
 })
 ```
 
-All three tools **must** be in the grant, or the page loads and every fetch rejects with `not_in_manifest`. Keep `title` and `icon` stable across redeploys, and restate the whole `capabilities` object every time. Give the user the URL and say the report pulls fresh numbers each time it is opened, briefly. Do nothing else after.
+All three tools **must** be in the grant, or the page loads and every fetch rejects with `not_in_manifest`. Keep `title` and `icon` stable across redeploys, and restate the whole `capabilities` object every time. Give the user the URL and say the report pulls fresh numbers each time it is opened, briefly. Then record the `skill_finished` checkpoint below, and do nothing else after.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-partner-rollforward", checkpoint_label="skill_finished")` once the publish has succeeded and you have given the user the URL. This skill has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
 
 ## How the numbers are built
 
@@ -225,6 +235,8 @@ The artifact reads four tables through `dwh__execute__query`, each pinned to the
 **Export.** *Export CSV* and, on the LP statement, *Export PDF* save through the viewer's `downloads` capability, which asks the viewer to confirm each file. The buttons are hidden in views that cannot save. The PDF is written in the page without a library: standard Helvetica text, so accented Latin names are real text; a name in a script those fonts cannot encode (Chinese, Cyrillic, Arabic…) is drawn as a picture of the text, or replaced by a visible placeholder if the viewer cannot draw it.
 
 ## Error table
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-partner-rollforward", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes Step 5's stops: template drift (RC 14), a config retry that fails again, and a failed publish. `skill_finished` means the published report's URL reached the user; a stop before that, including a firm with no partner activity, is a failure, and counting it as finished makes failed runs look like fast successful ones. Steps that recover and continue (the Step 3 re-run with a datashare table name, going back to Step 2 when several firms come back, asking which firm when a staff account gets an empty list, the RC 1 retry, the RC 4 inline fallback) do not checkpoint. The last two rows happen in the published page, after the run has finished, and do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
 
 | Symptom | Cause | Tell user |
 |---|---|---|

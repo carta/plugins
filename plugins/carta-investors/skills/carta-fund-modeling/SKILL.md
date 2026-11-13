@@ -20,6 +20,7 @@ allowed-tools:
   - mcp__carta__list_contexts
   - mcp__carta__get_current_user
   - mcp__carta__search_tools
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
@@ -27,6 +28,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__carta_production__welcome
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -34,6 +36,7 @@ allowed-tools:
   - mcp__carta_production__list_contexts
   - mcp__carta_production__get_current_user
   - mcp__carta_production__search_tools
+  - mcp__carta_production__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
@@ -41,6 +44,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - mcp__Claude_Browser__navigate
   - mcp__Claude_Browser__tabs_context
   - mcp__Claude_Browser__tabs_create
@@ -67,7 +71,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files.
 
@@ -321,6 +325,10 @@ warm-cache launch skips this step entirely — no MCP.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — the server instructions require `welcome` as the first call.
 After `welcome`, fetch `pk` per `${CLAUDE_PLUGIN_ROOT}/references/launch-user-id.md` (Build path).
 **Fund Admin only — never `fund_forecasting:*`.**
+
+> **Checkpoint**: Once `welcome` succeeds, call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-modeling", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the server you called `welcome` on above. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a refresh that re-runs Steps 1–3, a batch re-issued after a lapsed context, a re-run of the builder, the second invocation the note at the top of this file asks for) does not checkpoint again.
 
 **Classify the environment from `<SERVER>`'s name.** A name containing `test`/`sandbox`/`demo`/`preprod`/
 `preproduction` (case-insensitive) → `cartaEnvironment = "nonprod"`. Everything else — `carta`,
@@ -639,6 +647,8 @@ company on a firm that may hold hundreds, for a cosmetic enhancement.
 
 ## Step 3 — Build the data dir (deterministic — do NOT hand-write the JSON)
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-modeling", checkpoint_label="data_fetched")` once Step 2 has written every stem file.
+
 > **What's happening:** Transforming the raw query files into the structured JSON the React app consumes — portfolio companies, fund metrics, LP data, and benchmarks. A script handles this deterministically; no manual JSON writing.
 
 Write `<raw_dir>/meta.json` = `{"name":"<canonical name>","slug":"<slug printed by Step-1 resolve>","navAsOf":"<latest month_end_date, ISO>",
@@ -692,6 +702,8 @@ verbatim — no Node or build needed at runtime.
 After giving the URL, add one short post-launch line (not a menu):
 "A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · publish a scenario to share it with your firm · plan your next fund on the Plan New Fund tab · say 'refresh' to pull fresh Carta data."
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-modeling", checkpoint_label="skill_finished")` after the post-launch line, when this run recorded `skill_started` in Step 1. A launch from a cached dashboard records no checkpoint. If the call fails, carry on.
+
 ## Scenario sharing
 In the local build, firm admins publish/pull scenarios across the firm — **built into the app** (a Shared
 with you section on the Scenarios page to load shared scenarios, Publish in a scenario tile's ⋯ menu, and Update / Duplicate / Hide /
@@ -744,6 +756,8 @@ and a placeholder id is never substituted. A refresh that resolves a previously 
 picked up without a relaunch.
 
 ## Common failure modes
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-modeling", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. If the call fails, stop as planned. That includes a second empty result after re-setting the firm context, a stem past 5 pages (`needs_human`), a builder that still exits non-zero after its stems are fixed, plugin files that are still unavailable after the second invocation, and a launch that fails. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (re-setting the context and re-issuing an empty batch once, an empty file for a stem with no rows, asking again when no firm matched, fixing a stem and re-running the builder after a non-zero exit) do not checkpoint. Gate 0, Gate 1, Step 0 and a cached launch come before `skill_started` and record nothing, because they make no Carta call (or only Gate 1's read-only ones) by design; so does a stop in Step 1 before `welcome`.
 
 | Situation | What to do |
 |---|---|

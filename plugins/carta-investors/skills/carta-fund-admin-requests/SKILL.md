@@ -13,6 +13,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__skill_checkpoint
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -21,6 +22,7 @@ allowed-tools:
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   - mcp__carta_production__search_tools
+  - mcp__carta_production__skill_checkpoint
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -29,6 +31,7 @@ allowed-tools:
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__carta__search_tools
+  - mcp__carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
@@ -36,6 +39,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   # Claude Desktop's browser pane, for the request's progress page
   - mcp__remote-devices__Claude_Browser__preview_start
   - mcp__remote-devices__Claude_Browser__navigate
@@ -50,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -84,6 +88,11 @@ uploads returned, at most 15. Leave it out when nothing is attached.
 ## Gate 0 — session + access
 
 1. Call `welcome`, then `get_current_user`.
+
+   > **Checkpoint**: Once `welcome` succeeds, call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the server you called `welcome` on above. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+   Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a case opened from the Flow 2 list, a reply after reading a thread, a refresh of the list, a redraft after **Edit first**) does not checkpoint again.
+
 2. No Fund Admin access (`fund_admin_access` false) → surface verbatim and stop:
 
    > Sending work to a Carta Fund Admin team needs a Carta Fund Administration
@@ -131,6 +140,8 @@ markdown does not block execution and you will answer your own question:
 | Ask Carta to fix it | Proceed to Flow 1. |
 | Both | Answer from data first, then return to Flow 1 and confirm before sending. |
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_finished")` when the user picks **Look into it**, as you hand off.
+
 ## Flow 1 — Send a request
 
 **Never send an unconfirmed message.** It leaves Carta on the user's behalf, so
@@ -173,6 +184,8 @@ they see the exact text first, every time.
 
    Leave out the progress sentence when there is no `companion_url`. Name only the
    files whose tokens were sent.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_finished")` after the report in step 6, or when the user picks **Don't send**.
 
 Never estimate a turnaround. Never say "within 24 hours" or similar — you do not
 know the queue.
@@ -241,6 +254,8 @@ Close with:
 Enter a number to open that case, or: [N] New request  [R] Refresh
 ```
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_finished")` after the closing line.
+
 ---
 
 ## Flow 3 — Read a request
@@ -264,6 +279,8 @@ State plainly whether the ball is with Carta or the user, then:
 3 - Back to queue
 ```
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_finished")` after the options.
+
 ## Flow 4 — Reply
 
 Same confirmation as Flow 1, including the `AskUserQuestion` tool: draft, show the
@@ -279,9 +296,13 @@ Name only the files whose tokens were sent.
 
 Then offer **Back to queue**.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_finished")` after the confirmation.
+
 ---
 
 ## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. If the call fails, stop as planned. That includes Gate 0's stops and a send that returns no `workflow_id`. `skill_finished` means the run reached an end this skill plans for: a report, an answer, a hand-off, or the user choosing **Don't send**. A stop that reached none of these is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (asking in Gate 1, stopping to call `AskUserQuestion` after a written list, setting the firm and retrying once, asking to confirm a case number, describing a file that can't be attached) do not checkpoint. Only Gate 0's `welcome` and `get_current_user` calls come before `skill_started`, because the Carta server takes `welcome` first; a stop there records nothing.
 
 | Situation | Response |
 |---|---|
@@ -293,4 +314,4 @@ Then offer **Back to queue**.
 | `fa__create__fund-admin-message` returns no `workflow_id` | Say the request may not have been created and to check with their Carta team before resending — do **not** resend automatically, it would open a second case |
 | `workflow_id` not found | Wrong case number — ask them to confirm it |
 | A file can't be attached: upload not available, file too large, more than 15 files, or the upload failed | Describe the document in the message and say the team will ask for it. Never hold the send for it |
-| User is reporting a plugin bug | Not a Fund Admin request — call `fa:create:feedback` directly |
+| User is reporting a plugin bug | Not a Fund Admin request — call `fa:create:feedback` directly, then call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_finished")` |

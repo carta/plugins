@@ -17,18 +17,22 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_carta__call_tool
   - mcp__claude_ai_carta__read_tool
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__list_contexts
+  - mcp__claude_ai_carta__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   # Cowork
   - Artifact
   # Local execution
@@ -42,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -84,6 +88,10 @@ Talk like a person who looked it up. Never show UUIDs, tool names, SQL, "the ren
 
 ## Step 1: Firm context
 
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a page built after a chat answer, a follow-up question, a re-publish, the second invocation the note at the top of this file asks for) does not checkpoint again.
+
 If the user's accessible firms are already in the conversation (from a `welcome` call), use that list; otherwise call `list_contexts`. One firm: `set_context` with it. Several: infer the firm from the request (firm, fund or company name), else ask with `AskUserQuestion`, then `set_context`. Keep the firm's **name** and **UUID**.
 
 ## Step 2: Funds and SPVs
@@ -116,10 +124,14 @@ A future date isn't possible: say so in one sentence and use today. When the dat
 
 1. Read `ownership.sql`. Replace every `<FUND_UUIDS>` with the Step 2 UUIDs, each in single quotes and comma-separated, and every `<AS_OF_DATE>` with the Step 3 date. Append `LIMIT 1000 OFFSET 0`.
 2. Run it once with the Carta MCP (a call that fails with an error mentioning `welcome` gets the recovery in Caveats first): `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<the query>"}})`. If exactly 1,000 rows come back, run the next page with `OFFSET 1000`, up to 10 pages in all. If the query fails, show the error in plain words and stop. Don't rewrite the query or try other tables.
+
+   > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="data_fetched")` once the last page of the query has returned.
 3. Keep the companies the user asked about: a case-insensitive match on `company_name`, or all of them. One row comes back per fund and company. Group rows by `company_key`.
 4. **Company row:** shares held is the sum of its fund rows. Outstanding and fully diluted shares are the company totals (the same on every fund row). Both percentages are the summed shares ÷ that total. Never add percentages together, and never add the totals across funds.
 5. Show a table with up to 6 columns: **Investment | Shares held | Outstanding ownership % | Outstanding | Fully diluted ownership % | Fully diluted shares**. Put each company in bold, with its funds indented beneath it. Write percentages to three decimals, as `X.XXX%`, like the web app. Always write share counts as the full number with commas, never abbreviated (1,240,000, not 1.2M). Use `—` for any blank value. Mark a company whose `has_cap_table` is false *No cap table on Carta*. For a one-company question, answer in one sentence first, e.g. *"As of Nov 3, 2026 you own 12.400% of Globex fully diluted (1,240,000 of 10,000,000 shares), through Fund II and Fund III."*, then show the table.
 6. End by saying the date. Mention any company whose `cap_table_as_of`, or any fund row whose `ownership_as_of`, is more than a quarter older than that date. If Step 2 kept `incomplete_entities`, say which kind of entity (fund or SPV) may be missing and that the totals may be understated. Then follow the build-the-page rule in Step 4.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_finished")` once the chat answer has been shown.
 
 ### Build the page
 
@@ -187,6 +199,12 @@ Fill the link with the `url` the publish call returned. The side panel does not 
 - Filter by fund or company name, sort any column, and use **Download CSV** for a spreadsheet.
 
 Add *"I couldn't load every **<fund / SPV>** for **<Firm Name>**, so some may be missing."* when Step 2 set `incomplete_entities`.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_finished")` once the publish in Step 7 has succeeded and the confirmation is shown. The page has no `data_fetched` checkpoint — it fetches its own data after your turn ends.
+
+## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That covers a failed query, a failed render, and a failed publish. `skill_finished` means an answer or a page reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the `welcome` call and single retry in Caveats, a further page of query results, a future date replaced by today, a missing `Artifact` tool or a failed artifact check that falls back to a chat answer, an incomplete entity list) do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
 
 ## How the numbers work
 

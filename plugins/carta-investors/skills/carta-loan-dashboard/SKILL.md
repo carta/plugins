@@ -14,12 +14,15 @@ allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
   - mcp__carta__welcome
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   # Step 2: find the firm the user names (list_contexts) and switch to it (set_context).
   - mcp__carta__list_contexts
   - mcp__claude_ai_Carta__list_contexts
@@ -39,10 +42,11 @@ allowed-tools:
   - Bash(jq *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py" *)
   - Bash(mkdir -p *)
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -60,6 +64,10 @@ Creates (or updates) a persistent Cowork artifact showing the user's loan portfo
 The artifact's aggregate SQL groups by currency, so a cross-currency total is not expressible: it renders one currency at a time and names which. That guard has to live where the numbers are fetched.
 
 ## Steps
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-loan-dashboard", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a Step 4 re-run after a fallback, a render retry, a re-publish, the second invocation the note at the top of this file asks for) does not checkpoint again.
 
 Steps 2–4 each carry a network round-trip (the schema-validation query alone runs ~20–55s depending on whether the fallback probe fires). Post a one-line status after each — connecting, resolving schema, validating data, rendering, publishing — so the user isn't staring at silence during the wait.
 
@@ -141,6 +149,8 @@ firm's rows.
 - *Unknown column* (a layer names a money column differently): probe `SELECT * FROM <loan_table> LIMIT 1` (format markdown) and resolve — `<committed>` → first present of `TOTAL_COMMITMENT`, `TOTAL_COMMITTED_AMOUNT`; `<drawn>` → first present of `TOTAL_DRAWN_AMOUNT`, `TOTAL_DRAWN`; re-run. If a concept still has no matching column, drop its tile/column rather than erroring (error table: *Unknown column, no fallback match*).
 
 **Error table — what to tell the user.** The steps point here by row name, so the wording each failure uses lives in one place:
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-loan-dashboard", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes Step 6's stops: template drift (RC 14), a config write that fails its retry, and a publish that fails; and plugin files still unavailable after the second invocation. `skill_finished` means the dashboard URL reached the user; a stop before that is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the Step 3 fallbacks, *Unknown column, no fallback match*, *Zero rows in scope*, the RC 1 retry, the RC 4 inline fallback) do not checkpoint, and neither does *Row from another firm mid-page*, which happens on the page after the run has ended.
 
 | Symptom | Cause | Tell user |
 |---|---|---|
@@ -360,6 +370,8 @@ Artifact({
 })
 ```
 
-All three tools **must** be in the grant, or the page loads and every fetch rejects with `not_in_manifest`. Keep `title` and `icon` stable across redeploys, and restate the whole `capabilities` object every time — a non-empty object replaces the stored grant. Give the user the URL, say the dashboard pulls fresh numbers each time they open it, briefly. Do nothing else after.
+All three tools **must** be in the grant, or the page loads and every fetch rejects with `not_in_manifest`. Keep `title` and `icon` stable across redeploys, and restate the whole `capabilities` object every time — a non-empty object replaces the stored grant. Give the user the URL, say the dashboard pulls fresh numbers each time they open it, briefly. Then record the `skill_finished` checkpoint below, and do nothing else after.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-loan-dashboard", checkpoint_label="skill_finished")` once the URL has reached the user, whether 6c or the 6e fallback built the HTML.
 
 **6e. Inline fallback** (only when 6a's probe finds no script or the runtime blocks subprocess): load the template with `read_skill(file_path="references/artifact_template.html")`, escape the compact config JSON exactly as the template's header comment documents (the `\uXXXX` form for `&` `<` `>` `'` — **not** HTML entities; a raw `</script>` in the firm name would otherwise inject HTML = stored XSS), replace the single `__LOAN_DATA__` placeholder, then publish as in 6d.

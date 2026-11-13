@@ -22,26 +22,30 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_artifact.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_generator.py *)
   - Bash(uv run python -c "import tempfile; print(tempfile.gettempdir())")
   - Write(~/.cache/carta-form-adv/**)
   - Read
   - AskUserQuestion
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.6</carta-plugin>
+<carta-plugin>carta-investors:7.43.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -81,6 +85,10 @@ Send no message before Step 1 passes, other than its connection-error or No Fund
 ### Step 1 — Connect and check Fund Admin access [Hard gate]
 
 Call `welcome` to establish the session and resolve `<SERVER>`. Its response includes `is_fund_admin_user`, whether the signed-in user has an active Carta Fund Administration subscription.
+
+> **Checkpoint**: Once `welcome` succeeds, call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-form-adv", checkpoint_label="skill_started")` before proceeding. `<SERVER>` is the server you called `welcome` on above. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a re-run with a different reporting date, a retry of a failed generator, a follow-up such as the prior-year comparison, the second invocation the note at the top of this file asks for) does not checkpoint again.
 
 | `welcome` result | Action |
 |---|---|
@@ -137,6 +145,8 @@ After the status, surface only caveats that **apply to this specific filing** (e
 
 Then close with the Escalation Contract reminder and Response Closing.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-form-adv", checkpoint_label="skill_finished")` once this acknowledgment, with at least one artifact's path, has reached the user.
+
 ---
 
 ## Out of scope
@@ -165,6 +175,8 @@ Then close with the Escalation Contract reminder and Response Closing.
 ---
 
 ## Error Handling
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started` and whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-form-adv", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes Step 1's No Fund Admin stop, a query with no rows, a failed `set_context`, a 403, both artifact generators failing, and plugin files still unavailable after the second invocation. `skill_finished` means at least one Form ADV artifact reached the user; a stop that produced none, including Step 1's No Fund Admin message, is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a null NAV or currency surfaced as a caveat, a fund count mismatch or unmatched fund name the user confirms, a corrected reporting date, one generator failing while the other's artifact still reaches the user) do not checkpoint. Paths before `skill_started` record nothing: a `welcome` error, which leaves no Carta server to record to.
 
 | Symptom | Likely cause | Tell the user |
 |---|---|---|
