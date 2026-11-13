@@ -26,14 +26,17 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   # Step 1: render the page (stamps the Carta Home link in).
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/scripts/render-artifact.py" *)
   # Step 2, before republishing over an existing page: find the user's changes and carry
@@ -44,14 +47,21 @@ allowed-tools:
   - Edit(./fund-performance*.html)
   # Ask about a change that collides with the new version — only then.
   - AskUserQuestion
+  - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.5</carta-plugin>
+<carta-plugin>carta-investors:7.43.6</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 # Fund Performance
+
+## Start of every run
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a second invocation to get this skill's file paths, a follow-up benchmark question, a re-render, a re-publish) does not checkpoint again.
 
 Two modes. Pick one from the request:
 
@@ -62,6 +72,10 @@ Two modes. Pick one from the request:
 
 When a message could be either ("show me fund performance vs peers"), answer the benchmark
 question in chat first and offer the page.
+
+> **Checkpoint**: In peer benchmarks in chat, call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="data_fetched")` once the benchmark query has returned.
+
+> **Checkpoint**: In peer benchmarks in chat, call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="skill_finished")` once the benchmark answer is shown. Asking for a fund name, including after a query that found none, or for a narrower one when several funds match, is not the finish: the run continues when the user replies.
 
 ## Page
 
@@ -161,7 +175,11 @@ Carta Home asked for it, return those lines with the URL instead of printing the
 Say in one sentence that the dashboard is ready, and that clicking a fund opens its
 chart against its peers. Do not restate the metrics.
 
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="skill_finished")` once the publish in Step 2 has succeeded and you have responded, or, when another skill (Carta Home) invoked this one for the page, once the URL is handed back to it. The page has no `data_fetched` checkpoint: it fetches its own data after your turn ends. If the call fails, carry on.
+
 ## Error handling
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. If the call fails, stop as planned. That includes a render script that fails in Step 1, a publish that fails in Step 2, plugin files that are still unavailable after the second invocation, and a benchmark query that fails, or finds no fund when the user gives no other name to try. `skill_finished` means a report or answer reached the user, or the page's URL was handed back to the skill that invoked this one; a stop that delivered none of these is a failure, and counting it as finished makes failed runs look like fast successful ones. Steps that recover and continue (a second invocation that gives this skill's file paths, a question about a change that collides with the new version, a request for a fund name, including after a query that found none) do not checkpoint.
 
 The artifact handles these itself — no action needed in the skill:
 
