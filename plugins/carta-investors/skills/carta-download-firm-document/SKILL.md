@@ -30,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.43.11</carta-plugin>
+<carta-plugin>carta-investors:7.44.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -144,39 +144,12 @@ Send only the filters the request gives, and leave every other one out.
     when the investor option is added, then free text), plus "An investor
     named <name>" when the user said neither, which takes the `None` path.
     Multi-select allowed. Never pick one on your own.
-  - None → the name is an investor. With no type, put the name in `search`.
-    With a type sent, run the **investor search** below.
-- **Investor search** — Carta can't filter by investor here, and most rows
-  have no `partner_name` (it is set only on a document linked to an investor
-  record), so with a type sent an investor needs two searches:
-  1. **By title:** the type and the other filters, with `search` set to the
-     name as the user gave it. Keep every row whose title also holds all
-     other title words of the request. When its first page keeps no rows
-     and the name has several words, search once more with its most
-     distinctive word: the surname or family name, never a word such as LLC,
-     LP, Inc, Trust, Fund, Partners or Capital ("Jane Okafor-Reyes" → search
-     `Okafor-Reyes`). That is the only retry; from then on the surname search is the title search: page it from its own `next`, and drop the full-name search's `next`. Its rows may belong to someone
-     else with that name, so say with them "These titles contain only
-     <word>, not the full name."
-  2. **By investor:** the same filters, with `search` holding only the other
-     title words (or left out when there are none); keep the rows whose
-     `partner_name` contains the name. After a lookup 403, keep the rows whose
-     `partner_name` or `fund_name` contains the name.
-
-  Run the first page of both before paging either, then merge them, each
-  document once, newest first ("Meridian side letter" → type `Side Letter`;
-  Meridian is no fund or company, so keep rows whose `partner_name` contains
-  "Meridian", plus every row a search `Meridian` returns). An investor search
-  has more (`has_next`) while either search has a `next`, and "the next
-  ones" or "show more" continues each search from its own `next`. When the
-  first pages of both keep no row → "None, with filters" in 2b even while
-  `has_next` is true (the every-match step below pages on instead), adding that Carta checked the investor field and the
-  titles and that more documents can be checked, and give the filtered page
-  link (every match, below), so the user can look through that type there.
-  For an investor search that link carries only the other title words, never
-  the name, and names the investor as what the user still narrows by.
-
-  > **Checkpoint**: once the first page of both searches (and any retry) is back, call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-download-firm-document", checkpoint_label="data_fetched", notes="investor search: <n> by investor, <m> by title, <k> after merge, retry <yes|no>")`. Counts only; never the investor's name.
+  - None → the name is an investor. Carta can't filter by investor here, so
+    with a type sent, keep the rows whose `partner_name` contains the name
+    ("Meridian side letter" → type `Side Letter`, no `search`; Meridian is no
+    fund or company, so keep rows whose `partner_name` contains "Meridian").
+    After a lookup 403, keep the rows whose `partner_name` or `fund_name`
+    contains the name. With no type, put the name in `search` instead.
 - `signed_from` / `signed_to` — inclusive `YYYY-MM-DD` dates, when the user
   ties a date to signing ("signed in March 2026", "executed last quarter").
   Say with the results: "Documents with no signed date in Carta are left out
@@ -207,9 +180,8 @@ partner_name, date, signed_date}`: `date` is the upload date and
 `total_count` (every match across pages, or null when Carta didn't count
 them), `has_next` and `next`. A row is **matched locally** when 2a kept it
 by its `partner_name` or `fund_name`, or, with no type sent, by its
-`document_type`, and every row of an investor search is; `total_count`
-counts before that, so it is the number of matches only when nothing was
-matched locally.
+`document_type`; `total_count` counts before that, so it is the number of
+matches only when nothing was matched locally.
 
 ### Every match
 
@@ -220,13 +192,7 @@ are the choice, so there is no pick question.
 1. Keep the rows that fit the request: every row 2a returns, except that rows
    matched locally (2a) must match. Call 2a again with `after` set to the
    previous `next` until `has_next` is false, the kept rows reach the run's
-   cap, or 10 calls are done. An investor search pages each of its two
-   searches with its own `next`, and the 10 calls count both and the retry
-   together; apply the cap after the merge. Rows found only by the surname
-   retry never join the batch on their own: before step 5, show them and
-   ask which ones to add. Added rows count toward the run's cap, and when
-   the batch is otherwise empty they are shown instead of step 4's
-   no-match reply.
+   cap, or 10 calls are done.
 2. Keep at most the run's cap of rows, newest first. That number is the
    batch: the table, the confirm and the links minted all use it.
 3. The batch is cut short when step 2 dropped a matching row, or paging
