@@ -1613,7 +1613,7 @@
     // ── overview ──
     // The strip under the title: what LPs still owe, what has gone back to them, and how much of
     // the commitments sit with the largest few LPs.
-    const CONCENTRATION_TOP = 3;
+    const CONCENTRATION_TOP = 5;
 
     // The firm's main currency: the one most of its funds report in, then the one with the most
     // LP accounts. The overview's amounts and shares are in it, as amounts never add across currencies.
@@ -1637,7 +1637,7 @@
     // currency's total apart. unfunded: its amount and share of committed, and every other
     // currency's amount apart. distributions: what LPs have received in the main currency and the
     // net DPI it makes (null before any capital is paid in), every other currency apart. concentration: the top LPs' share of commitments (and of unfunded) in the
-    // main currency, null when the firm has too few LPs for "top 3" to mean anything.
+    // main currency, null when the firm has too few LPs for "top CONCENTRATION_TOP" to mean anything.
     function overviewModel(families) {
       const records = families.flatMap(f => f.records);
       const code = mainCurrency(records);
