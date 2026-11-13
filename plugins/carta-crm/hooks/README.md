@@ -5,7 +5,7 @@
 Every hook dispatches to the shared Go hooks binary in `tools/hooks/` via
 `dispatch.sh`.
 
- **Windows:** `dispatch.sh` is a POSIX shell script, so hooks won't fire unless Bash or Git Bash is installed.
+ **Windows:** See the Windows note in `tools/hooks/README.md`.
 
 | Event | Matcher | Command | Purpose |
 |-------|---------|---------|---------|
