@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.44.10</carta-plugin>
+<carta-plugin>carta-investors:7.44.11</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -132,6 +132,11 @@ at the start of its `description`.
   LP families by commitment with net TVPI, from `FUND_ADMIN.PARTNER_DATA` and each partner's
   latest `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` month, per fund currency. The footer
   launches the LP Summary dashboard.
+- **Carta Law firms** (`resources/app/law-only-home.js`) — a firm with NDA insights data and
+  no Fund Admin gets NDA prompts (tagged Legal) in the "Suggested for you" slots its recommendations leave, no What's new
+  carousel (every item needs Fund Admin) and no Skill directory tab; Plugin news stays. The
+  tour leaves out capital activity for any firm without Fund Admin, and the directory for
+  a Carta Law firm.
 - **NDA insights** (`resources/app/nda-card.js`, firms with NDAs Carta Law has read) — the
   three NDAs that expire soonest, the NDA count and how many companies are under
   an active restriction (a non-solicit, no-contact or non-circumvention clause), by

@@ -225,10 +225,73 @@ const PEER_MEDIAN_CSS_VAR = "--carta-peer-median";
 // defaults to a hardcoded #666, which is unreadable on the dark surface.
 if (window.Chart) Chart.defaults.color = chartLabelColor();
 
+const BENCH_TOOLTIP_ID = "benchmark-tooltip";
+const BENCH_TOOLTIP_GAP = 8;
+
+function _benchTooltipEl() {
+  let el = document.getElementById(BENCH_TOOLTIP_ID);
+  if (!el) {
+    el = document.createElement("div");
+    el.id = BENCH_TOOLTIP_ID;
+    el.className = "bench-tooltip";
+    el.setAttribute("aria-hidden", "true");
+    document.body.appendChild(el);
+    // A scroll moves the chart under a box fixed to the viewport, so the box goes until
+    // the next hover places it again.
+    document.addEventListener("scroll", _hideBenchTooltip, { capture: true, passive: true });
+  }
+  return el;
+}
+
+function _hideBenchTooltip() {
+  const el = document.getElementById(BENCH_TOOLTIP_ID);
+  if (el) el.style.opacity = "0";
+}
+
+// Chart.js `external` tooltip: fixed to the viewport so no card clips it, placed above
+// the hovered point (below when there's no room) and kept on screen sideways.
+function renderBenchmarkTooltip({ chart, tooltip }) {
+  const el = _benchTooltipEl();
+  if (!tooltip.opacity || !tooltip.dataPoints?.length) { _hideBenchTooltip(); return; }
+  el.replaceChildren();
+  const title = document.createElement("div");
+  title.className = "bench-tooltip-title";
+  title.textContent = (tooltip.title || []).join(" ");
+  el.appendChild(title);
+  tooltip.body.forEach((b, i) => {
+    const text = b.lines.join(" ").trim();
+    if (!text) return;
+    const row = document.createElement("div");
+    row.className = "bench-tooltip-row";
+    const swatch = document.createElement("span");
+    swatch.className = "bench-tooltip-swatch";
+    swatch.style.background = tooltip.labelColors[i]?.backgroundColor || "";
+    const label = document.createElement("span");
+    label.textContent = text;
+    row.appendChild(swatch);
+    row.appendChild(label);
+    el.appendChild(row);
+  });
+  el.style.opacity = "1";
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+  el.style.maxWidth = `min(420px, ${vw - 2 * BENCH_TOOLTIP_GAP}px)`;
+  el.style.maxHeight = `${vh - 2 * BENCH_TOOLTIP_GAP}px`;
+  const box = chart.canvas.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const pointX = box.left + tooltip.caretX;
+  const left = Math.max(BENCH_TOOLTIP_GAP, Math.min(pointX - w / 2, vw - w - BENCH_TOOLTIP_GAP));
+  const above = box.top - h - BENCH_TOOLTIP_GAP;
+  const below = Math.min(box.bottom + BENCH_TOOLTIP_GAP, vh - h - BENCH_TOOLTIP_GAP);
+  const top = above >= BENCH_TOOLTIP_GAP ? above : Math.max(BENCH_TOOLTIP_GAP, below);
+  el.style.left = left + "px";
+  el.style.top = top + "px";
+}
+
 function drawBenchmarkChart(labels, datasets) {
   const canvasEl = document.getElementById("benchmark-chart");
   if (!canvasEl) return;
-  if (_benchmarkChartInst) { _benchmarkChartInst.destroy(); _benchmarkChartInst = null; }
+  if (_benchmarkChartInst) { _benchmarkChartInst.destroy(); _benchmarkChartInst = null; _hideBenchTooltip(); }
   const ctx = canvasEl.getContext("2d");
   const textColor = chartLabelColor();
   const crosshairPlugin = {
@@ -255,13 +318,10 @@ function drawBenchmarkChart(labels, datasets) {
       plugins: {
         legend: { display: false, labels: { color: textColor } },
         tooltip: {
-          enabled: true, mode: "index", intersect: false,
-          backgroundColor: inkColor("--carta-surface-card-elevated", "#2C3030"),
-          titleColor: "#9C9F9F", titleFont: { size: 10, family: "Inter,system-ui,sans-serif" },
-          bodyColor: "#FFFFFF", bodyFont: { size: 11, family: "Inter,system-ui,sans-serif" },
-          borderColor: "rgba(255,255,255,0.08)", borderWidth: 1,
-          padding: { top:8, bottom:8, left:12, right:12 },
-          cornerRadius: 6, caretSize: 4,
+          // Drawn on the canvas, the tooltip is cut off at the chart's 100px height and
+          // the card's overflow; a page-level box can grow past both.
+          enabled: false, external: renderBenchmarkTooltip,
+          mode: "index", intersect: false,
           itemSort: (a, b) => b.parsed.y - a.parsed.y,
           callbacks: {
             label(item) {
@@ -398,7 +458,7 @@ function _benchShowChartNote(msg) {
   const canvas = document.getElementById("benchmark-chart");
   const wrap = canvas ? canvas.closest(".chart-wrap") : document.querySelector(".card-preview .chart-wrap");
   if (!wrap) return;
-  if (_benchmarkChartInst) { _benchmarkChartInst.destroy(); _benchmarkChartInst = null; }
+  if (_benchmarkChartInst) { _benchmarkChartInst.destroy(); _benchmarkChartInst = null; _hideBenchTooltip(); }
   wrap.innerHTML = `<div class="bench-chart-note">${msg}</div>`;
 }
 
@@ -1200,6 +1260,8 @@ const PROMPT_TAGS = {
   accounting: { label: "Accounting", words: ["balance sheet", "p&l", "trial balance", "journal", "general ledger", "nav", "reconcil"] },
   finance:    { label: "Finance",    words: ["budget", "actuals", "expense", "manco", "aum", "form adv", "fee", "capital call", "distribution"] },
   portfolio:  { label: "Portfolio",  words: ["portfolio", "holding", "investment", "valuation", "moic", "irr", "tvpi", "cap table", "compan"] },
+  // Spaced " nda " so "calendar" and "agenda" don't read as NDAs.
+  legal:      { label: "Legal",      words: ["ndas", " nda ", "solicit", "counterpart"] },
 };
 const PROMPT_TAG_FALLBACK = "portfolio";
 
@@ -1235,9 +1297,13 @@ function capCardHtml(prompt, meta = {}) {
 }
 
 // "Suggested for you": the first 4 non-gap personalized prompts, open slots padded
-// from CAP_STATIC_PAD (all four pads when there are no personalized ones). Returns the
+// from capStaticPads() (all four pads when there are no personalized ones). Returns the
 // prompts now on screen so the "What's new" row below never repeats one.
+// The last recommendations, so the row can re-render with other pads.
+let _capRecs = [];
 function renderCapabilities(recs) {
+  _capRecs = recs;
+  const pads = capStaticPads();
   const grid = document.getElementById("cap-grid");
   const liveAll = Array.isArray(recs) ? recs.filter(r => !r.is_skill_gap && r.recommended_prompt) : [];
   const cards = liveAll.slice(0, 4).map(r => ({
@@ -1252,11 +1318,11 @@ function renderCapabilities(recs) {
   const haystack = cards.map(c => c.prompt).join(" ").toLowerCase();
   const covered = pad => pad.topics.some(t => haystack.includes(t));
   const has = pad => cards.some(c => c.prompt === pad);
-  for (const pad of CAP_STATIC_PAD) {
+  for (const pad of pads) {
     if (cards.length >= 4) break;
     if (!covered(pad) && !has(pad)) cards.push({ prompt: pad, source: PROMPT_SOURCE.STATIC });
   }
-  for (const pad of CAP_STATIC_PAD) {
+  for (const pad of pads) {
     if (cards.length >= 4) break;
     if (!has(pad)) cards.push({ prompt: pad, source: PROMPT_SOURCE.STATIC });
   }
@@ -1602,12 +1668,17 @@ window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change"
 
 // ── Banner dismiss (in-memory — sandbox blocks localStorage) ──
 // ── Tab switcher ──
-function switchTab(id) {
-  trackHome("click", "CartaHome.Tab." + (id === "recommended" ? "Recommended" : "Directory"));
+// Shows one pane and marks its tab, without counting a click.
+function showPane(id) {
   ['recommended', 'directory'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('active', t === id);
     document.getElementById('tab-btn-' + t).classList.toggle('active', t === id);
   });
+}
+
+function switchTab(id) {
+  trackHome("click", "CartaHome.Tab." + (id === "recommended" ? "Recommended" : "Directory"));
+  showPane(id);
   if (id === 'directory') {
     _dirTabOpened = true;
     renderDirectory();
@@ -1729,12 +1800,14 @@ function tourSectionHidden(id) {
 }
 
 function _tourShownSteps() {
-  return TOUR_STEPS.filter(step => !step.skipIfHidden || _tourIsShown(_tourGetEl(step)));
+  return TOUR_STEPS.filter(step => !tourSkipsStep(step) && (!step.skipIfHidden || _tourIsShown(_tourGetEl(step))));
 }
 
 // Hidden by attribute, folded away (capital activity with every card dismissed) or not shown.
 function _tourIsShown(el) {
-  return !!el && !el.hidden && !el.inert && el.style.display !== 'none';
+  // offsetParent is null when an ancestor hides it too, like the tab bar a Carta Law firm's
+  // Home hides (app/law-only-home.js).
+  return !!el && !el.hidden && !el.inert && el.style.display !== 'none' && el.offsetParent !== null;
 }
 
 function _tourGetEl(step) {
@@ -1840,7 +1913,7 @@ function _tourPaint() {
   let el       = _tourGetEl(step);
   const hidden = !_tourIsShown(el);
   const desc   = hidden && step.emptyDesc && typeof caNoneOpen === 'function' && caNoneOpen() ? step.emptyDesc : step.desc;
-  if (hidden && step.emptyDesc) el = null;
+  if (hidden) el = null;
   else if (el && step.spotId) el = document.getElementById(step.spotId) || el;
 
   // The card fades out where it is (riding off with the page), the page scrolls while the

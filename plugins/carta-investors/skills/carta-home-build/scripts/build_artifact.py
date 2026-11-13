@@ -120,6 +120,7 @@ APP_JS_PARTS = [
     "app/whats-new.js",
     "app/segment-dashboards.js",
     "app/nda-card.js",
+    "app/law-only-home.js",
     "app/soi-new-fund.js",
 ]
 

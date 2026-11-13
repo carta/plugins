@@ -207,6 +207,8 @@ function renderWhatsNew(profile, entries, shownAbove) {
   const section = document.getElementById("whats-new-section");
   if (!section) return;
   _wn.last = { profile, entries, shownAbove };
+  // A Carta Law firm gets no carousel: every item it would show needs Fund Admin.
+  if (lawOnlyUnknown() || isLawOnly()) { section.hidden = true; return; }
   // With no product flag known, show nothing rather than upsell a paying customer. Only
   // get_current_user's own flags count: a derived flag alone doesn't say what the firm has.
   const real = profile || {};

@@ -64,6 +64,7 @@ function layoutDashboards() {
   if (section) section.hidden = _reconnectShown || layout.count === 0;
   // The tour is not loaded in every test page.
   if (section?.hidden && typeof tourSectionHidden === "function") tourSectionHidden("dashboards-section");
+  lawOnlySettled();
   reportDashboardCards();
 }
 
@@ -92,6 +93,8 @@ function failDashboardCard(key) {
 function showDashboardNotes(...keys) {
   keys.forEach(key => { if (_cardState[key] === "loading") _cardState[key] = "note"; });
   layoutDashboards();
+  // The NDA answer won't come either, so nothing waits for it.
+  revealHome();
 }
 
 // Once every card this firm gets has settled (data, empty or error), record which ones it
