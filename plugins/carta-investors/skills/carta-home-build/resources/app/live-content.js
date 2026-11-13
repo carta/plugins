@@ -11,21 +11,22 @@ const NEWS_TAG_SOURCE = "metadata";
 // content_type intentionally UNSET so the query spans every tagged type; ADAPTERS picks the renderable ones.
 
 // Unwrap an MCP call_tool result into the plain object the command returned.
-// The command's output is {result: <entry|asset>}; prefer the structured payload,
-// fall back to JSON in the text content block.
-function _unwrap(res) {
-  if (!res || res.isError) return null;
-  let obj = res.payload ?? res.structured_content ?? res.structuredContent ?? null;
-  if (obj && obj.result !== undefined) obj = obj.result;
-  if (obj) return obj;
-  const txt = res.content?.[0]?.text;
-  if (!txt) return null;
+// FastMCP wraps the command's output as {result: "<json string>"}, so `result` is
+// parsed when it is a string. Prefer the structured payload, fall back to the text
+// content block. Returns null for an error or anything that is not JSON.
+function _parseJson(s) {
   try {
-    const parsed = JSON.parse(txt);
-    return parsed.result !== undefined ? parsed.result : parsed;
+    return JSON.parse(s);
   } catch (e) {
     return null;
   }
+}
+function _unwrap(res) {
+  if (!res || res.isError) return null;
+  let obj = res.payload ?? res.structured_content ?? res.structuredContent ?? null;
+  if (!obj && res.content?.[0]?.text) obj = _parseJson(res.content[0].text);
+  if (obj && obj.result !== undefined) obj = obj.result;
+  return typeof obj === "string" ? _parseJson(obj) : obj ?? null;
 }
 
 // Ask Contentful which entries to show, rather than naming entry IDs here, so
@@ -326,7 +327,7 @@ async function _listWhatsNewPrompts() {
   try {
     // No bridge probe here: _mcp() resolves the connector itself and throws when it
     // is unavailable, which the catch below turns into the microapps-only fallback.
-    const obj = _unwrap(await _mcp("call_tool", {
+    const payload = _unwrap(await _mcp("call_tool", {
       name: "marketing__list__content",
       arguments: {
         content_type: CONTENT_TYPE,
@@ -335,10 +336,6 @@ async function _listWhatsNewPrompts() {
         limit: String(FETCH),
       },
     }));
-    // FastMCP wraps a tool's return as {result: "<json string>"}, and _unwrap hands
-    // back whatever `result` held — so this is a JSON string on the wire even though
-    // a structured_content response gives an object. Parse the string form.
-    const payload = typeof obj === "string" ? JSON.parse(obj) : obj;
     const items = Array.isArray(payload?.items) ? payload.items : [];
     return items
       .map((it) => {

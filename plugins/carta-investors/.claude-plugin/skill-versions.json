@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.24.5",
+    "version": "1.24.6",
     "headline": "Firms that use Carta Law get a Home built around their NDAs: NDA prompts, and nothing that needs Fund Admin. Rebuild to get it."
   },
   "carta-lp-summary": {
