@@ -1,22 +1,29 @@
 // ── Segment dashboards: which cards show, and the LP summary card ──
 // Depends on core.js (carta-home.app.js): _mcp(), dwhRows(), fmtCurrency(), escHtml(), trackHome().
-// SOI and Fund performance are built for every firm, LP summary for Fund Admin firms. A card
-// whose query answers with no rows is hidden instead of showing a blank, and the grid sizes
-// itself to the cards left; with none left the whole section goes. A card whose query fails
-// stays, showing its note.
-// fundAdmin is null until get_current_user answers, so the LP query can start before then.
-const _segment = { fundAdmin: null, firmId: null, profileDone: false };
+// SOI, Fund performance and NDA insights are built for every firm, LP summary for Fund Admin
+// firms. A card whose query answers with no rows is hidden instead of showing a blank, and the
+// grid sizes itself to the cards left; with none left the whole section goes. A card whose
+// query fails stays, showing its note, unless it hides on error.
+// fundAdmin: undefined until get_current_user answers (and if it fails); then true, false, or
+// null when the answer doesn't say. The LP query can start before then.
+const _segment = { fundAdmin: undefined, firmId: null, profileDone: false };
 
 const LP_CARD_ROWS = 3;
 
 // One entry per dashboard card: its element id and the name its empty event carries.
+// `hideOnError` hides a card whose query fails: NDA insights, because most firms don't use
+// Carta Law and a note about NDAs would make no sense to them.
 const DASHBOARD_CARDS = {
   soi:  { id: "soi-card",  event: "SOI" },
   perf: { id: "perf-card", event: "Perf" },
   lp:   { id: "lp-card",   event: "LP" },
+  nda:  { id: "nda-card",  event: "NDA", hideOnError: true },
 };
-// "loading" until the card's query settles, then "data", "empty" or "error".
+// "loading" until the card's query settles, then "data", "empty" or "error". "note" is a card
+// showing why Home couldn't load the firm at all: shown like "error", but, like "loading",
+// `unsettled` until its own query answers.
 const _cardState = Object.fromEntries(Object.keys(DASHBOARD_CARDS).map(key => [key, "loading"]));
+const unsettled = state => state === "loading" || state === "note";
 let _cardsReported = false;
 
 // The cards this firm gets: LP summary only for a Fund Admin firm.
@@ -24,8 +31,22 @@ function firmCards(seg) {
   return Object.keys(DASHBOARD_CARDS).filter(key => key !== "lp" || seg.fundAdmin === true);
 }
 
+// Whether the LP query may run: only while the profile hasn't answered, or once it has said the
+// firm has Fund Admin. A profile that answered without saying, or failed, gets no LP card.
+const mayGetLpCard = seg => seg.fundAdmin === true || (seg.fundAdmin === undefined && !seg.profileDone);
+
+// A Fund Admin firm sees its cards while they load, and so does a firm whose profile answered
+// without saying. A firm Carta says has no Fund Admin, or whose profile failed, waits.
+const showsLoadingCards = seg => seg.fundAdmin === true || (seg.profileDone && seg.fundAdmin === null);
+
+// Any firm that doesn't see loading cards sees a card only once it has something to show, so a
+// card it has no data for never appears and then vanishes. A card that hides on error (NDA
+// insights) waits for its data for every firm: most firms have no NDAs to show.
 function dashboardLayout(seg, state) {
-  const shown = firmCards(seg).filter(key => state[key] !== "empty");
+  const ready = key => DASHBOARD_CARDS[key].hideOnError ? state[key] === "data"
+    : showsLoadingCards(seg) ? state[key] !== "empty"
+    : ["data", "error", "note"].includes(state[key]);
+  const shown = firmCards(seg).filter(ready);
   return { shown, count: shown.length };
 }
 
@@ -49,17 +70,27 @@ function layoutDashboards() {
 // A card's query has settled. Empty hides the card; data keeps it. A failed card can still
 // settle when a later retry gets its data.
 function settleDashboardCard(key, hasData) {
-  if (!(key in _cardState) || !["loading", "error"].includes(_cardState[key])) return;
+  const state = _cardState[key];
+  if (!(key in _cardState) || !(unsettled(state) || state === "error")) return;
   _cardState[key] = hasData ? "data" : "empty";
   if (!hasData) trackHome("render", `CartaHome.${DASHBOARD_CARDS[key].event}.Empty`);
   layoutDashboards();
 }
 
-// A card's query failed. The card stays with its note, so it counts as shown.
+// A card's query failed. The card stays with its note, so it counts as shown, unless it
+// hides on error (dashboardLayout). Either way a retry can still load it.
 function failDashboardCard(key) {
-  if (!(key in _cardState) || _cardState[key] !== "loading") return;
+  if (!(key in _cardState) || !unsettled(_cardState[key])) return;
   _cardState[key] = "error";
   trackHome("render", `CartaHome.${DASHBOARD_CARDS[key].event}.LoadError`);
+  layoutDashboards();
+}
+
+// Home couldn't load the firm's data, so these cards show the note saying why.
+// CartaHome.Unavailable.* records that page; CartaHome.View.Cards waits until a load in which
+// every card the firm gets settles through its own query, a recovered load included.
+function showDashboardNotes(...keys) {
+  keys.forEach(key => { if (_cardState[key] === "loading") _cardState[key] = "note"; });
   layoutDashboards();
 }
 
@@ -68,10 +99,18 @@ function failDashboardCard(key) {
 // counts. Sent as a click because a render event can't carry a value.
 function reportDashboardCards() {
   if (_cardsReported || !_segment.profileDone || _reconnectShown) return;
-  if (firmCards(_segment).some(key => _cardState[key] === "loading")) return;
+  if (firmCards(_segment).some(key => unsettled(_cardState[key]))) return;
   _cardsReported = true;
   const shown = dashboardLayout(_segment, _cardState).shown;
   trackHome("click", "CartaHome.View.Cards", { value: shown.length ? shown.join(",") : "none" });
+  openTourWhenReady();
+}
+
+// The tour points at the dashboards, so it waits until they stop changing: a firm that sees
+// loading cards (showsLoadingCards) has them on screen from the start (NDA insights joins only
+// if it has data); any other firm waits until every card has settled.
+function dashboardsReadyForTour() {
+  return showsLoadingCards(_segment) || _cardsReported;
 }
 
 // Wording for a firm whose holdings are all in SPVs, so the cards don't call them funds. The
@@ -106,9 +145,9 @@ function applyWording(map) {
 
 // From fetchUserEnrichment, once get_current_user answers.
 function segmentSetFundAdmin(flag) {
-  _segment.fundAdmin = flag === true;
+  _segment.fundAdmin = typeof flag === "boolean" ? flag : null;
   layoutDashboards();
-  if (!_segment.fundAdmin) return;
+  if (!mayGetLpCard(_segment)) return;
   if (_lpResult) applyLpResult();
   else if (_segment.firmId) fetchLpSummary();
 }
@@ -117,15 +156,16 @@ function segmentSetFundAdmin(flag) {
 // firm gets an LP card is known. Never from the 5s backstop: a slow profile can still add it.
 function segmentProfileDone() {
   _segment.profileDone = true;
-  reportDashboardCards();
+  layoutDashboards();
 }
 
 // From fetchLiveData, once the firm is resolved and pinned with set_context.
-// The LP query starts here, beside the other cards, unless the profile already said no: waiting
-// for get_current_user would put it behind the profile call.
+// The LP query starts here, beside the other cards, while the profile hasn't answered or once it
+// has said the firm has Fund Admin: waiting for get_current_user would put it behind the profile call.
 function segmentSetFirm(firmId) {
   _segment.firmId = firmId;
-  if (_segment.fundAdmin !== false) fetchLpSummary();
+  fetchNdaSummary(firmId);
+  if (mayGetLpCard(_segment)) fetchLpSummary();
 }
 
 // ── LP summary ──

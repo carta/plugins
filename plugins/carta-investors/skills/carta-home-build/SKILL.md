@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.44.6</carta-plugin>
+<carta-plugin>carta-investors:7.44.10</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -132,6 +132,11 @@ at the start of its `description`.
   LP families by commitment with net TVPI, from `FUND_ADMIN.PARTNER_DATA` and each partner's
   latest `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` month, per fund currency. The footer
   launches the LP Summary dashboard.
+- **NDA insights** (`resources/app/nda-card.js`, firms with NDAs Carta Law has read) — the
+  three NDAs that expire soonest, the NDA count and how many companies are under
+  an active restriction (a non-solicit, no-contact or non-circumvention clause), by
+  carta-nda-dashboard's rules. It is not built with Home, so the footer
+  opens the NDA dashboard's prompt. A firm without NDAs never sees it, even when the query fails.
 - **What's new** (`resources/app/whats-new.js`) — a rotating carousel of up to four items.
   The featured microapps (`WHATS_NEW_MICROAPPS`: Fund Modeling, ManCo Budgeting, Portfolio
   Analytics) each have a preview mockup and a "Set up in Claude Code" button that copies their
@@ -191,7 +196,11 @@ The dashboard cards are **summaries that link out**, not full surfaces. The full
 Investments, Fund Performance and LP Summary experiences each live in their own standalone
 artifact, published by their own skill, so there is exactly one implementation of each.
 Every firm gets the first two; a Fund Admin firm adds LP summary
-(`resources/app/segment-dashboards.js`), so the grid holds 2 or 3 cards.
+(`resources/app/segment-dashboards.js`) and a firm with NDAs adds NDA insights, so the grid
+holds 1 to 4 cards. A Fund Admin firm, or one whose profile answered without saying, sees its
+cards while they load; a firm Carta says has no Fund Admin, or whose profile failed, sees a
+card only once it has data or a note, and its tour waits for the cards. NDA insights waits for
+its data for every firm, and never shows a note.
 
 `DASHBOARDS` in `resources/carta-home.config.js` is the registry. Each entry has:
 
@@ -265,7 +274,8 @@ need the full file in context. Edit the small source file for what you're changi
 | `resources/app/capital-activity.js` | Capital activity cards + detail overlay (fetch/render/dismiss) | change the capital call / distribution cards or their detail modal |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |
-| `resources/app/segment-dashboards.js` | LP summary card: which firms get it, its warehouse query, and the 2/3-card grid | change who sees that card or what it shows |
+| `resources/app/segment-dashboards.js` | LP summary card: which firms get it, its warehouse query; which cards show while loading, and the 1–4-card grid | change who sees that card or what it shows |
+| `resources/app/nda-card.js` | NDA insights card: its warehouse query and rows | change what the NDA card shows |
 | `resources/app/whats-new.js` | What's new carousel: featured microapps (locked by product flag, linked in-app or to a carta.com demo page or not at all; the Data Collection lookup behind Portfolio Analytics), one new skill from Contentful (only one the current Skill Directory lists, skipping `whatsNew: false` and featured microapps' own skills, visual outputs first) with a preview of its output (`WHATS_NEW_SKILL_OUTPUTS` in the config file), rotation, and the microapp preview mockups (microapp list lives in `WHATS_NEW_MICROAPPS` in the config file above) | change which microapps are featured or how they lock, how many new skills join, or the carousel's behaviour |
 | `resources/app/soi-new-fund.js` | SOI card banner for funds the published SOI page does not list yet (fund list from `--soi-page`), its copy prompt and dismissal | change when that banner shows or what it says |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
@@ -369,10 +379,11 @@ its prompt is copied, `CartaHome.SOI.NewFund.Dismiss` (click) when it is dismiss
 
 Dashboard cards: a card whose query answers with no rows is hidden, never shown blank
 (`settleDashboardCard` in `app/segment-dashboards.js`), and fires `CartaHome.SOI.Empty`,
-`CartaHome.Perf.Empty` or `CartaHome.LP.Empty` (render). A card whose query fails keeps an
+`CartaHome.Perf.Empty`, `CartaHome.LP.Empty` or `CartaHome.NDA.Empty` (render). A card whose query fails keeps an
 note and fires `CartaHome.SOI.LoadError`, `CartaHome.Perf.LoadError` or
-`CartaHome.LP.LoadError` (`failDashboardCard`). Once every card the firm gets has loaded or
-failed, `CartaHome.View.Cards` (click, `value` = the cards shown, a failed card included, e.g.
+`CartaHome.LP.LoadError` (`failDashboardCard`); NDA insights hides instead and fires
+`CartaHome.NDA.LoadError`. Once every card the firm gets has loaded or
+failed, `CartaHome.View.Cards` (click, `value` = the cards shown, a failed card included except NDA insights, e.g.
 `soi,perf`, or `none`) records which Home the firm got. The full list is in `USAGE_DATA.md`.
 
 A button that copies a prompt calls `trackPrompt(elementId, prompt, source, { skill, rank })`
@@ -911,6 +922,7 @@ Carta Home dashboard as a whole, not on requests for one of those cards in isola
 |------|-----------|-------|
 | SOI | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.FUNDS` | Joined on FUND_UUID; a second `FUND_ADMIN.FUNDS` lookup (every real fund with `IS_ADMINISTERED_BY_CARTA`) feeds the scope note |
 | Fund Performance | `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` (chart + metrics); `FUND_ADMIN.AGGREGATE_FUND_METRICS` (Total Value fallback when benchmarks empty) | All funds for the firm, ≥ 2021-06-01 |
+| NDA insights | `FUND_ADMIN.DOCUMENT_AI_RECORD` + `FUND_ADMIN.DOCUMENT_ATTRIBUTE_CARTA_LAW_WORK_ITEM` | carta-nda-dashboard's dedupe, counterparty and expiry rules; `resources/app/nda-card.js` |
 | LP Summary | `FUND_ADMIN.PARTNER_DATA` + `FUND_ADMIN.FUNDS` + `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` | Largest LP families by commitment per fund currency, net TVPI from each partner's latest month; Fund Admin firms only (`resources/app/segment-dashboards.js`) |
 | Capital Activity | none — `fa:list:active-capital-activity` + `fa:list:capital-activity-partner` | Active capital calls/distributions + per-partner detail; the row `id`/`fund_uuid` feed the reminder `call_tool` call |
 

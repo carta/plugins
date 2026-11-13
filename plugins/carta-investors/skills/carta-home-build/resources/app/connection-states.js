@@ -27,7 +27,7 @@ const CONNECTION_LOST_CODES = new Set(Object.keys(RECONNECT_COPY));
 const TOOL_OFF_CODES = new Set(["not_in_manifest", "not_granted", "consent_required", "capability_disabled"]);
 
 // One place for each card's subject, so every cause reads the same on every card.
-const CARD_SUBJECT = { soi: "your portfolio", perf: "fund performance", lp: "your investors" };
+const CARD_SUBJECT = { soi: "your portfolio", perf: "fund performance", lp: "your investors", nda: "your NDAs" };
 
 const CHECK_AGAIN = { label: "Check again", event: "CheckAgain" };
 const TRY_AGAIN = { label: "Try again", event: "TryAgain" };

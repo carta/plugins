@@ -200,6 +200,8 @@ let _fundColorMap  = {};        // { fundName → CSS colour } — populated in 
 const _BENCH_COLORS = ["--carta-series-blue", "--carta-series-teal", "--carta-series-pink", "--carta-series-gray", "--carta-series-lilac"];
 const _benchToken = i => _BENCH_COLORS[i % _BENCH_COLORS.length];
 const FIRM_PLACEHOLDER = 'your firm';
+// The firm's own name once fetchLiveData has it, else null.
+const firmOwnName = () => (_firmDisplayName && _firmDisplayName !== FIRM_PLACEHOLDER ? _firmDisplayName : null);
 let _firmDisplayName = FIRM_PLACEHOLDER; // set by fetchLiveData once firm is resolved
 
 // ── Resolve a CSS custom property to a concrete color Chart.js can paint ──
@@ -421,8 +423,9 @@ async function fetchBenchmarkFallback() {
     }
   });
   if (res.isError) throw new Error("DWH fallback failed");
-  const rows = dwhRows(res, "FUND_UUID");
-  if (!rows.length) return false;  // no fund data at all
+  // A fund with no value previews as a blank row, so only funds with a value count.
+  const rows = dwhRows(res, "FUND_UUID").filter(r => parseFloat(r.TOTAL_VALUE || 0) !== 0);
+  if (!rows.length) return false;  // no fund with a value
 
   rows.forEach((r, i) => { _fundColorMap[r.FUND_NAME] = `var(${_benchToken(i)})`; });
   // AGGREGATE_FUND_METRICS is a latest-month snapshot per fund, not a quarterly
@@ -465,6 +468,7 @@ function _renderBenchValueTable(items, asOf) {
 function populateFallback(code = "no_connector") {
   renderSOIError(code);
   renderBenchError(code);
+  showDashboardNotes("soi", "perf");
 }
 
 // The Fund performance card's note, unless the card already shows something other than an
@@ -663,7 +667,8 @@ function fmtShort(v) {
 
 function fmtDate(d) {
   if (!d) return "—";
-  const dt = new Date(d);
+  // A date-only value is that day where the viewer is, not midnight UTC.
+  const dt = /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? new Date(d + "T00:00:00") : new Date(d);
   if (isNaN(dt)) return String(d).slice(0, 10);
   return dt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
@@ -812,6 +817,7 @@ async function fetchLiveData({ final = true } = {}) {
     } else {
       if (_cardState.perf === "error") fetchBenchmarkData();
       if (_cardState.lp === "error") fetchLpSummary();
+      if (_cardState.nda === "error") fetchNdaSummary();
     }
 
     // Step 2: single DWH query — fund names + portfolio values (no set_context or fa:list:entities needed)
@@ -865,6 +871,7 @@ async function fetchLiveData({ final = true } = {}) {
     trackUnavailable("CartaHome.Unavailable.LoadError");
     // Connector-level codes rethrow from _mcp and land here; each code has its own fix.
     renderSOIError(err?.code);
+    showDashboardNotes("soi");
     return "failed";
   }
 }
@@ -1163,7 +1170,7 @@ function promptParts(prompt, now = new Date()) {
     push(prompt.text.slice(last));
     return parts;
   }
-  const firm = _firmDisplayName && _firmDisplayName !== FIRM_PLACEHOLDER ? _firmDisplayName : null;
+  const firm = firmOwnName();
   const alts = [
     `\\bQ[1-4](?:\\s?(?:'|\u2019)?\\d{2,4})?\\b`,
     `\\b${MONTHS_RE} \\d{1,2}, \\d{4}\\b`,
@@ -1514,9 +1521,25 @@ function markEnrichmentDone() {
   if (_enrichmentDone) return;
   _enrichmentDone = true;
   if (_dirTabOpened) renderDirectory();
-  // The tour opens once get_current_user has answered (or failed), or the 5s backstop has
-  // fired, so What's new has usually settled. tourStart fixes the tour's steps either way.
-  tourStart();
+  openTourWhenReady();
+}
+
+// The tour opens once get_current_user has answered (or failed), or the 5s backstop has
+// fired, so What's new has usually settled, and once the dashboards are ready for it
+// (dashboardsReadyForTour in app/segment-dashboards.js). If they are still loading, it opens
+// when they settle or after TOUR_CARD_WAIT_MS, whichever comes first. The steps are fixed
+// when it opens either way.
+// Long enough for a slow warehouse answer: opening early would tour cards still settling.
+const TOUR_CARD_WAIT_MS = 10000;
+let _tourWaitTimer = null;
+function openTourWhenReady() {
+  if (!_enrichmentDone) return;
+  if (dashboardsReadyForTour()) {
+    clearTimeout(_tourWaitTimer);
+    tourStart();
+  } else if (!_tourWaitTimer) {
+    _tourWaitTimer = setTimeout(tourStart, TOUR_CARD_WAIT_MS);
+  }
 }
 
 // ── Init ──
@@ -1670,7 +1693,7 @@ function _tourSeen() {
 }
 
 function tourStart() {
-  if (_tourSeen()) return;
+  if (_tourSeen() || _tourIsOpen()) return;
   // Not over the Skill directory tab, where every Home step would point at a hidden pane, and
   // not while the viewer is typing, since the tour takes focus. A later visit opens it instead.
   if (!document.getElementById('tab-recommended')?.classList.contains('active')) return;

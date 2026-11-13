@@ -40,6 +40,13 @@ const DASHBOARDS = [
     // carta-home.app.js). The card shows on the same condition (app/segment-dashboards.js).
     requires: 'has_fund_admin',
   },
+  {
+    key: 'nda',
+    label: 'Open NDA Dashboard',
+    footerId: 'nda-card-footer',
+    prompt: 'Show me my NDA dashboard',
+    // No buildSkill: the NDA dashboard is not built with Home, so the card opens its prompt.
+  },
 ];
 
 // Baked in at build time by build_artifact.py from --dashboard-url key=url, or this

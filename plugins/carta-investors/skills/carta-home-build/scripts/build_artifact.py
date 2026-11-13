@@ -119,6 +119,7 @@ APP_JS_PARTS = [
     "app/skill-directory.js",
     "app/whats-new.js",
     "app/segment-dashboards.js",
+    "app/nda-card.js",
     "app/soi-new-fund.js",
 ]
 

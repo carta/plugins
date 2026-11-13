@@ -34,7 +34,7 @@ arrive only when the host still relays UI events.
 | `CartaHome.View` | render | Home loaded |
 | `CartaHome.View.Version` | click | `value` = the skill version the page was built with |
 | `CartaHome.View.First` | render | First load in this browser |
-| `CartaHome.View.Cards` | click | Every dashboard card the firm gets has loaded or failed, and the profile (`get_current_user`) has answered or failed. `value` = the cards shown, in order (`soi`, `perf`, `lp`, comma-separated), or `none`. A card whose query failed is shown with its note, so it is in `value`; its `LoadError` event tells it apart from a card with data. Not sent when Carta isn't connected, there's no active firm, the profile never answers, the reconnect panel is shown, or loading fails at the connector (`Unavailable.NoFirm`, `Unavailable.LoadError`) |
+| `CartaHome.View.Cards` | click | Every dashboard card the firm gets has loaded or failed, and the profile (`get_current_user`) has answered or failed. `value` = the cards shown, in order (`soi`, `perf`, `lp`, `nda`, comma-separated), or `none`. A card whose query failed is shown with its note, so it is in `value`, except NDA insights, which hides on error; its `LoadError` event tells it apart from a card with data. Not sent when Carta isn't connected, there's no active firm, the profile never answers, the reconnect panel is shown, or loading fails at the connector (`Unavailable.NoFirm`, `Unavailable.LoadError`), unless a later load of the same page (on return, or Try again) gets every card |
 | `CartaHome.Unavailable.NoFirm` | render | Once per page, the first time Home finds no active firm in the viewer's Carta context |
 | `CartaHome.Unavailable.LoadError` | render | Once per page, the first time loading the firm's data fails at the connector, after Home's quiet retries for a passing failure |
 | `CartaHome.Load.Recovered` | click | Home's data loaded after a failure. `value` = `<trigger>:<try>`: `open` (first open, after quiet retries), `focus` (the viewer came back to a Home that had failed) or `button` (Try again), and which try worked, e.g. `open:3`. A first-try load on open sends nothing |
@@ -54,10 +54,12 @@ A card whose query answers with no rows is hidden instead of shown blank. A card
 | `CartaHome.SOI.NewFund.Copy` | prompt | The banner's update prompt was copied (a `trackPrompt`, source `dashboard`, skill `carta-soi`). Carries the fixed text "Update my Schedule of Investments to add new funds", never fund names |
 | `CartaHome.SOI.NewFund.Dismiss` | click | The banner was dismissed |
 | `CartaHome.SOI.PartialScope` | render | The Schedule of investments card shows the "Carta administers N of your M funds" note, so Carta administers only part of the firm's funds. Not sent when the fund lookup fails: the note is hidden. Not sent for a fund of funds either |
-| `CartaHome.Perf.Empty` | render | The benchmark and fund metrics queries answered with no fund, so the Fund performance card is hidden. Not sent when either query fails without a fund to show: the card stays with its note and `Perf.LoadError` is sent |
+| `CartaHome.Perf.Empty` | render | The benchmark and fund metrics queries answered with no fund that has a value, so the Fund performance card is hidden. Not sent when either query fails without a fund to show: the card stays with its note and `Perf.LoadError` is sent |
 | `CartaHome.Perf.LoadError` | render | No fund could be shown because the benchmark or fund metrics query failed; the Fund performance card stays and shows a note |
 | `CartaHome.LP.Empty` | render | A Fund Admin firm has no LPs to show, so the LP summary card is hidden |
 | `CartaHome.LP.LoadError` | render | The LP query failed; the LP summary card stays and shows a note |
+| `CartaHome.NDA.Empty` | render | The firm has no NDAs Carta has read, so the NDA insights card is hidden. Sent for every firm without Carta Law |
+| `CartaHome.NDA.LoadError` | render | The NDA query failed. The NDA insights card stays hidden, since most firms don't use Carta Law, and is left out of `View.Cards`; a retry of Home's load tries it again |
 | `CartaHome.Dashboard.Open.<dashboard>` | click | Opened a built dashboard from its card |
 | `CartaHome.Dashboard.CopyPrompt.<dashboard>` | prompt | Copied a dashboard's prompt from its card |
 | `CartaHome.Customize.Open.<dashboard>` | click | Opened a card's customize options |

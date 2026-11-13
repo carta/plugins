@@ -53,14 +53,14 @@
   </section>
 
   <!-- ── Portfolio analytics ── -->
-  <section id="dashboards-section">
+  <section id="dashboards-section" hidden>
     <div class="section-label-row">
       <p class="section-label" style="margin:0">Your dashboards</p>
     </div>
     <div class="card-grid" id="dashboard-grid" data-cards="2">
 
       <!-- Schedule of Investments -->
-      <div class="skill-card dash-card" id="soi-card">
+      <div class="skill-card dash-card" id="soi-card" hidden>
         <div class="card-header">
           <div class="card-header-text">
             <div class="card-title">Schedule of investments</div>
@@ -85,7 +85,7 @@
       </div>
 
       <!-- Fund Performance -->
-      <div class="skill-card dash-card" id="perf-card">
+      <div class="skill-card dash-card" id="perf-card" hidden>
         <div class="card-header">
           <div class="card-header-text">
             <div class="card-title">Fund performance</div>
@@ -119,6 +119,25 @@
           </div>
         </div>
         <div class="card-footer" id="lp-card-footer"></div>
+      </div>
+
+      <!-- NDA insights — shown when the firm has NDAs Carta has read (app/segment-dashboards.js) -->
+      <div class="skill-card dash-card" id="nda-card" hidden>
+        <div class="card-header">
+          <div class="card-header-text">
+            <div class="card-title">NDA insights</div>
+            <div class="card-desc">Your NDAs that expire soonest, and how many companies are under an active restriction.</div>
+          </div>
+        </div>
+        <div class="card-preview">
+          <div class="tbl-row tbl-header">
+            <span class="tbl-col-name">EXPIRING SOON</span>
+            <span class="tbl-col-lp">EXPIRES</span>
+          </div>
+          <div id="nda-rows"></div>
+          <div class="soi-scope-note" id="nda-note" hidden></div>
+        </div>
+        <div class="card-footer" id="nda-card-footer"></div>
       </div>
 
     </div>
