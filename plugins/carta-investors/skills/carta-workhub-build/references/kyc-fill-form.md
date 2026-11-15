@@ -7,14 +7,17 @@ Help the signed-in user fill in **their own** KYC forms, the way a compliance an
 an investor's own KYC tasks, or, for a GP, the KYC of one of their firm's funds (Step 1b), one
 task or several in one chat (Batch mode). Work in a loop: say what each open task still needs, read the documents the user shares against
 what the form asks, save the answers the user confirms, and go round again until nothing is
-left that Claude can fill. Then, in a form reloaded after the last save, the user does
-everything only the form can (Step 2) and submits each form themselves.
+left that Claude can fill. Then the user does what only the form can (Step 2) in a form reloaded
+after the last save, and the form is submitted: from the chat only where Carta's submit check is
+enforced for the form, which covers what the form checks except the RBI/CBI answers (Step 10),
+otherwise by the user in the form (Step 9).
 
 ## When to Use
 
 - "Help me fill in my KYC form."
 - "Complete my Carta identity verification from these documents."
 - "What does my KYC form still need?"
+- "Submit my KYC." / "Is my KYC ready to submit?"
 - "Here's my passport and our formation documents, can you do the KYC?"
 - "This isn't working, I want to give feedback on the KYC form."
 - "Help me complete our fund's KYC due diligence."
@@ -27,8 +30,14 @@ everything only the form can (Step 2) and submits each form themselves.
 
 ## Rules
 
-- **Never submit the form.** No command here submits it. Saving answers only fills it in;
-  the user checks the form and presses Submit themselves.
+- **Submit only through Step 10, and only once the user says to.** `kyc__mutate__submission`
+  is the only command that submits, and it submits only where Carta's submit check is enforced
+  for the form, which covers what the form checks except the RBI/CBI answers (Step 10); everywhere
+  else it hands the form back to the user. Saving answers only fills the
+  form in. Never say a KYC is submitted unless that command returned `submitted: true`.
+- **Declarations in Carta's words only.** A declaration is a legal statement the user makes.
+  Show each one exactly as `attestationPrompts` words it, record only the ones the user agrees
+  to, and never write, shorten or reword one yourself (Step 6d).
 - **Upload only what the user shared, after asking.** In Claude Code or Cowork, upload a
   document the user gave you as a file on their computer, once they confirm it (Step 7). In
   claude.ai chat there is no `Bash`, so every document is the user's to upload in the form:
@@ -74,7 +83,7 @@ Tell the user, task by task, by its fund or entity name (never the reference id)
 | --- | --- |
 | `EVALUATION_COMPLETION_STATUS_NOT_STARTED` | Not started |
 | `EVALUATION_COMPLETION_STATUS_IN_PROGRESS` | In progress, and what is still missing, sorted as Step 2 shows (the form-only group waits for Step 9) |
-| `EVALUATION_COMPLETION_STATUS_COMPLETE` | Ready for them to check and submit in the form |
+| `EVALUATION_COMPLETION_STATUS_COMPLETE` | Ready to check and submit |
 | `EVALUATION_COMPLETION_STATUS_SUBMITTED` | Submitted, nothing to do |
 | `null` | Its status could not be read; offer to look at it anyway |
 
@@ -213,7 +222,9 @@ When the last task is done, give one list of every task in the batch, by its fun
 name, each with Step 9's summary and its `form_url`. List the skipped tasks with their reason
 (not a v2 form: fill it on Carta; refused; no longer waiting on you). Step 9's reload, finish
 and submit instructions, and its rule never to call a KYC done or submitted, hold for every form
-in the list.
+in the list. Step 9's submit question, and Step 10, are offered per task: one question and one
+submission for each task that is ready to submit (Step 2) with nothing left for the form, never one for
+several.
 
 ## Step 2 — Read what the task still needs, and who can fill it
 
@@ -230,13 +241,23 @@ It reads:
 | `rosterShortfalls[]` | a role with too few or too many people or entities (`minCount`/`maxCount`) |
 | `ownershipShortfalls[]` | a member whose ownership is not stated or is below the role's `minOwnershipPct` |
 | `roleMismatches[]` | a member of a kind its role does not take, or in a role no rule defines |
+| `brokenValidations[]` | an answer or document that breaks a rule (`entityId`, `fieldId` or `fileType`, `subFieldPath`, and the rule's own `message`), such as a proof of address that is too old. `status` can read `COMPLETE` while this is not empty |
 | `reopen` | why the form is back with the user |
+
+A task is **ready to submit** when it reads `COMPLETE` and lists no `brokenValidations`. Show each
+broken rule to the user in its own words and fix it like a missing item: a new answer, or a new
+document. Sort each broken rule into the two groups below as you would the same field or document
+if it were missing.
 
 Sort every item into one of two groups, and say both to the user, and that the second group
 waits for Step 9:
 
 - **Claude can fill it:** a field `kyc__mutate__answers` takes (Step 6), on a party already on
-  the form (it has an `entityId` here), and a member's ownership in `ownershipShortfalls`. With
+  the form (it has an `entityId` here), and a member's ownership in `ownershipShortfalls`; the
+  tax fields `taxReportingDetails`, `fatcaDetails`, `crsDetails` and `rbiCbiDetails` (Step 6b);
+  the Investor Profile fields `accreditations`, `accreditationType` and `investorExperiences`
+  (Step 6c); and the declarations `accuracyDeclaration`, `backgroundCheckConsent`,
+  `taxDeclaration` and `luxInvestorProtectionDeclaration` (Step 6d). With
   `Bash` (Claude Code or Cowork), also a document for such a party that the user shares as a
   file (Step 7), unless it is already on the Step 9 list: a document declined, refused or
   failed in this session is left for the form and never asked about or sent again. The same
@@ -245,7 +266,10 @@ waits for Step 9:
   share as a file; a person or entity a `rosterShortfalls` role still needs, or one in
   `roleMismatches` (the user adds, removes or changes it in the form); the nature of business
   (`businessNature`), which the form picks from a closed list Carta's API does not give, so never
-  propose a value for it; and the sections Step 6 leaves to the form.
+  propose a value for it; the CRS certification and signature (part of `crsDetails`), which only
+  the user gives in the form, so a `crsDetails` still missing after its answers are saved counts
+  as form-only; an Investor Profile questionnaire the user did not answer in full (Step 6c); and
+  the sections Step 6 leaves to the form.
 
 A missing field with one of these `fieldId`s is answered by a file, not a value. Treat it as a
 document, under the `fileType` shown (the form's own field-to-document table). Uploading the file
@@ -363,14 +387,73 @@ Shapes the form refuses otherwise:
 | `ownershipPercentage`, `ownershipInterests`, `controlByOtherMeans`, `isUsResident`, `isUsPerson`, `isSpecifiedUsPerson` | beside `individual`/`institution`, not inside; `ownershipPercentage` as `{"value": "25"}`, never `25` |
 | an address | the **whole** address object. A section you send replaces the stored one, so a partial address loses the rest. |
 | a field the other kind declares, or one the firm wrote | under `individual`/`institution` as `customFields`, keyed by its camelCase `fieldId` |
+| `taxInfo` (tax residencies) | the **whole** list, one row per residency. A number outside the US: `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_TIN", "taxId": "…"}`; no number: `{"taxCountry": "VG", "taxIdMissingReason": "…"}` (the user's own reason). A row with a number and no `taxIdType` still owes the reason |
+| `utr` (UK Unique Taxpayer Reference) | not a field of its own: one more `taxInfo` row, `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_UTR", "taxId": "…"}`, sent with every other row. Without a UTR, the same row with `"taxIdMissingReason": "…"` (the user's own reason) in place of `taxId` |
 
-Not answered here, only in the form: tax reporting (`taxReportingDetails`), FATCA
-(`fatcaDetails`), CRS (`crsDetails`), the PEP declaration and the other attestations, and the
-nature of business (`businessNature`), a closed list only the form offers: never propose or save
-a value for it.
+Not answered here: the tax records, the Investor Profile and the declarations, which have
+commands of their own (Steps 6b–6d), and the nature of business (`businessNature`), a closed list
+only the form offers: never propose or save a value for it.
 
 The result names the `saved_fields`, never their values. A refusal names what went wrong;
 fix the shape it points at and try once more, then leave that field for the user.
+
+### 6b — Tax reporting, FATCA and CRS
+
+```
+call_tool({"name": "kyc__mutate__tax_records",
+           "arguments": {"evaluation_id": "<evaluation_reference_id>",
+                         "records": {"taxReportingDetails": {"<sub-field Step 2 names>": "…"},
+                                     "fatcaDetails": {"isForeignFinancialInstitution": "OPTIONAL_BOOL_VALUE_FALSE"}}}})
+```
+
+Keys are the tax records Step 2 lists, each holding the sub-fields Step 2 names. Save
+`taxReportingDetails` first, or in the same call; the other records are refused until it is
+saved. Yes/no answers are `OPTIONAL_BOOL_VALUE_TRUE` / `OPTIONAL_BOOL_VALUE_FALSE`. Add `entity_id` for a supporting party.
+Only the answers you send change. The CRS certification and signature are the user's to give in
+the form: never send them. Show the answers in Step 5's table first, as for any other answer.
+
+### 6c — Investor Profile
+
+Read the party's form (Step 3) first. Under its `accreditations` field, each accreditation type
+lists its statements (the options of its `statements` sub-field, with their wording) and, for a
+statement with a question of its own, that question (the `name` of its `answers` sub-field).
+Under `investorExperiences`, each question lists its answers. Show the user each statement and
+question in those words, and save only what they choose:
+
+```
+call_tool({"name": "kyc__mutate__investor_profile",
+           "arguments": {"evaluation_id": "<evaluation_reference_id>",
+                         "accreditations": {"<ACCREDITATION_TYPE_…>": {"statements": ["<ACCREDITATION_VALUE_…>"],
+                                                                       "<ACCREDITATION_VALUE_…>": {"answers": ["…"]}}},
+                         "investor_experiences": {"<INVESTOR_EXPERIENCE_TYPE_…>": ["<INVESTOR_EXPERIENCE_VALUE_…>"]}}})
+```
+
+`accreditations` replaces the whole questionnaire. Before a call carrying `accreditations`, ask
+every accreditation type Step 3 lists for the party, and send them all in that one call. If the
+user does not answer every type, send no `accreditations`, and put the questionnaire on the
+form-only list for Step 9.
+A party with several roles needs `relation_type` (and `role_key`) naming the one whose form words
+the profile; the profile is the party's, so save it once.
+
+### 6d — Declarations
+
+The party's form (Step 3) lists `attestationPrompts`: each `attestationType`, `title`, `text`,
+`required` and `requiresChoice`. Show each prompt's `title` and `text` exactly, one by one or in a
+list, and ask with `AskUserQuestion`: `I agree` / `I don't agree` for each declaration, and `Yes` /
+`No` for a prompt with `requiresChoice` (the firm sharing question, which has no default). Then
+record what they chose:
+
+```
+call_tool({"name": "kyc__mutate__attestations",
+           "arguments": {"evaluation_id": "<evaluation_reference_id>",
+                         "agreed": ["ATTESTATION_TYPE_ACCURACY", "ATTESTATION_TYPE_BACKGROUND_CHECK"],
+                         "declined": ["ATTESTATION_TYPE_FIRM_SHARING_AGREEMENT"]}})
+```
+
+`agreed` takes only what the user agreed to; `declined` takes only a `requiresChoice` prompt they
+answered No. The command stores Carta's own wording, never yours. A `required` declaration left
+unagreed keeps the form from being submitted. Add `entity_id` for a supporting party's own
+declarations; it is never asked the firm sharing question.
 
 ## Step 7 — Upload the documents the user shared
 
@@ -488,19 +571,53 @@ stops. Then move to their next
 unfinished task (Step 1, or Step 1b for a fund's KYC), or in Batch mode the next task in the
 batch.
 
-## Step 9 — The user finishes and submits each form themselves
+## Step 9 — The user finishes each form
 
-For each task that reads `COMPLETE` or has only items the form can fill, Claude has finished
-saving. Tell the user to reload its form (the task's `form_url`, from Step 1 or Step 1b), then
-check every answer, do what is left and submit it there. The form runs its own checks and may still ask
-for something. Summarise per task:
+For each task that is ready to submit (Step 2), or has only items the form can fill, Claude has finished
+saving. Tell the user to reload its form (the task's `form_url`, from Step 1 or Step 1b) and
+check every answer there, doing whatever is left. It is then submitted in the form, or from the
+chat through Step 10. The form runs its own checks and may still ask for something. Summarise
+per task:
 
 - what was saved and which documents were uploaded, per party,
 - what the user still has to do in the form: everything Step 2 puts under "Only the form can
   fill it", and the documents on the Step 9 list with their warnings.
 
+For a task that is ready to submit (Step 2) with nothing left for the form, ask with `AskUserQuestion`:
+`Submit it now` / `I'll check the form first`. Go to Step 10 only on `Submit it now`; on
+`I'll check the form first`, submit nothing and leave the form to the user.
+
 Never say a KYC is done or submitted: it is filled in, waiting for the user to finish and
-submit it in the form.
+submit it, in the form or through Step 10.
+
+## Step 10 — Submit, where Carta's submit check is enforced for the form
+
+Run this only on `Submit it now` (Step 9), or when the user asks to submit, for a task that is
+ready to submit (Step 2); once Step 9 has started, only after the user says they have finished in the form.
+Answering `Submit it now` counts as saying so: do not ask again.
+
+The form also checks the RBI/CBI answers (`rbiCbiDetails`), which Carta's submit check does not.
+Before submitting, read the form configuration (Step 3) for the main party, and for each party on
+the form with its `entity_id`, unless it was already read for this task in this chat. When any of
+them lists `rbiCbiDetails`, check with the user that each of its answers is saved, and leave the
+submission to the form if any is not.
+
+```
+call_tool({"name": "kyc__mutate__submission",
+           "arguments": {"evaluation_id": "<evaluation_reference_id>", "firm_sharing_answered": true}})
+```
+
+Send `firm_sharing_answered: true` only when the user answered this task's firm sharing prompt
+(this `evaluation_id`) in Step 6d and it was recorded with `kyc__mutate__attestations`; otherwise
+send `false`. The command asks the user to confirm before it submits, then:
+
+| Result | Do |
+| --- | --- |
+| `submitted: true` | Tell the user it is submitted to Carta for review |
+| `handoff_reason: submit_not_enabled` or `gate_not_enforced` | Submitting from the chat is not available for this form yet: send the user to reload the form, check it and submit it there (Step 9) |
+| `handoff_reason: not_complete` | Read Step 2 again and go on filling; nothing was submitted |
+| `handoff_reason: firm_sharing_unanswered` | Ask the `firm_sharing_prompt` it returns (Step 6d), record the answer, then call again |
+| refused, listing parties and broken rules | Nothing was submitted. Fix each item with the command for its field (Steps 6–7), read Step 2 again, and offer to submit once it is ready to submit |
 
 ## If a command is refused
 
@@ -513,6 +630,8 @@ submit it in the form.
 | refused these answers | a value's shape is wrong, or the form can no longer be edited; check the shape table, else stop |
 | attached no document (Step 7d) | after one send, get a fresh link and send once more; refused again, put it on the Step 9 list and say the form may need a clear PDF or image (Step 7d) |
 | sign-in not accepted | ask the user to reconnect Carta |
+| does not ask that declaration, statement or answer (Steps 6c–6d) | read the party's form again (Step 3) and use only what it lists |
+| refused these tax answers (Step 6b) | check each value's shape and the order in Step 6b; else leave it for the form |
 | anything this table does not resolve, or a refusal that comes back after the fix | file feedback (below), then tell the user what you could not do |
 
 ## When something gets stuck, file feedback
@@ -550,7 +669,7 @@ call_tool({"name": "kyc__create__feedback",
 | --- | --- |
 | `requestType` | `bug`, or `feature_request` when the user needs something this skill cannot do |
 | `source` | `claude` when you file it on your own, `user` when the user asked to give feedback |
-| `step` | where it got stuck: `list_tasks` (Steps 1 and 1b), `read_completion` (Steps 2 and 8), `read_form_configuration` (Step 3), `read_documents` (Step 4), `propose_answers` (Step 5), `save_answers` (Step 6), `upload_documents` (Step 7), `finish_in_form` (Step 9), else `other`. In Batch mode, the step of the task it got stuck on: choosing the scope is `list_tasks`, the hand-back `finish_in_form` |
+| `step` | where it got stuck: `list_tasks` (Steps 1 and 1b), `read_completion` (Steps 2 and 8), `read_form_configuration` (Step 3), `read_documents` (Step 4), `propose_answers` (Step 5), `save_answers` (Step 6), `upload_documents` (Step 7), `finish_in_form` (Steps 9 and 10), else `other`. In Batch mode, the step of the task it got stuck on: choosing the scope is `list_tasks`, the hand-back `finish_in_form` |
 | `problem` | `command_error`, `wrong_or_unusable_result`, `too_slow`, `cannot_do`, `unclear_instructions`, `user_unhappy` or `other` |
 | `command`, `errorCode` | the `kyc:` command involved and the error's code (an HTTP status or gRPC code name), when there is one |
 | `requestBody` | what went wrong, in up to 500 characters of general terms |

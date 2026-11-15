@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.44.31</carta-plugin>
+<carta-plugin>carta-investors:7.45.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -153,20 +153,9 @@ read_tool({"name": "data_collection__get__firm_settings",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 
-**Stop unless `data_collection_enabled` and `data_collection_v2_enabled` are both true.** A 404
+**Stop unless `data_collection_enabled` is true** — without it the firm collects no data. A 404
 means the firm has no data collection configuration at all — treat it the same way and do not
 retry. Say *"Data collection isn't set up for &lt;firm&gt; yet"*, then `AskUserQuestion`: `Try a different firm` / `Cancel`.
-
-What the two gates mean, since neither name says it:
-
-| Field | What it actually gates |
-|---|---|
-| `data_collection_enabled` | The firm collects data at all |
-| `data_collection_v2_enabled` | The **send endpoints** work. They reject a firm without it, so this is why the gate exists — it is not a dashboard setting |
-
-**Never say "v2" to the user.** The field name is the API's and stays on the wire, but the
-version number means nothing to a firm and will age badly. Say what is true instead: *"Data
-collection isn't set up for &lt;firm&gt; yet."*
 
 Hold the whole response. `flexible_data_collection`, `cadence` and `organization_name` are inputs
 to the actions, not gates here. `flexible_data_collection` is the one that follows the dashboard —
