@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.45.4</carta-plugin>
+<carta-plugin>carta-investors:7.45.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -94,10 +94,10 @@ at the start of its `description`.
   `FUND_ADMIN.FUNDS.ENTITY_TYPE_NAME` is `Fund` (SPV-, GP- and ManCo-only firms keep their own funds) and,
   in one reporting currency, at least `FOF_MIN_FUNDS` outside
   funds hold at least `FOF_MIN_SHARE` of its active value in that currency. Outside funds are
-  `IS_INVESTMENT_IN_FUND IS TRUE`, group by `GENERAL_LEDGER_ISSUER_ID` (or `ISSUER_NAME` when it has none),
+  `IS_INVESTMENT_IN_FUND` (a missing flag counts as false), group by `GENERAL_LEDGER_ISSUER_ID` (or `ISSUER_NAME` when it has none),
   and leave out any whose name matches one of the firm's own `FUND_NAME`s, ignoring case and spaces. The
   share's base leaves out stakes in the firm's own Carta funds
-  (`IS_INVESTMENT_IN_CARTA_FUND_ENTITY IS NOT TRUE`), so a feeder's stake in its main fund doesn't count
+  (`IS_INVESTMENT_IN_CARTA_FUND_ENTITY`, a missing flag counting as false), so a feeder's stake in its main fund doesn't count
   twice. The card shows one currency: the qualifying one with the most outside funds, its top
   `SOI_CARD_ROWS` by value; no amount is added across currencies. Any other qualifying currency gets a line
   under the rows, e.g. "Also invests in EUR funds". The "Carta administers N of M" note and the new-fund banner stay hidden,

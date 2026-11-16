@@ -621,13 +621,13 @@ async function fetchUnderlyingFunds(firmId) {
         // (a feeder's stake in its main fund), the same rows the outside funds leave out.
         sql: `WITH by_issuer AS (
                 SELECT MAX(ai.ISSUER_NAME) AS ISSUER_NAME, f.REPORTING_CURRENCY AS CURRENCY,
-                       BOOLOR_AGG(ai.IS_INVESTMENT_IN_FUND IS TRUE) AS IN_FUND,
+                       BOOLOR_AGG(COALESCE(ai.IS_INVESTMENT_IN_FUND, FALSE)) AS IN_FUND,
                        SUM(${AI_VALUE}) AS TOTAL_VALUE,
                        SUM(${AI_GL}) AS TOTAL_GL,
                        SUM(SUM(${AI_VALUE})) OVER (PARTITION BY f.REPORTING_CURRENCY) AS FIRM_VALUE
                 FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID
                 WHERE f.FIRM_ID = '${firmId}' AND ai.IS_ACTIVE_INVESTMENT
-                  AND ai.IS_INVESTMENT_IN_CARTA_FUND_ENTITY IS NOT TRUE
+                  AND NOT COALESCE(ai.IS_INVESTMENT_IN_CARTA_FUND_ENTITY, FALSE)
                   AND EXISTS (SELECT 1 FROM FUND_ADMIN.FUNDS t
                               WHERE t.FIRM_ID = '${firmId}' AND t.ENTITY_TYPE_NAME = 'Fund')
                 GROUP BY COALESCE(ai.GENERAL_LEDGER_ISSUER_ID::string, ai.ISSUER_NAME), f.REPORTING_CURRENCY)

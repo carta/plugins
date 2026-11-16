@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.25.0",
+    "version": "1.25.1",
     "headline": "Carta Home now has a firm switcher at the top, so a login that opens several firms can move between them. Rebuild to get it."
   },
   "carta-lp-summary": {
