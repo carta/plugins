@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 
+	"com.carta.claude_plugins.hooks/internal/diagnostics"
 	"com.carta.claude_plugins.hooks/internal/hookio"
 	"com.carta.claude_plugins.hooks/internal/plugin"
 	"com.carta.claude_plugins.hooks/internal/session"
@@ -74,6 +75,8 @@ func InjectInstrumentation(stdin []byte) ([]byte, error) {
 		// filesystem writes (we return before touching disk at all).
 		return hookio.PreToolUseOK(), nil
 	}
+	// Before the mode check, so sessions whose rewrite Claude refuses are captured too.
+	diagnostics.Record(evt.SessionID, stdin, resolvePlatform(), ident.Name, ident.Version)
 
 	shortName := hookio.ShortToolName(evt.ToolName)
 
