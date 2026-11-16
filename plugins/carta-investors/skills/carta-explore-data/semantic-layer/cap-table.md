@@ -34,7 +34,8 @@ Portfolio event questions:
 
 When the active MCP context is a **Firm**, the agent has investor-side access only. Most portfolio companies returned by `fa:list:portfolio_companies` are exposed through the investor portal, **not** as direct cap-table-tenant members.
 
-- **ALWAYS query the DW.** Use `SUMMARY_CAP_TABLE` for share-class detail and `FUND_CORPORATION_OWNERSHIP` for firm ownership % rollups.
+- **Firm ownership % (how much the firm or a fund owns, FD%, shares held, by company and fund, as of a date): call `portfolio_holding:list:ownership` first.** One call covers one, many or all companies; give its company figures as returned and never add percentages across funds. Run **Query B** only when that read is not available on the connection.
+- **Everything else here, query the DW.** Use `SUMMARY_CAP_TABLE` for share-class detail.
 - **NEVER call** `cap_table:*` or `cap_table_chart`. Those MCP commands require a direct cap-table-tenant user role and reject UUID-only corporation IDs. In firm context they will fail with permission or "invalid corporation_id" errors on nearly every portfolio company (only companies where the firm holds a direct cap-table viewer role — e.g. holdco entities — will succeed).
 - **Waterfall scenarios** (`/waterfall-scenarios`) are NOT supported here — they depend on cap-table-tenant access. If asked, explain the limitation and stop; do not attempt a DW workaround.
 - **Per-stakeholder / shareholder lists** come from `FUND_ADMIN.STAKEHOLDER_CAP_TABLE` (**Query D**). It is row-access controlled: a firm sees a company's stakeholder rows only when that company grants the firm **Detailed** cap table access in Carta. Zero rows for a company is the normal outcome when the firm has Summary access only — say "no detailed cap-table access for this company", not "no data", and do not fall back to `cap_table:*`.
@@ -53,11 +54,11 @@ When the active MCP context is a **Firm**, the agent has investor-side access on
 | User intent                                            | Use this query   | Primary table                              |
 |--------------------------------------------------------|------------------|--------------------------------------------|
 | Share-class breakdown, outstanding/authorized shares   | **Query A**      | `FUND_ADMIN.SUMMARY_CAP_TABLE`             |
-| Firm ownership % / fully-diluted stake                 | **Query B**      | `FUND_ADMIN.FUND_CORPORATION_OWNERSHIP`    |
+| Firm ownership % / fully-diluted stake                 | `portfolio_holding:list:ownership`; **Query B** only without it | `FUND_ADMIN.FUND_CORPORATION_OWNERSHIP` |
 | Portfolio event history (certificate issuance/transfer, conversions, warrant exercises) | **Query C** | `FUND_ADMIN.NEWSFEED` |
 | Shareholder / stakeholder list, what a holder owns, per-holder breakdown | **Query D** | `FUND_ADMIN.STAKEHOLDER_CAP_TABLE` |
-| Batch — same intent across multiple companies          | A, B, C, or D with `IN` | (same as above)                     |
-| Both — "give me the full picture for [Company]"        | A then B         | Both                                       |
+| Batch — same intent across multiple companies          | A, C, or D with `IN`; firm ownership: one `portfolio_holding:list:ownership` call (**Query B** with `IN` only without it) | (same as above) |
+| Both — "give me the full picture for [Company]"        | A, then `portfolio_holding:list:ownership` (**Query B** only without it) | Both |
 
 ## Input resolution (run before either query)
 
@@ -207,7 +208,7 @@ LIMIT 500
 
 ## Query B — Firm Ownership Snapshot (FUND_CORPORATION_OWNERSHIP)
 
-For "what's our ownership in [Company]" / "fully-diluted stake" / "firm stake" questions. Returns one row per (corporation, fund) at the most recent `AS_OF_DATE` on or before `<AS_OF_DATE>`. Exposes `PERCENTAGE` (the fund's % stake), `OWNERSHIP_QUANTITY` (number of shares held), `FULLY_DILUTED` (the corporation's total fully-diluted share count at that date — the denominator backing the %), and `AS_OF_DATE`.
+The fallback for "what's our ownership in [Company]" / "fully-diluted stake" / "firm stake" questions when `portfolio_holding:list:ownership` is not available on the connection. Returns one row per (corporation, fund) at the most recent `AS_OF_DATE` on or before `<AS_OF_DATE>`. Exposes `PERCENTAGE` (the fund's % stake), `OWNERSHIP_QUANTITY` (number of shares held), `FULLY_DILUTED` (the corporation's total fully-diluted share count at that date — the denominator backing the %), and `AS_OF_DATE`.
 
 Parameters to substitute:
 - `<FIRM_UUID>` — from `list_contexts`.
@@ -513,7 +514,7 @@ Canonical company-name/identifier lookup. Join target for `FUND_CORPORATION_OWNE
 3. **Currency** — `$X.XX` for round price; `$X,XXX` for liquidation preference (`outstanding_shares × round_price` per share class; surface as a face-value summary line below the table, not as an inline column).
 4. **Liquidation preference reliability** — `round_price` is `NULL` when no matching row exists in `FINANCING_HISTORY` for that share class. This is expected behavior, not a bug: `FINANCING_HISTORY` only covers priced financing rounds, so non-priced classes (option/RSU plans, warrants, common stock, ESOP) will always have `NULL` round price. With the SELECT's `CASE WHEN r.round_price IS NULL THEN NULL` guard, `liquidation_preference` is also `NULL` for those rows. Render `—` for both columns in those cases. For preferred classes where the round price is still `NULL`, note in prose that the financing-round price could not be resolved (uncommon but possible for older / pre-Carta rounds with missing `FINANCING_HISTORY` coverage).
 5. **Percentages** — `X.XX%`. The `ownership_pct` column from Query A is the share class's % of total fully-diluted shares — NOT the firm's stake. Label it "Class Ownership %" to avoid confusion.
-6. **Firm-level stake** — to show "what % does the firm own", run Query B and surface its result in a separate summary line (e.g. "Firm ownership: 4.32% as of 2026-03-31"), not as a per-row column in the share-class table.
+6. **Firm-level stake** — to show "what % does the firm own", take it from `portfolio_holding:list:ownership` (Query B only without it) and surface its result in a separate summary line (e.g. "Firm ownership: 4.32% as of 2026-03-31"), not as a per-row column in the share-class table.
 7. **Row order** — common first, then option plans, then preferred (oldest to newest round), then warrants
 8. **Missing round price** — show `—` rather than `$0` to avoid implying a zero-dollar round
 
@@ -532,14 +533,14 @@ Canonical company-name/identifier lookup. Join target for `FUND_CORPORATION_OWNE
 ### Stakeholder list (Query D)
 1. **Header line** — "Stakeholders of **[Company Name]** as of [snapshot date]"
 2. **Table columns** (max 6): Stakeholder | Group | Outstanding Shares | Fully Diluted Shares | FD Ownership % | Holdings. Use the stakeholder-summary variant by default; switch to the holding-detail variant only when the user asks about a specific holder or wants the class-level breakdown.
-3. **Percentages** — `X.XX%`, from `FULLY_DILUTED_OWNERSHIP * 100` (the source is a fraction). Label it "FD Ownership %" — it is the holder's share of the company, not the firm's stake (that is Query B).
+3. **Percentages** — `X.XX%`, from `FULLY_DILUTED_OWNERSHIP * 100` (the source is a fraction). Label it "FD Ownership %" — it is the holder's share of the company, not the firm's stake (that is the ownership read).
 4. **Row order** — largest fully diluted holding first, as the query returns.
 5. **Empty results** — show "_No detailed cap-table access for this company._" per company. Never say "no data" or "no shareholders": zero rows means the company has not granted the firm Detailed cap table access. If Query A has rows for the company, offer the share-class view. If the question had an as-of date, first drop the date filter and compare the snapshot date with the requested one: on or before it, answer from that snapshot and state its date; after it, say "_Detailed holders are available as of YYYY-MM-DD only_" instead of "no access".
 6. **Totals** — do not add a total row; the unissued option pool has no stakeholder row, so stakeholder rows do not sum to the company's fully diluted total. Point to Query A for company totals.
 7. **Money** — `CASH_RAISED` / `PRINCIPAL` / `OUTSTANDING_DEBT` are in `CURRENCY_CODE`; format with that code (e.g. `€1,200,000`), not `$` by default.
 8. **Batch** — same per-company section pattern as Query A: one `### [Company Name]` header per company, no interleaving.
 
-### Ownership-only response (Query B without Query A)
+### Ownership-only response (the ownership read, or Query B without it, and no Query A)
 - Render one table per company, with columns: Fund Name | As Of | Ownership % | Shares Held.
 - Each row corresponds to one fund within the firm holding that company. If the firm holds the company through multiple funds, list each fund as its own row so the user can see fund-specific ownership.
 - Do not sum the ownership % across funds. `total_fd_shares` is the corporation's total fully-diluted share count (the denominator) — it is the same for every fund in a given (corp, snapshot) and should not be rendered as a per-row column; mention it once in a footnote if the user asks for the denominator.
