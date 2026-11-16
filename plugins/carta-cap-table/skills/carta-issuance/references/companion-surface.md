@@ -125,10 +125,12 @@ answers, the reply is these parts, in this order, and no other text:
    board consent covers it yet" when none does), the type's summary items. A check message on a
    cell is an item, never a line here. A thing that needs the user and is on no cell (a banner error, a
    possible duplicate stakeholder, a file you could not read) adds one line here.
-2. "N things need you, in the card above.", with N the number of items. When the set has an empty
-   optional column ([§ 8](#the-optional-columns-once-per-set) step 1), add " Ask me if you also
-   want optional details." to that line: the card never posts when it is done, so the user may
-   go straight to Issue. The text names no item,
+2. "N things need you, in the card above.", with N the number of items. Only when the set has an
+   empty optional column ([§ 8](#the-optional-columns-once-per-set) step 1: a `field_spec` field
+   with `required` false, not `hidden` and with no `default_value`, that no row fills), add " Ask
+   me if you also want optional details." to that line: the card never posts when it is done, so
+   the user may go straight to Issue. With no such field, as when every field is required, the
+   line ends at "in the card above.". The text names no item,
    no field of an item and no value an item asks about: the card holds them, once.
 3. The reply's page line, as [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)
    says, alone: no line about the browser before it. It is the last line of the reply.
