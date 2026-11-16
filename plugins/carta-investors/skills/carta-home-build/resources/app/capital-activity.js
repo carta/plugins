@@ -311,7 +311,7 @@ const CA_PAYOUT_STATUSES = {
 // A part-paid capital call reads as paid once no more than a flat amount (in the
 // call's own currency) and no more than a fraction of the call is still owed, so a
 // rounding or fee shortfall is not worth chasing an LP over.
-const CA_NEAR_PAID_MAX = 25;
+const CA_NEAR_PAID_MAX = 30;
 const CA_NEAR_PAID_FRACTION = 0.01;
 
 // A capital call's pill, coloured on the same scale as a payout's.

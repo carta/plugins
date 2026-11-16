@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.46.1</carta-plugin>
+<carta-plugin>carta-investors:7.46.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -183,7 +183,7 @@ at the start of its `description`.
   listing each LP partner's amount, status, and date — paid date once paid, days late while
   outstanding. On a capital call, unpaid partners get **Send Reminder** (**Resend**, over the
   last-reminded date, once one has gone out), which previews and then sends the email via
-  `fa:mutate:send-capital-call-reminder`. A partner with at most 25 (or 1% of the call, if less) left to pay
+  `fa:mutate:send-capital-call-reminder`. A partner with at most 30 (or 1% of the call, if less) left to pay
   on a capital call reads as **Paid**, and the list runs unpaid, then partly paid, then paid. Other partly paid
   partners show a **Partially paid** pill,
   a `$X unpaid` line under the amount called (in the picker too) and days late in gray rather

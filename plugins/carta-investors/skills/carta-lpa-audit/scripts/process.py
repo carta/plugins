@@ -1149,6 +1149,7 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
                 "stateOfFormation": _rj_field(raw_json, ("parties", "general_partner", "state_of_formation"), _to_str),
                 "commitmentAmount": _rj_field(raw_json, ("parties", "general_partner", "commitment_amount"), _to_float),
                 "commitmentPercentage": _rj_field(raw_json, ("parties", "general_partner", "commitment_percentage"), _to_float),
+                "commitmentFormula": _rj_field(raw_json, ("parties", "general_partner", "commitment_formula"), _to_str),
                 "address": _rj_field(raw_json, ("parties", "general_partner", "address"), _to_str),
                 # RAW_JSON only -- ATTRIBUTES never carries it.
                 "managingMembers": _rj_member_names(raw_json, "parties", "general_partner", "members"),
