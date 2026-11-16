@@ -243,7 +243,7 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate, isCall) {
   try {
     for (let page = 1; rows.length < CA_ROWS_MAX; page++) {
       const res = await _mcp("read_tool", {
-        name: "fa__list__capital-activity-partner",
+        name: "fa__list__capital-activity-interest",
         arguments: {
           fund_uuid: fundUuid,
           capital_activity_id: activityId,
@@ -251,7 +251,7 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate, isCall) {
         }
       });
       if (res.isError) {
-        console.error('[ca detail] fa:list:capital-activity-partner failed —',
+        console.error('[ca detail] fa:list:capital-activity-interest failed —',
           res.content?.[0]?.text ?? res);
         failed = true;
         break;
@@ -1253,7 +1253,7 @@ async function fetchEmailPreview(fundUuid, activityId, partnerId) {
     arguments: {
       fund_uuid: fundUuid,
       capital_activity_id: activityId,
-      partner_id: parseInt(partnerId, 10),
+      interest_id: parseInt(partnerId, 10),
       is_reminder: true,
       body_format: "html",
     }

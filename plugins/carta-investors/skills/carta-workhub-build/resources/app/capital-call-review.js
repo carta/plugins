@@ -737,7 +737,7 @@ async function ccrFetchEmail(target, partnerId) {
   const res = await mcpRead("fa:get:capital-activity-partner-email-preview", {
     fund_uuid: target.fundUuid,
     capital_activity_id: target.activityId,
-    partner_id: partnerId,
+    interest_id: partnerId,
     body_format: "html",
   });
   let p = res.isError ? null : ccrPayload(res, (c) => "subject" in c || "body" in c);
@@ -746,7 +746,7 @@ async function ccrFetchEmail(target, partnerId) {
     const alt = await mcpRead("fa:get:capital-activity-partner-email-preview", {
       fund_uuid: target.fundUuid,
       capital_activity_id: target.activityId,
-      partner_id: partnerId,
+      interest_id: partnerId,
       body_format: "text",
     });
     if (alt.isError) throw new Error(alt.content?.[0]?.text ?? "preview failed");

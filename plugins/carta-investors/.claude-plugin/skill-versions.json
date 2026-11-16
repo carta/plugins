@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.25.2",
+    "version": "1.25.3",
     "headline": "A capital call partner with $30 or less left to pay now reads as Paid, up from $25. Rebuild to get it."
   },
   "carta-lp-summary": {
@@ -16,7 +16,7 @@
     "headline": "SOI now has an Investment Cash Flows tab: every dated investment, proceed and terminal value behind Deal IRR, grouped by company and fund, following the same fund, as-of and exited filters."
   },
   "carta-workhub-build": {
-    "version": "1.13.0",
+    "version": "1.13.1",
     "headline": "When KYC forms are waiting on you, you can now choose which ones Claude helps you fill in: one, several or all of them. Rebuild to get it."
   }
 }
