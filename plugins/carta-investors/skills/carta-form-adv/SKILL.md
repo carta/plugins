@@ -45,7 +45,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.47.0</carta-plugin>
+<carta-plugin>carta-investors:7.47.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -111,11 +111,12 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
 
 ### Step 3 — Run the queries (silently)
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/references/queries.md` for the SQL. Execute all three queries in order via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`:
+Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/references/queries.md` for the SQL. Execute all four queries in order via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`:
 
 1. **Query 1** — per-fund AUM, fund detail, capital activity, point-in-time portfolio composition.
 2. **Query 2** — per-fund investor demographics (point-in-time membership and NAV from `PARTNER_MONTHLY_NAV_CALCULATIONS`, mutually-exclusive entity-type buckets).
 3. **Query 3** — firm-level **distinct** LP aggregates (Items 5.D, 5.H). This block is **required**: the artifact generators read distinct LP counts from `firm_aggregates` instead of summing per-fund counts (which double-counts any LP in multiple funds).
+4. **Query 4** — LP NAV by fund reporting currency (Item 5.H). This block is **required**: funds can report in different currencies and Carta does not convert them, so partner NAV is summed only within one currency. The generators read it from `lp_nav_by_currency`.
 
 **Do not echo raw rows or render markdown tables** of the results.
 
@@ -184,7 +185,7 @@ Then close with the Escalation Contract reminder and Response Closing.
 | `set_context` fails | MCP not connected or user lacks access | "I wasn't able to find your firm. Make sure the Carta MCP server is connected." |
 | Permission denied (403) | User lacks data warehouse access | "Your account doesn't have data warehouse access for this query. Contact your Carta admin." |
 | All NAV fields null for a fund | Monthly NAV calculation hasn't run for that period | "NAV not calculated for [fund] as of [date] — performance and Net AUM will be blank. Ask your fund admin to run the NAV before filing." |
-| `reporting_currency` is null for a fund | Fund admin hasn't set the currency in Carta | "Reporting currency is not set for [fund name] in Carta — the artifacts label its amounts with `$`, but the currency is unconfirmed. Ask your fund admin to set the fund currency before filing." |
+| `reporting_currency` is null for a fund | Fund admin hasn't set the currency in Carta | "Reporting currency is not set for [fund name]; its amounts are shown without a currency until your fund admin sets it." |
 | Fund count mismatch | Excluded entity type (e.g., GP entity) | "I found [N] Fund/SPV entities. If you expected [M], some funds may be a different entity type — check with your Carta admin." |
 | HTML artifact script fails | Missing `uv`, malformed JSON, or unwritable output path | "I couldn't generate the interactive filing guide. Try again, or open an issue if it persists. The Excel file may still be available — check the path below." |
 | Excel generator fails | Missing `uv`/`openpyxl`, malformed JSON, or unwritable path | "I couldn't generate the Excel filing reference. The HTML guide may still be available. Try again or contact support." |

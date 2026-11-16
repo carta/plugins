@@ -15,13 +15,13 @@
      the HTML artifact for users who prefer a spreadsheet they can annotate offline.
 -->
 
-After running Query 1, Query 2, **and Query 3**, generate both artifacts. This is mandatory — the artifacts are the skill's deliverable, not a supplementary export.
+After running Query 1, Query 2, Query 3, **and Query 4**, generate both artifacts. This is mandatory — the artifacts are the skill's deliverable, not a supplementary export.
 
 Tell the user once at the start: *"Building your Form ADV interactive filing guide and Excel reference..."*
 
 ### Step 1 — Build the data file
 
-Extract values from Query 1, Query 2, and Query 3. Use the `Write` tool to create `~/.cache/carta-form-adv/form_adv_data.json`:
+Extract values from Query 1, Query 2, Query 3, and Query 4. Use the `Write` tool to create `~/.cache/carta-form-adv/form_adv_data.json`:
 
 ```json
 {
@@ -35,21 +35,21 @@ Extract values from Query 1, Query 2, and Query 3. Use the `Write` tool to creat
   },
   "firm_aggregates": {
     "<the single row returned by Query 3 — all columns>"
-  }
+  },
+  "lp_nav_by_currency": [
+    { "<one object per row returned by Query 4 — reporting_currency, total_lp_nav, us_lp_nav, non_us_lp_nav, pct_non_us_lp_nav>" }
+  ]
 }
 ```
 
 Use actual query result values — no placeholders. *Lowercase all JSON keys* — the data warehouse returns column names in UPPERCASE (`FUND_NAME`, `FAIR_MARKET_VALUE`, etc.) but the artifact generators read lowercase snake_case (`fund_name`, `fair_market_value`). If you copy the column names as-is, every field renders as `undefined`.
 
-> **Currency — include `reporting_currency` per fund.** Query 1 returns a
-> `reporting_currency` column on every fund row; keep it in the `funds` array (it comes
-> through automatically when you copy all columns).
+> **Currency.** Query 1 returns a `reporting_currency` column on every fund row; keep it in the `funds` array (it comes through automatically when you copy all columns). Carta does not convert currencies, so both generators handle it the same way:
 >
-> **Known limitation:** The generators (`generate_form_adv_artifact.py`,
-> `form_adv_excel_generator.py`) format all amounts with a USD `$` symbol regardless of the
-> fund's `reporting_currency`. If your firm's funds use non-USD currencies, verify that the
-> reported amounts match your fund administrator's records before filing — the currency
-> symbol in the artifacts will show `$` even for EUR, GBP, or other currencies.
+> - Every fund's amounts use that fund's own `reporting_currency`. The HTML guide formats them with the currency symbol; the Excel file prefixes the ISO code (`EUR 1,234,567`). A fund with no currency set shows a plain number.
+> - Firm-level amounts (Item 5.F, balance sheet components, asset composition) are subtotals per currency. When every fund shares one currency there is one set. When funds report in more than one currency (a fund with no currency set counts as its own group), there is no grand total: each currency gets its own subtotal, with the mixed-currency note both artifacts show.
+> - Fund counts and distinct LP counts are not amounts and stay firm-wide.
+> - Item 5.H LP NAV comes from `lp_nav_by_currency` (Query 4), one row set per currency. `lp_nav_by_currency` is an array of `{reporting_currency, total_lp_nav, us_lp_nav, non_us_lp_nav, pct_non_us_lp_nav}`; a NULL `reporting_currency` stays NULL. `us_lp_nav`, `non_us_lp_nav` and the share count only LPs with a country on file, so the two shares add to 100%; when none has a country the share is NULL and both artifacts show `—`, never 0%. If the key is missing, the NAV cells show `—` with a warning, and per-fund NAV is never summed across currencies. The non-US share of LP NAV is one percentage per currency, and shares in different currencies cannot be combined without converting the amounts behind them. When the firm has more than one NAV row or more than one fund currency, both artifacts label each NAV share with its currency, and the HTML checklist step for Item 5.H tells the user to convert before filing. The Excel Item 5.H table shows a single labelled share when there is one NAV row and points to the per-currency NAV table when there are several.
 
 > **Why `firm_aggregates` is required:** The artifact generators read firm-level distinct-LP counts (Items 5.D, 5.H) directly from this block. Without it, both generators fall back to summing per-fund counts, which double-counts any LP committed to multiple funds. If `firm_aggregates` is missing, the artifacts will emit a visible "⚠ Counts may be inflated (LPs committed to multiple funds are double-counted)" banner.
 

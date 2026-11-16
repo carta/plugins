@@ -31,6 +31,7 @@
 | # Beneficial Owners (per fund) | PARTNER_MONTHLY_NAV_CALCULATIONS | distinct partner_id at month_end_date | Sched D §7.B.(1) Q.13 |
 | # Beneficial Owners (firm) | Query 3 firm_aggregates | distinct partner_id across funds | Item 5.D, 5.H — firm-level distinct LP count |
 | % Non-US Persons (firm) | Query 3 firm_aggregates | partner_country bucketed, distinct partner_id | Item 5.H |
+| LP NAV, US LP NAV, non-US LP NAV, % non-US LP NAV (per currency) | Query 4 lp_nav_by_currency | partner NAV summed only within one fund reporting currency | Item 5.H |
 | Fund Formation Date | FUNDS | vintage_date | Sched D §7.B.(1) Q.6 |
 | Legal Structure | FUNDS | legal_structure | Sched D §7.B.(1) organizational form |
 | Fund Type | FUNDS | investment_strategy_code | Sched D §7.B.(1) fund type classification |
@@ -503,9 +504,11 @@ ORDER BY f.fund_name
 
 ### Query 3 — Firm-Level Aggregates (Distinct LP Count, US/Non-US)
 
-Returns **one row** of firm-wide distinct-partner counts and NAV totals for Items 5.D and 5.H. Run after Query 1 and Query 2. The artifact generators must read these values from `firm_aggregates` in the JSON data file rather than summing per-fund counts — same partner committed to multiple funds was being double-counted.
+Returns **one row** of firm-wide distinct-partner counts for Items 5.D and 5.H. Run after Query 1 and Query 2. The artifact generators must read these values from `firm_aggregates` in the JSON data file rather than summing per-fund counts, which counts a partner committed to multiple funds once per fund.
 
-> **Point-in-time:** Same as Query 2 — membership and NAV are pulled from `PARTNER_MONTHLY_NAV_CALCULATIONS` at `reporting_date`.
+This query returns counts only. Partner NAV is an amount, and funds report in different currencies, so NAV is never summed across funds here — Query 4 returns it per currency.
+
+> **Point-in-time:** Same as Query 2 — membership is pulled from `PARTNER_MONTHLY_NAV_CALCULATIONS` at `reporting_date`.
 >
 > **Country deduplication:** A partner committed to multiple funds appears once per fund in PMN. For firm-level distinct counts we collapse to one row per `partner_id` using `MAX(partner_country)` (firms generally have consistent country data per partner; if not, the value reviewed should be flagged).
 
@@ -522,9 +525,8 @@ funds AS (
       AND f.is_onboarding = FALSE
 ),
 
--- Collapse to one row per LP at the firm level:
---   - partner_country: MAX (deterministic single value)
---   - partner_total_nav: SUM across funds (correct — partner's true firm-level NAV)
+-- Collapse to one row per LP at the firm level (partner_country: MAX gives a
+-- deterministic single value).
 --
 -- LEFT JOIN to PARTNER_DATA (not INNER) so a partner present in PMN at reporting_date
 -- without a PARTNER_DATA row isn't silently dropped from the universe. We exclude them
@@ -535,7 +537,6 @@ firm_lp_universe AS (
     SELECT
         pmn.partner_id,
         MAX(pd.partner_country)                              AS partner_country,
-        SUM(pmn.ending_total_nav)                            AS partner_total_nav,
         BOOLOR_AGG(COALESCE(pd.is_limited_partner, FALSE))   AS is_limited_partner
     FROM FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS pmn
     INNER JOIN funds f
@@ -565,15 +566,6 @@ SELECT
     COUNT(DISTINCT CASE
         WHEN partner_country IS NULL THEN partner_id END)                      AS lp_investors_no_country_on_file,
 
-    -- Firm-wide LP NAV (sum is correct here — each partner appears once per fund-relationship)
-    ROUND(SUM(partner_total_nav), 2)                                           AS total_lp_nav,
-    ROUND(SUM(CASE
-        WHEN UPPER(TRIM(partner_country)) NOT IN (
-            'US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA',
-            'U.S.', 'U.S.A.', 'UNITED STATES OF AMERICA (USA)')
-            AND partner_country IS NOT NULL
-        THEN partner_total_nav ELSE 0 END), 2)                                 AS non_us_lp_nav,
-
     ROUND(
         COUNT(DISTINCT CASE
             WHEN UPPER(TRIM(partner_country)) NOT IN (
@@ -584,20 +576,78 @@ SELECT
         * 100.0
         / NULLIF(COUNT(DISTINCT CASE
             WHEN partner_country IS NOT NULL THEN partner_id END), 0),
-    1)                                                                         AS pct_non_us_lp_investors,
+    1)                                                                         AS pct_non_us_lp_investors
+
+FROM firm_lp_universe
+WHERE is_limited_partner  -- orphan PMN rows (no PARTNER_DATA match) and confirmed non-LPs excluded
+```
+
+---
+
+### Query 4 — LP NAV by Currency (Item 5.H NAV)
+
+Returns **one row per fund reporting currency** with LP NAV, non-US LP NAV and the non-US share of LP NAV for Item 5.H. Run after Query 3. Funds can report in different currencies and Carta does not convert them, so partner NAV is summed **only within one currency**, never across currencies. The generators read the rows from `lp_nav_by_currency` in the JSON data file.
+
+> **Shares Query 3's logic.** Point-in-time membership, the LEFT JOIN to `PARTNER_DATA`, the `MAX(partner_country)` collapse, the US country list and the `is_limited_partner` filter match Query 3. Query 4 adds the `reporting_currency` column on `funds` and groups by it, so a partner's NAV is summed across the funds that share one currency.
+>
+> **Country on file:** `us_lp_nav` and `non_us_lp_nav` count only LPs with a country on file, and `pct_non_us_lp_nav` is `non_us_lp_nav` over those two amounts together, so the US and non-US shares add to 100%. NAV of LPs with no country on file is in `total_lp_nav` only. When no LP in a currency has a country on file, `pct_non_us_lp_nav` is NULL and the artifacts show `—`.
+>
+> **NULL currency:** a fund with no `reporting_currency` set forms its own row with `reporting_currency` NULL. Keep that row in the JSON as-is.
+
+```sql
+WITH
+constants AS (
+    SELECT LAST_DAY('{reporting_date}'::DATE) AS reporting_date
+),
+
+funds AS (
+    SELECT f.fund_uuid, f.firm_id, f.reporting_currency
+    FROM FUND_ADMIN.FUNDS f
+    WHERE f.entity_type_name IN ('Fund', 'SPV')
+      AND f.is_onboarding = FALSE
+),
+
+-- One row per (currency, LP). partner_total_nav sums only funds that share the currency.
+currency_lp_universe AS (
+    SELECT
+        f.reporting_currency,
+        pmn.partner_id,
+        MAX(pd.partner_country)                              AS partner_country,
+        -- Classified once per partner; both aggregates below read this flag.
+        COALESCE(UPPER(TRIM(MAX(pd.partner_country))) NOT IN (
+            'US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA',
+            'U.S.', 'U.S.A.', 'UNITED STATES OF AMERICA (USA)'), FALSE)
+                                                             AS is_non_us,
+        SUM(pmn.ending_total_nav)                            AS partner_total_nav,
+        BOOLOR_AGG(COALESCE(pd.is_limited_partner, FALSE))   AS is_limited_partner
+    FROM FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS pmn
+    INNER JOIN funds f
+           ON pmn.fund_id = f.fund_uuid
+    LEFT JOIN FUND_ADMIN.PARTNER_DATA pd
+           ON pmn.fund_id    = pd.fund_uuid
+          AND pmn.partner_id = pd.partner_id
+    CROSS JOIN constants c
+    WHERE pmn.month_end_date = c.reporting_date
+    GROUP BY f.reporting_currency, pmn.partner_id
+)
+
+SELECT
+    reporting_currency,
+
+    ROUND(SUM(partner_total_nav), 2)                                           AS total_lp_nav,
+    ROUND(SUM(CASE WHEN is_non_us THEN partner_total_nav ELSE 0 END), 2)       AS non_us_lp_nav,
+    ROUND(SUM(CASE WHEN partner_country IS NOT NULL AND NOT is_non_us
+        THEN partner_total_nav ELSE 0 END), 2)                                 AS us_lp_nav,
 
     ROUND(
-        SUM(CASE
-            WHEN UPPER(TRIM(partner_country)) NOT IN (
-                'US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA',
-                'U.S.', 'U.S.A.', 'UNITED STATES OF AMERICA (USA)')
-                AND partner_country IS NOT NULL
-            THEN partner_total_nav ELSE 0 END)
+        SUM(CASE WHEN is_non_us THEN partner_total_nav ELSE 0 END)
         * 100.0
         / NULLIF(SUM(CASE
             WHEN partner_country IS NOT NULL THEN partner_total_nav ELSE 0 END), 0),
     1)                                                                         AS pct_non_us_lp_nav
 
-FROM firm_lp_universe
+FROM currency_lp_universe
 WHERE is_limited_partner  -- orphan PMN rows (no PARTNER_DATA match) and confirmed non-LPs excluded
+GROUP BY reporting_currency
+ORDER BY reporting_currency
 ```

@@ -237,7 +237,7 @@ It reads:
 
 | Part | What it says |
 | --- | --- |
-| `parties[].missing[]` | per party (`entityId`, `relationType`), each required field (`fieldId`) and document (`fileType`, `anyOf`) not yet answered, with the form's `label` |
+| `parties[].missing[]` | per party (`entityId`, `relationType`), each required field (`fieldId`) and document (`fileType`, `anyOf`) not yet answered, with the form's `label`. An item with a `subFieldPath` is one question inside a field or document: a proof of address that is on file can still be owed its issue date, listed with `fileType` `FILE_TYPE_PROOF_OF_ADDRESS` and `subFieldPath` `["issueDate"]` |
 | `rosterShortfalls[]` | a role with too few or too many people or entities (`minCount`/`maxCount`) |
 | `ownershipShortfalls[]` | a member whose ownership is not stated or is below the role's `minOwnershipPct` |
 | `roleMismatches[]` | a member of a kind its role does not take, or in a role no rule defines |
@@ -308,6 +308,12 @@ Step 3 describes `documentVerification` as nothing to supply, because the form f
 identity check of its own. A government ID uploaded in Step 7 answers it just the same, and the
 form then no longer asks for it. A US individual's form often lists no document at all and asks
 for the ID only this way.
+
+A proof of address listed with `subFieldPath` `["issueDate"]` is owed the date the document was
+issued, which the form checks against its age limit. Step 7d sends it with the document as `issue_date`
+when `kyc__create__document` takes that argument. When that command offers none, the
+document can be attached but its issue date cannot be given from here: list it on the Step 9 list
+for the form, as a field only the form can fill. Do not guess a date.
 
 A roster shortfall is for the user to fix in the form at Step 9. If they then ask you to fill
 the new party, read this again for its `entityId` once they say they have finished in the
@@ -387,8 +393,8 @@ Shapes the form refuses otherwise:
 | `ownershipPercentage`, `ownershipInterests`, `controlByOtherMeans`, `isUsResident`, `isUsPerson`, `isSpecifiedUsPerson` | beside `individual`/`institution`, not inside; `ownershipPercentage` as `{"value": "25"}`, never `25` |
 | an address | the **whole** address object. A section you send replaces the stored one, so a partial address loses the rest. |
 | a field the other kind declares, or one the firm wrote | under `individual`/`institution` as `customFields`, keyed by its camelCase `fieldId` |
-| `taxInfo` (tax residencies) | the **whole** list, one row per residency. A number outside the US: `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_TIN", "taxId": "…"}`; no number: `{"taxCountry": "VG", "taxIdMissingReason": "…"}` (the user's own reason). A row with a number and no `taxIdType` still owes the reason |
-| `utr` (UK Unique Taxpayer Reference) | not a field of its own: one more `taxInfo` row, `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_UTR", "taxId": "…"}`, sent with every other row. Without a UTR, the same row with `"taxIdMissingReason": "…"` (the user's own reason) in place of `taxId` |
+| `taxInfo` (tax residencies) | the **whole** list, one row per residency, and never without a residency row: a party's `taxInfo` always starts with at least one. A number outside the US: `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_TIN", "taxId": "…"}`; no number: `{"taxCountry": "VG", "taxIdMissingReason": "…"}` (the user's own reason). A row with a number and no `taxIdType` still owes the reason |
+| `utr` (UK Unique Taxpayer Reference) | not a field of its own: one more `taxInfo` row, `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_UTR", "taxId": "…"}`, sent after the party's residency rows, never alone: the form drops a lone UTR row on its next save. A party whose only UK number is its UTR still sends a residency row for `GB`, `{"taxCountry": "GB", "taxIdMissingReason": "…"}` (the user's own reason it has no other number), then the UTR row. Without a UTR, the same UTR row with `"taxIdMissingReason": "…"` (the user's own reason) in place of `taxId` |
 
 Not answered here: the tax records, the Investor Profile and the declarations, which have
 commands of their own (Steps 6b–6d), and the nature of business (`businessNature`), a closed list
@@ -554,7 +560,24 @@ document lands on the investor. Add `"field_id"` for a document the firm wrote i
 (`FILE_TYPE_OTHER`). When `anyOf` lists several types, send the one this file is. For a field a
 file answers, send the `fileType` from Step 2's table.
 
-Tell the user it was uploaded, for which party.
+A document the completion read lists with `subFieldPath` `["issueDate"]` (a proof of address, say) is
+owed its issue date, and one listed with `["expiryDate"]` its expiry date. Send them with the
+document as `"issue_date"` and `"expiry_date"`, each `{"year": 2026, "month": 10, "day": 20}`
+(never `"2026-10-20"`), and only the one it lists:
+
+```
+call_tool({"name": "kyc__create__document",
+           "arguments": {"evaluation_id": "<evaluation_reference_id>",
+                         "upload_id": "<upload_id from 7b>", "file_name": "<file_name>",
+                         "file_type": "FILE_TYPE_PROOF_OF_ADDRESS",
+                         "issue_date": {"year": 2026, "month": 10, "day": 20}}})
+```
+
+Send the date printed on the document. If the document shows none, ask the user for it, and never
+infer it from the upload date. If `read_tool` shows that `kyc__create__document` has no such
+argument, attach the document without it and put the date on the Step 9 list for the form.
+
+Tell the user it was uploaded, for which party, and which issue date, if any, was sent with it.
 
 A refusal that says kyc-service "attached no document" cannot tell two causes apart: the file
 did not reach storage (an expired link, a failed send), or its format is not accepted. When this

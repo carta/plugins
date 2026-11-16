@@ -10,7 +10,7 @@ Blue cells  = Carta-sourced value. Safe to use directly in IARD.
 Orange cells = Must be entered manually in the IARD web portal.
 """
 
-import json, argparse
+import json, argparse, re
 from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -22,10 +22,12 @@ MANUAL_FILL  = PatternFill("solid", fgColor="FED7AA")   # light orange — manua
 HDR_FILL     = PatternFill("solid", fgColor="1E40AF")   # dark blue   — column headers
 SECT_FILL    = PatternFill("solid", fgColor="E2E8F0")   # light grey  — section dividers
 FUND_FILL    = PatternFill("solid", fgColor="1E40AF")   # dark blue   — fund name banner
+WARN_FILL    = PatternFill("solid", fgColor="FEF3C7")   # light amber — warning banner
 
 CARTA_FONT   = Font(color="1E3A5F")
 MANUAL_FONT  = Font(color="7C2D12", italic=True)
 HDR_FONT     = Font(color="FFFFFF", bold=True)
+WARN_FONT    = Font(bold=True, color="78350F")
 BOLD         = Font(bold=True)
 ITALIC       = Font(italic=True, color="6B7280")
 THIN         = Border(bottom=Side(style="thin", color="CBD5E1"))
@@ -33,10 +35,68 @@ THIN         = Border(bottom=Side(style="thin", color="CBD5E1"))
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def fmt_currency(v):
+MIXED_CURRENCY_ACTION = "Convert them yourself before entering a single figure in IARD."
+MIXED_CURRENCY_NOTE = (
+    "Funds report in more than one currency. Carta does not convert currencies, so amounts are "
+    "shown per currency. " + MIXED_CURRENCY_ACTION
+)
+NO_CURRENCY_LABEL = "No currency set"
+
+# Amounts that sum across funds, rolled up within one currency.
+ROLLUP_KEYS = [
+    "regulatory_aum", "total_active_fmv",
+    "fmv_exchange_traded_equity", "fmv_private_equity",
+    "fmv_pooled_investment_vehicles", "fmv_options_and_warrants",
+    "fmv_digital_assets", "fmv_other_alternatives",
+]
+
+
+def norm_currency(code):
+    """ISO-style 3-letter code, upper-cased; None when missing or not a code."""
+    if isinstance(code, str) and re.fullmatch(r"[A-Za-z]{3}", code.strip()):
+        return code.strip().upper()
+    return None
+
+def currency_label(code):
+    return code or NO_CURRENCY_LABEL
+
+
+def currency_suffix(code, show):
+    """Label appended to a figure when the firm's figures span more than one currency."""
+    return f" ({currency_label(code)})" if show else ""
+
+
+def currency_sort_key(code):
+    """Sort order for anything grouped by currency: codes A-Z, the no-currency group last."""
+    return (code is None, code or "")
+
+
+def fmt_currency(v, currency=None):
+    """ISO code, a space, then the grouped amount (EUR 1,234,567; negatives in
+    parentheses). Without a valid currency the amount is a plain number — never a default."""
     if v is None: return "—"
-    try: return f"${float(v):,.0f}"
-    except: return "—"
+    try: n = round(float(v))
+    except (TypeError, ValueError): return "—"
+    code = norm_currency(currency)
+    body = f"{abs(n):,.0f}"
+    if code: body = f"{code} {body}"
+    return f"({body})" if n < 0 else body
+
+def rollup_by_currency(funds):
+    """One roll-up per fund reporting currency, in a stable order (codes A-Z, no-currency last).
+    Amounts are only ever added within a currency."""
+    groups = {}
+    for f in funds:
+        groups.setdefault(norm_currency(f.get("reporting_currency")), []).append(f)
+    if not groups:
+        groups[None] = []
+    rollups = []
+    for code in sorted(groups, key=currency_sort_key):
+        r = {k: sum(f.get(k) or 0 for f in groups[code]) for k in ROLLUP_KEYS}
+        r["currency"] = code
+        r["fund_count"] = len(groups[code])
+        rollups.append(r)
+    return rollups
 
 def fmt_pct(v, decimals=1):
     if v is None: return "—"
@@ -80,6 +140,13 @@ def sect(ws, row, title, ncols):
     c = ws.cell(row=row, column=1, value=title)
     c.fill = SECT_FILL
     c.font = Font(bold=True, color="1E293B")
+
+def warn_banner(ws, row, text, cols=4):
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=cols)
+    c = ws.cell(row=row, column=1, value="⚠ " + text)
+    c.fill = WARN_FILL
+    c.font = WARN_FONT
+    return c
 
 def kv(ws, row, label, value, is_carta=True, val_col=2):
     ws.cell(row=row, column=1, value=label).font = BOLD
@@ -125,6 +192,7 @@ def build_legend(wb, firm_name, reporting_date):
         "Legal fund names may differ from display names in Carta. Always verify against fund formation documents.",
         "Fund type classification is derived from investment_strategy_code — confirm legal classification with counsel.",
         "Regulatory AUM = Gross Assets + Unfunded Commitments (balance sheet method, per SEC instructions for private fund advisers).",
+        "Each fund's amounts are in that fund's reporting currency. Carta does not convert currencies: firm-level amounts are subtotals per currency, never one cross-currency total.",
     ], 16):
         ws.cell(row=i, column=2, value=f"• {text}")
 
@@ -142,8 +210,6 @@ def _firm_lp_aggregates(firm_aggregates, demos):
             "us_lp":      fa.get("us_lp_investors") or 0,
             "non_us_lp":  fa.get("non_us_lp_investors") or 0,
             "no_country": fa.get("lp_investors_no_country_on_file") or 0,
-            "total_nav":  fa.get("total_lp_nav") or 0,
-            "non_us_nav": fa.get("non_us_lp_nav") or 0,
         }
     return {
         "source": "per_fund_sum",
@@ -151,40 +217,56 @@ def _firm_lp_aggregates(firm_aggregates, demos):
         "us_lp":      sum(d.get("us_lp_investors",              0) or 0 for d in demos.values()),
         "non_us_lp":  sum(d.get("non_us_lp_investors",          0) or 0 for d in demos.values()),
         "no_country": sum(d.get("lp_investors_no_country_on_file", 0) or 0 for d in demos.values()),
-        "non_us_nav": sum(d.get("non_us_lp_nav",                0) or 0 for d in demos.values()),
-        "total_nav":  sum(d.get("total_lp_nav",                 0) or 0 for d in demos.values()),
     }
 
 
-def build_firm_overview(wb, fr, demos, firm_aggregates):
+def _nav_rows(lp_nav_by_currency):
+    """Query 4 rows normalised to {currency, total, non_us, pct}. Never summed across
+    currencies. The non-US amount and share are Query 4's, over LPs with a country on file;
+    a NULL share stays None and shows "—"."""
+    rows = [{"currency": norm_currency(r.get("reporting_currency")),
+             "total": r.get("total_lp_nav"), "non_us": r.get("non_us_lp_nav"),
+             "pct": r.get("pct_non_us_lp_nav")}
+            for r in lp_nav_by_currency or []]
+    rows.sort(key=lambda r: currency_sort_key(r["currency"]))
+    return rows
+
+
+def build_firm_overview(wb, rollups, funds, demos, firm_aggregates, lp_nav_by_currency):
     ws = wb.create_sheet("Firm Overview")
     hdr(ws, 1, [""], col_widths=[42, 22, 18, 38])
 
-    fund_count = fr.get("_fund_count", "—")
+    fund_count = len(funds)
+    mixed = len(rollups) > 1
     row = 1
 
     lp_agg = _firm_lp_aggregates(firm_aggregates, demos)
     if lp_agg["source"] == "per_fund_sum":
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
-        c = ws.cell(row=row, column=1,
-            value="⚠ Firm-level LP counts may be inflated — firm_aggregates block missing from data file. "
-                  "Counts are summed across funds, so LPs committed to multiple funds are double-counted.")
-        c.fill = PatternFill("solid", fgColor="FEF3C7")
-        c.font = Font(bold=True, color="78350F")
+        warn_banner(ws, row,
+            "Firm-level LP counts may be inflated — firm_aggregates block missing from data file. "
+            "Counts are summed across funds, so LPs committed to multiple funds are double-counted.")
         row += 2
 
-    # Item 5.F
-    sect(ws, row, "Item 5.F — Regulatory AUM", 4); row += 1
-    hdr(ws, row, ["Item", "Amount", "# Accounts", "Notes"]); row += 1
-    for label, amt, accts in [
-        ("Discretionary regulatory AUM",  fmt_currency(fr.get("regulatory_aum")), fund_count),
-        ("Non-discretionary AUM",          "$0",                                   "0"),
-        ("Total regulatory AUM",           fmt_currency(fr.get("regulatory_aum")), fund_count),
-    ]:
-        ws.cell(row=row, column=1, value=label).font = BOLD
-        carta(ws, row, 2, amt); carta(ws, row, 3, accts); row += 1
+    if mixed:
+        warn_banner(ws, row, MIXED_CURRENCY_NOTE)
+        row += 2
 
-    row += 1
+    # Item 5.F — one block per currency; a single block when all funds share one.
+    for r in rollups:
+        cur = r["currency"]
+        title = "Item 5.F — Regulatory AUM"
+        title += currency_suffix(cur, mixed)
+        sect(ws, row, title, 4); row += 1
+        hdr(ws, row, ["Item", "Amount", "# Accounts", "Notes"]); row += 1
+        for label, amt, accts in [
+            ("Discretionary regulatory AUM",  fmt_currency(r["regulatory_aum"], cur), r["fund_count"]),
+            ("Non-discretionary AUM",          fmt_currency(0, cur),                   "0"),
+            ("Total regulatory AUM",           fmt_currency(r["regulatory_aum"], cur), r["fund_count"]),
+        ]:
+            ws.cell(row=row, column=1, value=label).font = BOLD
+            carta(ws, row, 2, amt); carta(ws, row, 3, accts); row += 1
+        row += 1
+
     # Item 5.D
     sect(ws, row, "Item 5.D — Client Types", 4); row += 1
     kv(ws, row, "Client type",         "Pooled Investment Vehicles");  row += 1
@@ -200,18 +282,41 @@ def build_firm_overview(wb, fr, demos, firm_aggregates):
     us_lp      = lp_agg["us_lp"]
     non_us_lp  = lp_agg["non_us_lp"]
     no_country = lp_agg["no_country"]
-    non_us_nav = lp_agg["non_us_nav"]
-    total_nav  = lp_agg["total_nav"]
     known      = us_lp + non_us_lp
+
+    nav_rows = _nav_rows(lp_nav_by_currency)
+    if len(nav_rows) == 1:
+        n = nav_rows[0]
+        pct_nav = fmt_pct(n["pct"]) + currency_suffix(n["currency"], mixed)
+    elif nav_rows:
+        pct_nav = "See per-currency NAV below"
+    else:
+        pct_nav = "—"
 
     for label, count, pct_c, pct_n in [
         ("US persons",          us_lp,      fmt_pct(us_lp / known * 100)      if known else "—", "—"),
-        ("Non-US persons",      non_us_lp,  fmt_pct(non_us_lp / known * 100)  if known else "—",
-                                            fmt_pct(non_us_nav / total_nav * 100) if total_nav else "—"),
+        ("Non-US persons",      non_us_lp,  fmt_pct(non_us_lp / known * 100)  if known else "—", pct_nav),
         ("Country not on file", no_country, "—", "—"),
     ]:
         ws.cell(row=row, column=1, value=label).font = BOLD
         carta(ws, row, 2, count); carta(ws, row, 3, pct_c); carta(ws, row, 4, pct_n); row += 1
+
+    row += 1
+    sect(ws, row, "Item 5.H — LP NAV by currency", 4); row += 1
+    hdr(ws, row, ["Currency", "Total LP NAV", "Non-US LP NAV", "% of LP NAV (non-US)"]); row += 1
+    if nav_rows:
+        for n in nav_rows:
+            ws.cell(row=row, column=1, value=currency_label(n["currency"])).font = BOLD
+            carta(ws, row, 2, fmt_currency(n["total"], n["currency"]))
+            carta(ws, row, 3, fmt_currency(n["non_us"], n["currency"]))
+            carta(ws, row, 4, fmt_pct(n["pct"])); row += 1
+    else:
+        ws.cell(row=row, column=1, value="All funds").font = BOLD
+        carta(ws, row, 2, "—"); carta(ws, row, 3, "—"); carta(ws, row, 4, "—"); row += 1
+        warn_banner(ws, row,
+            "LP NAV is not shown — lp_nav_by_currency block missing from data file. "
+            "Run Query 4 to populate it; NAV is never summed across currencies.")
+        row += 1
 
     ws.cell(row=row + 1, column=1,
         value="⚠ Non-US % is approximate — based on partner_country field in Carta.").font = ITALIC
@@ -223,6 +328,7 @@ def build_per_fund_detail(wb, funds):
 
     row = 1
     for f in funds:
+        cur = norm_currency(f.get("reporting_currency"))
         # Fund banner
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
         c = ws.cell(row=row, column=1, value=f"▸ {f.get('fund_name', '—')}")
@@ -236,6 +342,7 @@ def build_per_fund_detail(wb, funds):
             ("Fund type classification",                         f.get("fund_type_classification"),    True),
             ("Investment strategy code (Carta)",                 f.get("investment_strategy_code"),    True),
             ("Legal structure",                                  f.get("legal_structure"),              True),
+            ("Reporting currency",                               currency_label(cur),                  True),
             ("Formation date",                                   fmt_val(f.get("formation_date")),     True),
             ("Fiscal year end month",                            None,                                 False),
             ("Open to new investors? (Y/N)",                     None,                                 False),
@@ -261,7 +368,7 @@ def build_per_fund_detail(wb, funds):
             ("GP NAV",                                      "gp_nav"),
         ]:
             ws.cell(row=row, column=1, value=label).font = BOLD
-            carta(ws, row, 2, fmt_currency(f.get(key))); row += 1
+            carta(ws, row, 2, fmt_currency(f.get(key), cur)); row += 1
 
         # Investor counts
         sect(ws, row, "Beneficial Owners (Q.13)", 5); row += 1
@@ -285,9 +392,9 @@ def build_per_fund_detail(wb, funds):
             ("Distributions",  "annual_distributions",  "annual_lp_distributions",  "annual_gp_distributions"),
         ]:
             ws.cell(row=row, column=1, value=label).font = BOLD
-            carta(ws, row, 2, fmt_currency(f.get(tk)))
-            carta(ws, row, 3, fmt_currency(f.get(lk)))
-            carta(ws, row, 4, fmt_currency(f.get(gk))); row += 1
+            carta(ws, row, 2, fmt_currency(f.get(tk), cur))
+            carta(ws, row, 3, fmt_currency(f.get(lk), cur))
+            carta(ws, row, 4, fmt_currency(f.get(gk), cur)); row += 1
 
         # Capital activity — ITD
         sect(ws, row, "Capital Activity — Inception-to-Date", 5); row += 1
@@ -298,9 +405,9 @@ def build_per_fund_detail(wb, funds):
             ("Committed capital", "total_committed_capital",       None,                               None),
         ]:
             ws.cell(row=row, column=1, value=label).font = BOLD
-            carta(ws, row, 2, fmt_currency(f.get(tk)))
-            if lk: carta(ws, row, 3, fmt_currency(f.get(lk)))
-            if gk: carta(ws, row, 4, fmt_currency(f.get(gk)))
+            carta(ws, row, 2, fmt_currency(f.get(tk), cur))
+            if lk: carta(ws, row, 3, fmt_currency(f.get(lk), cur))
+            if gk: carta(ws, row, 4, fmt_currency(f.get(gk), cur))
             row += 1
 
         # Performance multiples (Form PF reference)
@@ -364,34 +471,43 @@ def build_investor_demographics(wb, funds, demos):
         value="⚠ Country detection is approximate. Partners with no country on file are excluded from the US/non-US %.").font = ITALIC
 
 
-def build_asset_composition(wb, fr):
+def build_asset_composition(wb, rollups):
     ws = wb.create_sheet("Asset Composition")
     hdr(ws, 1, [""], col_widths=[50, 22, 20])
 
+    mixed = len(rollups) > 1
     sect(ws, 1, "Schedule D §5.K.(1) — SMA Asset Category Breakdown (Firm Rollup)", 3)
     ws.cell(row=2, column=1,
         value="Note: §5.K.(1) applies to separately managed accounts. If all AUM is in private funds, this section is N/A — confirm with adviser.").font = ITALIC
+    row = 3
+    if mixed:
+        warn_banner(ws, row, MIXED_CURRENCY_NOTE, cols=3)
+        row += 1
 
-    hdr(ws, 3, ["Asset Category", "FMV", "% of Total Active FMV"])
-    total_fmv = fr.get("total_active_fmv") or 0
-    row = 4
-    for label, key in [
-        ("Exchange-Traded Equity (U.S. and non-U.S.)",           "fmv_exchange_traded_equity"),
-        ("Private Equity (non-public ownership interests)",       "fmv_private_equity"),
-        ("Securities issued by pooled investment vehicles",       "fmv_pooled_investment_vehicles"),
-        ("Options and warrants",                                  "fmv_options_and_warrants"),
-        ("Digital assets / cryptocurrency",                       "fmv_digital_assets"),
-        ("Other alternatives",                                    "fmv_other_alternatives"),
-    ]:
-        val = fr.get(key) or 0
-        pct = fmt_pct(val / total_fmv * 100) if total_fmv else "—"
-        ws.cell(row=row, column=1, value=label).font = BOLD
-        carta(ws, row, 2, fmt_currency(val))
-        carta(ws, row, 3, pct); row += 1
+    for r in rollups:
+        cur = r["currency"]
+        if mixed:
+            sect(ws, row, f"Funds reporting in {currency_label(cur)}", 3); row += 1
+        hdr(ws, row, ["Asset Category", "FMV", "% of Total Active FMV"]); row += 1
+        total_fmv = r.get("total_active_fmv") or 0
+        for label, key in [
+            ("Exchange-Traded Equity (U.S. and non-U.S.)",           "fmv_exchange_traded_equity"),
+            ("Private Equity (non-public ownership interests)",       "fmv_private_equity"),
+            ("Securities issued by pooled investment vehicles",       "fmv_pooled_investment_vehicles"),
+            ("Options and warrants",                                  "fmv_options_and_warrants"),
+            ("Digital assets / cryptocurrency",                       "fmv_digital_assets"),
+            ("Other alternatives",                                    "fmv_other_alternatives"),
+        ]:
+            val = r.get(key) or 0
+            pct = fmt_pct(val / total_fmv * 100) if total_fmv else "—"
+            ws.cell(row=row, column=1, value=label).font = BOLD
+            carta(ws, row, 2, fmt_currency(val, cur))
+            carta(ws, row, 3, pct); row += 1
 
-    ws.cell(row=row, column=1, value="Total Active Investment FMV").font = Font(bold=True)
-    carta(ws, row, 2, fmt_currency(total_fmv))
-    carta(ws, row, 3, "100%")
+        ws.cell(row=row, column=1, value="Total Active Investment FMV").font = Font(bold=True)
+        carta(ws, row, 2, fmt_currency(total_fmv, cur))
+        carta(ws, row, 3, "100%")
+        row += 2
 
 
 def build_manual_fields(wb):
@@ -465,25 +581,17 @@ def main():
     funds            = data.get("funds", [])
     demos            = data.get("investor_demographics", {})
     firm_aggregates  = data.get("firm_aggregates", {})
-    fr = {
-        key: sum(f.get(key) or 0 for f in funds)
-        for key in [
-            "regulatory_aum", "total_active_fmv",
-            "fmv_exchange_traded_equity", "fmv_private_equity",
-            "fmv_pooled_investment_vehicles", "fmv_options_and_warrants",
-            "fmv_digital_assets", "fmv_other_alternatives",
-        ]
-    }
-    fr["_fund_count"] = len(funds)
+    lp_nav_by_currency = data.get("lp_nav_by_currency")
+    rollups          = rollup_by_currency(funds)
 
     wb = Workbook()
     wb.remove(wb.active)
 
     build_legend(wb, firm_name, reporting_date)
-    build_firm_overview(wb, fr, demos, firm_aggregates)
+    build_firm_overview(wb, rollups, funds, demos, firm_aggregates, lp_nav_by_currency)
     build_per_fund_detail(wb, funds)
     build_investor_demographics(wb, funds, demos)
-    build_asset_composition(wb, fr)
+    build_asset_composition(wb, rollups)
     build_manual_fields(wb)
 
     out_path = Path(args.out)

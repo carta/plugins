@@ -162,11 +162,49 @@ function esc(s) {
   if (s == null || s === '') return '—';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function fmt$(n) {
+const MIXED_CURRENCY_ACTION = 'Convert them yourself before entering a single figure in IARD.';
+const MIXED_CURRENCY_NOTE = 'Funds report in more than one currency. Carta does not convert currencies, so amounts are shown per currency. ' + MIXED_CURRENCY_ACTION;
+const NO_CURRENCY_LABEL = 'No currency set';
+
+// A valid 3-letter currency code, upper-cased; null when missing or not a code.
+function normCurrency(c) {
+  return (typeof c === 'string' && /^[A-Za-z]{3}$/.test(c.trim())) ? c.trim().toUpperCase() : null;
+}
+function currencyLabel(code) { return code || NO_CURRENCY_LABEL; }
+// Label appended to a figure when the firm's figures span more than one currency.
+function currencySuffix(code, show) { return show ? ` (${currencyLabel(code)})` : ''; }
+// Sort order for anything grouped by currency: codes A-Z, the no-currency group last.
+function byCurrency(a, b) {
+  return (a.currency === null) - (b.currency === null) || String(a.currency).localeCompare(String(b.currency));
+}
+function emptyRollup(code) {
+  const r = { currency: code, fund_count: 0 };
+  ROLLUP_KEYS.forEach(k => { r[k] = 0; });
+  return r;
+}
+// Amber warning box; `html` is the message, `marginBottom` the gap below in px.
+function warningBanner(html, marginBottom) {
+  return `<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 14px;margin-bottom:${marginBottom}px;color:#78350F;font-size:13px;">
+         ⚠ ${html}
+       </div>`;
+}
+
+// Money in the given currency. Without a valid currency the amount is a plain grouped
+// number with no symbol: a missing currency is never defaulted to another one.
+function fmtMoney(n, currency) {
   if (n == null || n === '') return '—';
-  const abs = Math.abs(Number(n));
-  const s = '$' + abs.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  return Number(n) < 0 ? '(' + s + ')' : s;
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  const code = normCurrency(currency);
+  if (code) {
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency', currency: code, currencySign: 'accounting', maximumFractionDigits: 0,
+      }).format(v);
+    } catch (e) { /* unknown code: fall through to the plain number */ }
+  }
+  const plain = Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return v < 0 ? '(' + plain + ')' : plain;
 }
 function fmtPct(n, decimals = 1) {
   if (n == null || n === '') return '—';
@@ -206,24 +244,50 @@ function initTabs() {
   });
 }
 
-// ── Firm rollup (computed from per-fund rows — firm_rollup key removed from schema) ───
-function computeFirmRollup() {
-  const funds = DATA.funds || [];
-  return funds.reduce((acc, f) => {
-    acc.regulatory_aum               += f.regulatory_aum               || 0;
-    acc.fair_market_value            += f.fair_market_value            || 0;
-    acc.cash                         += f.cash                         || 0;
-    acc.other_assets                 += f.other_assets                 || 0;
-    acc.total_gross_assets           += f.total_gross_assets           || 0;
-    acc.unfunded_commitments         += f.unfunded_commitments         || 0;
-    acc.total_borrowings_outstanding += f.total_borrowings_outstanding || 0;
-    acc.net_asset_value              += f.net_asset_value              || 0;
-    return acc;
-  }, {
-    regulatory_aum: 0, fair_market_value: 0, cash: 0, other_assets: 0,
-    total_gross_assets: 0, unfunded_commitments: 0, total_borrowings_outstanding: 0,
-    net_asset_value: 0,
+// ── Firm rollups (computed from per-fund rows, one per reporting currency) ───
+// Amounts are only ever added within one currency. Funds with no valid currency form
+// their own group. Order: currency codes A-Z, the no-currency group last.
+const ROLLUP_KEYS = [
+  'regulatory_aum', 'fair_market_value', 'cash', 'other_assets', 'total_gross_assets',
+  'unfunded_commitments', 'total_borrowings_outstanding', 'net_asset_value',
+];
+function computeFirmRollups() {
+  const groups = new Map();
+  (DATA.funds || []).forEach(f => {
+    const code = normCurrency(f.reporting_currency);
+    if (!groups.has(code)) groups.set(code, emptyRollup(code));
+    const r = groups.get(code);
+    r.fund_count += 1;
+    ROLLUP_KEYS.forEach(k => { r[k] += f[k] || 0; });
   });
+  if (!groups.size) groups.set(null, emptyRollup(null));
+  return [...groups.values()].sort(byCurrency);
+}
+
+// LP NAV rows from Query 4 (`lp_nav_by_currency`), never summed across currencies.
+function getLpNavRows() {
+  const rows = (DATA.lp_nav_by_currency || []).map(r => {
+    // Query 4 defines the US and non-US amounts and the share, all over LPs with a country on
+    // file. A NULL share (no LP with a country) stays null and shows "—".
+    const pctNonUs = r.pct_non_us_lp_nav;
+    return {
+      currency: normCurrency(r.reporting_currency),
+      total: r.total_lp_nav ?? null,
+      non_us: r.non_us_lp_nav ?? null,
+      us: r.us_lp_nav ?? null,
+      pct_us: pctNonUs != null ? 100 - Number(pctNonUs) : null,
+      pct_non_us: pctNonUs ?? null,
+    };
+  });
+  return rows.sort(byCurrency);
+}
+
+// NAV shares are shown per currency (labelled, with a conversion instruction) when funds or
+// NAV rows span more than one currency.
+function navIsPerCurrency(navRows) { return computeFirmRollups().length > 1 || navRows.length > 1; }
+
+function mixedCurrencyBanner(rollups) {
+  return rollups.length > 1 ? warningBanner(`<strong>${MIXED_CURRENCY_NOTE}</strong>`, 18) : '';
 }
 
 // ── Header ────────────────────────────────────────────────────────────────
@@ -247,22 +311,17 @@ function getFirmLpAggregates() {
       us_lp:       fa.us_lp_investors ?? 0,
       non_us_lp:   fa.non_us_lp_investors ?? 0,
       no_country:  fa.lp_investors_no_country_on_file ?? 0,
-      total_nav:   fa.total_lp_nav ?? 0,
-      non_us_nav:  fa.non_us_lp_nav ?? 0,
       pct_non_us_count: fa.pct_non_us_lp_investors ?? null,
-      pct_non_us_nav:   fa.pct_non_us_lp_nav ?? null,
     };
   }
   // Legacy fallback — sum per-fund counts (double-counts multi-fund LPs).
   const funds = DATA.funds || [];
   const demos = DATA.investor_demographics || {};
-  let usLPs = 0, nonUsLPs = 0, noCtry = 0, totalLPNav = 0, nonUsNav = 0;
+  let usLPs = 0, nonUsLPs = 0, noCtry = 0;
   Object.values(demos).forEach(d => {
     usLPs      += d.us_lp_investors || 0;
     nonUsLPs   += d.non_us_lp_investors || 0;
     noCtry     += d.lp_investors_no_country_on_file || 0;
-    totalLPNav += d.total_lp_nav || 0;
-    nonUsNav   += d.non_us_lp_nav || 0;
   });
   const totalLPs = funds.reduce((s, f) => s + (f.beneficial_owners_lp || 0), 0);
   const known    = usLPs + nonUsLPs;
@@ -272,27 +331,29 @@ function getFirmLpAggregates() {
     us_lp:       usLPs,
     non_us_lp:   nonUsLPs,
     no_country:  noCtry,
-    total_nav:   totalLPNav,
-    non_us_nav:  nonUsNav,
     pct_non_us_count: known > 0 ? nonUsLPs / known * 100 : null,
-    pct_non_us_nav:   totalLPNav > 0 ? nonUsNav / totalLPNav * 100 : null,
   };
 }
 
 // ── Summary metrics ───────────────────────────────────────────────────────
 function renderMetrics() {
-  const fr = computeFirmRollup();
+  const rollups = computeFirmRollups();
+  const mixed = rollups.length > 1;
   const funds = DATA.funds || [];
   const lp = getFirmLpAggregates();
   const lpNote = lp.source === 'firm_aggregates'
     ? 'Distinct beneficial owners'
     : '⚠ Sum across funds (may double-count multi-fund LPs)';
-  const items = [
-    { label: 'Regulatory AUM', value: fmt$(fr.regulatory_aum), note: 'Gross assets + unfunded' },
-    { label: 'Total NAV', value: fmt$(fr.net_asset_value), note: 'LP + GP capital' },
+  const items = [];
+  rollups.forEach(r => {
+    const sfx = currencySuffix(r.currency, mixed);
+    items.push({ label: 'Regulatory AUM' + sfx, value: fmtMoney(r.regulatory_aum, r.currency), note: 'Gross assets + unfunded' });
+    items.push({ label: 'Total NAV' + sfx, value: fmtMoney(r.net_asset_value, r.currency), note: 'LP + GP capital' });
+  });
+  items.push(
     { label: 'Funds', value: fmtNum(funds.length), note: 'Active private funds' },
     { label: 'LP Investors', value: fmtNum(lp.total_lp), note: lpNote },
-  ];
+  );
   const el = document.getElementById('metrics');
   el.innerHTML = items.map(m => `
     <div class="metric">
@@ -304,7 +365,8 @@ function renderMetrics() {
 
 // ── Tab 1: Firm Overview ──────────────────────────────────────────────────
 function renderFirmTab() {
-  const fr = computeFirmRollup();
+  const rollups = computeFirmRollups();
+  const mixed = rollups.length > 1;
   const funds = DATA.funds || [];
 
   // Use SQL-computed firm aggregates if present; otherwise legacy per-fund sum.
@@ -312,29 +374,67 @@ function renderFirmTab() {
   const usLPs      = lp.us_lp;
   const nonUsLPs   = lp.non_us_lp;
   const noCtry     = lp.no_country;
-  const totalLPNav = lp.total_nav;
-  const nonUsNav   = lp.non_us_nav;
   const totalKnown    = usLPs + nonUsLPs;
   const pctUsCount    = totalKnown > 0 ? usLPs / totalKnown * 100 : null;
   const pctNonUsCount = lp.pct_non_us_count != null ? lp.pct_non_us_count
                        : (totalKnown > 0 ? nonUsLPs / totalKnown * 100 : null);
-  const pctUsNav      = totalLPNav > 0 ? (totalLPNav - nonUsNav) / totalLPNav * 100 : null;
-  const pctNonUsNav   = lp.pct_non_us_nav != null ? lp.pct_non_us_nav
-                       : (totalLPNav > 0 ? nonUsNav / totalLPNav * 100 : null);
 
   const totalFunds = funds.length;
+  const sfx = r => currencySuffix(r.currency, mixed);
+
+  // 5.F: one row set per currency (a single set when all funds share one currency).
+  const aumRows = rollups.map(r => `
+            <tr><td>Discretionary regulatory AUM${sfx(r)}</td><td class="num">${fmtMoney(r.regulatory_aum, r.currency)}</td><td class="num">${fmtNum(r.fund_count)}</td></tr>
+            <tr><td>Non-discretionary regulatory AUM${sfx(r)}</td><td class="num">${fmtMoney(0, r.currency)}</td><td class="num">0</td></tr>
+            <tr class="total-row"><td>Total Regulatory AUM${sfx(r)}</td><td class="num">${fmtMoney(r.regulatory_aum, r.currency)}</td><td class="num">${fmtNum(r.fund_count)}</td></tr>`).join('');
+
+  // 5.H NAV: one row set per currency from Query 4. Without it the cells show "—".
+  const navRowsData = getLpNavRows();
+  const labelNav = navIsPerCurrency(navRowsData);
+  const navRows = navRowsData.length ? navRowsData.map(n => {
+    const label = currencySuffix(n.currency, labelNav);
+    return `
+            <tr><td>US persons${label}</td><td class="num">${fmtMoney(n.us, n.currency)}</td><td class="num">${fmtPct(n.pct_us)}</td></tr>
+            <tr><td>Non-US persons${label}</td><td class="num">${fmtMoney(n.non_us, n.currency)}</td><td class="num">${fmtPct(n.pct_non_us)}</td></tr>`;
+  }).join('') : `
+            <tr><td>US persons</td><td class="num">—</td><td class="num">—</td></tr>
+            <tr><td>Non-US persons</td><td class="num">—</td><td class="num">—</td></tr>`;
+  const navMissingWarning = navRowsData.length ? '' : warningBanner(
+    `<strong>LP NAV is not shown.</strong> The data file is missing the <code>lp_nav_by_currency</code>
+        block. Run Query 4 to populate it. NAV is never added up across currencies.`, 12);
+  const navSummary = navRowsData.length
+    ? navRowsData.map(n => `<strong>${fmtPct(n.pct_non_us)}</strong>${currencySuffix(n.currency, labelNav)}`).join(', ')
+    : '<strong>—</strong>';
+
+  // Balance sheet components: one table per currency.
+  const balanceTables = rollups.map(r => `
+      ${mixed ? `<div class="section-sub" style="font-weight:600">Funds reporting in ${currencyLabel(r.currency)}</div>` : ''}
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Component</th><th class="num">Amount</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Fair Market Value (FMV)</td><td class="num">${fmtMoney(r.fair_market_value, r.currency)}</td><td class="src">Accounts 1100+1101</td></tr>
+            <tr><td>Cash &amp; cash equivalents</td><td class="num">${fmtMoney(r.cash, r.currency)}</td><td class="src">Accounts 1000–1099</td></tr>
+            <tr><td>Other assets</td><td class="num">${fmtMoney(r.other_assets, r.currency)}</td><td class="src">Accounts 1200–1899</td></tr>
+            <tr class="total-row"><td>Total Gross Assets</td><td class="num">${fmtMoney(r.total_gross_assets, r.currency)}</td><td></td></tr>
+            <tr><td>+ Unfunded commitments</td><td class="num">${fmtMoney(r.unfunded_commitments, r.currency)}</td><td class="src">Commitment − contributions</td></tr>
+            <tr class="total-row"><td>= Regulatory AUM</td><td class="num">${fmtMoney(r.regulatory_aum, r.currency)}</td><td></td></tr>
+            <tr><td>Borrowings (LOC outstanding)</td><td class="num">${fmtMoney(r.total_borrowings_outstanding, r.currency)}</td><td class="src">Accounts 2000–2999 (negated)</td></tr>
+            <tr><td>Total NAV</td><td class="num">${fmtMoney(r.net_asset_value, r.currency)}</td><td class="src">From NAV calculations</td></tr>
+          </tbody>
+        </table>
+      </div>`).join('');
 
   const aggregateWarning = lp.source === 'per_fund_sum'
-    ? `<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 14px;margin-bottom:18px;color:#78350F;font-size:13px;">
-         ⚠ <strong>Firm-level counts may be inflated.</strong> The data file is missing the
+    ? warningBanner(`<strong>Firm-level counts may be inflated.</strong> The data file is missing the
          <code>firm_aggregates</code> block, so LP counts shown below are summed across funds —
          partners committed to multiple funds will be counted multiple times. Re-run the skill
-         to populate <code>firm_aggregates</code> from Query 3 for accurate distinct counts.
-       </div>`
+         to populate <code>firm_aggregates</code> from Query 3 for accurate distinct counts.`, 18)
     : '';
 
   document.getElementById('tab-firm').innerHTML = `
     ${aggregateWarning}
+    ${mixedCurrencyBanner(rollups)}
     <div class="legend">
       <span class="legend-item">${badge('carta','Carta fills')} Carta can provide this value</span>
       <span class="legend-item">${badge('manual','Manual')} Must be entered directly in IARD</span>
@@ -347,9 +447,7 @@ function renderFirmTab() {
         <table>
           <thead><tr><th>Item 5.F</th><th class="num">Amount</th><th class="num"># Accounts</th></tr></thead>
           <tbody>
-            <tr><td>Discretionary regulatory AUM</td><td class="num">${fmt$(fr.regulatory_aum)}</td><td class="num">${fmtNum(totalFunds)}</td></tr>
-            <tr><td>Non-discretionary regulatory AUM</td><td class="num">$0</td><td class="num">0</td></tr>
-            <tr class="total-row"><td>Total Regulatory AUM</td><td class="num">${fmt$(fr.regulatory_aum)}</td><td class="num">${fmtNum(totalFunds)}</td></tr>
+            ${aumRows}
           </tbody>
         </table>
       </div>
@@ -374,44 +472,32 @@ function renderFirmTab() {
       <div class="section-sub">Based on <code>partner_country</code> field in Carta. Country detection is approximate — confirm completeness before filing. Partners with no country on file are excluded from the US/Non-US calculation.</div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Residency</th><th class="num">LP Count</th><th class="num">% of LP Investors</th><th class="num">Approx. LP NAV</th><th class="num">% of LP NAV</th></tr></thead>
+          <thead><tr><th>Residency</th><th class="num">LP Count</th><th class="num">% of LP Investors</th></tr></thead>
           <tbody>
-            <tr><td>US persons</td><td class="num">${fmtNum(usLPs)}</td>
-                <td class="num">${fmtPct(pctUsCount)}</td>
-                <td class="num">${fmt$(totalLPNav - nonUsNav)}</td>
-                <td class="num">${fmtPct(pctUsNav)}</td></tr>
-            <tr><td>Non-US persons</td><td class="num">${fmtNum(nonUsLPs)}</td>
-                <td class="num">${fmtPct(pctNonUsCount)}</td>
-                <td class="num">${fmt$(nonUsNav)}</td>
-                <td class="num">${fmtPct(pctNonUsNav)}</td></tr>
-            <tr><td>No country on file</td><td class="num">${fmtNum(noCtry)}</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+            <tr><td>US persons</td><td class="num">${fmtNum(usLPs)}</td><td class="num">${fmtPct(pctUsCount)}</td></tr>
+            <tr><td>Non-US persons</td><td class="num">${fmtNum(nonUsLPs)}</td><td class="num">${fmtPct(pctNonUsCount)}</td></tr>
+            <tr><td>No country on file</td><td class="num">${fmtNum(noCtry)}</td><td class="num">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      ${navMissingWarning}
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Residency</th><th class="num">Approx. LP NAV</th><th class="num">% of LP NAV</th></tr></thead>
+          <tbody>${navRows}
           </tbody>
         </table>
       </div>
       <p style="font-size:12px;color:var(--text-subtle);">
         For Item 5.H, SEC asks what % of regulatory AUM comes from non-US clients.
-        Approximate: <strong>${fmtPct(pctNonUsNav)}</strong> of LP NAV from non-US investors.
+        Approximate share of LP NAV from non-US investors: ${navSummary}.
       </p>
     </div>
 
     <div class="section">
       <div class="section-title">Balance Sheet Components ${badge('carta','Carta fills')}</div>
-      <div class="section-sub">Firm-wide totals (sum across all funds). Regulatory AUM = gross assets + unfunded commitments.</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>Component</th><th class="num">Amount</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td>Fair Market Value (FMV)</td><td class="num">${fmt$(fr.fair_market_value)}</td><td class="src">Accounts 1100+1101</td></tr>
-            <tr><td>Cash &amp; cash equivalents</td><td class="num">${fmt$(fr.cash)}</td><td class="src">Accounts 1000–1099</td></tr>
-            <tr><td>Other assets</td><td class="num">${fmt$(fr.other_assets)}</td><td class="src">Accounts 1200–1899</td></tr>
-            <tr class="total-row"><td>Total Gross Assets</td><td class="num">${fmt$(fr.total_gross_assets)}</td><td></td></tr>
-            <tr><td>+ Unfunded commitments</td><td class="num">${fmt$(fr.unfunded_commitments)}</td><td class="src">Commitment − contributions</td></tr>
-            <tr class="total-row"><td>= Regulatory AUM</td><td class="num">${fmt$(fr.regulatory_aum)}</td><td></td></tr>
-            <tr><td>Borrowings (LOC outstanding)</td><td class="num">${fmt$(fr.total_borrowings_outstanding)}</td><td class="src">Accounts 2000–2999 (negated)</td></tr>
-            <tr><td>Total NAV</td><td class="num">${fmt$(fr.net_asset_value)}</td><td class="src">From NAV calculations</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="section-sub">${mixed ? 'Subtotals per currency (no cross-currency total).' : 'Totals across all funds.'} Regulatory AUM = gross assets + unfunded commitments.</div>
+      ${balanceTables}
     </div>
   `;
 }
@@ -439,6 +525,8 @@ function renderFundsTab() {
 
   funds.forEach(f => {
     const d = demos[f.fund_uuid] || {};
+    const cur = f.reporting_currency;
+    const m = v => fmtMoney(v, cur);
     const isPIT = f.investor_count_is_point_in_time;
     const pitNote = isPIT
       ? `Counts are as of ${fmtDate(DATA.reporting_date)} (point-in-time from NAV calculation).`
@@ -453,7 +541,7 @@ function renderFundsTab() {
           <div class="fund-meta">${esc(f.fund_type_classification)}  ·  ${esc(f.investment_strategy_code)}  ·  Formed ${fmtDate(f.formation_date)}</div>
         </div>
         <div style="display:flex;align-items:center">
-          <span class="fund-aum-chip">Reg AUM: ${fmt$(f.regulatory_aum)}</span>
+          <span class="fund-aum-chip">Reg AUM: ${m(f.regulatory_aum)}</span>
           <span class="fund-toggle">&#8964;</span>
         </div>
       </div>
@@ -467,31 +555,32 @@ function renderFundsTab() {
             ${kv('Legal structure', f.legal_structure)}
             ${kv('Formation date', fmtDate(f.formation_date))}
             ${kv('Fund family', f.fund_family_name || '—')}
+            ${kv('Reporting currency', currencyLabel(normCurrency(cur)))}
 
             <div class="fund-section-title" style="margin-top:16px">Balance Sheet ${badge('carta','Carta fills')}</div>
-            ${kv('FMV (investments)', fmt$(f.fair_market_value))}
-            ${kv('Cash', fmt$(f.cash))}
-            ${kv('Other assets', fmt$(f.other_assets))}
-            ${kv('Total gross assets', fmt$(f.total_gross_assets))}
-            ${kv('Borrowings outstanding', fmt$(f.total_borrowings_outstanding))}
-            ${kv('Unfunded commitments', fmt$(f.unfunded_commitments))}
-            ${kv('Regulatory AUM', fmt$(f.regulatory_aum))}
-            ${kv('Net asset value (NAV)', fmt$(f.net_asset_value))}
-            ${kv('LP NAV', fmt$(f.lp_nav))}
-            ${kv('GP NAV', fmt$(f.gp_nav))}
+            ${kv('FMV (investments)', m(f.fair_market_value))}
+            ${kv('Cash', m(f.cash))}
+            ${kv('Other assets', m(f.other_assets))}
+            ${kv('Total gross assets', m(f.total_gross_assets))}
+            ${kv('Borrowings outstanding', m(f.total_borrowings_outstanding))}
+            ${kv('Unfunded commitments', m(f.unfunded_commitments))}
+            ${kv('Regulatory AUM', m(f.regulatory_aum))}
+            ${kv('Net asset value (NAV)', m(f.net_asset_value))}
+            ${kv('LP NAV', m(f.lp_nav))}
+            ${kv('GP NAV', m(f.gp_nav))}
           </div>
 
           <div>
             <div class="fund-section-title">Capital Activity — Annual ${badge('carta','Carta fills')}</div>
-            ${kv('LP subscriptions', fmt$(f.annual_lp_subscriptions))}
-            ${kv('GP subscriptions', fmt$(f.annual_gp_subscriptions))}
-            ${kv('LP distributions', fmt$(f.annual_lp_distributions))}
-            ${kv('GP distributions', fmt$(f.annual_gp_distributions))}
+            ${kv('LP subscriptions', m(f.annual_lp_subscriptions))}
+            ${kv('GP subscriptions', m(f.annual_gp_subscriptions))}
+            ${kv('LP distributions', m(f.annual_lp_distributions))}
+            ${kv('GP distributions', m(f.annual_gp_distributions))}
 
             <div class="fund-section-title" style="margin-top:16px">Capital Activity — ITD ${badge('carta','Carta fills')}</div>
-            ${kv('LP contributions', fmt$(f.lp_contributions_since_inception))}
-            ${kv('LP distributions', fmt$(f.lp_distributions_since_inception))}
-            ${kv('Total committed', fmt$(f.total_committed_capital))}
+            ${kv('LP contributions', m(f.lp_contributions_since_inception))}
+            ${kv('LP distributions', m(f.lp_distributions_since_inception))}
+            ${kv('Total committed', m(f.total_committed_capital))}
 
             <div class="fund-section-title" style="margin-top:16px">Beneficial Owners ${badge('carta','Carta fills')}</div>
             ${kv('LP investors', fmtNum(d.lp_investors || f.beneficial_owners_lp))}
@@ -501,7 +590,7 @@ function renderFundsTab() {
             ${kv('Non-US LP investors', fmtNum(d.non_us_lp_investors))}
             ${kv('No country on file', fmtNum(d.lp_investors_no_country_on_file))}
             ${kv('% non-US investors', fmtPct(d.pct_non_us_lp_investors))}
-            ${kv('Non-US LP NAV', fmt$(d.non_us_lp_nav))}
+            ${kv('Non-US LP NAV', m(d.non_us_lp_nav))}
             ${kv('% non-US LP NAV', fmtPct(d.pct_non_us_lp_nav))}
 
             <div class="fund-section-title" style="margin-top:16px">Investor Entity Types ${badge('carta','Carta fills')}</div>
@@ -518,13 +607,13 @@ function renderFundsTab() {
           <table>
             <thead><tr><th>Asset Class</th><th class="num">FMV</th><th class="num">% of Portfolio</th></tr></thead>
             <tbody>
-              ${assetRow('Exchange-traded equity', f.fmv_exchange_traded_equity, f.total_active_fmv)}
-              ${assetRow('Private equity / direct investments', f.fmv_private_equity, f.total_active_fmv)}
-              ${assetRow('Pooled investment vehicles', f.fmv_pooled_investment_vehicles, f.total_active_fmv)}
-              ${assetRow('Digital assets / crypto', f.fmv_digital_assets, f.total_active_fmv)}
-              ${assetRow('Options &amp; warrants', f.fmv_options_and_warrants, f.total_active_fmv)}
-              ${assetRow('Other alternatives', f.fmv_other_alternatives, f.total_active_fmv)}
-              <tr class="total-row"><td>Total active FMV</td><td class="num">${fmt$(f.total_active_fmv)}</td><td class="num">100%</td></tr>
+              ${assetRow('Exchange-traded equity', f.fmv_exchange_traded_equity, f.total_active_fmv, cur)}
+              ${assetRow('Private equity / direct investments', f.fmv_private_equity, f.total_active_fmv, cur)}
+              ${assetRow('Pooled investment vehicles', f.fmv_pooled_investment_vehicles, f.total_active_fmv, cur)}
+              ${assetRow('Digital assets / crypto', f.fmv_digital_assets, f.total_active_fmv, cur)}
+              ${assetRow('Options &amp; warrants', f.fmv_options_and_warrants, f.total_active_fmv, cur)}
+              ${assetRow('Other alternatives', f.fmv_other_alternatives, f.total_active_fmv, cur)}
+              <tr class="total-row"><td>Total active FMV</td><td class="num">${m(f.total_active_fmv)}</td><td class="num">100%</td></tr>
             </tbody>
           </table>
         </div>
@@ -539,9 +628,9 @@ function kv(label, value) {
   return `<div class="fund-kv"><span class="k">${label}</span><span class="v">${esc(value)}</span></div>`;
 }
 
-function assetRow(label, fmv, total) {
+function assetRow(label, fmv, total, currency) {
   const pct = (fmv && total && total > 0) ? fmtPct(fmv / total * 100) : '—';
-  return `<tr><td>${label}</td><td class="num">${fmt$(fmv)}</td><td class="num">${pct}</td></tr>`;
+  return `<tr><td>${label}</td><td class="num">${fmtMoney(fmv, currency)}</td><td class="num">${pct}</td></tr>`;
 }
 
 // ── Tab 3: IARD Checklist ─────────────────────────────────────────────────
@@ -553,8 +642,8 @@ function renderIARDTab() {
       <ol class="checklist">
         ${step(1,  'Log into IARD (iard.com) and open your Form ADV Part 1A amendment.')}
         ${step(2,  `Item 5.D — Client Type: select "Pooled Investment Vehicles" for 100% of clients. ${badge('carta','Carta fills')}`)}
-        ${step(3,  `Item 5.F — Regulatory AUM: enter <strong>${fmt$(computeFirmRollup().regulatory_aum)}</strong> as discretionary AUM, 0 as non-discretionary, and <strong>${fmtNum((DATA.funds || []).length)} accounts</strong>. ${badge('carta','Carta fills')}`)}
-        ${step(4,  `Item 5.H — Non-US Clients: use the % of LP NAV from the Firm Overview tab to select the appropriate IARD range. ${badge('carta','Carta fills')} ${badge('manual','Verify')}`)}
+        ${step(3,  `Item 5.F — Regulatory AUM: enter ${aumChecklistText()} as discretionary AUM, 0 as non-discretionary, and <strong>${fmtNum((DATA.funds || []).length)} accounts</strong>. ${badge('carta','Carta fills')}`)}
+        ${step(4,  `Item 5.H — Non-US Clients: ${navChecklistText()} ${badge('carta','Carta fills')} ${badge('manual','Verify')}`)}
         ${step(5,  `Schedule D §7.B.(1) — For each private fund, complete: fund identification (name, IARD fund ID, formation date, legal structure). ${badge('carta','Carta fills')} ${badge('flag','Verify legal names')}`)}
         ${step(6,  `Schedule D §7.B.(1) Q.13 — Enter beneficial owner counts (LP + GP) for each fund. ${badge('carta','Carta fills')}`)}
         ${step(7,  `Schedule D §7.B.(1) — Enter annual subscriptions, distributions, and ITD contributions/distributions for each fund. ${badge('carta','Carta fills')}`)}
@@ -591,6 +680,24 @@ function renderIARDTab() {
       </div>
     </div>
   `;
+}
+
+function aumChecklistText() {
+  const rollups = computeFirmRollups();
+  if (rollups.length === 1) return `<strong>${fmtMoney(rollups[0].regulatory_aum, rollups[0].currency)}</strong>`;
+  const parts = rollups.map(r => `<strong>${fmtMoney(r.regulatory_aum, r.currency)}</strong> (${currencyLabel(r.currency)}, ${fmtNum(r.fund_count)} funds)`);
+  return `${parts.join(' and ')} — shown per currency. ${MIXED_CURRENCY_ACTION}`;
+}
+
+// Item 5.H: the non-US share of LP NAV is one number per currency, and shares in different
+// currencies cannot be combined without converting the amounts behind them.
+function navChecklistText() {
+  const navRows = getLpNavRows();
+  if (!navRows.length || !navIsPerCurrency(navRows)) {
+    return 'use the % of LP NAV from the Firm Overview tab to select the appropriate IARD range.';
+  }
+  const parts = navRows.map(n => `<strong>${fmtPct(n.pct_non_us)}</strong>${currencySuffix(n.currency, true)}`);
+  return `the non-US % of LP NAV is ${parts.join(' and ')} — shown per currency. ${MIXED_CURRENCY_ACTION}`;
 }
 
 function step(n, text) {
