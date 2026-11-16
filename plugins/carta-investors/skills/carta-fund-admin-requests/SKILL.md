@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.45.0</carta-plugin>
+<carta-plugin>carta-investors:7.45.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

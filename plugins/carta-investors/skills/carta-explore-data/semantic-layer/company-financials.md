@@ -5,6 +5,26 @@ Query financial metrics and KPIs reported by portfolio companies — revenue, AR
 > For *investment cost basis and FMV*, use `AGGREGATE_INVESTMENTS` (see `investments.md`).
 > `COMPANY_FINANCIALS` contains metrics **reported by the company**, not fund-level investment figures.
 
+## Read them directly first: `portfolio_holding__list__metrics`
+
+Investors mix KPIs and statement lines in one ask ("burn, headcount and revenue for all my portcos"). One read answers any mix, for one company, a list or every holding, in seconds, with the figures the company page shows. Use it before Step 1 of the skill (`dwh__execute__question`) and before any SQL below:
+
+```
+read_tool({"name": "portfolio_holding__list__metrics", "arguments": {"owner_id": <firm_carta_id>, "metrics": "burn, headcount, revenue", "companies": "all"}})
+```
+
+- `owner_id` is the active firm's integer `carta_id` from `list_contexts`, not its `firm_id` UUID.
+- `metrics` takes the user's own words (revenue, EBITDA, gross profit, net income, burn, runway, headcount, cash, ARR, MRR) or the firm's name for a custom KPI. Pass them as the user said them. A word in `not_found` or `ambiguous` in the answer: ask the user which metric they mean, offering the names it returns. Do not guess one.
+- `companies` takes company names or `all`. `fund_names` (for example `"Fund II"`) narrows to one fund's companies.
+- `period_end` (`YYYY-MM-DD`, e.g. `2026-06-30` for Q2 2026) reads one period, and `periods` the latest N. `frequency` defaults to `QUARTER`. `include_forecast: "true"` adds the budget beside the actuals.
+- "Who hasn't reported Q2?": read the metric with `period_end` and answer from `missing`, which lists the companies with no figure for that period.
+- Each company's figures carry its `currency`. Never add or average amounts across currencies.
+
+Fall back to the `COMPANY_FINANCIALS` SQL below only when:
+- the read answers `Unknown tool`, because it isn't on for this user;
+- it fails for every company;
+- the question needs warehouse-only fields: `source_type`, the submission history (`as_of_date`), or a join with investment figures from `investments.md`.
+
 ## Common Aliases
 
 `PORTFOLIO_COMPANY_KPIS`, `PORTCO_FINANCIALS`, `COMPANY_KPIS`, `PORTCO_KPIS`, `PORTFOLIO_COMPANY_FINANCIALS`, `HEADCOUNT`, `METRICS`, `PORTCO_METRICS`

@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.45.0</carta-plugin>
+<carta-plugin>carta-investors:7.45.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -76,7 +76,7 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 | "Show me the cap table for [Company]"<br>"What share classes does [Company] have?"<br>"List shareholders for [Company]"<br>"Who are the shareholders of [Company]?"<br>"Show me the shareholder list"<br>"Who owns [Company]?"<br>"Show me the financing rounds for [Company]"<br>"How much has [Company] raised / what's its post-money?"<br>"Show me the portfolio event history for [Company]"<br>"What certificate activity has [Company] had?"<br>"Has [Company] had any warrant exercises or share class conversions?" | `cap-table.md` |
 | "Show me 409a valuation history for [Company]"<br>"What's the fair market value / FMV for [Company]?" | `valuations.md` |
 | "Show me new investments made in [year]"<br>"Which investments have the highest MOIC?"<br>"Which portfolio companies have the highest MOIC?"<br>"Which portfolio companies in [Fund] have the highest MOIC?"<br>"Break down [Fund]'s investments by entry round." | `investments.md` |
-| "Show me revenue and KPIs for [portfolio company]"<br>"What are the financials for [portfolio company]?" | `company-financials.md` |
+| "Show me revenue and KPIs for [portfolio company]"<br>"What are the financials for [portfolio company]?"<br>"Get burn, headcount and revenue for all my portcos"<br>"Which companies haven't reported Q2?" | `company-financials.md` — read `portfolio_holding__list__metrics` first, as it says, before Step 1 or any SQL |
 
 ## Prerequisites
 
@@ -88,7 +88,7 @@ The user must have the Carta MCP server connected. If this is the first query in
 
 > **Named-entity queries do NOT need `list_contexts`.** `list_contexts` only enumerates the Carta client **firms** the user has admin access to — never call it to search for a person, LP, or portfolio-company name. Once firm context is already set and the user names an entity that isn't the active firm (e.g. "Armstrong Capital Partners' capital activity inception to date"), that name is almost always an **LP/investor within the current firm**, not a request to switch firms — proceed straight to Step 1 (`dwh__execute__question`) with the question scoped to that name. Only call `list_contexts` again if the user explicitly asks to switch to a different firm.
 
-> **Tool priority (firm context):** `fa:*` MCP commands → `dwh__execute__question` → semantic-layer SQL (Steps 2–4) → raw `dwh__execute__query`. Whatever path answers, the firm's custom schemas (Step 1b) can enrich the result. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
+> **Tool priority (firm context):** `fa:*` and `portfolio_holding:*` MCP commands (portfolio company KPIs and financials: `portfolio_holding__list__metrics`, read before Step 1, see `company-financials.md`; its fallback is that file's SQL, never Step 1) → `dwh__execute__question` → semantic-layer SQL (Steps 2–4) → raw `dwh__execute__query`. Whatever path answers, the firm's custom schemas (Step 1b) can enrich the result. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
 
 ## Step 0 — Fetch portfolio companies (MANDATORY GATE)
 
@@ -119,6 +119,8 @@ read_tool({"name": "fa__list__entities", "arguments": {"entity_types": "spv,synd
 ## Step 1 — Try execute:question (PRIMARY query path)
 
 > **Structural questions ("what tables exist?", "what columns does X have?") skip Steps 1–3 entirely.** Go directly to `dwh__list__tables` (omit `schema` to list all) or `dwh__get__table_schema`. Do not run `execute:question` for schema discovery — it has no visibility into raw table structure and will hallucinate.
+
+> **Portfolio company KPI and financials questions skip Step 1.** Read `portfolio_holding__list__metrics` as `semantic-layer/company-financials.md` says, even though that file is a semantic layer. When one of that file's fallbacks applies (`Unknown tool`, every company fails, or warehouse-only fields), run its `COMPANY_FINANCIALS` SQL (Steps 3–4); do not return to Step 1, which would answer "who hasn't reported" from the companies that did report, leaving out the ones asked about.
 
 Before loading any semantic layer, call the plain-English query interface with the user's question verbatim (or lightly rephrased for clarity):
 
@@ -160,7 +162,7 @@ How:
 
 When presenting, name the custom schema each added column or row came from. Never replace a Carta value with a custom one: show both and flag any difference.
 
-Custom schemas add to `execute:question`; they never replace it — for data questions, always run Step 1 first. A question about which custom or integration data exists is structural: skip Step 1 and go straight to `dwh__list__tables`.
+Custom schemas add to `execute:question`; they never replace it — for data questions, always run Step 1 first, except the portfolio company KPI and financials questions, which skip it and never return to it (see Step 1). A question about which custom or integration data exists is structural: skip Step 1 and go straight to `dwh__list__tables`.
 
 ## Step 2 — Identify the Query Domain
 
@@ -179,7 +181,7 @@ Use this table to pick the right context file before running any query:
 | 409a valuations, fair market value, FMV, common stock price                                                                                                                                                | `valuations.md`                                   | `IRC409A_VALUE`                                                           |
 | Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss                                                                                                                                | `investments.md`                                  | `AGGREGATE_INVESTMENTS`, `AGGREGATE_INVESTMENTS_HISTORY` (point-in-time)  |
 | Per-LP/GP data — commitments, contributions, capital accounts, partner rollforward, LP count                                                                                                               | `partner-data.md`                                 | `PARTNER_DATA`, `PARTNER_MONTHLY_NAV_CALCULATIONS`                        |
-| Portfolio company financials — revenue, ARR, headcount, KPIs                                                                                                                                               | `company-financials.md`                           | `COMPANY_FINANCIALS`                                                      |
+| Portfolio company financials — revenue, ARR, headcount, KPIs                                                                                                                                               | `company-financials.md`                           | `portfolio_holding__list__metrics`, then `COMPANY_FINANCIALS`                                                      |
 | Benchmark percentile rankings vs peers                                                                                                                                                                     | Use `carta-investors:carta-fund-performance` | `TEMPORAL_FUND_COHORT_BENCHMARKS`                                         |
 | **The firm's own entities** — list of funds, SPVs, syndicate SPVs, GP entities, management companies (names, entity type, links)                                                                         | —                                                 | `fa__list__entities` — see "Listing the firm's entities" under Step 0 (set `entity_types` to the types asked about) |
 | Fund list with metrics, or entity type as a column of a DWH result                                                                                                                                                                       | Query `ALLOCATIONS` directly                      | `ALLOCATIONS`                                                             |
