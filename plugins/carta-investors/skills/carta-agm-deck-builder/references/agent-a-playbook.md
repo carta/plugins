@@ -45,7 +45,7 @@ The blob is a single-line JSON file (3–5 MB). The `Read` tool rejects files th
 
 **Option A — local `Bash` tool** (preferred; has access to Mac paths):
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/extract_agm_blob.py" <blob_path>
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/extract_agm_blob.py" <blob_path>
 ```
 
 **Option B — `mcp__workspace__bash`** (Linux container; use when local Bash is unavailable):
@@ -65,7 +65,7 @@ BLOB_FILE=$(basename "<blob_path>")
 BLOB_WS=$(find /sessions/$(hostname)/ -name "$BLOB_FILE" 2>/dev/null | head -1)
 echo "Blob: $BLOB_WS"
 
-# 3. Run the script
+# 3. Run the script (stdlib only; the container may not have uv)
 python3 "$SCRIPT" "$BLOB_WS"
 ```
 
@@ -154,7 +154,7 @@ If `welcome()` fails, show the user:
 
 > *Carta MCP is not connected, so I'll need you to provide the fund data manually.*
 >
-> *Tip: connecting the Carta MCP lets this skill pull live fund performance data automatically. To set it up, run `/carta-mcp:setup-mcp`.*
+> *Tip: connecting the Carta MCP lets this skill pull live fund performance data automatically. To set it up, connect the Carta app in Claude's connector settings.*
 
 If `fa:get:agm_deck_data` returns an error or `succeeded == 0`, fall back to the old multi-call pattern:
 

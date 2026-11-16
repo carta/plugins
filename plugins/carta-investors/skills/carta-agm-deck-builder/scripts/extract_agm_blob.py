@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = []
+# ///
 """extract_agm_blob.py
 
 Splits an AGM precompute blob (a single-line JSON file, typically 3–5 MB)
 into one small JSON file per query so the LLM can Read each one individually.
 
 Usage:
-    python3 extract_agm_blob.py <blob_path> [output_dir]
+    uv run extract_agm_blob.py <blob_path> [output_dir]
 
     blob_path   Path returned by fa:get:agm_deck_data (the auto-saved blob)
     output_dir  Directory for per-query files  (default: /tmp/agm-queries)

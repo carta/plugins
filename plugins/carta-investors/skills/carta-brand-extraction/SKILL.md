@@ -2,13 +2,16 @@
 name: carta-brand-extraction
 version: 0.1.0
 description: >
-  Generates a brand board from a firm's website URL, a deck it already has (a PowerPoint or
-  PDF pitch deck or LP letter), and optional user-provided assets.
-  Analyzes them to extract theme colors, typography, logos, and imagery, then
-  produces a polished brand board as an HTML artifact, PDF, slide deck, or React component.
-  Trigger phrases: "build a brand board", "create a brand board", "generate a brand board",
-  "extract brand identity", "brand board from website", "visual identity from URL",
-  "brand guidelines from site", "analyze brand from website", "brand from this deck", "brand audit".
+  Captures a firm's brand (colors, fonts, logo, imagery) from its website and/or a deck or PDF
+  it already has, shows it as a brand board (HTML, PDF, PPTX or React), saves it to Carta, and
+  hands it to whatever artifact the user is making: a deck, PDF, LP letter, dashboard, one-pager
+  or email.
+  Trigger phrases: "build a brand board", "extract our brand from our website", "get our brand
+  colors and fonts", "brand from this deck", "brand audit", "save our firm's branding",
+  "use our brand on this PDF / dashboard / one-pager / email".
+  Do NOT use to build the AGM or other fund deck (use carta-agm-deck-builder), or to brand the
+  LP Summary page or its PDF export ("brand my LP profiles", use carta-lp-summary); those skills
+  call this one themselves.
 allowed-tools:
   - Read
   - Write(./carta-brand-extraction/**)
@@ -43,15 +46,15 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.46.3</carta-plugin>
+<carta-plugin>carta-investors:7.47.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
-# Build Brand Board
+# Firm Brand
 
 ## Overview
 
-This skill generates a **brand board** — a single-page visual reference sheet capturing a company's visual identity — from their website URL and any additional assets the user provides.
+This skill captures a firm's **brand** from its website and/or a deck or PDF it already has, shows it as a **brand board**, saves it to Carta, and hands it to whatever artifact the user is making: a deck, PDF, LP letter, LP summary, dashboard, one-pager or email.
 
 A brand board includes:
 1. **Color palette** — primary, secondary, accent, and neutral colors with hex codes
@@ -60,7 +63,9 @@ A brand board includes:
 4. **Imagery & mood** — hero images and photography style
 5. **Design tokens** — border radius, shadows, spacing patterns, CSS custom properties
 
-The skill works in two phases: **extraction** (automated analysis of the website) and **composition** (building the brand board artifact with Claude's design judgment).
+The skill works in two phases: **extraction** (automated analysis of the website or deck) and **composition** (building the brand board artifact with Claude's design judgment). A second mode, *Use the brand on another artifact*, skips the board and returns the saved brand as a short token block (see that section below).
+
+The saved board's fields, and the brand tokens built from them, are described in `${CLAUDE_PLUGIN_ROOT}/references/brand-board-schema.md` (the plugin's own `references/`, not this skill's). Read it by that path when you build the token block; do not search for it.
 
 ## When to Use
 
@@ -72,12 +77,13 @@ Fire this skill when the user asks to:
 - Analyze a firm's website for colors, fonts, and design patterns
 - Create brand guidelines from a URL
 - Produce a "look and feel" reference from a website
+- Use the firm's brand on another artifact: "use our brand on this PDF", "match our branding", "brand this dashboard / one-pager / email"
 
 Also fire when the user provides a URL and asks for "brand analysis", "visual identity audit", or "design system extraction".
 
 ### When NOT to fire
 
-- Carta-internal branding requests — use `carta-brand` or `carta-theme` instead
+- Fund decks, the LP Summary page and its PDF belong to `carta-agm-deck-builder` and `carta-lp-summary`, which call this skill for the brand
 - Full design system documentation — this skill produces a one-page reference, not a comprehensive system
 - Logo design or creation — this skill extracts existing logos, it does not create new ones
 
@@ -100,27 +106,27 @@ Before touching the website, check whether Carta already has a saved brand board
 
 #### 0a. Ensure firm context is set
 
-If a firm UUID was passed in from the orchestrating skill (e.g., `carta-agm-deck-builder`), call:
+If a firm UUID was passed in from the orchestrating skill, call:
 
 ```
-mcp__claude_ai_carta__set_context(firm_id="<firm_uuid>")
+mcp__<SERVER>__set_context(firm_id="<firm_uuid>")
 ```
 
-If no firm UUID was passed, call `mcp__claude_ai_carta__list_contexts()` to list available firms and pick the matching one. Do not skip this step — the brand board lookup depends on the active firm context.
+If no firm UUID was passed, call `mcp__<SERVER>__list_contexts()` to list available firms and pick the matching one. Do not skip this step — the brand board lookup depends on the active firm context.
 
 If Carta MCP is not connected (tool not found or auth error), skip Phase 0 entirely and proceed to Phase 1. Record `brand_board_source = "none"`.
 
 #### 0b. Fetch saved brand board
 
 ```
-mcp__claude_ai_carta__read_tool({"name": "fa__get__brand_board"})
+mcp__<SERVER>__read_tool({"name": "fa__get__brand_board"})
 ```
 
 - **HTTP 200 / success**: A saved brand board exists. Use the `brand_board` field from the response as `brand_data`. Set `brand_board_source = "saved_mcp"`. Tell the user:
 
   > *"Found a saved brand board for this firm — reusing the previously extracted brand identity. Let me know if you'd like to re-extract from the website instead."*
 
-  **Skip Phase 2 (website extraction) entirely.** Jump directly to Phase 3 (Classify and curate) using the saved data.
+  **Skip Phase 2 (website extraction) entirely.** Jump directly to Phase 3 (Classify and curate) using the saved data, or, in *Use the brand on another artifact* mode, straight to its token block.
 
 - **404 / "Brand board not found"**: No saved board exists. Set `brand_board_source = "to_be_created"`. Proceed to Phase 1 (gather inputs) and Phase 2 (website extraction). The result will be saved in Phase 5.
 
@@ -130,28 +136,16 @@ mcp__claude_ai_carta__read_tool({"name": "fa__get__brand_board"})
 
 ### Phase 1: Gather inputs
 
-1. **Ask for the website URL** if not already provided. Accept bare domains (`acme.com`) — the script prepends `https://` automatically. When the user gave a deck (a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF pitch deck or LP letter) and no URL, the deck is the source: don't ask for a URL.
+Ask **at most one question**, and only for what is missing: a website URL or a deck.
 
-2. **Ask about additional assets** (optional). The user may provide:
-   - Logo files (PNG, SVG) they want used instead of / in addition to extracted logos
-   - A pitch deck or LP letter (PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF), read in Phase 2
-   - Brand color specifications (hex codes, color names)
-   - Existing brand guidelines or style guides
-   - Reference brand boards from other companies they admire
-   - Font names or specimen images
-
-   If the user says "no" or provides nothing extra, proceed with website-only extraction.
-
-3. **Ask about the output format** (optional). Default to **HTML artifact**. Other options:
-   - PDF (landscape A4)
-   - PPTX (16:9 slide deck)
-   - React artifact
-
-   If the user doesn't specify, produce an HTML artifact.
+1. Take the source from the user's message first: a URL or bare domain (`acme.com`; the script prepends `https://` automatically), an attached or named deck (a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF pitch deck or LP letter), a logo file, hex codes or font names they typed. Then from the saved Carta board (Phase 0) or firm context. If any of these gives a source, ask nothing.
+2. Skip any question the saved board or the user's message already answers.
+3. Only when there is no URL, no deck and no saved board, ask once for the website URL or a deck. A deck alone is a complete source: when the user gave one and no URL, don't ask for a URL.
+4. Do not ask about extra assets or the output format. Default to an **HTML brand board** (Phase 4 says what else is accepted). Use whatever the user attached or typed in their first message in Phase 6; a later request for another format is handled in Phase 4.
 
 ### Phase 2: Extract brand signals
 
-Every file this skill writes goes in the working folder, `./carta-brand-extraction/`: the saved analysis report, deck logo candidates, and the PDF or PPTX board. Create the folder before anything writes to it (`analyze_deck.py` and both board generators do; for the saved report, create it with a first `Write` there).
+Every file this skill writes goes in the working folder, `./carta-brand-extraction/` (the current directory plus `carta-brand-extraction/`): the saved analysis report, deck logo candidates, and the PDF or PPTX board. Create the folder before anything writes to it (`analyze_deck.py` and both board generators do; for the saved report, create it with a first `Write` there).
 
 Run the analysis script:
 
@@ -164,7 +158,7 @@ This returns a JSON report with raw extraction data. **Save the output** to `./c
 **From a deck.** When the user gave a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF deck, run the deck reader on it (alongside the website analysis when there is a URL too), saving logo candidates in the working folder:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_deck.py" "<deck file path>" --out-dir "<working folder>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_deck.py" "<deck file path>" --out-dir "./carta-brand-extraction"
 ```
 
 It prints `accent_candidates` (`#RRGGBB`, best first, neutrals already left out), `fonts` (`heading`, `body`) and `logo_candidates` (saved file paths, best first). A PowerPoint's colours and fonts come exactly from its theme (`"colors_exact": true`). A PDF's colours are the ones its first pages paint most (`"colors_exact": false`) and it has no fonts: tell the user the colours are a best guess from the PDF. An empty `accent_candidates` means the deck has no brand colour: ask the user for one. Exit 1 prints why the file couldn't be read (not a deck, password-protected); tell the user and ask for another file or the website.
@@ -223,17 +217,19 @@ Group the extracted colors into four categories:
 
 ### Phase 4: Compose the brand board
 
-Read the appropriate snippet template:
+When another skill invoked this one for the brand, skip the board: hand the classified brand back to it and go straight to the checkpoint at the end of this phase, then Phase 5.
+
+Read the appropriate snippet template by its full path (the files are in this skill's own `snippets/` folder; do not search for them):
 
 | Format | Snippet to read |
 |--------|----------------|
-| HTML artifact | `snippets/brand_board_html.html` |
-| React artifact | `snippets/brand_board_react.jsx` |
-| PDF | `snippets/brand_board_pdf.py` |
-| PPTX | `snippets/brand_board_pptx.py` |
+| HTML artifact | `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_html.html` |
+| React artifact | `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_react.jsx` |
+| PDF | `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_pdf.py` |
+| PPTX | `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_pptx.py` |
 
 **For HTML artifacts** (default):
-1. Read `snippets/brand_board_html.html`
+1. Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_html.html`
 2. Replace all `{{PLACEHOLDER}}` values with the classified data
 3. Duplicate the repeating elements (`.bb-swatch`, `.bb-type-specimen`, etc.) for each data item
 4. If the brand identity is dark, add class `dark-mode` to `<body>`
@@ -241,42 +237,56 @@ Read the appropriate snippet template:
 6. Output the complete HTML as a Claude artifact
 
 **For React artifacts:**
-1. Read `snippets/brand_board_react.jsx`
+1. Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_react.jsx`
 2. Construct the props object from classified data
 3. Render `<BrandBoard>` with the populated props
 4. For logos, use base64 data URIs for self-contained artifacts
 
 **For PDF:**
-1. Read `snippets/brand_board_pdf.py`
+1. Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_pdf.py`
 2. Construct the `data` dict with classified colors, fonts, logos, tokens
 3. Call `generate_brand_board_pdf(data, "carta-brand-extraction/brand_board.pdf", firm_name="...")`
+4. Give the user the full path: the current directory plus `carta-brand-extraction/brand_board.pdf`
 
 **For PPTX:**
-1. Read `snippets/brand_board_pptx.py`
+1. Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/snippets/brand_board_pptx.py`
 2. Construct the `data` dict
 3. Call `generate_brand_board_pptx(data, "carta-brand-extraction/brand_board.pptx", firm_name="...")`
+4. Give the user the full path: the current directory plus `carta-brand-extraction/brand_board.pptx`
 
-> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_finished")` once the brand board, in whichever format, has reached the user, or, when another skill invoked this one for the extracted brand, once that brand is handed back to it.
+Close with *"Brand board ready."* and the next step: *"Next: use this brand on a deck, PDF, LP summary, dashboard or email, or tell me what to change."* The first time, add one line that a logo file, hex codes, a PDF, PPTX or React board are also accepted.
 
-### Phase 5: Save brand board to Carta (MANDATORY if newly extracted)
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_finished")` once the brand has reached the user or the skill that invoked this one, as defined under Troubleshooting.
 
-If brand data was freshly extracted in this session (i.e., `brand_board_source = "to_be_created"` — Phase 0 returned a 404), save it to Carta **automatically** after the user has seen the brand board output and not objected to the colors.
+### Phase 5: Save brand board to Carta
 
-You do **not** need a separate explicit consent question for this write. The user's approval of the brand board in Phase 4 (or the absence of any correction) is sufficient consent. If the user explicitly said "don't save" or "skip Carta", honor that.
+Save when the brand was freshly extracted in this session: `brand_board_source = "to_be_created"` (Phase 0 returned a 404) creates the board, and `brand_board_source = "saved_mcp"` where the user asked to re-extract or changed the brand updates it. This is a Tier 1 write (informative friction only): do it **automatically** after the user has seen the brand (the board or the token block) or it was handed back to the skill that invoked this one, with no separate consent question, but say this one line first, before any write:
 
-Call:
+> *"Saving this brand to Carta so decks and reports reuse it."*
+
+If the user already said "don't save" or "skip Carta" earlier, honor that and write nothing, not even the notice.
+
+Build the payload from the full brand identity JSON — colors, typography, logos, and source metadata. Keep the logos the persistence rule in `${CLAUDE_PLUGIN_ROOT}/references/brand-board-schema.md` keeps (the plugin's own `references/`, not this skill's). When it leaves out a deck's local logo path, tell the user in one line that the deck logo stays on this machine and the colours and fonts were saved.
+
+Create (no saved board):
 
 ```
-mcp__claude_ai_carta__call_tool({"name": "fa__create__brand_board", "arguments": {"brand_board": <brand_data_json>}})
+mcp__<SERVER>__call_tool({"name": "fa__create__brand_board", "arguments": {"brand_board": <brand_data_json>}})
 ```
 
-The `brand_board` parameter is the full brand identity JSON object — colors, typography, logo candidates, and source metadata.
+Update (a saved board exists and the user re-extracted). An update must never remove a logo the new extraction could not replace: when the new payload has no persistable logo, copy `logos` from the saved board (Phase 0's `brand_data`) into it before calling:
+
+```
+mcp__<SERVER>__call_tool({"name": "fa__mutate__brand_board", "arguments": {"brand_board": <brand_data_json>}})
+```
 
 On success, tell the user (one line only):
-> *"Brand board saved to Carta — future runs will reuse it automatically."*
+> *"Brand saved to Carta — any artifact you make later (a deck, PDF, LP summary, dashboard or email) can reuse it."*
+
+If the call fails, do not retry: follow the `fa__create__brand_board` / `fa__mutate__brand_board` row under Troubleshooting and carry on.
 
 Skip this step if:
-- `brand_board_source` is `"saved_mcp"` (came from Carta, no need to re-save)
+- `brand_board_source` is `"saved_mcp"` and the user did not re-extract or change the brand (nothing new to save)
 - Carta MCP was unavailable in Phase 0 (`brand_board_source = "none"`)
 - The firm UUID / context was never set
 
@@ -284,7 +294,7 @@ Skip this step if:
 
 ### Phase 6: Incorporate user-provided assets
 
-If the user provided additional assets in Phase 1:
+If the user provided additional assets in their message:
 
 - **Logo files** — replace extracted logos with user-provided ones
 - **A deck** — its colours, fonts and logo override the website's; the website fills gaps only
@@ -294,13 +304,24 @@ If the user provided additional assets in Phase 1:
 
 User-provided input always takes precedence over automated extraction.
 
+## Use the brand on another artifact
+
+When the user wants their brand on something they are making, and not a board ("use our brand on this PDF", "match our branding", "brand this dashboard / one-pager / email"):
+
+1. Run Phase 0. A saved board is the source (`brand_board_source = "saved_mcp"`).
+2. With no saved board (404, or Carta not connected), run Phases 1-3 first (one question at most, for a website or deck). Skip the Phase 4 board unless the user asks to see it.
+3. Read `${CLAUDE_PLUGIN_ROOT}/references/brand-board-schema.md` and build the brand tokens by the schema's mapping. Leave out any token the board does not carry; never guess one.
+4. Give the user the tokens in one short code block, and apply them to the artifact in this conversation: colours as the artifact's theme values or CSS variables, the two fonts (with their `@font-face` file URLs from `typography.font_faces` when the family is listed there), and the logo in the header. Say in one line which tokens you used.
+5. Run Phase 5 now, after step 4, when the brand was freshly extracted.
+6. Call `skill_finished` as defined under Troubleshooting.
+
 ## User-facing output
 
 Keep responses concise. The brand board artifact is the deliverable — not the conversation.
 
 - **Start**: one sentence — *"Analyzing acme.com to build your brand board."*
 - **After extraction**: brief summary of what was found — *"Found 12 colors, 2 font families (Inter, Playfair Display), 3 logo candidates, and 5 hero images."*
-- **After composition**: *"Brand board ready."* + the artifact
+- **After composition**: *"Brand board ready."* + the artifact + the next step from Phase 4
 - **Do NOT** dump the raw JSON analysis, list every extracted color, or narrate each classification decision
 - **Do NOT** explain the template structure or which snippet was used
 
@@ -322,14 +343,23 @@ Before delivering the brand board:
 
 ## Troubleshooting
 
-> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a run where neither the website nor a deck nor the user's own input gave enough to compose a board, a board generator that fails, and plugin files still unavailable after the second invocation. `skill_finished` means what the Phase 4 checkpoint says (the board reached the user, or the brand was handed back to the skill that invoked this one); a stop before that is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (a skipped Phase 0 when Carta is not connected, an error from the saved-board lookup treated as not found, a `WebFetch` fall-back, a screenshot or manual colours and fonts from the user, another deck after `analyze_deck.py` exits 1) do not checkpoint. Paths before `skill_started` record nothing: a request this skill should not fire on (see "When NOT to fire").
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a run where neither the website nor a deck nor the user's own input gave enough to compose a board, a board generator that fails, and plugin files still unavailable after the second invocation. `skill_finished` means the brand reached the user (the board or the token block) or the skill that invoked this one; a stop before that is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (a skipped Phase 0 when Carta is not connected, an error from the saved-board lookup treated as not found, a `WebFetch` fall-back, a screenshot or manual colours and fonts from the user, another deck after `analyze_deck.py` exits 1, a failed save to Carta) do not checkpoint. Paths before `skill_started` record nothing: a request this skill should not fire on (see "When NOT to fire").
 
-- **Script returns empty colors**: The site may use CSS-in-JS or a framework that inlines styles at runtime. Try `WebFetch` to get the rendered HTML, or ask the user for a screenshot.
-- **No fonts detected**: The site may use system fonts only, or load fonts via JavaScript. Check for `@font-face` in the raw CSS or Google Fonts links.
-- **Logo not found**: Many sites use inline SVGs or CSS background images for logos. Check the SVG extraction results. If nothing works, ask the user to provide their logo file.
-- **Site blocks requests (403/429)**: Some sites block automated requests. Ask the user to provide a screenshot of their homepage, or paste the key colors/fonts manually.
-- **JS-heavy SPA**: The script fetches server-rendered HTML only. SPAs that render entirely client-side will return minimal data. Ask for a screenshot or manual input.
+| Symptom | Cause | Tell the user |
+|---------|-------|---------------|
+| Script returns empty colors | The site uses CSS-in-JS or a framework that inlines styles at runtime | "I couldn't read colors from the page itself." Try `WebFetch` for the rendered HTML, else ask for a screenshot |
+| No fonts detected | The site uses system fonts only, or loads fonts with JavaScript | "No custom fonts found." Check for `@font-face` in the raw CSS or Google Fonts links, else ask for the font names |
+| Logo not found | Inline SVG or a CSS background image holds the logo | "I couldn't find your logo." Check the SVG results; if nothing works, ask for the logo file |
+| Site blocks requests (403/429) | The site blocks automated requests | "The site blocked my request." Ask for a screenshot of the homepage, or the key colors and fonts pasted in |
+| JS-heavy SPA returns little | The script reads server-rendered HTML only | "The page builds itself in the browser, so I got little from it." Ask for a screenshot or manual input |
+| `analyze_deck.py` exits 1 | Not a deck, or password-protected | "I couldn't read that file." Ask for another deck or the website |
+| `fa__create__brand_board` or `fa__mutate__brand_board` fails | Carta rejected or could not take the write | "Could not save to Carta; your brand is still here for this conversation. Try again later." Do not retry |
 
 ## Related skills (bundled in this plugin)
 
-- `carta-agm-deck-builder` — the main orchestrator skill that chains brand extraction + deck generation + Carta badge.
+| Skill | Relationship |
+|-------|--------------|
+| `carta-agm-deck-builder` | Calls this skill for the firm's brand before it builds a deck |
+| `carta-lp-summary` | Calls this skill for the firm's brand before it brands the LP Summary page and its PDF |
+
+Other artifact skills can read the saved brand board directly (`${CLAUDE_PLUGIN_ROOT}/references/brand-board-schema.md` lists its fields) instead of re-extracting.

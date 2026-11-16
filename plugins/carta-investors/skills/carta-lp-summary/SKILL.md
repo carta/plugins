@@ -56,7 +56,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.46.3</carta-plugin>
+<carta-plugin>carta-investors:7.47.0</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -265,6 +265,8 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-summary/scripts/brand_assets.py" d
 ## Brand the LP profiles
 
 The firm's branding styles the whole page and Export's PDF. With a brand on file, every viewer opens the page in the firm's look (its logo beside "Powered by" and the Carta logo, its colours, and its fonts: an embedded heading font sets the title, LP name, section titles and menu titles, and with a brand board its body font sets all other text too) and can switch to Carta from the logo's *Branding* menu; the choice is remembered per viewer, and Export opens on it. The build offers it once, as a follow-up after the page is live (5f). With no brand on file, the Branding cards show a dashed *Add your branding* slot whose *Set up with Claude* copies **"Brand my LP profiles with <firm_name>'s branding"** for the viewer to paste here. The logo's *Branding* menu and the Export dialog show the same cards. With a brand on file, the slot becomes the firm's card beside *Carta*, and the menu's *Edit branding* copies the same prompt to replace it; a pick in Export applies to that export only.
+
+To get the firm's brand itself (a brand board, or its colours, fonts and logo for another artifact) and not an LP profile page, use `carta-investors:carta-brand-extraction` directly.
 
 When the user asks to brand their LP profiles, from their website or from a deck they drop in ("brand my LP profiles from this deck"), or says yes in 5f:
 1. Resolve the firm as in Steps 1–2 (without the intro: the page is not being built) and `$WORKDIR`, that firm's own folder, as in 5a (already done when you come from 5f). The page must already exist (`$WORKDIR/lp-summary-data.json`); if it does not, build it first (Steps 3–5, skipping 5f), then come back.

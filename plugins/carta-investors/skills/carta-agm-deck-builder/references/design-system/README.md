@@ -89,7 +89,7 @@ Apply on the `<section>`:
 
 ## Logo color treatment (rule, not preference)
 
-Every logo on a slide — the brand mark, partner marks, the Carta mark — **must** receive the correct color treatment for the surface it sits on, in **both the live render and every export path**.
+Every logo on a slide — the brand mark, partner marks, the Carta mark — **must** receive the correct color treatment for the surface it sits on, in the live render.
 
 **Never** ship a single rasterised logo that gets reused across light and dark slides.
 
@@ -102,13 +102,11 @@ How this template enforces it:
   ```
   Use `<div class="ds-chrome-logo"></div>` and the system picks the right URL automatically based on the slide's surface class. On a `.ds-dark` slide, mark the chrome with `data-variant="dark"` to force the inverted asset.
 - **Carta mark.** Drawn as inline SVG with `fill="currentColor"`. It inherits `--ds-ink`, which the surface variant remaps. Never bake a hard color into the SVG.
-- **Export.** `build/build.js` honours both: it loads the brand logo source file matching the slide variant (no screenshotting), and rasterises the Carta SVG with the slide's resolved ink color baked in onto a transparent canvas. The result: light slides export with dark logos and dark slides export with cream logos, with no background bleed.
 
 Adding a new logo (e.g. a partner mark) to a deck:
 
 1. Drop **two** asset files in `assets/` — one for light surfaces, one for dark.
 2. Either declare both as CSS variables in the brand or per-slide via `--logo-light` / `--logo-dark` custom properties, and a small CSS rule that picks based on surface.
-3. If the export emits this logo, make sure it routes through the same source-file-by-variant path the brand logo uses — no full-element screenshots.
 
 ---
 
