@@ -7,7 +7,7 @@ import { parseRoute, useMemoryRoute } from "./route.js";
 import { portfolioQuery } from "./state/usePortfolio.js";
 import { newScenarioId, trackPortfolioEtags, watchForOutsideChanges } from "./panel-sync.js";
 
-// Entry for the MCP App panel. The shell page sets window.__fmHost = { callTool } before this
+// Entry for the MCP App panel. The shell page sets window.__fmHost = { callTool, waitForChange } before this
 // bundle loads; sign-in is the Carta connection's, so there is no token gate.
 installMcpFetch(window.__fmHost.callTool);
 const portfolioEtags = trackPortfolioEtags();
@@ -23,6 +23,8 @@ createRoot(document.getElementById("root")).render(
 watchForOutsideChanges({
   ...portfolioEtags,
   currentQuery: () => portfolioQuery(parseRoute().firm),
+  currentFirm: () => parseRoute().firm,
+  waitForChange: window.__fmHost.waitForChange,
   // A scenario the new-scenario form just made is selected once it arrives.
   reload: async () => {
     const ctl = window.__fmPortfolioCtl;
