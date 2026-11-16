@@ -41,7 +41,9 @@ that tool's prefix:
 
 Don't search again later in the conversation. The Claude in Chrome tool names, this order, and
 the new-tab first open and its one attempt in Chrome follow `carta-investors`'s
-`references/gate-in-app-browser.md`; change them with it.
+`references/gate-in-app-browser.md`; change them with it. `carta-investors`'s
+fund construction companion skill keeps a copy of this procedure in its own
+`references/open-the-plan.md`; change it with this file.
 
 `Claude_Preview` is a different family: its `preview_start` launches a local server from
 `.claude/launch.json` and can't open a Carta address. When `Claude_Preview` is all you have,

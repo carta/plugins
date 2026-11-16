@@ -1,3 +1,0 @@
-*.sh -text
-bin/SHA256SUMS -text
-bin/hooks-* -text

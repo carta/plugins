@@ -2,6 +2,8 @@
 
 ## Hook entries
 
+> **Off:** `hooks.json` registers none of the `dispatch.sh` entries below, so they never run. Add them back to `hooks.json` to turn them on.
+
 Every hook dispatches to the shared Go hooks binary in `tools/hooks/` via
 `dispatch.sh`, except the carta-pe-bulk-issuance `PostToolUse` entry, which runs a Python script with `uv`.
 
