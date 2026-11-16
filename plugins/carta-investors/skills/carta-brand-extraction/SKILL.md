@@ -42,11 +42,12 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
+  - AskUserQuestion
   - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.48.0</carta-plugin>
+<carta-plugin>carta-investors:7.49.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -260,11 +261,19 @@ Close with *"Brand board ready."* and the next step: *"Next: use this brand on a
 
 ### Phase 5: Save brand board to Carta
 
-Save when the brand was freshly extracted in this session: `brand_board_source = "to_be_created"` (Phase 0 returned a 404) creates the board, and `brand_board_source = "saved_mcp"` where the user asked to re-extract or changed the brand updates it. This is a Tier 1 write (informative friction only): do it **automatically** after the user has seen the brand (the board or the token block) or it was handed back to the skill that invoked this one, with no separate consent question, but say this one line first, before any write:
+Save when the brand was freshly extracted in this session: `brand_board_source = "to_be_created"` (Phase 0 returned a 404) creates the board, and `brand_board_source = "saved_mcp"` where the user asked to re-extract or changed the brand replaces it.
+
+**First save (no saved board).** This is a Tier 1 write (informative friction only): do it **automatically** after the user has seen the brand (the board or the token block) or it was handed back to the skill that invoked this one, with no separate consent question, but say this one line first, before any write:
 
 > *"Saving this brand to Carta so decks and reports reuse it."*
 
-If the user already said "don't save" or "skip Carta" earlier, honor that and write nothing, not even the notice.
+**Replacing a saved board.** The write overwrites the brand that every deck and report uses, so it needs a yes first. After the user has seen the brand, or it was handed back, ask one question with `AskUserQuestion`: *"Replace the saved brand with this new one?"*, options *"Replace the saved brand"* and *"Keep the saved brand"*. Write only on *"Replace the saved brand"*, and say no notice line before the answer.
+
+- *"Keep the saved brand"*: write nothing. The new brand still goes to the artifact in this conversation.
+- When another skill's sub-agent invoked this one (no user to ask, or `AskUserQuestion` unavailable because you are running as a sub-agent): do not write. Hand the new brand back without saving it, and say in one line that the saved brand was kept.
+- Otherwise, when `AskUserQuestion` is not available, ask the same question in chat with the two options as a numbered list, and wait for the answer.
+
+If the user already said "don't save" or "skip Carta" earlier, honor that and write nothing, not even the notice or the question.
 
 Build the payload from the full brand identity JSON — colors, typography, logos, and source metadata. Keep the logos the persistence rule in `${CLAUDE_PLUGIN_ROOT}/references/brand-board-schema.md` keeps (the plugin's own `references/`, not this skill's). When it leaves out a deck's local logo path, tell the user in one line that the deck logo stays on this machine and the colours and fonts were saved.
 
@@ -274,7 +283,7 @@ Create (no saved board):
 mcp__<SERVER>__call_tool({"name": "fa__create__brand_board", "arguments": {"brand_board": <brand_data_json>}})
 ```
 
-Update (a saved board exists and the user re-extracted). An update must never remove a logo the new extraction could not replace: when the new payload has no persistable logo, copy `logos` from the saved board (Phase 0's `brand_data`) into it before calling:
+Update (a saved board exists, the user re-extracted and answered *"Replace the saved brand"*). An update must never remove a logo the new extraction could not replace: when the new payload has no persistable logo, copy `logos` from the saved board (Phase 0's `brand_data`) into it before calling:
 
 ```
 mcp__<SERVER>__call_tool({"name": "fa__mutate__brand_board", "arguments": {"brand_board": <brand_data_json>}})
@@ -287,6 +296,7 @@ If the call fails, do not retry: follow the `fa__create__brand_board` / `fa__mut
 
 Skip this step if:
 - `brand_board_source` is `"saved_mcp"` and the user did not re-extract or change the brand (nothing new to save)
+- `brand_board_source` is `"saved_mcp"`, the brand was re-extracted, and the user answered *"Keep the saved brand"* or a sub-agent ran it (the saved brand stays)
 - Carta MCP was unavailable in Phase 0 (`brand_board_source = "none"`)
 - The firm UUID / context was never set
 
@@ -343,7 +353,7 @@ Before delivering the brand board:
 
 ## Troubleshooting
 
-> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a run where neither the website nor a deck nor the user's own input gave enough to compose a board, a board generator that fails, and plugin files still unavailable after the second invocation. `skill_finished` means the brand reached the user (the board or the token block) or the skill that invoked this one; a stop before that is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (a skipped Phase 0 when Carta is not connected, an error from the saved-board lookup treated as not found, a `WebFetch` fall-back, a screenshot or manual colours and fonts from the user, another deck after `analyze_deck.py` exits 1, a failed save to Carta) do not checkpoint. Paths before `skill_started` record nothing: a request this skill should not fire on (see "When NOT to fire").
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-brand-extraction", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That includes a run where neither the website nor a deck nor the user's own input gave enough to compose a board, a board generator that fails, and plugin files still unavailable after the second invocation. `skill_finished` means the brand reached the user (the board or the token block) or the skill that invoked this one; a stop before that is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (a skipped Phase 0 when Carta is not connected, an error from the saved-board lookup treated as not found, a `WebFetch` fall-back, a screenshot or manual colours and fonts from the user, another deck after `analyze_deck.py` exits 1, a failed save to Carta, a saved brand kept instead of replaced) do not checkpoint. Paths before `skill_started` record nothing: a request this skill should not fire on (see "When NOT to fire").
 
 | Symptom | Cause | Tell the user |
 |---------|-------|---------------|
@@ -353,6 +363,7 @@ Before delivering the brand board:
 | Site blocks requests (403/429) | The site blocks automated requests | "The site blocked my request." Ask for a screenshot of the homepage, or the key colors and fonts pasted in |
 | JS-heavy SPA returns little | The script reads server-rendered HTML only | "The page builds itself in the browser, so I got little from it." Ask for a screenshot or manual input |
 | `analyze_deck.py` exits 1 | Not a deck, or password-protected | "I couldn't read that file." Ask for another deck or the website |
+| The user asks to delete or remove the saved brand | This skill has no delete command; saving a new brand replaces the saved one only after a yes | "I can't delete a saved brand from here. Carta support can remove it. I can replace it with a new brand if you want." |
 | `fa__create__brand_board` or `fa__mutate__brand_board` fails | Carta rejected or could not take the write | "Could not save to Carta; your brand is still here for this conversation. Try again later." Do not retry |
 
 ## Related skills (bundled in this plugin)
