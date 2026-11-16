@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"com.carta.claude_plugins.hooks/internal/diagnostics"
 	"com.carta.claude_plugins.hooks/internal/session"
 )
 
@@ -763,5 +764,34 @@ func TestInjectInstrumentation_SafeModesStillInject(t *testing.T) {
 				t.Errorf("from_hook = %s, want true", instr["from_hook"])
 			}
 		})
+	}
+}
+
+func TestInjectInstrumentation_RecordsDiagnosticsEvenWhenRewriteIsSkipped(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-cap-table", "6.111.13")
+
+	stdin := `{"tool_name":"mcp__carta__read_tool","tool_input":{},"session_id":"s1","permission_mode":"auto"}`
+	if _, err := InjectInstrumentation([]byte(stdin)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(diagnostics.Path("s1")); err != nil {
+		t.Errorf("diagnostics file missing for an auto-mode call: %v", err)
+	}
+}
+
+func TestInjectInstrumentation_UnwritableDiagnosticsKeepsNormalOutput(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-cap-table", "6.111.13")
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CARTA_SESSION_STATE_DIR", blocker)
+
+	stdin := `{"tool_name":"mcp__carta__read_tool","tool_input":{},"session_id":"s1","permission_mode":"default"}`
+	if instr := injectAndGetInstr(t, stdin); string(instr["from_hook"]) != "true" {
+		t.Errorf("from_hook = %s, want the input still rewritten", instr["from_hook"])
 	}
 }

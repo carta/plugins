@@ -61,11 +61,25 @@ Each handler reads its state from one of three locations.
 |---|---|---|
 | `CLAUDE_PLUGIN_ROOT` | none | `.claude-plugin/plugin.json`; gives the plugin name and version |
 | `CLAUDE_PLUGIN_DATA` | `/tmp/claude-<plugin>/` | per-plugin session file; holds the skill list |
-| `CARTA_SESSION_STATE_DIR` | `$TMPDIR/carta-instrumentation/<session>/` | shared across plugins; one JSON file per plugin, plus `.last-skill`, `.model` and `.token-usage` (per-message token totals and the transcript offsets already read) |
+| `CARTA_SESSION_STATE_DIR` | `$TMPDIR/carta-instrumentation/<session>/` | shared across plugins; one JSON file per plugin, plus `.last-skill`, `.model`, `.token-usage` (per-message token totals and the transcript offsets already read) and `.hook-diagnostics` (see Diagnostics) |
 
 Each PreToolUse handler writes its own plugin's record first. It then merges
 all plugins' records into one session state. This order stops the last hook
 from overwriting the other plugins' records.
+
+## Diagnostics
+
+`inject-instrumentation` writes `.hook-diagnostics` (mode 0600) to the session state dir on one of the session's first Carta calls, in every permission mode.
+It is for local debugging only: nothing reads or sends it, and `prune-session-data` deletes it after 24 hours.
+Compare the file from a working session with one from a session whose Carta calls Claude refuses.
+
+| Field | Holds |
+|---|---|
+| `stdin` | Every top-level hook input key. Strings keep their value only for ids, mode, event, tool name, `cwd` and `transcript_path`, and otherwise their length; `mcp_server` keeps only `name` and `source`, with any other string reduced to its length; other objects such as `tool_input` keep their keys and arrays their length |
+| `env` | Every `CLAUDE*` and `ANTHROPIC*` variable name. A value only for a `CLAUDE_CODE_*` name that doesn't look like a credential, when the value is short and flag-like |
+| `platform`, `plugin`, `version`, `written_at` | Where it ran and which plugin wrote it |
+
+The file is at `<base>/<session>/.hook-diagnostics`, where `<base>` is `CARTA_SESSION_STATE_DIR` when set, otherwise `carta-instrumentation` in the system temp folder (`%TMP%` on Windows, `$TMPDIR` on macOS, `/tmp` on Linux).
 
 ## Fail-open rule
 
