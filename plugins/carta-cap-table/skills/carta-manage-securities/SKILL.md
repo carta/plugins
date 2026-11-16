@@ -5,7 +5,8 @@ description: >-
   anything changes. Covers fixing, correcting, amending, cancelling, partly cancelling, uncancelling or
   undoing the termination of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or
   warrant; transferring shares, an RSA, a PIU, a warrant or a note; buying back shares;
-  recording an option exercise; and approving or rejecting exercise requests. Not for a
+  recording an option exercise; and approving or rejecting exercise requests. Not for
+  changing post-termination exercise periods (done in the Carta web app). Not for a
   departure: someone who left and loses their unvested equity is a termination.
 when_to_use: >-
   Use when the user asks to change a security that is already on the cap table, often to
@@ -45,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.16</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.17</carta-plugin>
 
 # Manage securities
 
@@ -79,7 +80,9 @@ The inputs of the transfer, buyback, exercise and exercise request previews are 
 Run only the actions in this table. A document change, such as a new stock purchase agreement, is
 not one of them: make no bootstrap, no preview and no upload. The bootstrap can offer other
 actions, such as a change to the post-termination exercise periods: make no preview for them, and
-never find their tools with `search_tools`. Say that this change is made in Carta, and stop.
+never find their tools with `search_tools`. Say in one line that this skill does not make that
+change and that it is made in the Carta web app (a post-termination exercise period, on the
+grant), and offer the fields the bootstrap marks `eligible`. Then stop.
 
 `security_type` is one of `certificate`, `option_grant`, `convertible_note`, `rsu`, `rsa`, `sar`,
 `cbu`, `piu` or `warrant`. The action narrows it: a transfer or buyback of shares is

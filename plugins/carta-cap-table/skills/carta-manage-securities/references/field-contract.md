@@ -46,7 +46,7 @@ is false (see the table above).
   at a time. With 2+ securities the bootstrap marks them `single_security_only`. Do not stop: change
   each security on its own, as
   [change-flow.md § Several securities](change-flow.md#several-securities) says.
-- **Post-termination exercise periods** are not changed by this skill. Send the user to Carta.
+- **Post-termination exercise periods** are not changed by this skill. Send the user to the Carta web app, and offer the fields the bootstrap marks eligible.
 - **Documents** are not edited here (`why_not.code: documents`). Send the user to Carta.
 - **`dividend_accrual_start_date`** is share-class gated: Carta rejects a value that does not fit
   a certificate's share class. Quote the check.
