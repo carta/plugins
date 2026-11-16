@@ -2,7 +2,7 @@
 name: carta-spa-audit
 description: >-
   SPA (stock purchase agreement) coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed, and can drill into a specific company's SPA documents. Use for any question about which investments are missing an SPA or an executed or signed SPA ("Which of our investments are missing an executed SPA?", "what's our SPA status?"), SPA coverage, document completeness, or a named company's SPA — even when the same request also asks for another skill, such as co-investors: run both. Not for general portfolio metrics; for who else invested alongside you, use carta-co-investors.
-version: 0.9.7
+version: 0.9.8
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -41,17 +41,22 @@ allowed-tools:
   # Local execution
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-spa-audit/scripts/render-artifact.py" *)
   - Bash(pwd)
+  - Bash(carta workspace cache *)
+  - Bash(command -v *)
+  - Bash(test -d *)
+  - Bash(date *)
+  - Bash(mkdir -p *)
   - Read
   - Write(~/mnt/outputs/carta-spa-audit/**)
   - Write(~/.carta/cache/carta-spa-audit/**)
-  - Write(//tmp/carta-spa-audit/**)
+  - Write(./carta-spa-audit/**)
   # Interaction
   - AskUserQuestion
   - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.46.2</carta-plugin>
+<carta-plugin>carta-investors:7.46.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -346,38 +351,32 @@ Render the four-bucket audit as Markdown tables. Single fetch, single render.
 
 ### Step B0: Resolve workspace and check cache
 
-Before fetching anything, resolve a stable, cross-platform working directory. The audit cache and (in v0.4.0) the HTML artifact both live under `$WORKSPACE`. **Both the Claude process AND the preview-panel host must be able to read this path** — on Cowork demo VMs running macOS 26.5+ the host can no longer see `~/.cache/...` or `/tmp/...`. The probe below picks the right path automatically: Cowork sandboxes get `$HOME/mnt/outputs/` (the bind-mounted session outputs dir, visible from both VM and host), regular Claude Code CLI laptops get `carta workspace cache`, and anything else falls back to `$TMPDIR`.
+Before fetching anything, resolve a stable, cross-platform working directory, `<WORKSPACE>`, where the audit cache lives. **Both the Claude process AND the preview-panel host must be able to read this path** — on Cowork demo VMs running macOS 26.5+ the host can no longer see `~/.cache/...` or `/tmp/...`. Run each command below as its own Bash call, exactly as written: each matches an `allowed-tools` entry, and a shell variable does not survive from one Bash call to the next, so write the resolved path into later commands literally.
+
+1. `test -d "$HOME/mnt/outputs"` — succeeds in the Cowork sandbox, where `mnt/outputs/` under the session root is the folder the host can read too. `<WORKSPACE>` is that folder (expand `$HOME` with `pwd` if needed) plus `/carta-spa-audit`.
+2. Otherwise `command -v carta` — succeeds on a Claude Code laptop. Run `carta workspace cache carta-spa-audit`; it prints a quoted path, which is `<WORKSPACE>` without the quotes.
+3. Otherwise `<WORKSPACE>` is `<CWD>/carta-spa-audit`, with `<CWD>` from `pwd`.
+
+Then create it:
 
 ```bash
-if [ -d "${HOME}/mnt/outputs" ] && [ -w "${HOME}/mnt/outputs" ]; then
-  # Cowork sandbox: $HOME is the session root (/sessions/<name>) and
-  # mnt/outputs/ is the bind mount the macOS host sees as
-  # ~/Library/Application Support/Claude/.../outputs/. Writes here are
-  # readable by both the sandboxed Claude process and the host.
-  WORKSPACE="${HOME}/mnt/outputs/carta-spa-audit"
-elif command -v carta >/dev/null 2>&1; then
-  # Regular Claude Code CLI on a developer laptop.
-  WORKSPACE=$(carta workspace cache carta-spa-audit | jq -r .)
-else
-  # Last-resort fallback (e.g. CI / hosted runtimes without Carta CLI).
-  WORKSPACE="${TMPDIR:-/tmp}/carta-spa-audit"
-fi
-mkdir -p "$WORKSPACE"
+mkdir -p "<WORKSPACE>"
 ```
 
 Do not hardcode `/tmp` — it breaks on Windows and is invisible to the Cowork host on macOS 26.5+.
 
-**Cache check.** If `$WORKSPACE/carta-spa-audit-data.json` exists AND is less than 60 minutes old AND the cached `firmId` matches the current `<firm_id>`, read it and skip Step B1 entirely:
+**Cache check:**
 
 ```bash
-test -f "$WORKSPACE/carta-spa-audit-data.json" && \
-  find "$WORKSPACE/carta-spa-audit-data.json" -mmin -60 -print
+date +%s && date -r "<WORKSPACE>/carta-spa-audit-data.json" +%s
 ```
 
-If the file is fresh:
-1. `Read` it.
+The cache is fresh when the two printed numbers differ by less than 3600 (60 minutes). If the second command fails, there is no cache.
+
+If the cache is fresh:
+1. `Read` `<WORKSPACE>/carta-spa-audit-data.json`.
 2. Confirm `data.meta.firmId == <firm_id>` (cache is per-firm; a stale cache from another firm must be ignored).
-3. Tell the user: `Using cached SPA data from $(date -r "$WORKSPACE/carta-spa-audit-data.json" "+%H:%M"). Preparing results…`
+3. Run `date -r "<WORKSPACE>/carta-spa-audit-data.json" +%H:%M` and tell the user: `Using cached SPA data from <that time>. Preparing results…`
 4. Skip Step B1 and proceed directly to Step B2.
 
 **Fall through to Step B1 (live fetch) when:**
@@ -441,7 +440,7 @@ Tell the user: `SPA data loaded. Building your coverage report…`
 
 ### Step B1.5: Write cache
 
-After both queries return, assemble a cache payload and write it to `$WORKSPACE/carta-spa-audit-data.json` so a re-invocation within 60 minutes can skip the live fetch (Step B0).
+After both queries return, assemble a cache payload and write it to `<WORKSPACE>/carta-spa-audit-data.json` so a re-invocation within 60 minutes can skip the live fetch (Step B0).
 
 Cache schema:
 
@@ -558,7 +557,7 @@ AskUserQuestion(
 )
 ```
 
-If the user picks "Drill into a company," continue with the **Drill-down** section below. If they pick "Show only gaps," re-render Step B2 with only buckets 1 and 2. If they pick "Run co-investor analysis," hand off to `carta-co-investors` (do not re-fetch — the SPA data is already cached at `$WORKSPACE`).
+If the user picks "Drill into a company," continue with the **Drill-down** section below. If they pick "Show only gaps," re-render Step B2 with only buckets 1 and 2. If they pick "Run co-investor analysis," hand off to `carta-co-investors` (do not re-fetch — the SPA data is already cached at `<WORKSPACE>`).
 
 > **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-spa-audit", checkpoint_label="skill_finished")` after showing the next-step question.
 
