@@ -1153,6 +1153,9 @@
     const TOO_LARGE_ERROR = /too much data|"code"\s*:\s*"too_large"/i;
     const FITTING_ROWS = /limit param to about (\d+)/i;
     const LOAD_CONCURRENCY = 4;
+    // The page size a kind of query last fit at. The next fund's query of the same kind starts
+    // there instead of at PAGE_LIMIT, so a refusal is paid once per kind, not once per fund.
+    const fittingLimit = new Map();
 
     // The next page size after a refusal: the row count the tool says fits, and never more
     // than half the size just refused. Null when the error is not a size refusal or one row
@@ -1180,9 +1183,9 @@
     // Every row of a query. Each SQL ends in an ORDER BY over all its columns: the tool applies
     // it to every page, so pages neither repeat nor skip rows. A page count that does not add up
     // to the tool's total_rows fails the load instead of showing a silent subset.
-    async function queryAll(sql, label) {
+    async function queryAll(sql, label, kind) {
       const rows = [];
-      let skipped = 0, limit = PAGE_LIMIT, offset = 0, total = null;
+      let skipped = 0, limit = fittingLimit.get(kind) || PAGE_LIMIT, offset = 0, total = null;
       for (;;) {
         let page;
         try {
@@ -1191,6 +1194,7 @@
           const smaller = shrunkLimit((err && err.message) || '', limit);
           if (smaller === null) throw err;
           limit = smaller;
+          fittingLimit.set(kind, Math.min(fittingLimit.get(kind) || PAGE_LIMIT, smaller));
           continue;
         }
         assertFirm(page.rows);
@@ -2099,7 +2103,7 @@
       await ensureSession();
       try {
         status('Loading funds…');
-        const fundRes = await queryAll(fundsSql(), 'Loading funds');
+        const fundRes = await queryAll(fundsSql(), 'Loading funds', 'funds');
         funds = fundRes.rows;
         if (!funds.length) { fail(new Error('no funds with partner activity were found for this firm')); return; }
         currencyRanking = currencyOrder(funds);
@@ -2109,9 +2113,9 @@
         await forEachLimited(funds, LOAD_CONCURRENCY, async fund => {
           const label = `Loading ${fund.fund_name}`;
           const [partnerRes, navRes, ledgerRes] = await Promise.all([
-            queryAll(partnersSql(fund.fund_uuid), label),
-            queryAll(navSql(fund.fund_uuid), label),
-            queryAll(allocationsSql(fund.fund_uuid), label),
+            queryAll(partnersSql(fund.fund_uuid), label, 'partners'),
+            queryAll(navSql(fund.fund_uuid), label, 'nav'),
+            queryAll(allocationsSql(fund.fund_uuid), label, 'allocations'),
           ]);
           const partners = new Map();
           for (const p of partnerRes.rows) partners.set(p.partner_id, p);
