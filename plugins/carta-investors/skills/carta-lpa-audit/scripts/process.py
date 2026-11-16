@@ -980,6 +980,13 @@ HEADLINE_TERMS = (
     "preferredReturnMultiple", "fundTermYears", "investmentPeriodYears",
 )
 
+# Terms an amendment is compared on against the agreement the table shows.
+# Kept in step with AMENDABLE_TERMS in artifact.html.
+AMENDABLE_TERMS = (
+    "mgmtFeeRateInvestmentPeriod", "mgmtFeeRatePostInvestment", "carriedInterestRate", "preferredReturnRate",
+    "preferredReturnMultiple", "fundTermYears", "investmentPeriodYears", "capitalCallNoticeDays",
+)
+
 SHORT_TEXT_LIMIT = 60
 
 
@@ -1122,6 +1129,9 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
             "extractionId": eid,
             "documentType": document_type,
             "notFundLpa": not_fund_lpa,
+            # "Original", "Amended and Restated" or "Amendment"; an amendment states only what it changes.
+            "documentVariant": _rj_field(raw_json, ("document_metadata", "document_variant"), _to_str),
+            "amendmentNumber": _rj_field(raw_json, ("document_metadata", "amendment_number"), _to_int),
             "fund": {
                 "name": _rj_field(raw_json, ("fund_info", "fund_name"), _to_str),
                 "stateOfFormation": _rj_field(raw_json, ("fund_info", "state_of_formation"), _to_str),
@@ -1554,6 +1564,39 @@ def match_all(
                 "limitedPartners": merge_lp_rosters(matched_eid, [h[0] for h in hits], lpas),
             }
 
+        # Amendments and restated agreements on file beside the agreement the table reads: each lists
+        # the terms it states with a value the table does not show, since the table never applies one.
+        # A restated agreement the table passed over (an Original uploaded later can win a tie) is
+        # listed too, so the panel never hides the agreement that replaced the one it shows. A fund keeps
+        # an executed copy per investor, so copies of one agreement (same variant, number and date; when an
+        # agreement has no number or date, the terms it states too) are listed once, and copies of the
+        # agreement the table reads are not listed at all.
+        amendments = []
+        if matched_lpa:
+            def agreement_key(l):
+                key = (l.get("documentVariant"), l.get("amendmentNumber"), l["fund"]["lpaDate"])
+                if l.get("amendmentNumber") is None and not l["fund"]["lpaDate"]:
+                    key += tuple(l["terms"].get(k) for k in AMENDABLE_TERMS)
+                return key
+
+            seen = {agreement_key(matched_lpa)}
+            for eid, _tier, _names_series in hits:
+                other = lpas[eid]
+                if other.get("documentVariant") not in ("Amendment", "Amended and Restated") or agreement_key(other) in seen:
+                    continue
+                seen.add(agreement_key(other))
+                amendments.append({
+                    "documentId": other["documentId"],
+                    "variant": other.get("documentVariant"),
+                    "amendmentNumber": other.get("amendmentNumber"),
+                    "date": other["fund"]["lpaDate"],
+                    "changedTerms": [
+                        k for k in AMENDABLE_TERMS
+                        if other["terms"].get(k) is not None and other["terms"].get(k) != matched_lpa["terms"].get(k)
+                    ],
+                })
+            amendments.sort(key=lambda a: (a["amendmentNumber"] or 0, a["date"] or ""))
+
         matching_sls = list(sls_by_fund.get(firm_name) or [])
 
         # Collapse duplicate uploads (same counterparty + issue date + role) and
@@ -1582,6 +1625,7 @@ def match_all(
             "documentId": matched_lpa["documentId"] if matched_lpa else None,
             "lpa": matched_lpa,
             # "exact" = same name; "close" = typo-level or legal-form difference.
+            "amendments": amendments,
             "lpaMatch": None if match_tier is None else ("exact" if match_tier == FUND_MATCH_EXACT else "close"),
             # LPAs that tie between this fund and a sibling, so neither got them.
             "possibleLpaNames": possible_names.get(firm_name, []) if matched_lpa is None else [],
