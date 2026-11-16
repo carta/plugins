@@ -71,7 +71,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.45.6</carta-plugin>
+<carta-plugin>carta-investors:7.45.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them. One exception: when Gate 0's `detect-surface` can't run, or a hosted hand-off's own `gate-in-app-browser.md` read fails, take the sandboxed/hosted branch instead of stopping — the hosted app itself needs no plugin files.
 
@@ -705,11 +705,11 @@ After giving the URL, add one short post-launch line (not a menu):
 > **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-modeling", checkpoint_label="skill_finished")` after the post-launch line, when this run recorded `skill_started` in Step 1. A launch from a cached dashboard records no checkpoint. If the call fails, carry on.
 
 ## Scenario sharing
-In the local build, firm admins publish/pull scenarios across the firm — **built into the app** (a Shared
-with you section on the Scenarios page to load shared scenarios, Publish in a scenario tile's ⋯ menu, and Update / Duplicate / Hide /
-Delete in the top bar for the active shared scenario). It is button-driven with no
-prompt flow; if a user asks to share, point them at those controls. On the hosted app, each user's scenarios and
-plans are private to them, and there is no publish step yet. See
+Firm admins publish/pull scenarios across the firm, locally and on the hosted app — **built into the app** (a
+Shared with you section on the Scenarios page to load shared scenarios, Publish in a scenario tile's ⋯ menu, and
+Update / Duplicate / Hide / Delete in the top bar for the active shared scenario). It is button-driven with no
+prompt flow; if a user asks to share, point them at those controls. A scenario published from one pulls into the
+other. The Fund Modeling panel inside Claude has no sharing controls; sharing happens in the browser app. See
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/references/scenario-sharing.md`.
 
 ## Refresh / edits

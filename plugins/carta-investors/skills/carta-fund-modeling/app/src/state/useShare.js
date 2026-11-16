@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { trackClick } from "../analytics.js";
+import { portfolioQuery } from "./usePortfolio.js";
 
 const SHARE_POLL_MS = 2500;
 
@@ -9,7 +10,8 @@ const EVENT = { publish: "FundModeling.Share.Publish", pull: "FundModeling.Share
 /** Publish / pull / delete lifecycle, polled from /api/scenarios/share-status. Each op flushes
  *  edits first, runs in the background, then soft-reloads the doc; a `stale` publish surfaces the
  *  staleness guard instead of overwriting a teammate's change. */
-export default function useShare() {
+export default function useShare(firm) {
+  const q = portfolioQuery(firm);
   const [st, setSt] = useState({ status: "idle" });
   const pollRef = useRef(null);
   const actionRef = useRef(null); // the op in flight, for analytics + done-routing
@@ -82,7 +84,7 @@ export default function useShare() {
       // Flush + pause autosave so the server reads the latest portfolio.json and no browser
       // save races its merge write (mirrors the refresh apply).
       await window.__fmPortfolioCtl?.pauseAutosave?.();
-      const res = await fetch(`/api/scenarios/${action}`, {
+      const res = await fetch(`/api/scenarios/${action}${q}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}),
       });
       if (res.status === 409) throw new Error("Another sharing action is already running.");
@@ -95,7 +97,7 @@ export default function useShare() {
       window.__fmPortfolioCtl?.resumeAutosave?.();
       setSt({ status: "error", action, code: "failed", message: e.message || "Sharing failed." });
     }
-  }, [running, startPolling]);
+  }, [running, startPolling, q]);
 
   // Endpoint is /publish for both create and update — the server routes on shared.uuid.
   const publish = useCallback((sliceId, { force = false, asNew = false } = {}) => {

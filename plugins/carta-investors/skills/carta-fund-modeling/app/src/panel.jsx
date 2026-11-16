@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import Root from "./Root.jsx";
-import { FEATURES } from "./app-config.js";
+import { PANEL_FEATURES } from "./app-config.js";
 import { installMcpFetch } from "./mcp-fetch.js";
 import { parseRoute, useMemoryRoute } from "./route.js";
 import { portfolioQuery } from "./state/usePortfolio.js";
@@ -15,7 +15,7 @@ useMemoryRoute("/");
 installMemoryStorage();
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <Root features={FEATURES.hosted} />
+    <Root features={PANEL_FEATURES} />
   </React.StrictMode>
 );
 // Show scenarios and edits made from Claude without a reopen: flush the app's own pending edit,

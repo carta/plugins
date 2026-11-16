@@ -142,7 +142,7 @@ function DataStatus({ asOf }) {
 export default function App({ firm, features, canSwitchFirm, onChooseFirm }) {
   const { snapshot, doc, slice, selectSlice, sliceIds, createSlice, renameSlice, forkSlice, deleteSlice, hideShared, showHidden, unshareSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
     usePortfolio(firm, { onLockedEdit: () => warn(BASELINE_LOCKED_MSG) });
-  const share = useShare();
+  const share = useShare(firm);
   // Current user's Carta id, for the owner-only Delete on a shared scenario (self-vs-other).
   const [userId, setUserId] = useState(null);
   useEffect(() => {

@@ -71,7 +71,7 @@ def _classify(err):
     """Map a Carta error string to (code, user_message, needs_human). Substring heuristics —
     the fa layer has no typed error codes — ordered most-specific first."""
     e = (err or "").lower()
-    if "unknown command" in e or "not enabled" in e or "feature flag" in e:
+    if "unknown command" in e or "unknown tool" in e or "not enabled" in e or "feature flag" in e:
         return ("not_enabled", "Scenario sharing isn't enabled for this firm yet.", False)
     if "403" in e or "forbidden" in e or "permission" in e:
         if "owner" in e or "creator" in e or "delete" in e:

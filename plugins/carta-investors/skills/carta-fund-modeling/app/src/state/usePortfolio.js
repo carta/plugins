@@ -8,7 +8,7 @@ import { setTrackingFirm } from "../analytics.js";
 import useEtagAutosave from "./useEtagAutosave.js";
 import { runFirmLoad } from "./firmLoad.js";
 
-/** The query string the portfolio and snapshot routes take for `firm`. */
+/** The query string the portfolio, snapshot and share routes take for `firm`. */
 export const portfolioQuery = (firm) => (firm ? `?firm=${encodeURIComponent(firm)}` : "");
 
 export default function usePortfolio(firm, { onLockedEdit } = {}) {
