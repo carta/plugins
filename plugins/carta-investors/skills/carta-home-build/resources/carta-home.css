@@ -154,6 +154,30 @@
       color: var(--ink-color-global-border-default);
       margin: 0 4px;
     }
+    /* Firm switcher: shown only to people whose login opens more than one firm. */
+    .firm-switcher {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .firm-switcher[hidden] { display: none; }
+    .firm-switcher-label {
+      font-size: 14px;
+      color: var(--ink-color-global-text-subtle);
+    }
+    .firm-switcher-select {
+      font: inherit;
+      font-size: 14px;
+      max-width: min(100%, 360px);
+      padding: 6px 28px 6px 10px;
+      color: var(--ink-color-global-text-default);
+      background-color: var(--ink-color-global-surface-default, transparent);
+      border: 1px solid var(--ink-color-global-border-default);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .firm-switcher-select:disabled { cursor: progress; opacity: 0.6; }
     .page-subtitle {
       font-size: 15px;
       color: var(--ink-color-global-text-subtle);

@@ -896,6 +896,7 @@ async function fetchLiveData({ final = true } = {}) {
         firmId = active.firm_id != null ? String(active.firm_id) : null;
         firmName = active.firm_name ?? null;
       }
+      renderFirmSwitcher(payload.firms, firmId);
     } else {
       const ctxText = ctxRes.content?.[0]?.text ?? "";
       // Prefer active firm; fall back to first firm listed

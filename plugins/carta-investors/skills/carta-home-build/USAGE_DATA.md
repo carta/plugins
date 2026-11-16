@@ -40,6 +40,8 @@ arrive only when the host still relays UI events.
 | `CartaHome.Unavailable.LoadError` | render | Once per page, the first time loading the firm's data fails at the connector, after Home's quiet retries for a passing failure |
 | `CartaHome.Load.Recovered` | click | Home's data loaded after a failure. `value` = `<trigger>:<try>`: `open` (first open, after quiet retries), `focus` (the viewer came back to a Home that had failed) or `button` (Try again), and which try worked, e.g. `open:3`. A first-try load on open sends nothing |
 | `CartaHome.Load.Failed` | click | Home's load ended on an error the viewer can see. `value` = what started it (`open`, `focus`, `button`). Only arrives when the connector still carries events, so it undercounts connector failures |
+| `CartaHome.FirmSwitcher.Changed` | click | A viewer whose login opens several firms picked another firm in the header select |
+| `CartaHome.FirmSwitcher.Failed` | click | Switching firm failed (`set_context` errored or threw) and the select went back to the previous firm |
 | `CartaHome.Tab.<tab>` | click | Switched tab (Recommended, Directory) |
 
 ## Dashboard cards

@@ -111,6 +111,7 @@ SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 APP_JS_PARTS = [
     "carta-home.app.js",
     "app/connection-states.js",
+    "app/firm-switcher.js",
     "app/capital-activity.js",
     "app/version-check.js",
     "app/live-content.js",

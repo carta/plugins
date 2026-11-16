@@ -57,7 +57,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.45.2</carta-plugin>
+<carta-plugin>carta-investors:7.45.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -284,6 +284,7 @@ need the full file in context. Edit the small source file for what you're changi
 | `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |
 | `resources/app/segment-dashboards.js` | LP summary card: which firms get it, its warehouse query; which cards show while loading, and the 1–4-card grid | change who sees that card or what it shows |
 | `resources/app/nda-card.js` | NDA insights card: its warehouse query and rows | change what the NDA card shows |
+| `resources/app/firm-switcher.js` | header Firm select for logins with more than one firm; a switch calls `set_context` and reloads | change which firms it lists or what a switch does |
 | `resources/app/whats-new.js` | What's new carousel: featured microapps (locked by product flag, linked in-app or to a carta.com demo page or not at all; the Data Collection lookup behind Portfolio Analytics), one new skill from Contentful (only one the current Skill Directory lists, skipping `whatsNew: false` and featured microapps' own skills, visual outputs first) with a preview of its output (`WHATS_NEW_SKILL_OUTPUTS` in the config file), rotation, and the microapp preview mockups (microapp list lives in `WHATS_NEW_MICROAPPS` in the config file above) | change which microapps are featured or how they lock, how many new skills join, or the carousel's behaviour |
 | `resources/app/soi-new-fund.js` | SOI card banner for funds the published SOI page does not list yet (fund list from `--soi-page`), its copy prompt and dismissal | change when that banner shows or what it says |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
