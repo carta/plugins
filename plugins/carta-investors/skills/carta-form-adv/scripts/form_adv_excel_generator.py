@@ -41,6 +41,9 @@ MIXED_CURRENCY_NOTE = (
     "shown per currency. " + MIXED_CURRENCY_ACTION
 )
 NO_CURRENCY_LABEL = "No currency set"
+# Carta does not record whether a fund's assets are managed with discretion, so Item 5.F's
+# non-discretionary figure is fixed at 0. The HTML template carries the same wording.
+NON_DISCRETIONARY_ASSUMPTION = "assumed; Carta does not track discretion"
 
 # Amounts that sum across funds, rolled up within one currency.
 ROLLUP_KEYS = [
@@ -260,7 +263,7 @@ def build_firm_overview(wb, rollups, funds, demos, firm_aggregates, lp_nav_by_cu
         hdr(ws, row, ["Item", "Amount", "# Accounts", "Notes"]); row += 1
         for label, amt, accts in [
             ("Discretionary regulatory AUM",  fmt_currency(r["regulatory_aum"], cur), r["fund_count"]),
-            ("Non-discretionary AUM",          fmt_currency(0, cur),                   "0"),
+            ("Non-discretionary AUM",          f"{fmt_currency(0, cur)} ({NON_DISCRETIONARY_ASSUMPTION})", "0"),
             ("Total regulatory AUM",           fmt_currency(r["regulatory_aum"], cur), r["fund_count"]),
         ]:
             ws.cell(row=row, column=1, value=label).font = BOLD
@@ -595,8 +598,9 @@ def main():
     build_manual_fields(wb)
 
     out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
-    print(f"Saved: {out_path}")
+    print(f"Saved: {out_path.resolve()}")
 
 
 if __name__ == "__main__":

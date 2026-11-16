@@ -162,6 +162,7 @@ function esc(s) {
   if (s == null || s === '') return '—';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+const NON_DISCRETIONARY_ASSUMPTION = 'assumed; Carta does not track discretion';
 const MIXED_CURRENCY_ACTION = 'Convert them yourself before entering a single figure in IARD.';
 const MIXED_CURRENCY_NOTE = 'Funds report in more than one currency. Carta does not convert currencies, so amounts are shown per currency. ' + MIXED_CURRENCY_ACTION;
 const NO_CURRENCY_LABEL = 'No currency set';
@@ -385,7 +386,7 @@ function renderFirmTab() {
   // 5.F: one row set per currency (a single set when all funds share one currency).
   const aumRows = rollups.map(r => `
             <tr><td>Discretionary regulatory AUM${sfx(r)}</td><td class="num">${fmtMoney(r.regulatory_aum, r.currency)}</td><td class="num">${fmtNum(r.fund_count)}</td></tr>
-            <tr><td>Non-discretionary regulatory AUM${sfx(r)}</td><td class="num">${fmtMoney(0, r.currency)}</td><td class="num">0</td></tr>
+            <tr><td>Non-discretionary regulatory AUM${sfx(r)}</td><td class="num">${fmtMoney(0, r.currency)} (${NON_DISCRETIONARY_ASSUMPTION})</td><td class="num">0</td></tr>
             <tr class="total-row"><td>Total Regulatory AUM${sfx(r)}</td><td class="num">${fmtMoney(r.regulatory_aum, r.currency)}</td><td class="num">${fmtNum(r.fund_count)}</td></tr>`).join('');
 
   // 5.H NAV: one row set per currency from Query 4. Without it the cells show "—".
@@ -642,7 +643,7 @@ function renderIARDTab() {
       <ol class="checklist">
         ${step(1,  'Log into IARD (iard.com) and open your Form ADV Part 1A amendment.')}
         ${step(2,  `Item 5.D — Client Type: select "Pooled Investment Vehicles" for 100% of clients. ${badge('carta','Carta fills')}`)}
-        ${step(3,  `Item 5.F — Regulatory AUM: enter ${aumChecklistText()} as discretionary AUM, 0 as non-discretionary, and <strong>${fmtNum((DATA.funds || []).length)} accounts</strong>. ${badge('carta','Carta fills')}`)}
+        ${step(3,  `Item 5.F — Regulatory AUM: enter ${aumChecklistText()} as discretionary AUM, 0 as non-discretionary (${NON_DISCRETIONARY_ASSUMPTION}), and <strong>${fmtNum((DATA.funds || []).length)} accounts</strong>. ${badge('carta','Carta fills')}`)}
         ${step(4,  `Item 5.H — Non-US Clients: ${navChecklistText()} ${badge('carta','Carta fills')} ${badge('manual','Verify')}`)}
         ${step(5,  `Schedule D §7.B.(1) — For each private fund, complete: fund identification (name, IARD fund ID, formation date, legal structure). ${badge('carta','Carta fills')} ${badge('flag','Verify legal names')}`)}
         ${step(6,  `Schedule D §7.B.(1) Q.13 — Enter beneficial owner counts (LP + GP) for each fund. ${badge('carta','Carta fills')}`)}

@@ -6,9 +6,11 @@
 generate_form_adv_artifact.py — combine Form ADV JSON data with the HTML template.
 
 Usage:
-    uv run generate_form_adv_artifact.py --data /tmp/form_adv_data.json \
+    uv run generate_form_adv_artifact.py --data form_adv_data.json \
                                          --title "Acme Capital — Form ADV 2024" \
-                                         --out /tmp/FormADV_AcmeCapital_2024.html
+                                         --out carta-form-adv/FormADV_AcmeCapital_2024.html
+
+Prints the absolute path of the HTML file it wrote.
 """
 
 import argparse
@@ -56,7 +58,7 @@ def main() -> None:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
-    print(f"Artifact written to {out_path}")
+    print(f"Artifact written to {out_path.resolve()}")
 
 
 if __name__ == "__main__":
