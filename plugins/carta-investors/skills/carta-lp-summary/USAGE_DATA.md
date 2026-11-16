@@ -55,6 +55,7 @@ without the tracker sends nothing.
 | `LPSummary.Detail.Positions.More` | click | Showed all of an LP's fund positions |
 | `LPSummary.Exposure.Mode.<mode>` | click | Switched exposure between company, sector and geography |
 | `LPSummary.Exposure.Fund.Open` / `.Pick` | click | Opened / picked from the exposure fund menu |
+| `LPSummary.AsOf.Open` / `.Pick` | click | Opened / picked from the header's As of menu |
 | `LPSummary.Exposure.Row.Expand` | click | Expanded an exposure row |
 | `LPSummary.Exposure.ShowAll` | click | Showed every exposure row |
 | `LPSummary.Filter.Open` / `.Clear` | click | Opened / cleared the filter menu |

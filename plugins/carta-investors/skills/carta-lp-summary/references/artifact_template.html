@@ -239,6 +239,13 @@
     .menu-option[aria-checked="true"] svg { opacity: 1; }
     .menu-title { font: 600 var(--ink-font-global-size-body-1)/24px var(--ink-font-global-family-base); color: var(--ink-color-global-text-default); }
     .contacts-menu, .fund-menu { box-sizing: content-box; }
+    /* As of: a label and a plain-text trigger, the SOI dashboard's switcher. */
+    .as-of-switcher { display: flex; align-items: center; gap: 8px; margin-left: auto; align-self: center; }
+    .as-of-label { font: 500 var(--ink-font-global-size-small-1)/20px var(--ink-font-global-family-base); color: var(--ink-color-global-text-subtle); white-space: nowrap; }
+    .as-of-trigger { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font: 500 var(--ink-font-global-size-small-1)/20px var(--ink-font-global-family-base); color: var(--ink-color-global-text-default); white-space: nowrap; }
+    .as-of-trigger:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 3px; }
+    .as-of-menu { min-width: 260px; max-height: min(340px, 60vh); }
+    .menu-option > .as-of-meta { flex: none; font-size: var(--ink-font-global-size-small-1); color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
     .link-btn { all: unset; cursor: pointer; font: 400 var(--ink-font-global-size-small-1)/20px var(--ink-font-global-family-base); color: var(--ink-color-global-link-default); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
     .link-btn:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); }
     /* Export: one button that opens the Export profiles dialog. */
@@ -662,7 +669,8 @@
       .top-tools { justify-self: auto; }
       h1 { font-size: var(--ink-font-global-size-display-1); }
       .top-tools { width: 100%; }
-      .export-wrap .menu { right: auto; left: 0; }
+      .as-of-switcher { margin-left: 0; }
+      .export-wrap .menu, .as-of-menu { right: auto; left: 0; }
 
       /* One column: the toggle swaps the views in place, and the list and an LP's detail take turns. */
       .split { --list-w: 100%; position: static; }
@@ -721,6 +729,7 @@
           <h1>Limited Partner Summary</h1>
           <span class="as-of" id="as-of"></span>
           <button class="ink-btn-secondary is-small reopen-btn" type="button" data-reopen>Show overview</button>
+          <div class="menu-wrap as-of-switcher" id="as-of-switcher"></div>
         </div>
       </div>
       <div class="overview-row">
@@ -2186,6 +2195,54 @@
     function isLastPage(pageRows, pageSkipped, pageSize) {
       return pageRows + pageSkipped < pageSize;
     }
+
+    // ── as-of quarter ──
+    // The page is as of a quarter-end. A quarter counts as finalized once the firm has
+    // published a financial report for it (the Financial Reporting Tracker's `published`).
+    const QUARTER_ENDS = ['03-31', '06-30', '09-30', '12-31'];
+    // Quarters offered, newest first, and quarters checked for a published report.
+    const MAX_QUARTERS = 12;
+    const FINALIZED_LOOKBACK = 4;
+
+    // Quarter-ends on or before `today` ('YYYY-MM-DD'), newest first, none earlier than the
+    // month of `firstNavDate` (a quarter before any NAV has nothing to show).
+    function completedQuarters(today, firstNavDate) {
+      if (!ISO_DATE.test(today)) return [];
+      let year = Number(today.slice(0, 4));
+      let index = QUARTER_ENDS.length - 1;
+      while (index >= 0 && year + '-' + QUARTER_ENDS[index] > today) index--;
+      if (index < 0) { year--; index = QUARTER_ENDS.length - 1; }
+      const quarters = [];
+      while (quarters.length < MAX_QUARTERS) {
+        const key = year + '-' + QUARTER_ENDS[index];
+        if (firstNavDate && ISO_DATE.test(firstNavDate) && key < firstNavDate.slice(0, 8) + '01') break;
+        quarters.push({ key, year, quarter: index + 1, label: 'Q' + (index + 1) + ' ' + year });
+        if (--index < 0) { year--; index = QUARTER_ENDS.length - 1; }
+      }
+      return quarters;
+    }
+
+    // Whether a Financial Reporting Tracker answer holds a published financial report: on an
+    // entity, on one of its packages, or on a combined family package.
+    function hasPublishedReport(status) {
+      const holders = ((status && status.entities) || []).concat((status && status.families) || []);
+      return holders.some(h => [h].concat(h.packages || []).some(x => x.financial_report && x.financial_report.code === 'published'));
+    }
+
+    // The quarter the page opens on: the newest with a published report, else the newest
+    // completed one. `published` is a Set of quarter keys.
+    function defaultQuarter(quarters, published) {
+      return quarters.find(q => published.has(q.key)) || quarters[0] || null;
+    }
+
+    // What the dropdown says beside a quarter's date about its finalization. Nothing when no
+    // quarter has a published report, since there is then nothing to tell them apart by.
+    function finalizationNote(key, quarters, published) {
+      if (!published.size) return '';
+      const finalKey = defaultQuarter(quarters, published).key;
+      if (key === finalKey) return 'latest finalized';
+      return key > finalKey ? 'not finalized' : '';
+    }
     // </lps-core>
   </script>
   <script>
@@ -2195,7 +2252,7 @@
     const WELCOME_TOOL = 'welcome';
     const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-lp-summary'], from_ui: true };
     // Matches .claude-plugin/skill-versions.json; the update banner compares it to the published one.
-    const ARTIFACT_VERSION = '1.4.0';
+    const ARTIFACT_VERSION = '1.5.0';
 
     // Config values land in SQL, so only plain identifiers are accepted.
     const IDENT = /^[A-Za-z0-9_.]+$/;
@@ -2464,6 +2521,18 @@
       catch (err) { return { rows: [], truncated: false, skipped: 0, failed: true, error: err }; }
     }
 
+    // ── as-of quarter ──
+    // `key` is the quarter-end the figures are as of; '' is Current, the month ending this
+    // month. `quarters` are the ones the dropdown offers, `published` the keys among them whose
+    // financial report is published, and `seq` numbers picks. Only the load for the current
+    // `seq` may touch `data`: loadAll only fetches, and the caller assembles after checking.
+    const asOf = { key: '', quarters: [], published: new Set(), seq: 0 };
+    // Only a quarter-end from the dropdown reaches SQL; anything else reads as Current.
+    const AS_OF_KEY = new RegExp('^\\d{4}-(' + QUARTER_ENDS.join('|') + ')$');
+    function asOfLiteral(key) {
+      return AS_OF_KEY.test(key) ? `DATE '${key}'` : 'LAST_DAY(CURRENT_DATE())';
+    }
+
     // ── queries ──
     // Read-only, keyed by fund UUID and partner id, each pinned to the firm and selecting
     // firm_id so assertFirm can check every page.
@@ -2488,11 +2557,17 @@
               ORDER BY f.FUND_NAME, f.FUND_UUID`;
     }
 
-    // The LP accounts the page covers. Wire rows join back to partner rows by fund and partner,
-    // so both queries read this one filter.
+    // The LP accounts the page covers today: the Current page, the firm probe and the wire rows.
     const LP_ROWS = 'p.IS_LIMITED_PARTNER AND p.IS_ACTIVE';
 
-    function partnersSql() {
+    // The LPs on a page: at Current the active ones. At a picked quarter IS_ACTIVE is today's
+    // status, so an LP active then and inactive since stays when it has a NAV month by then.
+    function lpRowsAt(key) {
+      if (!AS_OF_KEY.test(key)) return LP_ROWS;
+      return `p.IS_LIMITED_PARTNER AND (p.IS_ACTIVE OR EXISTS (SELECT 1 FROM ${table('nav')} n WHERE n.FUND_ID = p.FUND_UUID AND n.PARTNER_ID = p.PARTNER_ID AND n.MONTH_END_DATE <= ${asOfLiteral(key)}))`;
+    }
+
+    function partnersSql(key) {
       return `SELECT p.FUND_UUID AS fund_uuid, p.PARTNER_ID AS partner_id, p.PARTNER_NAME AS partner_name,
                      p.FIRM_PARTNER_GROUP_ID AS family_id, p.FIRM_PARTNER_GROUP_NAME AS family_name,
                      p.PARTNER_ENTITY_TYPE AS entity_type, p.PARTNER_COUNTRY AS country, p.PARTNER_STATE AS state,
@@ -2500,12 +2575,14 @@
                      p.TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT AS committed, p.TOTAL_CAP_CONTRIBUTION AS called,
                      p.TOTAL_DISTRIBUTION AS distributed, p.FIRM_ID AS firm_id
               FROM ${table('partners')} p
-              WHERE ${LP_ROWS}${firmPin('p')}
+              WHERE ${lpRowsAt(key)} AND (p.EARLIEST_COMMITMENT_DATE IS NULL OR p.EARLIEST_COMMITMENT_DATE <= ${asOfLiteral(key)})${firmPin('p')}
               ORDER BY p.FUND_UUID, p.PARTNER_ID`;
     }
 
     // Separate from partnersSql: a viewer whose role cannot read wire data still sees the
-    // rest of the page, with wire cells marked Restricted.
+    // rest of the page, with wire cells marked Restricted. Wires are current and read the
+    // active LPs only, so an LP shown at a past quarter that has since gone inactive has no
+    // wire row here and reads has_setup: false.
     function wiresSql() {
       return `SELECT p.FUND_UUID AS fund_uuid, p.PARTNER_ID AS partner_id,
                      p.HAS_CONFIRMED_WIRE_INSTRUCTIONS AS has_confirmed, p.HAS_WIRE_SETUP AS has_setup,
@@ -2516,26 +2593,36 @@
               ORDER BY p.FUND_UUID, p.PARTNER_ID`;
     }
 
-    // Each partner's latest month: NAV and cumulative paid-in and distributions for the net
-    // multiples, plus every partner's NAV (GPs included) for the fund totals look-through
-    // divides by.
-    function latestNavSql() {
+    // The first month any LP has a NAV: the oldest quarter the as-of dropdown offers.
+    function firstNavSql() {
+      return `SELECT TO_CHAR(MIN(n.MONTH_END_DATE), 'YYYY-MM-DD') AS first_nav_date, n.FIRM_ID AS firm_id
+              FROM ${table('nav')} n
+              WHERE n.IS_LIMITED_PARTNER${firmPin('n')}
+              GROUP BY n.FIRM_ID
+              ORDER BY n.FIRM_ID`;
+    }
+
+    // Each partner's latest month up to the as-of date: NAV, cumulative commitment and
+    // paid-in and distributions for the net multiples, plus every partner's NAV (GPs
+    // included) for the fund totals look-through divides by.
+    function latestNavSql(key) {
       return `SELECT n.FUND_ID AS fund_uuid, n.PARTNER_ID AS partner_id, n.IS_LIMITED_PARTNER AS is_lp,
                      TO_CHAR(n.MONTH_END_DATE, 'YYYY-MM-DD') AS nav_date, n.ENDING_TOTAL_NAV AS nav,
+                     n.CUMULATIVE_TOTAL_COMMITMENT AS nav_committed,
                      n.CUMULATIVE_TOTAL_CONTRIBUTIONS AS paid_in, n.CUMULATIVE_TOTAL_DISTRIBUTIONS AS nav_distributed,
                      n.FIRM_ID AS firm_id
               FROM ${table('nav')} n
-              WHERE n.MONTH_END_DATE <= LAST_DAY(CURRENT_DATE())${firmPin('n')}
+              WHERE n.MONTH_END_DATE <= ${asOfLiteral(key)}${firmPin('n')}
               QUALIFY ROW_NUMBER() OVER (PARTITION BY n.FUND_ID, n.PARTNER_ID ORDER BY n.MONTH_END_DATE DESC) = 1
               ORDER BY n.FUND_ID, n.PARTNER_ID`;
     }
 
     // Only months with money moving, so the row count follows capital activity, not age.
-    function flowsSql() {
+    function flowsSql(key) {
       return `SELECT n.FUND_ID AS fund_uuid, n.PARTNER_ID AS partner_id, TO_CHAR(n.MONTH_END_DATE, 'YYYY-MM-DD') AS flow_date,
                      n.TOTAL_CONTRIBUTIONS AS contributions, n.TOTAL_DISTRIBUTIONS AS distributions, n.FIRM_ID AS firm_id
               FROM ${table('nav')} n
-              WHERE n.IS_LIMITED_PARTNER AND n.MONTH_END_DATE <= LAST_DAY(CURRENT_DATE())
+              WHERE n.IS_LIMITED_PARTNER AND n.MONTH_END_DATE <= ${asOfLiteral(key)}
                 AND (n.TOTAL_CONTRIBUTIONS <> 0 OR n.TOTAL_DISTRIBUTIONS <> 0)${firmPin('n')}
               ORDER BY n.FUND_ID, n.PARTNER_ID, n.MONTH_END_DATE`;
     }
@@ -2554,18 +2641,21 @@
     // One row per security, in the fund's own currency. A position already in that currency
     // reads its native value and cost: the base-currency columns are not populated for those
     // (mostly 0 or empty). Only a foreign-currency position reads the converted columns, and
-    // one with no converted value is counted, not guessed.
+    // one with no converted value is counted, not guessed. Read from the investment history
+    // as it stood at the as-of date: the row whose effective range holds it, held when it
+    // still has cost or value. `fmv_date` is that row's effective date.
     const SAME_CURRENCY = '(i.BASE_CURRENCY_CODE IS NULL OR i.CURRENCY_CODE = i.BASE_CURRENCY_CODE)';
-    function holdingsSql() {
+    function holdingsSql(key) {
       return `SELECT i.FUND_UUID AS fund_uuid, i.GENERAL_LEDGER_ISSUER_ID AS issuer_id, MAX(i.ISSUER_NAME) AS issuer_name,
                      i.ASSET_NAME AS asset_name, BOOLOR_AGG(COALESCE(i.IS_INVESTMENT_IN_FUND, FALSE)) AS is_fund,
                      SUM(IFF(${SAME_CURRENCY}, i.REMAINING_VALUE, i.BASE_CURRENCY_REMAINING_VALUE)) AS value,
                      IFF(COUNT_IF(IFF(${SAME_CURRENCY}, i.TOTAL_COST, i.BASE_CURRENCY_TOTAL_COST) IS NULL) > 0, NULL,
                          SUM(IFF(${SAME_CURRENCY}, i.TOTAL_COST, i.BASE_CURRENCY_TOTAL_COST))) AS cost,
                      COUNT_IF(NOT ${SAME_CURRENCY} AND i.BASE_CURRENCY_REMAINING_VALUE IS NULL) AS unconverted,
-                     TO_CHAR(MIN(i.LATEST_FMV_EFFECTIVE_DATE), 'YYYY-MM-DD') AS fmv_date, i.FIRM_ID AS firm_id
-              FROM ${table('investments')} i
-              WHERE i.IS_ACTIVE_INVESTMENT${firmPin('i')}
+                     TO_CHAR(MAX(i.EFFECTIVE_DATE), 'YYYY-MM-DD') AS fmv_date, i.FIRM_ID AS firm_id
+              FROM ${table('investment_history')} i
+              WHERE i.EFFECTIVE_DATE <= ${asOfLiteral(key)} AND (i.NEXT_EFFECTIVE_DATE IS NULL OR i.NEXT_EFFECTIVE_DATE > ${asOfLiteral(key)})
+                AND (COALESCE(i.TOTAL_COST_BASIS, 0) <> 0 OR COALESCE(i.REMAINING_VALUE, 0) <> 0)${firmPin('i')}
               GROUP BY i.FUND_UUID, i.GENERAL_LEDGER_ISSUER_ID, i.ASSET_NAME, i.FIRM_ID
               ORDER BY i.FUND_UUID, i.GENERAL_LEDGER_ISSUER_ID, i.ASSET_NAME`;
     }
@@ -2755,11 +2845,12 @@
       return `<span class="ink-tooltip-wrap" tabindex="0"><span class="ink-tooltip${tipClass ? ' ' + tipClass : ''}" role="tooltip">${esc(tooltip)}</span>${p}</span>`;
     }
 
-    // A dropdown built on the Ink secondary button: options are {key, label}; '' is "All funds".
-    function dropdownHtml(id, label, options, current, menuClass, extraClass, name) {
+    // A dropdown: options are {key, label, meta?}, '' is "All funds", and `triggerClass` styles
+    // the button, the Ink secondary one for the fund dropdowns.
+    function dropdownHtml(id, label, options, current, menuClass, triggerClass, name) {
       const open = ui.menu === id;
-      const items = options.map(o => `<button class="menu-option" type="button" role="menuitemradio" aria-checked="${o.key === current}" data-option="${esc(o.key)}"><span>${esc(o.label)}</span>${ICON.check}</button>`).join('');
-      return `<button class="ink-btn-secondary is-dropdown ${extraClass}" type="button" data-menu="${id}" aria-haspopup="menu" aria-expanded="${open}" aria-label="${esc(name)}: ${esc(label)}">${esc(label)}${ICON.chevronDown}</button>
+      const items = options.map(o => `<button class="menu-option" type="button" role="menuitemradio" aria-checked="${o.key === current}" data-option="${esc(o.key)}"><span>${esc(o.label)}</span>${o.meta ? `<span class="as-of-meta">${esc(o.meta)}</span>` : ''}${ICON.check}</button>`).join('');
+      return `<button class="${triggerClass}" type="button" data-menu="${id}" aria-haspopup="menu" aria-expanded="${open}" aria-label="${esc(name)}: ${esc(label)}">${esc(label)}${ICON.chevronDown}</button>
         ${open ? `<div class="menu ${menuClass}" role="menu" data-menu-for="${id}">${items}</div>` : ''}`;
     }
 
@@ -2782,6 +2873,21 @@
       if (!s.earlier.length) return base;
       const tip = s.earlier.map(e => esc(e.fund) + ': ' + esc(dateLabel(e.date))).join('<br>');
       return `${base} · <span class="ink-tooltip-wrap as-of-mixed" tabindex="0"><span class="ink-tooltip is-multiline is-end" role="tooltip">${tip}</span>some funds earlier</span>`;
+    }
+
+    // The as-of control on the title row, at the far right: "As of" and the picked quarter, opening a
+    // list of Current and the completed quarters, each with its quarter-end date.
+    function renderAsOf() {
+      $('as-of').innerHTML = data.loaded ? asOfHtml(data.fundDates) : '';
+      const box = $('as-of-switcher');
+      if (!asOf.quarters.length) { box.innerHTML = ''; return; }
+      const options = [{ key: '', label: 'Current', meta: '' }].concat(asOf.quarters.map(q => ({
+        key: q.key, label: q.label,
+        meta: [dateLabel(q.key), finalizationNote(q.key, asOf.quarters, asOf.published)].filter(Boolean).join(' · '),
+      })));
+      const picked = options.find(o => o.key === asOf.key) || options[0];
+      box.innerHTML = `<span class="as-of-label">As of</span>
+        ${dropdownHtml('asof', picked.label, options, picked.key, 'as-of-menu', 'as-of-trigger', 'As of')}`;
     }
 
     // ── rendering: header ──
@@ -3357,7 +3463,7 @@
           <div class="seg" role="group" aria-label="Group exposure by">
             ${modes.map(([mode, label]) => `<button type="button" data-x-mode="${mode}" aria-pressed="${ui.xMode === mode}">${label}</button>`).join('')}
           </div>
-          <div class="menu-wrap">${dropdownHtml('x-fund', current.label, options, current.key, 'fund-menu', 'is-small', 'Fund')}</div>
+          <div class="menu-wrap">${dropdownHtml('x-fund', current.label, options, current.key, 'fund-menu', 'ink-btn-secondary is-dropdown is-small', 'Fund')}</div>
         </div>`;
       const blocks = Array.from(groups, ([code]) => {
         const lt = lts.get(code);
@@ -3555,6 +3661,7 @@
     }
 
     function renderAll() {
+      renderAsOf();
       renderView();
       renderExport();
       renderOverview();
@@ -3701,6 +3808,7 @@
 
     function renderMenu(id) {
       if (id === 'filter') renderFilter();
+      else if (id === 'asof') renderAsOf();
       else if (id === 'template') renderBrand();
       else renderDetail();
     }
@@ -3728,6 +3836,9 @@
       if (menu === 'x-fund') {
         Object.assign(ui, { xFund: key || null, xOpen: new Set(), xAll: false });
         renderDetail();
+      } else if (menu === 'asof') {
+        renderAsOf();
+        pickAsOf(key);
       }
       refocus(`[data-menu="${menu}"]`);
     }
@@ -4071,13 +4182,18 @@
       if (ui.menu && !menuBtn && !t.closest('.menu')) closeMenu();
       if (menuBtn) {
         if (!menuBtn.disabled) {
-          if (ui.menu !== menuBtn.dataset.menu) { if (menuBtn.dataset.menu === 'contacts') track('click', 'Detail.Contacts.Open'); else if (menuBtn.dataset.menu === 'filter') track('click', 'Filter.Open'); else if (menuBtn.dataset.menu === 'template') track('click', 'Template.Open'); else track('click', 'Exposure.Fund.Open'); }
+          if (ui.menu !== menuBtn.dataset.menu) { if (menuBtn.dataset.menu === 'contacts') track('click', 'Detail.Contacts.Open'); else if (menuBtn.dataset.menu === 'filter') track('click', 'Filter.Open'); else if (menuBtn.dataset.menu === 'template') track('click', 'Template.Open'); else if (menuBtn.dataset.menu === 'asof') track('click', 'AsOf.Open'); else track('click', 'Exposure.Fund.Open'); }
           toggleMenu(menuBtn.dataset.menu);
         }
         return;
       }
       const option = t.closest('[data-option]');
-      if (option) { track('click', 'Exposure.Fund.Pick'); pickOption(option.closest('[data-menu-for]').dataset.menuFor, option.dataset.option); return; }
+      if (option) {
+        const menu = option.closest('[data-menu-for]').dataset.menuFor;
+        track('click', menu === 'asof' ? 'AsOf.Pick' : 'Exposure.Fund.Pick');
+        pickOption(menu, option.dataset.option);
+        return;
+      }
       const view = t.closest('[data-view]');
       if (view) {
         if (ui.view !== view.dataset.view) track('click', 'View.Switch.' + trackLabel(view.dataset.view));
@@ -4293,7 +4409,11 @@
 
     const recordKey = (fund, partner) => fund + ':' + partner;
 
-    function assemble(res) {
+    // `load` is what loadAll returned: the as-of key it ran at and each query's result.
+    function assemble(load) {
+      const { key, res } = load;
+      data.funds.clear();
+      data.notes = [];
       for (const f of res.funds.rows) data.funds.set(f.fund_uuid, f);
       const latest = new Map(res.latest.rows.map(r => [recordKey(r.fund_uuid, r.partner_id), r]));
       const flows = new Map();
@@ -4326,8 +4446,13 @@
         if (!fund) continue;
         const k = recordKey(p.fund_uuid, p.partner_id);
         const l = latest.get(k) || {};
+        // Commitment, called and distributions follow the NAV month, so they agree with the
+        // multiples. An LP committed before a past as-of date with no NAV month yet shows the
+        // partner row's commitment and has called and distributed nothing; at Current it keeps
+        // the partner row's own.
+        const atNav = l.nav_date ? { committed: l.nav_committed, called: l.paid_in, distributed: l.nav_distributed } : (key ? { called: 0, distributed: 0 } : {});
         records.push({
-          ...p, record_key: k, fund_name: fund.fund_name, fund_short: shortFundName(fund.fund_name, data.firmName), vintage_year: fund.vintage_year,
+          ...p, ...atNav, record_key: k, fund_name: fund.fund_name, fund_short: shortFundName(fund.fund_name, data.firmName), vintage_year: fund.vintage_year,
           currency: fund.currency_code || '', nav: Number(l.nav) || 0, nav_date: l.nav_date || null,
           paid_in: Number(l.paid_in) || 0, nav_distributed: Number(l.nav_distributed) || 0,
           flows: flows.get(k) || [], contacts: contacts.get(k) || [],
@@ -4373,6 +4498,11 @@
       if (res.tags.failed) data.notes.push('Sectors are unavailable in this view, so every company reads Unclassified.');
       if (res.contacts.failed) data.notes.push('Contacts are unavailable in this view.');
       if (res.wires.failed) data.notes.push('Wire status could not be loaded in this view, so every fund reads Restricted.');
+      if (asOf.quarters.length && !asOf.published.size) {
+        const checked = Math.min(FINALIZED_LOOKBACK, asOf.quarters.length);
+        data.notes.push('No financial report is published for the last ' + checked + ' quarter(s), or the Financial Reporting Tracker is not available to you.');
+      }
+      if (key) data.notes.push('Wire status, contacts, and exposure sectors, geography and fund links are current, not as of ' + dateLabel(key) + '.');
     }
 
     async function init() {
@@ -4385,34 +4515,93 @@
       if (!FIRM_ROW_ID || !FIRM_CONTEXT_ID) { fail(new Error('the page config does not name its firm, so it will not load any rows; ask Claude to rebuild the LP Summary')); return; }
       try { await ensureSession(); } catch (err) { fail(err); return; }
       try {
-        status('Loading limited partners…');
-        await assertSessionOnFirm();
-        const [funds, partners, latest, flows, contacts, holdings, wires, masters, tags, geoTags, hq] = await Promise.all([
-          queryAll(fundsSql(), 'Loading funds'),
-          queryAll(partnersSql(), 'Loading limited partners'),
-          queryAll(latestNavSql(), 'Loading NAV'),
-          queryAll(flowsSql(), 'Loading capital activity'),
-          queryOptional(contactsSql(), 'Loading contacts'),
-          queryAll(holdingsSql(), 'Loading holdings'),
-          queryOptional(wiresSql(), 'Loading wire status'),
-          queryOptional(mastersSql(), 'Loading fund links'),
-          queryOptional(tagsSql(), 'Loading tags'),
-          queryOptional(geoTagsSql(), 'Loading geography tags'),
-          queryOptional(hqCountrySql(), 'Loading company countries'),
-        ]);
-        // The queries ran in parallel; a firm switch during them leaves some empty, not foreign.
-        await assertSessionOnFirm();
-        assemble({ funds, partners, latest, flows, contacts, holdings, wires, masters, tags, geoTags, hq });
-        data.loaded = true;
-        ui.sel = data.families.length ? data.families[0].key : null;
-        // A search typed while the page loaded applies to the first selection too.
-        syncSelection();
-        $('as-of').innerHTML = asOfHtml(data.fundDates);
-        status('');
-        renderAll();
-        track('render', 'View.' + ORIGIN);
-        if (!data.families.length) track('render', 'Empty');
+        status('Finding the latest finalized quarter…');
+        await chooseQuarter();
+        if (await reload(null)) {
+          track('render', 'View.' + ORIGIN);
+          if (!data.families.length) track('render', 'Empty');
+        }
       } catch (err) { fail(err); }
+    }
+
+    // Loads at asOf.key and, unless a later pick overtook it, shows the result with `keep`
+    // selected (the first family when `keep` is gone). Returns whether it showed the result.
+    // It throws only when the load for the current pick failed.
+    async function reload(keep) {
+      const seq = asOf.seq;
+      status('Loading limited partners…');
+      let loaded;
+      // Only the load for the current pick may report a failure; an overtaken one ends quietly.
+      try { loaded = await loadAll(); } catch (err) { if (seq === asOf.seq) throw err; return false; }
+      if (seq !== asOf.seq) return false;
+      assemble(loaded);
+      data.loaded = true;
+      ui.sel = keep && findFamilyKey(keep) ? keep : (data.families.length ? data.families[0].key : null);
+      // A search typed while the page loaded applies to the selection too.
+      syncSelection();
+      status('');
+      renderAll();
+      return true;
+    }
+
+    // The quarters to offer, and the one to open on: the newest with a published report.
+    async function chooseQuarter() {
+      const first = await queryOptional(firstNavSql(), 'Finding reporting quarters');
+      asOf.quarters = completedQuarters(data.today, first.rows.length ? first.rows[0].first_nav_date : null);
+      asOf.published = await publishedQuarters(asOf.quarters.slice(0, FINALIZED_LOOKBACK));
+      const pick = defaultQuarter(asOf.quarters, asOf.published);
+      asOf.key = pick ? pick.key : '';
+    }
+
+    // The keys of the quarters whose Financial Reporting Tracker shows a published report; a
+    // year-end quarter also counts its yearly package. A tracker the viewer cannot read, or
+    // a failed read, counts as nothing published.
+    async function publishedQuarters(quarters) {
+      const periods = quarters.flatMap(q => [{ q, period: 'Q' + q.quarter }].concat(q.quarter === 4 ? [{ q, period: 'YEARLY' }] : []));
+      const found = await Promise.all(periods.map(async ({ q, period }) => {
+        try {
+          const args = { firm_uuid: FIRM_CONTEXT_ID, period, year: q.year };
+          const text = unwrap(await withRetry(() => callMcpWithWelcomeRetry(CALL_TOOL, { name: 'fa__get__reporting-status', arguments: args }), 'Checking published reports'));
+          return hasPublishedReport(JSON.parse(text)) ? q.key : null;
+        } catch (_) { return null; }
+      }));
+      return new Set(found.filter(Boolean));
+    }
+
+    // Reads every table at the as-of date picked when it was called and returns the results
+    // with that date, for assemble. It never writes `data`: a slower load that was overtaken
+    // by a later pick is dropped by its caller, not assembled.
+    async function loadAll() {
+      const key = asOf.key;
+      await assertSessionOnFirm();
+      const [funds, partners, latest, flows, contacts, holdings, wires, masters, tags, geoTags, hq] = await Promise.all([
+        queryAll(fundsSql(), 'Loading funds'),
+        queryAll(partnersSql(key), 'Loading limited partners'),
+        queryAll(latestNavSql(key), 'Loading NAV'),
+        queryAll(flowsSql(key), 'Loading capital activity'),
+        queryOptional(contactsSql(), 'Loading contacts'),
+        queryAll(holdingsSql(key), 'Loading holdings'),
+        queryOptional(wiresSql(), 'Loading wire status'),
+        queryOptional(mastersSql(), 'Loading fund links'),
+        queryOptional(tagsSql(), 'Loading tags'),
+        queryOptional(geoTagsSql(), 'Loading geography tags'),
+        queryOptional(hqCountrySql(), 'Loading company countries'),
+      ]);
+      // The queries ran in parallel; a firm switch during them leaves some empty, not foreign.
+      await assertSessionOnFirm();
+      return { key, res: { funds, partners, latest, flows, contacts, holdings, wires, masters, tags, geoTags, hq } };
+    }
+
+    // Reloads the figures at another quarter-end ('' is Current), keeping the LP on screen.
+    async function pickAsOf(key) {
+      if ((key === asOf.key && data.loaded) || (key && !asOf.quarters.some(q => q.key === key))) return;
+      asOf.seq++;
+      const keep = ui.sel;
+      asOf.key = key;
+      data.loaded = false;
+      $('error').hidden = true;
+      renderAll();
+      try { await reload(keep); } catch (err) { fail(err); }
     }
 
     // ── update banner ──
