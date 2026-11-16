@@ -2,7 +2,7 @@
 name: carta-portfolio-ownership
 description: >-
   Show investment firms their ownership by portfolio company and by underlying fund: shares held, outstanding and fully diluted ownership %, and share counts, as of today or a past date. Answers in chat, or builds a live ownership table in Cowork with each company expanded into its funds. Use for "how much do we own of X", our stake or FD% in a company, shares held, ownership across funds and SPVs, every company in a fund, or adding ownership to a spreadsheet. Do NOT use for an LP's share of a fund, a company's cap table, shareholders or option pool (use carta-explore-data), modelling a new round, or cost, FMV and IRR (use carta-soi, or carta-explore-data when the question also asks for ownership).
-version: 0.2.0
+version: 0.3.0
 model: inherit
 allowed-tools:
   # The only source for a connector's name
@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.47.2</carta-plugin>
+<carta-plugin>carta-investors:7.47.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -59,9 +59,8 @@ bases: **outstanding** (issued shares) and **fully diluted** (issued shares plus
 warrants and the unissued pool). It answers a single question in chat, or builds a live
 ownership table in Cowork: one row per company, expanded into one row per fund or SPV.
 
-The numbers come from one query, `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-ownership/references/ownership.sql`
-(this skill's own `references/`). The live page runs the same text, so a chat answer and the
-page always agree. Read it by that exact path; don't search for it.
+The numbers come from one Carta MCP read, `portfolio_holding:list:ownership`. The live page
+reads the same tool, so a chat answer and the page always agree.
 
 ## When to use
 
@@ -98,7 +97,7 @@ If the user's accessible firms are already in the conversation (from a `welcome`
 
 Fetch the firm's `fund` and `spv` entities by reading `${CLAUDE_PLUGIN_ROOT}/references/list-firm-entities.md` (the plugin's own `references/`, not this skill's; do not search for it) and following it with those two types, as two calls in parallel. If that file says the list is incomplete, keep `incomplete_entities` for the answer. Keep each entity's `uuid`, `name` and `fund_family_name`. Use every fund and SPV in the list, whether or not Carta still services it: ownership is a property of the holding, not of the service.
 
-**Scope.** If the user named funds or SPVs, match those names against the list; the query runs on the matches. Otherwise it runs on every fund and SPV in the list. Ownership is per fund and SPV, so *"we"* and *"the firm"* mean all of them combined.
+**Scope.** If the user named funds or SPVs, match those names against the list; the read covers the matches. Otherwise it covers every fund and SPV in the list. Ownership is per fund and SPV, so *"we"* and *"the firm"* mean all of them combined.
 
 ## Step 3: As-of date
 
@@ -122,14 +121,13 @@ A future date isn't possible: say so in one sentence and use today. When the dat
 
 ### Answer in chat
 
-1. Read `ownership.sql`. Replace every `<FUND_UUIDS>` with the Step 2 UUIDs, each in single quotes and comma-separated, and every `<AS_OF_DATE>` with the Step 3 date. Append `LIMIT 1000 OFFSET 0`.
-2. Run it once with the Carta MCP (a call that fails with an error mentioning `welcome` gets the recovery in Caveats first): `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<the query>"}})`. If exactly 1,000 rows come back, run the next page with `OFFSET 1000`, up to 10 pages in all. If the query fails, show the error in plain words and stop. Don't rewrite the query or try other tables.
+1. Read ownership once with the Carta MCP (a call that fails with an error mentioning `welcome` gets the recovery in Caveats first): `read_tool({"name": "portfolio_holding__list__ownership", "arguments": {"funds": "<Step 2 UUIDs, comma-separated>", "as_of": "<Step 3 date>", "companies": "<the companies the user asked about, comma-separated>"}})`. Send each name without its legal suffix or any comma (`Globex`, not "Globex, Inc."): the read splits `companies` on commas and matches part of a name. Leave out `companies` to read every company. When the answer has `next`, call again with the same arguments plus `"after": "<next>"`, up to 20 pages in all. If the call fails, show the error in plain words and stop. Don't query the data warehouse instead.
 
-   > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="data_fetched")` once the last page of the query has returned.
-3. Keep the companies the user asked about: a case-insensitive match on `company_name`, or all of them. One row comes back per fund and company. Group rows by `company_key`.
-4. **Company row:** shares held is the sum of its fund rows. Outstanding and fully diluted shares are the company totals (the same on every fund row). Both percentages are the summed shares ÷ that total. Never add percentages together, and never add the totals across funds.
-5. Show a table with up to 6 columns: **Investment | Shares held | Outstanding ownership % | Outstanding | Fully diluted ownership % | Fully diluted shares**. Put each company in bold, with its funds indented beneath it. Write percentages to three decimals, as `X.XXX%`, like the web app. Always write share counts as the full number with commas, never abbreviated (1,240,000, not 1.2M). Use `—` for any blank value. Mark a company whose `has_cap_table` is false *No cap table on Carta*. For a one-company question, answer in one sentence first, e.g. *"As of Nov 3, 2026 you own 12.400% of Globex fully diluted (1,240,000 of 10,000,000 shares), through Fund II and Fund III."*, then show the table.
-6. End by saying the date. Mention any company whose `cap_table_as_of`, or any fund row whose `ownership_as_of`, is more than a quarter older than that date. If Step 2 kept `incomplete_entities`, say which kind of entity (fund or SPV) may be missing and that the totals may be understated. Then follow the build-the-page rule in Step 4.
+   > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="data_fetched")` once the last page has returned.
+2. Each entry of `companies` is one company, with its funds and SPVs in `funds`. A name in `unmatched_companies` matched no holding of these funds: say so in one line.
+3. **Company row:** use the company's `shares_held`, `outstanding_ownership`, `outstanding_shares`, `fully_diluted_ownership` and `fully_diluted_shares` as given. They are the funds' summed shares ÷ the company's own totals, so the funds add up to them. Never add percentages together, and never add the totals across funds.
+4. Show a table with up to 6 columns: **Investment | Shares held | Outstanding ownership % | Outstanding | Fully diluted ownership % | Fully diluted shares**. Put each company in bold, with its funds indented beneath it. Write percentages to three decimals, as `X.XXX%`, like the web app. Always write share counts as the full number with commas, never abbreviated (1,240,000, not 1.2M). Use `—` for any blank value. Mark a company whose `has_cap_table` is false *No cap table on Carta*. For a one-company question, answer in one sentence first, e.g. *"As of Nov 3, 2026 you own 12.400% of Globex fully diluted (1,240,000 of 10,000,000 shares), through Fund II and Fund III."*, then show the table.
+5. End by saying the date. Mention any company whose `cap_table_as_of`, or any fund row whose `ownership_as_of`, is more than a quarter older than that date. If Step 2 kept `incomplete_entities`, say which kind of entity (fund or SPV) may be missing and that the totals may be understated. Then follow the build-the-page rule in Step 4.
 
 > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_finished")` once the chat answer has been shown.
 
@@ -204,7 +202,7 @@ Add *"I couldn't load every **<fund / SPV>** for **<Firm Name>**, so some may be
 
 ## If something goes wrong
 
-> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That covers a failed query, a failed render, and a failed publish. `skill_finished` means an answer or a page reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the `welcome` call and single retry in Caveats, a further page of query results, a future date replaced by today, a missing `Artifact` tool or a failed artifact check that falls back to a chat answer, an incomplete entity list) do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That covers a failed ownership read, a failed render, and a failed publish. `skill_finished` means an answer or a page reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the `welcome` call and single retry in Caveats, a further page of ownership results, a future date replaced by today, a missing `Artifact` tool or a failed artifact check that falls back to a chat answer, an incomplete entity list) do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
 
 ## How the numbers work
 
@@ -218,7 +216,7 @@ Use these to answer follow-up questions:
 - **Pro forma cap tables are left out.** Zero-share links show `—`, not 0%. A percentage above 100% is a data fault and shows `—`.
 - **No cap table on Carta:** a company the fund holds on its books whose cap table isn't on Carta. It is listed so the portfolio is complete, with no ownership.
 - **Never across firms.** Every figure is for one firm, its funds and SPVs only.
-- **Large firms:** a chat answer stops at 10,000 rows; say so if it does, and suggest narrowing to some funds or companies.
+- **Large firms:** a chat answer stops after 20 pages; say so if it does, and suggest narrowing to some funds or companies.
 
 ## Caveats
 

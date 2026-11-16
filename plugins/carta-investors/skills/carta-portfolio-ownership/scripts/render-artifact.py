@@ -6,10 +6,10 @@
 render-artifact.py — render the firm's Portfolio Ownership Live Artifact.
 
 The skill lists the firm's funds and SPVs, writes them to a JSON file, and calls this
-script with its path. The script embeds that list, the ownership query
-(references/ownership.sql, the same text the skill's chat answers run) and the opening
-as-of date into references/artifact.html, and writes the page. The page runs the query
-itself on load and whenever the viewer picks another date.
+script with its path. The script embeds that list and the opening as-of date into
+references/artifact.html, and writes the page. The page reads ownership from the Carta
+MCP's portfolio_holding:list:ownership (the read the skill's chat answers use) on load and
+whenever the viewer picks another date.
 
 Usage:
     uv run render-artifact.py <output> <artifact_id> <mcp_server> <firm_uuid> \\
@@ -49,12 +49,8 @@ from live_artifact_render import (  # noqa: E402
 SKILL = "carta-portfolio-ownership"
 REFERENCES = Path(__file__).resolve().parent.parent / "references"
 TEMPLATE = REFERENCES / "artifact.html"
-OWNERSHIP_SQL = REFERENCES / "ownership.sql"
 
 PLACEHOLDERS = ("{{STATE_JSON}}", "{{CARTA_MCP_SERVER}}", "{{FIRM_NAME}}", "{{FIRM_UUID}}")
-# The page substitutes these into the query at run time; a template without them would
-# silently query every fund on the warehouse's default date.
-SQL_PARAMS = ("<FUND_UUIDS>", "<AS_OF_DATE>")
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 USAGE = (
@@ -145,11 +141,6 @@ def main() -> int:
     if problem:
         return fail(problem)
 
-    sql = OWNERSHIP_SQL.read_text(encoding="utf-8")
-    missing_params = [p for p in SQL_PARAMS if p not in sql]
-    if missing_params:
-        return fail(f"ownership.sql is missing parameters {missing_params}")
-
     content = inline_tracker(TEMPLATE.read_text(encoding="utf-8"), SKILL)
     missing = [p for p in PLACEHOLDERS if p not in content]
     if missing:
@@ -160,7 +151,6 @@ def main() -> int:
         "firm_name": firm_name,
         "artifact_id": artifact_id,
         "funds": funds,
-        "ownership_sql": sql,
         "initial_as_of": initial_as_of,
     }
     values = {

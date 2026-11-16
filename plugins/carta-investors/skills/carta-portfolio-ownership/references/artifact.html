@@ -892,12 +892,11 @@
     <script>/* __MCP_UI_TRACKER_JS__ */</script>
     <script>
         // STATE: {firm_uuid, firm_name, artifact_id, funds: [{uuid, name, fund_family_name?, vintage_date?}],
-        //   ownership_sql, initial_as_of}, embedded by render-artifact.py. ownership_sql is
-        //   references/ownership.sql verbatim, so the page and the skill's chat answers
-        //   run the same query.
+        //   initial_as_of}, embedded by render-artifact.py. The page reads ownership from
+        //   OWNERSHIP_TOOL, the read the skill's chat answers use, so the two always agree.
         // FIRM_UUID: the artifact pins the viewer's MCP firm context to this on load (via
-        //   set_context), so the warehouse query succeeds even if the viewer has switched
-        //   contexts elsewhere.
+        //   set_context), so the ownership read acts on this firm even if the viewer has
+        //   switched contexts elsewhere.
         // CARTA_MCP_SERVER: the Carta connector's DISPLAY NAME. The artifact runtime's mcp
         //   capability addresses a connector by display name only, because a published
         //   page runs for many viewers and connector ids are per-viewer facts.
@@ -910,14 +909,13 @@
         // session; when the session expires, later calls fail asking for welcome, and
         // callMcpWithWelcomeRetry recovers.
         const CALL_TOOL = 'call_tool';
+        const OWNERSHIP_TOOL = 'portfolio_holding__list__ownership';
         const SET_CONTEXT_TOOL = 'set_context';
         const WELCOME_TOOL = 'welcome';
 
-        // The warehouse query response has a payload size limit, so the page reads the
-        // result in pages. ownership.sql's ORDER BY is unique per row, which OFFSET
-        // paging needs to neither skip nor repeat a row.
-        const PAGE_SIZE = 500;
-        const MAX_PAGES = 20;
+        // The ownership read returns companies in pages linked by `next`; a firm with more
+        // pages than this is too large for one view.
+        const MAX_PAGES = 50;
 
         const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -1068,7 +1066,7 @@
             return DATE_RE.test(s) ? s : null;
         }
 
-        // Mirrors ownership.sql: above 1 is a data fault, so it shows as blank, not >100%.
+        // Mirrors the ownership read: above 1 is a data fault, so it shows as blank, not >100%.
         function ratio(part, whole) {
             if (part == null || !whole) return null;
             const r = part / whole;
@@ -1122,80 +1120,62 @@
                 : FUNDS.filter(f => fundFilter.has(f.uuid)).map(f => f.name).join('; ');
         }
 
-        // ── Query ──
+        // ── Ownership read ──
 
-        function ownershipSql(asOfDate) {
-            if (!DATE_RE.test(asOfDate)) throw new Error('Invalid as-of date: ' + asOfDate);
-            const fundList = FUNDS.map(f => {
-                if (!UUID_RE.test(f.uuid)) throw new Error('Invalid fund UUID: ' + f.uuid);
-                return `'${f.uuid}'`;
-            }).join(', ');
-            return STATE.ownership_sql.replaceAll('<FUND_UUIDS>', fundList).replaceAll('<AS_OF_DATE>', asOfDate).trim();
-        }
-
-        function parseDwhQueryResult(result) {
-            return parseNdjson(unwrapResponse(result)).map(r => {
-                const out = {};
-                Object.keys(r).forEach(k => { out[k.toLowerCase()] = r[k]; });
-                return out;
-            });
-        }
-
-        function unwrapResponse(result) {
-            if (typeof result === 'string') return result;
+        // The tool's answer as an object. FastMCP may wrap a JSON result as {"result": "<json>"}.
+        function parseToolJson(result) {
             if (!result || typeof result !== 'object') {
                 throw new Error('Unexpected response shape: ' + (typeof result));
             }
             if (result.isError) {
                 const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
-                throw new Error('dwh query failed: ' + msg);
+                throw new Error('ownership read failed: ' + msg);
             }
-            if (Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
-                return result.content[0].text;
+            const text = Array.isArray(result.content) && result.content[0] && result.content[0].text;
+            let body = typeof text === 'string' ? JSON.parse(text) : result.structuredContent;
+            if (body && typeof body.result === 'string') body = JSON.parse(body.result);
+            if (!body || !Array.isArray(body.companies)) {
+                throw new Error('Could not find companies in the ownership response');
             }
-            if (result.structuredContent && typeof result.structuredContent.result === 'string') {
-                return result.structuredContent.result;
-            }
-            throw new Error('Could not find text payload in response');
+            return body;
         }
 
-        // The ndjson payload may open with a `total_rows: …` header line and a blank line.
-        function parseNdjson(text) {
-            const rows = [];
-            if (!text) return rows;
-            let body = text;
-            const firstLine = text.trimStart().split('\n')[0] || '';
-            if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
-                body = text.slice(text.indexOf('\n\n') + 2);
-            }
-            for (const raw of body.split('\n')) {
-                const line = raw.trim();
-                if (!line || line.startsWith('(Result truncated')) continue;
-                try {
-                    const obj = JSON.parse(line);
-                    if (obj && typeof obj === 'object' && !Array.isArray(obj)) rows.push(obj);
-                } catch (e) {
-                    console.warn('parseNdjson: skipping malformed line', e);
-                }
-            }
-            return rows;
+        // One row per fund and company, in the shape buildCompanies reads: each fund's own
+        // position beside its company's totals.
+        function fundRows(companies) {
+            return companies.flatMap(c => c.funds.map(f => ({
+                fund_uuid: f.fund_uuid,
+                company_key: c.company_key,
+                company_name: c.company_name,
+                shares_held: f.shares_held,
+                outstanding_shares: c.outstanding_shares,
+                fully_diluted_shares: c.fully_diluted_shares,
+                outstanding_ownership: f.outstanding_ownership,
+                fully_diluted_ownership: f.fully_diluted_ownership,
+                ownership_as_of: f.ownership_as_of,
+                cap_table_as_of: c.cap_table_as_of,
+                has_cap_table: c.has_cap_table,
+            })));
         }
 
-        // Stops at the first short page, which is the last one.
-        async function fetchAllPages(sql) {
+        // Every fund of the page, every company, following `next` to the last page.
+        async function fetchOwnershipRows(asOfDate) {
+            if (!DATE_RE.test(asOfDate)) throw new Error('Invalid as-of date: ' + asOfDate);
+            const funds = FUNDS.map(f => {
+                if (!UUID_RE.test(f.uuid)) throw new Error('Invalid fund UUID: ' + f.uuid);
+                return f.uuid;
+            }).join(',');
             const rows = [];
+            let after = null;
             for (let page = 0; page < MAX_PAGES; page++) {
-                const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
-                    name: 'dwh__execute__query',
-                    // On its own line: a trailing `--` comment in the query would swallow it.
-                    arguments: { sql: `${sql}\nLIMIT ${PAGE_SIZE} OFFSET ${page * PAGE_SIZE}`, format: 'ndjson' },
-                });
-                const pageRows = parseDwhQueryResult(result);
-                rows.push(...pageRows);
-                if (pageRows.length < PAGE_SIZE) return rows;
+                const args = { funds, as_of: asOfDate };
+                if (after) args.after = after;
+                const body = parseToolJson(await callMcpWithWelcomeRetry(CALL_TOOL, { name: OWNERSHIP_TOOL, arguments: args }));
+                rows.push(...fundRows(body.companies));
+                if (!body.next) return rows;
+                after = body.next;
             }
-            // A truncated result must never look complete: the later companies would be missing
-            // and the last one's shares held would sum only some of its funds.
+            // A truncated result must never look complete: the later companies would be missing.
             const err = new Error('This portfolio has more positions than the page can load. Ask in chat for some funds or companies.');
             err.userFacing = true;
             throw err;
@@ -1204,7 +1184,7 @@
         // ── MCP plumbing ──
 
         // The Carta MCP asks for `welcome` when the viewer's session has expired. Match
-        // on the word: narrow enough to skip unrelated warehouse errors, loose enough to
+        // on the word: narrow enough to skip unrelated errors, loose enough to
         // survive wording tweaks.
         function isWelcomeRequiredMessage(text) {
             return typeof text === 'string' && /welcome/i.test(text);
@@ -1871,7 +1851,7 @@
             }
             showLoading(`Loading ownership as of ${fmtDate(date)}…`);
             try {
-                const rows = await fetchAllPages(ownershipSql(date));
+                const rows = await fetchOwnershipRows(date);
                 ownershipCache.set(date, rows);
                 if (seq !== loadSeq) return;
                 loadedRows = rows;
