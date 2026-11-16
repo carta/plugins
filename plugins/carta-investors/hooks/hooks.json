@@ -1,60 +1,6 @@
 {
     "hooks": {
-        "SessionStart": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" inject-context",
-                        "timeout": 8
-                    },
-                    {
-                        "type": "command",
-                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" prune-session-data",
-                        "timeout": 8
-                    },
-                    {
-                        "type": "command",
-                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-model",
-                        "timeout": 8
-                    }
-                ]
-            }
-        ],
-        "PostModelSwitch": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-model-switch",
-                        "timeout": 8
-                    }
-                ]
-            }
-        ],
         "PreToolUse": [
-            {
-                "matcher": "Skill",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-active-skill",
-                        "timeout": 8,
-                        "onFailure": "continue"
-                    }
-                ]
-            },
-            {
-                "matcher": "mcp__(.*[Cc]arta.*|2827383e-1775-4df3-b6ff-04d5392f6d18|640916d9-5e0c-4d0b-830a-03500fa93e5e|1af3c326-9402-463c-ba5c-d62de59cf57b|8eb65db0-0cbd-4f50-833b-3057c150d41a|33b9b857-8443-4b2d-b191-2d9b6c50eb86)__.*",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" inject-instrumentation",
-                        "timeout": 8,
-                        "onFailure": "continue"
-                    }
-                ]
-            },
             {
                 "matcher": "mcp__(.*[Cc]arta.*|2827383e-1775-4df3-b6ff-04d5392f6d18|640916d9-5e0c-4d0b-830a-03500fa93e5e|1af3c326-9402-463c-ba5c-d62de59cf57b|8eb65db0-0cbd-4f50-833b-3057c150d41a|33b9b857-8443-4b2d-b191-2d9b6c50eb86)__call_tool",
                 "hooks": [
@@ -63,17 +9,6 @@
                         "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/guard-own-sync-push.js\"",
                         "timeout": 8,
                         "onFailure": "continue"
-                    }
-                ]
-            }
-        ],
-        "UserPromptSubmit": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-slash-skill",
-                        "timeout": 8
                     }
                 ]
             }

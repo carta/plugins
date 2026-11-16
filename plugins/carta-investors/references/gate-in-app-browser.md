@@ -27,7 +27,9 @@ cannot include a file.
 `fa-tax`'s `tax-agent-companion.md` keeps its own copy of this detection; change it with this
 file. `carta-cap-table`'s `references/open-the-companion-page.md` copies the Claude in Chrome
 tool names, their order, and the new-tab first open and its one attempt of "Open a link" below;
-change it with this file too.
+change it with this file too. This plugin's fund construction
+companion skill copies the same Chrome tools, order and one attempt into its own
+`references/open-the-plan.md`; change it with this file too.
 
 ## Open a link
 

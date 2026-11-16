@@ -94,27 +94,15 @@ The Carta MCP server exposes these data warehouse tools:
 | `list_contexts` | See which firms you have access to |
 | `set_context` | Switch to a different firm |
 
-## Command hooks and the compiled binary
+## Command hooks
 
 The plugin runs these command hooks, listed in `hooks/hooks.json`. They run on your
 machine when Claude Code fires the event, and none of them blocks or changes a call except where noted.
 
 | Event | What runs | What it does |
 |-------|-----------|--------------|
-| SessionStart | `hooks/dispatch.sh inject-context` | Adds the instruction to load a Carta skill before a Carta tool call. |
-| SessionStart | `hooks/dispatch.sh prune-session-data` | Deletes session files older than 24 hours from two folders: `CLAUDE_PLUGIN_DATA/sessions` (when that variable is set) and the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder), which other Carta plugins also use. |
-| SessionStart, PostModelSwitch | `hooks/dispatch.sh capture-model`, `capture-model-switch` | Records the active Claude model in a per-session file in the shared session folder (`CARTA_SESSION_STATE_DIR`, or `carta-instrumentation` in the system temp folder). |
-| PreToolUse (Skill) | `hooks/dispatch.sh capture-active-skill` | Records which of this plugin's skills were loaded: the name in `CLAUDE_PLUGIN_DATA/sessions`, the latest one in the shared session folder. Makes no decision. |
-| PreToolUse (Carta MCP) | `hooks/dispatch.sh inject-instrumentation` | Adds a usage record (`_instrumentation_v2`) to Carta MCP calls. Outside the `default`, `acceptEdits`, `dontAsk` and `bypassPermissions` permission modes it changes nothing. It also writes a local `.hook-diagnostics` file to the shared session folder, which is never sent anywhere; `tools/hooks/README.md` § Diagnostics lists what it holds. |
 | PreToolUse (Carta MCP `call_tool`) | `node scripts/hooks/guard-own-sync-push.js` | Denies a budget-report push that differs from the plan `own_sync.py` wrote; otherwise prints nothing. |
-| UserPromptSubmit | `hooks/dispatch.sh capture-slash-skill` | Records skills you invoke with a slash command, in the same two places. |
 | PostToolUse (Carta MCP `execute_query`) | `node scripts/hooks/warn-empty-query.js` | Tells Claude when a query returned no rows. |
-
-`dispatch.sh` runs a compiled Go program from `hooks/bin/` (one file per platform), which a code scan cannot
-read. Its source is in `hooks/src/`, it uses only the Go standard library, and the build is reproducible.
-To check the binaries against the hashes in `hooks/bin/SHA256SUMS`, run `sh hooks/src/verify-checksums.sh`. To
-rebuild them from source and compare, run `GOTOOLCHAIN=go$(cat hooks/src/.go-version) sh hooks/src/build.sh --check`, which needs the Go version in `hooks/src/.go-version` (details in `hooks/bin/SOURCE.md`).
-The hooks read no credentials. `hooks/README.md` gives each hook's exact output.
 
 ## Credentials
 

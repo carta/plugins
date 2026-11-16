@@ -2,16 +2,17 @@
 
 ## Hook entries
 
+> **Off:** `hooks.json` registers none of the `dispatch.sh` entries below, so they never run. Add them back to `hooks.json` to turn them on.
+
 Every hook except `warn-empty-query.js` and `guard-own-sync-push.js`, which run
 under node, dispatches to the shared Go hooks binary in `tools/hooks/` via
 `dispatch.sh`.
 
 ## Binary source
 
-The published plugin ships the compiled binaries in `hooks/bin/` and their Go
-source in `hooks/src/`. `hooks/bin/SOURCE.md` explains how to check the
-binaries against `hooks/bin/SHA256SUMS` (`sh hooks/src/verify-checksums.sh`)
-and how to rebuild them from source and compare (`GOTOOLCHAIN=go$(cat hooks/src/.go-version) sh hooks/src/build.sh --check`).
+While the `dispatch.sh` entries are off, the published plugin ships no compiled
+binaries. When they are on, it ships them in `hooks/bin/` with their Go source in
+`hooks/src/`; `hooks/bin/SOURCE.md` explains how to verify and rebuild them.
 
  **Windows:** See the Windows note in `tools/hooks/README.md`.
 
