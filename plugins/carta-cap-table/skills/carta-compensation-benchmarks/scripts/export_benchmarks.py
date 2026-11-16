@@ -4,23 +4,45 @@
 # dependencies = ["openpyxl>=3.1", "pillow"]
 # ///
 """
-Generate a Carta-branded XLSX from compensation benchmark data.
+Generate a Carta-branded XLSX, or a CSV, from compensation benchmark data.
 
 Usage:
     uv run export_benchmarks.py --data @/tmp/benchmarks.json --output benchmarks.xlsx \
         --attribution "Data source: Companies with post money valuations between $50M-$100M. Benchmarks released May 2026." \
         [--notional-first]
 
+    uv run export_benchmarks.py --export-page /tmp/page_0.json --export-page /tmp/page_12.json \
+        --output benchmarks.csv --attribution "..."
+
 --data accepts either a JSON string or a @filepath (e.g. @/tmp/data.json).
+--export-page takes one saved compensation:export:benchmarks page (repeat per page of
+  the sweep); the rows are read out of the columnar payload by column name.
+--output ending in .csv writes a CSV headed with the documented field keys (job, ladder,
+  level, currency, salary_p25, ...), in that order, and the attribution as its final row
+  in a single cell; anything else writes the branded XLSX, which uses display labels.
 --notional-first sets equity column order to notional → FD% → shares (peer groups ≥ $500M).
 """
 
 import argparse
 import copy
+import csv
 import json
 import sys
 from pathlib import Path
-from openpyxl import load_workbook
+
+# The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
+for _root in Path(__file__).resolve().parents:
+    if (_root / "lib" / "comp_envelope.py").is_file():
+        sys.path.insert(0, str(_root / "lib"))
+        break
+from comp_envelope import (  # noqa: E402
+    EXPORT_PAYLOAD_KEYS,
+    EXPORT_PCT_KEYS,
+    export_pct_columns,
+    find_export_page,
+)
+
+from openpyxl import load_workbook  # noqa: E402
 
 ASSETS_DIR = Path(__file__).parent.parent / "assets"
 TEMPLATE_PATH = ASSETS_DIR / "carta_benchmarks_template.xlsx"
@@ -147,6 +169,132 @@ def build_columns(notional_first: bool) -> list[str]:
     return base + salary + tcc + equity
 
 
+# ── Columnar bulk export (compensation:export:benchmarks) ────────────────────
+# A page of that export is columnar: one `columns` header plus one flat value
+# array per row, named with the export's short forms (sal_p25, eq_p90_nv, …).
+# Those are not the keys this script writes into the workbook, so a page has to
+# be translated. The short names come from lib/comp_envelope.py, shared with
+# carta-compensation-app's save_benchmark_result.py, which reads the same page.
+
+
+def export_column_map() -> dict[str, str]:
+    """Map each export column name onto the row key build_columns() expects."""
+    mapping = {name: name for name in ("job", "ladder", "level", "currency")}
+    for p in EXPORT_PCT_KEYS:
+        for figure, column in export_pct_columns(p).items():
+            mapping[column] = f"{figure}_{p}"
+    return mapping
+
+
+EXPORT_COLUMN_MAP = export_column_map()
+
+
+def export_page_rows(page) -> list[dict]:
+    """Flat row dicts from one columnar export page.
+
+    Zips `columns` against each row BY NAME. Appending a column to the export is
+    a backward-compatible server change, so reading by position would silently
+    shift every figure in the workbook by one column.
+    """
+    columns = page.get("columns")
+    rows = page.get("rows")
+    if not isinstance(columns, list) or not isinstance(rows, list):
+        raise ValueError("not a columnar export page: expected `columns` and `rows`")
+
+    out = []
+    for i, row in enumerate(rows):
+        if not isinstance(row, list) or len(row) != len(columns):
+            raise ValueError(
+                f"row {i} has {len(row) if isinstance(row, list) else 'a non-list'} "
+                f"value(s) but there are {len(columns)} columns"
+            )
+        values = dict(zip(columns, row))
+        out.append({
+            row_key: values[name]
+            for name, row_key in EXPORT_COLUMN_MAP.items()
+            if name in values
+        })
+    return out
+
+
+def sweep_gap(pages) -> str | None:
+    """Describe why these pages are not a complete sweep, or None when they are.
+
+    The stop condition for the export is `next_job_offset is None`; the proof a
+    sweep actually landed is that every page's jobs_covered + jobs_empty together
+    account for total_job_areas. Checking it here is what stops one page being
+    written out as if it were every job area.
+    """
+    totals = {p.get("total_job_areas") for p in pages
+              if isinstance(p.get("total_job_areas"), int)}
+    if not totals:
+        return None  # a page with no paging fields: nothing to check against
+    if len(totals) > 1:
+        return (f"pages disagree on total_job_areas ({sorted(totals)}) — they are not "
+                "pages of one sweep")
+    total = totals.pop()
+
+    # Count each page's areas rather than only unioning them: the same page
+    # passed twice, or two windows that overlap because job_limit moved
+    # mid-sweep, would union to a complete sweep while every shared area's rows
+    # land in the output twice.
+    seen = []
+    for page in pages:
+        seen.extend(page.get("jobs_covered") or [])
+        seen.extend(page.get("jobs_empty") or [])
+    covered = set(seen)
+    if len(seen) != len(covered):
+        dupes = sorted(area for area in covered if seen.count(area) > 1)
+        return (f"pages overlap on job areas {', '.join(dupes)} — pass each page of "
+                "the sweep once")
+    if len(covered) != total:
+        return (f"incomplete sweep: {len(covered)} of {total} job areas captured. Call "
+                "compensation:export:benchmarks again with job_offset = the previous "
+                "page's next_job_offset until that field comes back null, and pass every "
+                "page with --export-page")
+    return None
+
+
+def rows_from_export_pages(paths) -> list[dict]:
+    """Read every saved page and return the sweep's rows, or exit 2 explaining why not."""
+    pages = []
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                raw = json.load(fh)
+        except (OSError, ValueError) as exc:
+            print(f"Error: cannot read export page {path}: {exc}", file=sys.stderr)
+            sys.exit(2)
+        # A blob result reaches disk as an MCP content-block list whose real page
+        # is base64 inside `resource.blob`, often behind a text summary block.
+        page = find_export_page(raw)
+        if page is None:
+            print(
+                f"Error: {path} is not a compensation:export:benchmarks page (no "
+                + " + ".join(f"`{k}`" for k in EXPORT_PAYLOAD_KEYS)
+                + "). Pass the file your client saved for the response_mode='blob' "
+                "call, or — on the inline fallback — the file you saved with the "
+                "whole response verbatim.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        pages.append(page)
+
+    gap = sweep_gap(pages)
+    if gap:
+        print(f"Error: {gap}", file=sys.stderr)
+        sys.exit(2)
+
+    rows = []
+    for path, page in zip(paths, pages):
+        try:
+            rows.extend(export_page_rows(page))
+        except ValueError as exc:
+            print(f"Error: {path}: {exc}", file=sys.stderr)
+            sys.exit(2)
+    return rows
+
+
 def _copy_style(src_cell, dst_cell):
     """Copy formatting (font, fill, alignment, border, number_format) from one
     openpyxl cell to another. openpyxl shares style objects across cells via
@@ -228,17 +376,53 @@ def fill_benchmarks_sheet(ws, rows: list[dict], columns: list[str], attribution:
     ws.cell(row=new_attr_row, column=2).value = attribution
 
 
+def write_csv(path, rows: list[dict], columns: list[str], attribution: str):
+    """Write the CSV header SKILL.md documents — the field keys — plus the attribution.
+
+    The header is the field keys ("CSV format (bulk)"), not the workbook's
+    display labels, so a CSV this script writes and one assembled by hand from
+    the documented column list have the same shape.
+
+    A CSV goes through here for the same reason the workbook does: the mapping
+    from an export page's column names onto these columns is the script's job,
+    never a figure retyped out of a page. A value the page does not carry stays
+    blank rather than becoming a zero.
+    """
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(columns)
+        for row in rows:
+            writer.writerow([
+                "" if (value := display_value(col, row.get(col))) is None else value
+                for col in columns
+            ])
+        # Attribution placement for a CSV is its final row (SKILL.md "Where to
+        # place it"). One cell: `attribution` already opens "Data source: ".
+        writer.writerow([attribution])
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Export Carta comp benchmarks as branded XLSX")
-    parser.add_argument("--data",           required=True, help="JSON rows string or @filepath")
-    parser.add_argument("--output",         required=True, help="Output .xlsx path")
+    parser = argparse.ArgumentParser(
+        description="Export Carta comp benchmarks as a branded XLSX or a CSV")
+    parser.add_argument("--data",           help="JSON rows string or @filepath")
+    parser.add_argument("--export-page",    action="append", default=[], metavar="PATH",
+                        help="A saved compensation:export:benchmarks page; repeat per page")
+    parser.add_argument("--output",         required=True,
+                        help="Output path; .csv writes a CSV, anything else the branded .xlsx")
     parser.add_argument("--attribution",    required=True, help="Data-source attribution string")
     parser.add_argument("--notional-first", action="store_true",
                         help="Peer group ≥ $500M: put notional equity columns first")
     args = parser.parse_args()
 
+    if bool(args.data) == bool(args.export_page):
+        print("Error: pass either --data or one or more --export-page, not both and not neither",
+              file=sys.stderr)
+        sys.exit(1)
+
     # Load data
-    if args.data.startswith("@"):
+    if args.export_page:
+        rows = rows_from_export_pages(args.export_page)
+    elif args.data.startswith("@"):
         with open(args.data[1:]) as f:
             rows = json.load(f)
     else:
@@ -255,10 +439,15 @@ def main():
     # attribution misaligned above where the data would normally appear.
     # Reject early with a clear message so the caller can decide what to do.
     if not rows:
-        print("Error: --data is an empty array; no benchmarks to export", file=sys.stderr)
+        print("Error: no benchmark rows to export", file=sys.stderr)
         sys.exit(2)
 
     columns = build_columns(args.notional_first)
+
+    if Path(args.output).suffix.lower() == ".csv":
+        write_csv(args.output, rows, columns, args.attribution)
+        print(f"Saved: {args.output}")
+        return
 
     # Open the brand-managed template — it owns title block, subtitle, logo,
     # fonts (SangBleu Versailles for H1, Calibri for body), column-header and

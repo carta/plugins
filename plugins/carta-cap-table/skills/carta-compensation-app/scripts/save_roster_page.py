@@ -66,13 +66,16 @@ import sys
 # shapes are identical for every compensation command, and two copies would drift
 # the first time a new envelope appears.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from save_benchmark_result import (  # noqa: E402
-    _load,
-    _looks_like_roster_page,
-    _looks_like_scorecard_export_page,
-    _walk_for_payload,
-    _write_json,
+for _root in pathlib.Path(__file__).resolve().parents:
+    if (_root / "lib" / "comp_envelope.py").is_file():
+        sys.path.insert(0, str(_root / "lib"))
+        break
+from comp_envelope import (  # noqa: E402
+    looks_like_roster_page,
+    looks_like_scorecard_export_page,
+    walk_for_payload,
 )
+from save_benchmark_result import _load, _write_json  # noqa: E402
 
 # The per-metric ratings the Scorecard tab reads. Order matters: it is the order
 # the rollup and the metric picker present, salary first (see the plan's
@@ -89,16 +92,15 @@ _RATING_FIELDS = (
 def _find_roster_page(raw):
     """Locate the scorecard payload inside whatever wrapper it arrived in.
 
-    Delegates to _walk_for_payload, which recurses through content-block ARRAYS,
-    base64 ``resource.blob`` values and string-valued result/content keys. That
-    only works because _looks_like_payload now recognises a roster page too — see
-    the note on _looks_like_roster_page. Before that, a page nested in a
-    content-block list was unreachable and this exited 2.
+    Delegates to walk_for_payload, which recurses through content-block arrays,
+    base64 ``resource.blob`` values and string-valued result/content keys. It
+    reaches a nested roster page only because looks_like_payload recognises one
+    — see the note on looks_like_roster_page.
     """
-    if _looks_like_roster_page(raw):
+    if looks_like_roster_page(raw):
         return raw
-    payload = _walk_for_payload(raw)
-    if _looks_like_roster_page(payload):
+    payload = walk_for_payload(raw)
+    if looks_like_roster_page(payload):
         return payload
     return None
 
@@ -286,13 +288,13 @@ def _roster_row(entry):
 def _find_scorecard_export(raw):
     """Locate a columnar employee export inside whatever wrapper it arrived in.
 
-    The shape marker lives in save_benchmark_result so the unwrapping layer can
-    recurse into it — see _looks_like_scorecard_export_page there.
+    The shape marker lives in the shared lib/comp_envelope.py so the unwrapping
+    layer can recurse into it — see looks_like_scorecard_export_page there.
     """
-    if _looks_like_scorecard_export_page(raw):
+    if looks_like_scorecard_export_page(raw):
         return raw
-    payload = _walk_for_payload(raw)
-    if _looks_like_scorecard_export_page(payload):
+    payload = walk_for_payload(raw)
+    if looks_like_scorecard_export_page(payload):
         return payload
     return None
 

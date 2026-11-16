@@ -31,7 +31,7 @@ import pathlib
 import sys
 
 # `_load` is shared — it handles the MCP's occasional preamble before the JSON.
-# `_walk_for_payload` deliberately is NOT: it ranks candidates by ROW COUNT, which
+# `walk_for_payload` deliberately is NOT: it ranks candidates by ROW COUNT, which
 # is the right rule for a columnar export and the wrong one here. This payload has
 # no rows, so every candidate would tie at zero.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))

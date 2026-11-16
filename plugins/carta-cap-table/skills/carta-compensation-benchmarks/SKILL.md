@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.18</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.20</carta-plugin>
 
 # Benchmark Query
 
@@ -139,6 +139,8 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 > ..., equity_notional_p25..p90, equity_fd_pct_p25..p90, equity_shares_p25..p90
 > ```
 >
+> For a peer group with `peer_group.notional_available: true`, add `--notional-first` to the `export_benchmarks.py` call that writes the file — that flag is what produces the order above, and without it the CSV comes out in the default order with notional last.
+>
 > Field source map (from each `benchmarks[i]` entry):
 > - `salary_p*` → `salary_benchmarks.percentiles.{p25,p50,p75,p90}`
 > - `tcc_p*` → `tcc_benchmarks.percentiles.{p25,p50,p75,p90}`
@@ -148,6 +150,17 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 > - `currency` → `salary_benchmarks.currency_code`
 >
 > Note: equity percentiles are nested objects (`percentiles.p25.as_shares`, etc.), not flat values like salary/tcc.
+>
+> Rows that came from the bulk export (`compensation:export:benchmarks`, Step 4) have a different source: that response is columnar and already flat, with its own short column names. Zip `columns` against each row **by name** — the export may append a column, so a positional read shifts every figure — and map:
+>
+> - `salary_p*` → `sal_{p25,p50,p75,p90}`
+> - `tcc_p*` → `tcc_{p25,p50,p75,p90}`
+> - `equity_fd_pct_p*` → `eq_{p25,p50,p75,p90}_fd`
+> - `equity_shares_p*` → `eq_{p25,p50,p75,p90}_sh`
+> - `equity_notional_p*` → `eq_{p25,p50,p75,p90}_nv`
+> - `job`, `ladder`, `level`, `currency` → the same names
+>
+> `export_benchmarks.py --export-page` applies exactly this mapping — use it rather than mapping a page by hand. It writes the CSV too: pass `--output "<path>.csv"` and it emits the field keys above as the header row, in this order, with the attribution as the final row in a single cell.
 >
 > If a column's source field is missing for a particular row (e.g. some roles have no equity), leave that cell blank — do not invent zeros and do not drop the column.
 >
@@ -168,6 +181,8 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 > - ❌ Omitting `--notional-first` when `peer_group.notional_available` is true
 
 ### Excel export — exact steps
+
+> **Came from the bulk export?** When the rows came from `compensation:export:benchmarks` (Step 4), skip Steps 1 and 2 entirely: pass each saved page straight to the script with a repeated `--export-page <saved_page_path>`, and it maps the export's columns (`sal_p25`, `eq_p90_nv`, …) onto the output's columns by name and checks the sweep covered every job area. The same call writes a CSV instead of the workbook when `--output` ends in `.csv`. Add `--notional-first` when `peer_group.notional_available` is true — this path skips Step 3, where that flag is otherwise named, so without it a large peer group's export silently gets the default order with notional last. Do not rebuild the rows below by hand from a page — that is the hand-copying the capture rule forbids. Steps 1–3 below are for rows you read from `compensation:get:benchmark`.
 
 **Step 1 — Build a JSON array of row objects** (one dict per `(job, ladder, level)`). Use `null` for missing values, never `0` or empty string.
 
@@ -684,7 +699,23 @@ If the dimension is one of the three known values, continue to Step 4 above.
 
 **Single-job bulk:** omit `level` to get every level for one job in one call (one row per level in that job's `levels`, fits well under the server response budget).
 
-**Multi-job bulk (CSV across all functions):** issue **one read per job area** (each `params.job[].value` from Step 2b) in parallel — do **not** omit both `job` and `level`. The unfiltered query returns every job at every level in a single payload that exceeds the 40K-char server budget and will be rejected with `"response too large"`. Iterating per-job stays inside the budget and parallelizes cleanly.
+**Multi-job bulk (CSV or Excel across many functions): use `compensation:export:benchmarks`.** It returns the market matrix for many job areas in one columnar response, and it is the command built for exactly this. Pass `jobs` as a list of Step 2b `params.job[].value`s, or omit `jobs` to sweep every job area a page at a time. Carry over the same filters you would have sent to `compensation:get:benchmark` — `equity_quantity` (the four-year-grant value, per the rule above — the export defaults to next-12-months vesting exactly as `get:benchmark` does), `level`, `location`, `focus`, `is_leader`, the peer-group bucket param, `benchmark_version_id`.
+
+The response is columnar — `{"columns": [...], "rows": [[...], ...]}`, one row per `(job, ladder, level)` — and its column names are the export's short forms (`sal_p25`, `tcc_p50`, `eq_p75_fd`, `eq_p90_nv`, …), not the nested objects `get:benchmark` returns. Zip `columns` against each row **by name**: the server may append a column, so a positional read silently shifts every figure. You do not have to do that mapping yourself — `export_benchmarks.py --export-page` does it (below), for a CSV as well as for the workbook; the "Field source map" above lists the names it applies.
+
+**Paging — one call is not the sweep.** The server returns at most 12 job areas per response, and an explicit `job_limit` above 12 is a 400 error rather than a clamp, so never raise it, and never change it mid-sweep (that shifts the window under offsets you already computed — one value for the whole sweep, whether that is omitted here or the fixed `job_limit: 6` of the no-blob fallback below). Omit `job_limit`, then call again with `job_offset` set to the previous response's `next_job_offset`, until that field comes back `null`. **The sweep is complete only when the union of every page's `jobs_covered` and `jobs_empty` equals `total_job_areas`** — `export_benchmarks.py` re-checks that and refuses a short sweep. Never present one page as every job area. (Same contract as `carta-compensation-app`'s `references/queries.md` §3 — keep the two in step rather than restating the numbers anywhere else.)
+
+**Writing the pages to a file rather than reading the numbers yourself** (every CSV and every XLSX built from the export): send `"response_mode": "blob"` on the **first** call and on every page after it — do not fetch a page and then re-fetch it. Your client writes each page to disk and returns only the counts and the paging cursor. Pass every saved path to the export script, which maps the export columns by name. `--output` decides the format — `.csv` for a CSV, `.xlsx` for the branded workbook. Add `--notional-first` at the end when `peer_group.notional_available` is true — this route skips Steps 1–3 of the Excel export, where that flag is otherwise named, so without it a ≥ $500M peer group's file comes out in the default order with notional last:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/export_benchmarks.py" --export-page "<page_1_path>" --export-page "<page_2_path>" --output "<output_path>.csv" --attribution "<full attribution string>"
+```
+
+> **Benchmark figures reach a CSV or XLSX only through that script.** Never hand-copy them out of a page and never retype them into a JSON file or a heredoc — except the verbatim page save in the no-blob fallback below, where the whole response goes to disk unedited. A page carries thousands of numbers and a single wrong digit is invisible in the output — the same rule `carta-compensation-app` states in its capture contract.
+
+**If `response_mode` comes back as an unknown parameter**, this MCP predates blob delivery and the page arrives inline. Drop the parameter and set `job_limit: 6`, so a page is small enough to write back out faithfully. The offsets are then known up front — 0, 6, 12, … up to `total_job_areas` — so fetch each page at its own offset rather than following the cursor. Save each page **verbatim** with the Write tool — the whole response object as received, nothing re-keyed, no figure retyped — then pass every saved path to `--export-page` as above. Do not fall back to a `compensation:get:benchmark` loop. (Same fallback as `carta-compensation-app`'s `references/queries.md` §3.)
+
+> **Do not loop `compensation:get:benchmark` once per job area.** The server rejects it by design. Equally, do not call `get:benchmark` with both `job` and `level` omitted: that asks for every job at every level in one payload, which never fits.
 
 ### Step 5 — Present results
 

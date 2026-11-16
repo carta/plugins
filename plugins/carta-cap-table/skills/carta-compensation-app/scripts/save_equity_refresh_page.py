@@ -46,11 +46,12 @@ import sys
 # shapes are identical for every compensation command, and two copies would drift
 # the first time a new envelope appears.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from save_benchmark_result import (  # noqa: E402
-    _load,
-    _walk_for_payload,
-    _write_json,
-)
+for _root in pathlib.Path(__file__).resolve().parents:
+    if (_root / "lib" / "comp_envelope.py").is_file():
+        sys.path.insert(0, str(_root / "lib"))
+        break
+from comp_envelope import walk_for_payload  # noqa: E402
+from save_benchmark_result import _load, _write_json  # noqa: E402
 
 # The column that identifies this payload. `external_id` alone is not enough — the
 # scorecard export carries it too — so the marker is a column only this report has.
@@ -78,7 +79,7 @@ def _find_export(raw):
     """Locate the export inside whatever wrapper it arrived in."""
     if _looks_like_equity_refresh_page(raw):
         return raw
-    payload = _walk_for_payload(raw)
+    payload = walk_for_payload(raw)
     if _looks_like_equity_refresh_page(payload):
         return payload
     return None
