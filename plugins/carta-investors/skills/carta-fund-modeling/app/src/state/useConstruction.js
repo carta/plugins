@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import useEtagAutosave from "./useEtagAutosave.js";
 import { emptyDoc, activePlan, normalizePlan } from "../model/construction/plan.js";
+import { firmQuery } from "../route.js";
 
 export default function useConstruction(firm) {
-  const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";
+  const q = firmQuery(firm);
   const [doc, setDoc] = useState(null);
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
   const [loadFailed, setLoadFailed] = useState(false);

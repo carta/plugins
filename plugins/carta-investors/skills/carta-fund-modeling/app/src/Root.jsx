@@ -9,7 +9,7 @@ import FundChooser from "./FundChooser.jsx";
 import { FirmDataContext } from "./state/FirmData.jsx";
 import { FS, sans } from "./ui/theme.js";
 import LoadingScreen from "./ui/LoadingScreen.jsx";
-import { parseRoute, navigate, subscribeNav, isFirmId } from "./route.js";
+import { parseRoute, navigate, subscribeNav, isFirmId, firmQuery } from "./route.js";
 import { postToOuter } from "./bridge-client.js";
 import { FirmAccess } from "./firm-access.js";
 import { runFirmLoad, stepProgress, CONNECTING_STEP } from "./state/firmLoad.js";
@@ -68,7 +68,7 @@ export default function Root({ features }) {
   useEffect(() => {
     if (!firm) return;
     let live = true;
-    const q = `?firm=${encodeURIComponent(firm)}`;
+    const q = firmQuery(firm);
 
     async function loadExtras() {
       // Check if snapshot data exists for this session

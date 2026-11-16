@@ -21,6 +21,8 @@ export const CARTA_ID_RE = /^[1-9][0-9]*$/;
 export const FIRM_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Hosted URLs name a firm by Carta ID, or by firm UUID while Carta sends no Carta ID.
 export const isFirmId = (firm) => CARTA_ID_RE.test(firm || "") || FIRM_UUID_RE.test(firm || "");
+/** The query string that names `firm` to the /api routes; empty without a firm. */
+export const firmQuery = (firm) => (firm ? `?firm=${encodeURIComponent(firm)}` : "");
 
 // In a Claude MCP App panel the page's own URL belongs to the host and the History API may be
 // refused, so the route lives in memory there instead (see useMemoryRoute).

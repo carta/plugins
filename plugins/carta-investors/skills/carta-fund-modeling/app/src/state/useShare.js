@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { trackClick } from "../analytics.js";
-import { portfolioQuery } from "./usePortfolio.js";
+import { firmQuery } from "../route.js";
 
 const SHARE_POLL_MS = 2500;
 
@@ -11,7 +11,7 @@ const EVENT = { publish: "FundModeling.Share.Publish", pull: "FundModeling.Share
  *  edits first, runs in the background, then soft-reloads the doc; a `stale` publish surfaces the
  *  staleness guard instead of overwriting a teammate's change. */
 export default function useShare(firm) {
-  const q = portfolioQuery(firm);
+  const q = firmQuery(firm);
   const [st, setSt] = useState({ status: "idle" });
   const pollRef = useRef(null);
   const actionRef = useRef(null); // the op in flight, for analytics + done-routing

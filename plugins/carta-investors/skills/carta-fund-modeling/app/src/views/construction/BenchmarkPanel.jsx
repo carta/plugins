@@ -7,6 +7,7 @@ import { latestFund } from "../../model/construction/plan.js";
 import { fundCurrency } from "../../model/funds.js";
 import { fundBenchmark, combineFunds, parallelFunds, applyBenchmark, usableEntries } from "../../model/construction/benchmark.js";
 import { trackClick } from "../../analytics.js";
+import { firmQuery } from "../../route.js";
 import { fmtYm, cellNum, sourceLabel } from "./fields.jsx";
 
 // A fund this young hasn't had time to follow on yet, so its rates understate reserves.
@@ -16,8 +17,7 @@ export function useInvestmentHistory(firm) {
   const [history, setHistory] = useState(undefined); // undefined = loading, null = none
   useEffect(() => {
     let live = true;
-    const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";
-    fetch(`/api/report/investment-history.json${q}`)
+    fetch(`/api/report/investment-history.json${firmQuery(firm)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((h) => { if (live) setHistory(h && !h.error && Object.keys(h).length ? h : null); })
       .catch(() => { if (live) setHistory(null); });

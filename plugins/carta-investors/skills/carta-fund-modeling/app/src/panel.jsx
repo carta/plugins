@@ -3,8 +3,7 @@ import { createRoot } from "react-dom/client";
 import Root from "./Root.jsx";
 import { PANEL_FEATURES } from "./app-config.js";
 import { installMcpFetch } from "./mcp-fetch.js";
-import { parseRoute, useMemoryRoute } from "./route.js";
-import { portfolioQuery } from "./state/usePortfolio.js";
+import { firmQuery, parseRoute, useMemoryRoute } from "./route.js";
 import { newScenarioId, trackPortfolioEtags, watchForOutsideChanges } from "./panel-sync.js";
 
 // Entry for the MCP App panel. The shell page sets window.__fmHost = { callTool, waitForChange } before this
@@ -22,7 +21,7 @@ createRoot(document.getElementById("root")).render(
 // then re-read the portfolio when its stored copy changed elsewhere.
 watchForOutsideChanges({
   ...portfolioEtags,
-  currentQuery: () => portfolioQuery(parseRoute().firm),
+  currentQuery: () => firmQuery(parseRoute().firm),
   currentFirm: () => parseRoute().firm,
   waitForChange: window.__fmHost.waitForChange,
   // A scenario the new-scenario form just made is selected once it arrives.

@@ -12,7 +12,7 @@
 // unreachable endpoint — defaults to "production", since an unclassified launch of a
 // customer-facing plugin is far more likely real prod use than a test session.
 
-import { isFirmId, parseRoute, subscribeNav } from "./route.js";
+import { firmQuery, isFirmId, parseRoute, subscribeNav } from "./route.js";
 
 // Lets telemetry join on the real Carta id instead of slugifying the firm name from PAGE_URL_PATH.
 const FIRM_CONTEXT_SCHEMA = "iglu:com.carta/firm/jsonschema/1-1-0";
@@ -43,7 +43,7 @@ export function setTrackingFirm(firmId, forFirm) {
 
 async function telemetryContext(firm) {
   try {
-    const r = await fetch(firm ? `/api/telemetry-context?firm=${encodeURIComponent(firm)}` : "/api/telemetry-context");
+    const r = await fetch(`/api/telemetry-context${firmQuery(firm)}`);
     return r.ok ? await r.json() : {};
   } catch {
     return {}; // a blip costs us the envelope, not every event

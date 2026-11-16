@@ -7,12 +7,10 @@ import { companyIsWaterfall } from "../model/reprice.js";
 import { setTrackingFirm } from "../analytics.js";
 import useEtagAutosave from "./useEtagAutosave.js";
 import { runFirmLoad } from "./firmLoad.js";
-
-/** The query string the portfolio, snapshot and share routes take for `firm`. */
-export const portfolioQuery = (firm) => (firm ? `?firm=${encodeURIComponent(firm)}` : "");
+import { firmQuery } from "../route.js";
 
 export default function usePortfolio(firm, { onLockedEdit } = {}) {
-  const q = portfolioQuery(firm);
+  const q = firmQuery(firm);
   const [snapshot, setSnapshot] = useState(null);
   const [doc, setDoc] = useState(null);
   const paused = useRef(false); // chat-turn soft lock: holds every autosave PUT
