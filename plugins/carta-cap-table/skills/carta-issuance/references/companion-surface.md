@@ -83,8 +83,9 @@ Once each:
    Leave out any unknown value; never guess or wait. Each field that `field_spec`, or one of its
    `conditionalRules`, requires for the row, not `hidden`, with no `default_value` and no
    given value, is a `needs_input` cell; so is the vesting schedule when nothing gives it.
-   No other field is a gap: with no given value, leave it out and Carta's default stands (when
-   `field_spec` does not require it, a grant with no board approval date waits for the board).
+   No other field is a gap, except one the type's own reference names (a debt note's maturity
+   date): with no given value, leave it out and Carta's default stands (when `field_spec` does not
+   require it, a grant with no board approval date waits for the board).
    `field_spec` comes from the § 3 `issuance_init` call: make no
    `cap_table:get:issuable_field_manifest` call.
 2. Up to 25 rows, `cap_table:mutate:prepare_drafts` with the rows in `drafts` and no
@@ -113,7 +114,9 @@ The **items** are the things that need the user and are on a cell, one item per 
 error or check warning (`validation.errors` and `validation.warnings`, by `draft_pk` and
 column), also when the prompt or a document gave that cell's value. A check message on a cell
 that is already an item (a gap, or two documents that disagree) goes in that item's `body`, and
-is not a second item. A check message on a cell is never a line of text.
+is not a second item. A check message on a cell is never a line of text. A
+`cap_table:get:draft_set_companion` read's `open_inputs` are items too: `reason` `missing` is a
+`needs_input` item; `invalid` is a check error, with its `messages` in the item's `body`.
 
 ### The reply
 
@@ -283,13 +286,14 @@ columns again, also after a later `Saved in the card` context.
 ### The review
 
 **On a pane host where the page opened**, the page's Issue is the one gate. Once no input is
-open and the check is clean, say: "All set. Review the draft set on the page and issue it there
-with the type's Issue button at the bottom of the page." Never issue it from the chat there;
-point to that button.
+open and the check is clean, say these words, with the type's Issue button from § 2 in place of
+`<Issue button>`, and no other sentence about the check or the issue: "All set. Review the draft
+set on the page and issue it there with **<Issue button>** at the bottom of the page." Never
+issue it from the chat there.
 
 **Once you told them to issue on the page**, call `cap_table:get:draft_set_companion` once with
-`wait_for_issue: true`. `issue_state` `done`: say how many issued, then `issue_summary.sentence`,
-then [§ 10](#10-follow-through). `failed`: say the page shows why. `running`: say the page is
+`wait_for_issue: true`. `issue_state` `done`: say [What issued](#what-issued), then
+`issue_summary.sentence`, then [§ 10](#10-follow-through). `failed`: say the page shows why. `running`: say the page is
 still issuing. Null: if `status` is `issued`, `partially_issued` or `pending_board_approval`,
 close on it with § 10; otherwise say Issue is not pressed yet.
 
@@ -300,16 +304,25 @@ nothing. Else ask one `AskUserQuestion` naming the preview's `revision`: "Issue 
 Issue option's `preview` holds the review, with `issue_summary`'s agreement, signatories and
 holders to email from the read, and the preview's `summary`. Never print the review as prose
 before the question: the host shows that prose only as a one-line summary. Once confirmed, apply
-the plan and follow its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says, then read `cap_table:get:draft_set_companion` and
-close on its `status`. A job still `running` after 3 reads: say these words, *"The issue is
+the plan and follow its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says, then read `cap_table:get:draft_set_companion` with
+`issue_id`, the job's `task_id`, say [What issued](#what-issued), and close on its `status`. A job still `running` after 3 reads: say these words, *"The issue is
 still running in Carta."*, and never apply again. Not confirmed: say "The draft set is still a draft. Nothing is issued
 yet.", then the close; outside the turn that built the set, add no *What I drafted* block. A
 save after the preview makes the plan stale: preview and confirm again.
 
+#### What issued
+
+The read's `issue_result`: its `detail` word for word, then each `issued` row's `label` and
+`holder_name`. Its `board_approval` is the step for the `held` rows: `create_consent`, create
+the board consent; `view_consent`, view the board consent; `ask_board_admin`, only a board admin
+can create it. On a pane host the page shows it; elsewhere link its `url`. With no
+`issue_result`, say the `status` only.
+
 **Each turn on this set**, before any write, read `cap_table:get:draft_set_companion`. Its
 `status`: `issued` or `partially_issued`, close; `pending_board_approval`, say the set is held
 for board approval; `draft`, carry on. For each `edited_in_drafts` value, say once "I saw you
-changed <title> for <holder> in Carta", and keep it.
+changed <title> for <holder> in Carta", and keep it. Ask its new `open_inputs` as § 6 does, and
+save the answers by `payload_key`.
 
 ## 9. Several types in one run
 
@@ -387,6 +400,11 @@ chat; no `get:draft_set_companion`, use the chat confirm in § 8. Send a refused
 
 A refusal that has a row in [mutate-recovery.md § Errors on any call](mutate-recovery.md#errors-on-any-call)
 is not the companion being unavailable: stay on this page, and do what its row says.
+
+A `prepare_drafts` or `save_drafts` row with an `error {code, field, message}` is not saved: say
+its `message`. With a `field`, fix that field and send the row again with its `draft_pk`; with no
+`field`, do what the `message` says and do not send the row again as it was. A top-level `error`
+saved no row: say its `message`, and do not send the set again.
 
 ## 12. End every turn that wrote with the way to the page
 

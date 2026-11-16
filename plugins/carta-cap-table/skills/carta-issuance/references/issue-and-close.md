@@ -121,6 +121,9 @@ Keep `draft_set_id` and each `draft_pk` for any later save (SKILL.md hard rule 3
 
 ### On success
 
+On the companion surface, start with the read's
+[What issued](companion-surface.md#what-issued), then go on as below.
+
 Lead with what happens next, in the Carta app's words: **Signatories were notified to sign
 options** (certificates, PIUs), then *"Once signatories sign, securities will be sent to
 stakeholders."* When the preview's `summary` said rows need board approval, those rows are

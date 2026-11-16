@@ -829,17 +829,21 @@ mcp__carta__call_tool({"name": "cap_table__mutate__save_drafts", "arguments": {
   "equity_plan_id": <equity_plan_id>}})   # option-grant only, on first save
 ```
 
-Response `{draft_set_id, drafts:[{temp_id, draft_pk, status}]}` — no top-level `validation`
+Response `{draft_set_id, drafts:[{temp_id, draft_pk, status, error}], error}` — no top-level `validation`
 (`save_drafts` skips it by design), **but each row's `status` still reflects its own save.**
 Check it:
 
 - **All success** → the *Saved as draft* [closing](issue-and-close.md#closing). It always ends
   with the link `[Drafts UI](<BASE_URL>/drafts/<security_type>/<CORP_ID>/draft/?draftSetPk=<draft_set_id>)`.
-- **Some errored** → surface verbatim per failing `draft_pk`, recover via
-  [mutate-recovery.md](mutate-recovery.md#error-recovery), then re-call
-  `save_drafts` with the same `draft_set_id` + each `draft_pk`.
-- **All failed** → surface verbatim; *"No drafts saved. Fix the errors above and re-try."* — no
-  Drafts-UI link, since there is nothing there to open.
+- **Some errored** (a row has `error {code, field, message}`) → surface its `error.message`
+  verbatim per failing `draft_pk`. With an `error.field`, fix it, recover via
+  [mutate-recovery.md](mutate-recovery.md#error-recovery), then re-call `save_drafts` with the
+  same `draft_set_id` + each `draft_pk`; with no `field`, do what the `message` says and never
+  resend that row as it was.
+- **All failed** (every row has an `error`) → surface each `error.message` verbatim and act on
+  each as above; *"No drafts saved."* — no Drafts-UI link, since there is nothing there to open.
+- **A top-level `error`** → no row was saved: surface its `message` verbatim and do not resend
+  the set. No Drafts-UI link.
 
 **Never show the success message when any row failed** — the user would believe a partial set
 is complete.
