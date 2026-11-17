@@ -12,7 +12,7 @@
     "headline": "The page now opens on your latest finalized quarter, and an As of menu beside the title switches to any earlier quarter."
   },
   "carta-soi": {
-    "version": "1.4.11",
+    "version": "1.4.12",
     "headline": "SOI now has an Investment Cash Flows tab: every dated investment, proceed and terminal value behind Deal IRR, grouped by company and fund, following the same fund, as-of and exited filters."
   },
   "carta-workhub-build": {

@@ -765,7 +765,14 @@
     // The first page reports total_rows, so the rest are fetched PAGE_CONCURRENCY
     // at a time. A query planned into more than MAX_PAGES ranges fails the load
     // rather than showing a partial row set as complete.
+    // Every page costs the server a fresh warehouse connection and two runs of
+    // the query (a count, then the page), so rounds dominate load time, not bytes.
+    // When the first page fits, the rest are sized from its characters per row to
+    // fill TARGET_PAGE_BYTES, which leaves room under the ceiling for wider rows; a
+    // 130-character-row query fetches 1,300 rows in 2 rounds.
     const PAGE_LIMIT = 40;
+    const TARGET_PAGE_BYTES = 160 * 1024;
+    const MAX_PAGE_ROWS = 10000;
     const PAGE_CONCURRENCY = 4;
     const MAX_PAGES = 500;
 
@@ -999,21 +1006,25 @@
 
     // `too_large` is the server's "this page is over the inline ceiling" error;
     // its fix text names a row count that fits ("lower the limit param to about 48").
-    // Returns the smaller limit to retry with, or null when the error is something
-    // else or the page is already a single row.
+    // Returns the smaller limit to retry with: the named count when there is one,
+    // so a page grown slightly past the ceiling loses only the overshoot, else half
+    // the page. Null when the error is something else or the page is a single row.
     function shrunkLimit(message, limit) {
       if (!/"code"\s*:\s*"too_large"/.test(message) || limit <= 1) return null;
       const m = message.match(/limit param to about (\d+)/);
-      const suggested = m ? parseInt(m[1], 10) : limit;
-      return Math.max(1, Math.min(suggested, Math.floor(limit / 2)));
+      if (!m) return Math.max(1, Math.floor(limit / 2));
+      return Math.max(1, Math.min(parseInt(m[1], 10), limit - 1));
     }
 
     // Runs one query to exhaustion. The SQL carries no LIMIT or OFFSET: the server
     // pages it from the `limit` / `offset` arguments. The first page is fetched
-    // alone, to learn total_rows and a page size that fits. The remaining ranges
-    // then run PAGE_CONCURRENCY at a time and are joined in offset order. A page
-    // that comes back `too_large` is retried at the same offset with fewer rows,
-    // and the smaller size is kept for the rest of the query. It returns every row
+    // alone, to learn total_rows and, from its characters per row, how many rows
+    // fill TARGET_PAGE_BYTES (never fewer than it held). PAGE_CONCURRENCY workers
+    // then claim the rest from a shared cursor, each range at the current page size,
+    // and the ranges are joined in offset order. A page that comes back `too_large`
+    // is retried at the same offset with fewer rows, and the smaller size is kept
+    // for the rest of the query: ranges claimed after it are claimed at that size,
+    // so only ranges already in flight leave a short tail. It returns every row
     // of the query or rejects: a query needing more than MAX_PAGES pages, or any
     // page that fails, fails the load, and no call for that query starts after that.
     // `onProgress(loaded, total)` hears the running row count after every page.
@@ -1042,7 +1053,10 @@
             },
           });
           try {
-            return parseNdjson(unwrapEnvelope(unwrapResponse(result)));
+            const text = unwrapEnvelope(unwrapResponse(result));
+            // Characters, not UTF-8 bytes: a non-ASCII name undercounts a little,
+            // which the headroom under the ceiling and the too_large retry absorb.
+            return { ...parseNdjson(text), chars: text.length };
           } catch (error) {
             const smaller = shrunkLimit(error.message || '', sent);
             if (smaller === null) throw error;
@@ -1078,29 +1092,32 @@
       if (first.totalRows === null) throw new Error(label + ': next_offset without total_rows');
       total = first.totalRows;
       onProgress(loaded, total);
-
-      const ranges = [];
-      for (let start = first.nextOffset; start < first.totalRows; start += limit) {
-        ranges.push([start, Math.min(start + limit, first.totalRows)]);
+      if (limit === PAGE_LIMIT && first.rows.length === PAGE_LIMIT) {
+        const fitting = Math.floor(TARGET_PAGE_BYTES * first.rows.length / first.chars);
+        limit = Math.max(PAGE_LIMIT, Math.min(MAX_PAGE_ROWS, fitting));
       }
-      if (ranges.length > MAX_PAGES) {
+
+      if (Math.ceil((total - first.nextOffset) / limit) > MAX_PAGES) {
         throw new Error(label + ': more than ' + MAX_PAGES + ' pages; results incomplete');
       }
-      const pages = new Array(ranges.length);
-      let nextRange = 0;
+      let cursor = first.nextOffset;
+      const pages = [];
       async function worker() {
-        while (nextRange < ranges.length) {
-          const i = nextRange++;
+        while (cursor < total) {
+          const start = cursor;
+          const end = Math.min(start + limit, total);
+          cursor = end;
           try {
-            pages[i] = await fetchRange(ranges[i][0], ranges[i][1]);
+            pages.push([start, await fetchRange(start, end)]);
           } catch (error) {
             failed = true;
             throw error;
           }
         }
       }
-      await Promise.all(Array.from({ length: Math.min(PAGE_CONCURRENCY, ranges.length) }, worker));
-      return first.rows.concat(...pages);
+      await Promise.all(Array.from({ length: PAGE_CONCURRENCY }, worker));
+      pages.sort((a, b) => a[0] - b[0]);
+      return first.rows.concat(...pages.map(p => p[1]));
     }
 
     // ── SQL ───────────────────────────────────────────────────────────────────
