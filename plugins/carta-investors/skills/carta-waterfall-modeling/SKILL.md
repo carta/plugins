@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.50.3</carta-plugin>
+<carta-plugin>carta-investors:7.50.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -444,9 +444,9 @@ call one that a different detail doc owns.
 
 Any other noun → skip as above. The cap table comes **as of the waterfall date, before any
 allocations** — in `chat` print it inline now, **before** the detail doc's light prompt (never ask
-first, never only in your reasoning); in `excel` **don't write it here**, hold it and write it with
-the results in the single write (the results doc's §Excel — fetch & write order). Then continue to
-the results fetch.
+first, never only in your reasoning; the tool result isn't shown to the user); in `excel` **don't
+write it here**, hold it and write it with the results in the single write (the results doc's §Excel
+— fetch & write order). Then continue to the results fetch.
 
 ### Formatting rules (shared by every rendered table + the BLUF totals)
 
