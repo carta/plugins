@@ -60,7 +60,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.50.7</carta-plugin>
+<carta-plugin>carta-investors:7.51.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
 
@@ -188,10 +188,10 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
    - If no context comes back at all, stop with: "I couldn't find any Carta data associated with your account. Try reconnecting to the Carta MCP server. If you believe you're already connected, [contact Carta Support](https://support.carta.com/kb/guide/en/how-to-get-support-with-carta-help-T8DEfuxhi9/Steps/3724508)."
 2. Call `set_context` with the chosen firm's `id`. That `id` is your `<firm_id>`, the sole filter both DWH queries scope on.
 3. The chosen firm's display name is your `<firm_name>`.
-4. Call `list_accounts` searching for `<firm_name>`. Find the entry with `type: "investment firm"`. Extract the numeric portion of its `id` (e.g. `"organization_pk:2645"` → `2645`) — this is `<org_pk>` for the documents link and the artifact's numeric Carta ID.
-5. Retrieve the firm's own entities with `fa__list__entities` (via `read_tool`): **one call per entity type, all six, every run**, then merge the results. Pass `{"entity_types": "fund"}`, then `"spv"`, `"syndicate_spv"`, `"gp_entity"`, `"management_co"` and `"elimination"`.
+4. **Right after `set_context`, make all seven lookups at once in a single turn:** `list_accounts` searching for `<firm_name>`, and the six `fa__list__entities` calls in step 5. None of them needs another's result, and each one made separately costs the user a full round trip before the page can start. In the `list_accounts` result, find the entry with `type: "investment firm"`. Extract the numeric portion of its `id` (e.g. `"organization_pk:2645"` → `2645`) — this is `<org_pk>` for the documents link and the artifact's numeric Carta ID.
+5. Retrieve the firm's own entities with `fa__list__entities` (via `read_tool`), in the batch step 4 sends: **one call per entity type, all six, every run**, then merge the results. Pass `{"entity_types": "fund"}`, `"spv"`, `"syndicate_spv"`, `"gp_entity"`, `"management_co"` and `"elimination"`.
    - **Never call it without `entity_types`, and never skip a type.** An unfiltered list for a firm with many entities is larger than the response limit and fails with "response too large". A skipped type silently drops all of its entities from the audit, so an SPV left out shows as if it had no LPA.
-   - A type the firm doesn't use returns an empty list. That is expected; move on to the next type.
+   - A type the firm doesn't use returns an empty list. That is expected.
    - If one type's call still comes back "response too large", follow `${CLAUDE_PLUGIN_ROOT}/references/list-firm-entities.md` (the plugin's own `references/`, not this skill's — do not search for it).
    - For every entity keep its display `name`, its numeric `carta_id`, its `entity_type_string` and its `currency` (the fund's Carta reporting currency) — these are the `<firm_funds>`, and their names are the `<firm_fund_names>` the audit will be scoped to. Keep every entity, including GP, management-company and elimination entities: the artifact matches all of them and then sets aside the ones that never carry an LPA (see Step A2a).
    - If all six calls return no entities, stop with: "I couldn't find any funds on file for <firm_name>. [Contact Carta Support](https://support.carta.com/kb/guide/en/how-to-get-support-with-carta-help-T8DEfuxhi9/Steps/3724508) if you believe this is an error."

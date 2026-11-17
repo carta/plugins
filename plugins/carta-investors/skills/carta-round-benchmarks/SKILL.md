@@ -3,26 +3,31 @@ name: carta-round-benchmarks
 description: >-
   Carta-wide market benchmarks for venture rounds: round size, pre- and post-money
   valuation and percent sold, as percentiles by stage (Seed to Series D+), sector and
-  US metro, from Carta platform data. Also places a valuation or raise against the market.
-  Triggers: "median post-money for a Series C", "Carta-wide Series A pre-money",
-  "how much do Seed rounds raise across the market", "round benchmarks",
-  "market valuation benchmarks by stage", "what percentile is a $40M pre-money at Series A",
-  "how much of the company is sold in a Series B", "fintech Series B valuations in the Bay Area".
-  Do NOT use for a fund's IRR, TVPI, DPI or MOIC against peers — use carta-fund-performance.
-  Do NOT use for deal terms or round sizes across the user's own portfolio, or a deal
-  compared with portfolio norms — use carta-market-benchmarks in carta-cap-table.
-  Do NOT use for one company's own financing history — use carta-explore-data.
-version: 1.0.0
+  US metro, from Carta platform data. Answers in chat, or opens an interactive round
+  benchmarking dashboard beside the chat. Also places a figure against the market.
+  Triggers: "median post-money for a Series C across the market", "Carta-wide Series A pre-money",
+  "how much do Seed rounds raise across the market", "round benchmarking dashboard",
+  "what percentile is a $40M pre-money at Series A", "fintech Series B valuations in the Bay Area".
+  Do NOT use for a fund's IRR, TVPI, DPI or MOIC against peers (use carta-fund-performance),
+  for round sizes or option pools across your own portfolio (use carta-market-benchmarks
+  in carta-cap-table), or for one company's financing history (use carta-explore-data).
+version: 1.1.0
 model: inherit
 allowed-tools:
   - mcp__carta__read_tool
+  - mcp__carta__view_static
+  - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__read_tool
+  - mcp__claude_ai_Carta__view_static
+  - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_static
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.50.7</carta-plugin>
+<carta-plugin>carta-investors:7.51.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -48,6 +53,11 @@ the market, never the user's own funds or portfolio.
 - "Compare SaaS and Biotech Series A round sizes"
 - "How does a $60M pre-money at Series A compare with the market?"
 - "What percent of the company is sold in a Series B?"
+- "Build me a round benchmarking dashboard" / "let me explore valuations by stage, sector and region"
+
+Answer a single question in chat. Open the dashboard when the user asks for one, wants
+to explore or compare across several stages, sectors or regions, or would otherwise need
+several follow-up questions. When unsure, answer in chat and offer the dashboard.
 
 ## When NOT to Use
 
@@ -143,17 +153,49 @@ offer to drop the sector or metro filter:
   not in it). Say so the first time you show it.
 - A `null` percentile shows as `—`.
 
+## Dashboard
+
+An interactive app beside the chat, like Carta's public Round Benchmarking tool: stage, sector,
+region, metric and date filters, median cards, trend charts, a percentile table, a CSV download
+and a box that places a figure against the market. Carta reads the data when the app opens, so
+opening it again refreshes it.
+
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-round-benchmarks", checkpoint_label="skill_started")` before opening the app. `<SERVER>` is the Carta MCP server name you call `view_static` on. Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`.
+
+Open it with one call, on the Carta MCP server this session has. It takes no filters, because the
+app holds every stage, sector and region and the user filters in it:
+
+```
+view_static({"name": "insights:view:round_benchmarks", "params": {}})
+```
+
+Use the view name exactly as written. Do not read the benchmark data first, and do not open the
+app twice: it reads its own data.
+
+| Result | What to do |
+|---|---|
+| The app opens | Say what is in it in one line, with the `data_as_of` date the result carries. Offer to answer a specific question in chat from the same data |
+| The result says `partial` is true | Say a size limit cut off some cells, so the app is partial; the numbers it shows are right |
+| `view_static` says the view is unknown or not available | Follow "When there is nothing to show" and stop. Do not retry, and do not build a page yourself |
+
+If the user also asked a specific question ("what is the median Series B post-money?"), answer it
+in chat from one `read_tool` read as above, after the app is open.
+
+> **Checkpoint**: Call `skill_checkpoint` with `checkpoint_label="skill_finished"` and a one-line note of what was shown. On any stop before that, call it with `checkpoint_label="skill_failed"` and `notes="<one-line reason>"` instead. A stop that delivered neither the app nor an answer is a failure.
+
 ## When there is nothing to show
 
 | Situation | What to do |
 |---|---|
-| `read_tool` says the command is unknown or not available | Round benchmarks are not enabled for this account yet. Tell the user to ask their Carta account manager to turn them on, and stop. Do not retry, and do not try `dwh__execute__query` or any other tool instead: the benchmark data is not reachable another way |
+| `read_tool` or `view_static` says the command or view is unknown or not available | Round benchmarks are not enabled for this account yet. Tell the user to ask their Carta account manager to turn them on, and stop. Do not retry, and do not try `dwh__execute__query` or any other tool instead: the benchmark data is not reachable another way |
 | A cell is `suppressed` | Fewer than `suppression_floor` rounds back it (quote the value from the response), so Carta withholds the figures. Say it is too thin to report, never zero, and offer to widen the window or drop a filter |
 | `cells` is empty | No rounds matched. Name the filters and offer to widen them |
 | The user asks about a non-US company or a non-USD round | Coverage is US-incorporated, USD-denominated primary rounds only. Say so rather than answering from US data |
 | The user asks for a single company's round | These are aggregates only; no company is identifiable in them. Point to `carta-explore-data` for the firm's own investments |
 
 ## Voice
+
+- Never show tool names, argument names, ids or the words "Snowflake" or "warehouse" in chat.
 
 - Say "the median Series C post-money was {p50}", not "the p50 of round_post_money was {raw number}".
 - Say what the peer set is in words: "Series A fintech rounds in the Bay Area, 2025".
