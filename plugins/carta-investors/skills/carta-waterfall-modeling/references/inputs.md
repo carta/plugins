@@ -38,10 +38,11 @@ defaults to `None`): collect these after all required inputs.
 
 - **The firm has saved inputs for this target** (Step 3's cached saved inputs, filtered per §Saved
   inputs) → open with one `AskUserQuestion` — "Use saved inputs" vs "Change one or more" vs "Reset to
-  defaults" — in place of the prompts below. Spell the "Use saved inputs" label inline as for "Use
-  defaults", with each saved value in place of the default and each kept `NESTED_LIST` row by its
-  `rows` entry's `label`. On "Change", loop through them one at a time, with each saved value in place
-  of the default. Otherwise, never offer "Use saved inputs" or "Reset to defaults".
+  defaults" — in place of the prompts below. Label it "Use saved inputs ({saved})" (§Saved inputs)
+  and spell it inline as for "Use defaults", with each saved value in place of the default and each
+  kept `NESTED_LIST` row by its `rows` entry's `label`. On "Change", loop through them one at a time,
+  with each saved value in place of the default. Otherwise, never offer "Use saved inputs" or "Reset
+  to defaults".
 - **2 or fewer optionals, none a `NESTED_LIST` with rows** → ask each directly, one at a time, the same
   way as required inputs. (The ENUM `(default)` marker on the matching
   choice already shows the default — don't add a separate "use defaults?"
@@ -66,11 +67,12 @@ only the `options` keys whose `available_inputs` entry is not skipped above (no 
 `unavailable`), and within a `NESTED_LIST` only the rows still in its `rows` without a `locked_reason`;
 name each other saved row with the `dropped` line below. None left → no saved inputs.
 
-Before the prompt, print one line: _"Saved by {saved_by.name} on {saved_at as ISO date}."_ — or
-_"Saved on {saved_at as ISO date}."_ when `saved_by` or its `name` is null. Then one line per
-`dropped` row: _"**{label}** ({option's `label`}) is no longer available for this company, so this
-run goes without it."_ — or _"A saved {option's `label`} row is no longer available for this
-company, so this run goes without it."_ when `label` is null.
+_{saved}_ is "saved by {saved_by.name} on {saved_at as ISO date}", or "saved on {saved_at as ISO
+date}" when `saved_by` or its `name` is null. Before the prompt, print one line: _"There are saved
+**{firm_name}** inputs for **{company}**, {saved}."_ Then one line per `dropped` row: _"**{label}**
+({option's `label`}) is no longer available for this company, so this run goes without it."_ — or
+_"A saved {option's `label`} row is no longer available for this company, so this run goes without
+it."_ when `label` is null.
 
 **Reset to defaults** — on that choice, or when the user asks to reset at that prompt, confirm
 with one `AskUserQuestion` — "Reset to defaults" / "Cancel" (Cancel returns to the prompt):
