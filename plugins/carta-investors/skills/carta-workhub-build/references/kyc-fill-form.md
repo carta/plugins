@@ -550,12 +550,13 @@ once: never fetch links ahead for later files.
 
 ### 7c — Send the file
 
-Run this on one line, exactly as written: `allowed-tools` matches the command text, so any other
-form makes the user approve every file. `<fields_json>` is 7b's `fields` object as JSON,
+Run this on one line, exactly as written, with `<plugin_root>` replaced by the plugin root
+named by the SKILL.md that sent you here, written out in full: the shell does not set `CLAUDE_PLUGIN_ROOT`, and
+`allowed-tools` matches the command text, so any other form makes the user approve every file. `<fields_json>` is 7b's `fields` object as JSON,
 unchanged. Single-quote every value; a value containing `'` is written `'\''`.
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" '<url>' '<fields_json>' '<file_path>'
+uv run "<plugin_root>/skills/carta-upload-firm-document/scripts/send_to_storage.py" '<url>' '<fields_json>' '<file_path>'
 ```
 
 The script checks that `url` is Carta's document storage and that the file exists, and prints

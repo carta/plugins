@@ -30,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.49.11</carta-plugin>
+<carta-plugin>carta-investors:7.49.12</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -43,7 +43,8 @@ skill's KYC branch in batch mode, with "every open KYC task" or several
 ("fill in all my KYC forms") or their fund's, read
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build/references/kyc-fill-form.md` (this skill's own
 `references/`; read it by that exact path, don't search for it) and follow it instead of the
-steps below. Everything else on this page builds the Workhub.
+steps below. This plugin's root is `${CLAUDE_PLUGIN_ROOT}`: wherever that file writes
+`<plugin_root>`, write this path out in full. Everything else on this page builds the Workhub.
 
 # Carta Workhub — Build / Redeploy
 
