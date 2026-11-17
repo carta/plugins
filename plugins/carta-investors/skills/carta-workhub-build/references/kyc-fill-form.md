@@ -380,6 +380,10 @@ came from, masked as the Rules say. Below it, list what is still needed.
 Ask with `AskUserQuestion`: `Save these answers` / `I'll correct some first` /
 `Stop`. Save only on `Save these answers`, and ask again after any correction.
 
+A party whose only UK tax number is its UTR still owes a reason it has no other one (Step 6,
+`utr`). Before this question, ask for it with `AskUserQuestion` when the user has not given it,
+and show it in the table. Never write a reason yourself, and never propose the UTR row on its own.
+
 ## Step 6 — Save the answers
 
 One call per party. The field id **is** the property name, placed under `individual` or
@@ -411,7 +415,7 @@ Shapes the form refuses otherwise:
 | an address | the **whole** address object. A section you send replaces the stored one, so a partial address loses the rest. |
 | a field the other kind declares, or one the firm wrote | under `individual`/`institution` as `customFields`, keyed by its camelCase `fieldId` |
 | `taxInfo` (tax residencies) | the **whole** list, one row per residency, and never without a residency row: a party's `taxInfo` always starts with at least one. A number outside the US: `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_TIN", "taxId": "…"}`; no number: `{"taxCountry": "VG", "taxIdMissingReason": "…"}` (the user's own reason). A row with a number and no `taxIdType` still owes the reason |
-| `utr` (UK Unique Taxpayer Reference) | not a field of its own: one more `taxInfo` row, `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_UTR", "taxId": "…"}`, sent after the party's residency rows, never alone: the form drops a lone UTR row on its next save. A party whose only UK number is its UTR still sends a residency row for `GB`, `{"taxCountry": "GB", "taxIdMissingReason": "…"}` (the user's own reason it has no other number), then the UTR row. Without a UTR, the same UTR row with `"taxIdMissingReason": "…"` (the user's own reason) in place of `taxId` |
+| `utr` (UK Unique Taxpayer Reference) | not a field of its own: one more `taxInfo` row, `{"taxCountry": "GB", "taxIdType": "TAX_ID_TYPE_UTR", "taxId": "…"}`, sent after the party's residency rows, never alone: the form drops a lone UTR row on its next save. A party whose only UK number is its UTR still sends a residency row for `GB`, `{"taxCountry": "GB", "taxIdMissingReason": "…"}` (the user's own reason it has no other number, asked in Step 5), then the UTR row. `kyc__mutate__answers` refuses a `taxInfo` of UTR rows only and names the shape to send: send that shape, never the same list again. Without a UTR, the same UTR row with `"taxIdMissingReason": "…"` (the user's own reason) in place of `taxId` |
 
 Not answered here: the tax records, the Investor Profile and the declarations, which have
 commands of their own (Steps 6b–6d), and the nature of business (`businessNature`), a closed list
