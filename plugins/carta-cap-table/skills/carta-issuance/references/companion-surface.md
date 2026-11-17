@@ -47,7 +47,7 @@ The steps below say "the type's" where these differ.
 |---|---|---|---|
 | Page | issuance page | issuance page | issuance page when `issuance_init` gives `companion.issuance_url`; else read-only page for one set, no Issue button: [§ PIU](#piu) |
 | Account gate | none | stop when the company has no live option plan or `document_sets` is empty, as [engine.md § Account-setup gate](engine.md#account-setup-gate-option-grant-and-piu) says | the same gate's PIU rows. Each row's `prefix` is its unit class; set `option_plan` only when the files or prompt name a plan |
-| `company_setup` picks | share class, legend, vesting template | 409A, plan, vesting template | unit class, plan, vesting template, acceleration, document set |
+| `company_setup` picks | share class, legend, vesting template | 409A, plan, vesting template, document set | unit class, plan, vesting template, acceleration, document set |
 | Summary adds | price and where it comes from, share class room left | exercise price and its 409A, pool room left | the threshold, and the plan or unit class room left |
 | `set_label` | `Certificates #<draft_set_id>` | `Options #<draft_set_id>` | `PIUs #<draft_set_id>` |
 | Issue button | **Issue certificates** | **Issue option grants** | **Issue PIUs** |
@@ -88,10 +88,24 @@ Once each:
    require it, a grant with no board approval date waits for the board).
    `field_spec` comes from the § 3 `issuance_init` call: make no
    `cap_table:get:issuable_field_manifest` call.
-2. Up to 25 rows, `cap_table:mutate:prepare_drafts` with the rows in `drafts` and no
-   `draft_set_id`. Over 25: one `cap_table:mutate:save_drafts` with every row, never
-   `is_bulk_import` (it returns no `draft_pk`), then `cap_table:mutate:validate_drafts`. Keep
-   `draft_set_id`, each row's `draft_pk` and the `revision`.
+   The save's check finds missing required fields first, and the fields below only on a later
+   save, so a gap you miss here comes back as a second card. Before the save, find each of these
+   in `field_spec` by name, for each row:
+   - `document_set_id`, `legend_id`: when `required`, the one the files or prompt name, else the
+     only one in its `issuance_init` section (`document_sets`, `legends`) as a `company_setup`
+     pick, else a `needs_input` cell.
+   - `rule_144_date`: when `required` and no file or the prompt gives it, a `needs_input` cell.
+   - Each field, not `hidden`, with no `default_value` and no given value, whose
+     `conditionalRules` `when` reads a `needs_input` cell, such as `vesting_start_date`
+     (`vesting_template`) and `rule_144_difference_reason` (`rule_144_date`): a
+     [§ 6](#6-ask-whats-missing-once) item of its own in the same card, after that cell's item.
+     Never fold it into the other item's `body`. Its own `body` says when Carta needs it. Record
+     no source for it: the other answer decides if it is a gap.
+2. Before the save, check each row once more against step 1's list. Up to 25 rows,
+   `cap_table:mutate:prepare_drafts` with the rows in `drafts` and no `draft_set_id`. Over 25:
+   one `cap_table:mutate:save_drafts` with every row, never `is_bulk_import` (it returns no
+   `draft_pk`), then `cap_table:mutate:validate_drafts`. Keep `draft_set_id`, each row's
+   `draft_pk` and the `revision`.
 3. `cap_table:mutate:draft_set_sources`, a source for every value you set, in calls of 25 rows
    (1–25, 26–50, …) until all rows are covered:
    `rows: [{draft_pk, fields: {<column or save key>: {kind, label, document, alternatives, note}}}]`.
@@ -117,7 +131,9 @@ Once each:
 The **items** are the things that need the user and are on a cell, one item per cell: every
 `needs_input` cell, every value two documents disagree on, and every other cell with a check
 error or check warning (`validation.errors` and `validation.warnings`, by `draft_pk` and
-column), also when the prompt or a document gave that cell's value. A check message on a cell
+column), also when the prompt or a document gave that cell's value, except a check warning on a
+value the user just gave ([§ 7](#7-answers)). After each `needs_input` item come its dependent
+fields, as [§ 5](#5-build-the-draft-set) step 1 says. A check message on a cell
 that is already an item (a gap, or two documents that disagree) goes in that item's `body`, and
 is not a second item. A check message on a cell is never a line of text. A
 `cap_table:get:draft_set_companion` read's `open_inputs` are items too: `reason` `missing` is a
@@ -168,6 +184,7 @@ to the company's. Each `body` says why the item needs the user and what Carta ne
 | Item | `kind` and `options` |
 |---|---|
 | a gap with `field_spec` `values` | `pick_one`, options from its `values` and `enum_labels`, the recommended one first |
+| a gap with a `source` | `pick_one`, options from its `issuance_init` section, by `id` and `name` |
 | another gap | `type_value`, with `input` (`text`, `email`, `date` or `number`) from its `type` |
 | a check warning on a filled cell | `pick_one` on that cell: the value you propose, then `Keep <current value>` with the cell's current value; the `body` gives the check's message |
 | a check error on a filled cell | `pick_one` on that cell with only the values you propose, no `Keep`; the `body` gives the check's message |
@@ -241,6 +258,10 @@ apply it anyway. Then:
 2. `cap_table:mutate:validate_drafts`.
 3. `cap_table:mutate:draft_set_sources` for changed values, one call per 25 rows, as
    `added_by_you`, each `note` the user's words for it.
+
+After either path, a check warning on a value the user just gave, in the card or in the chat, is
+not a new item: the user chose that value, and the page shows the warning. A check error on it is
+an item.
 
 `new_person` on a which_person item: save the row's `name` and `email`, no `stakeholder_id`. On
 an option grant, a choice the board consent doesn't approve: say the row will be held for board
