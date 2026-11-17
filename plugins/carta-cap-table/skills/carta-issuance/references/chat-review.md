@@ -8,7 +8,9 @@ The artifact renders its own review and does not use this file.
 Render **every** always-render column when there's no richer surface to lean on;
 defaulted/autofilled/looked-up values appear too, each with a `(default)` /
 `(autofill — <so_type> rule)` / `(from existing record)` tag, never a hidden column (the
-customer consents to defaults too). All date columns in `MM/DD/YYYY`.
+customer consents to defaults too). Write each tag word for word, as here and in
+[chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask), with its
+`—`: `GBP (autofill — EMI rule)`, never `GBP (autofill, EMI rule)`. All date columns in `MM/DD/YYYY`.
 
 The chat review has no header bar or KPI strip to carry batch-level values, and no earlier
 screen the user can go back to, so it keeps the **full** list below.

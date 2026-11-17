@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.21</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.22</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -96,7 +96,7 @@ read_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_i
 
 - Each row carries `name` (holder), `quantity`, `share_class_name`, `issue_date`, and `status_explanation`. Group matching rows by holder and sum `quantity`.
 - Fetch the page in `next` (its `page` and `page_size`) until `has_next` is false, **at most 10 pages**. If the sweep is still incomplete at 10 pages, show what you have, say the list is partial, and point the user to the round's page in Carta.
-- Certificates carry no cash paid. Report each investor's shares only. Do not multiply shares by the issue price to produce a per-investor dollar amount — say that per-investor cash isn't available here.
+- Certificates carry no cash paid. Report each investor's shares only. Do not multiply shares by the issue price to produce a per-investor dollar amount. Write this sentence word for word: "Per-investor cash isn't available: Carta certificates record shares, not cash paid."
 
 ## Gates
 

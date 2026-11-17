@@ -32,7 +32,8 @@ you have tried step 3.
    in Carta" in Through, and offer to add holders the user provides, labelled as the user's
    figures.
 
-Under the table, always say: Direct % is Carta data; Indirect % and Total % are Claude's
-analysis, not Carta data. Give the as-of date of each cap table you read. This calculation does not need the
+Under the table, always write these two sentences word for word: "Direct % is Carta data.
+Indirect % and Total % are Claude's analysis, not Carta data." Write "Claude's analysis", not
+"my analysis". Give the as-of date of each cap table you read. This calculation does not need the
 AI computation question in carta-cap-table's or carta-reporting's Gates: asking for total or
 indirect ownership is asking for it.

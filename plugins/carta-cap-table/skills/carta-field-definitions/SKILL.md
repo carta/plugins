@@ -16,7 +16,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.21</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.22</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -59,7 +59,7 @@ The glossary is Corp-primary; LLC entities are supported via terminology substit
 
 ### Step 0 — Screen the question before loading
 
-If the user's question is about **how** a field is computed ("how is X calculated?", "what's the formula for X?", "how does Carta derive X?") or **why** a value is blank/surprising ("why is my X empty?", "why is X zero?"), this is out of scope. **Do not load the glossary.** Redirect directly to [support.carta.com](https://support.carta.com/kb/en/) and stop.
+If the user's question is about **how** a field is computed ("how is X calculated?", "what's the formula for X?", "how does Carta derive X?") or **why** a value is blank/surprising ("why is my X empty?", "why is X zero?"), this is out of scope. **Do not load the glossary.** Redirect directly to [support.carta.com](https://support.carta.com/kb/en/) and stop. Do not guess causes or give examples of possible causes, even as hints.
 
 The glossary covers *what* a field represents and *where* it appears — never *how* it's computed. Even if a definition text contains a formula fragment, do not surface it in response to a calculation question; treat the whole question as out of scope.
 

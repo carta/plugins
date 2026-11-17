@@ -5,8 +5,9 @@ description: >-
   anything changes. Covers fixing, correcting, amending, cancelling, partly cancelling, uncancelling or
   undoing the termination of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or
   warrant; transferring shares, an RSA, a PIU, a warrant or a note; buying back shares;
-  recording an option exercise; and approving or rejecting exercise requests. Not for
-  changing post-termination exercise periods (done in the Carta web app). Not for a
+  recording an option exercise; and approving or rejecting exercise requests. For a
+  post-termination exercise period, it says where to change it in the Carta web app and what it
+  can edit on the grant. Not for a
   departure: someone who left and loses their unvested equity is a termination.
 when_to_use: >-
   Use when the user asks to change a security that is already on the cap table, often to
@@ -46,7 +47,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.21</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.22</carta-plugin>
 
 # Manage securities
 
@@ -259,7 +260,7 @@ Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 | `out_of_scope` | Say the user's access does not reach these securities or their plan. Stop. Do not retry. |
 | `not_found` on `thread_id` | Preview again with no `thread_id`. The page then has a new address: post the new `companion_url`. |
 | `not_found` on `security` or `securities` | Call the bootstrap again to get the ids. Never guess an id. |
-| `not_found` on `recipients[N].stakeholder` | Say this person is not a stakeholder of the company. Ask for the name or email as Carta shows it, or say to add the person in Carta first. |
+| `not_found` on `recipients[N].stakeholder` | Say this person is not a stakeholder of the company. In your last message, say to add the person in Carta first, and ask for the name or email as Carta shows it if the person is already there. |
 | `invalid_argument` on a file key | Never write a key. Upload the file as [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements) says, then preview again once. |
 | Bootstrap `not_found` on `label` | Make sure `label` is a list, one label per item. Then follow [§ Actions](#actions). |
 | Bootstrap "Unknown field in `fields`" | `fields` picks bootstrap sections, not the fields to edit. Leave it out. |
@@ -288,7 +289,8 @@ reasons are separate changes. Run each change as its own pass through steps 1 to
 split first, with the type of each security: *"These are two changes, an edit of certificate CS-1
 and a cancel of option grant ES-12. I'll apply them one at a time, starting with CS-1."* Put this
 sentence at the start of the first `AskUserQuestion` question, or of your message when there is no
-question: text before a tool call is hidden. Each pass
+question: text before a tool call is hidden. Say it also when a bootstrap or a preview blocks one
+of the changes. Each pass
 has its own bootstrap and its own thread, as [§ Flow](#flow) step 4 says, never an earlier
 pass's. Each exercise request is its own pass too, from the same list.
 
@@ -296,7 +298,8 @@ pass's. Each exercise request is its own pass too, from the same list.
 
 End the run with one short message and nothing after it:
 
-- One line: what was done and on which company.
+- One line: what was done and on which company. For several changes, start with their count,
+  such as *"Two changes on Meetly: 1 applied, 1 not applied."*
 - One bullet per security that changed: label, field, before → after. For a transfer, buyback
   or exercise: label, what happened and the quantity, for example `CS-12 · 100 shares
   transferred to the Smith Family Trust`. For an exercise request: the holder, the grant label
