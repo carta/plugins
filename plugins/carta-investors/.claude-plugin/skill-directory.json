@@ -129,6 +129,7 @@
     ]
   },
   "carta-fund-performance": null,
+  "carta-round-benchmarks": null,
 
   "carta-gp-cash-reconciliation": {
     "category": "fund-admin",
