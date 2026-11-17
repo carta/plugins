@@ -104,7 +104,12 @@ Once each:
    - `added_by_you`: the user said it in this chat, with a `note` holding their words that
      gave the value, up to 200 characters and no other chat text;
    - `needs_input`: still missing, with a `note` saying why.
-4. Open the issuance page, as [§ 9](#9-several-types-in-one-run) says.
+4. Move the page to the saved set in this turn, before the card, also when a source call failed:
+   `cap_table:get:issuance_companion` with `corporation_id` and `sets`
+   `[{security_type, draft_set_id}]`, then open its `companion_url` as § 4 says. With the
+   command refused, open the set's `companion_url`. The page at `companion.issuance_url` never
+   shows a saved set: it reads only the sets its address names. With several types,
+   [§ 9](#9-several-types-in-one-run) moves it once every set is saved.
 5. Reply as [§ 6](#6-ask-whats-missing-once) says.
 
 ## 6. Ask what's missing, once
