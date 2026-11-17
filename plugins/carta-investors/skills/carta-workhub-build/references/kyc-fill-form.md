@@ -315,6 +315,15 @@ when `kyc__create__document` takes that argument. When that command offers none,
 document can be attached but its issue date cannot be given from here: list it on the Step 9 list
 for the form, as a field only the form can fill. Do not guess a date.
 
+An entity investor whose kind is not saved yet lists one item only: `institutionType` (for a
+trust whose subtype is not saved, `trustType`), with `choices`, each a `value` and what it
+`means`. Nothing else is listed until it is saved, and Step 3 has no form for the investor until
+then: it answers that kyc-service "found no form for this party". Ask the user which one fits with
+`AskUserQuestion`, one option per choice in its `means` words, and never pick it from the entity's
+name or documents alone. Save their pick as Step 6 does, `{"institution": {"type": "<value>"}}`,
+with `"trustType": "<value>"` beside `type` for a trust's subtype, then read this step again. When
+the item carries no `choices`, ask the form's question and leave it for the form.
+
 A roster shortfall is for the user to fix in the form at Step 9. If they then ask you to fill
 the new party, read this again for its `entityId` once they say they have finished in the
 form.
@@ -335,9 +344,16 @@ It gives the shapes and labels of what Step 2 listed as missing. It describes th
 
 | Part | What it says |
 | --- | --- |
-| `checks[].fields[]` | the questions: `fieldId`, `required`, `name`, `description` |
+| `checks[].fields[]` | the questions: `fieldId`, `required`, `name`, `description`, `options` (each a `label`, the form's wording, and the `value` to send), and `sub` (a question's own questions, shaped the same) |
 | `checks[].documents[]` | the documents: `fileType`, `required`, `anyOf` (any one of these types will do), `fieldId` for a document the firm wrote itself |
 | `supportingEntityRules[]` | the people or entities the investor must add in the form: `relationType` (beneficial owner, control person, trustee…), `roleKey` for a role the firm wrote itself (empty for a standard role), `minCount`/`maxCount`, `minOwnershipPct` |
+
+A question with `options` takes one of their `value`s: send the `value` of the option whose
+`label` is the user's answer. Never work a value out from its own name or from the `fieldId`: some
+read the opposite way round. "Does the entity have beneficial owners of 25% or more?"
+(`noBeneficialOwners`) stores Yes as `OPTIONAL_BOOL_VALUE_FALSE` and No as
+`OPTIONAL_BOOL_VALUE_TRUE`, and its `description` says so. When you trim this read, with `jq` or
+otherwise, keep every option's `label` and every `description`.
 
 This read describes the investor only. To learn what a saved person or entity is asked for, read
 it again with `entity_id` (and, for a party that holds several roles, `relation_type` and
@@ -414,7 +430,8 @@ call_tool({"name": "kyc__mutate__tax_records",
 
 Keys are the tax records Step 2 lists, each holding the sub-fields Step 2 names. Save
 `taxReportingDetails` first, or in the same call; the other records are refused until it is
-saved. Yes/no answers are `OPTIONAL_BOOL_VALUE_TRUE` / `OPTIONAL_BOOL_VALUE_FALSE`. Add `entity_id` for a supporting party.
+saved. Yes/no answers are `OPTIONAL_BOOL_VALUE_TRUE` / `OPTIONAL_BOOL_VALUE_FALSE`, unless the
+question's `options` (Step 3) label them otherwise. Add `entity_id` for a supporting party.
 Only the answers you send change. The CRS certification and signature are the user's to give in
 the form: never send them. Show the answers in Step 5's table first, as for any other answer.
 
