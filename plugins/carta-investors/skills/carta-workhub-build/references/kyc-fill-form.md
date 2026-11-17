@@ -316,13 +316,14 @@ document can be attached but its issue date cannot be given from here: list it o
 for the form, as a field only the form can fill. Do not guess a date.
 
 An entity investor whose kind is not saved yet lists one item only: `institutionType` (for a
-trust whose subtype is not saved, `trustType`), with `choices`, each a `value` and what it
-`means`. Nothing else is listed until it is saved, and Step 3 has no form for the investor until
-then: it answers that kyc-service "found no form for this party". Ask the user which one fits with
-`AskUserQuestion`, one option per choice in its `means` words, and never pick it from the entity's
-name or documents alone. Save their pick as Step 6 does, `{"institution": {"type": "<value>"}}`,
-with `"trustType": "<value>"` beside `type` for a trust's subtype, then read this step again. When
-the item carries no `choices`, ask the form's question and leave it for the form.
+trust whose subtype is not saved, `trustType`), with `options`: the kinds the form offers this
+investor, each a `label` and the `value` to save. Nothing else is listed until it is saved, and
+Step 3 has no form for the investor until then: it answers that kyc-service "found no form for this
+party". Ask the user which one fits with `AskUserQuestion`, one option per entry by its `label`, and
+never pick it from the entity's name or documents alone. Save the `value` of their pick as Step 6
+does, `{"institution": {"type": "<value>"}}`, or `{"institution": {"trustType": "<value>"}}` for a
+trust's subtype, then read this step again. When the item carries no `options`, ask the form's
+question and leave it for the form.
 
 A roster shortfall is for the user to fix in the form at Step 9. If they then ask you to fill
 the new party, read this again for its `entityId` once they say they have finished in the
