@@ -102,7 +102,6 @@ machine when Claude Code fires the event, and none of them blocks or changes a c
 | Event | What runs | What it does |
 |-------|-----------|--------------|
 | PreToolUse (Carta MCP `call_tool`) | `node scripts/hooks/guard-own-sync-push.js` | Denies a budget-report push that differs from the plan `own_sync.py` wrote; otherwise prints nothing. |
-| PostToolUse (Carta MCP `execute_query`) | `node scripts/hooks/warn-empty-query.js` | Tells Claude when a query returned no rows. |
 
 ## Credentials
 
