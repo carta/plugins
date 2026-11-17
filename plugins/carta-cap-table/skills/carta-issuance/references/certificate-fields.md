@@ -16,7 +16,7 @@ only if init named it in `errors`).
 
 Each result has `id`, `name`, `prefix`, `authorized`, `outstanding`, `available`
 (server-computed — **never recompute client-side**, it accounts for warrants + the option
-pool), `is_common`, and `dividend` (`"Non-cash"`/`"Cash"`/`null`). Match names
+pool), `is_common`, and `dividend` (`"Non-cash"`/`"Cash"`/`"No dividend"`/`null`). Match names
 case-insensitively; capture `prefix` for the payload and `dividend` to drive the
 [Dividend accrual start date resolution](#dividend-accrual-start-date-resolution). For
 unmatched names, build one table (User-supplied / Suggested match / Confidence) and ask
@@ -62,7 +62,8 @@ Certificate only. Read the resolved share class's `dividend` field:
 - `"Non-cash"` → `AskUserQuestion`: `"Use the issue date…"` / `"Use a different date"`
   (collect as `MM/DD/YYYY`). Stamp `dividend_accrual_start_date` on every row carrying that
   class. Skip the prompt if the user volunteered the date.
-- `"Cash"` / `null` → do not prompt, do not include the field (the server rejects it).
+- `"Cash"` / `"No dividend"` / `null` → do not prompt, do not include the field (the server rejects it).
+  `"No dividend"` is a class that pays no dividend at all; nothing accrues on it.
 
 ---
 
