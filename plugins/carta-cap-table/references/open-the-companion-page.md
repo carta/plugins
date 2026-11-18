@@ -39,6 +39,13 @@ that tool's prefix:
 3. **None**: the link is the page for the rest of the conversation. Open nothing and call no
    `mcp__ccd_view__show_pane`. Don't tell the admin you looked for a browser.
 
+A Carta result can lead with a `next_step` that asks for this same open, with its own
+`ToolSearch` `select:` of Claude's browser tools, `mcp__ccd_view__show_pane` and the enable tool.
+It is this procedure, not a second open: open the page once. When you ran that search, it is the
+first search here: send the Claude in Chrome search only when it found no Claude's browser
+`navigate` tool, and load a tool this file calls that it did not load, such as `tabs_create`,
+with one `select:` when you need it.
+
 Don't search again later in the conversation. The Claude in Chrome tool names, this order, and
 the new-tab first open and its one attempt in Chrome follow `carta-investors`'s
 `references/gate-in-app-browser.md`; change them with it. `carta-investors`'s
