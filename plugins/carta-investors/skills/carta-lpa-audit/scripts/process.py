@@ -1087,8 +1087,14 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
                 # the currency of the extraction its amount came from.
                 "currencyCode": currency_code,
             })
+        # The initial limited partner is a principal who signs to form the fund
+        # and withdraws at the first closing, so they are not one of its investors.
+        initial_lp = _lp_key(_rj_field(raw_json, ("parties", "initial_limited_partner"), _to_str))
+        if initial_lp:
+            lps = [lp for lp in lps if lp["commitmentAmount"] is not None or _lp_key(lp["name"]) != initial_lp]
 
         fee_basis = _rj_field(raw_json, ("management_fee", "management_fee_basis_investment_period"), _to_str)
+        fee_basis_post = _rj_field(raw_json, ("management_fee", "management_fee_basis_post_investment"), _to_str)
         terms = {
             "carriedInterestRate": _rj_field(raw_json, ("carried_interest", "carried_interest_rate"), _to_float),
             "carryTierRates": _rj_carry_tier_rates(raw_json),
@@ -1100,6 +1106,8 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
             "mgmtFeeRatePostInvestment": _rj_field(raw_json, ("management_fee", "management_fee_rate_post_investment"), _to_float),
             "mgmtFeeBasisInvestmentPeriod": fee_basis,
             "mgmtFeeBasisShort": _shorten(fee_basis),
+            "mgmtFeeBasisPostInvestment": fee_basis_post,
+            "mgmtFeeBasisPostInvestmentShort": _shorten(fee_basis_post),
             "fundTermYears": _rj_field(raw_json, ("fund_terms", "fund_term_years"), _to_float),
             "investmentPeriodYears": _rj_field(raw_json, ("fund_terms", "investment_period_years"), _to_float),
             "capitalCallNoticeDays": _rj_field(raw_json, ("capital_provisions", "capital_call_notice_days"), _to_int),
@@ -1158,6 +1166,13 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
             "currencyCode": currency_code,
             "termsExtracted": terms_extracted,
             "headlineTermCount": headline_term_count,
+            # The LPA charges a fee but sets its rate in another document, such
+            # as an investment management agreement or a fee letter.
+            "mgmtFeeSetOutsideAgreement": (
+                terms_extracted
+                and terms.get("mgmtFeeRateInvestmentPeriod") is None
+                and _rj_field(raw_json, ("management_fee", "pays_management_fee"), _to_bool) is True
+            ),
             "terms": terms,
             "termFlags": term_flags(terms),
             "boundingBoxes": bboxes,

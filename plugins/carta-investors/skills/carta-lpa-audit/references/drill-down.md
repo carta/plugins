@@ -30,8 +30,8 @@ Present three sub-sections:
 
 | Field | Value |
 |-------|------|
-| Management fee (investment period) | <rate>% of <basis> |
-| Management fee (post-investment) | <rate>% |
+| Management fee (investment period) | <rate>% of <basis>, or `Charged; rate set outside the LPA` when `lpa.mgmtFeeSetOutsideAgreement` is true |
+| Management fee (post-investment) | <rate>% of <mgmtFeeBasisPostInvestment> |
 | Carried interest | <carry>%<if carryTierRates: " (tiered)"> |
 | Carry tiers | <carryTierRates joined with " → ", each as <rate>%> |
 | Preferred return / hurdle | <hurdle>%, <multiple>x, or both as "<hurdle>% · <multiple>x" |

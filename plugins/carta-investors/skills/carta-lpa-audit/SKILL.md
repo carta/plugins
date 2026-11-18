@@ -60,7 +60,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.52.1</carta-plugin>
+<carta-plugin>carta-investors:7.52.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." record `skill_failed` as Error handling describes, and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
 
@@ -86,7 +86,7 @@ Follow these rules every time except for machine-readable output (JSON, XML):
 - **Dates:** `Mmm D, yyyy` format (e.g. `Jan 5, 2024`).
 - **Amounts:** Rendered with a currency prefix (`$123,456`-style), negatives parenthesised (`($445,443)`). A per-extraction currency is read from `RAW_JSON` (not `ATTRIBUTES`, which is unpopulated for these two document types — see Caveats): the `currency_code` siblings (a small share of documents) first, else the free-form `currency` value when it is exactly a three-letter ISO code (e.g. `EUR`). When known, the amount renders with that currency's own symbol or code (e.g. `€123,456`). When neither yields a code, the fund's Carta reporting currency (`fa__list__entities`' `currency`, carried in the funds file) fills it: on the agreement, each LP commitment, and a side-letter commitment taken from the fund's own roster, never on a letter the fund received as an investor. A currency the document states always wins. When none of these is known, the currency is unknown: render the number bare (`123,456`) and never assume USD. Never sum amounts across currencies. Side letter `capital_commitment` fields arrive from the pipeline pre-formatted (e.g. `"MYR 15,000,000"`) and are displayed verbatim — populated on a minority of side letters (see Caveats).
 - **Percentages:** `X.XX%` (two decimals for rates; one decimal is fine for large percentages).
-- **Null values:** Use `—` (em-dash), never `N/A`, blank, or prose like "not recorded". The exception is a fund-table or Step B2 tear-sheet cell (fee, carry, hurdle, fund term, investment period) on a fund whose terms were extracted: write "Not found", never "None" — an empty extraction can't tell a term the agreement doesn't have from one that wasn't read. A stated 0 still reads "None", or "No fee (per LPA)" for the fee. Other tear-sheet rows (post-investment fee, waterfall, capital call notice) keep `—`. Carry tiers is omitted when null, and the drill-down tables omit any blank row (see Drill-down).
+- **Null values:** Use `—` (em-dash), never `N/A`, blank, or prose like "not recorded". The exception is a fund-table or Step B2 tear-sheet cell (fee, carry, hurdle, fund term, investment period) on a fund whose terms were extracted: write "Not found", never "None" — an empty extraction can't tell a term the agreement doesn't have from one that wasn't read. A stated 0 still reads "None", or "No fee (per LPA)" for the fee, and a fee the LPA charges but prices in another document (`lpa.mgmtFeeSetOutsideAgreement`) reads "Charged; rate set outside the LPA" in every view. Other tear-sheet rows (post-investment fee, waterfall, capital call notice) keep `—`. Carry tiers is omitted when null, and the drill-down tables omit any blank row (see Drill-down).
 
 ### Tables [PATTERN tables v0.0.12]
 
@@ -384,8 +384,8 @@ Triggered by "Ask a question about provisions" in Step B3, or any free-text ques
 **Then search the cached JSON at `<WORKSPACE>/carta-lpa-audit-data.json`.** For each fund:
 
 1. Walk `lpa.terms.*` for prose fields that might carry restrictions or definitions (`waterfallStructure`, `mgmtFeeBasisInvestmentPeriod`) and `lpa.fund.fundPurpose` for the investment mandate — these are the LPA-side fields most likely to encode a restriction.
-2. Walk `sideLetters[*].economicProvisions[*]` for every provision. Match on `provision_type` and inspect `rate_paid` when relevant.
-3. When the user's question is about a *sector restriction* (defense, tobacco, ESG carve-out, sanctioned countries, etc.) or a specific *right* (co-invest priority), say plainly that it isn't in the data this audit reads rather than implying the letter grants nothing. MFN, excuse-right and transfer terms and custom fee and carry schedules are read: search each side letter's `mfnProvision`, `excuseRight`, `transferRestrictionModification`, `complexManagementFee` and `complexCarry` text alongside `economicProvisions` (see Caveats).
+2. Walk `sideLetters[*].economicProvisions[*]` for every provision. Match on `provision_type` and inspect `rate_paid` when relevant. A question about fee or carry changes ("which LPs got reduced fees?") also reads each letter's `complexManagementFee` and `complexCarry`: a letter that changes the fee or carry in more than one step (1.5% during the investment period, 1.25% after) states it there, not as a typed provision.
+3. When the user's question is about a *sector restriction* (defense, tobacco, ESG carve-out, sanctioned countries, etc.) or a specific *right* (co-invest priority), say plainly that it isn't in the data this audit reads rather than implying the letter grants nothing. MFN, excuse-right and transfer terms are read: search each side letter's `mfnProvision`, `excuseRight` and `transferRestrictionModification` text alongside `economicProvisions` (see Caveats).
 
 **Presentation:**
 
