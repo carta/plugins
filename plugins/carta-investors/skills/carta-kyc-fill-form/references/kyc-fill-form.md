@@ -1,7 +1,7 @@
 # Fill in a Carta KYC form
 
-Carta Workhub's KYC branch: `carta-workhub-build/SKILL.md` sends a Workhub KYC card's chat, or
-a user who asks to fill in their KYC, here. Its steps run inside this skill.
+`carta-kyc-fill-form/SKILL.md` sends a user who asks to fill in their KYC, or a Carta Workhub KYC
+card's chat, here. Its steps run inside that skill.
 
 Help the signed-in user fill in **their own** KYC forms, the way a compliance analyst would:
 an investor's own KYC tasks, or, for a GP, the KYC of one of their firm's funds (Step 1b), one
@@ -22,11 +22,10 @@ otherwise by the user in the form (Step 9).
 - "This isn't working, I want to give feedback on the KYC form."
 - "Help me complete our fund's KYC due diligence."
 - "Fill in all my KYC forms." / "Do all my KYC tasks." / "Help with these three KYC forms." (Batch mode)
-- A Carta Workhub KYC card's prompt, which names this skill's KYC branch and an
-  `evaluation_reference_id`, with a `fund_uuid` for a fund's KYC.
-- A Carta Workhub **Fill all** or **Fill selected** prompt, which names this skill's KYC branch
-  in batch mode and either "every open KYC task" or several `evaluation_reference_id`s (Batch
-  mode).
+- A Carta Workhub KYC card's prompt, which names an `evaluation_reference_id`, with a
+  `fund_uuid` for a fund's KYC.
+- A Carta Workhub **Fill all** or **Fill selected** prompt, which names either "every open KYC
+  task" or several `evaluation_reference_id`s (Batch mode).
 
 ## Rules
 
@@ -705,7 +704,7 @@ when the user asks to give feedback, too.
 ```
 call_tool({"name": "kyc__create__feedback",
            "arguments": {"requestType": "bug", "source": "claude",
-                         "affectedSkill": "carta-investors:carta-workhub-build",
+                         "affectedSkill": "carta-investors:carta-kyc-fill-form",
                          "step": "save_answers", "problem": "command_error",
                          "command": "kyc:mutate:answers", "errorCode": "INVALID_ARGUMENT",
                          "requestBody": "Saving the company's registered address was refused twice; the shape table did not say which key was wrong."}})

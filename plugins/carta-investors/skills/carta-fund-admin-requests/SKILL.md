@@ -14,6 +14,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__skill_checkpoint
+  - mcp__claude_ai_Carta__open_workhub
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -23,6 +24,7 @@ allowed-tools:
   - mcp__carta_production__list_contexts
   - mcp__carta_production__search_tools
   - mcp__carta_production__skill_checkpoint
+  - mcp__carta_production__open_workhub
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -32,6 +34,7 @@ allowed-tools:
   - mcp__carta__list_contexts
   - mcp__carta__search_tools
   - mcp__carta__skill_checkpoint
+  - mcp__carta__open_workhub
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
@@ -40,6 +43,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__open_workhub
   # Claude Desktop's browser pane, for the request's progress page
   - mcp__remote-devices__Claude_Browser__preview_start
   - mcp__remote-devices__Claude_Browser__navigate
@@ -54,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.52.2</carta-plugin>
+<carta-plugin>carta-investors:7.52.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -251,8 +255,12 @@ column. Show **Tasks to complete** first, then **In progress**; collapse
 Close with:
 
 ```
-Enter a number to open that case, or: [N] New request  [R] Refresh
+Enter a number to open that case, or: [N] New request  [R] Refresh  [W] Open Workhub
 ```
+
+**W** calls `open_workhub` (no params), which opens the user's Carta Workhub beside the chat:
+these requests, with their threads, next to the rest of the firm's open work. If the call fails
+or answers that it can't be shown here, say the Workhub didn't open; the links above still work.
 
 > **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-admin-requests", checkpoint_label="skill_finished")` after the closing line.
 

@@ -252,6 +252,7 @@
       "body": "Runs a waterfall on a portfolio company's Carta cap table, shows each holder's payout in chat or Excel, and can update your holding values."
     }
   },
+  "carta-kyc-fill-form": null,
   "carta-workhub-build": null,
   "carta-upload-firm-document": {
     "category": "fund-admin",
