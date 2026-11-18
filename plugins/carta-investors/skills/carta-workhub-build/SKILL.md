@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.53.0</carta-plugin>
+<carta-plugin>carta-investors:7.53.1</carta-plugin>
 
 # Carta Workhub
 
