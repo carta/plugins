@@ -8,6 +8,20 @@ Five approaches are supported: **GPC**, **M&A**, **Post-Money**,
 follow-on configuration in chat. M&A and Post-Money are enabled here, and
 their values are entered in the methods table (Step 4).
 
+> **The methods table is standard-scenario only.** This file offers it in
+> four places — Step 1's by-hand entry, and the M&A, Post-Money and
+> Blended success messages. **Never offer it for a weighted PWERM
+> scenario.** `methodology-edit-view.md` takes `valuation_id` and nothing
+> else and saves on its own, so whatever the user types lands on the
+> candidate's standard scenario while the weighted scenario they named
+> keeps `NO_COMPANY_VALUE`. Nothing errors. For a weighted scenario, use
+> `references/dive-in/pwerm.md` Step 4 instead.
+>
+> **How to tell:** `portfolio_valuations:get:scenarios` returns `templateType`
+> — `PWERM` or `HYBRID` means weighted, `STANDARD` means the table is fine.
+> Check before offering the table, not after, so the offer isn't withdrawn.
+> If the command isn't available the account has no PWERM, so offer it.
+
 > **Tool-surface note:** the five required top-level DLOM fields
 > (SKILL.md § Tool surface) go on every `mutate:approaches` call — echo
 > them back from Step 2. Per-approach objects are ignored when null, so
@@ -65,6 +79,8 @@ both, or the call fails with a 500:
 
 If the user wants to enter the method inputs or the weighting themselves, read
 `references/dive-in/methodology-edit-view.md` instead — it opens the methods table for them.
+Not for a weighted PWERM scenario (see the methods-table note above); use
+`references/dive-in/pwerm.md` Step 4.
 
 If the request already names **exactly one** approach ("set up GPC",
 "use the post-money from our last round"), skip the picker and use it at
@@ -209,7 +225,9 @@ working the GPC multiples by hand (`references/dive-in/gpc-analysis.md`).
 
 "M&A is enabled on **{candidate name}**." Then offer the methods table
 for the M&A value (`references/dive-in/methodology-edit-view.md`, **Offer
-it instead of sending the user to Carta**).
+it instead of sending the user to Carta**) — not for a weighted PWERM
+scenario, where the table reaches only the standard scenario; use
+`references/dive-in/pwerm.md` Step 4 instead.
 
 ### Post-Money
 
@@ -235,7 +253,9 @@ above where it has one — the methods-table offer for M&A and Post-Money,
 and the company-value question for Custom Value. When the blend includes
 M&A or Post-Money, make one methods-table offer naming every method that
 needs a value, and skip the Custom Value question: on yes the user enters
-them all in the table.
+them all in the table. Not for a weighted PWERM scenario (see the
+methods-table note at the top of this file) — there, ask each method's
+value in chat and save it as `references/dive-in/pwerm.md` Step 4 does.
 
 ### No change needed (already configured)
 

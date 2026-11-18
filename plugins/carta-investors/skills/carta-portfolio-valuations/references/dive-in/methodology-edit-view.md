@@ -21,6 +21,27 @@ approach, a method's value or the split in chat. A request that already gives th
 split ("GPC 60% / M&A 40%") or the value ("set the company value to 50M") — is not a request to
 enter it by hand, so it stays with `set-approaches.md`.
 
+### Check the candidate isn't probability-weighted first
+
+**Before opening the view, call `portfolio_valuations:get:scenarios` for the candidate** (the read
+`references/dive-in/pwerm.md` Step 3 uses) and look at `templateType`:
+
+| `templateType` | What to do |
+|---|---|
+| `STANDARD` | Open the view as usual. |
+| `PWERM` or `HYBRID` | **Don't open it.** Say the table can't target a single scenario yet, and follow `references/dive-in/pwerm.md` Step 4, which asks for each method's value in chat. |
+
+Do the same when the user names a scenario ("the downside case") whatever `templateType` says.
+
+**If the call fails or the command isn't available, open the view as usual** — it is gated on the
+PWERM feature flags, so on an account without them a candidate cannot be weighted in the first
+place. The check must never be what stops a standard candidate from reaching the table.
+
+This matters because nothing downstream will complain. The view takes `valuation_id` and nothing
+else and saves on its own, so on a weighted candidate everything the user types lands on the
+standard scenario while the scenario they named keeps `NO_COMPANY_VALUE` — no error, and the value
+they see afterwards is one the blend ignores.
+
 ## Offer it instead of sending the user to Carta
 
 When a method still needs a value this skill can't collect in chat (M&A, Post-Money, Backsolve's

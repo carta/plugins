@@ -1,18 +1,18 @@
 ---
 name: carta-portfolio-valuations
 description: >
-  Portfolio valuations workflow — firm selection, dashboard, bulk-create valuations
-  on one or many companies (refresh, manual EV), and dive-in on a single
-  valuation. TRIGGER when the user mentions working on, reviewing, or running
-  portfolio valuations, takes a closer look at a specific company's valuation, or
-  updates the EV / company value (e.g. "work on my valuations today", "review our
-  portfolio valuations", "run all my Q2 valuations", "which companies need new
-  valuations", "look at MangoCart's valuations", "update the EV for Acme", "set the
-  company value for MangoCart", "batch valuations", "auto-run valuations"). DO NOT TRIGGER for 409A
-  valuations or cap table valuations, or to turn the valuation tool on for a firm
-  (this skill runs valuations only once it is already enabled). Use instead:
-  carta-valuations-excel when the user is working in Claude for Excel (a workbook
-  is open) — this skill's dashboard and bulk-create UI don't run there.
+  Portfolio valuations workflow — firm selection, dashboard, bulk-create valuations on
+  one or many companies (refresh, manual EV), and dive-in on a single valuation. TRIGGER
+  in chat or Cowork when the user mentions working on, reviewing, or running portfolio
+  valuations, opens one company's valuation, or updates the EV / company value (e.g.
+  "work on my valuations today", "review our portfolio valuations", "run all my Q2
+  valuations", "which companies need new valuations", "open MangoCart's draft
+  valuation", "set the company value for MangoCart", "batch valuations", "auto-run
+  valuations", "PWERM", "probability-weighted valuation", "weight upside and downside").
+  DO NOT TRIGGER for 409A valuations, cap table valuations or valuation history / FMV
+  (carta-valuation-history), to goal-seek or tune the EV to a target, or to turn the
+  valuation tool on for a firm (this skill runs valuations only once it is already
+  enabled). Use carta-valuations-excel when a workbook is open in Claude for Excel.
 user-invocable: true
 model: inherit
 allowed-tools:
@@ -72,7 +72,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.51.8</carta-plugin>
+<carta-plugin>carta-investors:7.52.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -1105,7 +1105,7 @@ offering to open the updated valuation (**Writes**).
 | "review the cap table", "show holders", "ownership %" | `references/dive-in/cap-table-review.md` |
 | "review financials", "show revenue", "what's the EBITDA", "refresh financials", "enter / add / work on the financials" | `references/dive-in/financials-review.md` (enter, add or work on → its Step 0 offers import from Carta, entry in chat, or entering them manually in the financials view) |
 | "I'll enter the financials manually", "let me type in the financials myself", "show me a form / table to enter financials" | `references/dive-in/edit-financials-view.md` — opens the financials view for the user to fill in. Takes precedence over the `financials-review.md` row for any request to enter the financials by hand. |
-| "let me enter the inputs for the methods", "I want to type in the GPC / post-money / custom value myself", "I'll set the weights myself", "manually set the weighting", "let me weigh the methods" | `references/dive-in/methodology-edit-view.md` — opens the methods table for the user to fill in. Takes precedence over the `set-approaches.md` row for any request to enter method inputs or weights by hand. |
+| "let me enter the inputs for the methods", "I want to type in the GPC / post-money / custom value myself", "I'll set the weights myself", "manually set the weighting", "let me weigh the methods" | `references/dive-in/methodology-edit-view.md` — opens the methods table for the user to fill in. Takes precedence over the `set-approaches.md` row for any request to enter method inputs or weights by hand. Not for a weighted PWERM scenario — the table reaches only the standard scenario; that file's **Check the candidate isn't probability-weighted first** says how to tell (`get:scenarios` `templateType`) and sends a weighted one to `references/dive-in/pwerm.md` Step 4. |
 | "set approaches", "change methodology", "use GPC / M&A / post-money / backsolve", "Custom Value", "manual EV", "set the company value to {N}" | `references/dive-in/set-approaches.md` |
 | "find comps", "update comps", "add a peer", "drop {ticker}" | `references/dive-in/comps.md` |
 | "run GPC analysis", "recommend multiples", "set the 75th percentile", "quartile stats" | `references/dive-in/gpc-analysis.md` (requires `gpc` enabled; if not, read `set-approaches.md` first) |
@@ -1113,7 +1113,8 @@ offering to open the updated valuation (**Writes**).
 | "how is the backsolve calculated", "explain the backsolve math", "how do we arrive at this value", "walk me through the backsolve numbers", "how does backsolve work", "how is the equity value derived", "show me the formulas", "show me the math" | `references/dive-in/backsolve/backsolve-explained.md` (only enter on explicit "explain / how is it calculated / show me the formulas" phrasing — do NOT enter for requests to configure or run backsolve) |
 | "create an Excel spreadsheet for the backsolve", "export backsolve to Excel", "give me the backsolve in a spreadsheet" | `references/dive-in/backsolve/backsolve-excel.md` — the file writes directly into the current sheet when Claude for Excel is active and says so plainly otherwise |
 | "run waterfall / OPM / CSE", "allocate to share classes", "compute holdings value" | `references/dive-in/allocation.md`, for every target kind. Its Gate 0 decides which methodologies to offer; don't call `get:configuration` here or for any other row. Requires a positive EV; if zero or negative, say so and route to `set-approaches.md`. Pass `valuationId` along with the usual ids. |
-| "add another scenario", "create a Version 2", "what if {X}" | `references/dive-in/add-candidate.md` |
+| "probability-weighted valuation", "PWERM", "weight an upside and a downside", "blend the scenarios", "70/30 on these outcomes", "re-weight the scenarios", "change the downside to 40%" | `references/dive-in/pwerm.md` — one candidate holding several weighted scenarios, blended into one value. Takes precedence over the `add-candidate.md` row whenever the outcomes are to be weighted together rather than compared side by side; that file's opening section settles an ambiguous ask. |
+| "add another scenario", "create a Version 2", "what if {X}" | `references/dive-in/add-candidate.md` — separate versions to compare. For outcomes weighted into one blended value, use the PWERM row above. |
 | "create a new valuation", "start a Q2 valuation", "new valuation as of {date}" | `references/dive-in/create-val.md` |
 | "draft audit notes", "produce the audit memo" | `references/dive-in/audit-notes.md` |
 | "view / read the valuation commentary", "add / edit / update the commentary", "write a note explaining this valuation", "clear the commentary" | `references/dive-in/commentary.md` |
