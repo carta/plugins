@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.115.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.115.1</carta-plugin>
 
 # Vesting
 
@@ -109,9 +109,11 @@ read, *Writes* for a change. `list_accounts` returns `id: "corporation_pk:<n>"`;
    which in one `AskUserQuestion`.
 3. **Show it.** For one security, lead with one sentence: how much has vested, what vests next
    and when, and when it is fully vested. Then show its tranches by date in a table with these 4
-   columns: `| Date | Quantity | Vested | Total vested |` (`vest_date`, `quantity`,
-   `vested_quantity`, `cumulative_vested_quantity`). Always show this table, also when the
-   security is fully vested, expired or canceled. Show at most 12 tranche rows, by date: start
+   columns: `| Date | Quantity | Vested | Running total |` (`vest_date`, `quantity`,
+   `vested_quantity`, `cumulative_quantity`). `Running total` is the schedule's total up to that
+   tranche, vested or not. Never fill it from `cumulative_vested_quantity`: that counts only what
+   has vested, so it stops growing after the last vested tranche. Always show this table, also when
+   the security is fully vested, expired or canceled. Show at most 12 tranche rows, by date: start
    at the last tranche that vested, or at the first tranche when none vested. When fewer than 12
    are left from there, show the last 12. Put each part that you leave out in one row, such as
    "36 earlier tranches". For several securities, give one row per security in a table with
