@@ -41,12 +41,13 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   - AskUserQuestion
+  - Skill(carta-investors:carta-portco-financials-and-kpis)
   - Read
   - ToolSearch
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.53.3</carta-plugin>
+<carta-plugin>carta-investors:7.53.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -195,15 +196,22 @@ opens with — take it from there rather than from however the user happened to 
 | Know who is contacted about a company | `references/contacts.md`, Step 1 alone |
 | Ask why a contact seems to be missing, or who a company's request is addressed to | `references/contacts.md`, Step 1 alone |
 | Change who is contacted, on any number of companies | `references/contacts.md`, from Step 1 |
-| Get numbers out of a newsletter, deck or email a company already sent | Not this skill — see "Extraction is not collection" below |
+| Get numbers out of a newsletter, deck or email a company already sent, or upload a document the firm has for a company | Hand it over — see "A document the firm already has goes to its skill" below |
 
 **Extraction is not collection.** Reading numbers out of a newsletter, a board deck or an email a
 company already sent is extraction — a separate capability, and not something a request does. A
 company that says "pull it from our newsletter" is declining the request, and this skill cannot
 pull anything. Say so in one sentence, without promising it, and offer what collection can do: ask
 the company to upload that same newsletter or deck as its response — the `DECK` file type covers
-investor updates — so it answers with what it already writes. A newsletter the firm already has in
-hand is `carta-portco-financials-and-kpis`, not this skill.
+investor updates — so it answers with what it already writes.
+
+**A document the firm already has goes to its skill, without asking.** When the user hands over a
+file or figures for a company to get into Carta ("upload LiveKindly's balance sheet", "extract
+the financials from this file", a newsletter the firm already has), and `carta-investors:carta-portco-financials-and-kpis` is in this
+session's skill list, invoke it with `upload <path>` (comma-separated for several files, no
+arguments for a paste), mid-flow or not. Uploading it does not answer a request and needs none.
+Do not ask which skill to use, and do not name the skill to the user. When it is not listed, say
+in one sentence that uploading a document isn't available in this chat.
 
 **Defining is not collecting.** A custom metric and a firm's own document type are both
 definitions: creating one adds it to the firm's vocabulary and asks nobody for anything. Asking a
