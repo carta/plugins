@@ -4,38 +4,48 @@
 //
 // The rules, in order:
 //   1. Exact pass: every meaningful typed word (about half of a long search) is found, from the start of
-//      a word, in the skill's own name or prompts.
-//   2. Category pass, only when no skill's own words match: the same, counting the name of the skill's
-//      category too, so "lp" finds the skills under "LP reporting".
-//   3. Close pass, only when those found nothing: the category's tagline and a hand-kept list of related
-//      words count too.
-//   4. Still typing: a short last word (two or three letters) counts as the start of a longer word, in the
-//      skill's text or its category's name, so "po" finds the Portfolio skills on the way to "portfolio".
-//   5. Nothing close: no skill. If a misspelling explains it, the corrected search is offered instead.
+//      a word, in the skill's own words: its name, its category's name and its prompts. The last word
+//      typed may still be cut off, so it matches the start of any word ("fun" finds "fund", "up" finds
+//      "upload"). The words searched never change with the search's length, so results only narrow as
+//      you type. Filler words in a skill's text are not searched, so "up" is not found in "spin up".
+//   2. Close pass, only when the exact pass found nothing: the category's tagline and a hand-kept list of
+//      related words count too.
+//   3. Nothing close: no skill. If a misspelling explains it, the corrected search is offered instead.
+// A typed word also matches the other forms of a word (plurals, -ing, -ed, a doubled last letter, a final
+// "e"), so "valuations", "modelling" and "compare" match "valuation", "modeling" and "comparing". Every
+// typed letter still counts: "fees" does not find "feedback".
 // It is rules, not AI: every result can be explained, and nothing leaves the page.
 
-// A search shorter than this shows the normal view.
+// A search shorter than this shows the normal view, and a last word shorter than this is not read as the
+// start of a longer one.
 const DIR_SEARCH_MIN_CHARS = 2;
 // A search with more meaningful words than this is not spell-corrected.
 const DIR_SPELL_MAX_WORDS = 4;
+// Past this many close matches, only the best-scoring stay.
+const DIR_CLOSE_MAX = 6;
 
 // Words people use for the same job; typing one finds skills that hold any other word in its group.
 // Kept by hand: a person who knows the skills should approve additions.
 const DIR_SYNONYMS = [
-  ["report", "reports", "reporting", "tear sheet", "deck", "presentation", "slides", "statement", "summary"],
+  ["report", "reports", "reporting", "tear sheet", "deck", "presentation", "slides", "statement", "summary", "quarterly", "one pager", "letter"],
   ["investor", "investors", "lp", "lps", "limited partner", "limited partners"],
   ["performance", "returns", "irr", "tvpi", "dpi", "moic", "benchmark", "benchmarks"],
-  ["holdings", "investments", "portfolio", "companies", "schedule of investments", "soi"],
+  ["holdings", "investments", "portfolio", "companies", "schedule of investments", "soi", "portco", "portcos", "portfolio company"],
   ["budget", "budgeting", "fees", "expenses", "spend", "actuals", "costs", "cost", "plan", "planning"],
   ["valuation", "valuations", "marks", "value", "nav"],
   ["compliance", "regulatory", "regulation", "adv", "form pf", "filing", "filings", "paperwork", "sec"],
   ["accounting", "balance sheet", "p&l", "financials", "financial", "trial balance", "ledger"],
   ["model", "modeling", "forecast", "forecasting", "projection", "projected", "scenario", "scenarios", "worth", "end", "future"],
-  ["document", "documents", "upload", "download", "file", "files", "lpa"],
+  ["document", "documents", "docs", "upload", "download", "file", "files", "lpa"],
   ["request", "requests", "fund admin", "support", "ask", "help"],
   ["app", "apps", "microapp", "microapps", "dashboard"],
   ["payout", "waterfall", "exit", "exits", "distribution", "distributions", "sells", "sell", "sold", "sale", "proceeds", "carry", "carried"],
   ["collect", "collection", "chase", "remind", "update", "updates", "numbers", "sent"],
+  ["manco", "man co", "mgmt co", "management company"],
+  ["brand", "branding", "logo", "logos", "colors", "colours", "fonts"],
+  ["co-investor", "coinvest", "syndicate", "who else invested", "other investors"],
+  ["reconciliation", "reconcile", "bank", "cash"],
+  ["ownership", "stake", "stakes", "cap table"],
 ];
 
 // Words that surround a request without saying what it is about. Numbers are ignored too.
@@ -46,25 +56,42 @@ const DIR_STOP_WORDS = new Set([
   "how", "what", "which", "who", "whom", "whose", "when", "where", "why", "this", "that", "these", "those", "there", "here",
   "all", "any", "some", "each", "every", "just", "also", "please", "like", "look", "looking", "much", "many", "more", "most", "not", "no", "yes", "now",
   "show", "make", "build", "get", "got", "give", "find", "tell", "use", "want", "need", "about", "send", "see", "check", "something", "anything", "thing",
+  "vs", "versus",
 ]);
 
 // ── Words ──
-// Typed words, lowercased: possessives ("fund's") and punctuation are dropped.
+// Typed text and a skill's text, lowercased, with possessives ("fund's"), apostrophes and dots dropped, so
+// "A.G.M." is "agm" wherever it is written.
+const dirNormalize = text => String(text || "").toLowerCase().replace(/[’']s\b/g, "").replace(/[’'.]/g, "");
+
+// Typed words: other punctuation splits words; a hyphenated word ("tear-sheet") stays one word.
 function dirQueryTokens(query) {
   const text = String(query || "").trim();
   if (text.length < DIR_SEARCH_MIN_CHARS) return [];
-  return text.toLowerCase()
-    .replace(/[’']s\b/g, "").replace(/[’']/g, "")
-    .replace(/[^a-z0-9&\s-]/g, " ").split(/\s+/).filter(Boolean);
+  return dirNormalize(text)
+    .replace(/[^a-z0-9&\s-]/g, " ").split(/\s+/)
+    .map(w => w.replace(/^-+|-+$/g, "")).filter(Boolean);
 }
 
-// Plural endings: "valuations" = "valuation", "companies" = "company".
+// A plural made singular: "valuations" is "valuation", "companies" is "company", "taxes" is "tax".
+function dirSingular(w) {
+  if (w.length <= 3) return w;
+  if (/ies$/.test(w)) return w.slice(0, -3) + "y";
+  if (/(sses|xes|ches|shes)$/.test(w)) return w.slice(0, -2);
+  if (/s$/.test(w) && !/(ss|us|is)$/.test(w)) return w.slice(0, -1);
+  return w;
+}
+
+// A word with its ending set aside, so forms of one word compare equal: "valuations" and "valuation",
+// "modelling" and "modeling", "budgeting" and "budget", "invested" and "investing", "compare" and "comparing".
 function dirStem(w) {
   if (w.length <= 3) return w;
-  if (/ies$/.test(w)) return w.replace(/ies$/, "y");
-  if (/(ss|us|is)$/.test(w)) return w;
-  const base = w.replace(/(sses|xes|ches|shes)$/, m => m.slice(0, -2)).replace(/s$/, "");
-  return base.length > 5 ? base.replace(/ing$/, "") : base;
+  let s = dirSingular(w);
+  if (s.length > 5 && /ing$/.test(s)) s = s.slice(0, -3);
+  else if (s.length > 5 && /ed$/.test(s)) s = s.slice(0, -2);
+  if (s.length > 4 && /([bdglmnprt])\1$/.test(s)) s = s.slice(0, -1);
+  if (s.length > 4 && /e$/.test(s)) s = s.slice(0, -1);
+  return s;
 }
 
 // What the search is about: the typed words minus filler and numbers. All the words when that leaves none.
@@ -76,88 +103,152 @@ function dirContentWords(tokens) {
 // How many content words a skill must hold: all of one or two, about half of a longer ask.
 const dirWordsNeeded = n => (n <= 2 ? n : Math.ceil(n / 2));
 
-const dirEscapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// A text's searchable words, without filler unless `keepFiller`. A hyphenated word gives itself, its
+// parts and its parts joined: "co-investor" gives "co-investor", "co", "investor" and "coinvestor".
+function dirTextWords(text, keepFiller) {
+  const words = new Set();
+  dirNormalize(text)
+    .split(/[^a-z0-9&-]+/).forEach(chunk => {
+      const parts = chunk.split("-").filter(Boolean);
+      if (parts.length > 1) { words.add(parts.join("-")); words.add(parts.join("")); }
+      parts.forEach(p => words.add(p));
+    });
+  return [...words].filter(w => (keepFiller || !DIR_STOP_WORDS.has(w)) && !/^\d+$/.test(w));
+}
 
-// Whether the text holds the word at the start of one of its words, so "form" finds "Form ADV" but not
-// "performance". Words of three letters or fewer must be the whole word, so "lps" does not hit "LPA".
-function dirHas(hay, w) {
+// Whether a typed word is in a list of words. It matches another form of the same word ("valuations"
+// finds "valuation", "modelling" finds "modeling"). A typed word of four letters or more also matches the
+// start of a word, as typed or made singular ("invest" finds "investors", "builds" finds "builder"), but
+// every typed letter counts: "fees" does not find "feedback", nor "state" "status". A finished shorter
+// word must be a form of the whole word, so "lps" does not hit "LPA"; an `unfinished` word, the last one
+// typed, matches the start of a word at any length. A hyphenated word matches as itself, joined up, or
+// part by part.
+function dirHas(words, w, unfinished) {
+  if (w.includes("-")) {
+    const parts = w.split("-").filter(Boolean);
+    return dirHas(words, parts.join(""), unfinished)
+      || parts.every((p, i) => dirHas(words, p, unfinished && i === parts.length - 1));
+  }
   const stem = dirStem(w);
-  const start = "(^|[^a-z0-9&])";
-  if (stem.length < 4) return new RegExp(start + dirEscapeRegExp(stem) + "($|[^a-z0-9&])").test(hay);
-  const plural = stem.endsWith("y") ? "|" + dirEscapeRegExp(stem.slice(0, -1)) + "ies" : "";
-  return new RegExp(start + "(" + dirEscapeRegExp(stem) + plural + ")").test(hay);
+  const singular = dirSingular(w);
+  const isForm = h => dirStem(h) === stem;
+  if (!unfinished && w.length <= 3) return words.some(isForm);
+  return words.some(h => h.startsWith(w) || (singular.length >= 4 && h.startsWith(singular)) || isForm(h));
 }
 
 // ── What a skill holds ──
-// The plain, lowercased text of a skill's prompts: what every pass searches and the spell-fix learns from.
-const dirPromptText = entry => entry.prompts.map(dirPlain).join(" ").toLowerCase();
+// The plain text of a skill's prompts.
+const dirPromptText = entry => entry.prompts.map(dirPlain).join(" ");
 
-// The skill's own words: its name and prompts, plus "microapp" for a microapp. `scope` widens it: DIR_OWN
-// is the skill's own words, DIR_WITH_CATEGORY adds its category's name, DIR_WITH_TAGLINE the tagline too.
-const DIR_OWN = 0;
-const DIR_WITH_CATEGORY = 1;
-const DIR_WITH_TAGLINE = 2;
-function dirHaystack(entry, scope = DIR_OWN) {
-  const category = scope >= DIR_WITH_CATEGORY ? (DIR_CATEGORIES.find(c => c.id === entry.category) || {}) : {};
-  return [entry.name, category.name, scope >= DIR_WITH_TAGLINE ? category.tagline : "", entry.tag === APP_TAG ? APP_TAG_LABEL : ""]
-    .concat(dirPromptText(entry)).join(" ").toLowerCase();
+// A skill's words, worked out once per skill: `name`, `category` (its category's name) and `prompts`
+// (plus "microapp" for a microapp) are its own words; `wide` adds the category's tagline, for close
+// matches; `all` keeps filler, for a search typed only in filler; `text` is the plain text, for phrases.
+const _dirSkillWords = new WeakMap();
+function dirSkillWords(entry) {
+  if (_dirSkillWords.has(entry)) return _dirSkillWords.get(entry);
+  const category = DIR_CATEGORIES.find(c => c.id === entry.category) || {};
+  const prompts = dirPromptText(entry);
+  const name = dirTextWords(entry.name);
+  const categoryName = dirTextWords(category.name);
+  const promptWords = dirTextWords(prompts).concat(entry.tag === APP_TAG ? dirTextWords(APP_TAG_LABEL) : []);
+  const own = [...new Set(name.concat(categoryName, promptWords))];
+  const words = {
+    name,
+    category: categoryName,
+    prompts: promptWords,
+    own,
+    wide: [...new Set(own.concat(dirTextWords(category.tagline)))],
+    all: dirTextWords([entry.name, category.name, prompts].join(" "), true),
+    text: " " + dirNormalize([entry.name, category.name, category.tagline, prompts].join(" ")).replace(/[^a-z0-9&]+/g, " ") + " ",
+  };
+  _dirSkillWords.set(entry, words);
+  return words;
 }
 
-function dirHitCount(entry, tokens, scope) {
-  const hay = dirHaystack(entry, scope);
-  return dirContentWords(tokens).filter(w => dirHas(hay, w)).length;
-}
-
-function dirMatches(entry, tokens, scope) {
-  return dirHitCount(entry, tokens, scope) >= dirWordsNeeded(dirContentWords(tokens).length);
-}
-
-// Close pass: a word the skill holds scores 2, a related word it holds scores 1. A skill that does not
-// account for enough of the search scores 0.
-function dirRelevance(entry, tokens) {
-  const hay = dirHaystack(entry, DIR_WITH_TAGLINE);
+// ── The typed search ──
+// Its tokens, its content words, whether its last word may be cut off mid-word, and whether it is only filler.
+function dirParse(query) {
+  const tokens = dirQueryTokens(query);
   const words = dirContentWords(tokens);
-  // A related phrase typed as consecutive words ("limited partners") selects its group for each word in it.
-  const typed = " " + tokens.join(" ") + " ";
-  const phrases = DIR_SYNONYMS.map(g => ({ g, hit: g.filter(x => x.includes(" ") && typed.includes(" " + x + " ")) })).filter(p => p.hit.length);
+  const last = words[words.length - 1];
+  return {
+    tokens,
+    words,
+    openLast: !!last && last === tokens[tokens.length - 1] && last.length >= DIR_SEARCH_MIN_CHARS,
+    fillerOnly: tokens.every(t => DIR_STOP_WORDS.has(t)),
+  };
+}
+const dirIsOpen = (q, i) => q.openLast && i === q.words.length - 1;
+
+function dirHitCount(entry, q, scope = "own") {
+  const words = dirSkillWords(entry)[scope];
+  return q.words.filter((w, i) => dirHas(words, w, dirIsOpen(q, i))).length;
+}
+
+// ── Close pass ──
+// A related word in the skill's name or category scores 1; one only in its prompts or tagline, 0.5.
+function dirGroupScore(entry, group) {
+  const sw = dirSkillWords(entry);
+  const head = sw.name.concat(sw.category);
+  const headText = " " + head.join(" ") + " ";
+  const holds = (words, text) => group.some(x => (x.includes(" ") ? text.includes(" " + x + " ") : dirHas(words, x, false)));
+  if (holds(head, headText)) return 1;
+  return holds(sw.wide, sw.text) ? 0.5 : 0;
+}
+
+// A word the skill holds (its tagline counts) scores 2; a word from the same related-word group scores up
+// to 1. A related phrase typed as words ("tear sheets") is one idea: its words score only through the
+// phrase's group, unless the skill holds the phrase itself, so "sheet" alone does not pick "balance sheet".
+// A phrase typed as one word ("tear-sheet", "tearsheet") brings in its group the same way.
+// A skill that does not account for enough of the search scores 0.
+function dirRelevance(entry, q) {
+  const stemmed = text => " " + text.split(" ").map(dirStem).join(" ") + " ";
+  const joined = text => dirStem(text.replace(/[\s-]+/g, ""));
+  const typed = stemmed(q.tokens.join(" "));
+  // Each group with the related phrases (its entries with a space) that pass match, leaving out groups with none.
+  const phraseGroups = match => DIR_SYNONYMS.map(g => ({ g, hit: g.filter(x => x.includes(" ") && match(x)) })).filter(p => p.hit.length);
+  const phrases = phraseGroups(x => typed.includes(stemmed(x)));
+  const inPhrase = w => phrases.filter(p => p.hit.some(x => x.split(" ").map(dirStem).includes(dirStem(w))));
+  const spelledOut = w => phraseGroups(x => joined(x) === joined(w));
+  const sw = dirSkillWords(entry);
+  const holdsPhrase = list => list.some(p => p.hit.some(x => sw.text.includes(" " + x + " ")));
   let score = 0;
   let hits = 0;
-  for (const w of words) {
-    if (dirHas(hay, w)) { score += 2; hits++; continue; }
-    const groups = DIR_SYNONYMS.filter(g => g.some(x => x === w || dirStem(x) === dirStem(w)))
-      .concat(phrases.filter(p => p.hit.some(x => x.split(" ").includes(w))).map(p => p.g));
-    if (groups.some(g => g.some(x => dirHas(hay, x)))) { score += 1; hits++; }
-  }
-  return hits >= dirWordsNeeded(words.length) ? score : 0;
+  q.words.forEach((w, i) => {
+    const typedIn = inPhrase(w);
+    const whole = spelledOut(w);
+    const holdsWord = typedIn.length ? holdsPhrase(typedIn) : dirHas(sw.wide, w, dirIsOpen(q, i)) || holdsPhrase(whole);
+    if (holdsWord) { score += 2; hits++; return; }
+    const groups = DIR_SYNONYMS.filter(g => g.some(x => x === w || dirStem(x) === dirStem(w))).concat(typedIn.map(p => p.g), whole.map(p => p.g));
+    const best = Math.max(0, ...groups.map(g => dirGroupScore(entry, g)));
+    if (best) { score += best; hits++; }
+  });
+  return hits >= dirWordsNeeded(q.words.length) ? score : 0;
 }
 
-// The best of the skills that passed: a typed word in the skill's name counts most, in its prompts less.
-// When the top two are level, no skill is chosen rather than picking by list order.
-function dirBestSkill(entries, tokens) {
+// The closest skills, best first: those within a point of the top score, or only the top scorers when
+// that is more than DIR_CLOSE_MAX.
+function dirClosest(entries, q) {
+  const scored = entries.map(e => [e, dirRelevance(e, q)]).filter(p => p[1] > 0);
+  const top = Math.max(0, ...scored.map(p => p[1]));
+  const near = scored.filter(p => p[1] >= top - 1);
+  const kept = near.length > DIR_CLOSE_MAX ? scored.filter(p => p[1] === top) : near;
+  return kept.sort((x, y) => y[1] - x[1]).map(p => p[0]);
+}
+
+// The best of the skills that passed: a typed word in the skill's name counts most, then in its category's
+// name, then in its prompts. When the top two are level, no skill is chosen rather than picking by list order.
+function dirBestSkill(entries, q) {
   if (entries.length === 1) return entries[0];
-  const words = dirContentWords(tokens);
   const rank = e => {
-    const name = e.name.toLowerCase();
-    const prompts = dirPromptText(e);
-    return words.reduce((sum, w) => sum + (dirHas(name, w) ? 4 : dirHas(prompts, w) ? 2 : 0), 0);
+    const sw = dirSkillWords(e);
+    return q.words.reduce((sum, w, i) => {
+      const open = dirIsOpen(q, i);
+      return sum + (dirHas(sw.name, w, open) ? 4 : dirHas(sw.category, w, open) ? 3 : dirHas(sw.prompts, w, open) ? 2 : 0);
+    }, 0);
   };
   const ranked = entries.map(e => [e, rank(e)]).sort((x, y) => y[1] - x[1]);
   return ranked[0][1] > ranked[1][1] ? ranked[0][0] : null;
-}
-
-// ── Typing ahead ──
-// Whether the skill holds a word starting with the search's last word, when that word is short enough to
-// have been cut off mid-typing (the category's name counts), and enough of the other words in the skill's
-// own name and prompts to pass. Words of four letters or more
-// already match from their start.
-function dirTypingAhead(entry, tokens) {
-  const words = dirContentWords(tokens);
-  const last = words[words.length - 1];
-  if (last !== tokens[tokens.length - 1] || last.length < DIR_SEARCH_MIN_CHARS || last.length > 3) return false;
-  const starts = new RegExp("(^|[^a-z0-9&])" + dirEscapeRegExp(last)).test(dirHaystack(entry, DIR_WITH_TAGLINE));
-  const own = dirHaystack(entry);
-  const others = words.slice(0, -1).filter(w => dirHas(own, w)).length;
-  return starts && others + 1 >= dirWordsNeeded(words.length);
 }
 
 // ── Spelling ──
@@ -174,33 +265,33 @@ function dirEditDistance(a, b) {
   return d[a.length][b.length];
 }
 
-// Words of five letters or more the directory uses: skill names, prompts and the related-word groups.
+// Words of five letters or more the directory uses: the skills' own words and the related-word groups.
 function dirVocabulary(entries) {
   const words = new Set();
-  const add = text => String(text).toLowerCase().split(/[^a-z0-9&-]+/).forEach(w => { if (w.length >= 5) words.add(w); });
-  entries.forEach(e => { add(e.name); add(dirPromptText(e)); });
-  DIR_SYNONYMS.forEach(g => g.forEach(add));
+  const add = list => list.forEach(w => { if (w.length >= 5) words.add(w); });
+  entries.forEach(e => add(dirSkillWords(e).own));
+  DIR_SYNONYMS.forEach(g => g.forEach(x => add(dirTextWords(x))));
   return [...words];
 }
 
 // A search with every misspelled word replaced, or "" when nothing needed fixing or a word could not
 // be fixed. Only words of five letters or more are touched, only in searches of four meaningful words or
 // fewer (a long ask is mostly everyday words), and never a word the directory already uses or starts
-// like one ("quarterly" is left alone).
+// like one ("quarterly" is left alone). Of equally close fixes, the one nearest the word as typed wins.
 function dirSpellFix(entries, tokens) {
   if (dirContentWords(tokens).length > DIR_SPELL_MAX_WORDS) return "";
-  const vocab = dirVocabulary(entries);
-  const stems = vocab.map(w => [w, dirStem(w)]);
+  const stems = dirVocabulary(entries).map(w => [w, dirStem(w)]);
   let changed = false;
   const fixed = tokens.map(t => {
     if (DIR_STOP_WORDS.has(t) || t.length < 5) return t;
     const stem = dirStem(t);
-    if (stems.some(([w, st]) => w === t || st === stem || (w.length >= 5 && (t.startsWith(w) || w.startsWith(t))))) return t;
+    if (stems.some(([w, st]) => w === t || st === stem || t.startsWith(w) || w.startsWith(t))) return t;
     const limit = t.length >= 9 ? 2 : 1;
     let best = null;
     for (const [w, st] of stems) {
-      const dist = Math.min(dirEditDistance(stem, st), dirEditDistance(t, w));
-      if (dist <= limit && (!best || dist < best.dist)) best = { w, dist };
+      const raw = dirEditDistance(t, w);
+      const dist = Math.min(dirEditDistance(stem, st), raw);
+      if (dist <= limit && (!best || dist < best.dist || (dist === best.dist && raw < best.raw))) best = { w, dist, raw };
     }
     if (!best) return t;
     changed = true;
@@ -214,24 +305,22 @@ function dirSpellFix(entries, tokens) {
 // `best` is the skill to tag as the best match (exact matches only), or null; `didYouMean` is a corrected
 // search that does find skills, set only when `skills` is empty. `skills` is empty when nothing is close.
 function dirSearch(entries, query) {
-  const tokens = dirQueryTokens(query);
-  if (!tokens.length) return { skills: entries, related: false, best: null, didYouMean: "" };
-  // Several can pass: keep those holding the most typed words.
-  const exact = scope => {
-    const passed = entries.filter(e => dirMatches(e, tokens, scope));
-    const top = Math.max(0, ...passed.map(e => dirHitCount(e, tokens, scope)));
-    return passed.filter(e => dirHitCount(e, tokens, scope) === top);
-  };
-  let skills = exact(DIR_OWN);
-  if (!skills.length) skills = exact(DIR_WITH_CATEGORY);
-  if (skills.length) return { skills, related: false, best: dirBestSkill(skills, tokens), didYouMean: "" };
-  const scored = entries.map(e => [e, dirRelevance(e, tokens)]).filter(p => p[1] > 0);
-  const top = Math.max(0, ...scored.map(p => p[1]));
-  skills = scored.filter(p => p[1] >= Math.max(1, top - 1)).sort((x, y) => y[1] - x[1]).map(p => p[0]);
+  const q = dirParse(query);
+  if (!q.tokens.length) return { skills: entries, related: false, best: null, didYouMean: "" };
+  const need = dirWordsNeeded(q.words.length);
+  const passing = scope => entries.map(e => [e, dirHitCount(e, q, scope)]).filter(p => p[1] >= need);
+  let passed = passing("own");
+  // A search typed only in filler ("show"): when no word starts that way, the filler in skills counts.
+  if (!passed.length && q.fillerOnly) passed = passing("all");
+  if (passed.length) {
+    // Several can pass: keep those holding the most typed words.
+    const top = Math.max(...passed.map(p => p[1]));
+    const skills = passed.filter(p => p[1] === top).map(p => p[0]);
+    return { skills, related: false, best: dirBestSkill(skills, q), didYouMean: "" };
+  }
+  const skills = dirClosest(entries, q);
   if (skills.length) return { skills, related: true, best: null, didYouMean: "" };
-  skills = entries.filter(e => dirTypingAhead(e, tokens));
-  if (skills.length) return { skills, related: false, best: null, didYouMean: "" };
-  const fixed = dirSpellFix(entries, tokens);
+  const fixed = dirSpellFix(entries, q.tokens);
   const check = fixed ? dirSearch(entries, fixed).skills.length : 0;
   return { skills: [], related: false, best: null, didYouMean: check ? fixed : "" };
 }

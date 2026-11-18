@@ -90,7 +90,7 @@ A card whose query answers with no rows is hidden instead of shown blank. A card
 | `CartaHome.Directory.View.<source>.<counts>` | render | The Skill Directory rendered (where its list came from, and its size) |
 | `CartaHome.Directory.<action>` | click | Used the Skill Directory |
 | `CartaHome.Directory.OpenCategory.<Category>` / `CloseCategory.<Category>` | click | Expanded or collapsed a category card |
-| `CartaHome.Directory.Search.Results<N>` | click | A search settled (800 ms after typing) and found N skills exactly (in their own words or, when none match, their category's name), or by a short last word (2–3 letters) read as the start of a word in the skill's text or its category's name. The typed words are never sent |
+| `CartaHome.Directory.Search.Results<N>` | click | A search settled (800 ms after typing) and found N skills exactly: every meaningful typed word (about half of a long search) was found in the skill's name, its category's name or its prompts, with the last word read as the start of a word. A search typed only in filler words ("show") also counts the filler in a skill's text. The typed words are never sent |
 | `CartaHome.Directory.Search.Related<N>` | click | A search settled and found N close matches but no exact one |
 | `CartaHome.Directory.Search.ZeroResults` | click | A search settled and found no skill; the empty state showed |
 | `CartaHome.Directory.Search.Clear` | click | Cleared the search with the X |

@@ -4,8 +4,8 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.25.4",
-    "headline": "A capital call partner with $30 or less left to pay now reads as Paid, up from $25. Rebuild to get it."
+    "version": "1.25.5",
+    "headline": "The Skill directory search is more forgiving: a topic name finds its skills, a half-typed word or a plural still matches, and results narrow as you type. Rebuild to get it."
   },
   "carta-lp-summary": {
     "version": "1.5.0",
