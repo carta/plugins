@@ -40,6 +40,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-round-history` | Financing round history |
 | `carta-register-of-allotments` | UK register of allotments with SH01 filing status |
 | `carta-grant-vesting` | Vesting schedule for a specific option grant |
+| `carta-vesting` | Read the vesting of a security or holder, and change it with a preview first: schedules, acceleration, performance conditions |
 | `carta-witness-signatures` | Status of witness and spousal-consent signature requests on awards |
 | `carta-conversion-calculator` | Calculate SAFE/note conversion into equity |
 | `carta-client-triggers` | Surface time-based BD triggers across the portfolio |
@@ -48,6 +49,8 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-compensation-rolematcher` | Classify a job title into the CTC compensation taxonomy |
 | `carta-issuance` | Issue certificates, option grants and profits interest units; draft shares, grants or units, or resume from a draft set |
 | `carta-manage-securities` | Edit, cancel, partly cancel, reverse the cancellation of, transfer or buy back an issued security, record an option exercise, and approve or reject exercise requests, with a preview first |
+| `carta-boardroom` | Board consents and who signed, and board members, with a preview before each change |
+| `carta-company-users` | Company users and their access levels: invite, change access or title, remove access, resend the invite |
 | `carta-start` | Get started: shows your company, what your role can do and three prompts to try, then sets up Carta Home |
 | `carta-captable-home-build` | Build or redeploy the `Carta Home - <company>` live artifact — ownership, fully diluted summary, option pool, stakeholders, drafts, and a skill directory for one company |
 

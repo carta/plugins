@@ -1,4 +1,18 @@
 {
+  "carta-boardroom": {
+    "category": "governance",
+    "name": "Board consents and board members",
+    "order": 15,
+    "prompts": [
+      "Which board consents at {{COMPANY}} are waiting for signatures, and who has not signed?",
+      "Create a draft board consent for {{COMPANY}} named [consent name]",
+      "Add [name] ([email]) to the board of {{COMPANY}}"
+    ],
+    "whatsNewCopy": {
+      "headline": "Track board consents and manage your board in chat",
+      "body": "Shows each Carta board consent and who signed, then creates, sends, reminds or voids a consent, or changes board members, after you approve a preview."
+    }
+  },
   "carta-cap-table": null,
   "carta-captable-home-build": null,
   "carta-company-users": {
@@ -239,6 +253,20 @@
     "whatsNewCopy": {
       "headline": "Check your current FMV and every past valuation",
       "body": "Reads your 409A, EMI, CSOP or share price valuations from Carta and shows current fair market value, past values and expiry dates in chat."
+    }
+  },
+  "carta-vesting": {
+    "category": "equity",
+    "name": "Change vesting",
+    "order": 15,
+    "prompts": [
+      "Put [security label] on the 4-year monthly schedule with a 1-year cliff",
+      "Accelerate [number] of [employee name]'s unvested options",
+      "Mark the [performance condition] for {{COMPANY}} as met"
+    ],
+    "whatsNewCopy": {
+      "headline": "Change vesting schedules and accelerate grants in chat",
+      "body": "Reads vesting for any Carta security or holder in chat, then applies a schedule, accelerates or records a performance condition after you approve a preview."
     }
   },
   "carta-voting-rights-optimizer": {
