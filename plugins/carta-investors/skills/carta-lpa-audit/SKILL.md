@@ -60,9 +60,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.51.6</carta-plugin>
+<carta-plugin>carta-investors:7.51.8</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." record `skill_failed` as Error handling describes, and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -180,6 +180,8 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
 ---
 
 ## Step 1: Establish firm context
+
+> **Every stop in this step** records `skill_failed` first, as Error handling describes: the run delivered nothing, and a stop that records nothing drops out of the usage stats. The one exception is the no-match stop for a firm the request named without a link: a pasted firm link resumes the run, so it records nothing.
 
 1. Pick the firm the request is about, and never silently audit another one:
    - If the request carries a Carta firm link (`…/investors/firm/<carta_id>/…`), call `list_contexts(firm_id="<carta_id>")` and use the row whose `carta_id` equals it. Carta staff have no firm memberships, so this is how a staff login reaches a client firm.
@@ -341,6 +343,8 @@ All three tools must be in the grant, or the page loads and the matching call re
 
 Keep `title` and `favicon` stable across redeploys, and restate the whole `capabilities` object every time: a non-empty object replaces the stored grant, so a tool left out is revoked.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_finished")` as soon as the publish above has succeeded, before the confirmation below. Mode A has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
+
 ### Step A4: Confirm
 
 > Your fund-terms view for **<Firm Name>** is ready: [Open <Firm Name> — LPA coverage audit](<url the publish returned>)
@@ -358,8 +362,6 @@ Then a 3–5 bullet summary of what it shows — one sortable table of every fun
 > *"Want to search across every fund's LPA terms and side letter provisions for a specific question — e.g. 'do any provisions prevent me from investing in defense tech?' or 'which LPs got reduced carry?' — just ask. See Step B4."*
 
 > **Numbers live in the artifact, not in your reply.** Do not restate coverage counts, fund statuses, or fund names in chat — you have not seen them. The page queries Carta after your turn ends, so any figure you quote is invented.
-
-> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_finished")` once the publish in Step A3 has succeeded. Mode A has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
 
 ---
 
@@ -426,11 +428,12 @@ If this run has not built the cache, do the paragraph above Step B4 first. The s
 
 ## Error handling
 
-> **Checkpoint on every stop before this run has recorded `skill_finished`**, whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a fall-through to Mode B, a fund that lands in No documents) do not checkpoint.
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, whether or not this table lists it: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lpa-audit", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a fall-through to Mode B, a fund that lands in No documents, a firm link pasted after the no-match stop for a named firm) do not checkpoint.
 
 | Symptom | Likely cause | What to tell the user |
 |---------|-------------|----------------------|
 | `list_contexts` returns no firm | User not authenticated or MCP session dropped | "I couldn't find any Carta data associated with your account. Try reconnecting to the Carta MCP server. If you believe you're already connected, [contact Carta Support](https://support.carta.com/kb/guide/en/how-to-get-support-with-carta-help-T8DEfuxhi9/Steps/3724508)." |
+| No context matches the firm the request names or links | The firm name is misspelled, the login lacks that firm, or the synced firm list lags a new grant | "I couldn't find <the firm the user named> among the Carta firms this login can open. If you are Carta staff, paste the firm's Carta link (the `/investors/firm/<number>/` page) and I'll use that." |
 | `firm_id` fails pre-flight UUID check | MCP session returned malformed context | "Could not determine your firm ID. Try reconnecting to the Carta MCP server." |
 | `fa__list__entities` returns no entities across all six types | Firm has no fund vehicles in Carta yet | "I couldn't find any funds on file for <firm_name>. [Contact Carta Support](https://support.carta.com/kb/guide/en/how-to-get-support-with-carta-help-T8DEfuxhi9/Steps/3724508) if you believe this is an error." |
 | 401 or 403 from any query | Carta session expired | "Your Carta session has expired. Reconnect to the Carta MCP server and try again." |

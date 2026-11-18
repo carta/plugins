@@ -58,9 +58,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.51.6</carta-plugin>
+<carta-plugin>carta-investors:7.51.8</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
+> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) record `skill_failed` as Error handling describes, and stop. Don't search the disk for them.
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -360,6 +360,8 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
 
 ## Step 1: Establish firm context
 
+> **Every stop in this step** records `skill_failed` first, as Error handling describes: the run delivered nothing, and a stop that records nothing drops out of the usage stats.
+
 1. Call `list_contexts` to get the firm UUID and display name. If nothing is returned → stop with: "I couldn't find any Carta data associated with your account. Try reconnecting to the Carta MCP server. If you believe you're already connected, contact your Carta representative."
 2. Call `read_tool({"name": "fa__list__entities", "arguments": {"entity_types": "fund"}})` and read `<firm_carta_id>` — the integer PK used in Carta web URLs — from any entity in the response. This call is only for that id; the firm's own vehicles are read from the warehouse (Mode A's page and Mode B's queries both do it), so do not list every entity type here.
    - **Never call it without `entity_types`.** An unfiltered list for a firm with many funds and SPVs is larger than the response limit, and the call fails with "response too large".
@@ -483,6 +485,8 @@ All three tools must be in the grant, or the page loads and the matching call re
 
 Keep `title` and `favicon` stable across redeploys, and restate the whole `capabilities` object every time: a non-empty object replaces the stored grant, so a tool left out is revoked.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_finished")` as soon as the publish above has succeeded, before the confirmation below. Mode A has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
+
 ### Step A4: Confirm
 
 > Your co-investor analysis for **<Firm Name>** is ready: [Open <Firm Name> — Co-Investor Analysis](<url the publish returned>)
@@ -494,8 +498,6 @@ Then a 3–5 bullet summary of what it shows — most frequent co-investors rank
 **Cross-skill follow-up.** When coverage is visibly incomplete, append: *"Coverage here is only as complete as the SPAs on file and the cap tables shared with you — run the `carta-spa-audit` skill to see which portfolio companies are missing an SPA."*
 
 > **Numbers live in the artifact, not in your reply.** Do not restate co-investor counts, coverage percentages, or company names in chat — you have not seen them. The page queries Carta after your turn ends, so any figure you quote is invented.
-
-> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_finished")` once the publish in Step A3 has succeeded. Mode A has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
 
 ---
 
