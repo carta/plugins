@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.52.0</carta-plugin>
+<carta-plugin>carta-investors:7.52.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -88,6 +88,21 @@ Customer-facing narration should sound like a person, not an implementer. The cu
 - Print "Perfect!" / "Excellent!" / "Great!" / "Done!" between every tool call. One natural confirmation at the end is enough.
 
 ## Workflow
+
+**The build makes only the Carta calls its steps name, and nothing else.** The page loads every
+holding, value and gain itself when it opens, so the build needs only these calls:
+- `list_contexts` / `set_context` (Step 1)
+- the entity-list calls `list-firm-entities.md` makes for `fund` and `spv` (Step 2)
+- the one `FUND_ADMIN.FUNDS` query (Step 2c)
+- the connector check's `welcome` call (Step 3)
+
+When the `Artifact` tool is available, until the artifact is published, do not call
+`dwh__execute__question`, `dwh__get__table_schema` or any other `dwh__execute__query`. Do not
+look up holdings, portfolio companies or performance either. This also holds when you're unsure
+of a column or a fund: the page answers those questions. If Step 2c fails, retry it once, then
+render without vintage dates. Answer data questions in chat only after the artifact is
+published, and only when the user asks one. Without the `Artifact` tool, Step 3's text summary
+applies instead.
 
 ### Step 1 — Set firm context if needed
 
