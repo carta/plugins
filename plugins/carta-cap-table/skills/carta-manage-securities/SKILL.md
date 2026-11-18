@@ -47,7 +47,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.114.25</carta-plugin>
+<carta-plugin>carta-cap-table:6.114.26</carta-plugin>
 
 # Manage securities
 
@@ -95,7 +95,9 @@ user's words first: "RSU" or "restricted stock unit" is
 "incentive unit" is `piu`, "warrant" is `warrant`, and "certificate", "share certificate" or
 "stock certificate" is `certificate`, and so are "shares" or "stock" when they name the security
 itself (as in "ES-123 (Shares)"), never as a count ("100 shares") or inside another type's name
-("stock option", "restricted stock unit"). "Units" alone is not a type word. With no
+("stock option", "restricted stock unit"). "Units" alone is not a type word. A type word gives
+the type of only the label after it: in "certificate CS-1 and ES-12", ES-12 gets its type from
+its prefix. With no
 type word, a `CN-` or `SAFE-` label is a `convertible_note`, an `RSU-` label is an `rsu`, a `PIU-`
 label is a `piu`, a `SAR-` or `UAR-` label is a `sar`, a `CBU-` label is a `cbu` and an `ES-` label
 is an `option_grant`. A prefix is only a first guess, not a type the user named: `CBU-3` starts as
@@ -179,7 +181,8 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    looks wrong"), always send `look_first: true` on the first type's bootstrap, so the Change page
    opens before the first preview. With no field named, bootstrap each type first, then ask which
    field in one `AskUserQuestion`, with one question for each type
-   ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)). Which
+   ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)), never
+   in text. Which
    preview takes this bootstrap's `thread_id` is in step 4.
 2. **Read the bootstrap.**
    - `blockers`: for `hard_stop`, quote `message` and `fix`, then stop. Ask about each
@@ -190,7 +193,8 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
      person and 2+ rows are selectable, ask which ones in one `AskUserQuestion`.
 3. **Collect the inputs** for the action. Use the user's words; ask only for what is missing,
    in one `AskUserQuestion` with up to 4 questions. When more inputs are missing, ask again for
-   the rest. Send dates as `YYYY-MM-DD`. Turn a relative date ("last Friday") into a date from
+   the rest. When the request has several changes, start the first question with the split
+   sentence in [§ Several changes](#several-changes). Send dates as `YYYY-MM-DD`. Turn a relative date ("last Friday") into a date from
    the bootstrap's `today`, and show it. Every preview takes
    `company`. The modify, cancel, partial cancel, reverse cancel, undo termination and
    `transfer_other_security_preview` previews also take `security_type`, the same as the
@@ -230,7 +234,9 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    When a result has a `companion_url`, post it as `[See it in Carta](<companion_url>)`, never as
    a bare address.
    Put the link of the latest page in your last message: after the answer to a question, after
-   a blocked preview and after a `look_first` bootstrap. A link in a question is not a link.
+   a blocked preview and after a `look_first` bootstrap. After a `look_first` bootstrap with no
+   field named, ask the field question first and post the link after the answer. A link in a
+   question is not a link.
 6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
    Name each one that cannot be undone, such as an email to a holder.
 7. **Approval.** When the email side effect counts more emails than holders, first ask **"Send these N

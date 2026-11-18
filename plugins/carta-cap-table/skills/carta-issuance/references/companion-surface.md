@@ -153,8 +153,9 @@ answers, the reply is these parts, in this order, and no other text:
    with one exception: the set has an empty optional column ([§ 8](#the-optional-columns-once-per-set)
    step 1: a `field_spec` field with `required` false, not `hidden` and with no `default_value`,
    that no row fills). Only then add " Ask me if you also want optional details." to that line:
-   the card never posts when it is done, so the user may go straight to Issue. A field with
-   `required` true or a `default_value` is never an empty optional column. The text names no item,
+   the card never posts when it is done, so the user may go straight to Issue. Before you add
+   it, name to yourself the `field_spec` field that makes the exception. With no such field
+   (every field has `required` true or a `default_value`), never add it. The text names no item,
    no field of an item and no value an item asks about: the card holds them, once.
 3. The reply's page line, as [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)
    says, alone: no line about the browser before it. It is the last line of the reply.
@@ -170,6 +171,9 @@ answers, the reply is these parts, in this order, and no other text:
 
 [Open the draft set in Carta](<address>)
 ```
+
+In this example, every `field_spec` field is required or has a default, so the count line ends
+at "in the card above.".
 
 With no item, there is no card: go on to [§ 8](#8-issue); its optional columns decide the reply.
 
