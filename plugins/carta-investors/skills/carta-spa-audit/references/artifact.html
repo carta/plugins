@@ -1508,7 +1508,7 @@
     // sorted by cost basis DESC (null/zero last), then company name ASC. That
     // tiebreaker is a genuine total ordering because Query A emits exactly one
     // row per company (see the fuzzy_matched ORDER BY total-ordering note in
-    // SKILL.md Mode B — the same reasoning applies to this JS-side re-sort).
+    // references/text-audit.md — the same reasoning applies to this JS-side re-sort).
     function buildBuckets(auditRows, enrichmentLookup) {
       const BUCKET_KEY = {
         '1. Missing SPA': 'missing',
