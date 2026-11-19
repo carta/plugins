@@ -47,7 +47,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.115.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.116.1</carta-plugin>
 
 # Manage securities
 
@@ -194,7 +194,8 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
 3. **Collect the inputs** for the action. Use the user's words; ask only for what is missing,
    in one `AskUserQuestion` with up to 4 questions. When more inputs are missing, ask again for
    the rest. When the request has several changes, start the first question with the split
-   sentence in [§ Several changes](#several-changes). Send dates as `YYYY-MM-DD`. Turn a relative date ("last Friday") into a date from
+   sentence in [§ Several changes](#several-changes). Edits of several securities with one reason
+   are one change, also when the types are different. Do not say the split sentence for them. Send dates as `YYYY-MM-DD`. Turn a relative date ("last Friday") into a date from
    the bootstrap's `today`, and show it. Every preview takes
    `company`. The modify, cancel, partial cancel, reverse cancel, undo termination and
    `transfer_other_security_preview` previews also take `security_type`, the same as the
@@ -229,7 +230,8 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    (for a partial cancel, the tranches; for the actions in transfer-buyback-exercise.md, the
    preview's `summary` word for word). Put the table in the `preview` of the **Apply** option
    in step 7, never in the question and never as text before the question: the host shows text
-   between tool calls only as a one-line summary, so the user never sees a table there. When
+   between tool calls only as a one-line summary, so the user never sees a table there. Never put
+   the table in the option's `description`. When
    step 7 shows the approval card, put the table in your last message, after `view_remote`.
    When a result has a `companion_url`, post it as `[See it in Carta](<companion_url>)`, never as
    a bare address.

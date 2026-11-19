@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.115.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.116.1</carta-plugin>
 
 # Vesting
 
@@ -145,7 +145,8 @@ For every change, find the company as [§ Calls](#calls) says.
    For a performance condition, skip this step: the change applies to every security that is
    linked to the condition. Say so.
 2. **Nothing to change.** When the read shows nothing to change, such as no schedule to remove
-   or no unvested units, still preview. Carta's failed check is the answer: quote it.
+   or no unvested units, still preview. Carta's failed check is the answer: quote it. First ask
+   for each input that step 3 asks for, such as the quantity of an acceleration.
 3. **Collect the inputs.** Use the user's words. Ask only for what is missing, in one
    `AskUserQuestion` with up to 4 questions. Send dates as `YYYY-MM-DD`, numbers as strings.
    Every preview takes `company`. A schedule change and an acceleration also take

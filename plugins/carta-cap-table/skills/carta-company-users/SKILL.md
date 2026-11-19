@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.115.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.116.1</carta-plugin>
 
 # Company users and roles
 
@@ -143,7 +143,7 @@ Do one person at a time, steps 3 to 7, then the next person, in the order the us
 | 403, `role_required` or access denied | Quote the message. Do not retry. On the list, when the message gives no other reason (such as a fund that manages the users), say only company admins and editors can see the company users. On a preview, say the user's role cannot make this change. |
 | `workflow_unavailable` | Say to make this change in Carta, under Users and permissions. Stop. |
 | `scope_required` | Ask the user to grant access as its `fix` says. Call again only after they confirm. |
-| `not_found` on `user` | Read the users again once, with `search`. A row matches: preview again once with its `id`. No row: say *"<name> is not a company user of <company>."*, and stop. Send no other preview, also not with the email. |
+| `not_found` on `user` | Read the users again once, with `search`. A row matches: preview again once with its `id`. No row: say *"<name> is not a company user of <company>."* word for word, also when the first read found the person, and stop. Send no other preview, also not with the email. |
 | `invalid_argument` naming company, signatory or board admin roles | Quote it. Say the person still holds a company role (such as cap table owner or legal contact), a signatory role or a board admin role: give it to someone else in Carta first, then ask again. Do not preview again. |
 | `invalid_argument`: the email is "already in use", or the user "already has an active role" | Say this person is already a company user. When a row of the list has this email, offer a change; if not, say to manage the person in Carta. Do not preview the invite again. |
 | `invalid_argument`: the email "must be added through your identity provider" | Quote it. Say the company's IT administrator must add this person through the identity provider, and nothing changed. Do not preview again. |

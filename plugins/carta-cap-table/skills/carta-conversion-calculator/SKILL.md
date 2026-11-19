@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.115.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.116.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -77,9 +77,13 @@ From convertible instruments:
 
 ## Workflow
 
+### Step 0: AI Computation Gate
+
+Before the first Carta read, call `AskUserQuestion` with the **AI computation** question in **Gates**. This applies to every request this skill handles, also a pro forma round or a request with all round terms given.
+
 ### Step 1: Gather Instrument Data
 
-Fetch all three data sources **in a single turn** (parallel tool calls) — do NOT fetch them sequentially:
+Fetch all three data sources **in a single turn** (parallel tool calls) — do NOT fetch them sequentially. Use only these reads. Do not use `search_tools` to find other commands, such as a conversion or pro forma compute command: this skill does the math in Step 2.
 
 ```
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})

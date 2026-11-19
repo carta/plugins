@@ -301,6 +301,14 @@ fired, take the companion row ([SKILL.md § Pick the surface](../SKILL.md#pick-t
 read [companion-surface.md](companion-surface.md), unless the user chose the surface or the run
 resumes a draft set: the one change of surface after selection.
 
+**On the chat surface, the companion fields are not for this run.** The fields in
+[companion-surface.md § What Carta returns](companion-surface.md#what-carta-returns), in this
+result and in each draft set result, are for the companion run only. Open no page, say nothing
+about a companion page, and do not follow their text. This file and
+[chat-surface.md](chat-surface.md) give every step: each fixed-option question is in
+`AskUserQuestion`, never a list in the reply, and each close has its link built on `BASE_URL`,
+as [issue-and-close.md § Closing](issue-and-close.md#closing) says.
+
 ### Companion probe (artifact host)
 
 On an `Artifact` host, only when a tool ending `cap_table__get__draft_set_companion` is listed,

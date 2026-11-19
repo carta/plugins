@@ -73,7 +73,8 @@ Bootstrap with `security_type` `certificate`, `rsa` or `piu`. The action is
 - A certificate, RSA or PIU from an equity plan also takes `return_shares`: ask whether the
   shares go back to the plan pool. When you do not know if it is from a plan, ask.
 - `reduce_from`: `unvested` buys back the unvested shares first (a holder who left), `vested`
-  the vested shares first. Ask when the user did not say.
+  the vested shares first. When the user did not say, ask before the preview. Never leave it out
+  or pick it yourself.
 - `repurchase_agreement_file_key` is optional ([§ Agreements](#agreements)).
 
 No money moves: the payment is made outside Carta. For a bank payment through Carta, give the
