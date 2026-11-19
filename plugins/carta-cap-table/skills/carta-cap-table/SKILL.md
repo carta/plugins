@@ -35,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.116.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.117.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -92,10 +92,10 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
   ```
   read_tool({"name": "cap_table__compute__reconciliation", "arguments": {"company": <corporation_id>, "type": "option", "rows": [{"holder": "<holder>", "label": "<label>", "quantity": "<quantity>"}]}})
   ```
-- Vesting of one grant, valuations (409A, FMV), round history and issuance have their own
-  skills. Load the matching skill. To edit, cancel, transfer or buy back an issued security,
-  record an option exercise, or approve or reject an exercise request, load
-  carta-manage-securities: it shows a preview before any change. To change vesting, load
+- Vesting of one grant, valuations (409A, FMV), stock comp (ASC 718) expense, round history
+  and issuance have their own skills. Load the matching skill. To edit, cancel, transfer or
+  buy back an issued security, record an option exercise, or approve or reject an exercise
+  request, load carta-manage-securities: it shows a preview before any change. To change vesting, load
   carta-vesting. For board consents and board members, load carta-boardroom. For the users
   of the company's Carta account and their access levels, load carta-company-users.
 - To write a company update or investor update, call `read_tool` with

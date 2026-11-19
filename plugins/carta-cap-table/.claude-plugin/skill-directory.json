@@ -242,6 +242,15 @@
     }
   },
   "carta-start": null,
+  "carta-stock-comp-expense": {
+    "category": "governance",
+    "name": "Stock comp (ASC 718) expense",
+    "order": 45,
+    "prompts": [
+      "What is the stock comp expense for {{COMPANY}} for last quarter?",
+      "Show ASC 718 expense for each period this year from our Carta reports"
+    ]
+  },
   "carta-valuation-history": {
     "category": "governance",
     "name": "Valuation & FMV history",

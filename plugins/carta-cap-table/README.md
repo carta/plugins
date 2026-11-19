@@ -35,6 +35,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-reporting` | Custom cap table reports and files — filtered, sorted tables, Excel and markdown exports |
 | `carta-field-definitions` | Explain a column or field within a specific Carta report |
 | `carta-valuation-history` | Valuation and FMV history (409A, EMI, CSOP, share price) |
+| `carta-stock-comp-expense` | ASC 718 stock comp expense from the reports Carta already ran |
 | `carta-hmrc-limits` | UK HMRC EMI/CSOP limit usage — company allowance and per-holder headroom |
 | `carta-voting-rights-optimizer` | Legal tool — minimum stockholder coalition to pass a charter amendment or vote |
 | `carta-round-history` | Financing round history |
