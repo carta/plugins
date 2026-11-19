@@ -22,6 +22,7 @@ allowed-tools:
   - mcp__carta__list_accounts
   - mcp__carta__list_contexts
   - mcp__carta__set_context
+  - mcp__carta__break_the_glass
   - mcp__carta__view_remote
   - mcp__carta__skill_checkpoint
   - mcp__claude_ai_Carta__search_tools
@@ -40,6 +41,8 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
+  - mcp__claude_ai_Carta__break_the_glass
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__break_the_glass
   - AskUserQuestion
   - Skill(carta-investors:carta-portco-financials-and-kpis)
   - Read
@@ -47,7 +50,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.53.8</carta-plugin>
+<carta-plugin>carta-investors:7.53.9</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -128,7 +131,9 @@ Run Step 2's settings check on **every** candidate, in parallel, in one reply. T
 | More than one has it enabled | Now ask, listing only the enabled ones. |
 
 A firm the user cannot reach comes back as a 404 or a permission error — that counts as not
-enabled, so it drops out of the running without a question.
+enabled, so it drops out of the running without a question. A `break_the_glass_required` is not
+a drop-out and not a reason to elevate yet: the candidate stays in the running with its settings
+unknown. When it is still viable, ask which firm, and elevate only for the one the user picks.
 
 **Do not ask while the answer is still discoverable.** A name that matches three accounts, only
 one of which collects data, has one real answer; asking makes the user do the elimination you can
@@ -272,6 +277,16 @@ table above is enough to choose one.
 > **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-data-collection", checkpoint_label="skill_finished")` once the action's result has reached the user: the form is open, a send, schedule or change has been made and summarized, or the answer to a read is shown. A route this skill cannot do, such as extraction, finishes when its one-sentence answer and offer are shown.
 
 ## Applies to every action
+
+**A Carta call answers `break_the_glass_required`:** the person is Carta staff reaching a firm or
+company they are not a member of. Only for the firm or company this run has settled on — never
+for a candidate Step 1 is still comparing — call `mcp__<SERVER>__break_the_glass` once (load it with
+`ToolSearch` `select:` first when it is deferred), with the `entity_type` and `entity_pk` the error
+names and a `rationale` naming the failed command and the user's ask, then retry the failed call
+once. Do not ask first: the user's request is the authorization, and Carta records the grant in its
+audit trail. Say in one line that you opened break-the-glass access to the firm or company. When
+the tool is not in this session, or the elevation or the retry fails, say they don't have access to
+it in Carta and stop. Never call it before a call has failed with that error.
 
 **A send emails people outside Carta and cannot be recalled.** Ask the confirmation question, end
 your reply, and wait. Never write in the same reply as the question — the action's reference says

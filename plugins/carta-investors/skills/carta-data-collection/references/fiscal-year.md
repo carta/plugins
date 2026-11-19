@@ -10,7 +10,9 @@ Steps 1 and 2.
 **The `get` and `set` fiscal-year commands are in the financials API and use a different
 permission from the rest of data collection.** A firm that can send requests may still get a
 permission error there. Treat that as "this is not available to you", not as a company without a
-fiscal year, and do not retry. The roster read below has no such catch.
+fiscal year, and do not retry. A `break_the_glass_required` is not that error: lift it as SKILL.md's
+"Applies to every action" says, and read whatever comes back after the retry against this note.
+The roster read below has no such catch.
 
 **The parameter is `entity_pk`, not `entity_id`.** Every other data collection command takes
 `entity_id`. The value is the same one from `data_collection__list__companies`; only the name
