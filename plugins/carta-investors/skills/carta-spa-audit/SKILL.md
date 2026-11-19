@@ -56,7 +56,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.55.1</carta-plugin>
+<carta-plugin>carta-investors:7.55.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) record `skill_failed` as Error handling describes, and stop. Don't search the disk for them.
 
@@ -78,7 +78,7 @@ Follow these rules every time except for machine-readable output (JSON, XML):
 - **Punctuation:** No period at the end of headings or titles.
 - **Bullets:** Always use `•` — never `-` or `*` for user-facing bullets. Numbered lists use `1.` `2.` `3.`
 - **Dates:** `Mmm D, yyyy` format (e.g. `Jan 5, 2024`). Exception: first invested dates are shown as `Mmm yyyy` (month-level — day precision is not meaningful for portfolio-entry dates).
-- **Currency (standard):** `$123,456`. Negative: `($445,443)`. Cost basis follows its own rule in Step B2 — it carries each company's currency code, never a `$`.
+- **Currency:** `123,456 <currency_code>`, with the code taken from the data, never an assumed `$`. Negative: `(445,443 <currency_code>)`. Cost basis follows its own rule in Step B2. Never total or rank across different currency codes.
 - **Null values:** Use `—` (em-dash), never `N/A`, blank, or prose like "not recorded".
 
 ### Tables [PATTERN tables v0.0.12]
@@ -201,7 +201,7 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
 
 > **Every stop in this step** records `skill_failed` first, as Error handling describes: the run delivered nothing, and a stop that records nothing drops out of the usage stats.
 
-1. Call `list_contexts`. If no context is returned, stop with: "I couldn't find any Carta data associated with your account. Try reconnecting to the Carta MCP server. If you believe you're already connected, contact your Carta representative."
+1. Call `list_contexts` (with `{"firm_name": "<firm_name>"}` if the user named a firm) and pick the firm: the user's only firm, the one they named, or the one whose `is_active` is true. With several firms and none named or active, ask once which firm with `AskUserQuestion`, and use the one they pick. If the call with `firm_name` returns nothing, call `list_contexts` once without it and ask which firm; only an empty unfiltered call means the account has no data. If the chosen firm is not already active, call `set_context({"firm_id": "<its UUID>"})` before the queries below, which run under the active firm. Whenever the call named a firm or returned several, open with a line naming the firm in use ("Using <firm_name>."), so the user can switch. If no context is returned, stop with: "I couldn't find any Carta data associated with your account. Try reconnecting to the Carta MCP server. If you believe you're already connected, contact your Carta representative."
 2. Note the firm `id` — this is your `<firm_id>` for every query below.
 3. Note the firm display name — this is your `<firm_name>`.
 4. Call `list_accounts` searching for `<firm_name>`. Find the entry with `type: "investment firm"`. Extract the numeric portion of its `id` (e.g. `"organization_pk:2645"` → `2645`) — this is `<org_pk>` for the document library link in Step 3.
@@ -296,7 +296,7 @@ On success the script prints one stdout line: the absolute output path. It exits
 
 Example: `"Acme Capital Partners, L.P."` → slug `"acme-capital-partners-lp"` → output `acme-capital-partners-lp-spa-audit.html`, artifact id `acme-capital-partners-lp-spa-audit`.
 
-Re-running the skill for the same firm produces the same artifact id and filename, so Step A3 updates the artifact in place.
+Re-running the skill for the same firm produces the same artifact id and filename, so Step A3 updates that firm's own page in place.
 
 ### Step A3: Publish
 
@@ -308,13 +308,16 @@ First look for an existing one:
 Artifact({action: "list", scope: "mine"})
 ```
 
-If a **<Firm Name> — SPA coverage audit** artifact is already published, keep its `url`. Then publish — one call either way, `url` being the only difference:
+Keep the `url` of this firm's existing page, found with
+`${CLAUDE_PLUGIN_ROOT}/references/firm-page-lookup.md` (the plugin's own `references/`, not
+this skill's; read it by that exact path, don't search for it). Its title is **SPA Audit**
+and its firm-named title is **<Firm Name> — SPA coverage audit**. For its "single firm" test, the user has a single firm only when `list_contexts` called without `firm_name` returned one firm; a call that named a firm counts as several. Then publish — one call either way, `url` being the only difference:
 
 ```
 Artifact({
   file_path: "<absolute path printed by the render script>",
   url: "<url from the list — omit entirely on a first publish>",
-  title: "<Firm Name> — SPA coverage audit",
+  title: "SPA Audit",
   description: "<Firm Name> — SPA coverage across your portfolio, missing/unexecuted/executed/not-needed",
   favicon: "📋",
   capabilities: {
@@ -335,7 +338,7 @@ Keep `title` and `favicon` stable across redeploys, and restate the whole `capab
 
 ### Step A4: Confirm
 
-> Your SPA coverage audit for **<Firm Name>** is ready: [Open <Firm Name> — SPA coverage audit](<url the publish returned>)
+> Your SPA coverage audit for **<Firm Name>** is ready: [Open SPA Audit](<url the publish returned>)
 
 Fill the link with the `url` the publish call returned. The side panel does not always open by itself, and this link is how the user reaches the page when it stays closed, so never say the page is loading or open in the sidebar.
 

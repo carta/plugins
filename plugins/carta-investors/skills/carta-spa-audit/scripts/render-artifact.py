@@ -95,7 +95,7 @@ def main() -> int:
 
     replacements = {
         "{{STATE_JSON}}": js_safe_json(state_obj),
-        "{{TITLE}}": html.escape(f"{firm_name} — SPA coverage audit"),
+        "{{TITLE}}": html.escape("SPA Audit"),
         "{{FIRM_UUID}}": firm_uuid,
         "{{CARTA_MCP_SERVER}}": mcp_server,
     }

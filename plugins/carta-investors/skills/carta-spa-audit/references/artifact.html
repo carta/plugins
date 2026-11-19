@@ -207,7 +207,7 @@
     .coverage-bar-head .label { font-size: 13px; font-weight: 500; color: var(--ink-color-global-text-default); }
     .coverage-bar-head .value { font-size: 13px; font-weight: 600; color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; margin-left: auto; }
     .bar-mode-toggle { display: flex; gap: 2px; }
-    .bar-mode-btn { font-size: var(--ink-font-global-size-small-1); font-family: inherit; padding: 0 10px; border: 1px solid var(--ink-color-global-border-default); border-radius: 4px; background: transparent; color: var(--ink-color-global-text-subtle); cursor: pointer; height: 28px; }
+    .bar-mode-btn { font-size: var(--ink-font-global-size-small-1); font-family: inherit; padding: 4px 10px; line-height: 1.3; border: 1px solid var(--ink-color-global-border-default); border-radius: 4px; background: transparent; color: var(--ink-color-global-text-subtle); cursor: pointer; min-height: 28px; }
     .bar-mode-btn.active { background: var(--ink-color-global-text-default); color: var(--ink-color-global-text-inverse); border-color: var(--ink-color-global-text-default); }
     .coverage-bar-track { display: flex; height: 18px; border-radius: 4px; overflow: hidden; background: var(--ink-color-global-surface-background-underlay); }
     .coverage-bar-seg { height: 100%; }
@@ -991,6 +991,20 @@
       if (el) el.textContent = msg;
     }
 
+    // Loading copy for the parallel queries: a percentage once every query has
+    // reported its row total, so the figure never moves backwards.
+    function loadProgress(labels, baseMessage) {
+      const seen = new Map();
+      return label => (loaded, total) => {
+        seen.set(label, { loaded, total });
+        const parts = labels.map(l => seen.get(l));
+        if (parts.some(p => !p || p.total === null)) return;
+        const all = parts.reduce((sum, p) => sum + p.total, 0);
+        const done = parts.reduce((sum, p) => sum + p.loaded, 0);
+        setLoadingStatus(all ? baseMessage + ' ' + Math.floor(100 * done / all) + '%' : baseMessage);
+      };
+    }
+
     function showContent() {
       document.getElementById('loading-state').style.display = 'none';
       document.getElementById('error-state').style.display = 'none';
@@ -1654,18 +1668,20 @@
 
       let auditRows, drilldownRows, enrichmentRows, statusRows, orphaned, coverageSpa;
       try {
-        setLoadingStatus('Loading SPA coverage data from Carta…');
+        const loadingMessage = 'Loading SPA coverage data from Carta…';
+        setLoadingStatus(loadingMessage);
+        const progress = loadProgress(['Query A', 'Query D', 'Query E', 'Query T'], loadingMessage);
         // Query A, D, and the coverage scalar are required — a failure on any
         // of them errors the whole page (below). Query E, T, and O each
         // degrade to a safe default on failure and never fail the audit.
         [auditRows, drilldownRows, enrichmentRows, statusRows, orphaned, coverageSpa] = await Promise.all([
-          fetchAllRows(buildAuditSql, 'Query A'),
-          fetchAllRows(buildDrilldownSql, 'Query D'),
-          fetchAllRows(buildEnrichmentSql, 'Query E').catch(err => {
+          fetchAllRows(buildAuditSql, 'Query A', progress('Query A')),
+          fetchAllRows(buildDrilldownSql, 'Query D', progress('Query D')),
+          fetchAllRows(buildEnrichmentSql, 'Query E', progress('Query E')).catch(err => {
             console.warn('enrichment query failed; funds/geography/SOI valuation disabled', err);
             return [];
           }),
-          fetchAllRows(buildStatusSql, 'Query T').catch(err => {
+          fetchAllRows(buildStatusSql, 'Query T', progress('Query T')).catch(err => {
             console.warn('status query failed; Live/Exited filter disabled', err);
             return [];
           }),
@@ -1765,9 +1781,8 @@
     // Firm-level totals (stat tiles, coverage bar) never add amounts in
     // different currencies. They sum only the companies whose cost basis is in
     // the currency most companies carry; a company in another currency, or
-    // whose own rows span currencies, is left out and counted so the page can
-    // say so. Adding one IDR holding into a USD total can lift a 47% coverage
-    // figure to 99%.
+    // whose own rows span currencies, is left out. Adding one IDR holding into a USD total can lift
+    // a 47% coverage figure to 99%.
     let VALUE_CCY;
     function valueCurrency() {
         if (VALUE_CCY !== undefined) return VALUE_CCY;
@@ -1939,7 +1954,7 @@
         const fyiLine = fyiPills ? '<div class="header-fyi">' + fyiPills + '</div>' : '';
         document.getElementById('page-header').innerHTML =
             '<h1>SPA Audit</h1>' +
-            '<p>' + esc(m.firmName) + ' · Extracted from stock purchase agreements · Data as of ' + esc(m.generatedAt) + '</p>' + fyiLine;
+            '<p>' + esc(m.firmName) + ' · Data as of ' + esc(m.generatedAt) + '</p>' + fyiLine;
     }
 
     // ---------- Stat tiles — one per bucket ----------
@@ -1948,11 +1963,6 @@
     // use muted styling so the user's eye lands on the gaps first.
     function bucketTotal(key) {
         return filteredBucketRowsByKey(key).filter(r => inValueCurrency(r)).reduce((s, r) => s + (r.costBasis || 0), 0);
-    }
-    // Companies with a cost basis that bucketTotal() leaves out for being in
-    // another currency.
-    function otherCurrencyCount() {
-        return BUCKETS.reduce((n, b) => n + filteredBucketRows(b).filter(r => r.costBasis && !inValueCurrency(r)).length, 0);
     }
     function renderMetricsGrid() {
         // Grand total across all buckets — each tile's cost basis is shown as
@@ -2032,11 +2042,9 @@
                 esc(o.label) + ' ' + p.toFixed(1) + '%</span>';
         });
 
-        const otherCcy = otherCurrencyCount();
         const headerValue = useCount
             ? countPct + '% of companies covered'
-            : valuePct.toFixed(1) + '% of ' + valueCurrency() + ' cost basis covered' +
-              (otherCcy ? ' · ' + otherCcy + (otherCcy === 1 ? ' company' : ' companies') + ' in other currencies not counted' : '');
+            : valuePct.toFixed(1) + '% of ' + valueCurrency() + ' cost basis covered';
 
         const toggleHtml =
             '<div class="bar-mode-toggle">' +

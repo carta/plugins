@@ -26,8 +26,8 @@ Present results in two sub-tables. Both use `SPA #` as the join key so the user 
 **Document overview**
 
 | SPA # | Issuer | Transaction date | Upload date | Executed? |
-|------:|-------|:----------------:|:-----------:|:---------:|
-| 1 | Acme Corp, Inc. | Jan 31, 2022 | Jan 2022 | Yes |
+|------:|:------|:-----------------|:------------|:----------|
+| 1 | Acme Corp, Inc. | Jan 31, 2022 | Feb 3, 2022 | Yes |
 
 **Purchaser / transaction details**
 
