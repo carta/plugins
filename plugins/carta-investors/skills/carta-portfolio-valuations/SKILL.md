@@ -72,7 +72,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.55.2</carta-plugin>
+<carta-plugin>carta-investors:7.56.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -132,6 +132,12 @@ If every one of these is already loaded, skip the search.
 
 **Run this once, on first invocation of the skill, right after the Startup message and before anything else.**
 One probe up front — never a check scattered through the individual flows. Every step after this may assume access is settled.
+
+**One exemption:** a request to *learn* PWERM (the Routing table's tutorial row) reads
+`references/tutorial.md` without this gate. It is a worked example on invented data and calls
+nothing, so there is no access to probe — and asking a learner to have the product enabled
+before they can read about it is backwards. The tutorial's closing offer to build a real one
+comes back here first.
 
 A caller without Portfolio Valuations is stopped in one of **two** ways, and
 which one they hit depends on how their access is configured:
@@ -661,11 +667,12 @@ may be stale:
 ## Routing: match the request to a capability
 
 This skill does three things — **review the dashboard**, **bulk-create
-valuations**, and **dive into one valuation**. There is **no fixed
-sequence**: read the user's first message, match it against the table
-below, and enter that capability directly. The only hard prerequisite is
-**firm selection** (Step 1) — resolve `org_pk` first, then act on the
-matched capability.
+valuations**, and **dive into one valuation** — and can teach PWERM on
+invented data. There is **no fixed sequence**: read the user's first
+message, match it against the table below, and enter that capability
+directly. The only hard prerequisite is **firm selection** (Step 1) —
+resolve `org_pk` first, then act on the matched capability — except the
+PWERM tutorial row, which needs no firm.
 
 ### Global interrupt: fund holdings request (any point in the flow)
 
@@ -678,6 +685,7 @@ output, not the fund-level split.
 
 | The user's request… | Enter |
 |---|---|
+| Learning PWERM, no company in mind ("walk me through PWERM", "how does a probability-weighted valuation work", "show me an example PWERM", "I've never built one of these") | **Read `references/tutorial.md` and run it now.** Skip Gate 1 and Step 1: it is a worked example on invented data, so it needs no firm, no company and no call. Its closing offer to build a real one re-enters at Gate 1, then Step 1, then takes the named company through this table's single-company row so **Step 2.5** resolves its project. |
 | **One** company named, or single-company drill-down ("show me MangoCart's valuations", "let's work on Acme today", "I want to pick comps myself", "review Acme's cap table", "let's go step by step on Acme", "update the EV for Acme") | **Dive into one** — after Step 1, go to **Step 2.5**: show the recap, then route the request. If the candidate isn't identified, ask which one. |
 | **Multiple** companies named ("review MangoCart and Acme") | **Bulk-create** with that pre-selected set — see *Multi-company entry* below. |
 | Open-ended: generic / unscoped ("I want to work on my portfolio valuations", "let's work on valuations today", "work on portfolio valuations for {firm}"), review / status phrasing scoped to the portfolio ("review my Q2 valuations", "which companies need new valuations"), bare / help-ish (empty message, "help", "what can you do", "get started", "show me what you can do", bare `/carta-portfolio-valuations`), or ambiguous | After Step 1, present the *dashboard-on-screen* or *no-dashboard* fork (below, whichever matches what Step 1's open call did) and wait. Do **not** render the portfolio table or jump into `references/bulk/bulk-runner.md` until the user asks. |
@@ -855,7 +863,9 @@ Then return control to wherever the user was — don't force a new menu.
 
 ## Step 1: Firm selection (prerequisite — resolve before any capability)
 
-Every capability needs `org_pk`, so resolve the firm first.
+Every capability needs `org_pk`, so resolve the firm first. **Except the tutorial** (the Routing
+table's PWERM tutorial row): it runs on invented data and names no firm, so don't ask for one
+before it. Ask when its closing offer is taken up.
 
 **Never load the portfolio on entry.** `list:portfolio_dashboard` is slow,
 so the skill does not call it when it starts: not ahead of time, not in

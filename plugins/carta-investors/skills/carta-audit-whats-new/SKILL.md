@@ -44,7 +44,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.55.2</carta-plugin>
+<carta-plugin>carta-investors:7.56.0</carta-plugin>
 
 # What's new since last check
 

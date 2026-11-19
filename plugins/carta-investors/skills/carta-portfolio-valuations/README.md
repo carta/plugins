@@ -37,6 +37,8 @@ These individual single-valuation flows are reachable directly on dive-in.
 ### Shared
 
 - **`references/dashboard-view.md`** — opens the `portfolio_valuations:view:dashboard` MCP App in the chat on entry (Step 1), once the firm is settled; carries on in chat, with no dashboard link, when the MCP App can't be used.
+- **`references/tutorial.md`** — a seven-section walkthrough of a probability-weighted valuation on fictional data: the outcomes and their weights, the single create, valuing each scenario, readiness and the blend, re-weighting, and the separate finalize confirmation. Teaching only — it reads and writes nothing.
+- **`references/dive-in/pwerm.md`** — the PWERM flow itself: agree the scenarios, create the candidate, let `get:scenarios`' blockers drive the work, value and allocate each scenario, show the blend, and change an existing one.
 - **`references/deep-link.md`** — URL construction for the Carta pages outside the valuations dashboard (cap-table access, firm investments, investment overview), and the ids `open_company` and `open_valuation` take. Single source for every URL pattern the skill uses.
 - **`references/md-table-runner.md`** — the text-based bulk runner: numbered run plan, overrides in prose, confirm, `create:bulk`.
 - **`references/bulk/bulk-runner-view.md`** — opens the `portfolio_valuations:view:edit_bulk_val` picker view: tick companies, pick an approach per company (pre-filled from its latest event, Post-money at the round's value after a financing round), a value and optional Waterfall or Common Stock Equivalent allocation (run after the value is set) for Post-money or Custom Company Value, and one valuation date; its message is the confirmation. Falls back to the table when the MCP App can't be used.
