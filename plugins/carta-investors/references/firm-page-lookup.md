@@ -1,6 +1,6 @@
 # Finding a firm's existing page
 
-Carta Home, SOI and LP Summary are each bound to one firm: the build bakes in that firm's
+Each firm-bound page (Carta Home, SOI, LP Summary, …) is bound to one firm: the build bakes in that firm's
 dashboards, funds or warehouse ids. Their titles carry no firm, so every firm a user builds
 for has its own page under the same title, and the title alone is not an identity. Each of
 these pages names its firm at the start of its artifact `description`: the description's

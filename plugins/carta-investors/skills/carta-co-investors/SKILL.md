@@ -58,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.55.0</carta-plugin>
+<carta-plugin>carta-investors:7.55.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) record `skill_failed` as Error handling describes, and stop. Don't search the disk for them.
 
@@ -182,10 +182,8 @@ against named columns:
 `spa_rec` also filters `FIRM_ID` even though every query filters it again
 downstream. That is deliberate: `firm_id` is the leading column of the table's
 clustering key, so pinning it here lets Snowflake prune partitions instead of
-scanning every firm's records and discarding them after the join. Measured on a
-~460-SPA firm it cut Query S from 3.3 GB scanned to 765 MB and 2.65s to 1.25s.
-It is safe because `firm_id` is constant across an extraction's records —
-verified: zero extractions carry more than one distinct `firm_id`.
+scanning every firm's records and discarding them after the join. It is safe
+because `firm_id` is constant across an extraction's records.
 
 **`RAW_JSON` envelope shape.** Every `RAW_JSON` leaf is a citation envelope
 — `{value, text, reasoning, confidence, error, citations[]}` — except on a
@@ -362,12 +360,12 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
 
 > **Every stop in this step** records `skill_failed` first, as Error handling describes: the run delivered nothing, and a stop that records nothing drops out of the usage stats.
 
-1. Call `list_contexts` to get the firm UUID and display name. If nothing is returned → stop with: "I couldn't find any Carta data associated with your account. Try reconnecting to the Carta MCP server. If you believe you're already connected, contact your Carta representative."
+1. Call `list_contexts` (with `{"firm_name": "<firm_name>"}` if the user named a firm) and pick the firm: the user's only firm, the one they named, or the one whose `is_active` is true. With several firms and none named or active, ask once which firm with `AskUserQuestion`, and use the one they pick. If the call with `firm_name` returns nothing, call `list_contexts` once without it and ask which firm; only an empty unfiltered call means the account has no data. If the chosen firm is not already active, call `set_context({"firm_id": "<its UUID>"})` before step 2, so step 2 reads that firm's entities. Whenever the call named a firm or returned several, open with a line naming the firm in use ("Using <firm_name>."), so the user can switch. Take that firm's UUID and display name. If nothing is returned → stop with: "I couldn't find any Carta data associated with your account. Try reconnecting to the Carta MCP server. If you believe you're already connected, contact your Carta representative."
 2. Call `read_tool({"name": "fa__list__entities", "arguments": {"entity_types": "fund"}})` and read `<firm_carta_id>` — the integer PK used in Carta web URLs — from any entity in the response. This call is only for that id; the firm's own vehicles are read from the warehouse (Mode A's page and Mode B's queries both do it), so do not list every entity type here.
    - **Never call it without `entity_types`.** An unfiltered list for a firm with many funds and SPVs is larger than the response limit, and the call fails with "response too large".
    - If the `fund` call comes back "response too large" or with no entities (an SPV-only firm), call once more with `{"entity_types": "management_co"}` and take `<firm_carta_id>` from that. That is the only retry: no `search=` probing, no other type lists, no repeat of either call.
 3. Store `<firm_id>` (the UUID), `<firm_name>` (display name), and `<firm_carta_id>`.
-4. Resolve `<base_url>` from the current Carta MCP server URL — **never hardcode an environment URL**, or a sandbox firm deep-links into production. The production MCP server (`mcp.app.carta.com`) maps to the Carta production web app; a sandbox server maps to the matching sandbox web app. It must be a plain `https://` origin with no path — the render script rejects anything else.
+4. Resolve `<base_url>` from the current Carta MCP server URL — **never hardcode an environment URL**. The production MCP server (`mcp.app.carta.com`) maps to the Carta production web app. It must be a plain `https://` origin with no path — the render script rejects anything else.
 
 **Pre-flight check:** confirm `<firm_id>` is a non-empty UUID string (matches `[a-f0-9-]{36}`). If not, stop with: "Could not determine your firm ID. Try reconnecting to the Carta MCP server. If you believe you're already connected, contact your Carta representative."
 
@@ -450,7 +448,7 @@ On success the script prints one stdout line: the absolute output path. It exits
 
 Example: `"Acme Capital Partners, L.P."` → slug `"acme-capital-partners-lp"` → output `acme-capital-partners-lp-co-investors.html`, artifact id `acme-capital-partners-lp-co-investors`.
 
-Re-running the skill for the same firm produces the same artifact id and filename, so Step A3 updates the artifact in place.
+Re-running the skill for the same firm produces the same artifact id and filename, and Step A3 updates that firm's own page in place.
 
 ### Step A3: Publish
 
@@ -462,13 +460,16 @@ First look for an existing one:
 Artifact({action: "list", scope: "mine"})
 ```
 
-If a **<Firm Name> — Co-Investor Analysis** artifact is already published, keep its `url`. Then publish — one call either way, `url` being the only difference:
+Keep the `url` of this firm's existing page, found with
+`${CLAUDE_PLUGIN_ROOT}/references/firm-page-lookup.md` (the plugin's own `references/`, not
+this skill's; read it by that exact path, don't search for it). Its title is **Co-Investor
+Analysis** and its firm-named title is **<Firm Name> — Co-Investor Analysis**. For its "single firm" test, the user has a single firm only when `list_contexts` called without `firm_name` returned one firm; a call that named a firm counts as several. Then publish — one call either way, `url` being the only difference:
 
 ```
 Artifact({
   file_path: "<absolute path printed by the render script>",
   url: "<url from the list — omit entirely on a first publish>",
-  title: "<Firm Name> — Co-Investor Analysis",
+  title: "Co-Investor Analysis",
   description: "<Firm Name> — who co-invests alongside you across the portfolio",
   favicon: "🤝",
   capabilities: {
@@ -489,7 +490,7 @@ Keep `title` and `favicon` stable across redeploys, and restate the whole `capab
 
 ### Step A4: Confirm
 
-> Your co-investor analysis for **<Firm Name>** is ready: [Open <Firm Name> — Co-Investor Analysis](<url the publish returned>)
+> Your co-investor analysis for **<Firm Name>** is ready: [Open Co-Investor Analysis](<url the publish returned>)
 
 Fill the link with the `url` the publish call returned. The side panel does not always open by itself, and this link is how the user reaches the page when it stays closed, so never say the page is loading or open in the sidebar.
 

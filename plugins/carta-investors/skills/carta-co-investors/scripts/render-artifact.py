@@ -129,7 +129,7 @@ def main() -> int:
     }
 
     content = content.replace("{{STATE_JSON}}", js_safe_json(state_obj))
-    content = content.replace("{{TITLE}}", html.escape(f"{firm_name} — Co-Investor Analysis"))
+    content = content.replace("{{TITLE}}", html.escape("Co-Investor Analysis"))
     content = content.replace("{{FIRM_UUID}}", firm_uuid)
     content = content.replace("{{CARTA_MCP_SERVER}}", mcp_server)
 

@@ -261,7 +261,7 @@
       white-space: nowrap;
     }
     .chip-more:hover { color: var(--ink-color-global-text-default); }
-    .footer-note { font-size: 12px; color: var(--ink-color-global-text-subtle); margin-top: 8px; }
+    .footer-note { font-size: 12px; color: var(--ink-color-global-text-subtle); }
     .company-link {
       color: var(--ink-color-global-link-default);
       font-size: 13px;
@@ -385,10 +385,9 @@
       padding-top: 16px;
       border-top: 1px solid var(--ink-color-global-border-subtle);
       display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
     }
     .carta-link { font-size: 13px; color: var(--ink-color-global-link-default); text-decoration: none; }
     .carta-link:hover { text-decoration: underline; color: var(--ink-color-global-link-hover); }
@@ -633,6 +632,25 @@
     function setLoadingStatus(msg) {
       const el = document.getElementById('loading-status');
       if (el) el.textContent = msg;
+    }
+
+    // The six queries load side by side, so the loading line shows one overall
+    // percentage, never a row count. Each query starts as one unit of work and is
+    // replaced by its real size once its first page reports; the shown percentage
+    // never moves backwards when a larger query reports late.
+    const LOAD_LABELS = ['Query S', 'Query R', 'Query T', 'Query V', 'Query C', 'Query P'];
+    const loadProgress = new Map(LOAD_LABELS.map(label => [label, { loaded: 0, total: 1 }]));
+    let loadPercent = 0;
+
+    function trackLoad(label) {
+      return (loaded, total) => {
+        const size = Math.max(total, 1);
+        loadProgress.set(label, { loaded: loaded >= total ? size : loaded, total: size });
+        let done = 0, all = 0;
+        for (const p of loadProgress.values()) { done += p.loaded; all += p.total; }
+        loadPercent = Math.max(loadPercent, Math.floor(100 * done / all));
+        setLoadingStatus('Loading co-investor data from Carta… ' + loadPercent + '%');
+      };
     }
 
     function showContent() {
@@ -1717,30 +1735,30 @@
         // Fully independent — issue all six concurrently so the wait is the
         // slowest query rather than their sum.
         [summaryRows, roundsRows, statusRows, vehicleRows, capRows, teamRows] = await Promise.all([
-          fetchAllRows(buildSummarySql, 'Query S'),
-          fetchAllRows(buildRoundsSql, 'Query R'),
+          fetchAllRows(buildSummarySql, 'Query S', trackLoad('Query S')),
+          fetchAllRows(buildRoundsSql, 'Query R', trackLoad('Query R')),
           // Query T supplies Live/Exited status, HAS_SPA and every coverage figure,
           // but not the co-investor table, so it must never fail the report. On
           // error the table still renders; the Live/Exited tabs and the header's
           // coverage sentence are left out and the tile reads "Coverage unavailable".
-          fetchAllRows(buildStatusSql, 'Query T').catch(err => {
+          fetchAllRows(buildStatusSql, 'Query T', trackLoad('Query T')).catch(err => {
             console.warn('status query failed; Live/Exited filter and coverage disabled', err);
             return [];
           }),
           // Without vehicles the firm name is still excluded, so a failure here
           // degrades the report rather than blocking it.
-          fetchAllRows(buildVehiclesSql, 'Query V').catch(err => {
+          fetchAllRows(buildVehiclesSql, 'Query V', trackLoad('Query V')).catch(err => {
             console.warn('vehicles query failed; excluding the firm name only', err);
             return [];
           }),
           // Cap tables add holders to the SPA picture, so a failure here degrades
           // the report to SPA-only rather than blocking it.
-          fetchAllRows(buildCapTableSql, 'Query C').catch(err => {
+          fetchAllRows(buildCapTableSql, 'Query C', trackLoad('Query C')).catch(err => {
             console.warn('cap table query failed; showing SPA data only', err);
             return [];
           }),
           // Carry holders only take team members off the list, so a failure here leaves the list as is.
-          fetchAllRows(buildTeamSql, 'Query P').catch(err => {
+          fetchAllRows(buildTeamSql, 'Query P', trackLoad('Query P')).catch(err => {
             console.warn('carry holders query failed; not excluding the firm team', err);
             return [];
           }),
@@ -1973,9 +1991,8 @@
       return { spaOnly, capOnly, both, covered: spaOnly + capOnly + both, total: totalForFilter(filter) };
     }
 
-    function coverageSentence(c) {
-      return c.spaOnly + ' companies from SPAs only, ' + c.capOnly + ' from cap tables only, ' + c.both +
-        ' from both, ' + c.covered + ' covered in total';
+    function coverageSplit(c) {
+      return c.spaOnly + ' come from SPAs only, ' + c.capOnly + ' from cap tables only and ' + c.both + ' from both';
     }
 
     function companySourceLabel(name) {
@@ -1996,12 +2013,9 @@
 
     function renderHeader() {
       const m = DATA.meta;
-      const c = coverageForFilter('all');
-      const coveredPct = c && c.total > 0 ? Math.round(c.covered / c.total * 100) : 0;
       document.getElementById('page-header').innerHTML =
         '<h1>Co-Investor Analysis</h1>' +
-        '<p>' + esc(m.firmName) + ' · From stock purchase agreements and cap tables · Data as of ' + esc(m.generatedAt) + '</p>' +
-        (c ? '<p>' + c.covered + ' of your ' + c.total + ' portfolio companies have an SPA or detailed cap table on file (' + coveredPct + '%)</p>' : '');
+        '<p>' + esc(m.firmName) + ' · Data as of ' + esc(m.generatedAt) + '</p>';
     }
 
     function renderFilterBar() {
@@ -2047,19 +2061,18 @@
       const cov = coverageForFilter(filter);
       const coverageLabel = filter === 'live' ? 'Live Coverage' : filter === 'exited' ? 'Exited Coverage' : 'Portfolio Coverage';
       const coverageIntro = 'Co-investor analysis covers portfolio companies with a Stock Purchase Agreement (SPA) uploaded to Carta, or a detailed cap table shared with you.';
-      let coverageValue, coverageSub, coverageTooltip;
+      let coverageValue, coverageTooltip;
       if (cov) {
         const total = cov.total;
         const coveredPct = total > 0 ? Math.round(cov.covered / total * 100) : 0;
         const missing = Math.max(total - cov.covered, 0);
         coverageValue = cov.covered + ' / ' + total + ' — ' + coveredPct + '%';
-        coverageSub = coverageSentence(cov);
         coverageTooltip = coverageIntro + ' ' +
           cov.covered + ' of ' + total + (filter === 'all' ? ' portfolio' : filter === 'live' ? ' live' : ' exited') + ' companies are covered' +
-          (missing > 0 ? ' — the remaining ' + missing + ' are not yet visible in this report.' : '.');
+          (missing > 0 ? ' — the remaining ' + missing + ' are not yet visible in this report.' : '.') +
+          ' Of those, ' + coverageSplit(cov) + '.';
       } else {
         coverageValue = 'Coverage unavailable';
-        coverageSub = '';
         coverageTooltip = coverageIntro + ' The portfolio list did not load, so coverage could not be computed.';
       }
 
@@ -2103,7 +2116,6 @@
         '<div class="metric-card has-tooltip" tabindex="0" aria-describedby="coverage-tooltip">' +
           '<div class="metric-label">' + esc(coverageLabel) + ' <span class="tooltip-icon" aria-hidden="true">i</span></div>' +
           '<div class="metric-value" style="font-size:20px;line-height:40px">' + esc(coverageValue) + '</div>' +
-          '<div class="metric-sub">' + esc(coverageSub) + '</div>' +
           '<div class="tooltip" id="coverage-tooltip" role="tooltip">' + esc(coverageTooltip) + '</div>' +
         '</div>';
     }
@@ -2159,7 +2171,7 @@
       // list is trimmed carries the way out of it.
       const toggle = !view.trimmable ? ''
         : ' ' + singlesToggleButton('carta-link', 'Show all ' + formatCount(view.total));
-      html += '<div class="footer-note">' + esc(note) + toggle + '</div>';
+      html = '<div class="footer-note">' + esc(note) + toggle + '</div>' + html;
       document.getElementById('page-footer').innerHTML = html;
     }
 

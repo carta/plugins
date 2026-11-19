@@ -202,7 +202,7 @@ you print the line, and re-run QC rather than adjusting a number if it fails.
 > groupings in `canonical-investors.json`.*
 
 | Co-investor | Companies | Entity type | Portfolio companies |
-|---|---|---|---|
+|---|--:|---|---|
 | [Name] | [N] | [type, or — when only a cap table names them] | Co. 1, Co. 2, Co. 3 |
 
 *Name groupings applied: list rows where `RAW_NAMES` contains a `||` separator
@@ -222,7 +222,7 @@ section if no rows had multi-vehicle groupings.*
 > derivable from SPA data alone.*
 
 | Co-investor | Companies >5% | Avg % of round | Entity type | Portfolio companies |
-|---|---|---|---|---|
+|---|--:|--:|---|---|
 
 [View SPA source documents in Carta](<base_url>/investors/firm/<firm_carta_id>/portfolio/documents/)
 
@@ -243,7 +243,7 @@ When Q4b returned rows, show current holders first:
 > **<Firm name> — <Company name>, current holders**
 
 | Investor | Current fully diluted ownership |
-|---|---|
+|---|--:|
 | [Investor, per merge rule 2] | [X.X%] |
 
 Q4b rows are one per stakeholder; resolve each to its investor with merge rule 2 and add up only the rows that resolve to the same investor (a shared label such as "Fund GP" is not an investor), and mark the firm's own vehicles **(You)**. Then, for each SPA round (grouped by `EXTRACTION_ID`), render a separate section:
@@ -252,7 +252,7 @@ Q4b rows are one per stakeholder; resolve each to its investor with merge rule 2
 > <N> investors | Total raised: <amount in CURRENCY>
 
 | Investor | Entity type | Shares | Amount paid | % of round |
-|---|---|---|---|---|
+|---|---|--:|--:|--:|
 | [Your fund] **(You)** | [type] | [N] | [amount in CURRENCY] | [X.X%] |
 
 Amounts take the round's `CURRENCY` column (see **Currency** under Typography). Rounds in different currencies get separate totals.
