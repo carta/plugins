@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carta Audit Home</title>
+<style>
+:root{
+  color-scheme:light dark;
+  --ink-color-global-text-default:light-dark(#1A1A1A,#EDEDED);
+  --ink-color-global-text-subtle:light-dark(#656B6B,#A7AAAA);
+  --ink-color-global-surface-background-default:light-dark(#FFFFFF,rgb(18 18 18));
+  --ink-color-global-surface-background-underlay:light-dark(#F1F1F1,#2D2D2D);
+  --ink-color-global-border-subtle:light-dark(#DEDFDF,#2D2D2D);
+  --ink-color-global-border-default:light-dark(#A7AAAA,#656B6B);
+  --ink-color-global-text-danger:light-dark(#E52431,#FF6B73);
+  --ink-button-background-color-primary-base-default:light-dark(#1A1A1A,#FFFFFF);
+  --ink-button-background-color-primary-base-hover:light-dark(#202020,#CECFCF);
+  --ink-button-background-color-primary-disabled:light-dark(#EDEDED,#394040);
+  --ink-button-font-color-primary-base:light-dark(#FFFFFF,#1A1A1A);
+  --ink-button-font-color-primary-disabled:light-dark(#CECFCF,#656B6B);
+  --ink-color-global-surface-background-overlay:light-dark(rgb(0 0 0 / 0.8),rgb(80 80 80 / 0.8));
+  --ink-color-global-border-active:light-dark(#1A1A1A,#CECFCF);
+  --ink-elevation-global-shadow-small:0 4px 12px 0 rgb(0 0 0 / 0.08);
+  --ink-elevation-global-shadow-large:0 4px 20px 0 rgb(0 0 0 / 0.2);
+  --ink-font-global-family-prominent:"SangBleu Versailles",Georgia,serif;
+  --ink-size-global-radius-flat:0;
+  --ink-size-global-radius-subtle:4px;
+  --card:light-dark(var(--ink-color-global-surface-background-default),var(--ink-color-global-surface-background-underlay));
+}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;font:14px/24px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--ink-color-global-surface-background-default);color:var(--ink-color-global-text-default)}
+.container{max-width:1040px;margin:0 auto;padding:24px 24px 56px}
+.logo{display:block;margin-bottom:12px;color:var(--ink-color-global-text-default)}
+h1{font-family:var(--ink-font-global-family-prominent);font-weight:400;font-size:28px;line-height:40px;margin:0 0 20px}
+h2{font-size:16px;font-weight:600;margin:0}
+.muted{color:var(--ink-color-global-text-subtle)}.small{font-size:13px}
+.hidden{display:none !important}
+.card{background:var(--card);border:1px solid var(--ink-color-global-border-subtle);border-radius:var(--ink-size-global-radius-flat);box-shadow:var(--ink-elevation-global-shadow-small);padding:20px;margin-bottom:16px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.notice{border:1px solid var(--ink-color-global-border-subtle);border-left:4px solid var(--ink-color-global-text-default);padding:10px 14px;margin-bottom:16px;background:var(--card)}
+.notice.error{border-left-color:var(--ink-color-global-text-danger)}
+select{font:inherit;border:1px solid var(--ink-color-global-border-default);border-radius:var(--ink-size-global-radius-subtle);padding:3px 8px;background:var(--ink-color-global-surface-background-default);color:inherit}
+.stats{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat{flex:1;min-width:150px;background:var(--card);border:1px solid var(--ink-color-global-border-subtle);box-shadow:var(--ink-elevation-global-shadow-small);padding:14px 16px}
+.stat .n{font-size:26px;line-height:34px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .l{font-size:13px;color:var(--ink-color-global-text-subtle)}
+.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+.grid>.card{margin-bottom:0}
+.firm{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-color-global-text-subtle);margin:16px 0 6px}
+.firm:first-child{margin-top:0}
+.fund{display:flex;align-items:center;gap:14px;padding:12px;border:1px solid var(--ink-color-global-border-subtle);margin-bottom:8px;cursor:pointer;background:transparent;width:100%;text-align:left;font:inherit;color:inherit}
+.fund:hover{border-color:var(--ink-color-global-text-default)}
+.fund[disabled]{cursor:default;opacity:.7}.fund[disabled]:hover{border-color:var(--ink-color-global-border-subtle)}
+.fund .fn{flex:1;min-width:0}.fund .fn b{display:block;font-weight:600}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.tags i{font-style:normal;font-size:11px;line-height:16px;padding:1px 8px;border-radius:10px;white-space:nowrap;border:1px solid var(--ink-color-global-border-default);color:var(--ink-color-global-text-subtle)}
+.tags i.on{background:var(--ink-color-global-text-default);border-color:var(--ink-color-global-text-default);color:var(--ink-color-global-surface-background-default)}
+.badge{font-size:12px;line-height:20px;font-weight:600;border-radius:999px;padding:0 8px;white-space:nowrap;display:inline-block}
+.badge.new{background:var(--ink-color-global-text-default);color:var(--ink-color-global-surface-background-default)}
+.badge.mute{background:var(--ink-color-global-surface-background-underlay);color:var(--ink-color-global-text-subtle);font-weight:500}
+.badge.out{border:1px solid var(--ink-color-global-text-default)}
+.badge.danger{border:1px solid var(--ink-color-global-text-danger);color:var(--ink-color-global-text-danger)}
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--ink-color-global-border-subtle)}
+.feed li:first-child{border-top:0}
+.feed .what{flex:1;min-width:0}.feed .doc{font-weight:500;overflow-wrap:anywhere}
+.tag{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;width:66px;flex:0 0 66px;padding-top:2px}
+.tag.removed{color:var(--ink-color-global-text-subtle)}
+.empty{border:1px dashed var(--ink-color-global-border-default);padding:16px;color:var(--ink-color-global-text-subtle);font-size:13px}
+.btn{background:var(--ink-button-background-color-primary-base-default);color:var(--ink-button-font-color-primary-base);border:1px solid var(--ink-button-background-color-primary-base-default);border-radius:var(--ink-size-global-radius-subtle);padding:5px 14px;font:inherit;font-weight:500;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-block}
+.btn:hover{background:var(--ink-button-background-color-primary-base-hover)}
+.btn[disabled]{background:var(--ink-button-background-color-primary-disabled);border-color:var(--ink-button-background-color-primary-disabled);color:var(--ink-button-font-color-primary-disabled);cursor:default}
+.btn.ghost{background:transparent;color:inherit;border-color:var(--ink-color-global-border-default)}.btn.ghost:hover{border-color:var(--ink-color-global-text-default)}
+.btn.sm{padding:2px 10px;font-size:13px}
+.link{color:inherit;text-decoration:underline;cursor:pointer;background:none;border:0;font:inherit;padding:0}
+button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--ink-color-global-text-default);outline-offset:2px}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;font-weight:600;color:var(--ink-color-global-text-subtle);text-align:left;padding:6px 8px;border-bottom:1px solid var(--ink-color-global-border-subtle)}
+td{padding:10px 8px;border-bottom:1px solid var(--ink-color-global-border-subtle);vertical-align:top}
+tr.area.expandable{cursor:pointer}tr.area.expandable:hover td{background:var(--ink-color-global-surface-background-underlay)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.detail td{background:var(--ink-color-global-surface-background-underlay);padding:8px 8px 12px 34px}
+.detail ul{margin:4px 0 0;padding-left:18px}.detail li{margin-bottom:2px;overflow-wrap:anywhere}
+.dl{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+.prompt{margin:-4px 0 16px}
+.prompt-box{display:flex;align-items:stretch;margin-top:4px;border:1px solid var(--ink-color-global-border-default);border-radius:var(--ink-size-global-radius-subtle);background:var(--ink-color-global-surface-background-underlay)}
+.prompt-box code{flex:1;min-width:0;padding:6px 10px;font:13px/22px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;user-select:all;overflow-wrap:anywhere}
+.prompt-box .copy{display:inline-flex;align-items:center;gap:6px;border:0;border-left:1px solid var(--ink-color-global-border-default);border-radius:0;background:transparent;color:inherit;padding:0 12px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.prompt-box .copy:hover{background:var(--ink-color-global-surface-background-default)}
+.prompt-box .copy svg{flex:0 0 auto}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--ink-color-global-border-subtle);border-top-color:var(--ink-color-global-text-default);border-radius:50%;animation:s .8s linear infinite;vertical-align:-1px}
+@keyframes s{to{transform:rotate(360deg)}}
+.tri{display:inline-block;width:12px;color:var(--ink-color-global-text-subtle);transition:transform .15s}.open .tri{transform:rotate(90deg)}
+.err{color:var(--ink-color-global-text-danger);font-size:13px}
+#tourOverlay{position:fixed;inset:0;z-index:998;cursor:pointer}
+#tourSpot{position:fixed;z-index:999;pointer-events:none;box-shadow:0 0 0 9999px var(--ink-color-global-surface-background-overlay),0 0 0 2.5px var(--ink-color-global-border-active)}
+#tourCard{position:fixed;z-index:1000;width:min(308px,calc(100vw - 24px));background:var(--ink-color-global-surface-background-default);border:1px solid var(--ink-color-global-border-subtle);box-shadow:var(--ink-elevation-global-shadow-large);padding:20px 22px;animation:tourIn .2s ease}
+@keyframes tourIn{from{opacity:0}}
+.tour-top,.tour-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tour-top{margin-bottom:10px}
+.tour-count{font-size:11px;line-height:16px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-color-global-text-subtle)}
+#tourSkip{font-size:12px;color:var(--ink-color-global-text-subtle)}
+.tour-title{font-size:14px;line-height:19px;font-weight:600;margin:0 0 6px}
+.tour-desc{font-size:13px;line-height:20px;color:var(--ink-color-global-text-subtle);margin:0 0 18px}
+#tourDots{display:flex;gap:5px;align-items:center}
+.tour-dot{display:block;width:6px;height:6px;border-radius:3px;background:var(--ink-color-global-border-default)}
+.tour-dot.active{width:18px;background:var(--ink-color-global-border-active)}
+@media (max-width:760px){.grid{grid-template-columns:1fr}.hide-sm{display:none}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}.tri{transition:none}#tourCard{animation:none}}
+</style>
+</head>
+<body>
+<div class="container">
+  <svg class="logo" width="64" height="32" viewBox="0 0 64 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Carta">
+    <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
+    <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
+  </svg>
+  <h1>Audit Home</h1>
+
+  <div id="notice" class="notice hidden" role="status"></div>
+
+  <section id="overview">
+    <div class="head" id="overviewHead">
+      <h2>Your audits</h2>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label class="small muted" id="yearWrap">Audit year <select id="year" aria-label="Audit year"></select></label>
+        <button class="btn ghost sm" id="refresh">Refresh</button>
+      </div>
+    </div>
+    <div class="prompt hidden" id="crossFund">
+      <div class="small"><b>Download across funds</b></div>
+      <div class="prompt-box">
+        <code id="crossFundText"></code>
+        <button class="copy" id="copyCrossFund"></button>
+      </div>
+      <p class="small muted hidden" id="handoff" role="status"></p>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="grid">
+      <div class="card" id="fundsCard">
+        <div class="head"><h2>Funds</h2><span class="small muted">Select a fund to see each audit area</span></div>
+        <div id="funds"><p class="muted"><span class="spin"></span> Loading your funds…</p></div>
+      </div>
+      <div class="card" id="newCard">
+        <div class="head"><h2>What's new</h2><span class="small muted" id="lastCheck"></span></div>
+        <div id="feed"></div>
+        <div style="margin-top:12px" id="feedActions"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="detail" class="hidden">
+    <p style="margin:0 0 10px"><button class="link" id="back">← All funds</button></p>
+    <div class="card">
+      <div class="head">
+        <div><div class="small muted" id="dFirm"></div><h2 id="dFund" style="font-size:20px;line-height:28px"></h2></div>
+        <div style="display:flex;gap:10px;align-items:center"><span class="small muted" id="dYear"></span><button class="btn" id="dlAll">Download all areas</button></div>
+      </div>
+      <p id="dVerdict" style="margin:0 0 12px"></p>
+      <table>
+        <thead><tr><th>Audit area</th><th class="num">Documents</th><th class="num hide-sm">Ready</th><th>Status</th><th></th><th></th></tr></thead>
+        <tbody id="areas"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="head"><h2>What's new in this fund</h2><span class="small muted" id="dLastCheck"></span></div>
+      <div id="dFeed"></div>
+    </div>
+  </section>
+</div>
+
+<div id="tourOverlay" class="hidden" aria-hidden="true"></div>
+<div id="tourSpot" class="hidden" aria-hidden="true"></div>
+<div id="tourCard" class="hidden" role="dialog" aria-modal="true" aria-labelledby="tourTitle" aria-describedby="tourDesc">
+  <div class="tour-top"><span class="tour-count" id="tourCount"></span><button class="link" id="tourSkip">Skip tour</button></div>
+  <p class="tour-title" id="tourTitle"></p>
+  <p class="tour-desc" id="tourDesc"></p>
+  <div class="tour-bottom"><div id="tourDots" role="group" aria-label="Tour progress"></div><button class="btn" id="tourNext"></button></div>
+</div>
+
+<script>
+// ── Carta MCP bridge ──
+// The runtime addresses a connector by display name; the build stamps it in.
+const CARTA_MCP_SERVER = "{{CARTA_MCP_SERVER}}";
+const SKILL = "carta-investors:carta-audit-home";
+
+let _nsPromise = null;
+function _waitForClaude(timeoutMs) {
+  if (window.claude?.use) return Promise.resolve(window.claude);
+  // A `claude` without `.use` never serves MCP (chat), so don't wait out the full budget.
+  const budget = window.claude ? Math.min(timeoutMs, 300) : timeoutMs;
+  return new Promise(resolve => {
+    const id = setInterval(() => { if (window.claude?.use) { clearInterval(id); clearTimeout(tid); resolve(window.claude); } }, 20);
+    const tid = setTimeout(() => { clearInterval(id); resolve(null); }, budget);
+  });
+}
+function _mcpNamespace() {
+  if (!_nsPromise) {
+    _nsPromise = _waitForClaude(5000)
+      .then(c => c ? c.use("mcp") : null)
+      .catch(() => null)
+      .then(ns => { if (!ns) _nsPromise = null; return ns; });
+  }
+  return _nsPromise;
+}
+// Every call the page makes goes through here, so the UI-origin stamp has one source.
+async function _mcp(tool, args) {
+  const mcp = await _mcpNamespace();
+  if (!mcp) throw Object.assign(new Error("no connector"), { code: "not_granted" });
+  try {
+    return await mcp.callTool(CARTA_MCP_SERVER, tool,
+      Object.assign({}, args, { _instrumentation_v2: { skills: [SKILL], from_ui: true } }));
+  } catch (err) {
+    // A failed tool belongs to whatever asked; connector-level codes rethrow to the page.
+    if (err?.code === "tool_error") return { isError: true, content: [{ type: "text", text: err.message ?? "tool error" }] };
+    throw err;
+  }
+}
+_mcpNamespace();
+
+// The command's answer: the structured payload when there is one, else JSON in the text block.
+function unwrap(res) {
+  if (!res || res.isError) return null;
+  let obj = res.payload ?? res.structured_content ?? res.structuredContent ?? null;
+  if (obj == null) {
+    try { obj = JSON.parse(res.content?.[0]?.text ?? ""); } catch (_) { return null; }
+  }
+  if (obj && typeof obj.result === "string") { try { obj = JSON.parse(obj.result); } catch (_) { return null; } }
+  else if (obj && obj.result !== undefined) obj = obj.result;
+  return obj;
+}
+const readTool = (name, args) => _mcp("read_tool", { name, arguments: args });
+const callTool = (name, args) => _mcp("call_tool", { name, arguments: args });
+const rowsOf = obj => Array.isArray(obj) ? obj : Array.isArray(obj?.results) ? obj.results : Array.isArray(obj?.firms) ? obj.firms : [];
+
+// Carta keeps one active firm per session, so firm-scoped calls take turns: each switches
+// to its firm first, then runs. Short calls only — a download's polling goes through call by call.
+// The chat shares that active firm and can change it at any moment, so every turn switches
+// again rather than trusting the firm the page set last.
+let _firmChain = Promise.resolve();
+const switchFirm = async firmId => {
+  const res = await _mcp("set_context", { firm_id: firmId });
+  // A refused switch must stop this firm's work, not run it under the previous firm.
+  if (res.isError) throw new Error("set_context refused");
+};
+function inFirm(firmId, fn) {
+  const run = _firmChain.then(async () => { await switchFirm(firmId); return fn(); });
+  _firmChain = run.catch(() => {});
+  return run;
+}
+
+// ── Audit areas and readiness (references/audit/audit-areas.md) ──
+const AREAS = [
+  { label: "General", slug: "general" },
+  { label: "Cash", slug: "cash" },
+  { label: "Investments", slug: "investment" },
+  { label: "Partners' Equity", slug: "partner-equity" },
+  { label: "Income & Expenses", slug: "income-and-expenses" },
+  { label: "Financial Packages", slug: "financial-packages" },
+  { label: "Supplemental", slug: "supplemental" },
+];
+const READINESS = {
+  "Completed": "ready",
+  "New": "processing", "Processing": "processing", "Uncategorized": "processing",
+  "AI Categorized": "processing", "AI Extracted": "processing",
+  "AI Error": "attention",
+  "Drafted": "draft",
+  "Archived": "withdrawn", "Retracted": "withdrawn",
+};
+const NOT_READY_COPY = {
+  attention: "needs attention — Carta couldn't process it, so the fund may need to re-upload it",
+  processing: "still processing — should clear on its own",
+  draft: "draft — not yet final",
+};
+// The years the investor portal's year dropdown offers, newest first; 2026 is the audit
+// everyone is working toward, so it's the default whenever a fund has it.
+const YEARS = [2026, 2025, 2024, 2023, 2022];
+const DEFAULT_YEAR = 2026;
+const MAX_LIST_PAGES = 200;
+// Listing calls in flight at once across the page; each fund asks for its seven areas together.
+const LIST_CONCURRENCY = 8;
+const POLL_MS = 5000;
+const POLL_ATTEMPTS = 60;
+const DETAIL_CAP = 20;
+
+// ── State ──
+const state = { firms: [], funds: [], year: null, listings: {}, exports: {}, current: null };
+const fundKey = (f, y) => `${f.uuid}|${y}`;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => Number(n).toLocaleString("en-US");
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function shortDate(iso) {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d) ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+}
+
+// ── "What's new" record, kept in this browser per fund and year ──
+// Shared with Audit Home pages fa-audit builds; renaming it resets every viewer's what's-new record.
+const RECORD_PREFIX = "fa-audit-home:v1:";
+function readRecord(f, y) {
+  try {
+    const rec = JSON.parse(localStorage.getItem(RECORD_PREFIX + fundKey(f, y)) || "null");
+    return rec && typeof rec.documents === "object" && rec.documents ? rec : null;
+  } catch (_) { return null; }
+}
+// An area too large to list keeps what the last record held for it, so it doesn't read as new later.
+function saveRecord(f, y, docs, unlisted = []) {
+  const documents = {};
+  const before = readRecord(f, y);
+  if (before) Object.entries(before.documents).forEach(([id, d]) => { if (unlisted.includes(d.area)) documents[id] = d; });
+  docs.forEach(d => { documents[d.id] = { name: d.name, area: d.area, state: d.state, lifecycle: d.lifecycle }; });
+  const rec = { checkedAt: new Date().toISOString(), documents };
+  try { localStorage.setItem(RECORD_PREFIX + fundKey(f, y), JSON.stringify(rec)); } catch (_) {}
+  return rec;
+}
+function diffAgainst(rec, docs, unlisted = []) {
+  if (!rec) return [];
+  const now = new Map(docs.map(d => [d.id, d]));
+  const out = [];
+  docs.forEach(d => {
+    const was = rec.documents[d.id];
+    if (!was) out.push({ kind: "added", doc: d });
+    else if (was.state !== d.state || was.lifecycle !== d.lifecycle) out.push({ kind: "changed", doc: d });
+  });
+  Object.entries(rec.documents).forEach(([id, was]) => {
+    if (!now.has(id) && !unlisted.includes(was.area)) out.push({ kind: "removed", doc: { id, name: was.name, area: was.area } });
+  });
+  return out;
+}
+
+// ── Loading ──
+function normFirm(r) {
+  const id = [r?.uuid, r?.firm_uuid, r?.id, r?.firm_id].find(v => typeof v === "string" && UUID_RE.test(v));
+  const name = r?.name ?? r?.firm_name;
+  return id && name ? { id, name: String(name) } : null;
+}
+async function loadFirms() {
+  let res = await readTool("fa__list__member-firms", {});
+  if (res.isError) { try { await _mcp("welcome", {}); } catch (_) {} res = await readTool("fa__list__member-firms", {}); }
+  if (res.isError) throw new Error("firms");
+  return rowsOf(unwrap(res)).map(normFirm).filter(Boolean);
+}
+async function loadFunds(firm) {
+  const answers = await inFirm(firm.id, () => Promise.all(YEARS.map(y =>
+    readTool("fa__list__auditable-funds", { firm_uuid: firm.id, report_year: y }).then(r => [y, r]))));
+  const byUuid = new Map();
+  answers.forEach(([y, res]) => {
+    rowsOf(unwrap(res)).forEach(r => {
+      if (!r?.uuid || !r?.name) return;
+      const f = byUuid.get(r.uuid) || { uuid: String(r.uuid), name: String(r.name), firm, years: {} };
+      // true or null (not worked out yet) both count as having documents; only false hides a year.
+      f.years[y] = r.has_document === false ? false : true;
+      byUuid.set(r.uuid, f);
+    });
+  });
+  if (answers.every(([, res]) => res.isError)) throw new Error("funds");
+  // A year Carta didn't answer for is unknown, not empty, so it stays on offer.
+  answers.filter(([, res]) => res.isError).forEach(([y]) => byUuid.forEach(f => { if (f.years[y] === undefined) f.years[y] = null; }));
+  return [...byUuid.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+function normDoc(r) {
+  const area = AREAS.find(a => a.slug === r?.audit_area);
+  if (!area || r?.id == null) return null;
+  const lifecycle = typeof r.lifecycle_status === "string" ? r.lifecycle_status : null;
+  return {
+    id: String(r.id), name: String(r.name || r.title || "Untitled document"), area: area.slug,
+    state: r.state ?? null, lifecycle, status: lifecycle ? (READINESS[lifecycle] || null) : null,
+    updated: r.updated_at || null,
+  };
+}
+// Carta caps one answer's size, and a whole fund can pass it, so each audit area is listed on its own.
+// A listing slot keeps the page's calls in flight under LIST_CONCURRENCY.
+let _listBusy = 0;
+const _listWaiting = [];
+async function inListSlot(fn) {
+  if (_listBusy >= LIST_CONCURRENCY) await new Promise(r => _listWaiting.push(r)); else _listBusy++;
+  try { return await fn(); } finally { const next = _listWaiting.shift(); if (next) next(); else _listBusy--; }
+}
+async function loadArea(f, y, area) {
+  const docs = [];
+  let after = null;
+  for (let page = 0; page < MAX_LIST_PAGES; page++) {
+    const args = { fund_uuid: f.uuid, audit_year: y, audit_area: area.slug };
+    if (after) args.after = after;
+    let res = await inListSlot(() => readTool("fa__list__audit-documents", args));
+    // One refusal can be a passing hiccup, or the chat having switched firms under the page,
+    // so the page asks once more under the fund's own firm before giving up on the fund.
+    if (res.isError) {
+      try { await switchFirm(f.firm.id); } catch (_) {}
+      res = await inListSlot(() => readTool("fa__list__audit-documents", args));
+    }
+    if (res.isError) return { error: page === 0 ? "access" : "partial" };
+    const obj = unwrap(res);
+    // An oversize answer comes back as a link this page has no way to fetch.
+    if (obj?.document_returned) return { tooMany: true };
+    rowsOf(obj).map(normDoc).filter(d => d && d.area === area.slug).forEach(d => docs.push(d));
+    if (!obj?.has_next || !obj?.next) return { docs };
+    after = String(obj.next);
+  }
+  return { tooMany: true };
+}
+// An area too large to list is set aside; the fund's other areas still show. Any other failure
+// abandons the fund, since a list with a hole in it would misreport what's new.
+async function loadListing(f, y) {
+  const parts = await Promise.all(AREAS.map(a => loadArea(f, y, a)));
+  const failed = parts.find(p => p.error);
+  if (failed) return { error: failed.error };
+  return { docs: parts.flatMap(p => p.docs || []), unlisted: AREAS.filter((a, i) => parts[i].tooMany).map(a => a.slug) };
+}
+function summarize(docs, unlisted = []) {
+  const areas = {};
+  AREAS.forEach(a => { areas[a.slug] = { total: 0, ready: 0, processing: 0, attention: 0, draft: 0, withdrawn: 0, tracked: 0, docs: [], tooMany: unlisted.includes(a.slug) }; });
+  docs.forEach(d => {
+    const s = areas[d.area];
+    s.total++; s.docs.push(d);
+    if (d.status) { s.tracked++; s[d.status]++; }
+  });
+  return areas;
+}
+const notReady = s => s.processing + s.attention + s.draft;
+// An area counts as complete only when Carta tracks its documents and none is waiting.
+const isComplete = s => s.total > 0 && s.tracked > 0 && !notReady(s);
+// The download buttons take any area with documents in it, ready or not. An area too large to
+// list has documents by definition.
+const hasDownloads = s => s.total > 0 || s.tooMany;
+function areaState(s) { return s.tooMany ? "untracked" : !s.total ? "none" : notReady(s) ? "warn" : isComplete(s) ? "ok" : "untracked"; }
+
+async function loadYear(y) {
+  const byFirm = new Map();
+  state.funds.filter(f => offeredIn(f, y) && !state.listings[fundKey(f, y)]).forEach(f => {
+    state.listings[fundKey(f, y)] = { loading: true };
+    if (!byFirm.has(f.firm.id)) byFirm.set(f.firm.id, []);
+    byFirm.get(f.firm.id).push(f);
+  });
+  renderAll();
+  for (const [firmId, funds] of byFirm) {
+    await inFirm(firmId, () => Promise.all(funds.map(async f => {
+      let out;
+      // A connector failure (expired sign-in, no connection) is the page's, not this fund's.
+      try { out = await loadListing(f, y); } catch (e) { if (e?.code) throw e; out = { error: "access" }; }
+      if (out.docs) {
+        let rec = readRecord(f, y);
+        const first = !rec;
+        if (first) rec = saveRecord(f, y, out.docs, out.unlisted);
+        out = { docs: out.docs, unlisted: out.unlisted, areas: summarize(out.docs, out.unlisted), record: rec, first, changes: first ? [] : diffAgainst(rec, out.docs, out.unlisted) };
+      }
+      state.listings[fundKey(f, y)] = out;
+      renderAll();
+    }))).catch(e => {
+      // Whatever stopped this firm's work, its funds are no longer loading; the notice says why.
+      funds.forEach(f => { if (state.listings[fundKey(f, y)]?.loading) state.listings[fundKey(f, y)] = { error: "stopped" }; });
+      renderAll();
+      handlePageError(e);
+    });
+  }
+}
+
+async function boot() {
+  hideNotice();
+  if (!(await _mcpNamespace())) return showUnavailable();
+  try {
+    state.firms = await loadFirms();
+    if (!state.firms.length) return showNoFirms();
+    const funds = [], missed = [];
+    for (const firm of state.firms) {
+      // A firm Carta won't switch to, or won't list funds for, gets a second try, then drops out
+      // with a notice so its funds aren't silently missing; connector failures stop the page.
+      let got = null;
+      for (let attempt = 0; attempt < 2 && !got; attempt++) {
+        try { got = await loadFunds(firm); } catch (e) { if (e?.code) throw e; }
+      }
+      if (got) funds.push(...got); else missed.push(firm.name);
+    }
+    state.funds = funds;
+    if (missed.length) showNotice(`Couldn't load the funds of ${esc(missed.join(", "))}. Press Refresh to try again.`, true);
+    if (!funds.length) return missed.length ? clearPanes() : showNoFirms();
+    const offered = yearsOffered();
+    state.year = offered.includes(DEFAULT_YEAR) ? DEFAULT_YEAR : (offered[0] ?? null);
+    renderYear();
+    if (state.year == null) return renderAll();
+    await loadYear(state.year);
+    tourStart();
+  } catch (e) { handlePageError(e); }
+}
+// A fund-year is offered when Carta listed the fund for that year without saying it has no documents.
+const offeredIn = (f, y) => f.years[y] !== false && f.years[y] !== undefined;
+function yearsOffered() { return YEARS.filter(y => state.funds.some(f => offeredIn(f, y))); }
+
+// ── Page-level states ──
+function showNotice(html, isError) { const n = $("notice"); n.innerHTML = html; n.classList.toggle("error", !!isError); n.classList.remove("hidden"); }
+function hideNotice() { $("notice").classList.add("hidden"); }
+// The page with nothing to show: one message (or none) in place of the funds, every other pane empty.
+function clearPanes(fundsHtml = "") {
+  $("funds").innerHTML = fundsHtml; $("feed").innerHTML = ""; $("stats").innerHTML = ""; showYearControls(false);
+}
+function showUnavailable() {
+  clearPanes(`<div class="empty">Open this page in Claude Code or Cowork with your Carta connection to see your audits.</div>`);
+}
+function showNoFirms() {
+  clearPanes(`<div class="empty">You don't have audit access to any fund on Carta yet. Access to a fund's audit documents comes from the fund's general partner or its fund administrator, not from Carta support.</div>`);
+}
+function showYearControls(shown) {
+  ["yearWrap", "crossFund"].forEach(id => $(id).classList.toggle("hidden", !shown));
+}
+function handlePageError(e) {
+  const code = e?.code;
+  const copy = {
+    server_not_connected: "Carta isn't connected for you. Add Carta in Settings → Connectors, then press Refresh.",
+    selection_required: "Choose which Carta connection to use when Claude asks, then press Refresh.",
+    needs_reauth: "Your Carta sign-in has expired. Reconnect Carta in Settings → Connectors, then press Refresh.",
+    not_in_manifest: "This page doesn't have permission for everything it needs. Ask Claude to \"rebuild my Carta audit home page\".",
+    blocked_by_policy: "Your organization's policy blocks this page from reaching Carta.",
+    approval_required: "Your organization needs to approve this page's access to Carta.",
+  }[code];
+  if (code === "not_granted" || code === "capability_disabled" || code === "capability_removed") return showUnavailable();
+  if (code === "server_not_connected" || code === "needs_reauth" || code === "selection_required") {
+    state.funds = []; state.listings = {};
+    $("funds").innerHTML = ""; $("feed").innerHTML = ""; $("stats").innerHTML = "";
+  }
+  showNotice(esc(copy || "Carta didn't answer just now. Press Refresh to try again."), true);
+}
+
+// ── Overview ──
+function fundsThisYear() { return state.funds.filter(f => f.years[state.year] !== undefined); }
+function renderYear() {
+  const offered = yearsOffered();
+  showYearControls(offered.length > 0);
+  $("year").innerHTML = offered.map(y => `<option${y === state.year ? " selected" : ""}>${y}</option>`).join("");
+  renderCrossFund();
+}
+function renderAll() { if (state.current) renderDetail(); else renderOverview(); }
+function renderOverview() {
+  if (!state.funds.length) return;
+  const y = state.year;
+  if (y == null) {
+    $("funds").innerHTML = `<div class="empty">No audit documents filed for your funds yet.</div>`;
+    $("feed").innerHTML = ""; $("stats").innerHTML = ""; return;
+  }
+  const funds = fundsThisYear();
+  let areasWithDocs = 0, areasAll = 0, fundsNotReady = 0, fundsNew = 0, fundsUnread = 0, anyFirst = false, anyCompared = false, anyLoading = false;
+  funds.forEach(f => {
+    const L = state.listings[fundKey(f, y)];
+    if (L?.loading) anyLoading = true;
+    if (L?.error) fundsUnread++;
+    if (!L?.areas) return;
+    const vals = Object.values(L.areas);
+    areasAll += AREAS.length; areasWithDocs += vals.filter(hasDownloads).length;
+    if (vals.some(notReady)) fundsNotReady++;
+    if (L.first) anyFirst = true; else { anyCompared = true; if (L.changes.length) fundsNew++; }
+  });
+  $("stats").innerHTML = [
+    [funds.length, funds.length === 1 ? "fund to audit" : "funds to audit"],
+    // A fund that couldn't be read is left out of the count, so the tile says so rather than shrink unexplained.
+    [areasAll ? `${areasWithDocs} / ${areasAll}` : "—", `audit areas with downloadable documents${fundsUnread ? ` · ${fundsUnread} ${fundsUnread === 1 ? "fund" : "funds"} not checked, press Refresh` : ""}`],
+    [areasAll ? fundsNotReady : "—", fundsNotReady === 1 ? "fund with documents not yet ready" : "funds with documents not yet ready"],
+    [anyCompared ? fundsNew : "—", fundsNew === 1 ? "fund with changes since your last check" : "funds with changes since your last check"],
+  ].map(s => `<div class="stat"><div class="n" title="${esc(s[0])}">${esc(s[0])}</div><div class="l">${esc(s[1])}</div></div>`).join("");
+
+  let html = "", lastFirm = null;
+  funds.forEach(f => {
+    if (f.firm.id !== lastFirm) { html += `<div class="firm">${esc(f.firm.name)}</div>`; lastFirm = f.firm.id; }
+    const L = state.listings[fundKey(f, y)];
+    let line, bar = "", badge = "", disabled = false;
+    if (f.years[y] === false) { line = `No audit documents filed for ${y}`; disabled = true; }
+    else if (!L || L.loading) line = `<span class="spin"></span> Checking documents…`;
+    else if (L.error) { line = listingErrorCopy(L.error); disabled = true; }
+    else {
+      const vals = Object.values(L.areas);
+      const withDocs = vals.filter(hasDownloads).length;
+      const nr = vals.reduce((n, s) => n + notReady(s), 0);
+      const big = vals.filter(s => s.tooMany).length;
+      line = `${withDocs} of ${AREAS.length} areas with downloadable documents${nr ? ` · ${fmt(nr)} not yet ready` : ""}${big ? ` · ${big} too large to list` : ""}`;
+      bar = `<div class="tags">${AREAS.map(a => { const on = hasDownloads(L.areas[a.slug]); return `<i class="${on ? "on" : ""}" title="${esc(a.label)}: ${on ? "documents to download" : "no documents"}">${esc(a.label)}</i>`; }).join("")}</div>`;
+      badge = L.first ? "" : changeBadge(L.changes);
+    }
+    html += `<button class="fund" data-uuid="${esc(f.uuid)}"${disabled ? " disabled" : ""}><div class="fn"><b>${esc(f.name)}</b><span class="small muted">${line}</span>${bar}</div>${badge}${disabled ? "" : `<span class="muted" aria-hidden="true">›</span>`}</button>`;
+  });
+  $("funds").innerHTML = html;
+  $("funds").querySelectorAll(".fund:not([disabled])").forEach(b => b.onclick = () => openFund(b.dataset.uuid));
+
+  const items = funds.flatMap(f => { const L = state.listings[fundKey(f, y)]; return L?.changes ? L.changes.map(c => ({ f, c })) : []; });
+  const since = earliestCheck(funds, y);
+  $("lastCheck").textContent = "";
+  if (!anyCompared && anyFirst) {
+    $("feed").innerHTML = `<div class="empty">First visit for ${y}. Next time, this shows documents added, changed or removed since last opened.</div>`;
+  } else if (!anyCompared && anyLoading) {
+    $("feed").innerHTML = `<p class="muted small"><span class="spin"></span> Checking…</p>`;
+  } else if (!anyCompared) {
+    $("feed").innerHTML = `<div class="empty">Nothing to compare for ${y}.</div>`;
+  } else {
+    $("feed").innerHTML = items.length ? feedList(items.slice(0, 8), true) + (items.length > 8 ? `<p class="small muted" style="margin:8px 0 0">${items.length - 8} more — open a fund to see them all.</p>` : "")
+      : `<div class="empty">Nothing new since last check${since ? ` on ${esc(since)}` : ""}.</div>`;
+    if (items.length && since) $("feed").insertAdjacentHTML("afterbegin", `<p class="small muted" style="margin:0 0 8px">Since last check on ${esc(since)}</p>`);
+    if (anyFirst) $("feed").innerHTML += `<p class="small muted" style="margin:8px 0 0">Funds opened here for the first time are compared from your next visit.</p>`;
+  }
+  $("feedActions").innerHTML = items.length ? `<button class="btn ghost sm" id="markAll">Mark all as checked</button>` : "";
+  if ($("markAll")) $("markAll").onclick = () => { funds.forEach(f => markChecked(f, y)); renderOverview(); };
+}
+// "N new" counts added and changed documents; removals alone read as "Changes".
+function changeBadge(changes) {
+  const n = changes.filter(c => c.kind !== "removed").length;
+  if (n) return `<span class="badge new">${n} new</span>`;
+  return changes.length ? `<span class="badge out">Changes</span>` : `<span class="badge mute">Nothing new</span>`;
+}
+function earliestCheck(funds, y) {
+  const ts = funds.map(f => state.listings[fundKey(f, y)]).filter(L => L?.record && !L.first).map(L => L.record.checkedAt).sort();
+  return ts.length ? shortDate(ts[0]) : "";
+}
+function listingErrorCopy(err) {
+  return {
+    access: "Couldn't read this fund's documents. Access comes from the fund's general partner or fund administrator.",
+    partial: "Carta stopped partway through the list. Press Refresh to try again.",
+    stopped: "Couldn't finish checking this fund. Press Refresh to try again.",
+  }[err] || "Couldn't read this fund's documents.";
+}
+const KIND_LABEL = { added: "Added", changed: "Changed", removed: "Removed" };
+const areaLabel = slug => AREAS.find(a => a.slug === slug)?.label ?? "";
+function feedList(items, showFund) {
+  return `<ul class="feed">${items.map(({ f, c }) => {
+    const when = c.doc.updated ? ` · last updated in Carta ${shortDate(c.doc.updated)}` : "";
+    return `<li><span class="tag ${c.kind}">${KIND_LABEL[c.kind]}</span><div class="what"><div class="doc">${esc(c.doc.name)}</div><div class="small muted">${showFund ? esc(f.name) + " · " : ""}${esc(areaLabel(c.doc.area))}${when}</div></div></li>`;
+  }).join("")}</ul>`;
+}
+function markChecked(f, y) {
+  const L = state.listings[fundKey(f, y)];
+  if (!L?.docs) return;
+  L.record = saveRecord(f, y, L.docs, L.unlisted); L.changes = []; L.first = false;
+}
+
+// ── One fund ──
+function openFund(uuid) {
+  state.current = state.funds.find(f => f.uuid === uuid) || null;
+  $("overview").classList.add("hidden"); $("detail").classList.remove("hidden");
+  renderDetail(); window.scrollTo(0, 0);
+}
+function statusCell(s) {
+  if (s.tooMany) return `<span class="badge out">Too many to list here</span>`;
+  if (!s.total) return `<span class="badge mute">Nothing filed</span>`;
+  if (!s.tracked) return `<span class="muted">Status not tracked</span>`;
+  const p = [];
+  if (s.attention) p.push(`<span class="badge danger">${fmt(s.attention)} need${s.attention > 1 ? "" : "s"} attention</span>`);
+  if (s.processing) p.push(`<span class="badge out">${fmt(s.processing)} still processing</span>`);
+  if (s.draft) p.push(`<span class="badge out">${fmt(s.draft)} draft</span>`);
+  return p.length ? p.join(" ") : "Complete";
+}
+const exportKey = (f, y, slug) => `${fundKey(f, y)}|${slug}`;
+function downloadCell(f, y, a, s) {
+  if (!hasDownloads(s)) return "";
+  const ex = state.exports[exportKey(f, y, a.slug)];
+  const btn = label => `<button class="btn ghost sm" data-dl="${a.slug}">${label}</button>`;
+  if (!ex) return `<div class="dl">${btn("Download")}</div>`;
+  if (ex.status === "busy") return `<div class="dl small muted"><span><span class="spin"></span> Preparing zip…</span></div>`;
+  if (ex.status === "failed") return `<div class="dl"><span class="err">Couldn't start the download.</span>${btn("Try again")}</div>`;
+  if (ex.status === "slow") return `<div class="dl"><span class="small muted">Still preparing on Carta's side.</span>${btn("Try again")}</div>`;
+  const name = `${a.label} - ${y} - ${f.name} - ${f.firm.name}.zip`;
+  const link = (url, label) => /^https:\/\//i.test(url) ? `<a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(name)}">${label}</a>` : "";
+  // Carta's links expire, so a finished export can always be started again.
+  let out = ex.peUrl ? link(ex.url, "Save zip 1 of 2") + link(ex.peUrl, "Save zip 2 of 2") : link(ex.url, "Save zip");
+  if (ex.peError) out += `<span class="small err">Capital account statements, reports and tax documents couldn't be retrieved. Ask Claude to download Partners' Equity.</span>`;
+  return `<div class="dl">${out}${btn("Download again")}</div>`;
+}
+function renderDetail() {
+  const f = state.current, y = state.year;
+  if (!f) return;
+  const L = state.listings[fundKey(f, y)];
+  $("dFirm").textContent = f.firm.name; $("dFund").textContent = f.name; $("dYear").textContent = `Audit year ${y}`;
+  if (!L || L.loading || !L.areas) {
+    $("dVerdict").innerHTML = L?.error ? esc(listingErrorCopy(L.error)) : `<span class="spin"></span> Checking documents…`;
+    $("areas").innerHTML = ""; $("dFeed").innerHTML = ""; $("dlAll").disabled = true; return;
+  }
+  const vals = Object.values(L.areas);
+  const withDocs = vals.filter(hasDownloads).length;
+  const nr = vals.reduce((n, s) => n + notReady(s), 0);
+  const big = vals.filter(s => s.tooMany).length;
+  $("dVerdict").innerHTML = `<b>${withDocs} of ${AREAS.length} areas with downloadable documents.</b> ${nr ? `${fmt(nr)} document${nr > 1 ? "s aren't" : " isn't"} ready yet.` : ""}`
+    + (big ? ` <span class="muted">${big === 1 ? "One area has" : `${big} areas have`} too many documents to list here. Download ${big === 1 ? "it" : "them"} from the table, or ask Claude "is this fund ready for audit" to check readiness in chat.</span>` : "");
+  $("dlAll").disabled = !AREAS.some(a => hasDownloads(L.areas[a.slug]) && state.exports[exportKey(f, y, a.slug)]?.status !== "busy");
+  $("areas").innerHTML = AREAS.map(a => {
+    const s = L.areas[a.slug];
+    const changes = L.changes.filter(c => c.doc.area === a.slug);
+    const nrDocs = s.docs.filter(d => NOT_READY_COPY[d.status]);
+    const expandable = nrDocs.length || changes.length;
+    let row = `<tr class="area${expandable ? " expandable" : ""}" data-slug="${a.slug}"${expandable ? ' aria-expanded="false" tabindex="0"' : ""}>
+      <td><span class="tri">${expandable ? "›" : ""}</span> <b>${esc(a.label)}</b></td>
+      <td class="num">${s.tooMany ? "Many" : s.total ? fmt(s.total) : "—"}</td><td class="num hide-sm">${s.tracked ? fmt(s.ready) : "—"}</td>
+      <td>${statusCell(s)}</td><td>${changes.length ? changeBadge(changes) : ""}</td>
+      <td class="num">${downloadCell(f, y, a, s)}</td></tr>`;
+    if (expandable) {
+      const order = { attention: 0, processing: 1, draft: 2 };
+      const sorted = nrDocs.slice().sort((p, q) => order[p.status] - order[q.status]);
+      const shown = sorted.slice(0, DETAIL_CAP).map(d => `<li><i>${esc(d.name)}</i> — ${NOT_READY_COPY[d.status]}${d.updated ? ` · last updated in Carta ${shortDate(d.updated)}` : ""}</li>`).join("");
+      const more = sorted.length > DETAIL_CAP ? `<li class="muted">and ${fmt(sorted.length - DETAIL_CAP)} more not yet ready</li>` : "";
+      row += `<tr class="detail hidden" data-for="${a.slug}"><td colspan="6">
+        ${nrDocs.length ? `<div class="small"><b>Not yet ready</b><ul>${shown}${more}</ul></div>` : ""}
+        ${changes.length ? `<div class="small" style="margin-top:6px"><b>Since your last check</b><ul>${changes.map(c => `<li>${KIND_LABEL[c.kind]}: <i>${esc(c.doc.name)}</i></li>`).join("")}</ul></div>` : ""}
+      </td></tr>`;
+    }
+    return row;
+  }).join("");
+  $("areas").querySelectorAll("tr.area.expandable").forEach(tr => {
+    const toggle = e => {
+      if (e.target.closest("a,button")) return;
+      const d = $("areas").querySelector(`tr.detail[data-for="${tr.dataset.slug}"]`);
+      d.classList.toggle("hidden"); tr.classList.toggle("open");
+      tr.setAttribute("aria-expanded", String(!d.classList.contains("hidden")));
+    };
+    tr.onclick = toggle;
+    tr.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(e); } };
+  });
+  $("areas").querySelectorAll("[data-dl]").forEach(b => b.onclick = () => startExport(f, y, [b.dataset.dl]));
+  $("dLastCheck").textContent = "";
+  const checkedOn = L.first ? "" : shortDate(L.record.checkedAt);
+  $("dFeed").innerHTML = L.first ? `<div class="empty">First visit for this fund and year. Next time, this shows what changed since today.</div>`
+    : L.changes.length ? `<p class="small muted" style="margin:0 0 8px">Since last check on ${esc(checkedOn)}</p>` + feedList(L.changes.map(c => ({ f, c })), false) + `<div style="margin-top:12px"><button class="btn ghost sm" id="markFund">Mark as checked</button></div>`
+    : `<div class="empty">Nothing new since last check on ${esc(checkedOn)}.</div>`;
+  if ($("markFund")) $("markFund").onclick = () => { markChecked(f, y); renderDetail(); };
+}
+
+// ── Downloads ──
+// Starting an export is a write: it runs only on a click and is never re-sent on its own.
+async function startExport(f, y, slugs) {
+  slugs.forEach(slug => { state.exports[exportKey(f, y, slug)] = { status: "busy" }; });
+  renderAll();
+  await Promise.all(slugs.map(slug => runExport(f, y, slug)));
+}
+async function runExport(f, y, slug) {
+  const key = exportKey(f, y, slug);
+  let task;
+  try {
+    const res = await inFirm(f.firm.id, () => callTool("fa__mutate__export-audit-documents", { fund_uuid: f.uuid, audit_area: slug, audit_year: y }));
+    task = unwrap(res);
+  } catch (e) { task = null; if (e?.code && e.code !== "tool_error") handlePageError(e); }
+  if (!task?.id) { state.exports[key] = { status: "failed" }; return renderAll(); }
+  const args = { task_id: String(task.id) };
+  if (task.partners_equity_report_pk != null) args.partners_equity_report_pk = String(task.partners_equity_report_pk);
+  for (let i = 0; i < POLL_ATTEMPTS; i++) {
+    await new Promise(r => setTimeout(r, POLL_MS));
+    let st = null;
+    try { st = unwrap(await inFirm(f.firm.id, () => readTool("fa__get__audit-export-status", args))); } catch (_) {}
+    // Not ready yet comes back as an error; a Partners' Equity export also waits on its second zip.
+    if (!st?.url) continue;
+    if (args.partners_equity_report_pk && st.partners_equity_pending) continue;
+    state.exports[key] = { status: "done", url: st.url, peUrl: st.partners_equity_url || null, peError: !!st.partners_equity_error };
+    return renderAll();
+  }
+  state.exports[key] = { status: "slow" };
+  renderAll();
+}
+
+// ── Download across funds, in chat ──
+// A page can't post into the chat, so it shows a prompt for the viewer to copy and paste there. "All my
+// funds" makes the download skill's picker pre-tick every fund, so the viewer can untick some.
+const crossFundRequest = y => `Download audit documents for all my funds, audit year ${y}`;
+function copyText(text) {
+  const fallback = () => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.cssText = "position:fixed;left:-9999px;opacity:0";
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch (_) { return false; }
+  };
+  if (!navigator.clipboard?.writeText) return Promise.resolve(fallback());
+  return navigator.clipboard.writeText(text).then(() => true, fallback);
+}
+const COPY_ICON = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>`;
+const CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>`;
+// Runs whenever the year changes, so the prompt never names a year the selector no longer shows.
+function renderCrossFund() {
+  $("crossFundText").textContent = crossFundRequest(state.year);
+  $("copyCrossFund").innerHTML = `${COPY_ICON}Copy prompt`;
+  $("handoff").classList.add("hidden");
+}
+async function handOffCrossFund() {
+  const copied = await copyText(crossFundRequest(state.year));
+  if (copied) $("copyCrossFund").innerHTML = `${CHECK_ICON}Copied`;
+  // Only a failed copy needs a note; a successful one is shown by the button's "Copied".
+  $("handoff").innerHTML = `Your browser blocked copying. Select the prompt above, copy it, then paste it into chat and press Enter.`;
+  $("handoff").classList.toggle("hidden", copied);
+}
+
+// ── Guided tour ──
+// Opens once, on the first load that worked. Nothing here calls Carta.
+const TOUR_KEY = "carta-audit-home-tour-v1";
+const TOUR_STEPS = [
+  { id: "overviewHead", title: "Your funds and audit year",
+    desc: "The funds you can audit are grouped by firm below. Pick the audit year here and every fund is checked for it." },
+  { id: "fundsCard", title: "Seven audit areas, ready or not", needsFunds: true,
+    desc: "Each fund shows how many of its seven audit areas have documents, one tag per area. Open a fund to see each area's documents and which are ready, still processing or need attention." },
+  { id: "newCard", title: "What's new",
+    desc: "Documents added, changed or removed since you last checked. Press Mark as checked to start again from today." },
+  { id: "crossFund", title: "Download",
+    desc: "Open a fund to download any area as a zip, or all areas at once. To download across several funds, copy this prompt and paste it into chat." },
+];
+let _tourOpen = false, _tourIdx = 0, _tourSteps = [], _tourReturnFocus = null;
+// A browser that can't read the key can't save it either, so it counts as seen rather than
+// showing the tour on every visit.
+function tourSeen() { try { return !!localStorage.getItem(TOUR_KEY); } catch (_) { return true; } }
+// A step is skipped when its target isn't on screen, e.g. while a fund is open.
+function tourWanted(step) {
+  const el = $(step.id);
+  if (!el || el.closest?.(".hidden") || el.classList.contains("hidden")) return false;
+  return !step.needsFunds || !!$("funds").querySelector(".fund");
+}
+function tourStart(force) {
+  if (_tourOpen) return;
+  if (!force) {
+    if (tourSeen() || $("notice").classList.contains("error")) return;
+    // The tour takes focus, so it waits while the viewer is typing; a later visit opens it.
+    if (document.activeElement?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+  }
+  _tourSteps = TOUR_STEPS.filter(tourWanted);
+  if (!_tourSteps.length) return;
+  _tourOpen = true; _tourIdx = 0; _tourReturnFocus = document.activeElement;
+  tourPaint();
+}
+function tourPaint() {
+  const step = _tourSteps[_tourIdx], last = _tourIdx === _tourSteps.length - 1, el = $(step.id);
+  el.scrollIntoView?.({ block: el.getBoundingClientRect().height > window.innerHeight * 0.6 ? "start" : "center" });
+  $("tourCount").textContent = `${_tourIdx + 1} of ${_tourSteps.length}`;
+  $("tourTitle").textContent = step.title;
+  $("tourDesc").textContent = step.desc;
+  $("tourNext").textContent = last ? "Finish tour" : "Next →";
+  $("tourDots").innerHTML = _tourSteps.map((_, i) => `<i class="tour-dot${i === _tourIdx ? " active" : ""}"${i === _tourIdx ? ' aria-current="step"' : ""}></i>`).join("");
+  ["tourOverlay", "tourSpot", "tourCard"].forEach(id => $(id).classList.remove("hidden"));
+  tourPlace();
+  $("tourNext").focus?.({ preventScroll: true });
+}
+// The cut-out sits over the step's target; the card goes under it, above it, or over the bottom of
+// the screen when the target leaves no room.
+function tourPlace() {
+  const step = _tourSteps[_tourIdx], el = _tourOpen && step ? $(step.id) : null;
+  if (!el) return;
+  const r = el.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, pad = 8, gap = 14, m = 12;
+  const spot = $("tourSpot").style;
+  spot.top = `${r.top - pad}px`; spot.left = `${r.left - pad}px`; spot.width = `${r.width + pad * 2}px`; spot.height = `${r.height + pad * 2}px`;
+  const card = $("tourCard"), cw = card.offsetWidth || 308, ch = card.offsetHeight || 200;
+  let top = r.bottom + pad + gap;
+  if (top + ch > vh - m) top = r.top - pad - gap - ch;
+  if (top < m) top = Math.max(m, vh - ch - m);
+  card.style.top = `${top}px`;
+  card.style.left = `${Math.max(m, Math.min(r.left + r.width / 2 - cw / 2, vw - cw - m))}px`;
+}
+function tourNext() {
+  if (++_tourIdx >= _tourSteps.length) tourEnd(); else tourPaint();
+}
+function tourEnd() {
+  _tourOpen = false;
+  // A failed save must not trap the viewer behind the overlay; the tour just offers itself again.
+  try { localStorage.setItem(TOUR_KEY, "1"); } catch (_) {}
+  ["tourOverlay", "tourSpot", "tourCard"].forEach(id => $(id).classList.add("hidden"));
+  const back = _tourReturnFocus; _tourReturnFocus = null;
+  if (back && back !== document.body && back.isConnected && back.focus) back.focus({ preventScroll: true });
+}
+document.addEventListener("keydown", e => {
+  if (!_tourOpen) return;
+  if (e.key === "Escape" || e.key === "Esc") { e.preventDefault(); return tourEnd(); }
+  if (e.key !== "Tab") return;
+  // The card holds the focus: Tab and Shift+Tab move between its two buttons.
+  e.preventDefault();
+  const buttons = [$("tourSkip"), $("tourNext")], at = buttons.indexOf(document.activeElement);
+  (at < 0 ? $("tourNext") : buttons[(at + (e.shiftKey ? buttons.length - 1 : 1)) % buttons.length]).focus();
+});
+window.addEventListener("resize", tourPlace);
+window.addEventListener("scroll", tourPlace, { passive: true });
+
+// ── Wiring ──
+$("tourNext").onclick = tourNext;
+$("tourOverlay").onclick = tourNext;
+$("tourSkip").onclick = tourEnd;
+$("copyCrossFund").onclick = handOffCrossFund;
+$("dlAll").onclick = () => {
+  const f = state.current, y = state.year, L = state.listings[fundKey(f, y)];
+  if (!L?.areas) return;
+  const slugs = AREAS.map(a => a.slug).filter(slug => hasDownloads(L.areas[slug]) && state.exports[exportKey(f, y, slug)]?.status !== "busy");
+  if (slugs.length) startExport(f, y, slugs);
+};
+$("back").onclick = () => { state.current = null; $("detail").classList.add("hidden"); $("overview").classList.remove("hidden"); renderOverview(); };
+$("year").onchange = e => { state.year = Number(e.target.value); renderCrossFund(); renderOverview(); loadYear(state.year); };
+$("refresh").onclick = () => {
+  state.listings = {}; state.funds = []; state.exports = {}; state.current = null;
+  $("detail").classList.add("hidden"); $("overview").classList.remove("hidden");
+  $("funds").innerHTML = `<p class="muted"><span class="spin"></span> Loading your funds…</p>`; $("feed").innerHTML = ""; $("feedActions").innerHTML = "";
+  boot();
+};
+boot();
+</script>
+</body>
+</html>

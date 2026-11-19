@@ -145,6 +145,11 @@
     }
   },
   "carta-home-build": null,
+  "carta-audit": null,
+  "carta-audit-download": null,
+  "carta-audit-home": null,
+  "carta-audit-readiness": null,
+  "carta-audit-whats-new": null,
   "carta-lpa-audit": {
     "category": "fund-accounting",
     "name": "LPA and side letter terms",
