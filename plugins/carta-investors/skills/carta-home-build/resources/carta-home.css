@@ -177,6 +177,17 @@
       border-radius: 6px;
       cursor: pointer;
     }
+    .firm-switcher-search {
+      font: inherit;
+      font-size: 14px;
+      width: 180px;
+      padding: 6px 10px;
+      color: var(--ink-color-global-text-default);
+      background: transparent;
+      border: 1px solid var(--ink-color-global-border-default);
+      border-radius: 6px;
+    }
+    .firm-switcher-search[hidden] { display: none; }
     .firm-switcher-select:disabled { cursor: progress; opacity: 0.6; }
     .page-subtitle {
       font-size: 15px;

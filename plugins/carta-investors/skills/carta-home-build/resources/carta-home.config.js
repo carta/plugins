@@ -65,6 +65,10 @@ const DASHBOARD_URLS = {{DASHBOARD_URLS}};
 // on purpose (e.g. churned funds) — baked in by build_artifact.py --soi-page. `null` when
 // unknown — the SOI card's new-fund banner (app/soi-new-fund.js) then never shows.
 const SOI_FUND_UUIDS = {{SOI_FUND_UUIDS}};
+// The firm the dashboard links above were published for, from build_artifact.py
+// --dashboard-firm-id; `null` when unknown. Once the page loads another firm (the firm
+// switcher), those links would open the wrong firm's dashboards, so they become prompts.
+const DASHBOARD_FIRM_ID = {{DASHBOARD_FIRM_ID}};
 
 // ── Skill directory categories ──
 // Categories, in display order. The skills inside each one are not listed here: they live

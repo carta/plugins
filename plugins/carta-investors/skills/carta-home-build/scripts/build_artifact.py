@@ -42,6 +42,9 @@ passed to --dashboard-building carries the string "building" instead, so home ca
 before its dashboards exist and redeploy over itself once they do. A key absent from both
 leaves that card on its copyable prompt.
 
+`{{DASHBOARD_FIRM_ID}}` (in carta-home.config.js) becomes the firm UUID passed with
+--dashboard-firm-id, else `null`: the firm the dashboard URLs were published for.
+
 `{{SOI_FUND_UUIDS}}` (in carta-home.config.js) becomes a JSON array of the fund uuids a
 saved SOI page knows about (--soi-page): the funds it lists plus the ones it left out on
 purpose (`excluded`, e.g. churned funds). `null` when no page was passed, its state is
@@ -53,7 +56,8 @@ can tell exactly what the user changed on the published copy.
 Usage:
   uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
       --out <path>/carta-home-<slug>.html \
-      [--dashboard-url soi=https://… --dashboard-building perf] [--soi-page <soi.html>]
+      [--dashboard-url soi=https://… --dashboard-building perf] [--soi-page <soi.html>] \
+      [--dashboard-firm-id <firm uuid>]
 """
 import argparse
 import hashlib
@@ -214,6 +218,16 @@ def script_json(value, **kw):
     return json.dumps(value, **kw).replace("<", "\\u003c")
 
 
+FIRM_ID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def firm_id_arg(value):
+    """argparse type for --dashboard-firm-id: a firm UUID, never free text."""
+    if not FIRM_ID_RE.match(value):
+        raise argparse.ArgumentTypeError("not a firm UUID: {!r}".format(value))
+    return value.lower()
+
+
 def directory_json(entries):
     return script_json(entries, ensure_ascii=False)
 
@@ -279,7 +293,7 @@ def read_soi_fund_uuids(path):
     return sorted(set(uuids))
 
 
-def build(mcp_server, dashboard_urls=None, soi_fund_uuids=None):
+def build(mcp_server, dashboard_urls=None, soi_fund_uuids=None, dashboard_firm_id=None):
     template = (RES / "carta-home.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
@@ -319,6 +333,9 @@ def build(mcp_server, dashboard_urls=None, soi_fund_uuids=None):
     out = out.replace("{{SOI_FUND_UUIDS}}", script_json(soi_fund_uuids))
     if "{{SOI_FUND_UUIDS}}" in out:
         sys.exit("ERROR: {{SOI_FUND_UUIDS}} still present after substitution")
+    out = out.replace("{{DASHBOARD_FIRM_ID}}", script_json(dashboard_firm_id))
+    if "{{DASHBOARD_FIRM_ID}}" in out:
+        sys.exit("ERROR: {{DASHBOARD_FIRM_ID}} still present after substitution")
 
     out = out.replace("{{SKILL_DIRECTORY_JSON}}", skill_directory)
     if "{{SKILL_DIRECTORY_JSON}}" in out:
@@ -359,10 +376,14 @@ def main():
     ap.add_argument("--soi-page", metavar="PATH",
                     help="saved SOI page (carta-soi output) that stays published; its fund "
                          "list lets the SOI card flag funds the page does not list yet")
+    ap.add_argument("--dashboard-firm-id", metavar="FIRM_UUID", type=firm_id_arg,
+                    help="the firm the --dashboard-url dashboards were published for. When "
+                         "the page later loads another firm (the firm switcher), its "
+                         "dashboard links become prompts for that firm instead")
     args = ap.parse_args()
 
     html, build_id, version = build(args.mcp_server, parse_dashboard_urls(args.dashboard_url, args.dashboard_building),
-                                   read_soi_fund_uuids(args.soi_page))
+                                   read_soi_fund_uuids(args.soi_page), args.dashboard_firm_id)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)

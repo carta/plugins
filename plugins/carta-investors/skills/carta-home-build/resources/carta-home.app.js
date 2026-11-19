@@ -925,6 +925,7 @@ async function fetchLiveData({ final = true } = {}) {
         }
       });
     }
+    markDashboardsForFirm(firmId);
 
     if (!firmId) {
       trackUnavailable("CartaHome.Unavailable.NoFirm");
@@ -1105,12 +1106,25 @@ function prefersReducedMotion() {
 // The dashboard links back here by this page's URL, stamped in at build. Keep the URL a
 // bare artifact URL: Claude Desktop opens an artifact link in the app only when it has no
 // #fragment (or extra query keys), and otherwise sends it to the system browser.
+let _dashboardsForOtherFirm = false;
+
+// Records whether the page now shows a firm other than the one its dashboards were published
+// for, and redraws the launchers when that changes.
+function markDashboardsForFirm(firmId) {
+  const other = !!DASHBOARD_FIRM_ID && !!firmId && DASHBOARD_FIRM_ID !== firmId;
+  if (other === _dashboardsForOtherFirm) return;
+  _dashboardsForOtherFirm = other;
+  renderDashboardLaunchers();
+}
+
 function renderDashboardLaunchers() {
   DASHBOARDS.forEach(d => {
     const footer = document.getElementById(d.footerId);
     if (!footer) return;
-    const url = DASHBOARD_URLS[d.key];
-    const promptHtml = `<button class="run-btn" data-prompt="${escHtml(d.prompt)}" data-skill="${escHtml(d.key)}"
+    // The links open dashboards built for DASHBOARD_FIRM_ID; for another firm only the prompt is right.
+    const url = _dashboardsForOtherFirm ? null : DASHBOARD_URLS[d.key];
+    const prompt = _dashboardsForOtherFirm && firmOwnName() ? `${d.prompt} (firm: ${firmOwnName()})` : d.prompt;
+    const promptHtml = `<button class="run-btn" data-prompt="${escHtml(prompt)}" data-skill="${escHtml(d.key)}"
             onclick="dashShowPrompt(this)">${escHtml(d.label)} <span class="cta-arrow" aria-hidden="true">→</span></button>`;
     if (url === DASH_BUILDING) {
       // Named after the launcher it becomes. "A few minutes" on purpose, not a specific
@@ -1632,6 +1646,7 @@ async function fetchUserEnrichment() {
     // structuredContent wrapper like {result:"<json>"}. Collect every candidate and
     // pick the one that actually carries firm_ui_categories — don't assume a shape.
     const profile = extractUserProfile(res);
+    setFirmSwitcherStaff(profile.is_staff);
 
     _userEntitlements = {
       manco:  readProductFlag(profile, "has_active_manco"),
