@@ -47,7 +47,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.53.4</carta-plugin>
+<carta-plugin>carta-investors:7.53.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -197,6 +197,7 @@ opens with — take it from there rather than from however the user happened to 
 | Ask why a contact seems to be missing, or who a company's request is addressed to | `references/contacts.md`, Step 1 alone |
 | Change who is contacted, on any number of companies | `references/contacts.md`, from Step 1 |
 | Get numbers out of a newsletter, deck or email a company already sent, or upload a document the firm has for a company | Hand it over — see "A document the firm already has goes to its skill" below |
+| Extract a file a company uploaded to its request | Hand it over — see "A submitted file goes to its session" below |
 
 **Extraction is not collection.** Reading numbers out of a newsletter, a board deck or an email a
 company already sent is extraction — a separate capability, and not something a request does. A
@@ -212,6 +213,16 @@ session's skill list, invoke it with `upload <path>` (comma-separated for severa
 arguments for a paste), mid-flow or not. Uploading it does not answer a request and needs none.
 Do not ask which skill to use, and do not name the skill to the user. When it is not listed, say
 in one sentence that uploading a document isn't available in this chat.
+
+**A submitted file goes to its session, without asking.** Carta can open an extraction session
+for the files a company submits to its request. When the user asks to extract one ("extract the
+balance sheet LiveKindly submitted") and `carta-investors:carta-portco-financials-and-kpis` is listed, invoke it with
+`review org-id=<organization_pk>`, the company and the user's words, e.g.
+`review org-id=3849 LiveKindly — "extract the balance sheet LiveKindly submitted"`. That skill
+lists the sessions ready to review, the company's first, and opens the one the user picks, or says
+the submission has no session to review there. When
+it is not listed, say in one sentence that extracting a submitted file isn't available in this
+chat.
 
 **Defining is not collecting.** A custom metric and a firm's own document type are both
 definitions: creating one adds it to the firm's vocabulary and asks nobody for anything. Asking a
