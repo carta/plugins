@@ -27,7 +27,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.56.1</carta-plugin>
+<carta-plugin>carta-investors:7.56.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -42,7 +42,7 @@ the market, never the user's own funds or portfolio.
 ## Prerequisites
 
 - The Carta MCP connector, signed in.
-- Round benchmarks enabled on the account. Without them, see "When there is nothing to show".
+- A connector that lists round benchmarks. Without it, see "When there is nothing to show".
 
 ## When to Use
 
@@ -187,7 +187,7 @@ in chat from one `read_tool` read as above, after the app is open.
 
 | Situation | What to do |
 |---|---|
-| `read_tool` or `view_static` says the command or view is unknown or not available | Round benchmarks are not enabled for this account yet. Tell the user to ask their Carta account manager to turn them on, and stop. Do not retry, and do not try `dwh__execute__query` or any other tool instead: the benchmark data is not reachable another way |
+| `read_tool` or `view_static` says the command or view is unknown or not available | Round benchmarks are not available on this connector yet. Tell the user, and stop. Do not retry, and do not try `dwh__execute__query` or any other tool instead: the benchmark data is not reachable another way |
 | A cell is `suppressed` | Fewer than `suppression_floor` rounds back it (quote the value from the response), so Carta withholds the figures. Say it is too thin to report, never zero, and offer to widen the window or drop a filter |
 | `cells` is empty | No rounds matched. Name the filters and offer to widen them |
 | The user asks about a non-US company or a non-USD round | Coverage is US-incorporated, USD-denominated primary rounds only. Say so rather than answering from US data |
