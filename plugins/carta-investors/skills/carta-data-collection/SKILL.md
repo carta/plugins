@@ -50,7 +50,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.54.0</carta-plugin>
+<carta-plugin>carta-investors:7.54.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -279,14 +279,15 @@ table above is enough to choose one.
 ## Applies to every action
 
 **A Carta call answers `break_the_glass_required`:** the person is Carta staff reaching a firm or
-company they are not a member of. Only for the firm or company this run has settled on — never
-for a candidate Step 1 is still comparing — call `mcp__<SERVER>__break_the_glass` once (load it with
-`ToolSearch` `select:` first when it is deferred), with the `entity_type` and `entity_pk` the error
-names and a `rationale` naming the failed command and the user's ask, then retry the failed call
-once. Do not ask first: the user's request is the authorization, and Carta records the grant in its
-audit trail. Say in one line that you opened break-the-glass access to the firm or company. When
-the tool is not in this session, or the elevation or the retry fails, say they don't have access to
-it in Carta and stop. Never call it before a call has failed with that error.
+company they are not a member of. Only for the firm or company this run has settled on — never for a
+candidate Step 1 is still comparing — lift it once: call `mcp__<SERVER>__break_the_glass` (load it
+with `ToolSearch` `select:` first when it is deferred), or, when that tool is not in this session,
+run what the error's `fix` names, `call_tool` with `name` `context_tools__create__break_the_glass`.
+Pass the `entity_type` and `entity_pk` the error names and a `rationale` naming the failed command
+and the user's ask, then retry the failed call once. Do not ask first: the user's request is the
+authorization, and Carta records the grant in its audit trail. Say in one line that you opened
+break-the-glass access to the firm or company. When the elevation or the retry fails, say they don't
+have access to it in Carta and stop. Never elevate before a call has failed with that error.
 
 **A send emails people outside Carta and cannot be recalled.** Ask the confirmation question, end
 your reply, and wait. Never write in the same reply as the question — the action's reference says
