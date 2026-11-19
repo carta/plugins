@@ -63,16 +63,12 @@ allowed-tools:
   - mcp__visualize__show_widget
   - ToolSearch
   - Bash(sleep *)
-  - Bash(mkdir *)
-  - Bash(cat *)
-  - Bash(printf *)
-  - Bash(mktemp *)
   - Bash(echo *)
   - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.56.0</carta-plugin>
+<carta-plugin>carta-investors:7.56.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -80,7 +76,7 @@ allowed-tools:
 
 # Portfolio Valuations Workflow Skill
 
-**Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
+**Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces, and Bash does not set that variable — a command run with the braces still in it resolves to `/skills/...` and fails. Before reading or running such a path, replace that variable with this plugin's root, which is `${CLAUDE_PLUGIN_ROOT}` (filled in when this skill loads). Keep every quote, and keep the command on one line.
 
 Entry point for the portfolio valuations workflow, paired with Carta's
 valuation pages. The chat does the work; the page shows it. This skill never builds an artifact or starts a local preview
@@ -832,7 +828,7 @@ SELECT
     ALLOCATION_METHODOLOGY
 FROM FUND_ADMIN.FUND_HOLDINGS_VALUE
 WHERE (<one clause per company: TARGET_NAME ILIKE '%{name}%' AND VALUATION_DATE = '{date}'>)
-ORDER BY FUND_HOLDINGS_VALUE DESC
+ORDER BY FUND_HOLDINGS_VALUE DESC, TARGET_NAME, FUND_NAME, VALUATION_DATE
 ```
 
 Other shapes: `FUND_NAME ILIKE '%{fund}%'` for a fund; just
@@ -843,10 +839,22 @@ Call `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query>", 
 For an open-ended question, `dwh__execute__question` (plain English) is an
 acceptable fallback.
 
-**If the query returns exactly 200 rows, say so** — a firm-wide read can have
-more, and a table that stops at the cap reads as the whole picture. Give the
-count and offer to narrow it by fund, date or company rather than showing it
-as complete.
+**Don't stop at the cap.** A firm-wide read can exceed 200 rows, and a table that stops there
+reads as the whole portfolio. When a page comes back with exactly `limit` rows, there is more:
+page on with `OFFSET`
+(`... ORDER BY FUND_HOLDINGS_VALUE DESC, TARGET_NAME, FUND_NAME, VALUATION_DATE LIMIT 200 OFFSET 200`)
+until a page returns fewer, and merge the pages before rendering.
+
+**Every page carries that same full `ORDER BY`.** Holdings value alone is not unique — written
+down to zero, null, or the same figure across funds — and the warehouse does not promise tied
+rows come back in the same order twice. Order by value alone and a tie straddling a page
+boundary means page 2 repeats rows from page 1 and drops others, in a table the next line tells
+you to present as complete.
+
+Two pages is usually the whole firm. If it is still going after **five** — a thousand rows,
+more than anyone reads in chat — stop there and say so plainly: give the count loaded, say
+there are more, and offer to narrow by fund, date or company. Never show a truncated set as
+complete.
 
 Display results as a markdown table with columns: **Company**, **Fund**,
 **Valuation Date**, **Holdings Value**, **Invested Capital**,
@@ -1192,8 +1200,8 @@ Pad the labels so the values line up in one column:
 ```
 MangoCart, Inc. summary
 
-• Company value    -
-• Holdings value   -
+• Company value    $0 — not set up yet
+• Holdings value   $0 — needs a company value first
 
 Inputs:
 [ ] Financials (Required)
@@ -1236,7 +1244,7 @@ A Custom Value valuation requires neither input, so neither is marked
 IMIM summary
 
 • Company value    €10,000
-• Holdings value   -
+• Holdings value   €0 — allocation hasn't run
 
 Inputs:
 [ ] Financials
@@ -1249,10 +1257,12 @@ Next steps:
 ````
 
 - **Company value** is End Goal item 4 and **Holdings value** is item 5.
-  They are plain bullets (`•`), never checkboxes. Show the current value
-  next to the item, or `-` when it's zero or negative (same exception to
-  the **Table values** rule as the bulk results table: on a draft, zero or
-  a debt-only negative means the value isn't set up yet).
+  They are plain bullets (`•`), never checkboxes. **Show the actual value,
+  signed** — a negative company value is a real figure the analyst needs to
+  see, and hiding it behind a dash is the one thing that stops them acting
+  on it. Where it is zero or negative on a draft, follow the figure with a
+  short reason on the same line rather than masking the number:
+  `• Company value    −$2,100,000 — not set up yet, or debt exceeds it`.
   Format it in the valuation's currency
   (`get:valuation` → `currencyCode`); with none, show the bare number (see
   **Currency default**).
@@ -1353,6 +1363,11 @@ Fetch all pages fresh:
 3. Merge all `companies` arrays from every page response into one array.
    Do **not** render the dashboard until the last page is received.
 
+**Say where you are while it loads.** Nothing renders until the last page, so on a large
+portfolio the user waits with no sign anything is happening. After each page past the first,
+say `Loaded {companies.length} of {totalCompanies} companies…` — one short line, replaced as
+it goes, not a running list.
+
 Each page response shape:
 - `companies` — portfolio companies in this page. Each item has:
   `name`, `corporationId`, `isCartaCorporation`, `hasCorpCapTable`,
@@ -1411,10 +1426,14 @@ a single sequence across all actionable groups. Only render non-empty groups;
 precede each with a bold section label using the label name only
 (e.g. **Recent financing rounds**, **Draft valuation**) — do not include group numbers.
 
-**Valuation groups** (Draft valuation, Final valuation) columns: `#`, `Portfolio Company`,
-`Latest Val. Date`, `Status`, `Approach`, `Company Value`, `Holdings Value`.
+**One column set for the valuation groups and the No valuation group**, so they read as one
+table split by heading rather than three unrelated ones: `#`, `Portfolio Company`,
+`Latest Val. Date`, `Status`, `Approach`, `Company Value`, `Holdings Value`. The events groups
+below (financing rounds, tender offers, share transfers) keep their own columns.
 
-**No valuation** group columns: `#` and `Portfolio Company` only. Do not include valuation columns.
+The **No valuation** group has nothing for the last five, so fill them with `—`. Dropping the
+columns instead makes the eye re-learn the layout at each heading, and hides that the empty
+cells are the point of that group.
 
 In the `Portfolio Company` cell, suffix the name with `[C]` if
 `isCartaCorporation == true` (e.g., `MangoCart, Inc. [C]`).

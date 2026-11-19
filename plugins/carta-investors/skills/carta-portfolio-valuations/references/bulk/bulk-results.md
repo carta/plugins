@@ -66,9 +66,10 @@ and **back to the list** (Step 4) both read from it.
 | **Required inputs missing** | The row's required inputs that aren't filled in yet, per the **filled-in** rules in `SKILL.md`. `None` when nothing is missing. |
 | **Allocation** | `Run` when the standard scenario's `allocation.isCompleted` is `true`. `Failed` when an allocation attempt on this valuation failed earlier in the session, including a bulk run's allocation save or compute that failed (`❌ Allocation not saved` or `❌ Allocation not run`, `bulk-runner.md` Step 6.3). Otherwise `-`. Never infer it from the holdings value: a holding with a fixed value, such as a convertible note, gives a non-zero holdings value before any allocation has run. |
 
-**Zero or negative company value and holdings value show `-`.** This is a deliberate
-exception to SKILL.md's **Table values** rule, shared with the Step 2.5c
-summary checklist and applying only to these two values. A draft
+**Zero or negative company value and holdings value show `-` in this table.** This is a
+deliberate exception to SKILL.md's **Table values** rule, applying to these two values in this
+table alone — the Step 2.5c summary checklist shows the signed figure with a short reason after
+it, because it covers one company and has room to explain. A dense run of rows does not. A draft
 straight out of a bulk run often has a zero or debt-only negative value (e.g.
 GPC with no comps yet). Printing `0` or `-100,000` there reads as a
 valuation result, when it only means the value isn't set up yet. Hold the
