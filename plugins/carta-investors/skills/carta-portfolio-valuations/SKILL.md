@@ -9,10 +9,11 @@ description: >
   valuations", "which companies need new valuations", "open MangoCart's draft
   valuation", "set the company value for MangoCart", "batch valuations", "auto-run
   valuations", "PWERM", "probability-weighted valuation", "weight upside and downside").
-  DO NOT TRIGGER for 409A valuations, cap table valuations or valuation history / FMV
-  (carta-valuation-history), to goal-seek or tune the EV to a target, or to turn the
-  valuation tool on for a firm (this skill runs valuations only once it is already
-  enabled). Use carta-valuations-excel when a workbook is open in Claude for Excel.
+  DO NOT TRIGGER for 409A or cap table valuations, for a read-only valuation, MOIC, FMV
+  or history lookup that changes nothing (carta-explore-data, carta-valuation-history),
+  to goal-seek or tune the EV to a target, or to turn the valuation tool on for a firm
+  (the tool must already be enabled). Use carta-valuations-excel when a workbook is open
+  in Excel.
 user-invocable: true
 model: inherit
 allowed-tools:
@@ -66,13 +67,12 @@ allowed-tools:
   - Bash(cat *)
   - Bash(printf *)
   - Bash(mktemp *)
-  - Bash(rm -f *)
   - Bash(echo *)
   - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.54.3</carta-plugin>
+<carta-plugin>carta-investors:7.55.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -482,7 +482,12 @@ gave is not.
 
 **After every write, show the user what was saved** so they can check
 it without being interrupted first. One row or line per changed field:
-`{Field} — {full previous value, or "—" if new} → {full saved value}`.
+`{Field} — {full previous value, or "—" if new} → {full saved value}`,
+then, **unless the write was a finalize or a delete**, one line saying
+how to change it back ("Say the word and I'll put the 60/40 split
+back."). Those two can't be undone, so offering a way back would promise
+something that isn't there — and the call it leads to, `FINAL` → `DRAFT`,
+answers 400.
 Build it from the write's response (or a re-fetch), not from what you
 sent. If the user spots a mistake, fix it with another write.
 
@@ -534,6 +539,30 @@ the user:
 For these two, say what will happen, ask, and call the write only on an
 explicit yes. An earlier "finalize it" or "delete it" is the request,
 not the confirmation.
+
+### Why saving a valuation input needs no confirm
+
+A valuation input — an approach, a weight, a company value, an allocation —
+is **Tier 1, Informative** friction. It mutates data others read, which is
+the tier that can warrant a confirm, but it sits at the low end of it for
+one reason: **the undo path is the next save.** A DRAFT or
+IN_REVIEW valuation stays writable, every input is re-readable, and saving
+again replaces the value outright. Nothing has left Carta and no downstream
+consumer has been told.
+
+That stops being true at `FINAL`, which is why finalize is the gate — and
+why it is a one-way door: only Carta staff can reopen a finalized
+valuation.
+
+This covers a saved input, not every write. A bulk create reaches many
+companies at once and asks first (`references/bulk/bulk-runner.md`
+Step 3.4).
+
+It is also why the saved-values summary in **Writes** ends with the way
+back for a write that a later save can reverse: an action that reports
+the new value but not how to undo it is not Informative, it is
+unannounced. Finalize and delete are the exceptions in both directions —
+they ask first, and they promise no way back.
 
 ---
 
@@ -806,6 +835,11 @@ Call `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query>", 
 For an open-ended question, `dwh__execute__question` (plain English) is an
 acceptable fallback.
 
+**If the query returns exactly 200 rows, say so** — a firm-wide read can have
+more, and a table that stops at the cap reads as the whole picture. Give the
+count and offer to narrow it by fund, date or company rather than showing it
+as complete.
+
 Display results as a markdown table with columns: **Company**, **Fund**,
 **Valuation Date**, **Holdings Value**, **Invested Capital**,
 **Ownership %**, **MOIC**, **Method**. Format amounts with an M/B/K
@@ -831,7 +865,7 @@ or starts a bulk run. Firm selection needs only `list_contexts`,
 `list_accounts` and `set_context`.
 
 1. Call `list_contexts` to check for an active firm and get the firm name.
-   - **The user gave a numeric firm ID** (e.g. "Krakatoa Ventures (firm id = 1)"):
+   - **The user gave a numeric firm ID** (e.g. "`<firm name>` (firm id = `<firm_id>`)"):
      find the firm whose `carta_id` equals that number, use the number as
      `org_pk`, and **skip `list_accounts`**. A firm's `carta_id` is the same
      integer as its `organization_pk`. The user has already chosen the firm, so
@@ -1105,15 +1139,16 @@ offering to open the updated valuation (**Writes**).
 | "review the cap table", "show holders", "ownership %" | `references/dive-in/cap-table-review.md` |
 | "review financials", "show revenue", "what's the EBITDA", "refresh financials", "enter / add / work on the financials" | `references/dive-in/financials-review.md` (enter, add or work on → its Step 0 offers import from Carta, entry in chat, or entering them manually in the financials view) |
 | "I'll enter the financials manually", "let me type in the financials myself", "show me a form / table to enter financials" | `references/dive-in/edit-financials-view.md` — opens the financials view for the user to fill in. Takes precedence over the `financials-review.md` row for any request to enter the financials by hand. |
-| "let me enter the inputs for the methods", "I want to type in the GPC / post-money / custom value myself", "I'll set the weights myself", "manually set the weighting", "let me weigh the methods" | `references/dive-in/methodology-edit-view.md` — opens the methods table for the user to fill in. Takes precedence over the `set-approaches.md` row for any request to enter method inputs or weights by hand. Not for a weighted PWERM scenario — the table reaches only the standard scenario; that file's **Check the candidate isn't probability-weighted first** says how to tell (`get:scenarios` `templateType`) and sends a weighted one to `references/dive-in/pwerm.md` Step 4. |
+| "let me enter the inputs for the methods", "I want to type in the GPC / post-money / custom value myself", "I'll set the weights myself", "manually set the weighting", "let me weigh the methods" | `references/dive-in/methodology-edit-view.md` — opens the methods table for the user to fill in. Takes precedence over the `set-approaches.md` row for any request to enter method inputs or weights by hand. Not for a weighted PWERM scenario — the table reaches only the standard scenario; that file's **Check the candidate isn't probability-weighted first** says how to tell (`get:valuation` `templateType`) and sends a weighted one to `references/dive-in/pwerm.md` Step 4. |
 | "set approaches", "change methodology", "use GPC / M&A / post-money / backsolve", "Custom Value", "manual EV", "set the company value to {N}" | `references/dive-in/set-approaches.md` |
 | "find comps", "update comps", "add a peer", "drop {ticker}" | `references/dive-in/comps.md` |
 | "run GPC analysis", "recommend multiples", "set the 75th percentile", "quartile stats" | `references/dive-in/gpc-analysis.md` (requires `gpc` enabled; if not, read `set-approaches.md` first) |
-| "work on Backsolve", "run backsolve", "select a backsolve share class", "solve for equity value", "override the backsolve value", "make an equity adjustment", "adjust the equity value" | `references/dive-in/backsolve/backsolve.md` (requires `backsolve` enabled; if not, read `set-approaches.md` first — an override/adjustment request on an already-computed candidate enters directly at that file's Step 5) |
+| "work on Backsolve", "run backsolve", "select a backsolve share class", "solve for equity value", "override the backsolve value", "make an equity adjustment", "adjust the equity value" | `references/dive-in/backsolve/backsolve.md` (requires `backsolve` enabled; if not, read `set-approaches.md` first — an override/adjustment request on an already-computed candidate enters at that file's **Entry point: equity adjustment**, after its `templateType` check, which goes on to Step 5) |
 | "how is the backsolve calculated", "explain the backsolve math", "how do we arrive at this value", "walk me through the backsolve numbers", "how does backsolve work", "how is the equity value derived", "show me the formulas", "show me the math" | `references/dive-in/backsolve/backsolve-explained.md` (only enter on explicit "explain / how is it calculated / show me the formulas" phrasing — do NOT enter for requests to configure or run backsolve) |
 | "create an Excel spreadsheet for the backsolve", "export backsolve to Excel", "give me the backsolve in a spreadsheet" | `references/dive-in/backsolve/backsolve-excel.md` — the file writes directly into the current sheet when Claude for Excel is active and says so plainly otherwise |
 | "run waterfall / OPM / CSE", "allocate to share classes", "compute holdings value" | `references/dive-in/allocation.md`, for every target kind. Its Gate 0 decides which methodologies to offer; don't call `get:configuration` here or for any other row. Requires a positive EV; if zero or negative, say so and route to `set-approaches.md`. Pass `valuationId` along with the usual ids. |
-| "probability-weighted valuation", "PWERM", "weight an upside and a downside", "blend the scenarios", "70/30 on these outcomes", "re-weight the scenarios", "change the downside to 40%" | `references/dive-in/pwerm.md` — one candidate holding several weighted scenarios, blended into one value. Takes precedence over the `add-candidate.md` row whenever the outcomes are to be weighted together rather than compared side by side; that file's opening section settles an ambiguous ask. |
+| "probability-weighted valuation", "PWERM", "weight an upside and a downside", "blend the scenarios", "70/30 on these outcomes" | `references/dive-in/pwerm.md` — one candidate holding several weighted scenarios, blended into one value. Takes precedence over the `add-candidate.md` row whenever the outcomes are to be weighted together rather than compared side by side; that file's opening section settles an ambiguous ask. |
+| "add a scenario", "add a stretch case", "change the weights", "make the downside 40%", "drop the upside case", "change the downside exit value", "the base case should be {N}" — on a candidate that already has weighted scenarios | `references/dive-in/pwerm.md` § **Changing an existing PWERM candidate**. It checks the candidate's status first: a FINAL one is locked and only Carta staff can reopen it. |
 | "add another scenario", "create a Version 2", "what if {X}" | `references/dive-in/add-candidate.md` — separate versions to compare. For outcomes weighted into one blended value, use the PWERM row above. |
 | "create a new valuation", "start a Q2 valuation", "new valuation as of {date}" | `references/dive-in/create-val.md` |
 | "draft audit notes", "produce the audit memo" | `references/dive-in/audit-notes.md` |

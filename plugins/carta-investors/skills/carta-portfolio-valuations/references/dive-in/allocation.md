@@ -136,7 +136,30 @@ a positive `valueOfHoldings.amount` — never read it off the poll payload.
 
 **Do this silently** unless a prerequisite fails.
 
-Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and check `companyValue`:
+Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.
+
+**Check `templateType` on that response before writing anything.** `PWERM`
+or `HYBRID` means the candidate's value is a blend of weighted scenarios,
+and allocation belongs to a scenario rather than the candidate. Following
+this file unchanged allocates the vestigial standard scenario, which is
+not in the blend — the run reports success and no weighted scenario's
+allocation is cleared.
+
+Unless this file was reached *from* `references/dive-in/pwerm.md` Step 4
+with a `scenario_id` in hand — then carry on, passing that `scenario_id`
+on every call that takes it, under Step 4's **Allocation** rule and its
+three overrides — stop here and read it. `STANDARD` means carry on as
+written.
+
+If `get:valuation` fails or returns no `templateType`, the template is
+**unknown, not standard**: say it couldn't be confirmed and offer to
+retry rather than writing.
+
+> `scenario_id` is optional on every allocation command. Omit it and the
+> call targets the standard scenario, which is what a `STANDARD`
+> candidate wants.
+
+Then check `companyValue`:
 - **Zero, null, or missing** → surface plain language and ask inline
   as plain text:
 

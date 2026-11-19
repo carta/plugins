@@ -8,19 +8,30 @@ Five approaches are supported: **GPC**, **M&A**, **Post-Money**,
 follow-on configuration in chat. M&A and Post-Money are enabled here, and
 their values are entered in the methods table (Step 4).
 
-> **The methods table is standard-scenario only.** This file offers it in
-> four places — Step 1's by-hand entry, and the M&A, Post-Money and
-> Blended success messages. **Never offer it for a weighted PWERM
-> scenario.** `methodology-edit-view.md` takes `valuation_id` and nothing
-> else and saves on its own, so whatever the user types lands on the
-> candidate's standard scenario while the weighted scenario they named
-> keeps `NO_COMPANY_VALUE`. Nothing errors. For a weighted scenario, use
-> `references/dive-in/pwerm.md` Step 4 instead.
+> **Check `templateType` on `get:valuation` before writing anything.**
+> `PWERM` or `HYBRID` means the company value is a blend of weighted
+> scenarios. Every call below targets the candidate's **standard**
+> scenario, which on a weighted candidate carries no weight and is not in
+> the blend — the write succeeds, the value reads back correctly, and the
+> valuation does not move, so there is nothing to notice.
 >
-> **How to tell:** `portfolio_valuations:get:scenarios` returns `templateType`
-> — `PWERM` or `HYBRID` means weighted, `STANDARD` means the table is fine.
-> Check before offering the table, not after, so the offer isn't withdrawn.
-> If the command isn't available the account has no PWERM, so offer it.
+> Unless this file was reached *from* `references/dive-in/pwerm.md` Step 4
+> with a `scenario_id` in hand — then carry on, passing that `scenario_id`
+> on every call that takes it — stop here and read it. `STANDARD` means
+> carry on as written.
+>
+> If `get:valuation` fails or returns no `templateType`, the template is
+> **unknown, not standard**: say it couldn't be confirmed and offer to
+> retry rather than writing.
+>
+> Check before you offer anything, so an offer isn't withdrawn.
+
+> **The methods table is standard-scenario only**, and this file offers it
+> in four places — Step 1's by-hand entry, and the M&A, Post-Money and
+> Blended success messages. The guard above covers all four: on a weighted
+> candidate the table is not an option at all, because
+> `methodology-edit-view.md` takes `valuation_id` and nothing else and
+> saves on its own. Use `references/dive-in/pwerm.md` Step 4.
 
 > **Tool-surface note:** the five required top-level DLOM fields
 > (SKILL.md § Tool surface) go on every `mutate:approaches` call — echo

@@ -23,8 +23,8 @@ enter it by hand, so it stays with `set-approaches.md`.
 
 ### Check the candidate isn't probability-weighted first
 
-**Before opening the view, call `portfolio_valuations:get:scenarios` for the candidate** (the read
-`references/dive-in/pwerm.md` Step 3 uses) and look at `templateType`:
+**Before opening the view, call `portfolio_valuations:get:valuation` for the candidate** and look
+at `templateType`:
 
 | `templateType` | What to do |
 |---|---|
@@ -33,9 +33,15 @@ enter it by hand, so it stays with `set-approaches.md`.
 
 Do the same when the user names a scenario ("the downside case") whatever `templateType` says.
 
-**If the call fails or the command isn't available, open the view as usual** — it is gated on the
-PWERM feature flags, so on an account without them a candidate cannot be weighted in the first
-place. The check must never be what stops a standard candidate from reaching the table.
+If `get:valuation` fails or returns no `templateType`, the template is **unknown, not standard** —
+don't open the view. Say the template couldn't be confirmed and offer to retry. Opening it anyway
+sends everything the user types to the standard scenario of a candidate that may well be weighted,
+which is the silent failure this section exists to stop.
+
+`get:valuation` is the read to use here rather than `get:scenarios`: it carries `templateType` for
+every candidate and is not gated on the PWERM feature flags, so it answers on an account that has
+no PWERM at all. There is no route from `pwerm.md` into this view, so unlike the method flows this
+check has no exception.
 
 This matters because nothing downstream will complain. The view takes `valuation_id` and nothing
 else and saves on its own, so on a weighted candidate everything the user types lands on the

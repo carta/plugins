@@ -7,7 +7,7 @@ mutation.
 ## Prerequisites
 
 You need four things to work:
-- `ownerId` — the firm's org_pk integer (e.g. `1` for Krakatoa Ventures)
+- `ownerId` — the firm's org_pk integer (`<firm_id>`)
 - `targetKind` — the portfolio company's target type, either
   `CORPORATION` or `LLC_ISSUER`
 - `targetId` — the id matching that kind: `<corporation_id>` for a

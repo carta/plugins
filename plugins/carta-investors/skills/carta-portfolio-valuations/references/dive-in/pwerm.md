@@ -281,6 +281,84 @@ Then offer the next step: finalize (`ship.md`), adjust a weight
 
 ## Changing an existing PWERM candidate
 
+### First: can it be changed at all?
+
+`candidateStatus` comes back on both `get:valuation` and `get:scenarios`.
+
+| Status | What you can do |
+|---|---|
+| `DRAFT` | Edit freely. |
+| `IN_REVIEW` | Edit freely. A valuation under review stays editable so a reviewer's correction lands in place — don't move it back to DRAFT first. |
+| `FINAL` | **Nothing.** Say so and stop. |
+
+On a FINAL candidate every write below answers 400 *"This valuation has
+been finalized; its scenarios can no longer be changed."*
+
+> "**{candidate name}** is finalized, so its scenarios are locked. Carta
+> staff can un-finalize it if this needs to change — want me to explain
+> what to ask for?"
+
+**Don't try to reopen it.** `mutate:candidate` moves DRAFT to IN_REVIEW,
+IN_REVIEW back to DRAFT, and either to FINAL. **FINAL to anything is not
+a legal move** — it answers 400 `ILLEGAL_STATUS_TRANSITION`, and so does
+going via IN_REVIEW. Only a staff un-finalize reopens it. One attempt,
+then stop; this is not a call to retry with different arguments.
+
+### Edit a scenario's exit value
+
+Read `get:scenarios` first: it gives each scenario's id, its
+`scenarioCompanyValue` and whether its `allocation` has run. Match the
+user's words ("the downside case") to a scenario by name, and if two
+could match, ask which rather than guessing.
+
+**How the value was set decides the route, and the server says which.**
+`get:scenarios` gives the value but not the approaches behind it, so read
+them for this scenario:
+
+```json
+read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {
+  "ownerId": "<org_pk>",
+  "project_id": <project_id>,
+  "candidate_id": <candidate_id>,
+  "scenario_id": <scenario_id>
+}})
+```
+
+Use the `isUsed` flags, don't guess:
+
+- **Custom value is the only used approach** → replace it in one call,
+  below.
+- **Anything else is used** → that value has to change at its source. Go
+  back to **Step 4** and run that method's rule for this scenario.
+  Overwriting a GPC or backsolve figure with a custom value silently
+  drops the method the valuation documents, and on a blended scenario it
+  replaces only one of the weighted parts.
+
+For the custom-value case:
+
+```json
+call_tool({"name": "portfolio_valuations__mutate__custom_value", "arguments": {
+  "ownerId": "<org_pk>",
+  "project_id": <project_id>,
+  "candidate_id": <candidate_id>,
+  "scenario_id": <scenario_id>,
+  "companyValue": "<new value>"
+}})
+```
+
+**`scenario_id` is what makes this land on the right scenario.** Omit it
+and the command defaults to the vestigial standard scenario: the write
+succeeds, the scenario the user named keeps its old value, and the blend
+does not move.
+
+A new value makes that scenario's allocation stale, so re-run it for
+that scenario alone — **Step 4's Allocation rule**, with its three
+overrides, passing this `scenario_id`. Then read `get:scenarios` again
+and report the new blend from Step 5. Don't touch the other scenarios:
+their allocations are still good.
+
+### Add or re-weight scenarios
+
 `mutate:scenarios` adds, renames, re-weights and removes in one call.
 Ids come from `get:scenarios`. An entry with an `id` updates that
 scenario; one without creates it.
@@ -301,10 +379,31 @@ call_tool({"name": "portfolio_valuations__mutate__scenarios", "arguments": {
 
 Re-weighting is the common request ("make the downside 40%"). The
 weights must still sum to 1 afterwards, so work out what else has to
-move and **confirm the whole set before writing**:
+move and **confirm the whole set before writing** — show it at its new
+weights, totalling 100%, and say what you've assumed:
 
-> Taking Downside to 40% leaves 60% across Base and Upside. Should I
-> make them 45% and 15%, keeping their current ratio?
+| Scenario | Now | After |
+|---|---:|---:|
+| Downside | 20% | **40%** |
+| Base | 60% | **45%** |
+| Upside | 20% | **15%** |
+| **Total** | **100%** | **100%** |
+
+> Taking Downside to 40% leaves 60% across Base and Upside, so I've kept
+> their current ratio. Good to save?
+
+Nothing normalizes the weights for you: a set that doesn't sum to 1 is
+accepted and surfaces later as a `WEIGHTS_NOT_ONE` blocker that stops
+the valuation being finalized.
 
 Removing a scenario frees its weight, which leaves the rest summing to
-less than 1 — handle the same way, in the same question.
+less than 1 — handle it the same way, in the same table.
+
+A scenario you **add** starts with no company value, so it arrives as a
+`NO_COMPANY_VALUE` blocker — value it through **Step 4**, then run its
+allocation. Re-weighting an existing scenario changes no scenario's own
+value, so nothing needs re-valuing or re-allocating: the blend is
+recomputed on the next read.
+
+Either way, finish by reading `get:scenarios` and reporting what is left
+(**Step 3**), then the blend (**Step 5**).

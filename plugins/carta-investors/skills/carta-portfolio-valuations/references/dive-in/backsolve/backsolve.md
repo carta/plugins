@@ -20,6 +20,25 @@ inputs.
 > omitted field is reset. `mutate:backsolve` is the opposite: omitted
 > fields are left unchanged.
 
+**Check `templateType` on `get:valuation` before writing anything.**
+`PWERM` or `HYBRID` means a backsolve belongs to one weighted scenario,
+and every call here targets the candidate's standard scenario — which
+carries no weight and is not in the blend, so the backsolve runs, saves,
+reads back correctly and changes nothing the user is looking at.
+
+Unless this file was reached *from* `references/dive-in/pwerm.md` Step 4
+with a `scenario_id` in hand — then carry on, passing that `scenario_id`
+on every call that takes it — stop here and read it. `STANDARD` means
+carry on as written.
+
+If `get:valuation` fails or returns no `templateType`, the template is
+**unknown, not standard**: say it couldn't be confirmed and offer to
+retry rather than writing.
+
+This check comes before the entry points below, not inside Prerequisites,
+because an equity adjustment skips straight to Step 5 — every route into
+this file's writes passes here first.
+
 ## Entry point: equity adjustment / override requests
 
 If the user asks to **override the equity value** or **apply an

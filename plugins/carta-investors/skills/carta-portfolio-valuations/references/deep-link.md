@@ -81,7 +81,7 @@ table access" group is currently in view.
 
 Render it per **Step 3** above:
 
-[Request cap table access](https://app.test.carta.rocks/investors/firm/1/information-access/?has_active_holdings=true&inactive=false&ordering=captable_access&page=1&page_size=50)
+[Request cap table access]({BASE_URL}/investors/firm/1/information-access/?has_active_holdings=true&inactive=false&ordering=captable_access&page=1&page_size=50)
 
 ## Firm investments dashboard
 
@@ -97,7 +97,7 @@ to build a pro-forma cap table.
 
 Render it per **Step 3** above:
 
-[Open investments](https://app.test.carta.rocks/investors/firm/1/portfolio/investments/?date=2026-09-10&group=ungrouped)
+[Open investments]({BASE_URL}/investors/firm/1/portfolio/investments/?date=2026-09-10&group=ungrouped)
 
 ## Investment overview (fix a failed valuation)
 
@@ -127,9 +127,9 @@ App takes** above.
 
 Render it per **Step 3** above:
 
-[Fix in Carta](https://app.test.carta.rocks/investors/firm/1/portfolio/investment/7/overview)
+[Fix in Carta]({BASE_URL}/investors/firm/1/portfolio/investment/7/overview)
 
 Same page for an `LLC_ISSUER` (`ownerId=1`,
 `targetId=c3d27e81-1098-4735-a4cf-7b52d4506361`):
 
-[Fix in Carta](https://app.test.carta.rocks/investors/firm/1/portfolio/llc/c3d27e81-1098-4735-a4cf-7b52d4506361/holdings)
+[Fix in Carta]({BASE_URL}/investors/firm/1/portfolio/llc/c3d27e81-1098-4735-a4cf-7b52d4506361/holdings)

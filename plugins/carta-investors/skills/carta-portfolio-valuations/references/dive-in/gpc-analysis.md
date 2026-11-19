@@ -28,6 +28,22 @@ financials on the candidate are checked in Step 1.
 
 **Do this silently** unless a prerequisite fails.
 
+**Check `templateType` on `get:valuation` before writing anything.**
+`PWERM` or `HYBRID` means the candidate's value is a blend of weighted
+scenarios, and GPC multiples belong to one scenario. Every call in this
+file targets the candidate's standard scenario — which carries no weight
+and is not in the blend, so the multiples save, read back correctly and
+move no number the user is looking at.
+
+Unless this file was reached *from* `references/dive-in/pwerm.md` Step 4
+with a `scenario_id` in hand — then carry on, passing that `scenario_id`
+on every call that takes it — stop here and read it. `STANDARD` means
+carry on as written.
+
+If `get:valuation` fails or returns no `templateType`, the template is
+**unknown, not standard**: say it couldn't be confirmed and offer to
+retry rather than writing.
+
 Call `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
 - If `gpc.isUsed` is not `true`, surface plain language and ask inline:
   > "GPC isn't enabled on **{candidate name}** yet. Want to enable it
