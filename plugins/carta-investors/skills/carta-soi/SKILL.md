@@ -11,6 +11,11 @@ allowed-tools:
   - mcp__carta__welcome
   - mcp__claude_ai_Carta__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  # Usage checkpoints (carta-mcp CONTRIBUTING, "skill checkpoint"); Carta Home also reads skill_finished.
+  - mcp__carta__skill_checkpoint
+  - mcp__claude_ai_Carta__skill_checkpoint
+  - mcp__claude_ai_carta__skill_checkpoint
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
   # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -44,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.53.5</carta-plugin>
+<carta-plugin>carta-investors:7.53.8</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -88,6 +93,10 @@ Customer-facing narration should sound like a person, not an implementer. The cu
 - Print "Perfect!" / "Excellent!" / "Great!" / "Done!" between every tool call. One natural confirmation at the end is enough.
 
 ## Workflow
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-soi", checkpoint_label="skill_started")` before Step 1. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run, and they count as Carta calls the build may make. A run that has not recorded `skill_started` records no other checkpoint.
+
+Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again in the same run (a re-render, a re-publish, a follow-up question, the second invocation the note at the top of this file asks for) does not checkpoint again.
 
 **The build makes only the Carta calls its steps name, and nothing else.** The page loads every
 holding, value and gain itself when it opens, so the build needs only these calls:
@@ -321,6 +330,8 @@ finds this firm's existing page, so keep both as written here.
 Keep `favicon` stable across redeploys, and restate the whole `capabilities` object every
 time: a non-empty object replaces the stored grant, so a tool left out is revoked.
 
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-soi", checkpoint_label="skill_finished")` once the publish in Step 5 has succeeded, with the firm from Step 1 still the active context. Carta Home reads it to offer "Open my dashboard" for that firm. A run that falls back to the text summary, or fails to publish, does not record it.
+
 ### Step 6 — Confirm to the user
 
 Pick the branch from the `name_status` value captured in Step 2.
@@ -353,6 +364,10 @@ If both churned sentences apply, use the `named_churned` sentence only. Say noth
 After the branch sentence, append a 3–5 bullet summary of what the artifact contains (e.g. interactive holdings table, Deal IRR columns — proceeds, total value, multiple and IRR — an Investment Cash Flows tab, summary metrics, sortable columns, expand/collapse rows, filter by company name, fund switcher across all funds you have access to). Keep it brief — the customer can see the artifact themselves. The bullet summary is optional on re-invocation branches; if you've already shown it earlier in the conversation, skip it.
 
 See **User-facing output** at the top of this skill for the broader narration rules.
+
+## If something goes wrong
+
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-soi", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. If the call fails, stop as planned. That includes a failed publish, a missing `Artifact` tool answered with the text summary, a render script that exits non-zero, and a firm the user can't reach. Asking the user which firm or fund they mean is not a stop: the run continues when they reply.
 
 ## Deal IRR columns
 
