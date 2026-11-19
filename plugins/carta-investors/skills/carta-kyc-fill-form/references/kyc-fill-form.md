@@ -308,11 +308,13 @@ identity check of its own. A government ID uploaded in Step 7 answers it just th
 form then no longer asks for it. A US individual's form often lists no document at all and asks
 for the ID only this way.
 
-A proof of address listed with `subFieldPath` `["issueDate"]` is owed the date the document was
-issued, which the form checks against its age limit. Step 7d sends it with the document as `issue_date`
-when `kyc__create__document` takes that argument. When that command offers none, the
-document can be attached but its issue date cannot be given from here: list it on the Step 9 list
-for the form, as a field only the form can fill. Do not guess a date.
+A proof of address listed with `subFieldPath` `["issueDate"]` is on file but owed the date it was
+issued, which the form checks against its age limit; a document listed with `["expiryDate"]` is
+owed its expiry date. Step 7d sends these dates with the first upload. Once the document is
+attached, its date can be given in the form only: no command here sets a date on an attached
+file. Never upload the same file again to add the date: that attaches a second file of the same
+document. Put it on the Step 9 list: the user sets the date on the attached file in the form. Do
+not guess a date.
 
 An entity investor whose kind is not saved yet lists one item only: `institutionType` (for a
 trust whose subtype is not saved, `trustType`), with `options`: the kinds the form offers this
@@ -527,6 +529,13 @@ Add the time-limited warning the Rules ask for under any file it applies to. Use
 - Several files: `Upload all` ← recommended / `Choose which` / `Don't upload`.
 - One file: `Upload this document` / `Don't upload`.
 
+A document field holds several files (a document's pages, an ID's front and back), so a file
+shared for a document the completion read lists as on file (an item with a `subFieldPath`) can be
+another file of it or the same one again. Ask which with `AskUserQuestion` before the question
+above, naming the document, the party and the file: `Add it as another file of this document` /
+`It is the file already attached`. On the second, or anything else, upload nothing and leave the
+document's owed date on the Step 9 list.
+
 On `Upload all` or `Upload this document`, run 7b–7d for each listed file in turn, asking
 nothing between files. On `Choose which`, ask once more with `AskUserQuestion`
 (`multiSelect: true`), one option per file named by its file name and label. Split the files
@@ -582,10 +591,11 @@ document lands on the investor. Add `"field_id"` for a document the firm wrote i
 (`FILE_TYPE_OTHER`). When `anyOf` lists several types, send the one this file is. For a field a
 file answers, send the `fileType` from Step 2's table.
 
-A document the completion read lists with `subFieldPath` `["issueDate"]` (a proof of address, say) is
-owed its issue date, and one listed with `["expiryDate"]` its expiry date. Send them with the
-document as `"issue_date"` and `"expiry_date"`, each `{"year": 2026, "month": 10, "day": 20}`
-(never `"2026-10-20"`), and only the one it lists:
+A proof of address states the date it was issued, and an ID its expiry date. Send them with the
+first upload, as `"issue_date"` and `"expiry_date"`, each `{"year": 2026, "month": 10, "day": 20}`
+(never `"2026-10-20"`), whenever the document prints one, before the completion read lists it as
+owed (`subFieldPath` `["issueDate"]` or `["expiryDate"]`): a date left off can only be given in the
+form afterwards (Step 3).
 
 ```
 call_tool({"name": "kyc__create__document",
@@ -595,11 +605,13 @@ call_tool({"name": "kyc__create__document",
                          "issue_date": {"year": 2026, "month": 10, "day": 20}}})
 ```
 
-Send the date printed on the document. If the document shows none, ask the user for it, and never
-infer it from the upload date. If `read_tool` shows that `kyc__create__document` has no such
+Send the date printed on the document. If a proof of address shows no issue date, ask the user
+for it before uploading, and never infer it from the upload date. An ID that prints no expiry
+date is uploaded without one. If `read_tool` shows that `kyc__create__document` has no such
 argument, attach the document without it and put the date on the Step 9 list for the form.
 
-Tell the user it was uploaded, for which party, and which issue date, if any, was sent with it.
+Tell the user it was uploaded, for which party, and which issue or expiry date, if any, was sent
+with it.
 
 A refusal that says kyc-service "attached no document" cannot tell two causes apart: the file
 did not reach storage (an expired link, a failed send), or its format is not accepted. When this
