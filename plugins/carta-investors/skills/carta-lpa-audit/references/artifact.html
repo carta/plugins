@@ -2324,6 +2324,16 @@
     // Identity of an LP across LPA copies: the name modulo case and punctuation.
     // Deliberately stricter than normName, which also drops legal forms and
     // parentheticals — merging two different investors would hide one of them.
+    const AMENDMENT_VARIANTS = ['Amendment', 'Amended and Restated'];
+
+    // Copies of one agreement share variant, number and date; with no number or date, the terms
+    // it states too. A fund keeps an executed copy per investor, so this tells another agreement
+    // from another copy.
+    function agreementKey(l) {
+      return [l.documentVariant, l.amendmentNumber ?? '', l.fund.lpaDate ?? '',
+        ...(l.amendmentNumber == null && !l.fund.lpaDate ? AMENDABLE_TERMS.map(k => l.terms[k] ?? '') : [])].join('|');
+    }
+
     function lpKey(name) {
       return (name || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
     }
@@ -2332,12 +2342,30 @@
     // Funds collect an executed copy of the LPA per investor, so any one copy
     // names only its own signatory. A named LP appears once, preferring the entry
     // that carries a commitment. Unnamed entries come from the selected LPA only,
-    // so N copies cannot multiply them.
+    // so N copies cannot multiply them. An LP that only amendments name carries
+    // `namedIn`, the earliest of them, so the panel does not read as the agreement's own list.
     function mergeLpRosters(selectedEid, hitEids, lpas) {
       const roster = [];
       const position = new Map();
-      for (const eid of [selectedEid, ...hitEids.filter(e => e !== selectedEid)]) {
-        for (const lp of lpas.get(eid).limitedPartners) {
+      const selected = agreementKey(lpas.get(selectedEid));
+      const namedInOf = lpa => AMENDMENT_VARIANTS.includes(lpa.documentVariant) && agreementKey(lpa) !== selected
+        ? { documentId: lpa.documentId, variant: lpa.documentVariant, amendmentNumber: lpa.amendmentNumber, date: lpa.fund.lpaDate }
+        : null;
+      // Every agreement and copy before any amendment, then amendments oldest first and undated
+      // ones last: the first document to name an LP decides its tag, so an LP any agreement names
+      // is never tagged.
+      const rank = eid => {
+        const date = lpas.get(eid).fund.lpaDate;
+        return [namedInOf(lpas.get(eid)) ? 1 : 0, date ? 0 : 1, date || ''];
+      };
+      const others = hitEids.filter(e => e !== selectedEid).sort((a, b) => {
+        const [ra, rb] = [rank(a), rank(b)];
+        return ra[0] - rb[0] || ra[1] - rb[1] || ra[2].localeCompare(rb[2]);
+      });
+      for (const eid of [selectedEid, ...others]) {
+        const lpa = lpas.get(eid);
+        const namedIn = namedInOf(lpa);
+        for (const lp of lpa.limitedPartners) {
           const key = lpKey(lp.name);
           if (!key) {
             if (eid === selectedEid) roster.push(lp);
@@ -2345,9 +2373,10 @@
           }
           if (!position.has(key)) {
             position.set(key, roster.length);
-            roster.push(lp);
+            roster.push(namedIn ? { ...lp, namedIn } : lp);
           } else if (roster[position.get(key)].commitmentAmount === null && lp.commitmentAmount !== null) {
-            roster[position.get(key)] = lp;
+            const firstNamedIn = roster[position.get(key)].namedIn;
+            roster[position.get(key)] = firstNamedIn ? { ...lp, namedIn: firstNamedIn } : lp;
           }
         }
       }
@@ -2470,12 +2499,10 @@
         // an executed copy per investor, so copies of one agreement (same variant, number and date; when an
         // agreement has no number or date, the terms it states too) are listed once, and copies of the
         // agreement the table reads are not listed at all.
-        const keyOf = l => [l.documentVariant, l.amendmentNumber ?? '', l.fund.lpaDate ?? '',
-          ...(l.amendmentNumber == null && !l.fund.lpaDate ? AMENDABLE_TERMS.map(k => l.terms[k] ?? '') : [])].join('|');
-        const seen = new Set(matchedLpa ? [keyOf(matchedLpa)] : []);
+        const seen = new Set(matchedLpa ? [agreementKey(matchedLpa)] : []);
         const amendments = matchedLpa ? hits.map(([eid]) => lpas.get(eid))
-          .filter(l => ['Amendment', 'Amended and Restated'].includes(l.documentVariant))
-          .filter(l => !seen.has(keyOf(l)) && seen.add(keyOf(l)))
+          .filter(l => AMENDMENT_VARIANTS.includes(l.documentVariant))
+          .filter(l => !seen.has(agreementKey(l)) && seen.add(agreementKey(l)))
           .map(l => ({
             documentId: l.documentId,
             variant: l.documentVariant,
@@ -3623,6 +3650,9 @@
         }
         const priced = lps.filter(lp => lp.commitmentAmount != null);
         const lpName = lp => esc(lp.name || '—') +
+            (lp.namedIn ? ' <span class="chip" title="Named in ' + esc(amendmentLabel(lp.namedIn)) +
+                (lp.namedIn.date ? ' dated ' + esc(fmtDate(lp.namedIn.date)) : '') +
+                ', not in the agreement the terms come from.">From ' + esc(amendmentLabel(lp.namedIn)) + '</span>' : '') +
             (lp.entityType ? '<span class="lp-type">' + esc(lp.entityType) + '</span>' : '');
         const lpHeading = '<div class="drawer-section"><h3 class="drawer-section-title">Limited partners ' +
             '<span class="drawer-section-count">' + lps.length + '</span></h3>';
@@ -3691,6 +3721,10 @@
             '</div></div>';
     }
 
+    function amendmentLabel(a) {
+        return a.variant === 'Amended and Restated' ? 'Amended and restated agreement' : 'Amendment' + (a.amendmentNumber != null ? ' No. ' + a.amendmentNumber : '');
+    }
+
     // Which agreement the terms come from, and the amendments on file that the table does not apply.
     function renderAmendmentsSection(fund) {
         if (!fund.lpa) return '';
@@ -3698,8 +3732,7 @@
         const variant = fund.lpa.documentVariant;
         const source = variant === 'Amendment' ? 'an amendment' : variant === 'Amended and Restated' ? 'the amended and restated agreement' : null;
         if (!amendments.length && !source) return '';
-        const label = a => (a.variant === 'Amended and Restated' ? 'Amended and restated agreement' : 'Amendment' + (a.amendmentNumber != null ? ' No. ' + a.amendmentNumber : '')) + (a.date ? ' · ' + fmtDate(a.date) : '');
-        const items = amendments.map(a => '<li>' + documentLink(a.documentId, esc(label(a))) +
+        const items = amendments.map(a => '<li>' + documentLink(a.documentId, esc(amendmentLabel(a) + (a.date ? ' · ' + fmtDate(a.date) : ''))) +
             (a.changedTerms.length
                 ? ' <span class="chip chip-check" title="The table does not apply this amendment. Check the amendment for the value in force.">States different ' +
                   esc(a.changedTerms.map(k => TERM_LABELS[k].toLowerCase()).join(', ')) + '</span>'

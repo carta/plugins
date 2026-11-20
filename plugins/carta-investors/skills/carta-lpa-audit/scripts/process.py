@@ -1433,6 +1433,20 @@ def _gp_entity_fallback(
 # Firm-fund matching + coverage assembly
 # ---------------------------------------------------------------------------
 
+AMENDMENT_VARIANTS = ("Amendment", "Amended and Restated")
+
+
+def agreement_key(lpa: dict) -> tuple:
+    """Copies of one agreement share variant, number and date; with no number or date, the terms it states too.
+
+    A fund keeps an executed copy per investor, so this tells another agreement from another copy.
+    """
+    key = (lpa.get("documentVariant"), lpa.get("amendmentNumber"), lpa["fund"]["lpaDate"])
+    if lpa.get("amendmentNumber") is None and not lpa["fund"]["lpaDate"]:
+        key += tuple(lpa["terms"].get(k) for k in AMENDABLE_TERMS)
+    return key
+
+
 def _lp_key(name: str | None) -> str:
     """Identity of an LP across LPA copies: the name modulo case and punctuation.
 
@@ -1448,12 +1462,35 @@ def merge_lp_rosters(selected_eid: str, hit_eids: list[str], lpas: dict[str, dic
     Funds collect an executed copy of the LPA per investor, so any one copy
     names only its own signatory. A named LP appears once, preferring the entry
     that carries a commitment. Unnamed entries come from the selected LPA only,
-    so N copies cannot multiply them.
+    so N copies cannot multiply them. An LP that only amendments name carries
+    ``namedIn``, the earliest of them, so the panel does not read as the agreement's own list.
     """
+    selected = agreement_key(lpas[selected_eid])
+
+    def named_in_of(lpa: dict) -> dict | None:
+        if lpa.get("documentVariant") not in AMENDMENT_VARIANTS or agreement_key(lpa) == selected:
+            return None
+        return {
+            "documentId": lpa["documentId"],
+            "variant": lpa.get("documentVariant"),
+            "amendmentNumber": lpa.get("amendmentNumber"),
+            "date": lpa["fund"]["lpaDate"],
+        }
+
+    # Every agreement and copy before any amendment, then amendments oldest first and undated
+    # ones last: the first document to name an LP decides its tag, so an LP any agreement names
+    # is never tagged.
+    def visit_order(eid: str) -> tuple:
+        date = lpas[eid]["fund"]["lpaDate"]
+        return (named_in_of(lpas[eid]) is not None, not date, date or "")
+
+    others = sorted((e for e in hit_eids if e != selected_eid), key=visit_order)
     roster: list[dict] = []
     position: dict[str, int] = {}
-    for eid in [selected_eid, *(e for e in hit_eids if e != selected_eid)]:
-        for lp in lpas[eid]["limitedPartners"]:
+    for eid in [selected_eid, *others]:
+        lpa = lpas[eid]
+        named_in = named_in_of(lpa)
+        for lp in lpa["limitedPartners"]:
             key = _lp_key(lp.get("name"))
             if not key:
                 if eid == selected_eid:
@@ -1461,9 +1498,10 @@ def merge_lp_rosters(selected_eid: str, hit_eids: list[str], lpas: dict[str, dic
                 continue
             if key not in position:
                 position[key] = len(roster)
-                roster.append(lp)
+                roster.append({**lp, "namedIn": named_in} if named_in else lp)
             elif roster[position[key]]["commitmentAmount"] is None and lp["commitmentAmount"] is not None:
-                roster[position[key]] = lp
+                first_named_in = roster[position[key]].get("namedIn")
+                roster[position[key]] = {**lp, "namedIn": first_named_in} if first_named_in else lp
     return roster
 
 
@@ -1589,16 +1627,10 @@ def match_all(
         # agreement the table reads are not listed at all.
         amendments = []
         if matched_lpa:
-            def agreement_key(l):
-                key = (l.get("documentVariant"), l.get("amendmentNumber"), l["fund"]["lpaDate"])
-                if l.get("amendmentNumber") is None and not l["fund"]["lpaDate"]:
-                    key += tuple(l["terms"].get(k) for k in AMENDABLE_TERMS)
-                return key
-
             seen = {agreement_key(matched_lpa)}
             for eid, _tier, _names_series in hits:
                 other = lpas[eid]
-                if other.get("documentVariant") not in ("Amendment", "Amended and Restated") or agreement_key(other) in seen:
+                if other.get("documentVariant") not in AMENDMENT_VARIANTS or agreement_key(other) in seen:
                     continue
                 seen.add(agreement_key(other))
                 amendments.append({
