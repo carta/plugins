@@ -60,9 +60,11 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.56.7</carta-plugin>
+<carta-plugin>carta-investors:7.56.10</carta-plugin>
 
-> **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If a path is still unreplaced or a file is still not found, tell the user "I couldn't load this skill's files. Reconnect Carta or update the plugin, then ask again." record `skill_failed` as Error handling describes, and stop. This is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page, and don't search the disk for the files.
+> **If this plugin's files can't be found:** `${CLAUDE_PLUGIN_ROOT}` is this plugin's root, and seeing it unreplaced in this text is not a missing file: the root is this skill's base directory (the path shown when the skill loads) with its last two parts, `/skills/<this skill's directory>`, taken off the end. Write that path wherever this skill writes `${CLAUDE_PLUGIN_ROOT}`, in Bash commands too, and go on. Working that path out is not searching the disk. Only a "not found" when you read or run one of these files at that path means a file is missing, because the skill loaded before this session's computer link was ready: invoke this skill once more with the Skill tool and use the paths that copy gives. If a file is still not found, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) record `skill_failed` as Error handling describes, and stop. Don't search the disk for them.
+>
+> That is the one message for a missing file in either mode: don't fall back to text tables, copy the script, or hand-write the page.
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -235,7 +237,7 @@ Tell the user: `Firm context loaded: <firm_name>. Fetching LPAs and side letters
 
 ## Mode A — Live Artifact
 
-The artifact shows every fund the firm manages as a row in one sortable table, with coverage gaps (missing, partial, name-mismatch or no-documents LPA, series governed by a parent agreement, side-letters-without-LPA) as row badges and summary tiles that filter the table. A vehicle whose agreement states no fee or carry (an SPV, aggregator, feeder, blocker or side fund; see Caveats → *Partial LPAs*) gets its own "Vehicle agreement" badge and tile, not a gap. Clicking a row opens that fund's side panel — economic terms, side letters, LP roster with totals, fund identity — beside the table on wide screens and as a drawer over it on narrow ones, with previous/next to step through funds without closing it.
+The artifact shows every fund the firm manages as a row in one sortable table, with coverage gaps (missing, partial, name-mismatch or no-documents LPA, series governed by a parent agreement, side-letters-without-LPA) as row badges and summary tiles that filter the table. A vehicle whose agreement states no fee or carry (an SPV, aggregator, feeder, blocker or side fund; see Caveats → *Partial LPAs*) gets its own "Vehicle agreement" badge and tile, not a gap. Clicking a row opens that fund's side panel — economic terms, side letters, LP roster (with commitments and totals when the agreement states them), fund identity — beside the table on wide screens and as a drawer over it on narrow ones, with previous/next to step through funds without closing it.
 
 > **The page fetches its own data.** You issue no warehouse queries in Mode A. The rendered HTML calls Carta at runtime through `claude.use("mcp")`, pinning firm context and running the LPA and side-letter queries itself, then matches them against the firm's fund list in JavaScript. This is why Mode A costs the same for a 40-fund firm as for a 3-fund one — no rows ever pass through your context.
 >

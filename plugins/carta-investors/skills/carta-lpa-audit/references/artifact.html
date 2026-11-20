@@ -3622,11 +3622,24 @@
                 (fund.lpa.limitedPartnerCount ? ' (' + fund.lpa.limitedPartnerCount + ' LPs)' : '') + '. The roster is not repeated here.</div></div>';
         }
         const priced = lps.filter(lp => lp.commitmentAmount != null);
-        // Names with no commitment beside them say nothing the documents don't, so no
-        // table. Many LPAs leave commitments to each investor's subscription agreement.
-        if (!priced.length) {
+        const lpName = lp => esc(lp.name || '—') +
+            (lp.entityType ? '<span class="lp-type">' + esc(lp.entityType) + '</span>' : '');
+        const lpHeading = '<div class="drawer-section"><h3 class="drawer-section-title">Limited partners ' +
+            '<span class="drawer-section-count">' + lps.length + '</span></h3>';
+        if (!lps.length) {
             return '<div class="drawer-section"><h3 class="drawer-section-title">Limited partners</h3><div class="drawer-empty">' +
-                'This agreement does not list investor commitments. They are usually set in each investor\'s subscription agreement.</div></div>';
+                'Investors could not be found on the agreement.</div></div>';
+        }
+        // Many agreements, operating agreements especially, name their members but leave
+        // commitments to each investor's subscription agreement. The names still answer who
+        // is in the fund, so they are listed without the empty commitment and share columns.
+        if (!priced.length) {
+            return lpHeading +
+                '<div class="drawer-empty">This agreement does not list investor commitments. They are usually set in each investor\'s subscription agreement.</div>' +
+                '<table class="lp-table"><thead><tr><th scope="col">Name</th></tr></thead><tbody>' +
+                lps.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                    .map(lp => '<tr><td>' + lpName(lp) + '</td></tr>').join('') +
+                '</tbody></table></div>';
         }
         // The roster spans several documents. Amounts in different currencies are
         // never added; a document with no known currency counts as a currency of its own.
@@ -3638,12 +3651,10 @@
         const footNote = !sameCurrency
             ? 'Not totalled: amounts are in more than one currency'
             : unpriced ? 'Excludes ' + unpriced + ' LP' + (unpriced === 1 ? '' : 's') + ' with no extracted commitment' : '';
-        return '<div class="drawer-section"><h3 class="drawer-section-title">Limited partners ' +
-            '<span class="drawer-section-count">' + lps.length + '</span></h3>' +
+        return lpHeading +
             '<table class="lp-table"><thead><tr><th scope="col">Name</th>' +
             '<th scope="col" class="num">Commitment</th><th scope="col" class="num">% of total</th></tr></thead><tbody>' +
-            lps.map(lp => '<tr><td>' + esc(lp.name || '—') +
-                (lp.entityType ? '<span class="lp-type">' + esc(lp.entityType) + '</span>' : '') + '</td>' +
+            lps.map(lp => '<tr><td>' + lpName(lp) + '</td>' +
                 '<td class="num">' + fmtAmount(lp.commitmentAmount, lp.currencyCode) + '</td>' +
                 '<td class="num">' + share(lp.commitmentAmount) + '</td></tr>').join('') +
             '</tbody><tfoot><tr><td>Total' +
