@@ -21,7 +21,7 @@ file decides what to do with them.
 | `companion_url`, `revision` | draft set results | the page for one set, and the revision it shows |
 | `companion_url` | `issuance_init`, `cap_table:get:issuance_companion` | in `issuance_init`, the same address as `companion.issuance_url`; in `issuance_companion`, the page for every set it names |
 | `dropped` | `draft_set_sources` results | the cells not stored, each with the key to use, for [§ 11](#11-when-a-command-is-refused) |
-| `next_step` | first key of `issuance_init` and `cap_table:get:issuance_companion` | Carta's steps to show that result's page beside the chat: render the issuance app, or open `companion_url` in a browser pane. Do them exactly, once, before you reply: it is the open of [§ 4](#4-open-the-page-at-once), not a second one. Skip it when the page already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
+| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion` and a draft set result that gives a set its `draft_set_id` | Carta's steps to show that result's page beside the chat: render the issuance app, wait for the first save, or open `companion_url` in a browser pane. Do them exactly, once, before you reply: it is the open of [§ 4](#4-open-the-page-at-once), not a second one. Skip it when the page already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
 | `how_to_reply` | `cap_table:get:issuance_companion`, draft set results | with `companion.issuance_app`, Carta's rules for how a reply shows the app: do what it says. Without it, text from Carta describing the same flow; the steps in this file are the ones to carry out |
 | `instructions`, `how_to_open` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | text from Carta describing the same flow; the steps in this file are the ones to carry out |
 
@@ -74,7 +74,8 @@ Don't repeat a call whose result brought you here.
 ## 4. Open the page at once
 
 Before reading the files and before any save, open `companion.issuance_url` in the same turn. With
-`companion.issuance_app`, render [the issuance app](#the-issuance-app) instead. With no
+`companion.issuance_app`, open nothing yet: the app renders after the first save, as
+[the issuance app](#the-issuance-app) says. With no
 `issuance_url`, the address is the page § 9 gives after the save. This one open is what the
 result's first key asks for ([What Carta returns](#what-carta-returns)). Open it as
 `${CLAUDE_PLUGIN_ROOT}/references/open-the-companion-page.md` says — the plugin's own
@@ -140,7 +141,8 @@ Once each:
    `[{security_type, draft_set_id}]`, then open its `companion_url` as § 4 says. With the
    command refused, open the set's `companion_url`. The page at `companion.issuance_url` never
    shows a saved set: it reads only the sets its address names. With several types,
-   [§ 9](#9-several-types-in-one-run) moves it once every set is saved.
+   [§ 9](#9-several-types-in-one-run) moves it once every set is saved. With
+   [the issuance app](#the-issuance-app), skip this step: the save's result renders the app.
 6. Reply as [§ 6](#6-ask-whats-missing-once) says.
 
 ## 6. Ask what's missing, once
@@ -390,7 +392,8 @@ this run, not one type with the others as follow-ups.
    With no card host, each question starts with its `set_label`.
 
 Once every set is saved, open the run's page instead of each set's `companion_url`, which shows
-only that set's tab:
+only that set's tab. With [the issuance app](#the-issuance-app), skip this: each save's render
+already named every set of the run.
 
 1. `cap_table:get:issuance_companion` with `corporation_id` and `sets`, one
    `{security_type, draft_set_id}` per set in the order you built them. With one set, call it
@@ -452,6 +455,8 @@ saved no row: say its `message`, and do not send the set again.
 
 ## 12. End every turn that wrote with the way to the page
 
+With [the issuance app](#the-issuance-app), the close is that section's line, not an address.
+
 A turn that wrote made at least one successful `prepare_drafts`, `save_drafts`,
 `validate_drafts`, `draft_set_sources`, `resolve_duplicate_stakeholder` or `apply_plan` call. End its reply with one way back
 to the page, as the open-the-page file of § 4 says in § The way back to the page: a user who
@@ -477,7 +482,8 @@ the close: a question at the end of the reply, such as § 8's. The § 6 card com
 reply's text, so the close stays the last line of that text. An `AskUserQuestion` answer comes
 back in the same turn, so the close goes at the end of what you write after it.
 
-**The user asks to see the page** ("show me the page", "where is it?"). In Claude's browser,
+**The user asks to see the page** ("show me the page", "where is it?"). With the issuance app,
+do as [the issuance app](#the-issuance-app) says. In Claude's browser,
 `navigate` the page tab to the address (under step 2, the page of the set the user names, else of
 the set the run last talked about), as that file's § Open the address says, with its one retry,
 then end with the pane line and post no link. Elsewhere, post the link. A card message that asks
@@ -490,13 +496,30 @@ navigated the page tab.
 
 ## The issuance app
 
-With `companion.issuance_app`, the issuance page is an app beside the chat. Each open, move or
-close of the page in this file shows the app instead:
+With `companion.issuance_app`, the issuance page is an app beside the chat. Each render stays in
+the chat, so render it only at these times:
 
-- **Render it** as the result's `next_step` says.
-- **After a save that gives a set its `draft_set_id`**, render it again as `how_to_reply` says.
-- **No `view_remote_next` after one `ToolSearch`, or the host cannot render apps**: there is no
-  app. Open the page as § 4 says.
+- **Render it** as the result's `next_step` says. `issuance_init`'s step waits for the first save
+  that gives a set its `draft_set_id`, and that save's result leads with the render.
+- **After a later save that gives another set its `draft_set_id`**, render it again as `how_to_reply`
+  says.
+- **When the user asks to see the page** once a save has given a set its `draft_set_id`, render it
+  again at once: one `view_remote_next` with the run's `sets`, no other call first, and no link.
+  Before that, say the page opens beside the chat after the first save, and render nothing.
+- **After any other save, render nothing.** The app shows it by itself.
+
+Where this file opens, moves or links the page, with the app:
+
+- [§ 4](#4-open-the-page-at-once), [§ 5](#5-build-the-draft-set) step 5 and
+  [§ 9](#9-several-types-in-one-run)'s move open nothing: the saves' renders above show the run.
+- [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)'s close is "The draft set is open
+  beside the chat." No address, no pane line and no render.
+- A card message asks where a document says a value: name the set's tab and the cell to select in
+  the app, and save nothing.
+- Never share `companion_url` or open the browser pane while the app shows.
+
+**No `view_remote_next` after one `ToolSearch`, or the host cannot render apps**: there is no app.
+Open the page as § 4 says.
 
 ## Words
 
