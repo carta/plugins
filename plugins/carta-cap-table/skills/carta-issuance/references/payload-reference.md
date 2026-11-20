@@ -95,7 +95,7 @@ issuance. Do not add percentages to unit counts.
 | `is_flexible_issue_date` | optional | bool | |
 | `is_hmrc_notified` | EMI only, optional | bool | Cleared for other `so_type` |
 | `hmrc_notified` | EMI only, optional | `YYYY-MM-DD` or `MM/DD/YYYY` | Stored as `DateTimeField` on the draft model — server normalises both inputs |
-| `ato_notified` | ESS/Non-Concessional/ZEPO only, optional | bool | |
+| `ato_notified` | Startup Concessions/Non-Concessional/ZEPO only, optional | bool | |
 | `employment_related` | **`Unapproved` — required** | bool (Yes/No) | UK HMRC "Other ERS" designation. `validate_drafts` rejects a blank one, so **collect it up front**. `No` is a valid answer; only unanswered fails. Not required for `EMI` / `CSOP` (own returns) — omit for every other `so_type`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
 | `grant_reason` | optional | enum | See [Picklists](#picklists) — schema-enforced, not free text. **Never infer it**; leave unset unless the user or file named one |
 | `employee_id`, `cost_center`, `job_title`, `salary` | optional | string / decimal | Pass-through — **not collected by carta-issuance** (design feedback dropped these from this skill's surfaces entirely; they remain valid server-side for other callers) |

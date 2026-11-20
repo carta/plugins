@@ -82,9 +82,8 @@ differences:
 - **Ignore `dividend`.** `DraftPIU` has no dividend-accrual field, so the
   non-cash-dividend prompt that governs certificates does not apply.
 
-The default rule is the same one, and deliberately so: a sole class is pre-selected, two or
-more leave the control **required and unselected** with `missingFields()` holding **Review**
-on `a unit class`. An explicitly named class is still honoured, row-level or via
+The default rule is the same one, and deliberately so: use the class only when there is one;
+with two or more, ask for `a unit class` and never pre-select. An explicitly named class is still honoured, row-level or via
 the prefix the prompt named, except where a percentage meets a class or plan class that is
 not `PERCENT` ([chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask));
 carry one in **only when the prompt actually named one.**
@@ -204,8 +203,7 @@ no corresponding-interest link for this unit class"* on the strength of a missin
 an assertion the evidence does not support — it was reported to a user once, on a corp
 whose manage-share-classes page showed the link plainly.
 
-**Which class is "the resolved unit class".** The same precedence the unit-class buttons
-use to pre-select one (`default_share_class_prefix`), in order:
+**Which class is "the resolved unit class".** In order:
 
 1. the row's own `share_class_prefix`,
 2. a prefix the prompt named,
@@ -215,27 +213,20 @@ use to pre-select one (`default_share_class_prefix`), in order:
 
 Step 3 is load-bearing: the skill carries no prefix in unless the prompt named
 a unit class, so for the ordinary request (*"issue a PIU to X for 112 units"*) the first two
-are empty. Reading only a named prefix is what kept this row from ever rendering.
+are empty.
 
 Step 4 is deliberate. The class sets the holder's liquidation preference, price and
 economics, so a default picked for them hides the decision the field exists to ask. When
 several classes exist the gate reads "unresolved" and the user chooses.
 
-**The gate is not build-time only.** The link belongs to the unit class, so clicking a
-different class changes the answer. Any class carrying the link puts the row in the DOM
-for every class, tagged `data-conditional="corresponding_interest"` and hidden when the
-selected class has no link; `syncCorrespondingInterest()` re-toggles it on each class
-click, on load, and on a cloned block, reading the per-prefix map the form emits as
-`CORRESPONDING_INTEREST_BY_PREFIX`. When *no* class carries the link the row never enters
-the DOM at all.
-
-Batch mode renders it once in shared terms, from where it expands onto every submitted
-row.
+**The link belongs to the unit class**, so a change of class changes the answer: ask again
+after the user picks a different class. With several rows on one class, ask once for the
+batch.
 
 One line for the user: *"Yes also issues the matching interest in the linked operating
 company."* The server then checks permission on that company, its available units, and a
 same-named vesting schedule there; surface those messages verbatim. Only `true` is
-meaningful — the form omits the key entirely whenever the row is not visible.
+meaningful — omit the key when the resolved class has no link.
 
 #### An explicit request is never silently dropped
 

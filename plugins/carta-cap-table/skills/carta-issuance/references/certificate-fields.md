@@ -23,10 +23,10 @@ unmatched names, build one table (User-supplied / Suggested match / Confidence) 
 **once**: `"Accept suggested mappings"` / `"Map manually"` / `"Skip unmatched rows"` —
 never per-row.
 
-**No class named or implied → the builders pre-select a class only when the corp has
-exactly one** (for a quantity given as a percentage, exactly one `PERCENT` class; see the
-[chat-surface.md](chat-surface.md) defaults table). With two or more the control renders **required and unselected**, and
-`missingFields()` holds **Review** on `a share class` until a human picks. Nothing is ranked:
+**No class named or implied → use the class only when the corp has exactly one** (for a
+quantity given as a percentage, exactly one `PERCENT` class; see the
+[chat-surface.md](chat-surface.md) defaults table). With two or more classes, ask; never
+pre-select. Nothing is ranked:
 which class a holder lands in sets their liquidation preference, their price and their
 economics, so a ranked default hides the decision the field exists to capture — and the
 response order is not dependable anyway. Metal corporation 7 returns its eight classes in
@@ -69,11 +69,8 @@ Certificate only. Read the resolved share class's `dividend` field:
 
 ## Rule 144 difference reason
 
-Certificate only; only when `rule_144_date` ≠ `issue_date`. **The artifact collects it
-inline** — a reason `<select>` in the same row, shown the moment "Use a different
-date" is picked, and it will not submit until it is set; read `rule_144_reason` off the row and
-stamp it as `rule_144_difference_reason`. **On the chat surface**, ask for it in the
-[collect batch](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open):
+Certificate only; only when `rule_144_date` ≠ `issue_date`. **On the chat surface**, ask for
+it in the [collect batch](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open):
 `AskUserQuestion`, one option per enum (label → value): "Has determined 144 date" →
 `has_determined_144_date`; "Non-restricted 144" → `non_restricted_144`; "Relevance provision"
 → `relevance_provision`; "Affiliates" → `affiliates`; "Non-affiliates" → `non_affiliates`.

@@ -11,7 +11,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.117.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.118.0</carta-plugin>
 
 # issuance-import
 
@@ -74,7 +74,7 @@ which (`ERROR:` or `AMBIGUOUS:` plus `CANDIDATES=`).
 ## Running the phase — step by step
 
 `carta-issuance` [Phase 0.25](../references/engine.md#phase-025--ingest-an-uploaded-file) hands you the
-whole ingest and hands back the rows the surface seeds from. These are its steps; nothing here is repeated in
+whole ingest and hands back the rows the surface starts from. These are its steps; nothing here is repeated in
 `SKILL.md`, so work through them in order and return to [Phase
 0.5](../references/engine.md#phase-05--configure-the-issuance) at the end.
 
@@ -121,13 +121,9 @@ prints `SECURITY_TYPE=`, `ROW_COUNT=`, and the paths it wrote.
 **Reconcile `security_type` with the prompt.** File and prompt disagreeing is a real fork →
 `AskUserQuestion`. The file wins only when the prompt never said.
 
-### Step 3 — Resolve the names to ids (chat surface only)
+### Step 3 — Resolve the names to ids
 
-**On the artifact, skip to Step 5.** The page fetches its own reference data and resolves the
-file's free text itself, so a `--reference` pass here would be a round trip for a result it
-replaces.
-
-On the chat surface, run [Phase
+Run [Phase
 0.5](../references/engine.md#phase-05--configure-the-issuance)'s `issuance_init` call exactly as
 documented, with `security_type` now supplied by the file, and pass `stakeholder_names`
 covering **the names the file contains** rather than the names the prompt named — that keeps
@@ -165,7 +161,6 @@ collects the terms must both **report every note against the field it names** an
 field unanswered**, so nothing can be submitted until the admin settles it. A marker alone is
 ignorable; the withheld default is what actually prevents a silent wrong issuance
 ([chat-surface.md § 1](../references/chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open)).
-The artifact does this for itself from `row.import_notes`.
 
 **Strip `import_notes` before any mutate** — same discipline as the review-only fields
 ([Build the mutate payload](../references/engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows)).
@@ -177,8 +172,7 @@ Read `_import_report.json` and report totals — never silently drop a column or
 `Exercise Price` column is a wrong-priced grant the user has no way to notice.
 
 > *"Read 38 rows from Q3-grants.xlsx. State of Residency and Employee ID aren't fields this
-> flow sets, and 3 values I couldn't match are flagged in the form — everything else is filled
-> in. Review and submit when ready."*
+> flow sets, and I couldn't match 3 values — I'll ask for those. Everything else is filled in."*
 
 **Name the skipped rows and the unmapped columns, not just their counts.** Rows this skill
 can't issue (RSUs, SARs, CBUs, warrants, RSAs, convertibles) are skipped by the parser with a

@@ -4,18 +4,17 @@
 # ///
 """Carta's issuance picklists and per-`so_type` field gates, stated in Python.
 
-long-comment-ok: names the contract these constants exist to hold. The artifact's
-form logic answers the same questions in JavaScript
-(`skills/carta-issuance/issuance-artifact/resources/issuance.form.js`), and
-`tests/carta-cap-table/test_issuance_artifact_rules.py` pins the two together. A
-wrong `*_SO_TYPES` set misreports a grant to a tax authority rather than failing
-visibly, so each membership is stated once here and compared, never copied. Which
-fields each security type collects is stated in
-`skills/carta-issuance/references/payload-reference.md`.
+long-comment-ok: names the contract these constants exist to hold.
+`skills/carta-issuance/issuance-import/scripts/parse_upload.py` keeps its own copy
+of the picklists, and the field references (`payload-reference.md`,
+`option-grant-fields.md`, `certificate-fields.md`) restate the picklists and the
+gates; `tests/carta-cap-table/test_issuance_import_picklists.py` pins each one to
+this file. A wrong `*_SO_TYPES` set misreports a grant to a tax authority
+rather than failing visibly, so each membership is stated once here.
 Python 3.9-safe: `uv` can resolve to macOS's system 3.9.
 """
 
-# ── Jurisdiction → so_type buttons (carta-issuance Picklists). Primary first. ──
+# ── Jurisdiction → so_type choices (carta-issuance Picklists). Primary first. ──
 JURISDICTION_SO_TYPES = {
     "US": ["ISO", "NSO", "INTL"],
     "UK": ["EMI", "CSOP", "Unapproved"],
@@ -23,7 +22,7 @@ JURISDICTION_SO_TYPES = {
 }
 
 # Full `issue_date_relationship` picklist (payload-reference.md). Every
-# stakeholder answers it, so every row offers the whole list.
+# stakeholder answers it, so every row takes a value from the whole list.
 RELATIONSHIP_CHOICES = [
     "Advisor", "Ex-Advisor",
     "Board member", "Ex-Board member",

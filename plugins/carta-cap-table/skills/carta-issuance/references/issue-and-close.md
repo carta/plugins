@@ -62,8 +62,7 @@ confirming is entitled to know which, so carry the matching sentence into the co
 | Certificate | *"Confirming will issue these certificates to the cap table."* |
 | PIU | *"Confirming will send these profits interest units to the signatory for signature."* |
 
-The artifact carries this in its own Confirm step; on the chat surface it is yours to say, in
-the review's preview.
+On the chat surface it is yours to say, in the review's preview.
 
 
 ---
@@ -210,6 +209,6 @@ After each save or issue, on every surface, tell the user in plain words:
   After a save, Carta has notified nobody: say nothing about notifications.
 - **The next step, after a save only.** On the chat surface, say one line: "When you are ready,
   say 'issue them'." The [confirmation gate](../SKILL.md#hard-rules) still applies. On the
-  artifact surface, or the companion surface on a pane host where the page opened, tell the
-  user to issue with the page's Issue button. Elsewhere on the companion surface, say 'When you
+  companion surface on a pane host where the page opened, or where the issuance app shows,
+  tell the user to issue with the page's Issue button. Elsewhere on the companion surface, say 'When you
   are ready, say "issue them"', as on chat.

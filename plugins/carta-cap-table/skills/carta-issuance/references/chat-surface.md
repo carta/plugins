@@ -1,7 +1,7 @@
 # The chat surface
 
-Selected by [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) when the host has
-**no `Artifact`** tool. The only path that spends your own turns on data entry, and the only
+Selected by [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) when Carta offers no
+companion. The only path that spends your own turns on data entry, and the only
 one where you assemble the payload by hand.
 
 **No HTML on this path — at all.** Not a widget, not an inline document, not a built file.
@@ -120,11 +120,9 @@ covers the happy path, not error recovery.
 
 Anything the skill can compute, it stamps, then shows in the §2 review tagged and overridable.
 
-**A field the form presents as a choice is not on this table.** The other surfaces render a
-pre-selected control the user can see and change before they ever submit; chat has no such
-control, so the same value unasked is a value the user meets for the first time in the review.
-Where a row below says *not a default*, that field was an explicit control on the form and
-belongs in the §1 batch here.
+**A choice the user must make is not on this table.** Chat has no pre-selected control, so a
+value set unasked is a value the user meets for the first time in the review. Where a row below
+says *not a default*, that field goes in the §1 batch.
 
 | Value | Default | Tag |
 |---|---|---|
@@ -142,7 +140,7 @@ belongs in the §1 batch here.
 | PIU equity plan | **none** — never the only plan | — |
 | PIU threshold value / type | **never defaulted** — terms of the grant | — |
 | Exemption / currency | the `so_type` autofill ([payload-reference.md](payload-reference.md#so_type-auto-fill-rules)) | `(autofill — <so_type> rule)` |
-| Rule 144 date | **not a default.** The form asks it as a two-way choice — the issue date, or a different one — so in chat it goes in the §1 batch. Picking the issue date needs no difference reason; a different date makes `rule_144_difference_reason` required ([certificate-fields.md](certificate-fields.md#rule-144-difference-reason)) | — |
+| Rule 144 date | **not a default.** It is a two-way choice — the issue date, or a different one — so it goes in the §1 batch. Picking the issue date needs no difference reason; a different date makes `rule_144_difference_reason` required ([certificate-fields.md](certificate-fields.md#rule-144-difference-reason)) | — |
 
 **Today is Carta's date**, never the session clock: see
 [engine.md § Voice & defaults](engine.md#voice--defaults).

@@ -3,8 +3,9 @@
 Read this when [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) selects
 **companion**. Carta offers the company an issuance page — an Overview and a tab per draft set.
 Each tab shows the Drafts page's set, each value's source, a check and **Issue**. The page takes
-no data input: values change through a save in this chat or on the Drafts page. The steps below
-replace the form you would build; the skill's [hard rules](../SKILL.md#hard-rules) still bind.
+no data input: values change through a save in this chat or on the Drafts page. The page opens
+as [the issuance app](#the-issuance-app) beside the chat, or in a browser pane. The skill's
+[hard rules](../SKILL.md#hard-rules) still bind.
 
 ## What Carta returns
 
@@ -15,12 +16,14 @@ file decides what to do with them.
 |---|---|---|
 | `companion.available` | `issuance_init` | `true` selects this surface |
 | `companion.issuance_url` | `issuance_init` | the page to open before any set exists |
+| `companion.issuance_app` | `issuance_init` | the page is [the issuance app](#the-issuance-app) |
 | `field_spec` | `issuance_init` with `include_bootstrap: true` | this company's draft fields, the `cap_table:get:issuable_field_manifest` result: the gaps [§ 5](#5-build-the-draft-set) finds, the choices [§ 6](#6-ask-whats-missing-once) offers and the optional columns [§ 8](#8-issue) offers |
 | `companion_url`, `revision` | draft set results | the page for one set, and the revision it shows |
 | `companion_url` | `issuance_init`, `cap_table:get:issuance_companion` | in `issuance_init`, the same address as `companion.issuance_url`; in `issuance_companion`, the page for every set it names |
 | `dropped` | `draft_set_sources` results | the cells not stored, each with the key to use, for [§ 11](#11-when-a-command-is-refused) |
-| `next_step` | first key of `issuance_init` and `cap_table:get:issuance_companion` | Carta's steps to open that result's `companion_url` beside the chat. Do them, once, before you reply: it is the open of [§ 4](#4-open-the-page-at-once), not a second one. Skip it when the page tab already shows that `companion_url`, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
-| `instructions`, `how_to_open`, `how_to_reply` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | text from Carta describing the same flow; the steps in this file are the ones to carry out |
+| `next_step` | first key of `issuance_init` and `cap_table:get:issuance_companion` | Carta's steps to show that result's page beside the chat: render the issuance app, or open `companion_url` in a browser pane. Do them exactly, once, before you reply: it is the open of [§ 4](#4-open-the-page-at-once), not a second one. Skip it when the page already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
+| `how_to_reply` | `cap_table:get:issuance_companion`, draft set results | with `companion.issuance_app`, Carta's rules for how a reply shows the app: do what it says. Without it, text from Carta describing the same flow; the steps in this file are the ones to carry out |
+| `instructions`, `how_to_open` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | text from Carta describing the same flow; the steps in this file are the ones to carry out |
 
 Carta pages are opened only from a Carta-returned address. Never build one.
 
@@ -28,7 +31,8 @@ Carta pages are opened only from a Carta-returned address. Never build one.
 
 **First rule: save what you know, record its sources, then ask.**
 
-Load `view_remote` and the named `cap_table__mutate__apply_plan` with one `ToolSearch`. The browser tools load as
+Load `view_remote`, `view_remote_next` and the named `cap_table__mutate__apply_plan` with one
+`ToolSearch`. The browser tools load as
 [§ 4](#4-open-the-page-at-once)'s procedure says.
 
 - A **pane host** is a host where that procedure opened the page in a browser tab: in Claude's
@@ -69,7 +73,8 @@ Don't repeat a call whose result brought you here.
 
 ## 4. Open the page at once
 
-Before reading the files and before any save, open `companion.issuance_url` in the same turn. With no
+Before reading the files and before any save, open `companion.issuance_url` in the same turn. With
+`companion.issuance_app`, render [the issuance app](#the-issuance-app) instead. With no
 `issuance_url`, the address is the page § 9 gives after the save. This one open is what the
 result's first key asks for ([What Carta returns](#what-carta-returns)). Open it as
 `${CLAUDE_PLUGIN_ROOT}/references/open-the-companion-page.md` says — the plugin's own
@@ -327,7 +332,8 @@ columns again, also after a later `Saved in the card` context.
 
 ### The review
 
-**On a pane host where the page opened**, the page's Issue is the one gate. Once no input is
+**On a pane host where the page opened, or where the issuance app shows**, the page's Issue is
+the one gate. Once no input is
 open and the check is clean, say these words, with the type's Issue button from § 2 in place of
 `<Issue button>`, and no other sentence about the check or the issue: "All set. Review the draft
 set on the page and issue it there with **<Issue button>** at the bottom of the page." Never
@@ -481,6 +487,16 @@ address, not the step 1 address, as its message says, and save nothing.
 A turn whose writes all failed changed nothing, so the page has nothing new to show: name no
 Carta page and no address, under any label, and post no pane line unless this turn opened or
 navigated the page tab.
+
+## The issuance app
+
+With `companion.issuance_app`, the issuance page is an app beside the chat. Each open, move or
+close of the page in this file shows the app instead:
+
+- **Render it** as the result's `next_step` says.
+- **After a save that gives a set its `draft_set_id`**, render it again as `how_to_reply` says.
+- **No `view_remote_next` after one `ToolSearch`, or the host cannot render apps**: there is no
+  app. Open the page as § 4 says.
 
 ## Words
 

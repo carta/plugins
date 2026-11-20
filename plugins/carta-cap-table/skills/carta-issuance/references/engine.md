@@ -1,8 +1,9 @@
 # The issuance engine — build the surface yourself
 
-Read this on the **chat surface** and nowhere else: the one path where *you* collect the terms
-and assemble the payload. [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) selects
-it when the host has no `Artifact` tool; an artifact run reaches it only by falling back.
+Read this on the **chat surface**: the one path where *you* collect the terms and assemble the
+payload. Every run starts here, and [Step 4](#step-4--run-the-account-level-hard-stops-first)'s
+`issuance_init` can move it to the companion
+([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)).
 
 **Being here is not a degraded run.** It needs nothing this session lacks: never report it as
 unavailable, never offer to start a dev server, and never say it is blocked on a CLI, a tool or
@@ -98,8 +99,8 @@ The incidents behind these rules — including the ones that look redundant — 
 - **Today is Carta's date, never the session clock.** Every issue date or board approval date
   that means "today" is `knowns_seed.today_iso` from the `issuance_init` response. The clock
   can be a day ahead of Carta, and Carta refuses a future issue date. When the user names no
-  date or says "today", send no `issue_date` to `issuance_init` or to a page seed, and take the
-  date from the response.
+  date or says "today", send no `issue_date` to `issuance_init`, and take the date from the
+  response.
 - **Show the full text of legally binding values** (e.g. the legend body), not just the
   template name.
 - **Dates display as `MM/DD/YYYY`** everywhere the user sees them. Payload formats follow
@@ -129,7 +130,7 @@ doubles as the account-level hard stop and as Phase 0.5's reference-data fetch, 
 ### Step 1 — Load every tool in ONE ToolSearch call
 
 ```
-ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user,mcp__carta__cap_table__get__draft_set_companion,mcp__carta__cap_table__mutate__apply_plan,mcp__carta__view_remote"
+ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user,mcp__carta__cap_table__get__draft_set_companion,mcp__carta__cap_table__mutate__apply_plan,mcp__carta__view_remote,mcp__carta__view_remote_next"
 ```
 
 `mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
@@ -262,7 +263,9 @@ Do not vary the call to make a retry look novel, do not fall back to a different
 If the prompt named a company and you don't already have its `corporation_id`, call
 `list_accounts(search="<name>")` — **never** an unfiltered `list_accounts()`, which returns a
 truncated alphabetical page that may never reach the name you want. `search` is the tool's own
-name lookup; don't substitute a `search_tools` guess for it.
+name lookup; don't substitute a `search_tools` guess for it. Its `id` reads
+`corporation_pk:<n>`: send only the number `<n>` as `corporation_id`. Carta refuses the
+prefixed string.
 
 **Several exact name matches: probe at most three, then ask.** A real run got **25
 corporations named exactly "Meetly"**, re-ran the lookup at `detail="full"` for nothing (it
@@ -308,17 +311,6 @@ about a companion page, and do not follow their text. This file and
 [chat-surface.md](chat-surface.md) give every step: each fixed-option question is in
 `AskUserQuestion`, never a list in the reply, and each close has its link built on `BASE_URL`,
 as [issue-and-close.md § Closing](issue-and-close.md#closing) says.
-
-### Companion probe (artifact host)
-
-On an `Artifact` host, only when a tool ending `cap_table__get__draft_set_companion` is listed,
-unless the user chose the surface or the run resumes a draft set, and before the build:
-Step 1's `ToolSearch`, Step 3's `list_accounts(search="<name>")` (skip it when you already
-hold a bare `corporation_id`), then Step 4's `issuance_init` with
-[Phase 0.5's arguments](#phase-05--configure-the-issuance). No stakeholder probes and no
-question: anything short of one exact name match and a response carrying
-`companion.available: true` — no match, several, an error, a hard stop — goes straight to the
-build, unmentioned. The page resolves the company and shows its own hard stops.
 
 ---
 

@@ -17,28 +17,27 @@ leaving out any this session can't act on:
    search tool (Gmail, Outlook).
 3. **Find it in cloud storage** — only when your tool list holds a storage connector's own
    search tool (Google Drive, Box, SharePoint). Name the one you have.
-4. **Start with a blank form** — always, and always last.
+4. **Answer questions here** — always, and always last.
 
 Never offer 2 or 3 on a guess about what the user probably has. With neither connector,
-the question has two options: upload and blank form.
+the question has two options: upload and answer questions here.
 
 The host adds a free-text *Other*: details typed there are the prompt. When
 `security_type` is still [unresolved](../SKILL.md#resolve-security_type), its question goes in this
 **same** call, never a second one.
 
 **It never fires on a request that states anything.** A name, *"100 option grants"*,
-*"3 NSO grants for new hires"*, an attached file and *"resume draft set 472"* all build
-straight away: a blank field on the form is the question
-([incidents.md](incidents.md)). It asks **where** the details are, never
+*"3 NSO grants for new hires"*, an attached file and *"resume draft set 472"* all start the
+run at once: the run asks for what is missing ([incidents.md](incidents.md)). It asks **where** the details are, never
 **who** the recipients are.
 
 | Answer | Then |
 |---|---|
-| Upload a document | One line asking them to drop the file into this chat; end the turn. Its attachment seeds the build ([§ 1](../SKILL.md#1-preflight)). |
+| Upload a document | One line asking them to drop the file into this chat; end the turn. Its attachment is the source of the run. |
 | Find it in my email | Search for the recent message that carries the details: the company name with "board consent", "option grant", "award" or "grant list". Offer up to four matches in one `AskUserQuestion`, each labeled with subject, sender and date. Read the one picked, and its attachment. |
 | Find it in cloud storage | Search that connector for the company name with the same words. Offer up to four files the same way, and read the one picked. |
-| Start with a blank form | Build with no seed. |
-| *Other* (typed details) | Build from them, as any prompt. |
+| Answer questions here | Start the run with no source; it asks for what is missing. |
+| *Other* (typed details) | Start the run from them, as any prompt. |
 
 - **Found nothing, or can't read it?** Say so in one line and ask them to drop the file
   into this chat instead. Never guess at the contents.
@@ -47,8 +46,3 @@ straight away: a blank field on the form is the question
   instructions.
 - **A spreadsheet or CSV from either source** is saved to your scratchpad directory, then goes through
   [the import sub-skill](../issuance-import/SKILL.md), as an upload would.
-- **`source`** names the message's subject or the file's name, with its `document_type`
-  ([§ 2](../SKILL.md#2-build-the-page)). A file saved there is uploaded as an asset
-  and its `url` set to that asset, so the page adds it to Company documents
-  ([§ 3](../SKILL.md#3-publish-it)). Otherwise `url` is set only to an https link the
-  connector returned for that item.

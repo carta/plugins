@@ -22,12 +22,7 @@ Take returned rows as the working set. The set's `security_type` is locked once 
 never ask to change it on resume. If `load_drafts` returns more rows than you're tracking,
 see [Cleanup unexpected draft rows](#cleanup-unexpected-draft-rows).
 
-**Where the working set goes depends on the surface.**
-
-| Surface | What to do with the rows |
-|---|---|
-| **artifact** | Seed `draft_set_id`, plus `rows` (each with its `draft_pk`) as the fallback, then build and publish as usual — [SKILL.md § 2](../SKILL.md#2-build-the-page). The page reads the set's rows and terms back itself, and edits and re-saves that same set |
-| **chat** | Jump to the [Phase 2 review](issue-and-close.md#phase-2--the-review-gate) |
+Then jump to the [Phase 2 review](issue-and-close.md#phase-2--the-review-gate) with the rows.
 
 **Keep the `draft_set_id` you resumed from.** The rows are already on the server, so unless the
 user edits them, Phase 3 issues with that id and no `drafts` payload
