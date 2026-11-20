@@ -74,6 +74,17 @@ def currency_sort_key(code):
     return (code is None, code or "")
 
 
+def sort_funds_by_regulatory_aum(funds):
+    """Largest regulatory AUM first within each currency (codes A-Z, no-currency last), funds with
+    no regulatory AUM after those, ties by name, ignoring case. Amounts in different currencies are never ranked
+    against each other."""
+    def key(f):
+        aum = f.get("regulatory_aum")
+        return (currency_sort_key(norm_currency(f.get("reporting_currency"))),
+                aum is None, -(aum or 0), (f.get("fund_name") or "").casefold())
+    return sorted(funds, key=key)
+
+
 def fmt_currency(v, currency=None):
     """ISO code, a space, then the grouped amount (EUR 1,234,567; negatives in
     parentheses). Without a valid currency the amount is a plain number — never a default."""
@@ -581,7 +592,7 @@ def main():
 
     firm_name        = data.get("firm_name", "Firm")
     reporting_date   = data.get("reporting_date", "")
-    funds            = data.get("funds", [])
+    funds            = sort_funds_by_regulatory_aum(data.get("funds", []))
     demos            = data.get("investor_demographics", {})
     firm_aggregates  = data.get("firm_aggregates", {})
     lp_nav_by_currency = data.get("lp_nav_by_currency")

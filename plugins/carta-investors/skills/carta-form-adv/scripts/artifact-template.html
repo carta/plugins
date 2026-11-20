@@ -178,6 +178,20 @@ function currencySuffix(code, show) { return show ? ` (${currencyLabel(code)})` 
 function byCurrency(a, b) {
   return (a.currency === null) - (b.currency === null) || String(a.currency).localeCompare(String(b.currency));
 }
+// Names compared lower-cased with < and >, the same order as Python's str.casefold, not locale order.
+function compareNames(a, b) {
+  const x = String(a || '').toLowerCase(), y = String(b || '').toLowerCase();
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+// Largest regulatory AUM first within each currency, funds with none after those, ties by name ignoring case.
+// Amounts in different currencies are never ranked against each other.
+function byRegulatoryAum(a, b) {
+  const x = a.regulatory_aum, y = b.regulatory_aum;
+  return byCurrency({ currency: normCurrency(a.reporting_currency) }, { currency: normCurrency(b.reporting_currency) })
+    || (x == null) - (y == null) || (y || 0) - (x || 0)
+    || compareNames(a.fund_name, b.fund_name);
+}
+DATA.funds = [...(DATA.funds || [])].sort(byRegulatoryAum);
 function emptyRollup(code) {
   const r = { currency: code, fund_count: 0 };
   ROLLUP_KEYS.forEach(k => { r[k] = 0; });

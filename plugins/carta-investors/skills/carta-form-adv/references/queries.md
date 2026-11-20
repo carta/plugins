@@ -6,7 +6,7 @@
 
 | Table | Purpose |
 |---|---|
-| `FUND_ADMIN.FUNDS` | Fund metadata: entity type, legal structure, vintage/formation date, investment strategy, fund size, firm |
+| `FUND_ADMIN.FUNDS` | Fund metadata: entity type, legal structure, vintage/formation date, investment strategy, fund size, firm. Funds formed after the reporting date are excluded; Query 5 lists them. |
 | `FUND_ADMIN.JOURNAL_ENTRIES` | Balance sheet: cash, cost of investment, unrealized G/L, other assets, borrowings (all account types) |
 | `FUND_ADMIN.MONTHLY_NAV_CALCULATIONS` | Fund-level NAV (LP/GP split), unfunded commitments, cumulative and annual contributions/distributions |
 | `FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS` | **Partner-level point-in-time** NAV and active membership per fund at month-end. Use this for any reporting-date investor count or NAV breakdown. |
@@ -33,12 +33,21 @@
 | % Non-US Persons (firm) | Query 3 firm_aggregates | partner_country bucketed, distinct partner_id | Item 5.H |
 | LP NAV, US LP NAV, non-US LP NAV, % non-US LP NAV (per currency) | Query 4 lp_nav_by_currency | partner NAV summed only within one fund reporting currency | Item 5.H |
 | Fund Formation Date | FUNDS | vintage_date | Sched D §7.B.(1) Q.6 |
+| Funds left out (name, formation date) | Query 5 | vintage_date after the reporting date | Named to the user; not in the filing files |
 | Legal Structure | FUNDS | legal_structure | Sched D §7.B.(1) organizational form |
 | Fund Type | FUNDS | investment_strategy_code | Sched D §7.B.(1) fund type classification |
 
 ### Important: Date Field
 
 Use `effective_date` (accounting date) from `JOURNAL_ENTRIES`. The datashare table already filters to posted, non-deleted entries — **do not** add an additional `posted_date <= reporting_date` filter, as it will exclude valid backdated entries and misalign with the Carta balance sheet.
+
+### Fund Universe — Only Funds Formed By the Reporting Date
+
+Queries 1–4 keep a fund in their `funds` CTE only when `vintage_date <= reporting_date`, so a fund formed after the reporting date appears in none of their results: not as a Schedule D §7.B.(1) row, not in the fund count, and not in the firm-level LP counts or LP NAV. Run as of 2025-12-31, a fund formed in 2026 is left out.
+
+`vintage_date` is the formation date shown as "Formation date" in the outputs. A fund with no `vintage_date` is kept, because Carta cannot say it was formed after the reporting date, and its formation date shows as `—`. The skill names every such fund to the user, with or without data, says it is counted in the filing (its Schedule D section, one Item 5.F account and one Item 5.D client), and leaves the decision to them: Form ADV asks for each private fund the firm advises, with no exception for a fund that has no investment activity. Keep the predicate identical across Queries 1–4 so they describe the same set of funds.
+
+**The user is told about every fund that was left out.** Query 5 returns each one with its `vintage_date`, and the skill names every row to the user when it delivers the filing. `vintage_date` is the GL vintage date, which can be later than the fund's legal formation, so a left-out fund may belong in the filing. If one belongs in the filing, its vintage date in Carta must be corrected and the filing run again.
 
 ### Point-in-Time vs. Snapshot — Rule of Thumb
 
@@ -81,6 +90,7 @@ funds AS (
     CROSS JOIN constants c
     WHERE f.entity_type_name IN ('Fund', 'SPV')
       AND f.is_onboarding = FALSE
+      AND (f.vintage_date IS NULL OR f.vintage_date <= c.reporting_date)
 ),
 
 je_balances AS (
@@ -354,8 +364,10 @@ constants AS (
 funds AS (
     SELECT f.fund_uuid, f.fund_name, f.firm_id
     FROM FUND_ADMIN.FUNDS f
+    CROSS JOIN constants c
     WHERE f.entity_type_name IN ('Fund', 'SPV')
       AND f.is_onboarding = FALSE
+      AND (f.vintage_date IS NULL OR f.vintage_date <= c.reporting_date)
 ),
 
 -- Point-in-time partner membership at reporting_date.
@@ -521,8 +533,10 @@ constants AS (
 funds AS (
     SELECT f.fund_uuid, f.firm_id
     FROM FUND_ADMIN.FUNDS f
+    CROSS JOIN constants c
     WHERE f.entity_type_name IN ('Fund', 'SPV')
       AND f.is_onboarding = FALSE
+      AND (f.vintage_date IS NULL OR f.vintage_date <= c.reporting_date)
 ),
 
 -- Collapse to one row per LP at the firm level (partner_country: MAX gives a
@@ -603,8 +617,10 @@ constants AS (
 funds AS (
     SELECT f.fund_uuid, f.firm_id, f.reporting_currency
     FROM FUND_ADMIN.FUNDS f
+    CROSS JOIN constants c
     WHERE f.entity_type_name IN ('Fund', 'SPV')
       AND f.is_onboarding = FALSE
+      AND (f.vintage_date IS NULL OR f.vintage_date <= c.reporting_date)
 ),
 
 -- One row per (currency, LP). partner_total_nav sums only funds that share the currency.
@@ -650,4 +666,25 @@ FROM currency_lp_universe
 WHERE is_limited_partner  -- orphan PMN rows (no PARTNER_DATA match) and confirmed non-LPs excluded
 GROUP BY reporting_currency
 ORDER BY reporting_currency
+```
+
+---
+
+### Query 5 — Funds Left Out (Formed After the Reporting Date)
+
+Returns **one row per fund** that Queries 1–4 leave out because its `vintage_date` is after the reporting date, with its name and `vintage_date`. Run after Query 4. It uses the same `Fund`/`SPV` and `is_onboarding` filter as their `funds` CTE, with the date test reversed, so a fund is in exactly one of the two sets. A fund with no `vintage_date` is never returned: Queries 1–4 keep it. No rows is the normal case and means no fund was left out. These rows are not part of the data file; the skill names them to the user in chat.
+
+```sql
+WITH
+constants AS (
+    SELECT LAST_DAY('{reporting_date}'::DATE) AS reporting_date
+)
+
+SELECT f.fund_name, f.vintage_date
+FROM FUND_ADMIN.FUNDS f
+CROSS JOIN constants c
+WHERE f.entity_type_name IN ('Fund', 'SPV')
+  AND f.is_onboarding = FALSE
+  AND f.vintage_date > c.reporting_date
+ORDER BY f.vintage_date, f.fund_name
 ```
