@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.56.14</carta-plugin>
+<carta-plugin>carta-investors:7.56.17</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -94,7 +94,7 @@ Scan the tools available in the conversation (system-reminder blocks) for a `cal
 Keep that connector's **display name** as `<CARTA_MCP_SERVER>`. The artifact runtime addresses a connector by display name and the tool names are bare verbs (`call_tool`, `welcome`). Never substitute a UUID or an `mcp__…__` tool name — the runtime rejects both.
 
 ### 2. Call welcome and resolve the firm
-Call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-partner-rollforward"]})` — every run, including a refresh. If it fails, tell the user what `welcome` returned and that the report cannot resolve firm context without it, then stop (error table: *`welcome` fails*).
+Call `mcp__<SERVER>__welcome(_instrumentation_v2={"surface": "<surface>"})` — every run, including a refresh. If it fails, tell the user what `welcome` returned and that the report cannot resolve firm context without it, then stop (error table: *`welcome` fails*).
 
 **Resolve the firm the user means, even if another firm is active.** Row access follows the active firm, so pick the firm before any query runs. Call `list_contexts`, passing the name if the user gave one:
 
@@ -117,7 +117,7 @@ set_context({"firm_id": "<firm_uuid>"})
 
 Carry its name into `firm_name` and its UUID into `firm_context_id`. The artifact re-pins the context on every load, because the viewer's connector opens on whatever firm they last used.
 
-Every Carta tool call in this skill carries `_instrumentation`.
+Every Carta tool call in this skill carries `_instrumentation_v2`. Take where it goes, its shape and the value for `<surface>` from the `_instrumentation_v2` paragraph of `${CLAUDE_PLUGIN_ROOT}/references/carta-server-selection.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it). Read that file for this parameter only; this skill picks its server and calls `welcome` as its own steps say.
 
 ### 3. Validate the data in one query
 The schema is known (below), so there is no discovery pass. Run this once; it proves the table names resolve, proves the firm has partner activity, and yields `firm_warehouse_id`:
@@ -125,7 +125,7 @@ The schema is known (below), so there is no discovery pass. Run this once; it pr
 ```text
 read_tool({"name": "dwh__execute__query",
            "arguments": {"sql": "<SQL>", "format": "markdown"},
-           "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-partner-rollforward"]}})
+           "_instrumentation_v2": {"surface": "<surface>"}})
 ```
 
 The param key is `sql`, not `query`. `format` accepts `"markdown"` / `"ndjson"`. SELECT only. No firm filter — row access scopes it.
@@ -141,7 +141,7 @@ GROUP BY f.FIRM_ID
 - One row → its `firm_id` is `firm_warehouse_id`. **It can be a different ID from `firm_context_id`** for the same firm, and neither can be derived from the other, so always take it from this row. The artifact pins the firm in its SQL with this id and refuses to render any page carrying another firm's rows.
 - Several rows (a staff account scoped to nothing) → you did not pin a firm in Step 2; go back and do.
 - Zero rows → tell the user the firm has no partner ledger activity in this context and stop (error table: *No partner activity*).
-- A table or column error → run `read_tool({"name": "dwh__list__tables", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-partner-rollforward"]}})`, find the datashare name for the missing table (the same table with a `FUNDADMIN_DATASHARE_` prefix is the usual variant), put it in `tables`, and re-run once. If it still fails, stop (error table: *Table not found*).
+- A table or column error → run `read_tool({"name": "dwh__list__tables", "arguments": {}, "_instrumentation_v2": {"surface": "<surface>"}})`, find the datashare name for the missing table (the same table with a `FUNDADMIN_DATASHARE_` prefix is the usual variant), put it in `tables`, and re-run once. If it still fails, stop (error table: *Table not found*).
 
 Do **not** put these numbers in the artifact. It re-fetches on open.
 

@@ -54,7 +54,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.56.14</carta-plugin>
+<carta-plugin>carta-investors:7.56.17</carta-plugin>
 
 # Download audit documents
 

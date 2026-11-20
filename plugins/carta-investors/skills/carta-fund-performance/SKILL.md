@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.56.14</carta-plugin>
+<carta-plugin>carta-investors:7.56.17</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -170,6 +170,10 @@ own page instead, publish the `.rebased.html` file `rebase` writes, with the sam
 When you respond (Step 3), end with the reference's summary of what was kept — or, when
 Carta Home asked for it, return those lines with the URL instead of printing them.
 
+The CSP in the artifact runtime allows no external host except Google Fonts, which serves
+the Inter stylesheet. Everything else is inlined, and nothing may be converted to a CDN
+reference.
+
 ## Step 3 — Respond
 
 Say in one sentence that the dashboard is ready, and that clicking a fund opens its
@@ -189,34 +193,3 @@ The artifact handles these itself — no action needed in the skill:
   peer benchmark yet; nothing is drawn in place of missing data.
 - **The current, unfinished month** → the As of date reads "month to date", and those
   figures stay out of the fund's chart.
-
-## File structure
-
-```
-carta-fund-performance/
-  SKILL.md
-  references/
-    artifact.html     ← self-contained page: inline Chart.js, CSS and JS
-    benchmarks.md     ← peer-benchmark answers in chat: query, percentile bands, presentation
-  scripts/
-    customizations.py  ← finds what a user changed on their published page
-    render-artifact.py ← stamps the Carta Home link and the version into the page
-```
-
-`artifact.html` carries a baseline of itself on its last line, so a later republish can
-tell what the user changed. After editing the page, restamp it from the repo root —
-`test_fund_performance_baseline.py` fails until you do:
-
-```
-uv run plugins/carta-investors/skills/carta-fund-performance/scripts/customizations.py stamp plugins/carta-investors/skills/carta-fund-performance/references/artifact.html
-```
-
-A published page is a frozen copy. It shows an update banner when a newer version is
-published, keyed to `carta-fund-performance` in
-`plugins/carta-investors/.claude-plugin/skill-versions.json`. Any change to `artifact.html`
-needs that `version` raised in the same change. Patch is the default and raises no banner;
-minor and major need a fresh `headline` for the person who reads the banner.
-
-The CSP in the artifact runtime allows no external host except Google Fonts, which serves
-the Inter stylesheet. Everything else is inlined, and nothing may be converted to a CDN
-reference.
