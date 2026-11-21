@@ -1931,7 +1931,7 @@
 
     // Terms an amendment is compared on against the agreement the table shows.
     // Kept in step with AMENDABLE_TERMS in process.py.
-    const AMENDABLE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears', 'capitalCallNoticeDays'];
+    const AMENDABLE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears', 'capitalCallNoticeDays', 'waterfallStructure', 'initialClosingDate'];
     // What an agreement states for an amendable term.
     function amendableValue(l, k) {
       return l.terms[k] ?? null;
@@ -3204,12 +3204,13 @@
         mgmtFeeRateInvestmentPeriod: 'Management fee', mgmtFeeRatePostInvestment: 'Mgmt fee after investment period',
         carriedInterestRate: 'Carried interest', preferredReturnRate: 'Hurdle', preferredReturnMultiple: 'Preferred return multiple', fundTermYears: 'Fund term',
         investmentPeriodYears: 'Investment period', capitalCallNoticeDays: 'Capital call notice',
+        waterfallStructure: 'Waterfall', initialClosingDate: 'Initial closing',
     };
     // Each amendable term's value as plain text: the one format its row and an amendment's chip both show.
     const TERM_VALUE_TEXT = {
         mgmtFeeRateInvestmentPeriod: fmtFeeRate, mgmtFeeRatePostInvestment: fmtTermRate, carriedInterestRate: fmtTermRate,
         preferredReturnRate: fmtTermRate, preferredReturnMultiple: fmtMultiple, fundTermYears: fmtYearsFull,
-        investmentPeriodYears: fmtYearsFull, capitalCallNoticeDays: fmtDays,
+        investmentPeriodYears: fmtYearsFull, capitalCallNoticeDays: fmtDays, waterfallStructure: String, initialClosingDate: fmtDate,
     };
     // One chip per amendment that states any of `keys` differently, naming its value and linking to it.
     // The row keeps the agreement's own value: amendments are listed, not applied.
@@ -3525,11 +3526,11 @@
             [TERM_LABELS.carriedInterestRate, TERM_VALUE_TEXT.carriedInterestRate(t.carriedInterestRate), ['carriedInterestRate']],
             ['Carry tiers', t.carryTierRates ? t.carryTierRates.map(fmtPctSmart).join(' → ') : '—', []],
             [TERM_LABELS.preferredReturnRate, fmtHurdle(t), ['preferredReturnRate', 'preferredReturnMultiple']],
-            ['Waterfall', waterfall, []],
+            [TERM_LABELS.waterfallStructure, waterfall, ['waterfallStructure']],
             [TERM_LABELS.fundTermYears, TERM_VALUE_TEXT.fundTermYears(t.fundTermYears), ['fundTermYears']],
             [TERM_LABELS.investmentPeriodYears, TERM_VALUE_TEXT.investmentPeriodYears(t.investmentPeriodYears), ['investmentPeriodYears']],
             [TERM_LABELS.capitalCallNoticeDays, TERM_VALUE_TEXT.capitalCallNoticeDays(t.capitalCallNoticeDays), ['capitalCallNoticeDays']],
-            ['Initial closing', fmtDate(t.initialClosingDate), []],
+            [TERM_LABELS.initialClosingDate, TERM_VALUE_TEXT.initialClosingDate(t.initialClosingDate), ['initialClosingDate']],
         // A withheld profit split stays withheld: its rows get no chip, so the blank filter drops them.
         ].map(([k, v, keys]) => [k, v, fund.lpa.notFundLpa && keys.some(key => OPERATING_AGREEMENT_WITHHELD_TERMS.includes(key))
             ? '' : amendedChips(fund, keys)])

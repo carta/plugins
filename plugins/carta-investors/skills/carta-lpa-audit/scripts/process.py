@@ -985,6 +985,7 @@ HEADLINE_TERMS = (
 AMENDABLE_TERMS = (
     "mgmtFeeRateInvestmentPeriod", "mgmtFeeRatePostInvestment", "carriedInterestRate", "preferredReturnRate",
     "preferredReturnMultiple", "fundTermYears", "investmentPeriodYears", "capitalCallNoticeDays",
+    "waterfallStructure", "initialClosingDate",
 )
 
 
