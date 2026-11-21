@@ -129,7 +129,8 @@ Once each:
    documents disagree; any other source is `{kind, label, note}`. Leave out empty keys. Ask a gap
    with no Drafts column in the chat, with no source. Kinds:
    - `document`: `quote` is the file's exact words that give the value, copied as they are on
-     the page, never a summary: the page finds and marks them in the file;
+     the page, never a summary: the page finds and marks them in the file. Every document and
+     alternative has one (a call without is refused): in a letter, the sentence with the value;
    - `company_setup`: a pick from issuance_init or `field_spec` (the type's picks), and
      with `label` `Stakeholder record` on a matched holder's `name`, `email`, `stakeholderKind` and
      `issueDateRelationship`, never `stakeholder_id`;
