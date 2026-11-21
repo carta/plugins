@@ -1931,9 +1931,11 @@
 
     // Terms an amendment is compared on against the agreement the table shows.
     // Kept in step with AMENDABLE_TERMS in process.py.
-    const AMENDABLE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears', 'capitalCallNoticeDays', 'waterfallStructure', 'initialClosingDate'];
-    // What an agreement states for an amendable term.
+    const AMENDABLE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears', 'capitalCallNoticeDays', 'waterfallStructure', 'initialClosingDate', 'gpCommitmentPercentage'];
+    // What an agreement states for an amendable term. The GP's commitment sits outside its terms
+    // row, so it is read from the agreement itself.
     function amendableValue(l, k) {
+      if (k === 'gpCommitmentPercentage') return l.generalPartner.commitmentPercentage ?? null;
       return l.terms[k] ?? null;
     }
 
@@ -3205,12 +3207,16 @@
         carriedInterestRate: 'Carried interest', preferredReturnRate: 'Hurdle', preferredReturnMultiple: 'Preferred return multiple', fundTermYears: 'Fund term',
         investmentPeriodYears: 'Investment period', capitalCallNoticeDays: 'Capital call notice',
         waterfallStructure: 'Waterfall', initialClosingDate: 'Initial closing',
+        gpCommitmentPercentage: 'GP commitment',
     };
+    // A label inside a sentence: lowercase, except one that opens with an abbreviation ("GP commitment").
+    const inlineLabel = k => /^[A-Z]{2}/.test(TERM_LABELS[k]) ? TERM_LABELS[k] : TERM_LABELS[k].toLowerCase();
     // Each amendable term's value as plain text: the one format its row and an amendment's chip both show.
     const TERM_VALUE_TEXT = {
         mgmtFeeRateInvestmentPeriod: fmtFeeRate, mgmtFeeRatePostInvestment: fmtTermRate, carriedInterestRate: fmtTermRate,
         preferredReturnRate: fmtTermRate, preferredReturnMultiple: fmtMultiple, fundTermYears: fmtYearsFull,
         investmentPeriodYears: fmtYearsFull, capitalCallNoticeDays: fmtDays, waterfallStructure: String, initialClosingDate: fmtDate,
+        gpCommitmentPercentage: fmtPctSmart,
     };
     // One chip per amendment that states any of `keys` differently, naming its value and linking to it.
     // The row keeps the agreement's own value: amendments are listed, not applied.
@@ -3737,7 +3743,7 @@
         // The LPA's own wording ("the lesser of 1% or $1.5M") carries the floor or cap that a bare
         // percentage drops, so it is shown next to the figures.
         const gpCommitment = [
-            gp.commitmentPercentage != null && fmtPctSmart(gp.commitmentPercentage),
+            gp.commitmentPercentage != null && TERM_VALUE_TEXT.gpCommitmentPercentage(gp.commitmentPercentage),
             gp.commitmentAmount != null && fmtAmount(gp.commitmentAmount, fund.lpa.currencyCode),
             gp.commitmentFormula && '“' + esc(gp.commitmentFormula) + '”',
         ].filter(Boolean).join(' · ') || null;
@@ -3748,12 +3754,12 @@
             ['State of formation', f.stateOfFormation && esc(f.stateOfFormation)],
             ['General partner', gp.name && esc(gp.name) + (gp.entityType ? ' (' + esc(gp.entityType) + ')' : '')],
             ['GP state of formation', gp.stateOfFormation && esc(gp.stateOfFormation)],
-            ['GP commitment', gpCommitment],
+            [TERM_LABELS.gpCommitmentPercentage, gpCommitment, amendedChips(fund, ['gpCommitmentPercentage'])],
             ['Fund purpose', f.fundPurpose && esc(f.fundPurpose)],
-        ].filter(([, v]) => v);
+        ].filter(([, v, chips]) => v || chips);
         if (!rows.length) return '';
         return '<div class="drawer-section"><h3 class="drawer-section-title">Fund identity</h3><div class="kv-table">' +
-            rows.map(([k, v]) => '<div class="kv-key">' + esc(k) + '</div><div class="kv-value">' + v + '</div>').join('') +
+            rows.map(([k, v, chips]) => '<div class="kv-key">' + esc(k) + '</div><div class="kv-value">' + (v || termCell('—')) + (chips || '') + '</div>').join('') +
             '</div></div>';
     }
 
@@ -3771,7 +3777,7 @@
         const items = amendments.map(a => '<li>' + documentLink(a.documentId, esc(amendmentLabel(a) + (a.date ? ' · ' + fmtDate(a.date) : ''))) +
             (a.changedTerms.length
                 ? ' <span class="chip chip-check" title="The table does not apply this amendment. Check the amendment for the value in force.">States different ' +
-                  esc(a.changedTerms.map(k => TERM_LABELS[k].toLowerCase()).join(', ')) + '</span>'
+                  esc(a.changedTerms.map(inlineLabel).join(', ')) + '</span>'
                 : ' <span class="sl-meta">states no different term</span>') + '</li>');
         return '<div class="drawer-section"><h3 class="drawer-section-title">Amendments</h3>' +
             '<p class="sl-meta">Terms above come from ' + (source || 'the ' + documentLabel(fund.lpa)) + (fund.lpa.fund.lpaDate ? ' dated ' + esc(fmtDate(fund.lpa.fund.lpaDate)) : '') +

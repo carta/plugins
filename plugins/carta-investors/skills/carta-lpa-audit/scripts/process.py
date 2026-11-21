@@ -985,12 +985,17 @@ HEADLINE_TERMS = (
 AMENDABLE_TERMS = (
     "mgmtFeeRateInvestmentPeriod", "mgmtFeeRatePostInvestment", "carriedInterestRate", "preferredReturnRate",
     "preferredReturnMultiple", "fundTermYears", "investmentPeriodYears", "capitalCallNoticeDays",
-    "waterfallStructure", "initialClosingDate",
+    "waterfallStructure", "initialClosingDate", "gpCommitmentPercentage",
 )
 
 
 def amendable_value(lpa: dict, key: str):
-    """What an agreement states for an amendable term."""
+    """What an agreement states for an amendable term.
+
+    The GP's commitment sits outside its terms row, so it is read from the agreement itself.
+    """
+    if key == "gpCommitmentPercentage":
+        return lpa["generalPartner"].get("commitmentPercentage")
     return lpa["terms"].get(key)
 
 
