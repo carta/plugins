@@ -1932,6 +1932,10 @@
     // Terms an amendment is compared on against the agreement the table shows.
     // Kept in step with AMENDABLE_TERMS in process.py.
     const AMENDABLE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears', 'capitalCallNoticeDays'];
+    // What an agreement states for an amendable term.
+    function amendableValue(l, k) {
+      return l.terms[k] ?? null;
+    }
 
     const SHORT_TEXT_LIMIT = 60;
     // Cut long verbatim text to SHORT_TEXT_LIMIT characters at a word boundary, ending in an ellipsis.
@@ -2331,7 +2335,7 @@
     // from another copy.
     function agreementKey(l) {
       return [l.documentVariant, l.amendmentNumber ?? '', l.fund.lpaDate ?? '',
-        ...(l.amendmentNumber == null && !l.fund.lpaDate ? AMENDABLE_TERMS.map(k => l.terms[k] ?? '') : [])].join('|');
+        ...(l.amendmentNumber == null && !l.fund.lpaDate ? AMENDABLE_TERMS.map(k => amendableValue(l, k) ?? '') : [])].join('|');
     }
 
     function lpKey(name) {
@@ -2503,13 +2507,18 @@
         const amendments = matchedLpa ? hits.map(([eid]) => lpas.get(eid))
           .filter(l => AMENDMENT_VARIANTS.includes(l.documentVariant))
           .filter(l => !seen.has(agreementKey(l)) && seen.add(agreementKey(l)))
-          .map(l => ({
-            documentId: l.documentId,
-            variant: l.documentVariant,
-            amendmentNumber: l.amendmentNumber,
-            date: l.fund.lpaDate,
-            changedTerms: AMENDABLE_TERMS.filter(k => l.terms[k] != null && l.terms[k] !== matchedLpa.terms[k]),
-          }))
+          .map(l => {
+            // Every amendable term the amendment states, so the panel can show its value beside the agreement's.
+            const values = Object.fromEntries(AMENDABLE_TERMS.map(k => [k, amendableValue(l, k)]).filter(([, v]) => v !== null));
+            return {
+              documentId: l.documentId,
+              variant: l.documentVariant,
+              amendmentNumber: l.amendmentNumber,
+              date: l.fund.lpaDate,
+              values,
+              changedTerms: AMENDABLE_TERMS.filter(k => k in values && values[k] !== amendableValue(matchedLpa, k)),
+            };
+          })
           .sort((a, b) => (a.amendmentNumber ?? 0) - (b.amendmentNumber ?? 0) || (a.date || '').localeCompare(b.date || '')) : [];
 
         let matchingSls = [...(slsByFund.get(firmName) || [])];
@@ -3181,11 +3190,12 @@
         return n === 0 ? 'No fee (per LPA)' : fmtTermRate(n);
     }
     // A hurdle is a rate, a multiple of capital, or both ("8.00% · 1.50x").
+    const fmtMultiple = v => v.toFixed(2) + 'x';
     function fmtHurdle(t) {
         const multiple = t.preferredReturnMultiple;
-        if (multiple === null || multiple === undefined) return fmtTermRate(t.preferredReturnRate);
-        const parts = [multiple.toFixed(2) + 'x'];
-        if (t.preferredReturnRate) parts.unshift(fmtTermRate(t.preferredReturnRate));
+        if (multiple === null || multiple === undefined) return TERM_VALUE_TEXT.preferredReturnRate(t.preferredReturnRate);
+        const parts = [TERM_VALUE_TEXT.preferredReturnMultiple(multiple)];
+        if (t.preferredReturnRate) parts.unshift(TERM_VALUE_TEXT.preferredReturnRate(t.preferredReturnRate));
         return parts.join(' · ');
     }
     const termsOf = f => (f.lpa && f.lpa.termsExtracted) ? f.lpa.terms : null;
@@ -3195,6 +3205,25 @@
         carriedInterestRate: 'Carried interest', preferredReturnRate: 'Hurdle', preferredReturnMultiple: 'Preferred return multiple', fundTermYears: 'Fund term',
         investmentPeriodYears: 'Investment period', capitalCallNoticeDays: 'Capital call notice',
     };
+    // Each amendable term's value as plain text: the one format its row and an amendment's chip both show.
+    const TERM_VALUE_TEXT = {
+        mgmtFeeRateInvestmentPeriod: fmtFeeRate, mgmtFeeRatePostInvestment: fmtTermRate, carriedInterestRate: fmtTermRate,
+        preferredReturnRate: fmtTermRate, preferredReturnMultiple: fmtMultiple, fundTermYears: fmtYearsFull,
+        investmentPeriodYears: fmtYearsFull, capitalCallNoticeDays: fmtDays,
+    };
+    // One chip per amendment that states any of `keys` differently, naming its value and linking to it.
+    // The row keeps the agreement's own value: amendments are listed, not applied.
+    function amendedChips(fund, keys) {
+        return (fund.amendments || []).map(a => {
+            const changed = keys.filter(k => a.changedTerms.includes(k));
+            if (!changed.length) return '';
+            const said = changed.map(k => TERM_VALUE_TEXT[k](a.values[k])).join(' · ');
+            const label = amendmentLabel(a);
+            return ' <span class="chip chip-check" title="' + escAttr(label + (a.date ? ' dated ' + fmtDate(a.date) : '') +
+                ' states ' + said + '. The value shown comes from the agreement the terms come from; check the amendment for the value in force.') +
+                '">' + documentLink(a.documentId, esc(label + ': ' + said)) + '</span>';
+        }).join('');
+    }
     const flagsOf = f => (f.lpa && f.lpa.termFlags) || [];
     function termCheckChip(fund, field) {
         return checkChip(flagsOf(fund).filter(fl => fl.field === field).map(fl => fl.reason));
@@ -3484,21 +3513,27 @@
             : '—';
         // One flat list: fee and carry economics, then timing. Unextracted rows
         // are dropped rather than shown as a dash.
+        // The third entry names the amendable terms a row shows; an amendment stating one of them
+        // differently adds its chip, and keeps the row even when the agreement leaves it blank.
         const rows = [
             [TERM_LABELS.mgmtFeeRateInvestmentPeriod, fund.lpa.mgmtFeeSetOutsideAgreement ? FEE_SET_OUTSIDE : t.mgmtFeeRateInvestmentPeriod == null ? '—'
-                : fmtFeeRate(t.mgmtFeeRateInvestmentPeriod) + (pctValue(t.mgmtFeeRateInvestmentPeriod) === 0 ? '' : feeBasis)],
+                : TERM_VALUE_TEXT.mgmtFeeRateInvestmentPeriod(t.mgmtFeeRateInvestmentPeriod) + (pctValue(t.mgmtFeeRateInvestmentPeriod) === 0 ? '' : feeBasis),
+                ['mgmtFeeRateInvestmentPeriod']],
             [TERM_LABELS.mgmtFeeRatePostInvestment, t.mgmtFeeRatePostInvestment == null ? '—'
-                : fmtTermRate(t.mgmtFeeRatePostInvestment) + (pctValue(t.mgmtFeeRatePostInvestment) === 0 || !t.mgmtFeeBasisPostInvestment
-                    ? '' : ' of ' + esc(t.mgmtFeeBasisPostInvestment))],
-            [TERM_LABELS.carriedInterestRate, fmtTermRate(t.carriedInterestRate)],
-            ['Carry tiers', t.carryTierRates ? t.carryTierRates.map(fmtPctSmart).join(' → ') : '—'],
-            [TERM_LABELS.preferredReturnRate, fmtHurdle(t)],
-            ['Waterfall', waterfall],
-            [TERM_LABELS.fundTermYears, fmtYearsFull(t.fundTermYears)],
-            [TERM_LABELS.investmentPeriodYears, fmtYearsFull(t.investmentPeriodYears)],
-            [TERM_LABELS.capitalCallNoticeDays, fmtDays(t.capitalCallNoticeDays)],
-            ['Initial closing', fmtDate(t.initialClosingDate)],
-        ].filter(([, v]) => v !== '—');
+                : TERM_VALUE_TEXT.mgmtFeeRatePostInvestment(t.mgmtFeeRatePostInvestment) + (pctValue(t.mgmtFeeRatePostInvestment) === 0 || !t.mgmtFeeBasisPostInvestment
+                    ? '' : ' of ' + esc(t.mgmtFeeBasisPostInvestment)), ['mgmtFeeRatePostInvestment']],
+            [TERM_LABELS.carriedInterestRate, TERM_VALUE_TEXT.carriedInterestRate(t.carriedInterestRate), ['carriedInterestRate']],
+            ['Carry tiers', t.carryTierRates ? t.carryTierRates.map(fmtPctSmart).join(' → ') : '—', []],
+            [TERM_LABELS.preferredReturnRate, fmtHurdle(t), ['preferredReturnRate', 'preferredReturnMultiple']],
+            ['Waterfall', waterfall, []],
+            [TERM_LABELS.fundTermYears, TERM_VALUE_TEXT.fundTermYears(t.fundTermYears), ['fundTermYears']],
+            [TERM_LABELS.investmentPeriodYears, TERM_VALUE_TEXT.investmentPeriodYears(t.investmentPeriodYears), ['investmentPeriodYears']],
+            [TERM_LABELS.capitalCallNoticeDays, TERM_VALUE_TEXT.capitalCallNoticeDays(t.capitalCallNoticeDays), ['capitalCallNoticeDays']],
+            ['Initial closing', fmtDate(t.initialClosingDate), []],
+        // A withheld profit split stays withheld: its rows get no chip, so the blank filter drops them.
+        ].map(([k, v, keys]) => [k, v, fund.lpa.notFundLpa && keys.some(key => OPERATING_AGREEMENT_WITHHELD_TERMS.includes(key))
+            ? '' : amendedChips(fund, keys)])
+            .filter(([, v, chips]) => v !== '—' || chips);
         const notFundLpa = fund.lpa.notFundLpa
             ? '<div class="term-checks"><strong>Operating agreement, not a fund LPA</strong>' +
               '<ul><li>The stated carry is above ' + FUND_CARRY_MAX_PCT + '%, so it is a member profit split rather than fund carry. Carry, hurdle and waterfall are not shown.</li></ul></div>'
@@ -3509,7 +3544,7 @@
               flags.map(fl => '<li>' + esc(TERM_LABELS[fl.field]) + ': ' + esc(fl.reason) + '</li>').join('') + '</ul></div>'
             : '';
         return html + partialNote + vehicleNote + '<dl class="facts">' +
-            rows.map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>').join('') + '</dl>' + notFundLpa + checks + '</div>';
+            rows.map(([k, v, chips]) => '<dt>' + esc(k) + '</dt><dd>' + (v === '—' ? termCell(v) : v) + chips + '</dd>').join('') + '</dl>' + notFundLpa + checks + '</div>';
     }
 
     // Only ~15.7% of side letters state a commitment; the rest backfill from the LPA

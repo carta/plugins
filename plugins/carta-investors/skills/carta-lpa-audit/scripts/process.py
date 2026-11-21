@@ -987,6 +987,12 @@ AMENDABLE_TERMS = (
     "preferredReturnMultiple", "fundTermYears", "investmentPeriodYears", "capitalCallNoticeDays",
 )
 
+
+def amendable_value(lpa: dict, key: str):
+    """What an agreement states for an amendable term."""
+    return lpa["terms"].get(key)
+
+
 SHORT_TEXT_LIMIT = 60
 
 
@@ -1443,7 +1449,7 @@ def agreement_key(lpa: dict) -> tuple:
     """
     key = (lpa.get("documentVariant"), lpa.get("amendmentNumber"), lpa["fund"]["lpaDate"])
     if lpa.get("amendmentNumber") is None and not lpa["fund"]["lpaDate"]:
-        key += tuple(lpa["terms"].get(k) for k in AMENDABLE_TERMS)
+        key += tuple(amendable_value(lpa, k) for k in AMENDABLE_TERMS)
     return key
 
 
@@ -1633,15 +1639,15 @@ def match_all(
                 if other.get("documentVariant") not in AMENDMENT_VARIANTS or agreement_key(other) in seen:
                     continue
                 seen.add(agreement_key(other))
+                # Every amendable term the amendment states, so its value shows beside the agreement's.
+                values = {k: v for k in AMENDABLE_TERMS if (v := amendable_value(other, k)) is not None}
                 amendments.append({
                     "documentId": other["documentId"],
                     "variant": other.get("documentVariant"),
                     "amendmentNumber": other.get("amendmentNumber"),
                     "date": other["fund"]["lpaDate"],
-                    "changedTerms": [
-                        k for k in AMENDABLE_TERMS
-                        if other["terms"].get(k) is not None and other["terms"].get(k) != matched_lpa["terms"].get(k)
-                    ],
+                    "values": values,
+                    "changedTerms": [k for k in values if values[k] != amendable_value(matched_lpa, k)],
                 })
             amendments.sort(key=lambda a: (a["amendmentNumber"] or 0, a["date"] or ""))
 
