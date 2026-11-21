@@ -1931,10 +1931,13 @@
 
     // Terms an amendment is compared on against the agreement the table shows.
     // Kept in step with AMENDABLE_TERMS in process.py.
-    const AMENDABLE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears', 'capitalCallNoticeDays', 'waterfallStructure', 'initialClosingDate', 'gpCommitmentPercentage'];
-    // What an agreement states for an amendable term. The GP's commitment sits outside its terms
-    // row, so it is read from the agreement itself.
+    const AMENDABLE_TERMS = ['mgmtFeeRateInvestmentPeriod', 'mgmtFeeRatePostInvestment', 'carriedInterestRate', 'preferredReturnRate', 'preferredReturnMultiple', 'fundTermYears', 'investmentPeriodYears', 'capitalCallNoticeDays', 'waterfallStructure', 'initialClosingDate', 'gpCommitmentPercentage', 'paysManagementFee'];
+    // What an agreement states for an amendable term. Whether a fee is charged and the GP's
+    // commitment sit outside its terms row, so they are read from the agreement itself. Only a
+    // fee being charged counts, and only for an amendment stating no fee rate (see
+    // feeChargedSpeaks): a stated rate, 0% for no fee, is compared as the rate.
     function amendableValue(l, k) {
+      if (k === 'paysManagementFee') return l.paysManagementFee === true || l.terms.mgmtFeeRateInvestmentPeriod > 0 ? true : null;
       if (k === 'gpCommitmentPercentage') return l.generalPartner.commitmentPercentage ?? null;
       return l.terms[k] ?? null;
     }
@@ -2015,6 +2018,7 @@
           : allLps;
 
         const feeBasis = rjField(rawJson, ['management_fee', 'management_fee_basis_investment_period'], toStr);
+        const paysManagementFee = rjField(rawJson, ['management_fee', 'pays_management_fee'], toBool);
         const feeBasisPost = rjField(rawJson, ['management_fee', 'management_fee_basis_post_investment'], toStr);
         const terms = termsExtracted ? {
           carriedInterestRate: rjField(rawJson, ['carried_interest', 'carried_interest_rate'], toFloat),
@@ -2084,8 +2088,8 @@
           headlineTermCount,
           // The LPA charges a fee but sets its rate in another document, such
           // as an investment management agreement or a fee letter.
-          mgmtFeeSetOutsideAgreement: termsExtracted && terms.mgmtFeeRateInvestmentPeriod == null
-            && rjField(rawJson, ['management_fee', 'pays_management_fee'], toBool) === true,
+          mgmtFeeSetOutsideAgreement: termsExtracted && terms.mgmtFeeRateInvestmentPeriod == null && paysManagementFee === true,
+          paysManagementFee,
           terms,
           termFlags: termFlags(terms),
           boundingBoxes: bboxes,
@@ -2332,6 +2336,10 @@
     // parentheticals — merging two different investors would hide one of them.
     const AMENDMENT_VARIANTS = ['Amendment', 'Amended and Restated'];
 
+    // One change in the fee is marked once: "fee charged" is compared only for an amendment that
+    // states no fee rate, so a stated rate always decides.
+    const feeChargedSpeaks = values => !('mgmtFeeRateInvestmentPeriod' in values);
+
     // Copies of one agreement share variant, number and date; with no number or date, the terms
     // it states too. A fund keeps an executed copy per investor, so this tells another agreement
     // from another copy.
@@ -2518,7 +2526,8 @@
               amendmentNumber: l.amendmentNumber,
               date: l.fund.lpaDate,
               values,
-              changedTerms: AMENDABLE_TERMS.filter(k => k in values && values[k] !== amendableValue(matchedLpa, k)),
+              changedTerms: AMENDABLE_TERMS.filter(k => k in values && values[k] !== amendableValue(matchedLpa, k)
+                && (k !== 'paysManagementFee' || feeChargedSpeaks(values))),
             };
           })
           .sort((a, b) => (a.amendmentNumber ?? 0) - (b.amendmentNumber ?? 0) || (a.date || '').localeCompare(b.date || '')) : [];
@@ -3207,7 +3216,7 @@
         carriedInterestRate: 'Carried interest', preferredReturnRate: 'Hurdle', preferredReturnMultiple: 'Preferred return multiple', fundTermYears: 'Fund term',
         investmentPeriodYears: 'Investment period', capitalCallNoticeDays: 'Capital call notice',
         waterfallStructure: 'Waterfall', initialClosingDate: 'Initial closing',
-        gpCommitmentPercentage: 'GP commitment',
+        gpCommitmentPercentage: 'GP commitment', paysManagementFee: 'Whether a fee is charged',
     };
     // A label inside a sentence: lowercase, except one that opens with an abbreviation ("GP commitment").
     const inlineLabel = k => /^[A-Z]{2}/.test(TERM_LABELS[k]) ? TERM_LABELS[k] : TERM_LABELS[k].toLowerCase();
@@ -3216,7 +3225,7 @@
         mgmtFeeRateInvestmentPeriod: fmtFeeRate, mgmtFeeRatePostInvestment: fmtTermRate, carriedInterestRate: fmtTermRate,
         preferredReturnRate: fmtTermRate, preferredReturnMultiple: fmtMultiple, fundTermYears: fmtYearsFull,
         investmentPeriodYears: fmtYearsFull, capitalCallNoticeDays: fmtDays, waterfallStructure: String, initialClosingDate: fmtDate,
-        gpCommitmentPercentage: fmtPctSmart,
+        gpCommitmentPercentage: fmtPctSmart, paysManagementFee: () => 'a fee is charged',
     };
     // One chip per amendment that states any of `keys` differently, naming its value and linking to it.
     // The row keeps the agreement's own value: amendments are listed, not applied.
@@ -3525,7 +3534,7 @@
         const rows = [
             [TERM_LABELS.mgmtFeeRateInvestmentPeriod, fund.lpa.mgmtFeeSetOutsideAgreement ? FEE_SET_OUTSIDE : t.mgmtFeeRateInvestmentPeriod == null ? '—'
                 : TERM_VALUE_TEXT.mgmtFeeRateInvestmentPeriod(t.mgmtFeeRateInvestmentPeriod) + (pctValue(t.mgmtFeeRateInvestmentPeriod) === 0 ? '' : feeBasis),
-                ['mgmtFeeRateInvestmentPeriod']],
+                ['mgmtFeeRateInvestmentPeriod', 'paysManagementFee']],
             [TERM_LABELS.mgmtFeeRatePostInvestment, t.mgmtFeeRatePostInvestment == null ? '—'
                 : TERM_VALUE_TEXT.mgmtFeeRatePostInvestment(t.mgmtFeeRatePostInvestment) + (pctValue(t.mgmtFeeRatePostInvestment) === 0 || !t.mgmtFeeBasisPostInvestment
                     ? '' : ' of ' + esc(t.mgmtFeeBasisPostInvestment)), ['mgmtFeeRatePostInvestment']],

@@ -985,15 +985,25 @@ HEADLINE_TERMS = (
 AMENDABLE_TERMS = (
     "mgmtFeeRateInvestmentPeriod", "mgmtFeeRatePostInvestment", "carriedInterestRate", "preferredReturnRate",
     "preferredReturnMultiple", "fundTermYears", "investmentPeriodYears", "capitalCallNoticeDays",
-    "waterfallStructure", "initialClosingDate", "gpCommitmentPercentage",
+    "waterfallStructure", "initialClosingDate", "gpCommitmentPercentage", "paysManagementFee",
 )
+
+
+def fee_charged_speaks(values: dict) -> bool:
+    """One change in the fee is marked once: "fee charged" is compared only for an amendment stating no fee rate."""
+    return "mgmtFeeRateInvestmentPeriod" not in values
 
 
 def amendable_value(lpa: dict, key: str):
     """What an agreement states for an amendable term.
 
-    The GP's commitment sits outside its terms row, so it is read from the agreement itself.
+    Whether a fee is charged and the GP's commitment sit outside its terms row, so they are read
+    from the agreement itself. Only a fee being charged counts, and only for an amendment stating
+    no fee rate (see ``fee_charged_speaks``): a stated rate, 0% for no fee, is compared as the rate.
     """
+    if key == "paysManagementFee":
+        rate = lpa["terms"].get("mgmtFeeRateInvestmentPeriod")
+        return True if lpa.get("paysManagementFee") is True or (rate is not None and rate > 0) else None
     if key == "gpCommitmentPercentage":
         return lpa["generalPartner"].get("commitmentPercentage")
     return lpa["terms"].get(key)
@@ -1107,6 +1117,7 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
 
         fee_basis = _rj_field(raw_json, ("management_fee", "management_fee_basis_investment_period"), _to_str)
         fee_basis_post = _rj_field(raw_json, ("management_fee", "management_fee_basis_post_investment"), _to_str)
+        pays_management_fee = _rj_field(raw_json, ("management_fee", "pays_management_fee"), _to_bool)
         terms = {
             "carriedInterestRate": _rj_field(raw_json, ("carried_interest", "carried_interest_rate"), _to_float),
             "carryTierRates": _rj_carry_tier_rates(raw_json),
@@ -1183,8 +1194,9 @@ def build_lpas(lpa_rows: list[dict], document_type: str = LPA_DOCUMENT_TYPE) -> 
             "mgmtFeeSetOutsideAgreement": (
                 terms_extracted
                 and terms.get("mgmtFeeRateInvestmentPeriod") is None
-                and _rj_field(raw_json, ("management_fee", "pays_management_fee"), _to_bool) is True
+                and pays_management_fee is True
             ),
+            "paysManagementFee": pays_management_fee,
             "terms": terms,
             "termFlags": term_flags(terms),
             "boundingBoxes": bboxes,
@@ -1653,7 +1665,10 @@ def match_all(
                     "amendmentNumber": other.get("amendmentNumber"),
                     "date": other["fund"]["lpaDate"],
                     "values": values,
-                    "changedTerms": [k for k in values if values[k] != amendable_value(matched_lpa, k)],
+                    "changedTerms": [
+                        k for k in values
+                        if values[k] != amendable_value(matched_lpa, k) and (k != "paysManagementFee" or fee_charged_speaks(values))
+                    ],
                 })
             amendments.sort(key=lambda a: (a["amendmentNumber"] or 0, a["date"] or ""))
 
