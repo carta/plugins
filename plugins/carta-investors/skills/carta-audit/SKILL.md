@@ -45,7 +45,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.57.2</carta-plugin>
+<carta-plugin>carta-investors:7.58.0</carta-plugin>
 
 # Start an audit
 
