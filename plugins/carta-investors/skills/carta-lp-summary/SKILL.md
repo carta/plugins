@@ -56,7 +56,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.58.3</carta-plugin>
+<carta-plugin>carta-investors:7.59.4</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -169,7 +169,7 @@ WHERE p.IS_LIMITED_PARTNER AND p.IS_ACTIVE
 GROUP BY f.FIRM_ID
 ```
 
-- One row → call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lp-summary", checkpoint_label="data_checked")`. Its `firm_id` is `firm_warehouse_id`. **It is a different ID from `firm_context_id`** for the same firm; neither can be derived from the other. The artifact pins the firm in its SQL with this id and refuses to render any page carrying another firm's rows.
+- One row → call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lp-summary", checkpoint_label="data_checked")`, then `checkpoint_label="data_loaded"`, which Carta Home reads to move the dashboard card's progress bar. Its `firm_id` is `firm_warehouse_id`. **It is a different ID from `firm_context_id`** for the same firm; neither can be derived from the other. The artifact pins the firm in its SQL with this id and refuses to render any page carrying another firm's rows.
 - Several rows (a staff account scoped to nothing) → you did not pin a firm in Step 2; go back and do.
 - Zero rows → tell the user the firm has no active limited partners in this context and stop (error table: *No limited partners*).
 - A table or column error → run `call_tool({"name": "dwh__list__tables", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-lp-summary"]}})`, find the datashare name for the missing table (the same table with a `FUNDADMIN_DATASHARE_` prefix is the usual variant), put it in `tables`, and re-run once. If it still fails, stop (error table: *Table not found*).
@@ -233,6 +233,8 @@ It prints the absolute path of the HTML. Branch on the exit code:
 
 If the RC=1 retry also fails, stop and offer to escalate rather than retrying further.
 
+In a build run, once the page file is written (by 5c, or by 5d below), call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-lp-summary", checkpoint_label="dashboard_built")` once. Carta Home reads it to move the dashboard card's progress bar; carry on if the call fails.
+
 **5d. Inline fallback** (only when the renderer does not resolve or the runtime blocks subprocess): load the template with `read_skill(file_path="references/artifact_template.html")`, escape the compact config JSON as the template's header comment documents (the `\uXXXX` form for `&` `<` `>` `'` — **not** HTML entities), replace the single `__LOAN_DATA__` placeholder, replace the single `__ARTIFACT_TITLE__` placeholder with the config's `artifact_title` (HTML-escaped), then publish. Leave the `/* __VENDOR_JS:jspdf.umd.min.js__ */` marker as it is: without the inlined jsPDF the page cannot make PDFs, and Export copies a table instead; leave `/* __MCP_UI_TRACKER_JS__ */` too: without the inlined tracker the page sends no usage analytics.
 
 **5e. Publish the artifact.** Unless Carta Home gave you a URL, call `Artifact({action: "list", scope: "mine"})`; keep the `url` of this firm's existing page and tell the user you are refreshing it in place before you publish over it. Find it with `${CLAUDE_PLUGIN_ROOT}/references/firm-page-lookup.md` (the plugin's own `references/`, not this skill's; read it by that exact path, don't search for it): it is the page titled exactly **`LP Summary`**, and its firm-named title is exactly **`<firm_name> — LP Summary`**. `LP Summary` is the title the rendered page's `<title>` carries, and the tag always wins over the `title` parameter, so looking for anything else publishes a duplicate every run. Then publish:
@@ -271,7 +273,7 @@ To get the firm's brand itself (a brand board, or its colours, fonts and logo fo
 When the user asks to brand their LP profiles, from their website or from a deck they drop in ("brand my LP profiles from this deck"), or says yes in 5f:
 1. Resolve the firm as in Steps 1–2 (without the intro: the page is not being built) and `$WORKDIR`, that firm's own folder, as in 5a (already done when you come from 5f). The page must already exist (`$WORKDIR/lp-summary-data.json`); if it does not, build it first (Steps 3–5, skipping 5f), then come back.
 
-   A branding request on a page that already exists is not a build: it sends none of `skill_started`, `data_checked`, `skill_finished` or `skill_failed`, only the source checkpoint in step 2 and, when the brand carries a font, the font checkpoint in step 6. When the page does not exist yet, the build it runs first is a build: send `skill_started` before Step 3, then that build's checkpoints as usual.
+   A branding request on a page that already exists is not a build: it sends none of `skill_started`, `data_checked`, `data_loaded`, `dashboard_built`, `skill_finished` or `skill_failed`, only the source checkpoint in step 2 and, when the brand carries a font, the font checkpoint in step 6. When the page does not exist yet, the build it runs first is a build: send `skill_started` before Step 3, then that build's checkpoints as usual.
 2. Look for the firm's saved brand board first: `mcp__<SERVER>__read_tool(name="fa__get__brand_board")` once Step 2's `set_context` has run, the same board `carta-agm-deck-builder` reuses. A board found there is the source (say so in one line, and re-extract only if the user asks); an error or no board means there is none, so go on. It carries every brand colour by role and the firm's `@font-face` files; read its `typography` and pick the **heading font** and the **body font** (the families the firm's own site uses for headings and for text). Otherwise pick the source, then invoke `carta-investors:carta-brand-extraction` with it. The source is a pitch deck or LP letter the user attached (a PowerPoint (`.pptx`, `.ppsx`, `.potx`) or PDF), else the one chosen in 5f. With neither, as when the request is a pasted *Set up with Claude* or *Edit branding* prompt, ask once with `AskUserQuestion`: **"Where should the branding come from?"** — *Pull it from our website* / *Use a deck I'll drop in*. For the website, ask for the URL if you do not have it. This holds however the request arrives: never fetch the site, read the deck or choose colours yourself instead. **A logo file the user provides takes priority** over any extracted one, as in `carta-agm-deck-builder`. From its result pick one logo (a PNG/SVG, preferably on a transparent or white background), the **accent colour** (`#RRGGBB`) and the heading font family:
    - **Website:** its primary brand colour and heading font.
    - **PowerPoint:** the first accent candidate, its heading font, and the first logo candidate. These are exact.

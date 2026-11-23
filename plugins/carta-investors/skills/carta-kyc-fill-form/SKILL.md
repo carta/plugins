@@ -18,11 +18,18 @@ allowed-tools:
   - AskUserQuestion
   - Read
   - Bash(ls -l *)
+  # Opens the KYC form (companion_url: /kyc/task/<id>/ or /kyc/existing-fund/<id>/) when Claude
+  # Code has no browser pane. Each entry fixes the host and the /kyc/ prefix; the trailing * does
+  # not constrain what follows (more path, a closing quote, further arguments).
+  - Bash(open "https://app.carta.com/kyc/*)
+  - Bash(open "https://app.test.carta.rocks/kyc/*)
+  - Bash(open "https://app.preprod.carta.rocks/kyc/*)
+  - Bash(open "https://app.sandbox.carta.team/kyc/*)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-upload-firm-document/scripts/send_to_storage.py" *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.58.3</carta-plugin>
+<carta-plugin>carta-investors:7.59.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

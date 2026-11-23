@@ -106,6 +106,14 @@ The result leads with `next_step`, `companion_url` (that task's own form, `/kyc/
 and `how_to_reply`: open the `companion_url` beside the chat as `next_step` says, following
 `how_to_reply`.
 
+**No browser pane (Claude Code in a terminal).** When the search `next_step` runs finds no
+Claude_Browser tool, open the form in the user's own browser instead: run
+`open "<companion_url>"` yourself, without asking, and say in one line that their form opened in
+the browser, with the link under it in case it did not. Open each form this way once; after
+that, ask the user to reload the tab rather than opening it again. When `open` fails or Bash
+is not available, the link alone is the form. Every other step that opens a form beside the
+chat follows this too.
+
 If `kyc__list__tasks` is not found, KYC through Claude is not available for this account
 yet. Tell the user to fill in the form on Carta, and stop.
 

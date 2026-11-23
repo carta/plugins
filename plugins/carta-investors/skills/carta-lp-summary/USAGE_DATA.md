@@ -12,7 +12,7 @@ skipped. Leave staff and demo accounts out of adoption numbers (`IS_STAFF_USER`,
 ## Skill checkpoints
 
 Sent by the skill through carta-mcp's `skill_checkpoint`, as
-`skill_name="carta-investors:carta-lp-summary"`. The first four count build runs only (a
+`skill_name="carta-investors:carta-lp-summary"`. The first six count build runs only (a
 first build or a refresh); a request to brand a page that already exists sends only its
 source checkpoint. Each fires at most once per run, and a build run that sent `skill_started`
 ends in exactly one of `skill_finished` or `skill_failed`.
@@ -21,6 +21,8 @@ ends in exactly one of `skill_finished` or `skill_failed`.
 |---|---|
 | `skill_started` | The Carta connector answered `welcome`; a build or refresh has begun. Branding an existing page doesn't send it |
 | `data_checked` | The firm's LP tables resolved and it has active limited partners |
+| `data_loaded` | Sent right after `data_checked`; Carta Home reads it to move the dashboard card's progress bar |
+| `dashboard_built` | The page file is rendered and about to be published; Carta Home reads it to move the card's progress bar |
 | `skill_finished` | A build or refresh published the page. A branding republish doesn't send it |
 | `skill_failed` | A build or refresh stopped after `skill_started` and before `skill_finished`, at any step. Stops before it (no connector, `welcome` fails) send nothing |
 | `brand_source_website` | Branding was taken from the firm's website |

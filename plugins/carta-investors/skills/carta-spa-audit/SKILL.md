@@ -56,7 +56,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.58.3</carta-plugin>
+<carta-plugin>carta-investors:7.59.4</carta-plugin>
 
 > **If this plugin's files can't be found:** `${CLAUDE_PLUGIN_ROOT}` is this plugin's root, and seeing it unreplaced in this text is not a missing file: the root is this skill's base directory (the path shown when the skill loads) with its last two parts, `/skills/<this skill's directory>`, taken off the end. Write that path wherever this skill writes `${CLAUDE_PLUGIN_ROOT}`, in Bash commands too, and go on. Working that path out is not searching the disk. Only a "not found" when you read or run one of these files at that path means a file is missing, because the skill loaded before this session's computer link was ready: invoke this skill once more with the Skill tool and use the paths that copy gives. If a file is still not found, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) record `skill_failed` as Error handling describes, and stop. Don't search the disk for them.
 

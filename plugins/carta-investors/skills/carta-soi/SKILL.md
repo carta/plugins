@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.58.3</carta-plugin>
+<carta-plugin>carta-investors:7.59.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -154,6 +154,8 @@ when there is more than one fund, and the render script rejects the sentinel bel
 two — so for a one-fund firm, use that fund's uuid regardless of the table above.
 
 `named_but_missing` is **not** a blocker — render the artifact with the full firm fund list anyway. The user can pick their intended fund from the dropdown; Step 6 surfaces the miss in the confirmation message.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-soi", checkpoint_label="data_loaded")` once Step 2 has the firm's fund list. Carta Home reads it to move the dashboard card's progress bar. Record it once per run, and carry on if the call fails.
 
 ### Step 2b — Fund-of-funds look-through (no action needed, narration only)
 
@@ -269,6 +271,8 @@ On success, the script prints one stdout line: the absolute output path. The scr
 Example: `"Acme Capital Partners, L.P."` → slug `"acme-capital-partners-lp"` → output filename `acme-capital-partners-lp-fund-soi-collection.html`, funds-file `acme-capital-partners-lp-funds.json`, artifact id `acme-capital-partners-lp-fund-soi-collection`.
 
 Re-running the skill for the same firm produces the same artifact id and the same filename, so the artifact is cleanly updated in place by Step 5.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-soi", checkpoint_label="dashboard_built")` once the render script in Step 4 has written the file. Carta Home reads it to move the dashboard card's progress bar. Record it once per run, and carry on if the call fails.
 
 ### Step 5 — Publish the Live Artifact
 

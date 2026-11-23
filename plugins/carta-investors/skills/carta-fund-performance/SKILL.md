@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.58.3</carta-plugin>
+<carta-plugin>carta-investors:7.59.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -129,6 +129,8 @@ the link stays hidden.
 
 The script prints the absolute path it wrote. If it fails, show the error and stop. Never
 publish the template itself: its Home link is a placeholder.
+
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="dashboard_built")` once the render script in Step 1 has written the file. Carta Home reads it to move the dashboard card's progress bar. Record it once per run, and carry on if the call fails.
 
 ## Step 2 — Publish the artifact
 
