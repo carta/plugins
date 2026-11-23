@@ -29,7 +29,7 @@ allowed-tools:
   - mcp__carta__list_accounts
   - mcp__carta__welcome
   - mcp__carta__get_current_user
-  - mcp__carta__view_remote
+  - mcp__carta__view_remote_inline
   - mcp__carta__view_remote_next
   - mcp__carta__cap_table__get__draft_set_companion
   - mcp__claude_ai_Carta__call_tool
@@ -38,7 +38,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__get_current_user
-  - mcp__claude_ai_Carta__view_remote
+  - mcp__claude_ai_Carta__view_remote_inline
   - mcp__claude_ai_Carta__view_remote_next
   - mcp__claude_ai_Carta__cap_table__get__draft_set_companion
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
@@ -47,13 +47,13 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_inline
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_next
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__cap_table__get__draft_set_companion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.120.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.120.3</carta-plugin>
 
 # Issue Securities
 

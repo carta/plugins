@@ -30,12 +30,12 @@ file decides what to do with them.
 
 **First rule: save what you know, record its sources, then ask.**
 
-Load `view_remote`, `view_remote_next` and the named `cap_table__mutate__apply_plan` with one
+Load `view_remote_inline`, `view_remote_next` and the named `cap_table__mutate__apply_plan` with one
 `ToolSearch`.
 
 - An **app host** has `view_remote_next`, renders apps, and `issuance_init` gave
   `companion.issuance_app`. Only there does the page show ([the issuance app](#the-issuance-app)).
-- A **card host** has `view_remote` and shows chat cards: any Claude Desktop or claude.ai chat,
+- A **card host** has `view_remote_inline` and shows chat cards: any Claude Desktop or claude.ai chat,
   and Claude Code. If the host cannot draw the card, ask in the chat.
 
 Call Carta commands as `call_tool(name="cap_table__mutate__prepare_drafts", arguments={...})`,
@@ -215,7 +215,7 @@ is not a second item. A check message on a cell is never a line of text. A
 
 ### The reply
 
-Make the `view_remote` call ([The card](#the-card)) first, with no text before it. When it
+Make the `view_remote_inline` call ([The card](#the-card)) first, with no text before it. When it
 answers, the reply is these parts, in this order, and no other text:
 
 1. **What I drafted**: that heading, then 4 short lines or fewer: the files read, the holders
@@ -252,7 +252,7 @@ With no item, there is no card: go on to [§ 8](#8-issue); its optional columns 
 
 ### The card
 
-On a card host, one `view_remote` with `name: cap_table:view:draft_set_card` and params
+On a card host, one `view_remote_inline` with `name: cap_table:view:draft_set_card` and params
 `corporation_id`, `security_type`, `draft_set_id`, `revision`, `card: need_input` and `items`,
 one per item: `{id, set_label, kind, title, body, row_key, field, input, options, documents, term}`.
 `options`: `[{value, label, recommended, detail}]`, every candidate; company columns are matched
@@ -461,7 +461,7 @@ With no app host, confirm and issue one set at a time, each with its own revisio
 
 Close as the skill does, and say where the files went: "the 5 source files are in Issuance
 documents", adding "and corporate documents" when one was filed as `Document`. Name any file not
-filed and ask the user to upload it to Issuance documents. On a card host, one `view_remote`
+filed and ask the user to upload it to Issuance documents. On a card host, one `view_remote_inline`
 with `name: cap_table:view:draft_set_card`, params `corporation_id`, `card: suggestions` and 2 or
 3 of the `items` ({id, title}) below. Elsewhere, one line naming them. A tap is only a chat
 message; act on it:
@@ -482,7 +482,7 @@ id, say why, preview again, then `cap_table:mutate:apply_plan` once confirmed.
 Carry on silently: `draft_set_sources` refused twice, skip sources, and with
 [the issuance app](#the-issuance-app), for a set a save just gave its `draft_set_id`, render it
 now: one `view_remote_next` with the run's `sets`; a file not filed, its
-sources have no `file_id`; no `view_remote`, ask in the
+sources have no `file_id`; no `view_remote_inline`, ask in the
 chat; no `get:draft_set_companion`, use the chat confirm in § 8. Send a refused
 `draft_set_sources` call again once, and each `dropped` cell again once, under the key its
 `problem` names.

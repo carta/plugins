@@ -130,7 +130,7 @@ doubles as the account-level hard stop and as Phase 0.5's reference-data fetch, 
 ### Step 1 — Load every tool in ONE ToolSearch call
 
 ```
-ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user,mcp__carta__cap_table__get__draft_set_companion,mcp__carta__cap_table__mutate__apply_plan,mcp__carta__view_remote,mcp__carta__view_remote_next"
+ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user,mcp__carta__cap_table__get__draft_set_companion,mcp__carta__cap_table__mutate__apply_plan,mcp__carta__view_remote_inline,mcp__carta__view_remote_next"
 ```
 
 `mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
@@ -144,7 +144,7 @@ no tool ending in `read_tool` / `call_tool` / `list_accounts` / `welcome` exists
 genuinely gone: say so and stop. Everything else that looks like an answer is not one
 ([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
-One call, the complete set for the run. `view_remote` is there for the
+One call, the complete set for the run. `view_remote_inline` is there for the
 [companion surface](companion-surface.md); `cap_table__get__draft_set_companion` matches only when Carta offers the
 companion, so no match is the normal case, never a connection signal. `cap_table__mutate__apply_plan` is the issue
 ([SKILL.md § Issue](../SKILL.md#issue)).
