@@ -2,7 +2,7 @@
 name: carta-fund-admin-requests
 model: sonnet
 description: >-
-  Send work to your Carta Fund Admin team and track it. Opens a request the team reads, acts on, and replies to — the off-ramp for anything no other Carta skill or command can do. TRIGGER: "ask Carta to", "have Carta do", "send this to my fund admin", "ask my fund admin team", "can Carta do this for me", "check on my request", "did Carta reply", "what requests do I have open", "reply to Carta", "follow up on my request", plus ANY action request (create/change/send/restate/reconcile/split/fix) that no other skill or Carta command covers. NOT FOR: reporting a bug or feature request about this plugin (call fa:create:feedback directly); questions answerable from Carta data (use carta-explore-data); capital call reminders to LPs (that is a Carta command, not a Fund Admin request).
+  Send work to your Carta Fund Admin team and track it. Opens a request the team reads, acts on, and replies to — the off-ramp for anything no other Carta skill or command can do. TRIGGER: "ask Carta to", "have Carta do", "send this to my fund admin", "ask my fund admin team", "can Carta do this for me", "check on my request", "did Carta reply", "what requests do I have open", "reply to Carta", "follow up on my request", plus ANY action request (create/change/send/restate/reconcile/split/fix) that no other skill or Carta command covers. NOT FOR: reporting a bug or feature request about this plugin (call fa:create:feedback directly); questions answerable from Carta data (use carta-explore-data); capital call reminders to LPs (that is a Carta command, not a Fund Admin request); drafting capital calls or distributions (carta-workhub-build).
 version: 1.0.0
 allowed-tools:
   # Production
@@ -58,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.57.1</carta-plugin>
+<carta-plugin>carta-investors:7.57.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -67,6 +67,15 @@ allowed-tools:
 A request opens a case your Carta Fund Admin team works async. It is the answer
 whenever the user wants something **done** and no other skill or Carta command
 can do it — not a dead end, and never a warehouse query instead.
+
+**A capital call or distribution is not a request.** When the connector has `open_workhub`
+and the user asks to draft, call or set up a capital call or distribution, call
+`open_workhub` and draft it with the Workhub's `draft_capital_activity` app tool,
+so the user reviews the draft beside the chat. Send no request for it, and do not
+reply with a Carta link to it. When the Workhub doesn't open, follow
+`carta-workhub-build`'s fallback: say nothing was drafted and offer Carta's capital
+activity commands instead. When a Carta result leads with `open_app`, do what it
+says before replying: it shows what the call made in the Workhub.
 
 ## Commands
 

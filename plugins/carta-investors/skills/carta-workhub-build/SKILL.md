@@ -7,7 +7,10 @@ description: >-
   for "open the carta workhub", "open the carta workhub artifact", "open my Carta workhub",
   "show my Carta workhub", "build the carta workhub artifact", "rebuild carta workhub", "update
   my Carta Workhub artifact", "set up carta workhub", "deploy carta workhub", "rebuild carta
-  tasks", "show my Carta task board" or "pin my Carta requests". A prompt from a Workhub page's
+  tasks", "show my Carta task board" or "pin my Carta requests". So does a request to draft or
+  set up a capital call or distribution ("call $1M pro rata from Fund I investors", "draft a
+  distribution"): open the Workhub and draft it there; when it opens, never reply with a Carta
+  link. A prompt from a Workhub page's
   KYC card, which names this skill's KYC branch, goes to carta-investors:carta-kyc-fill-form.
 model: inherit
 allowed-tools:
@@ -19,7 +22,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.57.1</carta-plugin>
+<carta-plugin>carta-investors:7.57.2</carta-plugin>
 
 # Carta Workhub
 
@@ -44,3 +47,14 @@ other prompt opens the Workhub (below).
 3. When the call fails, the tool isn't there, or it answers that it can't be shown here, say the
    Carta connector couldn't open the Workhub and ask them to check that Carta is connected in
    Settings → Connectors. Keep their old page until it opens. Do not build or publish an artifact.
+
+## A capital call or distribution
+
+When the user asked for a capital call or distribution, open the Workhub (step 1), then draft it
+with the Workhub's `draft_capital_activity` app tool, once, passing only what they gave. The draft
+opens in the Workhub for them to review and release. Tell them what Carta filled in instead of
+step 2's lines, and do not reply with a Carta link to the draft.
+
+When the Workhub doesn't open (step 3), say it couldn't open here and that nothing was drafted,
+and offer to draft it with Carta's capital activity commands instead, which give a link to review
+it in Carta. Draft nothing until they say yes.
