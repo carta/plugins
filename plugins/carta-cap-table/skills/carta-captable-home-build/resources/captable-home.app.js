@@ -1,7 +1,7 @@
 // ── Carta MCP bridge ──
-// The artifact runtime addresses a connector by display name, so {{CARTA_MCP_SERVER}} is
-// the name the build script stamps in — not a UUID and not a prefixed tool name.
-const CARTA_MCP_SERVER = "{{CARTA_MCP_SERVER}}";
+// The artifact runtime addresses a connector by display name, so this is the name the page's
+// config block carries — not a UUID and not a prefixed tool name.
+const CARTA_MCP_SERVER = window.CAPTABLE_HOME.mcpServer;
 
 let _mcpNsPromise = null;
 // null means this view cannot run mcp — not granted, not served, or failed to load.
@@ -330,20 +330,20 @@ function setAllCardsLoading() {
 }
 // Baked at build time so the page can never disagree with the title that names
 // the same company. A second company means a second build.
-const BAKED_CORPORATION_ID = "{{CORPORATION_ID}}";
-const BAKED_COMPANY_NAME = {{COMPANY_NAME_JSON}};
+const BAKED_CORPORATION_ID = window.CAPTABLE_HOME.corporationId;
+const BAKED_COMPANY_NAME = window.CAPTABLE_HOME.companyName;
 
 // The Skill Directory as it stood at build time, from .claude-plugin/skill-directory.json
 // with opt-outs and skills absent from the install already dropped: a list of
 // {skill, category, name, order, prompts}, plus `tag` and `whatsNew` where an entry sets
 // them. It is the fallback — app/skill-directory.js replaces _directorySkills with the
 // published list once it arrives.
-const BAKED_SKILL_DIRECTORY = {{SKILL_DIRECTORY_JSON}};
+const BAKED_SKILL_DIRECTORY = window.CAPTABLE_HOME.skillDirectory;
 let _directorySkills = BAKED_SKILL_DIRECTORY;
 // The skills the directory file opts out with `null`. The published list from
 // plugin:list:skills can lag this build and still carry one of them, so What's new checks
 // this list too rather than trust whatever the published list holds.
-const BAKED_SKILL_OPT_OUTS = {{SKILL_OPT_OUTS_JSON}};
+const BAKED_SKILL_OPT_OUTS = window.CAPTABLE_HOME.skillOptOuts;
 
 // Every in-flight fetch compares against this after each await and discards its
 // result if it no longer matches.
@@ -472,7 +472,8 @@ function populateFallback() {
   });
 }
 
-console.log("[captable-home] build {{BUILD_ID}}");
+const BUILD_ID = window.CAPTABLE_HOME.buildId;
+console.log("[captable-home] build " + BUILD_ID);
 trackHome("render", "CaptableHome.View");
 setCompanyTitle(BAKED_COMPANY_NAME);
 renderDirectory();

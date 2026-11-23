@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.118.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.118.4</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -169,8 +169,8 @@ error, and empty (see "Data sources" below).
 
 The artifact resolves the runtime bridge once with `await claude.use("mcp")`, then calls
 `mcp.callTool(CARTA_MCP_SERVER, "<tool>", args)`. `CARTA_MCP_SERVER` is the Carta
-connector's **display name** — the `{{CARTA_MCP_SERVER}}` placeholder the build script
-fills in. The runtime addresses connectors by display name only, never by a UUID.
+connector's **display name** — the `{{CARTA_MCP_SERVER_JSON}}` placeholder in the page's
+config block, which the build script (or you, for the shell page) fills in as a JSON string. The runtime addresses connectors by display name only, never by a UUID.
 
 Every tool below must appear in the publish call's `capabilities.mcp` grant, or the call
 rejects with `not_in_manifest`:
@@ -182,8 +182,8 @@ rejects with `not_in_manifest`:
   `marketing:list:content` for What's new's recent skills. The marketing commands only
   exist on some environments; a missing one leaves the static news cards in place and
   What's new on its microapp or fallback cards.
-- `read_tool` — carries `plugin:get:version` for the update banner and `plugin:list:skills`
-  for the Skill Directory. It runs reads without asking the viewer, so neither check
+- `read_tool` — carries `plugin:get:version` for the update banner, `plugin:list:skills`
+  for the Skill Directory, and `plugin:get:artifact_bundle` for the shell page's body, CSS and JS. It runs reads without asking the viewer, so neither check
   interrupts the page load
 - `get_current_user` — called once; its profile supplies `recommendations` for Suggested
   for you and `has_ctc` / `has_cap_table` for What's new
@@ -213,12 +213,16 @@ the full file in context. Edit the small source file for what you're changing:
 | `resources/app/tour.js` | the first-visit guided tour: `TOUR_STEPS` (each step's element id, title and copy), the spotlight and tooltip, and its `CaptableHome.Tour.Start` / `.Next` / `.Skip` events; it opens once per browser (localStorage `captable-home-tour-v1`) | change the tour's steps or copy |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/captable-home.css` | styles (Ink tokens) | change appearance |
-| `resources/captable-home.template.html` | HTML skeleton + injection markers | change page structure |
+| `resources/captable-home.template.html` | the head, the config block (`window.CAPTABLE_HOME`: every per-company and per-build value) + injection markers | change the head or the config block |
+| `resources/captable-home.body.html` | the page's body markup (no placeholders) | change page structure |
+| `resources/bundle.json` | the body, CSS and JS parts in load order, as paths inside the skill as carta-mcp serves it (`vendor/` is the plugin's `vendor/`) | add, remove or reorder a part |
+| `resources/captable-home.loader.js` | the shell page's loader: cache, `plugin:get:artifact_bundle`, digest check, inject, retry | change how the shell loads its parts |
+| `resources/captable-home.shell.html` | generated: the template's head and config block, with the loader as the body | never by hand — run `uv run scripts/build_artifact.py --write-shell` after you change the template or the loader |
 | `resources/captable-home.tracker.js` | inlined `@carta/mcp-ui-tracker` browser bundle (`window.mcpUiTracker`) | re-run the library's `build:browser` and re-copy the output if the tracker source ever changes |
 
 App-layer JS assembles into a single classic (non-module) `<script>` tag — no bundler,
-no runtime `import`/`export`. New feature files get appended to `APP_JS_PARTS` in
-`build_artifact.py` and concatenated in order. Card fetch/render functions are declared
+no runtime `import`/`export`. New feature files get added to the `js` list in
+`resources/bundle.json` and concatenated in order. Card fetch/render functions are declared
 with `function name() {}` (hoisted), so `loadCompanyData` in `captable-home.app.js` can
 call them regardless of concatenation order.
 
@@ -234,12 +238,14 @@ takes the whole page with it. Two rules follow:
 - Every top-level name across all parts has to be unique. A duplicate `const` is a
   parse-time `SyntaxError` that kills every card at once; `test_bundle_parses` catches it.
 
-The build inlines `captable-home.css` → `/* __CAPTABLE_HOME_CSS__ */`,
-`captable-home.tracker.js` → `/* __CAPTABLE_HOME_TRACKER_JS__ */`, `captable-home.config.js`
-→ `/* __CAPTABLE_HOME_CONFIG_JS__ */`, and the concatenated app JS →
-`/* __CAPTABLE_HOME_APP_JS__ */`, then substitutes `{{CARTA_MCP_SERVER}}`, the company, the
-baked Skill Directory and its opted-out skills, and the build time (`BUILT_AT`), producing
-one self-contained HTML.
+The build inlines `captable-home.body.html` → `<!-- __CAPTABLE_HOME_BODY_HTML__ -->`,
+`captable-home.css` → `/* __CAPTABLE_HOME_CSS__ */`, and every JS part of `bundle.json`, in
+its order, → `/* __CAPTABLE_HOME_JS__ */` as one script (the tracker, the chart bundle, the
+config and the app files). The shell's loader joins the same parts the same way. Then the
+build fills the config block: `{{CARTA_MCP_SERVER_JSON}}`, the company, the baked Skill
+Directory and its opted-out skills, the version, the build id and the build time
+(`BUILT_AT`), producing one self-contained HTML. No part holds a per-company value, so
+carta-mcp can serve the same parts to every shell page.
 
 ## Versioning — bump this skill's entry when you change the artifact
 
@@ -342,12 +348,34 @@ companies never write over each other's file.
 
 Run this as its own command on one line, with the script path exactly as written and every
 argument quoted. Don't chain anything before or after it (no `mkdir … &&`): a chained command
-needs approval. Do not search for the script; Bash reaches this path on every surface, Cowork
-included:
+needs approval. Do not search for the script; where Bash is available, it reaches this path,
+Cowork included:
 
 ```
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-captable-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --corporation-id "<bare corporation pk from Step 0b>" --company-name "<company name from Step 0b>" --out "<outputs-directory>/captable-home-<slug>.html"
 ```
+
+#### Step 1 without Bash or `uv` (the skill comes from the Carta connector)
+
+Use this branch only when this session has no Bash tool or no `uv`. Do not run the build.
+Write the small shell page instead. When it opens, it gets its body, CSS and JS from
+carta-mcp through `read_tool` (`plugin:get:artifact_bundle`), so it is the same page, and it
+always runs the newest parts. It needs no version and no build time.
+
+1. Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-captable-home-build/resources/captable-home.shell.html`.
+   Do not search for it.
+2. Replace each placeholder in the shell text. Change nothing else. A JSON string has its
+   quotes, a `\"` for each `"` and a `\\` for each `\`, and `<` as `\u003c`, `>` as `\u003e`
+   and `&` as `\u0026`:
+
+   | Placeholder | Value |
+   |---|---|
+   | `{{PAGE_TITLE}}` | `Carta Home - <company name>`, with `&` as `&amp;`, `<` as `&lt;` and `>` as `&gt;` |
+   | `{{CARTA_MCP_SERVER_JSON}}` | the connector name from Step 0, as a JSON string: `"Carta"` |
+   | `{{CORPORATION_ID}}` | the bare corporation pk from Step 0b |
+   | `{{COMPANY_NAME_JSON}}` | the company name as a JSON string: `"Acme, Inc."` |
+
+3. Write the result to `<outputs-directory>/captable-home-<slug>.html`. Then go to Step 2.
 
 ### Step 2: Find an already-published Carta Home for this company
 
@@ -419,8 +447,9 @@ Artifact({
 > `<title>` tag and uses its `title` parameter only when the file has none — so a `title`
 > passed alongside a built page is silently dropped. `build_artifact.py` stamps
 > `Carta Home - <Company>` into the tag from `--company-name`, which is why the page and
-> the name it publishes under cannot disagree. If the artifact comes out named wrong, the
-> build is wrong: check what Step 1 printed, not this call.
+> the name it publishes under cannot disagree. For the shell page, `{{PAGE_TITLE}}` sets the
+> tag. If the artifact comes out named wrong, the build is wrong: check what Step 1 printed
+> or wrote, not this call.
 >
 > Anything the page calls that is missing from `tools` rejects with `not_in_manifest`.
 > `list_accounts` is **not** in the grant: the skill resolves the company at build time and
@@ -506,6 +535,7 @@ change, update the sketch and the text together and bump the date.
 | Suggested for you | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
 | What's new | the same `get_current_user` profile (`has_ctc` unlocks the microapp, `has_cap_table` gates the skills), plus `marketing:list:content` with `content_type: pluginPrompt`, `space: prompts`, newest `goLiveDate` first |
 | Update banner | `plugin:get:version` via `read_tool`, with `plugin` + `skill` arguments |
+| The shell page's body, CSS and JS | `plugin:get:artifact_bundle` via `read_tool`, with `plugin` + `skill`: the parts `resources/bundle.json` lists. The page keeps them in `localStorage` and sends their `build_id` as `if_build_id` on each open; it runs kept parts only when the answer is `unchanged` and their sha256 is the `build_id`. The shell bakes an empty Skill Directory, so the directory comes from `plugin:list:skills` |
 | Skill Directory | baked from `.claude-plugin/skill-directory.json` at build time, then `plugin:list:skills` via `read_tool` with `plugin` — entries at the plugin's stable tag, only for published skills. `skills: null` or an unusable list keeps the baked one |
 | Plugin news | `marketing:list:content` (tag `NEWS_TAG`, `tag_source: "metadata"`) then `marketing:get:asset_data` per image. Images must arrive as `data:` URIs — the sandbox CSP is `img-src 'self' data:`, so a remote asset URL renders nothing |
 | Ownership composition bar (on the Cap table page) | `cap_table_chart` — `chart_data.share_classes` and `chart_data.warrant_blocks` by `fully_diluted_ownership`, `chart_data.option_plans` by `outstanding_ownership + available_ownership`, largest first and capped at six segments, plus "Rest of the company" when `chart_data.totals.total_fully_diluted_ownership` is less than the whole |
@@ -530,6 +560,7 @@ from `list_connectors` and asks when more than one Carta entry is connected.
 | Situation | What to do |
 |---|---|
 | `welcome` or `list_accounts` errors in Step 0 | Tell the user Carta isn't responding and stop. Do not publish. |
+| The shell page shows "Carta Home could not load" | carta-mcp did not send the page's parts. Check that `read_tool` is in the grant (Step 3). Do not write the parts into the page. |
 | `build_artifact.py` exits with an error | Fix the argument it names (a still-prefixed `corporation_pk:` id is the usual one) and run it once more. If it fails again, show the error and stop. |
 | A card fails with `scope_required`, 403 or "response too large" | The card keeps its fallback state. Do not rebuild for it. |
 

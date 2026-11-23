@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "html": ["resources/captable-home.body.html"],
+  "css": ["resources/captable-home.css"],
+  "js": [
+    "resources/captable-home.tracker.js",
+    "vendor/chart.umd.min.js",
+    "resources/captable-home.config.js",
+    "resources/captable-home.app.js",
+    "resources/app/ownership.js",
+    "resources/app/option-pool.js",
+    "resources/app/stakeholders.js",
+    "resources/app/drafts.js",
+    "resources/app/dashboards.js",
+    "resources/app/capabilities.js",
+    "resources/app/whats-new.js",
+    "resources/app/version-check.js",
+    "resources/app/live-content.js",
+    "resources/app/skill-directory.js",
+    "resources/app/tour.js"
+  ]
+}

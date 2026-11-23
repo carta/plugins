@@ -1,7 +1,7 @@
 {
   "carta-captable-home-build": {
-    "version": "0.16.8",
-    "headline": "Carta Home has a new look: roomier dashboards, suggested prompts you can copy, and a What's new showcase."
+    "version": "0.16.9",
+    "headline": "Carta Home builds in seconds from the Carta connector: a small page gets its code from Carta when it opens."
   },
   "carta-compensation-benchmarks": {
     "version": "1.0.0",

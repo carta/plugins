@@ -5,8 +5,8 @@ const PLUGIN = "carta-cap-table";
 // Keyed by skill, not plugin: carta-cap-table ships several times a day for changes
 // this artifact never sees, which would raise the banner almost daily.
 const SKILL = "carta-captable-home-build";
-const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
-const BUILT_AT = "{{BUILT_AT}}";
+const ARTIFACT_VERSION = window.CAPTABLE_HOME.version;
+const BUILT_AT = window.CAPTABLE_HOME.builtAt;
 // A fresh build is already the newest the user can get. Matches carta-mcp's week-old
 // release pick, so after this window the banner names only a release a rebuild reaches.
 const QUIET_AFTER_BUILD_DAYS = 7;
@@ -127,3 +127,12 @@ async function checkForUpdate() {
 
 // Deferred so the check never competes with the first data paint.
 setTimeout(checkForUpdate, 0);
+
+// The visible stamp. The banner compares ARTIFACT_VERSION, never this text.
+function renderBuildStamps() {
+  document.querySelectorAll(".build-stamp").forEach(el => {
+    el.textContent = "v" + ARTIFACT_VERSION + " · build " + BUILD_ID.slice(0, 12);
+  });
+}
+
+renderBuildStamps();

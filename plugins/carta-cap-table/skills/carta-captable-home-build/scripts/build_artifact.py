@@ -3,22 +3,21 @@
 # ///
 """Assemble the self-contained captable-home live artifact from its source parts.
 
-Inlines the CSS + config + app JS into the template and substitutes the Carta MCP
-connector name, producing ONE self-contained HTML file the Artifact tool publishes
+Inlines the body, CSS and JS parts into the template and fills its config block, producing ONE self-contained HTML file the Artifact tool publishes
 by path. The model never has to read the large HTML: to change what the
 directory shows, edit resources/captable-home.config.js; to change logic, edit
 resources/captable-home.app.js; then re-run this.
 
-Source parts (all in the skill's resources/ dir):
-  captable-home.template.html  — HTML skeleton + <style>/<script> injection markers
-  captable-home.css            — styles          (marker: /* __CAPTABLE_HOME_CSS__ */)
-  captable-home.tracker.js     — Snowplow UI tracker bundle (marker: /* __CAPTABLE_HOME_TRACKER_JS__ */)
-  captable-home.config.js      — DIR_CATEGORIES  (marker: /* __CAPTABLE_HOME_CONFIG_JS__ */)
+Source parts: resources/bundle.json lists the body HTML, CSS and JS parts in load order, as
+paths inside the skill as carta-mcp serves it (`vendor/` is the plugin's vendor/ here). The
+body and the CSS fill their own markers. The JS parts fill /* __CAPTABLE_HOME_JS__ */ as one
+script, joined in list order the way the shell's loader joins them. carta-mcp serves the same
+parts, in the same order, to the small shell page (resources/captable-home.shell.html) that
+loads them at open.
 
 The Skill Directory's entries come from the plugin's .claude-plugin/skill-directory.json
 (placeholder: {{SKILL_DIRECTORY_JSON}}), baked in as the fallback for the published copy
 the page reads from carta-mcp at open time.
-  captable-home.app.js         — app logic       (marker: /* __CAPTABLE_HOME_APP_JS__ */)
 
 The artifact's version comes from the plugin's skill-versions registry, keyed by this
 skill (placeholder: {{ARTIFACT_VERSION}}). It lives there rather than beside the skill
@@ -26,9 +25,10 @@ because carta-mcp serves it to the running artifact from the published carta/plu
 mirror, and a skill that has not opted into publishing never reaches that mirror —
 whereas .claude-plugin/ is plugin-level metadata and is always published.
 
-The `{{CARTA_MCP_SERVER}}` placeholder (throughout the template + app) is replaced with
-the Carta connector's display name — what the artifact runtime's mcp capability
-addresses a connector by.
+The `{{CARTA_MCP_SERVER_JSON}}` placeholder (in the template's config block) is replaced with
+the Carta connector's display name, as JSON — what the artifact runtime's mcp capability
+addresses a connector by. Every per-company and per-build value sits in that one config
+block (`window.CAPTABLE_HOME`), never in a JS part, so the parts are the same for every page.
 
 One built page serves one company: `{{CORPORATION_ID}}`, `{{COMPANY_NAME_JSON}}` and
 `{{PAGE_TITLE}}` are baked in, and the artifact is published as "Carta Home - <company>".
@@ -42,6 +42,7 @@ Usage:
   uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
       --corporation-id <corporation_id> --company-name "<company legal name>" \
       --out <path>/captable-home-<slug>.html
+  uv run scripts/build_artifact.py --write-shell
 """
 import argparse
 import hashlib
@@ -73,33 +74,71 @@ SKILLS_ROOT = SKILL_DIR.parent
 # compares against the published one at runtime. Strict major.minor.patch.
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
-# App-layer JS is assembled from these files, concatenated in this order into the
-# single __CAPTABLE_HOME_APP_JS__ slot below. Add new feature files here.
-APP_JS_PARTS = [
-    "captable-home.app.js",
-    "app/ownership.js",
-    "app/option-pool.js",
-    "app/stakeholders.js",
-    "app/drafts.js",
-    "app/dashboards.js",
-    "app/capabilities.js",
-    "app/whats-new.js",
-    "app/version-check.js",
-    "app/live-content.js",
-    "app/skill-directory.js",
-    "app/tour.js",
-]
+BUNDLE_FILE = RES / "bundle.json"
+SHELL_FILE = RES / "captable-home.shell.html"
+LOADER_FILE = RES / "captable-home.loader.js"
 
+# The body and CSS parts, each with its marker in the template.
 MARKERS = {
-    "captable-home.css": r"/\*\s*__CAPTABLE_HOME_CSS__\s*\*/",
-    "captable-home.tracker.js": r"/\*\s*__CAPTABLE_HOME_TRACKER_JS__\s*\*/",
-    "captable-home.config.js": r"/\*\s*__CAPTABLE_HOME_CONFIG_JS__\s*\*/",
+    "resources/captable-home.body.html": r"<!--\s*__CAPTABLE_HOME_BODY_HTML__\s*-->\n",
+    "resources/captable-home.css": r"/\*\s*__CAPTABLE_HOME_CSS__\s*\*/",
 }
-VENDOR_MARKERS = {
-    # chart.js v4.5.1 — replace vendor/chart.umd.min.js and bump this comment to upgrade
-    "chart.umd.min.js": r"/\*\s*__CAPTABLE_HOME_CHART_JS__\s*\*/",
+# Every JS part, in bundle.json order, as one script. chart.js v4.5.1 is one of them: replace
+# vendor/chart.umd.min.js to upgrade.
+JS_MARKER = r"/\*\s*__CAPTABLE_HOME_JS__\s*\*/"
+# The loader's join: a part that ends without a semicolon cannot run into the next one.
+JS_JOIN = "\n;\n"
+# A <script> or <style> element that holds only build markers: the shell drops each one and
+# puts the loader in the JS slot.
+MARKER_ELEMENT = re.compile(r"[ \t]*<(script|style)>\s*(?:/\*\s*__CAPTABLE_HOME_\w+__\s*\*/\s*)+</\1>\n")
+HTML_COMMENT = re.compile(r"[ \t]*<!--.*?-->\n?", re.DOTALL)
+# The model writes the shell out token by token, so it carries no indent.
+INDENT = re.compile(r"^[ \t]+", re.MULTILINE)
+# The shell has no build. It reads the published Skill Directory, and the loader sets the
+# version and build id from carta-mcp's answer. No build time turns the update check off: the
+# shell always runs the newest parts.
+SHELL_VALUES = {
+    "SKILL_DIRECTORY_JSON": "[]", "SKILL_OPT_OUTS_JSON": "[]", "BUILD_ID": "", "ARTIFACT_VERSION": "", "BUILT_AT": "",
 }
-APP_JS_MARKER = r"/\*\s*__CAPTABLE_HOME_APP_JS__\s*\*/"
+
+
+def read_bundle():
+    """Return resources/bundle.json: {"version", "html": [path], "css": [path], "js": [path]},
+    in load order."""
+    bundle = json.loads(BUNDLE_FILE.read_text())
+    listed = bundle_paths(bundle)
+    missing = [path for path in MARKERS if path not in listed]
+    if missing:
+        sys.exit("ERROR: {} does not list {}".format(BUNDLE_FILE.name, ", ".join(missing)))
+    unplaced = [path for path in bundle["html"] + bundle["css"] if path not in MARKERS]
+    if unplaced:
+        sys.exit("ERROR: the template has no marker for {}".format(", ".join(unplaced)))
+    return bundle
+
+
+def bundle_paths(bundle):
+    """Every part bundle.json lists, in load order."""
+    return bundle["html"] + bundle["css"] + bundle["js"]
+
+
+def part_file(path):
+    """The local file of a bundle path: `vendor/` sits at the plugin root here."""
+    if path.startswith("vendor/"):
+        return VENDOR_DIR / path[len("vendor/"):]
+    return SKILL_DIR / path
+
+
+def build_shell():
+    """The shell page: the template's head and config block, with the loader as its whole
+    body, and only the placeholders the model fills by hand left in the config block."""
+    loader = LOADER_FILE.read_text()
+    out = MARKER_ELEMENT.sub(
+        lambda m: "<script>\n" + loader + "</script>\n" if re.search(JS_MARKER, m.group(0)) else "",
+        (RES / "captable-home.template.html").read_text(),
+    )
+    out = INDENT.sub("", HTML_COMMENT.sub("", out))
+    return re.sub(r"\{\{(" + "|".join(SHELL_VALUES) + r")\}\}", lambda m: SHELL_VALUES[m.group(1)], out)
+
 
 CORP_ID_PREFIX = "corporation_pk:"
 
@@ -222,9 +261,8 @@ def normalize_corporation_id(raw):
 
 def build(mcp_server, corporation_id, company_name):
     template = (RES / "captable-home.template.html").read_text()
-    parts = {name: (RES / name).read_text() for name in MARKERS}
-    parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
-    parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
+    bundle = read_bundle()
+    parts = {path: part_file(path).read_text() for path in bundle_paths(bundle)}
     skill_directory = directory_json(read_skill_directory())
     skill_opt_outs = directory_json(read_skill_opt_outs())
     # The directory is content like any source part, so it moves the build id too.
@@ -233,32 +271,31 @@ def build(mcp_server, corporation_id, company_name):
     )
 
     out = template
-    for filename, marker in {**MARKERS, **VENDOR_MARKERS}.items():
-        content = parts[filename]
+    for path, marker in MARKERS.items():
         if not re.search(marker, out):
-            sys.exit("ERROR: marker for {} missing from template".format(filename))
+            sys.exit("ERROR: marker for {} missing from template".format(path))
         # Use a function replacement so backslashes / $-refs in the content are literal.
-        out = re.sub(marker, lambda _m, c=content: c, out, count=1)
+        out = re.sub(marker, lambda _m, c=parts[path]: c, out, count=1)
 
-    app_js = "\n\n".join(parts[name] for name in APP_JS_PARTS)
-    if not re.search(APP_JS_MARKER, out):
-        sys.exit("ERROR: marker for app JS missing from template")
-    out = re.sub(APP_JS_MARKER, lambda _m, c=app_js: c, out, count=1)
+    js = JS_JOIN.join(parts[path] for path in bundle["js"])
+    if not re.search(JS_MARKER, out):
+        sys.exit("ERROR: marker for the JS missing from template")
+    out = re.sub(JS_MARKER, lambda _m, c=js: c, out, count=1)
 
-    # Leftover build-time markers would mean an incomplete assembly — fail loudly.
-    for token in ("__CAPTABLE_HOME_CSS__", "__CAPTABLE_HOME_TRACKER_JS__", "__CAPTABLE_HOME_CHART_JS__", "__CAPTABLE_HOME_CONFIG_JS__", "__CAPTABLE_HOME_APP_JS__"):
-        if token in out:
-            sys.exit("ERROR: unresolved marker {} after assembly".format(token))
+    # A leftover build-time marker means an incomplete assembly: fail loudly.
+    leftover = re.search(r"__CAPTABLE_HOME_\w+__", out)
+    if leftover:
+        sys.exit("ERROR: unresolved marker {} after assembly".format(leftover.group(0)))
 
     # One pass over the assembled page, so a substituted value (a company name that spells
     # out another marker) is never scanned again.
     version = read_version()
     values = {
-        "CARTA_MCP_SERVER": mcp_server,
-        "CORPORATION_ID": corporation_id,
-        # The name lands as a JS value in the page's one <script>: a quote or backslash
+        # Both names land as JS values in the config block's <script>: a quote or backslash
         # would be a SyntaxError killing every card, and `</script>` or `<!--` would end
         # or derail the script.
+        "CARTA_MCP_SERVER_JSON": script_json(mcp_server),
+        "CORPORATION_ID": corporation_id,
         "COMPANY_NAME_JSON": script_json(company_name),
         "SKILL_DIRECTORY_JSON": skill_directory,
         "SKILL_OPT_OUTS_JSON": skill_opt_outs,
@@ -275,16 +312,28 @@ def build(mcp_server, corporation_id, company_name):
 
 def main():
     ap = argparse.ArgumentParser(description="Assemble the captable-home artifact.")
-    ap.add_argument("--mcp-server", required=True,
-                    help="Carta connector display name (the {{CARTA_MCP_SERVER}} value)")
-    ap.add_argument("--corporation-id", required=True,
+    ap.add_argument("--write-shell", action="store_true",
+                    help="write resources/captable-home.shell.html from the template and loader, then stop")
+    ap.add_argument("--mcp-server",
+                    help="Carta connector display name (the {{CARTA_MCP_SERVER_JSON}} value)")
+    ap.add_argument("--corporation-id",
                     help="bare corporation pk this page is built for (no corporation_pk: prefix)")
-    ap.add_argument("--company-name", required=True,
+    ap.add_argument("--company-name",
                     help="company display name — shown on the page and, as "
                          "'Carta Home - <name>', in the page's <title> and so the "
                          "published artifact's name")
-    ap.add_argument("--out", required=True, help="output HTML path")
+    ap.add_argument("--out", help="output HTML path")
     args = ap.parse_args()
+
+    if args.write_shell:
+        shell = build_shell()
+        SHELL_FILE.write_text(shell)
+        print("wrote {} ({} bytes)".format(SHELL_FILE, len(shell.encode("utf-8"))))
+        return
+    missing = [flag for flag, value in (("--mcp-server", args.mcp_server), ("--corporation-id", args.corporation_id),
+                                        ("--company-name", args.company_name), ("--out", args.out)) if value is None]
+    if missing:
+        ap.error("the following arguments are required: " + ", ".join(missing))
 
     company_name = args.company_name.strip()
     if not company_name:
