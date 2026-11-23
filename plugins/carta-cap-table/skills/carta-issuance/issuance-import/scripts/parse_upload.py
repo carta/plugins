@@ -85,7 +85,7 @@ OPTION_TYPES = [
 # — the drafts path accepts only these two.
 THRESHOLD_VALUE_TYPES = ["Unit", "Overall"]
 
-# Security types an importer workbook can carry that this skill does not issue
+# Security types an importer workbook can carry that the import does not read
 # (SKILL.md Out of scope). Rows naming one are skipped and reported — never
 # coerced into a grant of a different type.
 OUT_OF_SCOPE_TYPES = {
@@ -899,8 +899,8 @@ def parse_file(path: Path, sheet: Optional[str] = None) -> Parsed:
             skipped.append({
                 "row": line,
                 "name": _text(_cell(record, "name")),
-                "reason": "This skill issues certificates, option grants and "
-                          "profits interest units; {} are done in the "
+                "reason": "{} are rows the import doesn't read: issue them "
+                          "from the chat on the companion surface, or in the "
                           "Drafts UI.".format(out_of_scope),
             })
             continue

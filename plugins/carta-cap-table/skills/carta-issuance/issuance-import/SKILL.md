@@ -11,7 +11,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.119.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.120.0</carta-plugin>
 
 # issuance-import
 
@@ -174,9 +174,9 @@ Read `_import_report.json` and report totals — never silently drop a column or
 > *"Read 38 rows from Q3-grants.xlsx. State of Residency and Employee ID aren't fields this
 > flow sets, and I couldn't match 3 values — I'll ask for those. Everything else is filled in."*
 
-**Name the skipped rows and the unmapped columns, not just their counts.** Rows this skill
-can't issue (RSUs, SARs, CBUs, warrants, RSAs, convertibles) are skipped by the parser with a
-reason and need the Drafts UI — an admin who thinks a 40-row sheet issued 40 securities when it
+**Name the skipped rows and the unmapped columns, not just their counts.** Rows the import
+doesn't read (RSUs, SARs, CBUs, warrants, RSAs, convertibles) are skipped by the parser with a
+reason: issue them from the chat on the companion surface, or in the Drafts UI — an admin who thinks a 40-row sheet issued 40 securities when it
 issued 37 has been misled. `unmapped_columns` holds the headers this skill has no field for;
 several — `state_exemption`, `state_of_residency`, `employee_id`, `cost_center`, `job_title`,
 `salary`, `convertible_note` — are dropped by design
@@ -216,8 +216,9 @@ Deterministic end to end.
   relationship, option type and grant reason matched exactly against
   [payload-reference.md § Picklists](../references/payload-reference.md#picklists).
 - **Out-of-scope rows skipped, not coerced.** An importer sheet can carry RSUs,
-  SARs, CBUs, warrants, RSAs, convertibles. Those rows are skipped with a reason
-  naming the Drafts UI — never reshaped into a grant of a different type.
+  SARs, CBUs, warrants, RSAs, convertibles: rows the import doesn't read. Those rows
+  are skipped with a reason: issue them from the chat on the companion surface, or in
+  the Drafts UI. Never reshape them into a grant of a different type.
 - **Multiple equity plans in one sheet** → a `batch_errors` entry. A draft set
   is locked to one plan server-side, so this has to surface before the terms are
   collected rather than failing at Phase 1.5.

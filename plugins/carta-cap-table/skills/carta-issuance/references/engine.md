@@ -334,8 +334,9 @@ exercise-price field — it is the failure this whole phase exists to prevent, a
 fallback when the parser is unavailable.
 
 Carta's own import template has sheets for out-of-scope types, so an uploaded workbook
-routinely contains rows this skill can't issue. This phase skips them and reports the count —
-never reshape an RSU row into an option grant to make it fit.
+routinely contains rows the import doesn't read. This phase skips them and reports the count:
+issue them from the chat on the companion surface, or in the Drafts UI. Never reshape an RSU row
+into an option grant to make it fit.
 
 ---
 

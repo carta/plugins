@@ -207,8 +207,8 @@ After each save or issue, on every surface, tell the user in plain words:
 - **Who Carta notified, after an issue only.** Name only the people in the issue result
   ([§ On success](#on-success)) or in `issue_summary.sentence` once `issue_state` is `done`.
   After a save, Carta has notified nobody: say nothing about notifications.
-- **The next step, after a save only.** On the chat surface, say one line: "When you are ready,
-  say 'issue them'." The [confirmation gate](../SKILL.md#hard-rules) still applies. On the
-  companion surface on a pane host where the page opened, or where the issuance app shows,
-  tell the user to issue with the page's Issue button. Elsewhere on the companion surface, say 'When you
-  are ready, say "issue them"', as on chat.
+- **The next step, after a save only.** On the chat surface, say one line: `When you are ready,
+  say "issue them".` The [confirmation gate](../SKILL.md#hard-rules) still applies. On the
+  companion surface where the issuance app shows, tell the user to issue with the app's Issue
+  button. Elsewhere on the companion surface, say `When you are ready, say "issue them".`, as on
+  chat.

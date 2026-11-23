@@ -1,19 +1,17 @@
 ---
 name: carta-issuance
 description: >-
-  Issue shares, option grants or units to people on your cap table. Use when the user
-  asks to issue certificates, stock certificates, option grants (ISO, NSO, EMI, CSOP,
-  Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest units
-  (PIUs), to draft shares, grants or units, or to resume issuing from a draft set. USE
-  WHEN the user says "issue", "grant", "draft", "award", "give equity", "give shares",
-  "create a certificate", "create a grant", "issue PIUs", "set up an option
-  grant", or names any specific security type above.
+  Issue securities to people on your cap table: certificates, option grants (ISO, NSO,
+  EMI, CSOP, Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest
+  units (PIUs), convertible notes and SAFEs, RSAs, RSUs, SARs, CBUs and warrants. Use to
+  draft them, or to resume a draft set of certificates, option grants or PIUs. USE WHEN the user says "issue",
+  "grant", "draft", "award", "give equity", "give shares", "create a certificate", "create
+  a grant", "issue PIUs", "set up an option grant", or names any security type above.
   Also USE WHEN the user points at a spreadsheet, CSV, Carta import template, or a
-  grant/award document as the source ("issue the grants in this file", "here's our import
-  template"). Also USE WHEN asked for help issuing with nothing attached ("help me issue
-  options in Carta", "can I issue grant awards?"). To edit or cancel an issued security,
-  use carta-manage-securities. For a summary of equity already issued ("how's our equity
-  issuance looking?"), use carta-cap-table.
+  grant/award document as the source ("issue the grants in this file"). Also USE WHEN
+  asked for help issuing with nothing attached ("help me issue options in Carta"). To
+  edit or cancel an issued security, use carta-manage-securities. For a summary of
+  equity already issued ("how's our equity issuance looking?"), use carta-cap-table.
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -52,47 +50,40 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_next
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__cap_table__get__draft_set_companion
-  - mcp__remote-devices__Claude_Browser__preview_start
-  - mcp__remote-devices__Claude_Browser__navigate
-  - mcp__remote-devices__Claude_Browser__tabs_context
-  - mcp__remote-devices__Claude_Browser__tabs_create
-  - mcp__Claude_Browser__preview_start
-  - mcp__Claude_Browser__navigate
-  - mcp__Claude_Browser__tabs_context
-  - mcp__Claude_Browser__tabs_create
-  - mcp__ccd_view__show_pane
-  - enable__mcp__remote-devices__Claude_Browser
-  - mcp__Claude_in_Chrome__tabs_context_mcp
-  - mcp__Claude_in_Chrome__tabs_create_mcp
-  - mcp__Claude_in_Chrome__navigate
-  - mcp__claude-in-chrome__tabs_context_mcp
-  - mcp__claude-in-chrome__tabs_create_mcp
-  - mcp__claude-in-chrome__navigate
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.119.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.120.0</carta-plugin>
 
 # Issue Securities
 
-From raw input to issued securities on a Carta cap table. These three types, and no others:
+From raw input to issued securities on a Carta cap table. These nine types, and no others:
 
 | Type | Example prompt |
 |---|---|
 | Certificate | "1 cert for Jane Doe, 1000 Series A at $1.50." |
 | Option grant | "1000 ISOs to Jane at $1.50 on the 2024 Plan." |
 | Profits interest unit | "5,000 CC units to Jane, $2.00 per-unit threshold." |
+| Convertible note or SAFE | "A $250,000 SAFE to Jane under the 2026 Seed SAFE terms." |
+| Restricted stock award (RSA) | "A restricted stock award of 40,000 shares to Jane." |
+| Restricted stock unit (RSU) | "5,000 RSUs to Jane on the 2024 Plan." |
+| Stock appreciation right (SAR) | "8,000 SARs to Jane at a $1.50 base price." |
+| Cash bonus unit (CBU) | "1,000 phantom cash bonus units to Jane." |
+| Warrant | "A warrant for 20,000 shares to Jane under the Series A warrant block." |
 
-A spreadsheet or award document sources those same three types; *"resume draft set 472"*
-re-enters a saved one. To **fix** or cancel an already-issued security, use
+The companion surface ([§ Pick the surface](#pick-the-surface)) issues all nine; the last six
+only from a typed request. The chat surface issues only the first three. A spreadsheet or award
+document sources certificates, option grants and PIUs, and *"resume draft set 472"* re-enters a
+saved set of those three types. To **fix** or cancel an already-issued security, use
 `carta-manage-securities`.
 
-**Out of scope** — route to the Drafts UI for RSUs, SARs, CBUs, warrants, convertibles,
-SAFEs, convertible debt, and anything **custom**: a legend, schedule or exercise period the
-corporation has no template for. Picking one it does have is in scope, and a grant's vesting
-schedule is the normal case, not a deflection.
+**Out of scope** — route to the Drafts UI for anything **custom**: a legend, schedule or exercise
+period the corporation has no template for. Picking one it does have is in scope, and a grant's
+vesting schedule is the normal case, not a deflection. Route RSAs, RSUs, SARs, CBUs, warrants,
+convertibles and SAFEs to the Drafts UI too unless that type's `issuance_init` returned
+`companion.available: true`.
 
-> *"This skill issues certificates, option grants and profits interest units today. For \<thing\>, use the Drafts UI in the Carta app."*
+> *"This skill can't issue \<thing\> here. Use the Drafts UI in the Carta app."*
 
 Then stop. You can offer to issue a type this skill supports. Do not list the request's terms
 or the terms still to enter: the Drafts UI asks for them.
@@ -184,9 +175,20 @@ Resolve once per type, at the top. Pass it on that type's draft-set tool calls.
 | "cert", "certificate", "shares", "Series A", "common", "membership units" | `certificate` (default) |
 | "option", "ISO", "NSO", "grant" (with plan), "EMI", "CSOP", "Unapproved", "Startup Concessions", "ESS", "Non-Concessional", "ZEPO" | `option_grant` |
 | "PIU", "PIUs", "profits interest", "profits interest unit", "incentive units", "threshold", "hurdle" | `piu` |
-| Ambiguous ("equity") | Ask with `AskUserQuestion` |
+| "SAFE", "convertible", "convertible note", "convertible debt", "convertible equity" | `convertible_note` |
+| "RSA", "restricted stock award" | `rsa` |
+| "RSU", "restricted stock unit", an `RSU-` label | `rsu` |
+| "SAR", "stock appreciation right", "UAR" | `sar` |
+| "CBU", "cash bonus unit" | `cbu` |
+| "warrant" | `warrant` |
+| Ambiguous ("equity"), or an `ES-` label with no type word (an option grant, RSU, SAR or CBU) | Ask with `AskUserQuestion`, once, before any Carta call |
 | Mixed in one prompt | Ask which to run first; run the others in follow-ups |
 | Out-of-scope security | Route to the Drafts UI; stop |
+
+A type word wins over a label. For the last six types, resolve the type and call `issuance_init`
+with it ([engine.md Step 4](references/engine.md#step-4--run-the-account-level-hard-stops-first)):
+they run only when that call returned `companion.available: true`, whatever row
+[§ Pick the surface](#pick-the-surface) takes, as [**Out of scope**](#issue-securities) says.
 
 **"units" and "membership units" aren't PIU cues.** On an LLC, Carta's equity language
 renames a *certificate* to a membership unit, so bare "units" lands at `certificate` at
@@ -202,7 +204,7 @@ named, no plural-**person** language → one recipient getting 100; only people-
 
 The chat surface ends at a saved, validated `draft_set_id`, and **you** perform the
 irreversible write so the host's own confirmation prompt fires. On the companion path, the
-admin issues from the page or the issuance app instead, as
+admin issues from the issuance app when it shows, as
 [companion-surface.md § 8](references/companion-surface.md#8-issue) says.
 
 The chat issue is one flow: preview the issue of the saved set
@@ -230,9 +232,9 @@ Every surface.
 
 1. **Never mix two security types in one mutate.**
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
-   one `AskUserQuestion` on the chat surface, or the Issue button on the Carta page or the
-   issuance app [the companion path](references/companion-surface.md) opens — **never an
-   `AskUserQuestion` stacked on an open page**. Recovery questions after a server short-circuit
+   one `AskUserQuestion` on the chat surface, or the Issue button in the issuance app
+   [the companion path](references/companion-surface.md) renders — **never an
+   `AskUserQuestion` stacked on the app**. Recovery questions after a server short-circuit
    are unrestricted.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from
    each type's first mutate on that type's later issue preview, `save_drafts`, `load_drafts`,
@@ -252,6 +254,8 @@ Every surface.
 7. **Never substitute the certificate flow for a PIU.** Server-side a PIU *is* a certificate
    row with `type="PIU"`, so that path looks like a fallback when a PIU call is refused. It
    isn't — it issues a plain unit certificate with no threshold value, a different security.
+   **Never use the option grant flow for an RSU, a SAR or a CBU**, and never save one as an
+   option grant: an RSU has no exercise price, a SAR has no FMV check and a CBU pays cash.
 8. **No raw ids or payload field names in customer-facing text — ever.** Not in headers,
    status lines, prompts, confirmations or errors. Never write "ID"
    (✅ *"looking up Jane"* / ❌ *"pulling stakeholder id 12345"*), and never render `(<number>)`

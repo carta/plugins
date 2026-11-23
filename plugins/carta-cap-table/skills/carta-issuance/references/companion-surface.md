@@ -3,9 +3,10 @@
 Read this when [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) selects
 **companion**. Carta offers the company an issuance page — an Overview and a tab per draft set.
 Each tab shows the Drafts page's set, each value's source, a check and **Issue**. The page takes
-no data input: values change through a save in this chat or on the Drafts page. The page opens
-as [the issuance app](#the-issuance-app) beside the chat, or in a browser pane. The skill's
-[hard rules](../SKILL.md#hard-rules) still bind.
+no data input: values change through a save in this chat or on the Drafts page. The page shows
+only as [the issuance app](#the-issuance-app) beside the chat. Never open a Carta address in a
+browser pane or a Chrome tab, and never post a link to the page. With no app, the run goes on in
+the chat. The skill's [hard rules](../SKILL.md#hard-rules) still bind.
 
 ## What Carta returns
 
@@ -15,30 +16,27 @@ file decides what to do with them.
 | Field | Where | Use |
 |---|---|---|
 | `companion.available` | `issuance_init` | `true` selects this surface |
-| `companion.issuance_url` | `issuance_init` | the page to open before any set exists |
+| `companion.issuance_url` | `issuance_init` | for a PIU, Carta has its issuance page ([§ PIU](#piu)). Never open it |
 | `companion.issuance_app` | `issuance_init` | the page is [the issuance app](#the-issuance-app) |
 | `field_spec` | `issuance_init` with `include_bootstrap: true` | this company's draft fields, the `cap_table:get:issuable_field_manifest` result: the gaps [§ 5](#5-build-the-draft-set) finds, the choices [§ 6](#6-ask-whats-missing-once) offers and the optional columns [§ 8](#8-issue) offers |
-| `companion_url`, `revision` | draft set results | the page for one set, and the revision it shows |
-| `companion_url` | `issuance_init`, `cap_table:get:issuance_companion` | in `issuance_init`, the same address as `companion.issuance_url`; in `issuance_companion`, the page for every set it names |
+| `revision` | draft set results | the revision the page shows |
+| `companion_url` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | the page's address. Never open or post it: the page is the app |
 | `dropped` | `draft_set_sources` results | the cells not stored, each with the key to use, for [§ 11](#11-when-a-command-is-refused) |
-| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion`, a draft set result that gives a set its `draft_set_id` and the first `draft_set_sources` result after it | Carta's steps to show that result's page beside the chat: record the sources first, render the issuance app, wait for the first save, or open `companion_url` in a browser pane. Do them exactly, once, before you reply: it is the open of [§ 4](#4-open-the-page-at-once), not a second one. Skip it when the page already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
+| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion`, a draft set result that gives a set its `draft_set_id` and the first `draft_set_sources` result after it | Carta's steps to show that result's page beside the chat: record the sources first, render the issuance app, or wait for the first save. Do them exactly, once, before you reply. Skip a step that opens `companion_url` in a browser pane or posts it. Skip it all when the app already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
 | `how_to_reply` | `cap_table:get:issuance_companion`, draft set results | with `companion.issuance_app`, Carta's rules for how a reply shows the app: do what it says. Without it, text from Carta describing the same flow; the steps in this file are the ones to carry out |
 | `instructions`, `how_to_open` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | text from Carta describing the same flow; the steps in this file are the ones to carry out |
-
-Carta pages are opened only from a Carta-returned address. Never build one.
 
 ## 1. Tools
 
 **First rule: save what you know, record its sources, then ask.**
 
 Load `view_remote`, `view_remote_next` and the named `cap_table__mutate__apply_plan` with one
-`ToolSearch`. The browser tools load as
-[§ 4](#4-open-the-page-at-once)'s procedure says.
+`ToolSearch`.
 
-- A **pane host** is a host where that procedure opened the page in a browser tab: in Claude's
-  browser beside this chat, or in Chrome.
+- An **app host** has `view_remote_next`, renders apps, and `issuance_init` gave
+  `companion.issuance_app`. Only there does the page show ([the issuance app](#the-issuance-app)).
 - A **card host** has `view_remote` and shows chat cards: any Claude Desktop or claude.ai chat,
-  with a browser pane or not, and Claude Code. If the host cannot draw the card, ask in the chat.
+  and Claude Code. If the host cannot draw the card, ask in the chat.
 
 Call Carta commands as `call_tool(name="cap_table__mutate__prepare_drafts", arguments={...})`,
 with `__` for each `:`. For this run: no `search_tools`, no `welcome`. Use at most 5 Carta
@@ -51,8 +49,7 @@ The steps below say "the type's" where these differ.
 
 | | `certificate` | `option_grant` | `piu` |
 |---|---|---|---|
-| Page | issuance page | issuance page | issuance page when `issuance_init` gives `companion.issuance_url`; else read-only page for one set, no Issue button: [§ PIU](#piu) |
-| Account gate | none | stop when the company has no live option plan or `document_sets` is empty, as [engine.md § Account-setup gate](engine.md#account-setup-gate-option-grant-and-piu) says | the same gate's PIU rows. Each row's `prefix` is its unit class; set `option_plan` only when the files or prompt name a plan |
+| Account gate | none | stop when the company has no live option plan or `document_sets` is empty, as [engine.md § Account-setup gate](engine.md#account-setup-gate-option-grant-and-piu) says | the same gate's PIU rows. Each row's `prefix` is its unit class; set `option_plan` only when the files or prompt name a plan. Never send `equity_plan_id` |
 | `company_setup` picks | share class, legend, vesting template | 409A, plan, vesting template, document set | unit class, plan, vesting template, acceleration, document set |
 | Summary adds | price and where it comes from, share class room left | exercise price and its 409A, pool room left | the threshold, and the plan or unit class room left |
 | `set_label` | `Certificates #<draft_set_id>` | `Options #<draft_set_id>` | `PIUs #<draft_set_id>` |
@@ -60,6 +57,11 @@ The steps below say "the type's" where these differ.
 | `cap_table:list:securities` `type` | `certificate` | `option` | `piu` |
 | Library `document_type` | `Stock Purchase Agreement`, `Board Consent`, `Equity Agreement` | `Option Agreement`, `Board Consent`, `Equity Plan` | `PIU Award Agreement`, `Board Consent`, `Equity Plan` |
 | Never recommend; for every type also a jurisdiction or exemption, which person a name means, which company | a share class, a price that follows a valuation | a share class, a price that follows a valuation | a unit class, a plan, a threshold |
+
+For `convertible_note`, `rsa`, `warrant`, `rsu`, `sar` and `cbu`, also read
+[companion-only-types.md](companion-only-types.md): its columns add to this table, its
+§ No block yet comes before [§ 5](#5-build-the-draft-set) saves a note or warrant set, and its
+§ Close replaces the per-type text of [issue-and-close.md](issue-and-close.md).
 
 ## 3. Start
 
@@ -71,18 +73,11 @@ The steps below say "the type's" where these differ.
 
 Don't repeat a call whose result brought you here.
 
-## 4. Open the page at once
+## 4. The page
 
-Before reading the files and before any save, open `companion.issuance_url` in the same turn. With
-`companion.issuance_app`, open nothing yet: the app renders after the first save, as
-[the issuance app](#the-issuance-app) says. With no
-`issuance_url`, the address is the page § 9 gives after the save. This one open is what the
-result's first key asks for ([What Carta returns](#what-carta-returns)). Open it as
-`${CLAUDE_PLUGIN_ROOT}/references/open-the-companion-page.md` says — the plugin's own
-`references/`, not this skill's — read that file by that path; do not search for it. The link
-text is `[Open the draft set in Carta](<address>)`, and the pane line calls the page "The draft
-set". The reply's way back to the page is the close [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)
-puts at its end. A sign-in request goes in the same turn as § 6's questions.
+On an app host, the app renders after the first save that gives a set its `draft_set_id`, as
+[the issuance app](#the-issuance-app) says. Open nothing before it. With no app host there is no
+page: build, ask, review and issue in the chat.
 
 ## 5. Build the draft set
 
@@ -138,14 +133,7 @@ Once each:
    - `added_by_you`: the user said it in this chat, with a `note` holding their words that
      gave the value, up to 200 characters and no other chat text;
    - `needs_input`: still missing, with a `note` saying why.
-5. Move the page to the saved set in this turn, before the card, also when a source call failed:
-   `cap_table:get:issuance_companion` with `corporation_id` and `sets`
-   `[{security_type, draft_set_id}]`, then open its `companion_url` as § 4 says. With the
-   command refused, open the set's `companion_url`. The page at `companion.issuance_url` never
-   shows a saved set: it reads only the sets its address names. With several types,
-   [§ 9](#9-several-types-in-one-run) moves it once every set is saved. With
-   [the issuance app](#the-issuance-app), skip this step: the save's result renders the app.
-6. Reply as [§ 6](#6-ask-whats-missing-once) says.
+5. Reply as [§ 6](#6-ask-whats-missing-once) says.
 
 ## 6. Ask what's missing, once
 
@@ -178,8 +166,7 @@ answers, the reply is these parts, in this order, and no other text:
    it, name to yourself the `field_spec` field that makes the exception. With no such field
    (every field has `required` true or a `default_value`), never add it. The text names no item,
    no field of an item and no value an item asks about: the card holds them, once.
-3. The reply's page line, as [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)
-   says, alone: no line about the browser before it. It is the last line of the reply.
+3. The close, as [§ 12](#12-end-every-turn-that-wrote) says. It is the last line of the reply.
 
 ```
 **What I drafted**
@@ -190,7 +177,7 @@ answers, the reply is these parts, in this order, and no other text:
 
 5 things need you, in the card above.
 
-[Open the draft set in Carta](<address>)
+<the close, as § 12 says>
 ```
 
 In this example, every `field_spec` field is required or has a default, so the count line ends
@@ -252,7 +239,7 @@ list of the open items, no field, no value, no check message.
 
 4 things still need you. Say when, and I'll ask again.
 
-[Open the draft set in Carta](<address>)
+<the close, as § 12 says>
 ```
 
 ### Possible duplicate stakeholders
@@ -292,9 +279,8 @@ an item.
 an option grant, a choice the board consent doesn't approve: say the row will be held for board
 approval, and offer to draft an amended consent.
 
-Never start a second draft set of this type. The page follows each save: don't navigate it
-again unless it is stuck or the user asks to see it. The reply still ends as
-[§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page) says.
+Never start a second draft set of this type. The app follows each save by itself. The reply
+still ends as [§ 12](#12-end-every-turn-that-wrote) says.
 
 ## 8. Issue
 
@@ -313,7 +299,7 @@ optional columns, one time per set:
    on the page), then `No, review and issue`. Sets that reach this point in the same turn share
    one `AskUserQuestion`, one question per set, each starting with its `set_label`. The
    suggestions card is for after the issue, so it never asks this.
-3. `No, review and issue`, or no column picked: go on to the review below, then the page line.
+3. `No, review and issue`, or no column picked: go on to the review below, then the close.
    A reply in the turn that built the set starts with part 1 of [The reply](#the-reply), one
    time; § 8 adds it in no later turn. A free-text answer picks the empty optional columns whose
    `label` it names.
@@ -336,16 +322,15 @@ columns again, also after a later `Saved in the card` context.
 
 ### The review
 
-**On a pane host where the page opened, or where the issuance app shows**, the page's Issue is
-the one gate. Once no input is
+**Where the issuance app shows**, the app's Issue is the one gate. Once no input is
 open and the check is clean, say these words, with the type's Issue button from § 2 in place of
 `<Issue button>`, and no other sentence about the check or the issue: "All set. Review the draft
-set on the page and issue it there with **<Issue button>** at the bottom of the page." Never
+set in the app and issue it there with **<Issue button>** at the bottom of the page." Never
 issue it from the chat there.
 
-**Once you told them to issue on the page**, call `cap_table:get:draft_set_companion` once with
+**Once you told them to issue in the app**, call `cap_table:get:draft_set_companion` once with
 `wait_for_issue: true`. `issue_state` `done`: say [What issued](#what-issued), then
-`issue_summary.sentence`, then [§ 10](#10-follow-through). `failed`: say the page shows why. `running`: say the page is
+`issue_summary.sentence`, then [§ 10](#10-follow-through). `failed`: say the app shows why. `running`: say the app is
 still issuing. Null: if `status` is `issued`, `partially_issued` or `pending_board_approval`,
 close on it with § 10; otherwise say Issue is not pressed yet.
 
@@ -362,15 +347,16 @@ does not show the job state, so never read the set in its place. When the job is
 `cap_table:get:draft_set_companion` one time with `issue_id`, the job's `task_id`, say [What issued](#what-issued), and close on its `status`.
 A job still `running` after 3 `get:task` reads: say these words, *"The issue is
 still running in Carta."*, and never apply again. Not confirmed: say "The draft set is still a draft. Nothing is issued
-yet.", then the close; outside the turn that built the set, add no *What I drafted* block. A
-save after the preview makes the plan stale: preview and confirm again.
+yet.", then the close, as [§ 12](#12-end-every-turn-that-wrote) says; outside the turn that
+built the set, add no *What I drafted* block. A save after the preview makes the plan stale:
+preview and confirm again.
 
 #### What issued
 
 The read's `issue_result`: its `detail` word for word, then each `issued` row's `label` and
 `holder_name`. Its `board_approval` is the step for the `held` rows: `create_consent`, create
 the board consent; `view_consent`, view the board consent; `ask_board_admin`, only a board admin
-can create it. On a pane host the page shows it; elsewhere link its `url`. With no
+can create it. Where the issuance app shows, the app shows it; elsewhere link its `url`. With no
 `issue_result`, say the `status` only.
 
 **Each turn on this set**, before any write, read `cap_table:get:draft_set_companion`. Its
@@ -384,40 +370,26 @@ save the answers by `payload_key`.
 When the files and prompt hold two or more of the types with an issuance page, build each in
 this run, not one type with the others as follow-ups.
 
-1. `cap_table:get:issuance_init` once per type, with that type's `security_type`. Open the page
-   once, from the first result.
+1. `cap_table:get:issuance_init` once per type, with that type's `security_type`.
 2. Build one draft set per type with that type's § 5 steps 1 to 4. Never start a second set of
    one type.
 3. One card per set that has items, one after the other with no text between them, then one
    reply for every set, as § 6 says: one *What I drafted* block, its lines for each set
-   starting with the set's `set_label`, N counting the items of every set, then the page line.
+   starting with the set's `set_label`, N counting the items of every set, then the close.
    With no card host, each question starts with its `set_label`.
 
-Once every set is saved, open the run's page instead of each set's `companion_url`, which shows
-only that set's tab. With [the issuance app](#the-issuance-app), skip this: each save's render
-already named every set of the run.
-
-1. `cap_table:get:issuance_companion` with `corporation_id` and `sets`, one
-   `{security_type, draft_set_id}` per set in the order you built them. With one set, call it
-   too.
-2. Open its `companion_url` as § 4 says, with that `companion_url` as the address. It shows
-   an Overview and one tab per set.
-
-If the command is refused, the page is each set's `companion_url`, as
-[§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)'s step 2 says.
-
+Each save's render names every set of the run, so the app shows an Overview and one tab per set.
 The admin issues each set from its own tab, in any order, once its inputs are answered and its
-check is clean. Name the set's tab when you say it is ready. With the command refused, each set
-has its own page instead of a tab: name the set's `set_label` and point to its page as § 12's
-step 2 says. After each set issues, call
-`cap_table:get:issuance_companion` again with every set:
+check is clean. Name the set's tab when you say it is ready. After each set issues, call
+`cap_table:get:issuance_companion` with `corporation_id` and `sets`, one
+`{security_type, draft_set_id}` per set in the order you built them:
 
 - `suggested_next` names a set: say "Next: <that set's `label` in `sets`> is ready to issue on
   its tab."
 - `suggested_next` is null and a set has `open_inputs`: ask for them, as above.
 - Every set's `state` is `issued` or `pending_board`: close once for the run.
 
-Where the page did not open, confirm and issue one set at a time, each with its own revision.
+With no app host, confirm and issue one set at a time, each with its own revision.
 
 ## 10. Follow-through
 
@@ -450,58 +422,34 @@ chat; no `get:draft_set_companion`, use the chat confirm in § 8. Send a refused
 `problem` names.
 
 A refusal that has a row in [mutate-recovery.md § Errors on any call](mutate-recovery.md#errors-on-any-call)
-is not the companion being unavailable: stay on this page, and do what its row says.
+is not the companion being unavailable: stay on this surface, and do what its row says.
 
 A `prepare_drafts` or `save_drafts` row with an `error {code, field, message}` is not saved: say
 its `message`. With a `field`, fix that field and send the row again with its `draft_pk`; with no
 `field`, do what the `message` says and do not send the row again as it was. A top-level `error`
 saved no row: say its `message`, and do not send the set again.
 
-## 12. End every turn that wrote with the way to the page
-
-With [the issuance app](#the-issuance-app), the close is that section's line, not an address.
+## 12. End every turn that wrote
 
 A turn that wrote made at least one successful `prepare_drafts`, `save_drafts`,
-`validate_drafts`, `draft_set_sources`, `resolve_duplicate_stakeholder` or `apply_plan` call. End its reply with one way back
-to the page, as the open-the-page file of § 4 says in § The way back to the page: a user who
-steps away and comes back needs it.
-
-The address:
-
-1. the issuance page's `companion_url`, once `cap_table:get:issuance_companion` has answered in
-   this run;
-2. otherwise, with several sets in this run and that command refused, each set's
-   `companion_url`. In Claude's browser, the page tab shows the page of the set the reply is
-   about: when the set that has open inputs or is ready to issue is not the one it shows,
-   `navigate` the page tab to that set's `companion_url` as that file's § Open the address
-   says, with its one retry, and the pane line names the `set_label` the page tab shows.
-   Elsewhere, the reply's one link is the `companion_url` of the set the reply is about, as
-   `[Open the draft set in Carta (<set_label>)](<companion_url>)`. A request to see another set
-   gets that set's link, as below;
-3. otherwise the `companion_url` of the latest draft set result;
-4. otherwise `companion.issuance_url`.
+`validate_drafts`, `draft_set_sources`, `resolve_duplicate_stakeholder` or `apply_plan` call. Where
+the issuance app shows, end its reply with "The draft set is open beside the chat." With no app
+host, end a turn that leaves the set a draft with `When you are ready, say "issue them".`, as
+[issue-and-close.md § Say what is live](issue-and-close.md#say-what-is-live-after-every-write)
+says. At a terminal state, close as [issue-and-close.md § Closing](issue-and-close.md#closing)
+says, or for a type in [companion-only-types.md](companion-only-types.md) as its § Close says.
 
 One close per turn, even when the turn made several writes. Only a closing question may follow
 the close: a question at the end of the reply, such as § 8's. The § 6 card comes before the
 reply's text, so the close stays the last line of that text. An `AskUserQuestion` answer comes
 back in the same turn, so the close goes at the end of what you write after it.
 
-**The user asks to see the page** ("show me the page", "where is it?"). With the issuance app,
-do as [the issuance app](#the-issuance-app) says. In Claude's browser,
-`navigate` the page tab to the address (under step 2, the page of the set the user names, else of
-the set the run last talked about), as that file's § Open the address says, with its one retry,
-then end with the pane line and post no link. Elsewhere, post the link. A card message that asks
-to show where a document says a value carries its own address on the issuance page: open that
-address, not the step 1 address, as its message says, and save nothing.
-
-A turn whose writes all failed changed nothing, so the page has nothing new to show: name no
-Carta page and no address, under any label, and post no pane line unless this turn opened or
-navigated the page tab.
+A turn whose writes all failed changed nothing: end it with no close and no address.
 
 ## The issuance app
 
-With `companion.issuance_app`, the issuance page is an app beside the chat. Each render stays in
-the chat, so render it only at these times:
+With `companion.issuance_app` on an app host, the issuance page is an app beside the chat. Each
+render stays in the chat, so render it only at these times:
 
 - **Render it** as the result's `next_step` says. `issuance_init`'s step waits for the first save
   that gives a set its `draft_set_id`. That save's result asks for the sources first, and the first
@@ -513,62 +461,22 @@ the chat, so render it only at these times:
   Before that, say the page opens beside the chat after the first save, and render nothing.
 - **After any other save, render nothing.** The app shows it by itself.
 
-Where this file opens, moves or links the page, with the app:
+A card message that asks where a document says a value: name the set's tab and the cell to select
+in the app, and save nothing.
 
-- [§ 4](#4-open-the-page-at-once), [§ 5](#5-build-the-draft-set) step 5 and
-  [§ 9](#9-several-types-in-one-run)'s move open nothing: the saves' renders above show the run.
-- [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page)'s close is "The draft set is open
-  beside the chat." No address, no pane line and no render.
-- A card message asks where a document says a value: name the set's tab and the cell to select in
-  the app, and save nothing.
-- Never share `companion_url` or open the browser pane while the app shows.
-
-**No `view_remote_next` after one `ToolSearch`, or the host cannot render apps**: there is no app.
-Open the page as § 4 says.
+**No `view_remote_next` after one `ToolSearch`, the host cannot render apps, or `issuance_init`
+gave no `companion.issuance_app`**: there is no app and no page. Go on in the chat: review and
+issue as [§ 8](#8-issue)'s *Elsewhere* says. A request to see the page, or where a document says a
+value, gets an answer in the chat: the file, page and quote from the sources you recorded.
 
 ## Words
 
 Until issued it is a **draft set**, never an issuance. After, say Issued or Held for board
-approval. No ids in your text except `set_label`: the link carries them.
+approval. No ids in your text except `set_label`.
 
 ## PIU
 
-A PIU with `companion.issuance_url` runs as every other type, from [§ 4](#4-open-the-page-at-once),
-and the admin issues it with **Issue PIUs** on the page. This section is only for a PIU with no
-`companion.issuance_url`: its page is read-only and has no Issue button, so every change goes
-through you as a save, and the issue is the chat confirm below. Run the issuance in the chat as
-[the chat surface](chat-surface.md) does: every phase, budget and gate there still binds, files
-still go through its import, and the review is still printed in the chat before the confirm.
-Opening the page is not building a form or HTML of your own: chat is still the surface.
-
-From the first save on, `save_drafts`, `validate_drafts` and `load_drafts` results carry
-`companion_url` and `revision`. Keep the latest `revision`.
-
-**Open the page after the first save.** After the save and validate, open `companion_url` as
-[§ 4](#4-open-the-page-at-once) says, with `companion_url` as the address. A sign-in
-request goes in the same turn as the review and the confirm. A request from a document or a CSV
-follows the same rules.
-
-**Edits re-save the same set.** An edit is one `cap_table:mutate:save_drafts` on the same
-`draft_set_id`, each changed row with its `draft_pk`, then `cap_table:mutate:validate_drafts`,
-then the review again. Don't open or navigate the browser again unless the user says the page is
-stuck or wrong or asks to see it, and never start a second draft set for an edit. The reply
-still ends as [§ 12](#12-end-every-turn-that-wrote-with-the-way-to-the-page) says. A resume reads `companion_url`
-and `revision` from `load_drafts` and follows the same rules.
-
-**The confirm names the revision.** Before the confirm, call
-`cap_table:compute:issue_draft_set_preview` with `company`, `security_type` and `draft_set_id`.
-A blocked preview: say each failed check, and issue nothing. The confirm is the chat surface's
-one `AskUserQuestion`, with the preview's `revision` in the question and the issue option, its
-`summary` in the review, and its other options as they are:
-
-> *"Issue revision 3?"* · issue option `"Issue revision 3 now"`
-
-It's the number the page shows, so the user approves what they reviewed. Name only a `revision`
-a Carta result returned in this run, never one you worked out. A save after the preview mints a
-new revision: preview and confirm again with that number. Once confirmed, apply the plan and
-follow its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says.
-
-**Follow-through.** Close as the skill does, then one line naming 2 or 3 next steps, such as
-reminding the signatory to sign or showing the updated cap table. Until it's issued, say "the
-draft set is open on the page", never "the issuance"; after the issue, say Issued.
+A PIU with `companion.issuance_url` runs as every other type, and the admin issues it with
+**Issue PIUs** in the app. A PIU with no `companion.issuance_url` has no issuance page: run it on
+[the chat surface](chat-surface.md), every phase, budget and gate there, as if Carta offered no
+companion. Never open the `companion_url` its draft set results carry.
