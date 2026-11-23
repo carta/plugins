@@ -60,7 +60,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.119.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.119.2</carta-plugin>
 
 # Manage securities
 
@@ -91,8 +91,10 @@ cancel their securities one by one here.
 The inputs of the transfer, buyback, exercise and exercise request previews are in
 [references/transfer-buyback-exercise.md](references/transfer-buyback-exercise.md).
 
-Run only the actions in this table. A document change, such as a new stock purchase agreement, is
-not one of them: make no bootstrap, no preview and no upload. The bootstrap can offer other
+Run only the actions in this table. An edit can add signed files to one security, as
+[change-flow.md § Documents](references/change-flow.md#documents) says. Any other document change,
+such as a replaced or removed stock purchase agreement, is not one of them: make no bootstrap, no
+preview and no upload. The bootstrap can offer other
 actions, such as a change to the post-termination exercise periods: make no preview for them, and
 never find their tools with `search_tools`. Say in one line that this skill does not make that
 change and that it is made in the Carta web app (a post-termination exercise period, on the
@@ -155,9 +157,9 @@ says. You pick no other value.
    [change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says.
    Never build a Carta URL.
 6. **No shell, no local files.** Never call Bash, and write no files. The one exception is the
-   agreement upload in
+   file upload in
    [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements)
-   for a transfer or an exercise, after the user gave the file. When the host saves a large
+   for a transfer, an exercise or added documents, after the user gave the file. When the host saves a large
    result to a file, read that file with `Read`. Take today's date from the bootstrap's `today`.
 7. **Never hand this skill to a background agent.** It needs the user at each approval.
 8. **Plain words.** No ids in the text. Show dates as `MM/DD/YYYY`. Give a one-line reason for
@@ -223,7 +225,8 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
      ([change-flow.md § Several securities](references/change-flow.md#several-securities)). See
      [references/change-flow.md](references/change-flow.md) for fields, reason,
      note, Rule 144 and the Change page. The field formats are in
-     [references/field-contract.md](references/field-contract.md).
+     [references/field-contract.md](references/field-contract.md). To add files, see
+     [change-flow.md § Documents](references/change-flow.md#documents).
    - **Cancel:** `security`, `cancel_date` (not in the future), `cancel_reason`, and `notes`.
      Send `relationship` when the reason is `Relationship change`. For a certificate, RSA or
      PIU from an equity plan, ask whether the shares go back to the plan pool (`return_shares`).

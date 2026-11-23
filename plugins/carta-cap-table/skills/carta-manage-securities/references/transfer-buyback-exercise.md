@@ -117,9 +117,9 @@ cost, how the holder pays and the request date. Never show the request id.
 ## Agreements
 
 An agreement file key comes only from an upload. Never write a key yourself, and never send a
-file name or a path as a key. This upload is only for the actions in this file: a document change
-on an issued security goes to Carta, as
-[change-flow.md § Documents](change-flow.md#documents) says.
+file name or a path as a key. This upload is for the actions in this file and for the documents an
+edit adds ([change-flow.md § Documents](change-flow.md#documents)). Any other document change on an
+issued security goes to Carta.
 
 A key is needed for a warrant or note transfer, for a recorded exercise, and for a share, RSA or
 PIU transfer when a failed check asks for it. When a key is needed, preview only after the

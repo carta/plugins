@@ -168,4 +168,24 @@ Different reasons are separate changes, per [SKILL.md § Several changes](../SKI
 
 ## Documents
 
-Edits change no documents. To attach, replace or remove a document, send the user to Carta.
+An edit can add signed files to one security as its additional documents (`add_attachments`). It
+never replaces or removes a document. For a replace, a remove or any other document field, send the
+user to Carta.
+
+1. Bootstrap the security ([SKILL.md § Flow](../SKILL.md#flow) step 1). For 2+ securities,
+   make each one its own change with a bootstrap of that one security, as **Single-security
+   fields** in [§ Several securities](#several-securities) says: `single_security_only` is not a
+   stop. Go on only when `sections.form` has `add_attachments` with `eligible: true`. Else quote
+   its `why_not.message` and stop.
+2. Ask for the files. When this chat has no shell, or the user has no file, say to add the
+   documents in Carta, apply nothing and stop.
+3. Upload each file as
+   [transfer-buyback-exercise.md § Agreements](transfer-buyback-exercise.md#agreements) steps 2
+   and 3 say. Never write a key. When an upload fails, say so, say to add the documents in
+   Carta, apply nothing and stop.
+4. Preview with `security_type`, `securities` (the one id), `add_attachments` (the keys, at most
+   20), `reason` and `note` ([§ Reason, note and Rule 144](#reason-note-and-rule-144)). Send
+   `fields` only for other changes the user asked for on the same security. Never put
+   `add_attachments` in `fields` or in `changes`.
+5. The preview shows the file names before and after, under "Additional documents". Go on from
+   [SKILL.md § Flow](../SKILL.md#flow) step 5.
