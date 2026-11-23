@@ -285,5 +285,19 @@
       "body": "Searches your firm's Carta Documents page by title, type or fund, then saves the file to your Downloads folder or hands you a link."
     }
   },
+  "carta-closings-companion": {
+    "category": "fund-admin",
+    "name": "Track fund closings",
+    "order": 20,
+    "prompts": [
+      "Show the **closings** for [fund name] in {{FIRM}}",
+      "**Remind the LPs** who haven't signed",
+      "Change [investor name]'s **commitment** to [amount]"
+    ],
+    "whatsNewCopy": {
+      "headline": "Track every LP's subscription progress live from chat",
+      "body": "Shows each LP's subscription progress live in a Closings view beside the chat, and invites, reminds and updates commitments only after you confirm."
+    }
+  },
   "financial-package-companion": null
 }
