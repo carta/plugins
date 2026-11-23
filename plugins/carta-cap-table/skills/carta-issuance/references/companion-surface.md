@@ -110,12 +110,20 @@ Once each:
    one `cap_table:mutate:save_drafts` with every row, never `is_bulk_import` (it returns no
    `draft_pk`), then `cap_table:mutate:validate_drafts`. Keep `draft_set_id`, each row's
    `draft_pk` and the `revision`.
-3. File each source file on disk with no `file_id`, once per run, in the company's document
-   library, so the page shows it: one `cap_table:mutate:upload_url`, then one
-   `cap_table:create:library_document` with `corporation_id`, `document_type` (the type the file
-   is: one of the type's [§ 2](#2-per-type-values) Library `document_type` values, or `Document`
-   when none fits) and its `file_key`. The
-   result's `document` is the file's `file_id`.
+3. File each source file the user gave with no `file_id`, attached or on disk, once per run, in
+   the company's document library, so the page shows it. One `cap_table:create:library_document`
+   per file with `corporation_id`, `name` (its file name), `document_type` (the type the file is:
+   one of the type's [§ 2](#2-per-type-values) Library `document_type` values, or `Document` when
+   none fits) and one of these. The result's `document` is the file's `file_id`.
+   - First try `file_key`: `cap_table:mutate:upload_url` with `filename`, then send the file in
+     one shell command, each of its `fields` first, then `Content-Type` (the file's type, as
+     `application/pdf`), then the file:
+     `curl -sS -o /dev/null -w '%{http_code}' --form-string '<field>=<value>' --form-string 'Content-Type=<file type>' -F 'file=@<path>' '<url>'`.
+     S3 answers `204`; with any other answer, or no network, that POST can't run.
+   - Only when that POST can't run, and the file is under 100 KB (`wc -c <path>`), `filename`
+     and `file_content_base64`: encode it with a command (`base64 -w0 <path>`) and paste its
+     whole output unchanged; never type or rebuild the bytes yourself. A larger file stays
+     unfiled.
 4. `cap_table:mutate:draft_set_sources`, a source for every value you set, in calls of 10 rows
    (1–10, 11–20, …) until all rows are covered: `files: {<key>: {name, file_id}}`, each source
    file of those rows once by a short key, and
