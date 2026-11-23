@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.119.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.119.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -94,7 +94,7 @@ Call `cap_table__list__financing_history` once. It answers overview, per-round c
 read_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_id": corporation_id, "ordering": "-quantity", "page_size": 25, "page": 1}})
 ```
 
-- Each row carries `name` (holder), `quantity`, `share_class_name`, `issue_date`, and `status_explanation`. Group matching rows by holder and sum `quantity`.
+- Each row carries `name` (holder), `quantity`, `share_class_name`, `issue_date`, `status_explanation`, and `debt_canceled` (converted SAFE or note amount). Group matching rows by holder and sum `quantity`.
 - Fetch the page in `next` (its `page` and `page_size`) until `has_next` is false, **at most 10 pages**. If the sweep is still incomplete at 10 pages, show what you have, say the list is partial, and point the user to the round's page in Carta.
 - Certificates carry no cash paid. Report each investor's shares only. Do not multiply shares by the issue price to produce a per-investor dollar amount. Write this sentence word for word: "Per-investor cash isn't available: Carta certificates record shares, not cash paid."
 
@@ -145,3 +145,4 @@ Each bar width = (cash_raised / max_cash_raised) * 40, rounded to nearest intege
 
 - Rows are per share class. A round that issued more than one class (e.g. Series A and Series A-1) appears as separate rows — present them as Carta reports them.
 - A row with `note_block_id` is a block of SAFEs or convertible notes, not a priced round: it has no price, post-money or fully diluted, and `shares_issued` is 0. Label it as SAFEs/notes and do not count it as a round. `total_cash_raised_by_currency` includes its cash. For the instruments, prefer the matching instrument-list skill.
+- `cash_raised_by_currency` is new cash only. When investors paid for a class by converting SAFEs or notes, that class shows less cash or none, because the converted money stays on the SAFE/notes row. Say this when a class shows less than the user expects, and do not call it an error. When the user compares with signed round documents, sum `debt_canceled` of the class's certificates, read as in Step 2, as its converted amount. If the sweep is partial, say the converted amount is partial too. A preferred class (not common stock) that shows no cash and no converted amount has no consideration recorded in Carta: tell the user to check the certificates in Carta.
