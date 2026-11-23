@@ -4,7 +4,7 @@ description: >-
   Issue securities to people on your cap table: certificates, option grants (ISO, NSO,
   EMI, CSOP, Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest
   units (PIUs), convertible notes and SAFEs, RSAs, RSUs, SARs, CBUs and warrants. Use to
-  draft them, or to resume a draft set of certificates, option grants or PIUs. USE WHEN the user says "issue",
+  draft them, or to resume a draft set of any of them. USE WHEN the user says "issue",
   "grant", "draft", "award", "give equity", "give shares", "create a certificate", "create
   a grant", "issue PIUs", "set up an option grant", or names any security type above.
   Also USE WHEN the user points at a spreadsheet, CSV, Carta import template, or a
@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.120.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.120.2</carta-plugin>
 
 # Issue Securities
 
@@ -73,8 +73,8 @@ From raw input to issued securities on a Carta cap table. These nine types, and 
 
 The companion surface ([§ Pick the surface](#pick-the-surface)) issues all nine; the last six
 only from a typed request. The chat surface issues only the first three. A spreadsheet or award
-document sources certificates, option grants and PIUs, and *"resume draft set 472"* re-enters a
-saved set of those three types. To **fix** or cancel an already-issued security, use
+document sources certificates, option grants and PIUs. *"resume draft set 472"* re-enters a saved
+set: of any of the nine on the companion, of the first three on chat. To **fix** or cancel an already-issued security, use
 `carta-manage-securities`.
 
 **Out of scope** — route to the Drafts UI for anything **custom**: a legend, schedule or exercise
@@ -147,7 +147,7 @@ never the disk, never an env var.
 | Condition | Surface |
 |---|---|
 | the user asked for a **different surface** than the one you would pick | the one they asked for: companion or chat; anything else → chat |
-| `issuance_init` returned `companion.available: true` — engine.md Step 4's call — and the run does not resume a draft set | **companion** — [references/companion-surface.md](references/companion-surface.md) |
+| `issuance_init` returned `companion.available: true` — engine.md Step 4's call | **companion** — [references/companion-surface.md](references/companion-surface.md) |
 | else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
 
 Every run starts on chat, and engine.md Step 4's `issuance_init` is the first time Carta says if

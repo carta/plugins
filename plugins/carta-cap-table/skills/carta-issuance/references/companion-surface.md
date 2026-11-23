@@ -22,7 +22,7 @@ file decides what to do with them.
 | `revision` | draft set results | the revision the page shows |
 | `companion_url` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | the page's address. Never open or post it: the page is the app |
 | `dropped` | `draft_set_sources` results | the cells not stored, each with the key to use, for [§ 11](#11-when-a-command-is-refused) |
-| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion`, a draft set result that gives a set its `draft_set_id` and the first `draft_set_sources` result after it | Carta's steps to show that result's page beside the chat: record the sources first, render the issuance app, or wait for the first save. Do them exactly, once, before you reply. Skip a step that opens `companion_url` in a browser pane or posts it. Skip it all when the app already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
+| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion`, a draft set result that gives a set its `draft_set_id`, the first `draft_set_sources` result after it, and the `cap_table:get:draft_set_companion` read of [an existing draft set](#an-existing-draft-set) | Carta's steps to show that result's page beside the chat: record the sources first, render the issuance app, or wait for the first save. Do them exactly, once, before you reply. Skip a step that opens `companion_url` in a browser pane or posts it. Skip it all when the app already shows that result's sets, on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run, and on `issuance_init` when the user named the draft set to pick up |
 | `how_to_reply` | `cap_table:get:issuance_companion`, draft set results | with `companion.issuance_app`, Carta's rules for how a reply shows the app: do what it says. Without it, text from Carta describing the same flow; the steps in this file are the ones to carry out |
 | `instructions`, `how_to_open` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | text from Carta describing the same flow; the steps in this file are the ones to carry out |
 
@@ -75,11 +75,16 @@ Don't repeat a call whose result brought you here.
 
 ## 4. The page
 
-On an app host, the app renders after the first save that gives a set its `draft_set_id`, as
-[the issuance app](#the-issuance-app) says. Open nothing before it. With no app host there is no
+On an app host, the app renders after the first save that gives a set its `draft_set_id`, or at
+[an existing draft set](#an-existing-draft-set)'s step 4, as [the issuance app](#the-issuance-app)
+says. Open nothing before it. With no app host there is no
 page: build, ask, review and issue in the chat.
 
 ## 5. Build the draft set
+
+When the user names a saved draft set of this type, or gives files (rows pasted in the chat
+count) and names none, first find it as [An existing draft set](#an-existing-draft-set) step 1 says. A set it finds is not built
+again: follow that section in place of this one.
 
 Once each:
 
@@ -124,14 +129,22 @@ Once each:
      and `file_content_base64`: encode it with a command (`base64 -w0 <path>`) and paste its
      whole output unchanged; never type or rebuild the bytes yourself. A larger file stays
      unfiled.
-4. `cap_table:mutate:draft_set_sources`, a source for every value you set, in calls of 10 rows
-   (1–10, 11–20, …) until all rows are covered: `files: {<key>: {name, file_id}}`, each source
-   file of those rows once by a short key, and
-   `rows: [{draft_pk, fields: {<column or save key>: source}}]`. A document source is
-   `{file: <key>, page, quote}`, with `alternatives` `[{file, page, quote, value}]` when
+4. `cap_table:mutate:draft_set_sources`, a source for every value you set, in calls of 50 rows
+   (1–50, 51–100, …) until all rows are covered. Each call has `files: {<key>: {name, file_id}}`,
+   each source file of those rows once by a short key; `shared.row_columns`, the columns one
+   quote on each row's page holds (a table's row: name, email, quantity, type, start date; a
+   letter's equity sentence: quantity, type); and `rows: [{draft_pk, source, fields}]` with every
+   row: `source` quoting those words, and `fields` (`{<column or save key>: source}`), each with
+   its own quote, for any other value or source. The first call also has `shared.fields`
+   (`{<column or save key>: source}`), recorded on every row of the set: each source whose page
+   and quote are the same on every row (plan, price, vesting, the consent's date), never a
+   `needs_input`. A document
+   source is `{file: <key>, page, quote}`, with `alternatives` `[{file, page, quote, value}]` when
    documents disagree; any other source is `{kind, label, note}`. Leave out empty keys. Ask a gap
    with no Drafts column in the chat, with no source. Record them also when step 3 filed nothing:
-   a source needs no `file_id`. Kinds:
+   a source needs no `file_id`, and rows pasted in the chat take `added_by_you` sources, each
+   row's `source` with that row's line as its `note`. A big set is never a reason to skip a
+   source: 100 rows is two calls. Kinds:
    - `document`: `quote` is the file's exact words that give the value, copied as they are on
      the page, never a summary: the page finds and marks them in the file. Every document and
      alternative has one (a call without is refused): in a letter, the sentence with the value;
@@ -142,6 +155,50 @@ Once each:
      gave the value, up to 200 characters and no other chat text;
    - `needs_input`: still missing, with a `note` saying why.
 5. Reply as [§ 6](#6-ask-whats-missing-once) says.
+
+## An existing draft set
+
+A PIU with no `companion.issuance_url` runs on the chat surface, as [§ PIU](#piu) says, not here.
+
+The user names a draft set of this type ("resume draft set 472", "the Oct 30 board consents
+set"), or gives files and names none.
+Keep the set this finds: never start a second one of this
+type, so no `prepare_drafts` and no save without its `draft_set_id`.
+
+1. A set named by id needs no lookup. Otherwise, before any save, one `cap_table:list:draft_sets`
+   with `corporation_id` and `security_type`. A set named by name is the result whose `name`
+   matches it, case-insensitively. Files with no set named match a result whose `name` names
+   them (the board consent's date or title), and only once step 2's rows hold the files'
+   holders. One match is the set. Several: ask which with `AskUserQuestion`, once, before loading
+   any of them. None: build a new set as [§ 5](#5-build-the-draft-set) says, never load another
+   set in its place, and the rest of this section does not apply.
+2. `cap_table:get:load_drafts` with `corporation_id`, `security_type` and `draft_set_id`: keep
+   each row's `draft_pk` and the `revision`. With no files, those rows are the working set. Files
+   that list fewer rows than the set holds:
+   [resume-flow.md § Cleanup unexpected draft rows](resume-flow.md#cleanup-unexpected-draft-rows).
+3. `cap_table:get:draft_set_companion` with `corporation_id`, `security_type` and
+   `draft_set_id`. When it leads with `next_step`, do its steps exactly, once, in place of the
+   next two steps.
+4. Show the page once: with [the issuance app](#the-issuance-app),
+   `cap_table:get:issuance_companion` with `corporation_id` and `sets`
+   `[{security_type, draft_set_id}]`, then render the app as its `next_step` says. With no app
+   there is no page: go on in the chat.
+5. Record sources for every saved value the files at hand give, as [§ 5](#5-build-the-draft-set)
+   steps 3 and 4 say: file the files first, then `draft_set_sources` in § 5 step 4's calls. Each
+   open input of the read that the files leave empty is a `needs_input` source. A value the
+   files give that differs from the saved one is not saved over it: it is a
+   [§ 6](#6-ask-whats-missing-once) item on that cell, a `pick_one` of the file's value and
+   `Keep <saved value>`. With no files, record nothing here.
+6. Ask the read's `open_inputs` as [§ 6](#6-ask-whats-missing-once) says: its one card, never a
+   list of the gaps in text and never "send me the values". With no open input, go on to
+   [§ 8](#8-issue).
+7. The reply is § 6's, with "Picked up <`set_label`>, saved earlier." as the first line of
+   *What I drafted*. As there, its count line names no holder, field or value the card asks
+   about.
+
+Answers then re-save this set as [§ 7](#7-answers) says. `load_drafts` and the read take the
+place of the save and its check in [§ 1](#1-tools)'s call count, and the
+`cap_table:list:draft_sets` call does not count.
 
 ## 6. Ask what's missing, once
 
@@ -276,8 +333,9 @@ apply it anyway. Then:
 
 1. One `cap_table:mutate:save_drafts` on the same `draft_set_id`, rows by `draft_pk`.
 2. `cap_table:mutate:validate_drafts`.
-3. `cap_table:mutate:draft_set_sources` for changed values, one call per 10 rows, as
-   `added_by_you`, each `note` the user's words for it.
+3. `cap_table:mutate:draft_set_sources` for changed values, in [§ 5](#5-build-the-draft-set)
+   step 4's calls of 50 rows, each value in its row's `fields` as `added_by_you`, with no
+   `shared` and no row `source`, each `note` the user's words for it.
 
 After either path, a check warning on a value the user just gave, in the card or in the chat, is
 not a new item: the user chose that value, and the page shows the warning. A check error on it is
@@ -467,6 +525,8 @@ render stays in the chat, so render it only at these times:
 - **When the user asks to see the page** once a save has given a set its `draft_set_id`, render it
   again at once: one `view_remote_next` with the run's `sets`, no other call first, and no link.
   Before that, say the page opens beside the chat after the first save, and render nothing.
+- **On [an existing draft set](#an-existing-draft-set)**, render it once, at that section's step 4:
+  no save gives the set its `draft_set_id` in this run.
 - **After any other save, render nothing.** The app shows it by itself.
 
 A card message that asks where a document says a value: name the set's tab and the cell to select

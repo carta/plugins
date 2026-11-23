@@ -12,6 +12,10 @@ skill is tracking.
 
 Draft sets are scoped by `security_type` — always pass it.
 
+**On the companion surface**, pick the set up as
+[companion-surface.md § An existing draft set](companion-surface.md#an-existing-draft-set) says,
+not as below.
+
 - **User gave id** → `cap_table:get:load_drafts` — wire `cap_table__get__load_drafts` —
   with `corporation_id`, `security_type`, `draft_set_id`.
 - **User gave name** → `cap_table:list:draft_sets` (`cap_table__list__draft_sets`), match
