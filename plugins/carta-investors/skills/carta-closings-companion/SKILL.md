@@ -24,7 +24,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.57.0</carta-plugin>
+<carta-plugin>carta-investors:7.57.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -35,6 +35,8 @@ A fund's closing contacts are the investors moving through subscription and coun
 > **Live only, never the warehouse.** Every answer comes from a fresh `fa__list__closing_contacts` call. Never read `LP_CLOSING_CONTACT_STATUSES` or any other warehouse table for closings; it lags real-time commitment and collaborator changes. Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-closings-companion/references/closing-contacts.md` (this skill's own `references/`; do not search for it) for what each field means, how states group, and how to page.
 
 ## Commands
+
+> **Asking the user.** Every question below uses `AskUserQuestion`. A client without that tool (Claude Desktop) gets the same question in chat: a confirmation as one line that names what will change, a choice as a numbered list of its options, and a request for missing details as a plain chat question. Nothing is sent until the user answers yes to the confirmation.
 
 > **Carta MCP only.** Make every Carta call through this session's Carta MCP tools (`welcome`, `list_contexts`, `set_context`, `call_tool`) and, for the Closings view, `view_remote_next` and the view's app tools (Step 4), and read each result as it returns. Never run the `carta` CLI or any shell command, never save a result to a file to inspect it, and never use Playwright or another browser tool of your own.
 
@@ -78,7 +80,7 @@ Tell the user that and stop. Do not retry, and do not fall back to the warehouse
 
 ## Step 4: show the closings
 
-The contacts result's `how_to_reply` says how to show them: it either names the Closings view to open, or says to describe the contacts in chat. Follow it. Every contact answer in chat follows `${CLAUDE_PLUGIN_ROOT}/skills/carta-closings-companion/references/chat-table.md` (this skill's own `references/`; do not search for it), with or without the view.
+The contacts result's `how_to_reply` says how to show them: it either names the Closings view to open, or says to describe the contacts in chat. Follow it. Every contact answer in chat follows `${CLAUDE_PLUGIN_ROOT}/skills/carta-closings-companion/references/chat-table.md` (this skill's own `references/`; do not search for it), which says what to write when the view is open.
 
 1. **`how_to_reply` names the Closings view.** Open it with the call it names. Once it is open, use its app tools as `fa:view:closings`'s help says, rather than opening it again: read what the user sees with `list_visible_contacts` before you answer about it. The view never writes: every change still goes through Steps 5, 6, 7, 9, 10 and 11 with their confirmations. If opening it fails, returns only text, returns an app payload but the user says nothing appeared, or the text says no view appears (a client that cannot render MCP apps), the view is not open: do not retry other display modes, do not mention the view, and continue with 2.
 2. **Otherwise, describe the closings in chat** with that table, as the whole answer. Keep any state or investor filter the user named. Say nothing about a view, never build a Carta URL, and never give a URL that was not in a result.

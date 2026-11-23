@@ -41,7 +41,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.57.0</carta-plugin>
+<carta-plugin>carta-investors:7.57.1</carta-plugin>
 
 # Audit readiness
 
