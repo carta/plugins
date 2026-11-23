@@ -28,9 +28,20 @@ A company error is an error whose `field` is `corporation_id` (or `company`), or
   dismisses the question, stop: make no further read, and ask them to name the company when
   they're ready.
 - **`not_found` with an empty `did_you_mean`:** call `list_accounts(search="<name>")` once.
-  If it finds nothing, ask the user for the company name as Carta shows it.
+  If it finds nothing, call `list_accounts()` once with no `search`. If that lists only a
+  personal portfolio (no company, firm or fund account), follow *No company account*. Else
+  ask the user for the company name as Carta shows it.
 - **`Missing required params` on `corporation_id`, or `invalid_argument` that the command
   requires `company`:** Carta found no single company for the user. Ask the user to name it.
+
+## No company account
+
+The user's Carta login has only a personal portfolio, so cap table reads cannot see any
+company for this user. Say: *"Your Carta login has no company account, so I can't read this
+company's cap table here. If you hold equity in it, open your portfolio on Carta on the web and
+select the company to see your grants and vesting. If you manage its cap table, ask its Carta
+admin to give you access."* Then stop. Do not call `search_tools` or a command of another
+domain (portfolio, valuations, fund) to find the data.
 
 ## Writes
 

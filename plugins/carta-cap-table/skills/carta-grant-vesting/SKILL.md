@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.118.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.118.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -126,6 +126,8 @@ The vesting detail commands return slightly different shapes:
 
 Do not call `list_accounts` or ask which company before the first read: Carta finds the company. Reuse the company already resolved in this conversation unless this prompt names or numbers another. Else send the numeric id the user gave, else the company name as the user said it, else no `corporation_id` (Carta uses the user's only company). On an error, and for later calls, follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own `references/`, not this skill's; read it by that path, do not search for it). Its reads are cap table reads: reuse `meta.company.id` on later calls. Never guess which company the user meant.
 
+**The user's own grants** ("my vesting", "when do my options vest"): read them as for any holder, with the user's name. This skill reads a company's cap table, so it works only when the user has access to that company on Carta. When the company read fails, follow the company errors in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`: its *No company account* section says what to tell a user who has only a personal portfolio.
+
 ### Step 1 — Identify the Grant
 
 **If `grant_id` is already known** from prior conversation context (e.g. the user just viewed a grants list), skip directly to Step 2.
@@ -203,7 +205,7 @@ Then show the formatted table from the tool.
 |---|---|
 | No stakeholder or grant matches the name (`not_found`, or no row in all four list commands) | Ask the user with `AskUserQuestion` for the name as Carta shows it. Never pick a person by guess. |
 | Response too large on a list command | Call it again with `search` (the holder name) and `"detail": "minimal"`. |
-| 403, `role_required` or access denied | Say the user's role can't see this grant's vesting. Do not retry. |
+| 403, `role_required` or access denied | Say the user's role can't see this grant's vesting. Do not retry, and do not look for the grant with other tools. |
 | Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Caveats
