@@ -13,7 +13,9 @@ with grouping `BY_HOLDER`.
 
 `chat` ignores this — it renders inline as the steps below describe. In `excel`, the
 three steps below fetch in order and write **once**; mechanics + tab layouts in
-`excel-output.md`.
+`excel-output.md`. **When `formula_spec_command` and `export_command` are both set** (`SKILL.md` §Surface —
+chat vs Excel), step 1 runs as written; a multi-entity run then goes to §Excel — multi-entity output, and any other run to §Excel — Carta
+formulas, which replaces steps 2–3 (fetch the root cap table; don't write it). A cut that reads cached allocations fetches the Step 6b pages when first picked.
 
 1. **Bootstrap alone, first (Step 6a)** — one breakpoints-only fetch (root page 1,
    `include_breakpoints: true`, `include_allocations: false`, no `node_id`) that waits
@@ -44,6 +46,71 @@ gathered; don't narrate individual fetches. Write mechanics and both tab layouts
 the single-call build, USD currency, column widths, metadata band, and the
 existing-tab classify → Carta-standard/Adapt decision — live in
 `excel-output.md` §Write mechanics.
+
+## Excel — multi-entity output (`excel` only)
+
+When `formula_spec_command` and `export_command` are both set (`SKILL.md` §Surface — chat vs Excel) and
+`nodes_summary` (step 1) lists more than one entity, ask **one**
+`AskUserQuestion` — options "Values: {root} only" / "Values: every entity" / "Download Carta's waterfall
+export":
+
+> How should I write the **{company}** waterfall to the workbook?
+
+- "Values: {root} only" → steps 2–3 for the root alone.
+- "Values: every entity" → steps 2–3.
+- "Download Carta's waterfall export" (only when `export_status_command` is set) → `follow-up.md`
+  §Download Carta's waterfall export, then this question again. Nothing is written.
+
+## Excel — Carta formulas (`excel` only)
+
+1. **Queue** — call `export_command` (colon → `__`, opaque), dispatched per `SKILL.md` §Dispatching
+   commands, and keep the `user_report_pk`. The connector has no `call_tool`, or the call errors → the
+   single write (steps 2–3 above).
+
+   ```
+   call_tool({"name": "<export_command with all ':' replaced by '__'>", "arguments": {
+     "owner_kind":   "FIRM",
+     "owner_id":     <locked from Step 1>,
+     "target_kind":  "<locked from Step 2>",
+     "target_id":    "<locked from Step 2>",
+     "execution_id": "<locked from Step 5>",
+     "kind":         "formula_spec"
+   }})
+   → response: { success, user_report_pk }
+   ```
+
+2. **Read page 1** — call `formula_spec_command` (colon → `__`, through `read_tool`):
+
+   ```
+   read_tool({"name": "<formula_spec_command with all ':' replaced by '__'>", "arguments": {
+     "owner_kind":     "FIRM",
+     "owner_id":       <locked from Step 1>,
+     "user_report_pk": <the kept user_report_pk>,
+     "page":           1
+   }})
+   → response: { status, user_report_pk, page, pages, blocks, rows, entity?, currency? }
+   ```
+
+   - `pending` → call it again with the same arguments, **at most 10 calls in all**. Still `pending`
+     after the 10th → stop and tell the user Carta is still preparing the formulas for this run, and to
+     ask again in a moment; on their ask, read page 1 again with the kept `user_report_pk`. Don't vary
+     the call, don't switch to another tool, and don't fall back to the single write.
+   - `error` / `not_found` → queue again (step 1) once; a second `error` / `not_found` → the single
+     write (steps 2–3 above).
+   - `complete` → page 1 also carries `entity` and `currency`; stash it per `excel-output.md`
+     §Carta formulas step 1.
+3. **Read pages 2 … `pages`** in order, the same call with `page`. Each page goes to
+   `excel-output.md` §Carta formulas step 1.
+   - `pending` → as page 1: the same call, **at most 10 calls for that page**, then stop and tell the
+     user Carta is still preparing page <page> of the formulas, and to ask again in a moment; on their
+     ask, read that page again with the kept `user_report_pk`.
+   - `error` / `not_found` → stop and tell the user Carta couldn't prepare page <page> of the formulas
+     for this run, and to ask again to retry; on their ask, start this section again from step 1. Until
+     then, don't queue again and don't fall back to the single write.
+
+Any fallback to the single write in this section → tell the user in one line that Carta's formulas
+couldn't be prepared for this run, so the tabs hold values; when `call_tool` is missing, say the
+connector needs it allowed.
 
 ## Step 6a — Bootstrap nodes_summary
 

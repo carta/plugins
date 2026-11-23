@@ -38,11 +38,12 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/build_artifact.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/sensitivity_tables.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/export_link.py" *)
   - Artifact
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.58.0</carta-plugin>
+<carta-plugin>carta-investors:7.58.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -125,16 +126,19 @@ never a false positive — in `chat` there is no workbook to write to.
 
 **Excel — strict fetch/write order.** In `excel`, Steps 6a.5 and 6 fetch in a specific order and
 write **once** (see **§Excel — fetch & write order** in the command's results doc; mechanics + tab
-layouts in [`references/excel-output.md`](references/excel-output.md)).
+layouts in [`references/excel-output.md`](references/excel-output.md)). When `formula_spec_command` and
+`export_command` are both set and the command's results doc has §Excel — Carta formulas, Carta's
+formulas are written instead of values, per that section; a multi-entity run goes to the results doc's
+§Excel — multi-entity output instead.
 
 Everything up to rendering — context, options, input collection, the run — is
 identical on both surfaces. Only the **output** of Steps 6a.5 and 6 forks.
 
 ## Dispatching commands — call `read_tool` / `call_tool` directly, never search
 
-Every command below that only reads — the options contract, `run_command`, `get_command`
-and `cap_table_command` — is dispatched through `read_tool`; `save_command` changes the
-firm's holdings, so it goes through `call_tool`. Both load **lazily** — they
+Every command below that only reads — the options contract, `run_command`, `get_command`,
+`cap_table_command`, `export_status_command` and `formula_spec_command` — is dispatched through `read_tool`; `save_command`
+changes the firm's holdings and `export_command` creates an export, so both go through `call_tool`. `read_tool` and `call_tool` load **lazily** — they
 won't appear in your tool list, but they exist. **Invoke it directly by its exact
 name; do NOT search for it first** (no generic/BM25 tool search — that's the
 thrash to avoid). Derive `<SERVER>` from any visible Carta tool (e.g.
@@ -265,7 +269,7 @@ read_tool({"name": "waterfall_modeling__get__options", "arguments": {
 ```
 
 Response fields (**every `*_command` is an exact MCP command string — convert `:` to `__`
-and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); never rewrite or shorten it**):
+and pass as the `name` field to `read_tool` (`call_tool` for `save_command` and `export_command`); never rewrite or shorten it**):
 
 - `run_command` — the command to dispatch the run in Step 5.
 - `get_command` — the command to fetch results in Step 6.
@@ -277,6 +281,15 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
 - `save_command` — **optional**; updates the firm's holding values from the run's results
   (offered in the Step 6 follow-up menu). May be `null` or absent — when so, omit the
   update option from the follow-up menu.
+- `export_command` / `export_status_command` — **optional**; `export_command` creates Carta's waterfall
+  export of the run and `export_status_command` returns its download link. **The export is offered** when
+  `export_command` is present, in `chat` only. **Read
+  [`references/follow-up.md`](references/follow-up.md) §Download Carta's waterfall export before every
+  `export_command` call in `chat`.** In `excel`, `export_command` is called only by
+  the results doc's §Excel — Carta formulas, which handles its own errors, and its §Excel —
+  multi-entity output.
+- `formula_spec_command` — **optional**; reads Carta's waterfall formulas for this run, in `excel`
+  only, queued through `export_command`. When it's used: §Surface — chat vs Excel.
 - `breakpoint_allocations_command` — **optional**; fetches one breakpoint's allocations
   (`Show breakpoints` prints each breakpoint's holders with it). May be `null` or absent —
   when so, `Show breakpoints` prints the breakpoint totals only.
@@ -324,7 +337,8 @@ read_tool({"name": "waterfall_modeling__get__saved_inputs", "arguments": {
 Step 4 handles its response and errors per `references/inputs.md` §Saved inputs; they never stop the flow.
 
 Cache `run_command`, `get_command`, `cap_table_command` (if present),
-`save_command` (if present), `breakpoint_allocations_command` (if present), `currency` (if present),
+`save_command` (if present), `export_command` and `export_status_command` (if present),
+`formula_spec_command` (if present), `breakpoint_allocations_command` (if present), `currency` (if present),
 `is_multi_entity`, `root` (if present), the saved inputs, and the catalog for the rest of the flow. **Do not re-call `get:options` mid-flow.**
 
 **Announce the multi-entity structure before collecting inputs.** When
@@ -452,7 +466,7 @@ write it here**, hold it and write it with the results in the single write (the 
 
 - `NESTED_LIST` row facts (Step 4): `*_quantity` and `*_value` follow [`references/inputs.md`](references/inputs.md) §`NESTED_LIST` (keeps fractions, sub-cent digits and Step 3's currency); every other table uses the rules below.
 - Currency (tables): `$X,XXX.XX` — two decimals, thousands separator.
-- Currency (Excel cells): see [`references/excel-output.md`](references/excel-output.md) (USD-locked accounting format).
+- Currency (Excel cells): see [`references/excel-output.md`](references/excel-output.md) (USD-locked accounting format). The Carta formulas tabs use the same format in the spec's currency.
 - Currency (BLUF only): compact, two decimals — `$1.00B` (≥1B),
   `$500.00M` (≥1M), `$12.50K` (≥1K), `$999.99` (<1K).
 - Percentages: `X.XX%`.
@@ -484,8 +498,8 @@ the follow-up menu and run the chosen action per
 menu** (you **must** call `AskUserQuestion` with every option for the surface,
 never in prose, never collapsed) and — **only when Step 3 returned `save_command`**
 — the update-holding-values action (confirm-then-post, anchored on the run
-identity). The cut handlers (BY_TYPE / firm-holdings / breakpoints) live in the
-command's results doc. **Read that file when you reach this step**, and repeat the
+identity), and — **only when the export is offered** — the download action.
+The cut handlers (BY_TYPE / firm-holdings / breakpoints) live in the command's results doc. **Read that file when you reach this step**, and repeat the
 menu after each action until the user is done.
 
 ## Do NOT

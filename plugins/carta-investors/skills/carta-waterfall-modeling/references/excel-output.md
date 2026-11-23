@@ -5,9 +5,11 @@ for Excel). The run flow and strict cap-table-first order live in `SKILL.md`; th
 table column/row definitions in the **command-matched** `references/rendering.<noun>.md`
 (cap table by `cap_table_command`'s noun, results by `get_command`'s noun);
 this file covers only the workbook write — mechanics, the metadata band, and the
-two tabs (**Cap Table** and **Waterfall**), plus **Sensitivity** for a sensitivity analysis.
+two tabs (**Cap Table** and **Waterfall**), plus **Sensitivity** for a sensitivity analysis, and
+**Carta formulas** when the results doc routes there.
 
-`carta-valuations-excel` writes with the same conventions, from its own
+`carta-valuations-excel` writes with the same conventions, except the header fill (Carta cream here, to
+match the in-app waterfall export), from its own
 [`references/excel-output.md`](../../carta-valuations-excel/references/excel-output.md) —
 a change here to layout, number formats, widths, or tab classification belongs there too.
 
@@ -128,8 +130,8 @@ Each block is `{ values, colTypes, headerRows, merges }`; assemble all of them a
   never let a block's own widths overwrite (the last write wins and shrinks the first). Set it via
   `sheet.getRangeByIndexes(0, colIndex, 1, 1).format.columnWidth = points` — there is
   no `getColumnByIndex`. `####` is never acceptable.
-- **Never read the workbook back after writing — skip the verification pass
-  entirely.** This bars *every* post-write read: re-reading written cells, a
+- **Never read the workbook back after writing**, except §Carta formulas step 5's check, which is
+  that path's output. This bars *every* other post-write read: re-reading written cells, a
   "quick sanity check on the totals", confirming the data "tied out", anything.
   The engine already returned correct figures and the write IS the output, so a
   post-write read is a wasted round-trip.
@@ -139,8 +141,10 @@ Each block is `{ values, colTypes, headerRows, merges }`; assemble all of them a
   - **Carta's own** — a `CartaTab__{TabKey}` named range points at this sheet, or
     (Cap Table) `B3 == "Source: Carta — Waterfall Modeling"`. (`{TabKey}` = the tab
     name with spaces / non-`[A-Za-z0-9_]` → `_`, since named ranges reject spaces:
-    `Cap Table` → `CartaTab__Cap_Table`.) → Carta-standard; clear **only the block
-    you write** (never `getUsedRange()`) and replace **in place** — don't delete +
+    `Cap Table` → `CartaTab__Cap_Table`.) → Carta-standard; clear the range of each
+    `CartaTab__` name that points at this sheet (skip one whose formula holds `#REF!`:
+    its rows are gone), then the block you write (never
+    `getUsedRange()` or the whole sheet), and replace **in place** — don't delete +
     re-add the sheet.
   - **The user's own populated table** — not ours, but the tab has a **header row
     plus data rows** (any labels/format). Detect this **structurally** — a header
@@ -155,9 +159,11 @@ Each block is `{ values, colTypes, headerRows, merges }`; assemble all of them a
     lives in the write code, so it holds even if the Step-1 classify was skipped: a
     skip can never destroy the user's data.
   - **Provenance marks Carta-standard tabs only (best-effort).** When you write the
-    **Carta-standard** layout, register `CartaTab__{TabKey}` via `names.add` (only if
-    absent; if the add fails for any reason, skip and continue — a convenience, never
-    a gate). The marker means "Carta owns this layout," so in **Adapt mode do NOT
+    **Carta-standard** layout, point `CartaTab__{TabKey}` at the block you wrote: delete
+    each `CartaTab__` name that points at this sheet (the ranges you just cleared) and any
+    `CartaTab__` name whose formula holds `#REF!`, then
+    `names.add` `CartaTab__{TabKey}` (if either fails, skip and continue — a
+    convenience, never a gate). The marker means "Carta owns this layout," so in **Adapt mode do NOT
     register it** (the tab is in the user's format, not ours), and if the tab already
     carried a `CartaTab__{TabKey}` from a prior Carta run, **remove it** — leaving it
     would make a later run clobber their reformatted tab.
@@ -167,12 +173,14 @@ Each block is `{ values, colTypes, headerRows, merges }`; assemble all of them a
   **B6** (column A stays empty as a thin left margin). (Logo at E1:E3 is deferred —
   leave column E clear for now.)
 - No inline chat table in `excel` — the workbook is the output.
+- **Carta formulas tabs** follow §Carta formulas alone: written page by page in the renderer's
+  formats, with its check's report printed in chat.
 
 ### Adapt mode — update values in place, don't rebuild
 
 Everything above is the **Carta-standard** layout — used for an empty tab or Carta's
-own. **Adapt mode** is entered **automatically** — never ask permission; filling a user's
-existing template in their format is expected, not an imposition — when the target tab
+own. **Adapt mode** is entered **automatically** — never ask permission (§Carta formulas
+confirms its cell map once); filling a user's existing template in their format is expected, not an imposition — when the target tab
 already holds the user's own table (classified above), or when they explicitly ask to
 match a layout; not on a fresh or Carta tab.
 
@@ -182,7 +190,7 @@ the new numbers into the cells that already hold them, and touch nothing else.**
 
 - **Write cell values only — never formatting.** Set `range.values` on the specific
   cells whose numbers change; **never** write fills, fonts, borders, widths, number
-  formats, the navy header, the metadata band, or any static text. Excel keeps every
+  formats, the header fill, the metadata band, or any static text. Excel keeps every
   format you don't touch, so the user's colors and number formats are preserved **by
   not writing them** — the existing number format also renders your raw value
   correctly, so there's nothing to set.
@@ -209,7 +217,7 @@ the new numbers into the cells that already hold them, and touch nothing else.**
 ## Cell formatting (both tabs)
 
 - **Title:** merge the **B2** title cell across the data-block width; bold.
-- **Header row(s):** bold, **white text on Carta navy fill `#1B2E50`**, centered.
+- **Header row(s):** bold, **black text on Carta cream fill `#FCF9F4`**, centered.
   Cap Table's two-row merged header: apply to both header rows.
 - **Data rows:** white fill, no zebra striping — borders separate rows.
 - **Numeric / currency / percent cells:** right-aligned.
@@ -373,3 +381,49 @@ range: `CartaTab__Sensitivity`.
 - After writing, state **one line** citing the tab (e.g. _"Wrote the sensitivity analysis to the
   **Sensitivity** tab — `<citation:Sensitivity!A1>`."_), then the follow-up prompt as on the
   Waterfall tab.
+
+## Carta formulas
+
+Reached from the results doc's §Excel — Carta formulas. These tabs replace the **Cap Table** and
+**Waterfall** tabs, and only this section's steps apply to them. Never compose, edit or simplify a
+formula — the renderer places each template.
+
+**The renderer.** Read this skill's `scripts/formula_renderer.js` once, as you read its
+`references/*.md` (do not search for it), and paste its whole content, verbatim, at the top of every
+`execute_office_js` code below. Call `holderCount`, `layout`, `cellsToWrite`, `checks`,
+`writePage`, `verify`, `report` and `explain` as below; never re-implement them. Any error it throws →
+stop and report it, never guess a cell.
+
+1. **Stash every page, then write.** One `execute_office_js` per page as it is read:
+   `blobs.setJSON('wf:<execution_id>:spec:<page>', <the page as a JSON literal>)`; the first stash
+   clears stale `wf:*` keys. Every later call rebuilds
+   `pages = [1, …, <pages>].map((n) => blobs.getJSON('wf:<execution_id>:spec:' + n))`. The last stash
+   returns `holderCount(pages)`.
+2. **Above 5,000 holder rows**, ask once via `AskUserQuestion`: _"This waterfall has {n} holder rows
+   across {pages} pages. Write every holder row, or the class and breakpoint figures only?"_ — options
+   "Write every holder row" / "Figures only". Figures only → pass `figuresOnly: true` to `layout`.
+3. **Pick the layout.** Classify the workbook per §Write mechanics:
+   - **Carta tabs** (empty, or the spec's sheets are Carta's own) → `layout(pages)`: one sheet per spec
+     `sheet`, named as the spec names it.
+   - **The user's own sheets** (Adapt mode) → read their used ranges, then build one cell map, spec
+     name → the user's cell, for each input and figure the sheets hold: `block[row].column` →
+     `'Sheet!C12'`, and `block[*].column` → the holder range, `'Sheet!C5:C40'`. Every cell of a
+     holder row maps only as `block[*].column`, never one row at a time; that column receives
+     Carta's holder rows, so its range has exactly one row per holder row of the block. Show it as a table
+     (spec block title, row label and column heading → cell) and confirm via `AskUserQuestion`
+     ("Use this mapping" / "Change a cell"). Then `layout(pages, {sheet: 'Carta inputs', cells: <the
+     confirmed cell map>})`; anything unmapped goes to the `Carta inputs` sheet in the Carta layout.
+   `blobs.setJSON('wf:<execution_id>:spec:binding', binding)`. In the same call, run
+   `cellsToWrite(binding, pages, <page>)` for every page and `checks(binding, pages)`, and return
+   only the count of writes: any error → write nothing, keep the workbook as it is, and report the
+   error.
+4. **Write page 1, then each further page** — one `execute_office_js` per page, in order, reading the
+   binding and page blobs: `return await writePage(context, binding, pages, <page>)`. A non-empty
+   `refused` (page 1 only; nothing was written) → redo step 3 with the same options, their `sheets`
+   updated with `refused` as it is. A page
+   whose call fails → skip step 5, and tell the user which pages were not written and that the Carta
+   tabs are incomplete.
+5. **Check.** One `execute_office_js`: `return report(await verify(context, binding, pages), pages[0].currency)`.
+   Output the markdown it returns as is, cite the sheets in one line (e.g. _"Wrote Carta's formulas to
+   the **Waterfall** and **Cap Table** tabs — `<citation:Waterfall!A1>`."_), and go to the follow-up
+   prompt as on the Waterfall tab.

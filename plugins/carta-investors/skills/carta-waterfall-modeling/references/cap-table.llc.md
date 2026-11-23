@@ -89,11 +89,16 @@ to results:
 > Options:
 >
 > - "Show the allocation results" ← recommended
+> - "Download Carta's waterfall export" — **always** when Step 3 returned `export_command` and the surface is
+>   `chat` (the export is offered, `SKILL.md` §Step 3)
 > - "Drill into a holder" — only when `holders` is non-empty
 > - "Show liquidation preferences" — the liq-pref companion (§Liquidation preferences below)
-> - "Cap table as of a different date" — re-fetch without re-running (below)
+> - "Cap table as of a different date" — re-fetch without re-running (below); left off when both
+>   "Download Carta's waterfall export" and "Drill into a holder" are shown, and still followed when
+>   the user asks for it
 
-On **"Drill into a holder"** → run the **Holder drill** flow below, then repeat this
+On **"Download Carta's waterfall export"** → read and follow `follow-up.md` §Download Carta's waterfall export, then
+repeat this prompt. On **"Drill into a holder"** → run the **Holder drill** flow below, then repeat this
 prompt. On **"Show the allocation results"** → continue to the results fetch (`SKILL.md` §Step 6). On **"Show liquidation
 preferences"** → run the **Liquidation preferences** flow below, then repeat this prompt.
 On **"Cap table as of a different date"** → ask for the date, re-fetch with the **same `issuerId`** (the root,

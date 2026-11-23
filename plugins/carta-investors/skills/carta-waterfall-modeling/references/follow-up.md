@@ -68,6 +68,10 @@ the surface can't render subtext, append it bracketed in the label. Self-explana
 - **Update holding values** — conditional: only when Step 3 returned `save_command` AND this run isn't
   saved yet (never show one the backend didn't offer; never re-offer once saved). Subtext: _"Update
   your firm's current holdings values using these waterfall results."_
+- **Download Carta's waterfall export** — only when the export is offered (`SKILL.md` §Step 3: Step 3
+  returned `export_command`, surface `chat`) and
+  no cap table prompt was shown for this run or its batch (that prompt offers it otherwise).
+  Subtext: _"Get the link to Carta's waterfall export of this run."_
 - **No, I'm done** — always.
 
 **Sub-menus** — each is a second `AskUserQuestion` = its leaves + `Back` (→ top menu); after any
@@ -80,10 +84,9 @@ sub-menu action renders, return to the top menu.
   `Show only my firm's holdings` · `Show breakpoints` · `Back`; excel drops `Show breakpoints`.
 
 **4-option cap.** `AskUserQuestion` accepts at most 4 options. Count what's in scope: `Explore the cap
-table` + the cuts (3 chat / 2 excel) + `Update holding values` + `No, I'm done`. **If the total exceeds
-4, collapse the cuts into `See a different cut`**; the other entries stay. Never collapse a list that
-already fits (≤4). The resulting top menus (all 8 surface × cap-table × `save_command` permutations,
-each ≤4):
+table` + the cuts (3 chat / 2 excel) + `Update holding values` + `Download Carta's waterfall export`
+(only with no cap table prompt for the run or its batch) + `No, I'm done`. **If the total exceeds 4, collapse the cuts into
+`See a different cut`**; the other entries stay. Never collapse a list that already fits (≤4). The resulting top menus (each ≤4):
 
 | Surface | Cap table | `save_command` | Top menu |
 |---|---|---|---|
@@ -95,6 +98,13 @@ each ≤4):
 | chat | Corp | no | `Explore the cap table` · `See a different cut` · `No, I'm done` |
 | excel | Corp | yes | `Explore the cap table` · `See a different cut` · `Update holding values` · `No, I'm done` |
 | excel | Corp | no | `Explore the cap table` · `Group results by security type` · `Show only my firm's holdings` · `No, I'm done` |
+
+With no cap table prompt for the run or its batch, and the export offered (`chat`):
+
+| `save_command` | Top menu |
+|---|---|
+| yes | `See a different cut` · `Update holding values` · `Download Carta's waterfall export` · `No, I'm done` |
+| no | `See a different cut` · `Download Carta's waterfall export` · `No, I'm done` |
 
 ### Handlers
 
@@ -121,6 +131,15 @@ handlers below are shared.
 - `"Update holding values"` → write the **full run** into the Carta database as
   the firm's holding values. See "Update holding values" below. (Only present when
   `save_command` was returned.)
+
+- `"Download Carta's waterfall export"` → see "Download Carta's waterfall export" below. (Only present
+  when the export is offered.)
+
+- The user asks what a cell the Carta formulas wrote does (`excel`) → one `execute_office_js` (renderer
+  pasted per `excel-output.md` §Carta formulas) returns `explain(binding, pages, <sheet>, <address>)`, with `binding` and `pages` read from the
+  `wf:<execution_id>:spec:*` blobs and `<address>` one cell such as `C12`.
+  Explain the cell from its `explains`, `row`, `heading` and `formula`; `null` → it isn't one of
+  Carta's formulas; say so. Return to the top menu after.
 
 After each follow-up render, repeat the top-level "What next?" prompt until the
 user picks "No, I'm done".
@@ -232,3 +251,74 @@ Then repeat the follow-up menu (now minus the update option). Updating is not
   retry?" Retry the same call.
 
 403 / 404 / 501 stop; 409 / 502 / 500 prompt first, then retry the same call.
+
+## Download Carta's waterfall export (only when offered)
+
+Prepares Carta's waterfall export of the **entire run** (the locked `execution_id`), not the cut on
+screen; for a multi-entity run, the top-level entity's consolidated export, which holds every entity.
+In `chat`, also followed whenever the user asks for it. In `excel`, reached only from the results
+doc's §Excel — multi-entity output. In a batch, first ask via
+`AskUserQuestion` which scenario, by its equity value, and use that run's `execution_id`; keep one
+`user_report_pk` per `execution_id`.
+
+### Create
+
+Skip when a `user_report_pk` is kept for this `execution_id`. Call `export_command` (colon → `__`, opaque),
+never with a `node_id`, and keep the `user_report_pk`:
+
+```
+call_tool({"name": "<export_command with all ':' replaced by '__'>", "arguments": {
+  "owner_kind":   "FIRM",
+  "owner_id":     <locked from Step 1>,
+  "target_kind":  "<locked from Step 2>",
+  "target_id":    "<locked from Step 2>",
+  "execution_id": "<locked from Step 5>"
+}})
+→ response: { success, user_report_pk }
+```
+
+### Get the link
+
+Call `export_status_command` (colon → `__`, through `read_tool`):
+
+```
+read_tool({"name": "<export_status_command with all ':' replaced by '__'>", "arguments": {
+  "owner_kind":     "FIRM",
+  "owner_id":       <locked from Step 1>,
+  "user_report_pk": <the kept user_report_pk>
+}})
+→ response: { status, user_report_pk, download_url?, expires_at?, report_url? }
+```
+
+- `complete` → write `{"company": "<company name>", "status": <the response, verbatim>}` (in a batch,
+  add `"scenario": "<its equity value in compact form, as in its BLUF>"`) to
+  `<outputs-directory>/export-<user_report_pk>.json`, then run, on one line, exactly as written:
+
+  ```
+  uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/export_link.py" --config "<outputs-directory>/export-<user_report_pk>.json"
+  ```
+
+  Its output, as is, is your **whole reply, and it ends your turn**: no prompt, question or tool call
+  after it. If the script fails, your whole reply is `[Download Carta's waterfall export](<download_url>)`, or
+  `[Open Carta's waterfall export in Carta](<report_url>)` when there is no `download_url`. Never show
+  the URL itself. In `excel`, skip the script: reply with that link, then _"Open it, right-click each
+  tab, and pick **Move or Copy** to bring it into this workbook."_
+- `pending` → call it once more; still `pending` → _"Carta is still preparing it. Pick **Download
+  Carta's waterfall export** again in a moment."_
+- `error` → _"Carta couldn't prepare the export for this run. Pick **Download Carta's waterfall
+  export** to try again."_ Forget the `user_report_pk`.
+- `not_found` → forget the `user_report_pk` and create it again (§Create), once.
+
+Never fetch or read the export. Then repeat the prompt or menu it was picked from: after `complete`, on
+the user's next message, unless it asks for something else.
+
+### Error handling (never auto-retry)
+
+- `409 waterfall_run_failed` → "This waterfall run failed, so it has no export. Run a new waterfall."
+- `504 waterfall_still_computing` → "The run is still finishing — want me to try again?" Retry the
+  same call.
+- `502` → "Couldn't prepare the export just now — want me to retry?" Retry the same call.
+- `400` → "Carta's export isn't available for this run. Your waterfall results aren't affected."
+
+No export error stops the run: after its message (codes not listed here per `SKILL.md` §Error
+handling), repeat the prompt or menu the download was picked from.

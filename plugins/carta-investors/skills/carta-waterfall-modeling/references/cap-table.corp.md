@@ -113,11 +113,14 @@ After the tables, a **light prompt** via `AskUserQuestion` — default is to pro
 > Options:
 >
 > - "Show the allocation results" ← recommended
+> - "Download Carta's waterfall export" — **always** when Step 3 returned `export_command` and the surface is
+>   `chat` (the export is offered, `SKILL.md` §Step 3)
 > - "Explore the cap table" — look deeper into this cap table (§Explore the cap table)
 > - "Cap table as of a different date" — re-fetch without re-running (below)
 
-On **"Show the allocation results"** → the results fetch (`SKILL.md` §Step 6). On **"Explore the cap
-table"** → the **Explore the cap table** sub-menu below, then repeat this prompt. On **"Cap table as
+On **"Show the allocation results"** → the results fetch (`SKILL.md` §Step 6). On **"Download Carta's
+waterfall export"** → read and follow `follow-up.md` §Download Carta's waterfall export, then repeat this prompt. On
+**"Explore the cap table"** → the **Explore the cap table** sub-menu below, then repeat this prompt. On **"Cap table as
 of a different date"** → ask for the date, re-fetch with the same `corporation_id` and the new
 `as_of_date` (share-class + convertibles + phantom units), render again, and repeat this prompt. This
 changes only the cap table, so also **suggest** in one line: _"Want me to re-run the waterfall as of
