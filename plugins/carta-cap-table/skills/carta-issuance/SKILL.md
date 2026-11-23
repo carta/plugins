@@ -71,7 +71,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.118.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.118.5</carta-plugin>
 
 # Issue Securities
 
@@ -156,7 +156,7 @@ never the disk, never an env var.
 | Condition | Surface |
 |---|---|
 | the user asked for a **different surface** than the one you would pick | the one they asked for: companion or chat; anything else → chat |
-| `issuance_init` returned `companion.available: true` — engine.md Step 4's call | **companion** — [references/companion-surface.md](references/companion-surface.md) |
+| `issuance_init` returned `companion.available: true` — engine.md Step 4's call — and the run does not resume a draft set | **companion** — [references/companion-surface.md](references/companion-surface.md) |
 | else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
 
 Every run starts on chat, and engine.md Step 4's `issuance_init` is the first time Carta says if

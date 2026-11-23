@@ -300,9 +300,9 @@ ahead of a check that invalidated all of them. The stop costs one call and it is
 first, so take it first. Everything the gate reads, Phase 0.5 reuses; it is not an extra fetch.
 
 **Then read the response for `companion.available`.** When it is `true` and no hard stop
-fired, take the companion row ([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)) and
-read [companion-surface.md](companion-surface.md), unless the user chose the surface or the run
-resumes a draft set: the one change of surface after selection.
+fired, take the companion row ([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)) when
+the table picks it, and read [companion-surface.md](companion-surface.md): the one change of
+surface after selection.
 
 **On the chat surface, the companion fields are not for this run.** The fields in
 [companion-surface.md § What Carta returns](companion-surface.md#what-carta-returns), in this

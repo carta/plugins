@@ -37,7 +37,8 @@ that tool's prefix:
    tab, `mcp__remote-devices__Claude_Browser__` in a regular conversation).
 2. **Claude in Chrome**: `mcp__Claude_in_Chrome__` or `mcp__claude-in-chrome__`.
 3. **None**: the link is the page for the rest of the conversation. Open nothing and call no
-   `mcp__ccd_view__show_pane`. Don't tell the admin you looked for a browser.
+   `mcp__ccd_view__show_pane`. Don't tell the admin you looked for a browser or that there is
+   none.
 
 A Carta result can lead with a `next_step` that asks for this same open, with its own
 `ToolSearch` `select:` of Claude's browser tools, `mcp__ccd_view__show_pane` and the enable tool.

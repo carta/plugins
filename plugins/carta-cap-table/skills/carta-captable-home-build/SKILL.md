@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.118.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.118.5</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -298,7 +298,7 @@ alongside the other plugin-wide references. They are *not* under this skill's ow
 
 This is a live artifact: the rendered HTML calls Carta at runtime through `claude.use("mcp")`, so it needs both.
 
-**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `list_accounts`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). `welcome` runs once per conversation: when you already called it in this conversation, do not call it again and call only `list_accounts`. An observed call is what makes the grant honest: publish without one and the platform warns that the page is "published against an unobserved interface". It does **not** verify the display name — nothing in this session can — so the name still comes from `list_connectors`. If either call errors, see Error Handling. If both succeed, say nothing about them.
+**Connector check — run it before publishing, and stay quiet when it passes.** `welcome` runs once per conversation. If this conversation already called `welcome`, call only `list_accounts`. If not, call `welcome`, then `list_accounts`. Use *your own* prefixed tool names (`mcp__<prefix>__welcome`). An observed call is what makes the grant honest: publish without one and the platform warns that the page is "published against an unobserved interface". It does **not** verify the display name — nothing in this session can — so the name still comes from `list_connectors`. If either call errors, see Error Handling. If both succeed, say nothing about them.
 
 **One connector answers the company and gets baked in — they must be the same one.**
 The page hard-codes two values that only work as a pair: the corporation pk, resolved
@@ -363,7 +363,8 @@ carta-mcp through `read_tool` (`plugin:get:artifact_bundle`), so it is the same 
 always runs the newest parts. It needs no version and no build time.
 
 1. Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-captable-home-build/resources/captable-home.shell.html`.
-   Do not search for it.
+   When the skill comes from the Carta connector, read it as the resource
+   `skill://carta-captable-home-build/resources/captable-home.shell.html`. Do not search for it.
 2. Replace each placeholder in the shell text. Change nothing else. A JSON string has its
    quotes, a `\"` for each `"` and a `\\` for each `\`, and `<` as `\u003c`, `>` as `\u003e`
    and `&` as `\u0026`:
