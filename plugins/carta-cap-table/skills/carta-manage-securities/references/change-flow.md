@@ -8,21 +8,54 @@ apply and the closing are in [SKILL.md § Flow](../SKILL.md#flow).
 Carta keeps an edit as a **thread** of previews: each preview is the next **revision**. For a type
 the page serves, the bootstrap carries `companion` with `available: true`, and each preview result
 leads with `companion_url` and `how_to_reply`, sometimes after `next_step`. The page shows the
-latest revision, read-only. Every change happens in chat; the page follows.
+latest revision, read-only. Every change happens in chat; the page follows. Never build the page's
+address.
 
-- Show each preview as in [SKILL.md § Flow](../SKILL.md#flow) step 5. Never build the page's
-  address.
-- When the user asks to see the page, open it as `next_step` would.
+### The Change page app
+
+The Change page is an app beside the chat. Render it with one `view_remote_next`, `name:
+cap_table:view:change_page`, params `corporation_id` (the `company`) and `thread_id`. Each render
+stays in the chat, so render it only at these times:
+
+- **A thread opens:** after the `look_first` bootstrap that gives a `thread_id`, and after a
+  preview sent with no `thread_id` (also the preview again after `not_found` on `thread_id`).
+- **The user asks to see the page:** render it again at once on the same thread, with no other
+  call first.
+
+Never render it for a later preview on the same thread: the app shows each new revision by itself.
+
+While the app shows this edit's thread:
+
+- For the latest revision with status `draft`, the app shows **Apply** and **Not now**. Ask no
+  approval question and render no `cap_table:view:plan_approval` card.
+- Its **Apply** sends the approval card's message, *"Sent from the Carta card: Apply revision N
+  (plan <plan_id>)."* When that `plan_id` is the latest preview's, apply it as
+  [SKILL.md § Flow](../SKILL.md#flow) step 8 says. When it is not, apply nothing: say a newer
+  revision is in the app, and ask the user to **Apply** it there.
+- When the plan sends more emails than holders, ask **"Send these N emails?"** before you apply.
+  An **Apply** sent before the answer waits for it: on **"Send"**, apply that plan when its
+  `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new revision,
+  so wait for **Apply** on it.
+- Its **Not now** message says not to apply: apply nothing and say so.
+- Post no `companion_url` and open no browser pane. Ignore the view's `_terminal_fallback`
+  text: it is for a host with no app.
+
+**No `view_remote_next` after one `ToolSearch`, or the host cannot render apps: there is no
+app.** Then:
+
+- Open `companion_url` as the file that [SKILL.md § Flow](../SKILL.md#flow) step 5 names says,
+  and show each preview and ask for approval as steps 5 and 7 say.
+- When the user asks to see the page, open it the same way.
 - Once the page is open, it follows each new revision by itself: **do not navigate again on the
   same thread**.
-- If the tab lands on a `login.` address, ask the user to sign in to Carta in that panel once.
 
 ## Open the page first
 
 Every edit's first bootstrap sends `look_first: true`, whatever the user said, so the page is up
 before the first preview. The result leads with `next_step`, `companion_url` and `how_to_reply`,
-and carries `thread_id`. Follow `next_step`, post the link as
-[SKILL.md § Flow](../SKILL.md#flow) step 5 says, then:
+and carries `thread_id`. Render the app as [§ The Change page app](#the-change-page-app) says, or,
+where there is no app, open `companion_url` as [SKILL.md § Flow](../SKILL.md#flow) step 5 says.
+Then:
 
 - **The user named the field and the value:** go on to the preview with that `thread_id`. The
   open page turns into the diff.

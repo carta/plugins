@@ -29,25 +29,38 @@ allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__list_accounts
   - mcp__carta__view_remote
+  - mcp__carta__view_remote_next
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__view_remote
+  - mcp__claude_ai_Carta__view_remote_next
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_next
   - mcp__*__show_widget
   - mcp__remote-devices__Claude_Browser__preview_start
   - mcp__remote-devices__Claude_Browser__navigate
   - mcp__remote-devices__Claude_Browser__tabs_context
+  - mcp__remote-devices__Claude_Browser__tabs_create
   - mcp__Claude_Browser__preview_start
   - mcp__Claude_Browser__navigate
   - mcp__Claude_Browser__tabs_context
+  - mcp__Claude_Browser__tabs_create
+  - mcp__ccd_view__show_pane
+  - enable__mcp__remote-devices__Claude_Browser
+  - mcp__Claude_in_Chrome__tabs_context_mcp
+  - mcp__Claude_in_Chrome__tabs_create_mcp
+  - mcp__Claude_in_Chrome__navigate
+  - mcp__claude-in-chrome__tabs_context_mcp
+  - mcp__claude-in-chrome__tabs_create_mcp
+  - mcp__claude-in-chrome__navigate
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.118.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.119.0</carta-plugin>
 
 # Manage securities
 
@@ -138,7 +151,9 @@ says. You pick no other value.
 4. **Quote Carta's messages word for word**: blockers, failed checks and errors.
 5. **Follow the result.** When a result has `next_step` or `how_to_reply`, do what it says.
    Open or post a Carta page only from `next_step`, `companion_url` or a `cap_table__get__*_link`
-   result. Never build a Carta URL.
+   result, and render the Change page app only as
+   [change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says.
+   Never build a Carta URL.
 6. **No shell, no local files.** Never call Bash, and write no files. The one exception is the
    agreement upload in
    [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements)
@@ -151,8 +166,9 @@ says. You pick no other value.
 ## Calls
 
 Load the Carta tools in one `ToolSearch` before the first Carta call
-(`select:mcp__carta__read_tool,mcp__carta__list_accounts`). The apply tool
-is often deferred: load it with `ToolSearch` (`+apply_plan`) before the approval question.
+(`select:mcp__carta__read_tool,mcp__carta__list_accounts`). For an edit, load `view_remote_next`
+with one `ToolSearch` (`+view_remote_next`) before the first bootstrap. The apply tool is often
+deferred: load it with `ToolSearch` (`+apply_plan`) before the approval.
 
 Use whichever Carta connector is present. The keys are `name` and `arguments`.
 
@@ -162,6 +178,7 @@ Use whichever Carta connector is present. The keys are `name` and `arguments`.
 | Bootstrap | `read_tool` | `cap_table__get__security_change_bootstrap` |
 | Exercise requests | `read_tool` | `cap_table__list__company_exercise_requests` |
 | Preview | `read_tool` | the preview in [§ Actions](#actions) |
+| Change page app | `view_remote_next` | `cap_table:view:change_page` |
 | Apply | the **named** `cap_table__mutate__apply_plan` tool | — |
 | Job | `read_tool` | `cap_table__get__task` |
 
@@ -224,28 +241,42 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    so, or apply answers `plan_stale`): preview again with the same `thread_id`, never a new
    bootstrap, so the page shows the next revision.
    `status: blocked` (no `plan_id`): quote each failed check, ask for the fix, ask no approval.
-5. **Show the preview.** With `next_step` and the browser tool it names, follow it, then keep
-   the chat to one line: the count, the fields, the reason, any problem and the full text of a
-   legend that changes. Else show a table with the header `| Security | Field | Before | After |`
+5. **Show the preview.** For an edit, render the Change page app when
+   [change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says so.
+   While the app shows the edit's thread, or the Change page is open in a browser pane, keep the
+   chat to one line: the count, the fields, the reason, any problem, the full text of a legend
+   that changes, and each side effect that cannot be undone, such as an email to a holder. Else
+   show a table with the header `| Security | Field | Before | After |`
    (for a partial cancel, the tranches; for the actions in transfer-buyback-exercise.md, the
    preview's `summary` word for word). Put the table in the `preview` of the **Apply** option
    in step 7, never in the question and never as text before the question: the host shows text
    between tool calls only as a one-line summary, so the user never sees a table there. Never put
    the table in the option's `description`. When
    step 7 shows the approval card, put the table in your last message, after `view_remote`.
-   When a result has a `companion_url`, post it as `[See it in Carta](<companion_url>)`, never as
-   a bare address.
-   Put the link of the latest page in your last message: after the answer to a question, after
-   a blocked preview and after a `look_first` bootstrap. After a `look_first` bootstrap with no
-   field named, ask the field question first and post the link after the answer. A link in a
-   question is not a link.
+   Where the app does not render, open `companion_url` as
+   `${CLAUDE_PLUGIN_ROOT}/references/open-the-companion-page.md` says (the plugin's own
+   `references/`, not this skill's: read that file by that path, do not search for it), with the
+   link text `See it in Carta`. When that file says to post the link, post it as
+   `[See it in Carta](<companion_url>)`, never as a bare address, in your last message: after the
+   answer to a question, after a blocked preview and after a `look_first` bootstrap. After a
+   `look_first` bootstrap with no field named, ask the field question first and post the link
+   after the answer. A link in a question is not a link.
 6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
    Name each one that cannot be undone, such as an email to a holder.
 7. **Approval.** When the email side effect counts more emails than holders, first ask **"Send these N
    emails?"** as [change-flow.md § Several securities](references/change-flow.md#several-securities)
-   **Emails** says, also before an approval card. Ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** (first,
-   with the step 5 table in its `preview`) and **"Not now"**. When `how_to_reply` names an
-   approval card, show that card with `view_remote` instead. On "Not now", apply nothing and say so.
+   **Emails** says, also before an approval card or the app's **Apply**. An **Apply** sent
+   before the answer waits for it: on **"Send"**, apply that plan when
+   its `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new
+   revision, so wait for **Apply** on it. Then:
+   - **An edit whose thread the Change page app shows:** ask no approval question and show no
+     card. End with one line that says to approve with **Apply** in the app beside the chat, as
+     [change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says.
+   - **Else** (no app, or an action other than an edit): ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** (first,
+     with the step 5 table in its `preview`) and **"Not now"**. When `how_to_reply` names an
+     approval card, show that card with `view_remote` instead.
+
+   On "Not now", apply nothing and say so.
 8. **Apply.** Call the named `cap_table__mutate__apply_plan` tool with `company`, the latest
    `plan_id` and its `summary` unchanged. If `ToolSearch` found no apply tool, apply nothing:
    *"Carta's apply tool isn't available in this chat, so nothing was changed. Reconnect Carta
@@ -266,7 +297,7 @@ Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 | `scope_required` | Ask the user to grant access as its `fix` says. Call again only after they confirm. |
 | `workflow_unavailable` | Say to make this change in the Carta web app. Stop. Do not retry, and never use `cap_table__mutate__modify_issuable`. |
 | `out_of_scope` | Say the user's access does not reach these securities or their plan. Stop. Do not retry. |
-| `not_found` on `thread_id` | Preview again with no `thread_id`. The page then has a new address: post the new `companion_url`. |
+| `not_found` on `thread_id` | Preview again with no `thread_id`. That opens a new thread: render the Change page app again with the new `thread_id`, or, where it cannot render, open the new `companion_url` as [§ Flow](#flow) step 5 says. |
 | `not_found` on `security` or `securities` | Call the bootstrap again to get the ids. Never guess an id. |
 | `not_found` on `recipients[N].stakeholder` | Say this person is not a stakeholder of the company. In your last message, say to add the person in Carta first, and ask for the name or email as Carta shows it if the person is already there. |
 | `invalid_argument` on a file key | Never write a key. Upload the file as [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements) says, then preview again once. |
@@ -280,9 +311,9 @@ Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 | `throttled` | Say Carta is busy. Wait, then call again once. If it fails again, stop. |
 | `internal_error` on apply | Call the apply tool again once with the same `plan_id` and `summary`: a plan applies only once, and a second call returns the stored result. If it fails again, say Carta has a temporary problem and the change may or may not have been applied. Read the securities before any new preview. |
 | `internal_error` on a read or preview | Follow the error's `fix`. If it has no `fix`, call again once. If it fails again, say Carta has a temporary problem. Stop. |
-| `plan_stale`: "The cap table changed after the preview." | Say a security changed in Carta after the preview. Preview again on the same `thread_id`, then ask for approval of the new preview. |
-| `plan_stale`: "Revision N of this preview replaced this plan." | A newer preview on the thread replaced this plan. Apply nothing. Show the summary of revision N, then apply its `plan_id` only after the user approves it. If you do not hold revision N's `plan_id` and `summary`, preview again on the same `thread_id` and ask for approval of that preview. |
-| `plan_expired` | Preview again on the same `thread_id`, then ask for approval again. |
+| `plan_stale`: "The cap table changed after the preview." | Say a security changed in Carta after the preview. Preview again on the same `thread_id`, then ask for approval of the new preview as [§ Flow](#flow) step 7 says. |
+| `plan_stale`: "Revision N of this preview replaced this plan." | A newer preview on the thread replaced this plan. Apply nothing. Show the summary of revision N, then apply its `plan_id` only after the user approves it. If you do not hold revision N's `plan_id` and `summary`, preview again on the same `thread_id` and ask for approval of that preview as [§ Flow](#flow) step 7 says. |
+| `plan_expired` | Preview again on the same `thread_id`, then ask for approval again as [§ Flow](#flow) step 7 says. |
 | Task `failed` or `partially_failed` | Name each security that did not change and quote its row `error`. Do not apply the same plan again. Offer a new preview of only those securities, after the user fixes what the error names. |
 
 ## Several changes
@@ -313,7 +344,8 @@ End the run with one short message and nothing after it:
   transferred to the Smith Family Trust`. For an exercise request: the holder, the grant label
   and approved or rejected.
 - One bullet per change that was not applied.
-- The page link as `[See it in Carta](<companion_url>)`, when a result gave one.
+- The page link as `[See it in Carta](<companion_url>)`, when a result gave one, the Change page
+  app did not render and step 5 says to post the link.
 - One line only for something that cannot be undone or is still running, such as an email to a
   holder or a job still in progress.
 
