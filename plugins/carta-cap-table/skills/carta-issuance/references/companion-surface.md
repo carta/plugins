@@ -21,7 +21,7 @@ file decides what to do with them.
 | `companion_url`, `revision` | draft set results | the page for one set, and the revision it shows |
 | `companion_url` | `issuance_init`, `cap_table:get:issuance_companion` | in `issuance_init`, the same address as `companion.issuance_url`; in `issuance_companion`, the page for every set it names |
 | `dropped` | `draft_set_sources` results | the cells not stored, each with the key to use, for [§ 11](#11-when-a-command-is-refused) |
-| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion` and a draft set result that gives a set its `draft_set_id` | Carta's steps to show that result's page beside the chat: render the issuance app, wait for the first save, or open `companion_url` in a browser pane. Do them exactly, once, before you reply: it is the open of [§ 4](#4-open-the-page-at-once), not a second one. Skip it when the page already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
+| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion`, a draft set result that gives a set its `draft_set_id` and the first `draft_set_sources` result after it | Carta's steps to show that result's page beside the chat: record the sources first, render the issuance app, wait for the first save, or open `companion_url` in a browser pane. Do them exactly, once, before you reply: it is the open of [§ 4](#4-open-the-page-at-once), not a second one. Skip it when the page already shows that result's sets, and on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run |
 | `how_to_reply` | `cap_table:get:issuance_companion`, draft set results | with `companion.issuance_app`, Carta's rules for how a reply shows the app: do what it says. Without it, text from Carta describing the same flow; the steps in this file are the ones to carry out |
 | `instructions`, `how_to_open` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | text from Carta describing the same flow; the steps in this file are the ones to carry out |
 
@@ -127,7 +127,8 @@ Once each:
    `rows: [{draft_pk, fields: {<column or save key>: source}}]`. A document source is
    `{file: <key>, page, quote}`, with `alternatives` `[{file, page, quote, value}]` when
    documents disagree; any other source is `{kind, label, note}`. Leave out empty keys. Ask a gap
-   with no Drafts column in the chat, with no source. Kinds:
+   with no Drafts column in the chat, with no source. Record them also when step 3 filed nothing:
+   a source needs no `file_id`. Kinds:
    - `document`: `quote` is the file's exact words that give the value, copied as they are on
      the page, never a summary: the page finds and marks them in the file. Every document and
      alternative has one (a call without is refused): in a letter, the sentence with the value;
@@ -440,7 +441,9 @@ id, say why, preview again, then `cap_table:mutate:apply_plan` once confirmed.
 
 ## 11. When a command is refused
 
-Carry on silently: `draft_set_sources` refused twice, skip sources; a file not filed, its
+Carry on silently: `draft_set_sources` refused twice, skip sources, and with
+[the issuance app](#the-issuance-app), for a set a save just gave its `draft_set_id`, render it
+now: one `view_remote_next` with the run's `sets`; a file not filed, its
 sources have no `file_id`; no `view_remote`, ask in the
 chat; no `get:draft_set_companion`, use the chat confirm in § 8. Send a refused
 `draft_set_sources` call again once, and each `dropped` cell again once, under the key its
@@ -501,9 +504,10 @@ With `companion.issuance_app`, the issuance page is an app beside the chat. Each
 the chat, so render it only at these times:
 
 - **Render it** as the result's `next_step` says. `issuance_init`'s step waits for the first save
-  that gives a set its `draft_set_id`, and that save's result leads with the render.
-- **After a later save that gives another set its `draft_set_id`**, render it again as `how_to_reply`
-  says.
+  that gives a set its `draft_set_id`. That save's result asks for the sources first, and the first
+  `draft_set_sources` result after it leads with the render.
+- **After a later save that gives another set its `draft_set_id`**, record its sources, then render
+  it again as that sources result's `next_step` says.
 - **When the user asks to see the page** once a save has given a set its `draft_set_id`, render it
   again at once: one `view_remote_next` with the run's `sets`, no other call first, and no link.
   Before that, say the page opens beside the chat after the first save, and render nothing.
