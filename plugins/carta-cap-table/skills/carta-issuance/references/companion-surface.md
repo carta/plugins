@@ -15,13 +15,13 @@ file decides what to do with them.
 
 | Field | Where | Use |
 |---|---|---|
-| `companion.issuance_url` | `issuance_init` | for a PIU, Carta has its issuance page ([§ PIU](#piu)). Never open it |
+| `companion.issuance_url` | `issuance_init` | the page's address, sent only with `companion.issuance_app`. Never open it |
 | `companion.issuance_app` | `issuance_init` | the page is [the issuance app](#the-issuance-app) |
 | `field_spec` | `issuance_init` with `include_bootstrap: true` | this company's draft fields, the `cap_table:get:issuable_field_manifest` result: the gaps [§ 5](#5-build-the-draft-set) finds, the choices [§ 6](#6-ask-whats-missing-once) offers and the optional columns [§ 8](#8-issue) offers |
 | `revision` | draft set results | the revision the page shows |
 | `companion_url` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | the page's address. Never open or post it: the page is the app |
 | `dropped` | `draft_set_sources` results | the cells not stored, each with the key to use, for [§ 11](#11-when-a-command-is-refused) |
-| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion`, a draft set result that gives a set its `draft_set_id`, the first `draft_set_sources` result after it, and the `cap_table:get:draft_set_companion` read of [an existing draft set](#an-existing-draft-set) | Carta's steps to show that result's page beside the chat: record the sources first, render the issuance app, or wait for the first save. Do them exactly, once, before you reply. Skip a step that opens `companion_url` in a browser pane or posts it. Skip it all when the app already shows that result's sets, on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run, and on `issuance_init` when the user named the draft set to pick up |
+| `next_step` | first key of `issuance_init`, `cap_table:get:issuance_companion`, a draft set result that gives a set its `draft_set_id`, the first `draft_set_sources` result after it, and the `cap_table:get:draft_set_companion` read of [an existing draft set](#an-existing-draft-set) | Carta's steps to show that result's page beside the chat: record the sources first, render the issuance app, or wait for the first save. Do them exactly, once, before you reply. Skip it all when the app already shows that result's sets, on every `issuance_init` after the first in a [§ 9](#9-several-types-in-one-run) run, and on `issuance_init` when the user named the draft set to pick up |
 | `how_to_reply` | `cap_table:get:issuance_companion`, draft set results | with `companion.issuance_app`, Carta's rules for how a reply shows the app: do what it says. Without it, text from Carta describing the same flow; the steps in this file are the ones to carry out |
 | `instructions`, `how_to_open` | `issuance_init`, `cap_table:get:issuance_companion`, draft set results | text from Carta describing the same flow; the steps in this file are the ones to carry out |
 
@@ -161,8 +161,6 @@ Once each:
 5. Reply as [§ 6](#6-ask-whats-missing-once) says.
 
 ## An existing draft set
-
-A PIU with no `companion.issuance_url` has no page: at step 4 it goes on in the chat, as [§ PIU](#piu) says.
 
 The user names a draft set of this type ("resume draft set 472", "the Oct 30 board consents
 set"), or gives files and names none.
@@ -545,10 +543,3 @@ value, gets an answer in the chat: the file, page and quote from the sources you
 
 Until issued it is a **draft set**, never an issuance. After, say Issued or Held for board
 approval. No ids in your text except `set_label`.
-
-## PIU
-
-A PIU with `companion.issuance_url` runs as every other type, and the admin issues it with
-**Issue PIUs** in the app. A PIU with no `companion.issuance_url` has no issuance page: run it as
-on a host with no app, and review and issue it in the chat as [§ 8](#8-issue)'s *Elsewhere* says.
-Never render the app for it, and never open the `companion_url` its draft set results carry.
