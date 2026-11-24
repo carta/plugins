@@ -7,15 +7,17 @@ Query limited-partner and general-partner data: commitments, contributions, mana
 
 ## Common Aliases
 
-`LP`, `LPs`, `limited partners`, `general partners`, `investors in the fund`, `capital accounts`, `partner rollforward`, `commitments`, `units per LP`
+`LP`, `LPs`, `limited partners`, `general partners`, `investors in the fund`, `capital accounts`, `commitments`, `units per LP`
 
 ## Picking the right table
 
 | User intent | Table |
 |---|---|
 | Current commitments, contributions, fees, NAV balance per LP ("list LPs in [Fund] with commitments") | `PARTNER_DATA` |
-| Capital-account statement / rollforward / NAV over time per LP ("LP X's capital account as of 12/31", "partner rollforward") | `PARTNER_MONTHLY_NAV_CALCULATIONS` |
+| One LP's capital-account balance at a date, or its balance history ("LP X's capital account as of 12/31") | `PARTNER_MONTHLY_NAV_CALCULATIONS` |
 | How many LPs / GPs does a fund have | either (count distinct `partner_id` / `partner_name`) |
+
+> These tables answer one-off partner questions. Don't assemble a partner rollforward report or capital account statement from them — those reports are out of scope for this skill.
 
 ## Table: PARTNER_DATA
 
@@ -58,7 +60,7 @@ LIMIT 200
 
 ## Table: PARTNER_MONTHLY_NAV_CALCULATIONS
 
-The per-partner companion to `MONTHLY_NAV_CALCULATIONS`: one row per partner per fund per month-end. Source for capital-account statements and rollforwards.
+The per-partner companion to `MONTHLY_NAV_CALCULATIONS`: one row per partner per fund per month-end. Source for capital-account balances over time.
 
 > **Cross-table column trap:** `CUMULATIVE_COMMITMENT_AMOUNT` is the correct commitment column in `MONTHLY_NAV_CALCULATIONS` but **does not exist** in `PARTNER_MONTHLY_NAV_CALCULATIONS`. Use `TOTAL_COMMITMENT` here instead.
 
@@ -97,7 +99,7 @@ ORDER BY capital_account_balance DESC NULLS LAST
 LIMIT 200
 ```
 
-### Query 3 — Capital-account rollforward for one LP
+### Query 3 — One LP's capital-account balance history
 
 ```sql
 SELECT

@@ -7,14 +7,15 @@ description: >
   cash flows, balance sheets, cap tables, shareholders, 409a valuations, FMV,
   MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
   data queries; over carta-portfolio-valuations for
-  read-only valuation/MOIC/investment data; over
-  carta-lp-dashboard unless asked by name; over carta-consolidating-financial-reports for
+  read-only valuation data; over
+  carta-lp-dashboard unless named; over carta-consolidating-financial-reports for
   single-fund balance sheets.
   Use instead: carta-lp-summary for the LP Summary page ("build the LP summary for [firm]");
   carta-portfolio-ownership for ownership %;
   carta-co-investors for "who else invested";
-  carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling;
-  carta-manco for any budget mention — build/edit, actuals, pacing, drill-down; carta-manco-reporting for a ManCo dashboard or Budget vs Actuals view.
+  carta-waterfall-modeling for "who gets paid if X exits";
+  carta-manco for any budget mention — build/edit, actuals, pacing, drill-down; carta-manco-reporting for a ManCo dashboard or Budget vs Actuals view;
+  carta-partner-rollforward for partner rollforwards.
 model: inherit
 allowed-tools:
   - mcp__carta__call_tool
@@ -36,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.61.9</carta-plugin>
+<carta-plugin>carta-investors:7.62.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -59,6 +60,7 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 * **Always use** when the user context is set to a `Firm` and the request involves any Carta Web / Fund Admin data query, financial metric, or reporting question
 * **Do NOT use** for funds that live in **Carta Fund Forecasting (formerly Tactyc)** — that is a separate domain with its own data; use `carta-fund-forecasting` for performance metrics (TVPI/DPI/IRR/MOIC/NAV/reserves) of those funds. When the fund system is unknown for a performance query, `fund-performance.md` probes Fund Forecasting automatically and redirects if the fund is found there
 * **Do NOT use** for the firm's or a fund's ownership of its portfolio companies (ownership %, FD%, shares held, "how much do we own of X", ownership by company and fund): use `carta-portfolio-ownership`, unless the question also asks for invested amounts or cost. A company's full cap table, share classes or shareholder list stays here.
+* **Do NOT use** for a partner rollforward report — the rollforward across funds or a fund family, a partners' capital walk, an LP capital account statement, or a capital call commitment / funded / unfunded rollforward: use `carta-partner-rollforward`. A single partner number (one quarter's contributions, an LP's balance, an LP count) stays here.
 * **Always use** for portfolio queries, holdings questions, fund breakdowns, or "what is [firm/fund] invested in" phrasing — even though those phrases appear in `carta-soi`'s trigger list; `carta-soi` is for building persistent Cowork artifacts, not answering data questions inline
 * **Always use** for read-only valuation data (409a history, FMV, MOIC, investment metrics) — even though "valuations" and "portfolio companies" appear in `carta-portfolio-valuations`; that skill is for running and updating valuation projects, not reading data
 * **Do NOT use** for co-investor questions — "who else invested in [Company]", "other investors in [Company]", "who are our co-investors", the syndicate on a company's round. Do not run Steps 0–4: invoke `Skill(carta-investors:carta-co-investors)` and follow it, even when the question is one line about one company. A request for a company's own shareholder list or cap table ("who owns [Company]", "show me the cap table") stays here, and so do single round facts ("who led Acme's Series B") and the firm's own syndicate SPVs ("list our syndicate SPVs")
@@ -73,7 +75,7 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 | "What's the current NAV for [Fund]?"<br>"Show me TVPI and DPI for all funds"<br>"Show me total contributions and distributions for each LP" | `nav.md` |
 | "What's the IRR for [Fund]?"<br>"Show me fund performance metrics"<br>"What are the fund metrics as of Q4 2024?"<br>"List my funds."<br>"What's the current Net IRR and TVPI of [Fund]?"<br>"How many planned reserves are left to deploy in [Fund]?"<br>"Show called capital per quarter for [Fund] over the last 3 years." | `fund-performance.md` |
 | "What journal entries were posted for [Fund] last quarter?"<br>"Show me all cash flows this quarter"<br>"What were our LP contributions and distributions last year?" | `cash-flows.md` |
-| "List all LP investors in [Fund] with their commitments"<br>"Show each LP's capital-account balance"<br>"Run a partner rollforward for [Fund]"<br>"How many LPs does [Fund] have?" | `partner-data.md` |
+| "List all LP investors in [Fund] with their commitments"<br>"Show each LP's capital-account balance"<br>"How many LPs does [Fund] have?" | `partner-data.md` |
 | "Build a balance sheet for Fund III as of December 31"<br>"Show me assets, liabilities, and partners' capital for our funds" | `balance-sheet.md` |
 | "Show me the cap table for [Company]"<br>"What share classes does [Company] have?"<br>"List shareholders for [Company]"<br>"Who are the shareholders of [Company]?"<br>"Show me the shareholder list"<br>"Who owns [Company]?"<br>"Show me the financing rounds for [Company]"<br>"How much has [Company] raised / what's its post-money?"<br>"Show me the portfolio event history for [Company]"<br>"What certificate activity has [Company] had?"<br>"Has [Company] had any warrant exercises or share class conversions?" | `cap-table.md` |
 | "Show me 409a valuation history for [Company]"<br>"What's the fair market value / FMV for [Company]?" | `valuations.md` |
@@ -182,7 +184,7 @@ Use this table to pick the right context file before running any query:
 | Portfolio events — certificate issuance/transfer, conversions, warrant exercises                                                                                                                           | `cap-table.md`                                    | `NEWSFEED` (firm context required)                                        |
 | 409a valuations, fair market value, FMV, common stock price                                                                                                                                                | `valuations.md`                                   | `IRC409A_VALUE`                                                           |
 | Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss                                                                                                                                | `investments.md`                                  | `AGGREGATE_INVESTMENTS`, `AGGREGATE_INVESTMENTS_HISTORY` (point-in-time)  |
-| Per-LP/GP data — commitments, contributions, capital accounts, partner rollforward, LP count                                                                                                               | `partner-data.md`                                 | `PARTNER_DATA`, `PARTNER_MONTHLY_NAV_CALCULATIONS`                        |
+| Per-LP/GP data — commitments, contributions, capital accounts, LP count                                                                                                                                    | `partner-data.md`                                 | `PARTNER_DATA`, `PARTNER_MONTHLY_NAV_CALCULATIONS`                        |
 | Portfolio company financials — revenue, ARR, headcount, KPIs                                                                                                                                               | `company-financials.md`                           | `portfolio_holding__list__metrics`, then `COMPANY_FINANCIALS`                                                      |
 | Benchmark percentile rankings vs peers                                                                                                                                                                     | Use `carta-investors:carta-fund-performance` | `TEMPORAL_FUND_COHORT_BENCHMARKS`                                         |
 | **The firm's own entities** — list of funds, SPVs, syndicate SPVs, GP entities, management companies (names, entity type, links)                                                                         | —                                                 | `fa__list__entities` — see "Listing the firm's entities" under Step 0 (set `entity_types` to the types asked about) |
