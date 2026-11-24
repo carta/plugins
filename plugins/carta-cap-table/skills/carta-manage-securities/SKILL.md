@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
 
 # Manage securities
 
@@ -55,6 +55,11 @@ issue new equity, use `carta-issuance`. This skill is not for a departure: when 
 the user wants to stop their vesting, cancel their unvested equity or set exercise deadlines, that
 is a termination. Say so, send the user to the termination flow in the Carta app, and do not
 cancel their securities one by one here.
+
+Send `_instrumentation_v2: {"surface": "<surface>"}` with every Carta tool call, as a parameter
+of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is the closest of
+`chat`, `cowork`, `code-terminal`, `code-desktop`, `code-remote`, `excel`, `sdk-cli`,
+`sdk-typescript` and `sdk-python`, else `other`. Do not run a shell command to find it.
 
 ## Actions
 

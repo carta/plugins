@@ -62,7 +62,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -78,6 +78,11 @@ displays CTC data and (in later tabs) models scenarios locally. Plan activation,
 employee edits, offer letters, HRIS resync and every other mutation stay in the CTC product.
 
 > **Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
+
+Send `_instrumentation_v2: {"surface": "<surface>"}` with every Carta tool call, as a parameter
+of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is the closest of
+`chat`, `cowork`, `code-terminal`, `code-desktop`, `code-remote`, `excel`, `sdk-cli`,
+`sdk-typescript` and `sdk-python`, else `other`. Do not run a shell command to find it.
 
 ## No demo data — real corporation required
 **Never** fabricate, synthesize, or fall back to demo data, and never launch against an empty or
@@ -835,6 +840,8 @@ is one page, not one bucket — each page subagent's brief must spell all of it 
 - Its bucket code(s), and **the matching bucket param for that dimension** — `post_money_bucket`
   / `headcount_bucket` / `capital_raised_bucket`, exactly one per call.
 - The pinned `benchmark_version_id`, `corporation_id`, and `equity_quantity: "FOUR_YEAR_GRANT"`.
+- The run's `surface`, and the instruction to send `_instrumentation_v2: {"surface": "<surface>"}`
+  next to `name` and `arguments` on each export call: a subagent sees only its brief.
 - The absolute raw-dir path, and the destination `<raw_dir>/peer_<CODE>` — the code spelled
   **exactly** as in the table above, since the builder reads the dimension and label back out of
   the directory name.

@@ -34,8 +34,10 @@ loads `view_remote_inline`, `view_remote_next` and the named `cap_table__mutate_
 
 - An **app host** has `view_remote_next`, renders apps, and `issuance_init` gave
   `companion.issuance_app`. Only there does the page show ([the issuance app](#the-issuance-app)).
-- A **card host** has `view_remote_inline` and shows chat cards: any Claude Desktop or claude.ai chat,
-  and Claude Code. If the host cannot draw the card, ask in the chat.
+- A **card host** is a host where that `ToolSearch` loaded `view_remote_inline`: any Claude Desktop
+  or claude.ai chat, and Claude Code. There, every item goes in the card. Never decide from the
+  surface or the session that the host cannot draw it. Ask in the chat only when the tool did not
+  load, Carta refused the card call, or the user says the card does not show.
 
 Call Carta commands as `call_tool(name="cap_table__mutate__prepare_drafts", arguments={...})`,
 with `__` for each `:`. For this run: no `search_tools`, no `welcome`. Use at most 5 Carta
@@ -129,7 +131,8 @@ Once each:
      whole output unchanged; never type or rebuild the bytes yourself. A larger file stays
      unfiled.
 4. `cap_table:mutate:draft_set_sources`, a source for every value you set, in calls of 50 rows
-   (1–50, 51–100, …) until all rows are covered. Each call has `files: {<key>: {name, file_id}}`,
+   (1–50, 51–100, …) until all rows are covered. Record them on every host, also with no app: the
+   set keeps them for any app that opens it later. Each call has `files: {<key>: {name, file_id}}`,
    each source file of those rows once by a short key; `shared.row_columns`, the columns one
    quote on each row's page holds (a table's row: name, email, quantity, type, start date; a
    letter's equity sentence: quantity, type); and `rows: [{draft_pk, source, fields}]` with every
@@ -183,8 +186,9 @@ type, so no `prepare_drafts` and no save without its `draft_set_id`.
    `[{security_type, draft_set_id}]`, then render the app as its `next_step` says. With no app
    there is no page: go on in the chat.
 5. Record sources for every saved value the files at hand give, as [§ 5](#5-build-the-draft-set)
-   steps 3 and 4 say: file the files first, then `draft_set_sources` in § 5 step 4's calls. Each
-   open input of the read that the files leave empty is a `needs_input` source. A value the
+   steps 3 and 4 say: file the files first, then `draft_set_sources` in § 5 step 4's calls. Rows
+   pasted in the chat are files here too, with `added_by_you` sources, also when every value
+   matches the saved one. Each open input of the read that the files leave empty is a `needs_input` source. A value the
    files give that differs from the saved one is not saved over it: it is a
    [§ 6](#6-ask-whats-missing-once) item on that cell, a `pick_one` of the file's value and
    `Keep <saved value>`. With no files, record nothing here.
@@ -222,13 +226,13 @@ answers, the reply is these parts, in this order, and no other text:
    board consent covers it yet" when none does), the type's summary items. A check message on a
    cell is an item, never a line here. A thing that needs the user and is on no cell (a banner error, a
    possible duplicate stakeholder, a file you could not read) adds one line here.
-2. "N things need you, in the card above.", with N the number of items. The line ends there,
-   with one exception: the set has an empty optional column ([§ 8](#the-optional-columns-once-per-set)
-   step 1: a `field_spec` field with `required` false, not `hidden` and with no `default_value`,
-   that no row fills). Only then add " Ask me if you also want optional details." to that line:
-   the card never posts when it is done, so the user may go straight to Issue. Before you add
-   it, name to yourself the `field_spec` field that makes the exception. With no such field
-   (every field has `required` true or a `default_value`), never add it. The text names no item,
+2. "N things need you, in the card above.", with N the number of items. Then look in
+   `field_spec` for an empty optional column ([§ 8](#the-optional-columns-once-per-set) step 1:
+   a field with `required` false, not `hidden` and with no `default_value`, that no row fills).
+   Name that field to yourself. Only when you can name one, add " Ask me if you also want
+   optional details." to that line: the card never posts when it is done, so the user may go
+   straight to Issue. When every field has `required` true or a `default_value`, you can name
+   none: the line ends at "in the card above.", with no other words. The text names no item,
    no field of an item and no value an item asks about: the card holds them, once.
 3. The close, as [§ 12](#12-end-every-turn-that-wrote) says. It is the last line of the reply.
 
@@ -276,20 +280,24 @@ item on that cell, and a check warning is a `pick_one` with only `Keep <current 
 
 ### No card host
 
-Only where there is no card host, or it cannot draw the card: in place of the card, one
-`AskUserQuestion` with the first 4 items, one question each (up to 4 options each), and with more
-items, one more `AskUserQuestion` after its answers. Never ask one item per call, and never put
-two items in one question. A `type_value` item, a check error with no
-value to propose included, offers no value of your own: its options are `I'll type it` and
-`Leave it for now`, and the user types the value as the free-text answer. A picked option label
+Only where the card host rule of [§ 1](#1-tools) sends the run to the chat. Build first: the
+first question comes after [§ 5](#5-build-the-draft-set) saved the set and recorded its sources,
+never before the save. Then, in place of the card, one `AskUserQuestion` with the first 4 items,
+one question each (up to 4 options each), and with more items, one more `AskUserQuestion` after
+its answers, also when the user left every answer open. Never ask one item per call, and never
+put two items in one question. A `type_value` item, a check error with no value to propose
+included, offers no value of your own, also no "today" for a date: its options are
+`I'll type it` and `Leave it for now`, and the user types the value as the free-text answer. A picked option label
 is never a value: `Leave it for now`, or `I'll type it` with nothing typed, is no answer, so save
 nothing for that item, and it stays open. Write no text before the first question, and never
 list the items in text. After the answers, save the real answers as § 7 says. The reply then is
 these parts, in this order, and no other text:
 
-1. The *What I drafted* block of [The reply](#the-reply).
+1. The *What I drafted* block of [The reply](#the-reply). A check warning is an item, so it is
+   never a line there.
 2. "Saved your N answers.", with N the saved answers only. With none, leave the line out.
-3. While items are open: "N things still need you. Say when, and I'll ask again." Else § 8.
+3. While items are open, this line word for word, with only N changed: "N things still need
+   you. Say when, and I'll ask again." Nothing goes between its two sentences. Else § 8.
 4. The close.
 
 Outside § 8's review, the reply names no item: the user just saw them in the questions. So no
@@ -368,11 +376,12 @@ optional columns, one time per set:
    A reply in the turn that built the set starts with part 1 of [The reply](#the-reply), one
    time; § 8 adds it in no later turn. A free-text answer picks the empty optional columns whose
    `label` it names.
-4. Each picked column: ask its value for every row, one item per row: a `pick_one` with the
-   field's `values` and `enum_labels` when it has them, else a `type_value` with `input` from
-   its `type`, each `body` saying the column is optional. On a card host, the items go in one
-   `need_input` card ([The card](#the-card)), never in an `AskUserQuestion`, and the reply is as
-   [The reply](#the-reply) says; elsewhere, as [No card host](#no-card-host) says. Save the
+4. Each picked column: on a card host, one `need_input` card ([The card](#the-card)), never an
+   `AskUserQuestion`, also right after the step 2 question, and the reply is as
+   [The reply](#the-reply) says; elsewhere, as [No card host](#no-card-host) says. It asks the
+   column's value for every row, one item per row: a `pick_one` with the field's `values` and
+   `enum_labels` when it has them, else a `type_value` with `input` from its `type`, each `body`
+   saying the column is optional. Save the
    answers as § 7 says, with `added_by_you` sources. An optional row left empty is no open
    input: after these answers, go on to the review.
 

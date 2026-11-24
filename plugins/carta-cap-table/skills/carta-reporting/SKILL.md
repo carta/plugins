@@ -61,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
 
 # Custom Reports
 
@@ -78,6 +78,11 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 > - Access to a Carta account with cap table data
 > - Reporting feature enabled for your company (ask your Carta admin if unsure)
 > - Claude Desktop: connects via the Carta integration button; Claude Code: uses an already-configured Carta MCP
+
+Send `_instrumentation_v2: {"surface": "<surface>"}` with every Carta tool call, as a parameter
+of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is the closest of
+`chat`, `cowork`, `code-terminal`, `code-desktop`, `code-remote`, `excel`, `sdk-cli`,
+`sdk-typescript` and `sdk-python`, else `other`. Do not run a shell command to find it.
 
 ## Trigger Examples
 
@@ -285,10 +290,12 @@ Run each script only in the one-line form shown below, as its own command: write
      template_id:    <template_id>
      run_id:         <run_id>
      carta_prefix:   <_carta_prefix>
+     surface:        <surface>
      output_path:    carta-reporting/template-run-<run_id>.xlsx
      The main thread treats the file's existence as "ready". Only `report_files.py` writes output_path, atomically, and it also creates the git-ignored `carta-reporting/` folder. Never write or move that file any other way.
 
      Steps:
+     Every `read_tool` call below sends `_instrumentation_v2: {"surface": "<surface>"}` next to `name` and `arguments`.
      0. Every error below is written with this one-line command, `--message` being the quoted error text: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" error --out <output_path> --message "<error text>"`
      1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_template_run", "arguments": { corporation_id: <corp_id>, template_id: <template_id>, run_id: <run_id> }})` every 3 s, up to 200 attempts (10 minutes), while `status` is "queued" or "running".
         - "succeeded" → proceed to step 2.
@@ -345,10 +352,12 @@ Run each script only in the one-line form shown below, as its own command: write
    user_report_pk: <pk>
    corporation_id: <corp_id>
    carta_prefix:   <_carta_prefix>
+   surface:        <surface>
    output_path:    carta-reporting/carta_report_<pk>.json
    The main thread treats the file's existence as "ready". Only `report_files.py` writes output_path, atomically, and it also creates the git-ignored `carta-reporting/` folder. Never write or move that file any other way.
 
    Steps:
+   Every `read_tool` call below sends `_instrumentation_v2: {"surface": "<surface>"}` next to `name` and `arguments`.
    0. Every error below is written with this one-line command, `--message` being the quoted error text: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" error --out <output_path> --message "<error text>"`
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
       20 attempts.
@@ -370,10 +379,12 @@ Run each script only in the one-line form shown below, as its own command: write
    user_report_pk_preview: <pk_preview>
    corporation_id:         <corp_id>
    carta_prefix:           <_carta_prefix>
+   surface:                <surface>
    output_path:            carta-reporting/carta_preview_<pk_preview>.json
    The main thread treats the file's existence as "ready". Only `report_files.py` writes output_path, atomically, and it also creates the git-ignored `carta-reporting/` folder. Never write or move that file any other way.
 
    Steps:
+   Every `read_tool` call below sends `_instrumentation_v2: {"surface": "<surface>"}` next to `name` and `arguments`.
    0. Every error below is written with this one-line command, `--message` being the quoted error text: `UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_files.py" error --out <output_path> --message "<error text>"`
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
       up to 10 attempts.

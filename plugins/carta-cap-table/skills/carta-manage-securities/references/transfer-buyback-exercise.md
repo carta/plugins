@@ -69,7 +69,8 @@ Bootstrap with `security_type` `certificate`, `rsa` or `piu`. The action is
 - `operation_type`: a buyback because the holder left the company is `RELATIONSHIP_CHANGE`.
   Unvested shares from an early exercise, bought back when the holder leaves, are
   `EARLY_EXERCISE_TERMINATION`. A tender offer is `TENDER_OFFER`. Any other buyback is `BUYBACK`.
-  A forfeiture can be a buyback or a cancel: ask which one the user means, and offer both.
+  A forfeiture can be a buyback or a cancel: ask which one the user means in one
+  `AskUserQuestion` before any preview, with a buyback option and a cancel option.
 - A certificate, RSA or PIU from an equity plan also takes `return_shares`: ask whether the
   shares go back to the plan pool. When you do not know if it is from a plan, ask.
 - `reduce_from`: `unvested` buys back the unvested shares first (a holder who left), `vested`

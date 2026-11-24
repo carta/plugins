@@ -8,7 +8,7 @@ when_to_use: >-
   Use when the user asks who has access to the company in Carta, or to manage its users:
   "who can see our cap table", "who are the admins", "what access does Dana have", "am I an
   admin", "invite our new CFO as an editor", "give our auditor view-only access", "add our
-  lawyer to Carta", "make Priya an admin", "change Lee's title", "John left, remove his Carta
+  lawyer to Carta", "make Priya an admin", "change Lee's title on our Carta account", "John left, remove his Carta
   access", "resend Maria's Carta invite". Not for a stakeholder's invitation to accept a grant
   or its reminder, or terminating someone's equity. For board members, use carta-boardroom.
 owner: carta-cap-table maintainers (#cap-table-eng)
@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
 
 # Company users and roles
 
@@ -39,6 +39,11 @@ the user approves and you apply it. A company user signs in to manage the compan
 stakeholder holds equity. For board members, use the carta-boardroom skill. Removing access
 does not end a person's equity: when the person left the company, say a termination in Carta
 does that.
+
+Send `_instrumentation_v2: {"surface": "<surface>"}` with every Carta tool call, as a parameter
+of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is the closest of
+`chat`, `cowork`, `code-terminal`, `code-desktop`, `code-remote`, `excel`, `sdk-cli`,
+`sdk-typescript` and `sdk-python`, else `other`. Do not run a shell command to find it.
 
 ## Actions
 

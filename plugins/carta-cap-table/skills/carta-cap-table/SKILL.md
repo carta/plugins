@@ -35,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -44,6 +44,11 @@ allowed-tools:
 The rules for every Carta cap table answer, and the direct commands for a single fact or
 a short answer. A more specific carta-cap-table skill (vesting, valuations, round history,
 issuance, reports) adds its own steps. These rules still apply.
+
+Send `_instrumentation_v2: {"surface": "<surface>"}` with every Carta tool call, as a parameter
+of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is the closest of
+`chat`, `cowork`, `code-terminal`, `code-desktop`, `code-remote`, `excel`, `sdk-cli`,
+`sdk-typescript` and `sdk-python`, else `other`. Do not run a shell command to find it.
 
 ## Find the company
 

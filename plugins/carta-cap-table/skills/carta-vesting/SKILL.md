@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
 
 # Vesting
 
@@ -43,6 +43,11 @@ Read the vesting of issued securities, and change it. Carta checks each change i
 To issue new equity, use `carta-issuance`. To stop the vesting of someone who left, that is a
 termination: say so, send the user to the termination flow in the Carta app, and change nothing
 here. An acceleration at a departure is done here.
+
+Send `_instrumentation_v2: {"surface": "<surface>"}` with every Carta tool call, as a parameter
+of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is the closest of
+`chat`, `cowork`, `code-terminal`, `code-desktop`, `code-remote`, `excel`, `sdk-cli`,
+`sdk-typescript` and `sdk-python`, else `other`. Do not run a shell command to find it.
 
 ## Actions
 
