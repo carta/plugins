@@ -30,10 +30,10 @@ file decides what to do with them.
 **First rule: save what you know, record its sources, then ask.**
 
 [engine.md Step 1](engine.md#step-1--load-every-tool-in-one-toolsearch-call)'s one `ToolSearch`
-loads `view_remote_inline`, `view_remote_next` and the named `cap_table__mutate__apply_plan`.
+loads `view_remote_inline`, `view_remote_panel` and the named `cap_table__mutate__apply_plan`.
 
 - An **app host** is one where `issuance_init` gave `companion.issuance_app` and that `ToolSearch`
-  loaded `view_remote_next`. Carta sends `issuance_app` only to a client that renders apps, so
+  loaded `view_remote_panel`. Carta sends `issuance_app` only to a client that renders apps, so
   never decide from the surface or the session that the host cannot. Only there does the page show
   ([the issuance app](#the-issuance-app)).
 - A **card host** is a host where that `ToolSearch` loaded `view_remote_inline`: any Claude Desktop
@@ -483,7 +483,7 @@ id, say why, preview again, then `cap_table:mutate:apply_plan` once confirmed.
 
 Carry on silently: `draft_set_sources` refused twice, skip sources, and with
 [the issuance app](#the-issuance-app), for a set a save just gave its `draft_set_id`, render it
-now: one `view_remote_next` with the run's `sets`; a file not filed, its
+now: one `view_remote_panel` with the run's `sets`; a file not filed, its
 sources have no `file_id`; no `view_remote_inline`, ask in the chat; a view refused with
 "Use <tool>(...)", load that tool and call it once, as it says. Send a refused
 `draft_set_sources` call again once, and each `dropped` cell again once, under the key its
@@ -525,7 +525,7 @@ render stays in the chat, so render it only at these times:
 - **After a later save that gives another set its `draft_set_id`**, record its sources, then render
   it again as that sources result's `next_step` says.
 - **When the user asks to see the page** once a save has given a set its `draft_set_id`, render it
-  again at once: one `view_remote_next` with the run's `sets`, no other call first, and no link.
+  again at once: one `view_remote_panel` with the run's `sets`, no other call first, and no link.
   Before that, say the page opens beside the chat after the first save, and render nothing.
 - **On [an existing draft set](#an-existing-draft-set)**, render it once, at that section's step 4:
   no save gives the set its `draft_set_id` in this run.
@@ -534,7 +534,7 @@ render stays in the chat, so render it only at these times:
 A card message that asks where a document says a value: name the set's tab and the cell to select
 in the app, and save nothing.
 
-**No `view_remote_next` after one `ToolSearch`, or this chat's `issuance_init` answered without
+**No `view_remote_panel` after one `ToolSearch`, or this chat's `issuance_init` answered without
 `companion.issuance_app`**: there is no app and no page. Go on in the chat: review and
 issue as [§ 8](#8-issue)'s *Elsewhere* says. A request to see the page, or where a document says a
 value, gets an answer in the chat: the file, page and quote from the sources you recorded.
