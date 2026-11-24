@@ -6,10 +6,9 @@ apply and the closing are in [SKILL.md § Flow](../SKILL.md#flow).
 ## The Change page
 
 Carta keeps an edit as a **thread** of previews: each preview is the next **revision**. For a type
-the page serves, the bootstrap carries `companion`, and each preview result
-leads with `companion_url` and `how_to_reply`, sometimes after `next_step`. The page shows the
-latest revision, read-only. Every change happens in chat; the page follows. Never build the page's
-address.
+the page serves, the bootstrap carries `companion`, and each preview result leads with
+`how_to_reply`, sometimes after `next_step`. The page is an app beside the chat. It shows the
+latest revision, read-only. Every change happens in chat; the page follows.
 
 ### The Change page app
 
@@ -37,31 +36,28 @@ While the app shows this edit's thread:
   `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new revision,
   so wait for **Apply** on it.
 - Its **Not now** message says not to apply: apply nothing and say so.
-- Post no `companion_url` and open no browser pane. Ignore the view's `_terminal_fallback`
-  text: it is for a host with no app.
+- Ignore the view's `_terminal_fallback` text: it is for a host with no app.
 
 **No `view_remote_next` after one `ToolSearch`, or the host cannot render apps: there is no
-app.** Then:
+app.** Then the chat is the only page:
 
-- Open `companion_url` as the file that [SKILL.md § Flow](../SKILL.md#flow) step 5 names says,
-  and show each preview and ask for approval as steps 5 and 7 say.
-- When the user asks to see the page, open it the same way.
-- Once the page is open, it follows each new revision by itself: **do not navigate again on the
-  same thread**.
+- Show each preview in the chat and ask for approval as
+  [SKILL.md § Flow](../SKILL.md#flow) steps 5 and 7 say.
+- When the user asks to see the page, show the latest preview in the chat again.
+- Post no link to the Change page, and open no browser.
 
 ## Open the page first
 
 Every edit's first bootstrap sends `look_first: true`, whatever the user said, so the page is up
-before the first preview. The result leads with `next_step`, `companion_url` and `how_to_reply`,
-and carries `thread_id`. Render the app as [§ The Change page app](#the-change-page-app) says, or,
-where there is no app, open `companion_url` as [SKILL.md § Flow](../SKILL.md#flow) step 5 says.
-Then:
+before the first preview. The result leads with `next_step` and `how_to_reply`, and carries
+`thread_id`. Render the app as [§ The Change page app](#the-change-page-app) says. Then:
 
 - **The user named the field and the value:** go on to the preview with that `thread_id`. The
-  open page turns into the diff.
+  app turns into the diff. With no app, the preview shows in the chat.
 - **They did not** ("show me first", "something is wrong", only a person or securities): say in
-  one line what the page shows, then ask which field to change as **No field named** in
-  [§ Fields and values](#fields-and-values) says, never in free text.
+  one line what the page shows, or with no app, what the bootstrap shows. Then ask which field
+  to change as **No field named** in [§ Fields and values](#fields-and-values) says, never in
+  free text.
 
 Send that `thread_id` with the first preview.
 
