@@ -83,6 +83,9 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   #     # rather than an error. Do not report that as "no rows matched those filters".
   #     group_selected       — grouping dimension, e.g. 'Relationship', 'Cost Center',
   #                            'Job Title' (REQUIRED when reports includes summary_grouped_cap)
+  #     report_currency      — optional ISO 4217 code, e.g. "EUR". Adds a "Total Cash Raised (<CCY>)" column
+  #                            (key total_cash_raised_in_report_currency), only when some cash was raised in
+  #                            another currency than this one.
   #
   #   equity_plan_report
   #     starting_date        — report period start, MM/DD/YYYY (REQUIRED)
@@ -191,9 +194,15 @@ call_tool({"name": "reporting__create__report_template", "arguments": { corporat
   #   A custom report holds ONE report type: `source` is a single object, and Carta refuses `sources`, `join`
   #   (unsupported_block), `dates`, formulas and aggregations (not_supported). A date filter keeps its exact date.
   #   Totals go in a sheet's `summary`, never `aggregations`.
-  #   { schema_version: 1, default_name, source: { report_type, params: {} },
+  #   { schema_version: 1, default_name, source: { report_type, params },
   #     sheets: [{ name, from: { match: "exact" | "prefix" | "suffix", value, merge? },
-  #                columns: [{ key } | { dynamic, field?, source }], filters: [{ key, op, value }], sort: [{ key, direction }] }] }
+  #                columns: [{ key }], filters: [{ key, op, value }], sort: [{ key, direction }] }] }
+  #   `params` are the report's own settings, as the report was created with them (a cap table's `reports`,
+  #   `group_selected`, `report_currency`); never the scoping filters. Carta refuses a param a report needs on
+  #   every run (forbidden_param): starting_date, ending_date, to_date, stakeholder_pk, option_plan_pk,
+  #   organization_pk. build_template_definition.py refuses a report created with one, so an equity_plan_report,
+  #   or a report run for one stakeholder, can't be saved. Carta checks the rest and refuses one a custom report
+  #   can't keep (unknown_field).
   #   A sheet with totals has `summary` in place of `columns` and `sort` (its filters run first), written from a
   #   report_processor `summary_table`:
   #     summary: { rows: [1 or 2 keys], pivot?: key, values: [{ key, fn: "sum" | "count",
@@ -204,7 +213,9 @@ call_tool({"name": "reporting__create__report_template", "arguments": { corporat
   #   more than one currency are never saved, and it labels a money group in dollars, so a summary grouped by
   #   money in another currency is never saved either.
   #   Columns, filters and sort are named by `key`, never by header. A per-item column (one per share
-  #   class, plan, currency…) is named by `dynamic`, `field` and `source`; filters and sort take keys only.
+  #   class, plan, currency…) has no key, and Carta refuses `dynamic` (unknown_dynamic_column). For cash
+  #   raised per currency, a cap table with a report_currency has a keyed total instead, when some cash was
+  #   raised in another currency.
   #   Merged sheets are saved as one sheet whose `from` matches every merged sheet by a common start or
   #   end of name, with `merge: true`; a prefix or suffix value is 1-31 characters. Carta refuses a report
   #   type it does not take yet (unsupported_report_type, its reason names the types it takes). No as-of

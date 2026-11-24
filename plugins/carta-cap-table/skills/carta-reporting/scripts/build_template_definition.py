@@ -26,20 +26,24 @@ definition names them by `key`, which the downloaded report JSON carries on ever
 script looks each header up in that file. It writes only what a template stores, and only what
 the screen showed: the sheets in report order, the columns, the filters and the sort, or for a
 sheet with a `summary_table` aggregation, the filters and the summary (groups, pivot, sums and
-counts, shares, totals and subtotals) with each column headed as the screen headed it. A template
-never stores an as-of date: every run asks for one. It ignores the config's `label_overrides`:
+counts, shares, totals and subtotals) with each column headed as the screen headed it, and the
+report's own settings (a cap table's sub-reports, its report currency) as the source's params. A
+template never stores an as-of date: every run asks for one. It ignores the config's `label_overrides`:
 a renamed value is a display choice, and Carta's template renders its own labels. A filter on a
 renamed value cannot be reproduced reliably there (text matches case-insensitively, a rename can
 land on a value the report already holds, several raw values can share a label), so the script
 never rewrites a filter value. When the config has `label_overrides`, it refuses only a filter a
 rename can affect: a `contains` whose text (ignoring letter case) is inside a rename's raw value
 or label, or any other operator whose value equals one of them. Every other filter is saved
-unchanged. A summary is refused when a group it shows is renamed, as the result's stats say.
+unchanged. A summary is refused when a group it shows is renamed, as the result's stats say. A
+column per share class, plan, currency or custom field is refused: a template names columns by key.
 
 Stdout is JSON. On success: {"out": <file>, "sheets": [<sheet name>, ...], "dropped_params": [...]},
 where dropped_params are the report's scoping filters (people, plans, securities, share classes,
-issue dates), which every run of the template leaves open; it is [] when the report had none. Any
-other create param (one the report needs on every run, such as a stakeholder) refuses the save.
+issue dates), which every run of the template leaves open; it is [] when the report had none. A
+create param the report needs on every run (a period's dates, a stakeholder, a plan) refuses the
+save, as Carta would. Every other create param but the run-time ones is kept in `source.params` as
+it was sent: Carta decides which of those a template may keep, and refuses the save naming any it can't.
 When it cannot save the report it writes nothing, exits 1, and prints
 {"refused": [<reason in plain words>, ...]} with every reason it found.
 """
@@ -83,6 +87,12 @@ SCOPING_FILTERS = frozenset(
     {"stakeholder_ids", "equity_plan_ids", "security_ids", "share_class_ids", "issued_from", "issued_to"}
 )
 
+# Params a report needs on every run, which Carta refuses to store (forbidden_param): a template
+# keeps no dates, and a pinned id would go stale or name another company's record.
+PER_RUN_PARAMS = frozenset(
+    {"starting_date", "ending_date", "to_date", "stakeholder_pk", "option_plan_pk", "organization_pk"}
+)
+
 # A config field that transforms the data beyond select, filter and sort, with what to tell the user.
 UNSUPPORTED = {
     "formulas": "Formulas (computed columns) can't be saved in a custom report yet.",
@@ -98,9 +108,11 @@ AGGREGATION_REFUSALS = {
 # Carta's custom report labels a money group in dollars, whatever currency its amounts are in.
 GROUP_LABEL_CURRENCY = "USD"
 MAX_SUMMARY_HEADER = 60  # also the limit of a summary value's id
-# Custom-field columns exist only at some dates; every other dynamic column (one per share class,
-# equity plan, currency...) is saved by kind, field and the item the screen showed.
+# Custom-field columns exist only at some dates. A definition names a column by key only, so no
+# dynamic column (one per share class, equity plan, currency...) can be saved either.
 CUSTOM_FIELD_KINDS = frozenset({"custom_event", "custom_property"})
+# Cash raised per currency: a report currency gives the cap table one keyed total instead.
+CURRENCY_KIND = "currency"
 # Of those, the ones the config can also set for a single sheet.
 UNSUPPORTED_PER_SHEET = ("formulas",)
 
@@ -202,23 +214,28 @@ def _shown_columns(sheet):
 
 
 def _column_key(sheet_name, column, reasons):
-    """The column as a definition names it: its key, or for a dynamic column a
-    {"dynamic", "field"?, "source"} reference to the one item the screen showed."""
+    """The column's key, as a definition names it, or None after recording why it has none."""
     header = column.get("name")
     kind = column.get("dynamic")
-    # A custom-field column is refused even when it also carries a key: the key does not make it
+    # A dynamic column is refused even when it also carries a key: the key does not make it
     # appear at every as-of date.
     if column.get("key") and not kind:
         return column["key"]
-    if kind and kind not in CUSTOM_FIELD_KINDS and column.get("source") is not None:
-        ref = {"dynamic": kind, "source": str(column["source"])}
-        if column.get("field"):
-            ref["field"] = column["field"]
-        return ref
-    if kind:
+    if kind in CUSTOM_FIELD_KINDS:
         reasons.append(
             f'"{header}" in "{sheet_name}" is a custom column that exists only at some dates, '
             "so it can't be saved in a template."
+        )
+    elif kind == CURRENCY_KIND:
+        reasons.append(
+            f'"{header}" in "{sheet_name}" is cash raised in one currency, which can\'t be saved in a template. '
+            'Set a report currency instead: when some cash was raised in another currency, the report adds '
+            '"Total Cash Raised" in that currency, which a template keeps.'
+        )
+    elif kind:
+        reasons.append(
+            f'"{header}" in "{sheet_name}" is a column per share class, plan or other item, '
+            "which can't be saved in a template."
         )
     else:
         reasons.append(f"\"{header}\" in \"{sheet_name}\" carries no stable key, so it can't be saved in a template.")
@@ -282,22 +299,12 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, stats, r
         reasons.append(f'"{sheet_name}" has no column to save.')
     if len(saved_keys) > MAX_COLUMNS:
         reasons.append(f'"{sheet_name}" has {len(saved_keys)} columns; a template keeps at most {MAX_COLUMNS} per sheet.')
-    labels = [_ref_label(key) for key in saved_keys]
-    repeated = sorted({label for label in labels if labels.count(label) > 1})
+    repeated = sorted({key for key in saved_keys if saved_keys.count(key) > 1})
     if repeated:
         reasons.append(f'"{sheet_name}" names the same column more than once ({", ".join(repeated)}).')
 
     if not is_summary:
-        definition["columns"] = [key if isinstance(key, dict) else {"key": key} for key in saved_keys]
-
-    def filter_or_sort_key(header, what):
-        """A filter or sort names a keyed column only: a template can't filter or sort on a
-        dynamic one."""
-        key = key_of(header)
-        if isinstance(key, dict):
-            reasons.append(f'The {what} on "{header}" in "{sheet_name}" uses a per-item column, which a template can\'t {what} on yet.')
-            return None
-        return key
+        definition["columns"] = [{"key": key} for key in saved_keys]
 
     # report_processor filters before it selects columns, so a filter may name any column.
     saved_filters = []
@@ -325,7 +332,7 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, stats, r
         if not all(isinstance(one, (str, int, float, bool)) for one in values):
             reasons.append(f'A filter on "{item["column"]}" in "{sheet_name}" compares to a value that is not text, a number or true/false.')
             continue
-        key = filter_or_sort_key(item["column"], "filter")
+        key = key_of(item["column"])
         if key is not None:
             saved_filters.append({"key": key, "op": item["op"], "value": value})
     if saved_filters:
@@ -343,7 +350,7 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, stats, r
         if direction not in SORT_DIRECTIONS:
             reasons.append(f'The sort on "{item["column"]}" in "{sheet_name}" is "{direction}"; use asc or desc.')
             continue
-        key = filter_or_sort_key(item["column"], "sort")
+        key = key_of(item["column"])
         if key is not None:
             saved_sort.append({"key": key, "direction": direction})
     if saved_sort:
@@ -359,8 +366,8 @@ def _summary(sheet_name, spec, stats, key_of, reasons):
     shows that Carta would show differently."""
     pivot = spec.get("pivot")
     groups = [*spec["rows"], *([pivot] if pivot else [])]
-    group_keys = [_summary_key(sheet_name, header, key_of, reasons) for header in groups]
-    value_keys = [_summary_key(sheet_name, value["column"], key_of, reasons) for value in spec["values"]]
+    group_keys = [key_of(header) for header in groups]
+    value_keys = [key_of(value["column"]) for value in spec["values"]]
     if stats is None:
         reasons.append(
             f'The totals in "{sheet_name}" can\'t be checked: run report_processor.py on the config being saved '
@@ -407,14 +414,6 @@ def _summary(sheet_name, spec, stats, key_of, reasons):
     return summary
 
 
-def _summary_key(sheet_name, header, key_of, reasons):
-    key = key_of(header)
-    if isinstance(key, dict):
-        reasons.append(f'The totals in "{sheet_name}" use "{header}", a per-item column, which a custom report can\'t total on yet.')
-        return None
-    return key
-
-
 
 
 def _summary_id(value, key, taken):
@@ -455,12 +454,6 @@ def _check_one_currency(sheet_name, values, stats, reasons):
                 f'"{header}" in "{sheet_name}" holds amounts in more than one currency, and a custom report '
                 "would add them together, so its totals can't be saved."
             )
-
-
-def _ref_label(key):
-    if not isinstance(key, dict):
-        return key
-    return ":".join(str(key[part]) for part in ("dynamic", "field", "source") if key.get(part))
 
 
 def _merge_affix(sources, sheet_names):
@@ -558,19 +551,22 @@ def build_definition(config, report, report_type, default_name, create_params=No
     clashing = sorted({sheet["name"] for sheet in sheets if tab_names.count(sheet["name"].casefold()) > 1})
     if clashing:
         reasons.append(f"Two sheets would get the same tab name ({', '.join(clashing)}).")
-    # Any other create param is one the report needs on every run (a stakeholder, a set of
-    # sub-reports), which a template has nowhere to keep.
-    needed = sorted(set(create_params or {}) - RUN_TIME_PARAMS - SCOPING_FILTERS)
+    needed = sorted(set(create_params or {}) & PER_RUN_PARAMS)
     if needed:
-        reasons.append(f"This report needs {', '.join(needed)} on every run, which a template can't keep yet.")
+        reasons.append(f"This report needs {', '.join(needed)} on every run, which a template can't keep.")
     if reasons:
         raise TemplateRefused(list(dict.fromkeys(reasons)))
     dropped = sorted(set(create_params or {}) & SCOPING_FILTERS)
+    # The report's own settings (sub-reports, report currency...) go as sent; Carta checks which a
+    # template may keep. Every run leaves the scoping filters open.
+    params = {
+        name: value for name, value in (create_params or {}).items()
+        if name not in RUN_TIME_PARAMS and name not in SCOPING_FILTERS and name not in PER_RUN_PARAMS
+    }
     definition = {
         "schema_version": SCHEMA_VERSION,
         "default_name": default_name,
-        # A template stores no create params: every run leaves the scoping filters open.
-        "source": {"report_type": report_type, "params": {}},
+        "source": {"report_type": report_type, "params": params},
         "sheets": sheets,
     }
     return definition, dropped
