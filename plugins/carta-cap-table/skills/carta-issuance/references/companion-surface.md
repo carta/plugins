@@ -486,7 +486,8 @@ id, say why, preview again, then `cap_table:mutate:apply_plan` once confirmed.
 Carry on silently: `draft_set_sources` refused twice, skip sources, and with
 [the issuance app](#the-issuance-app), for a set a save just gave its `draft_set_id`, render it
 now: one `view_remote_next` with the run's `sets`; a file not filed, its
-sources have no `file_id`; no `view_remote_inline`, ask in the chat. Send a refused
+sources have no `file_id`; no `view_remote_inline`, ask in the chat; a view refused with
+"Use <tool>(...)", load that tool and call it once, as it says. Send a refused
 `draft_set_sources` call again once, and each `dropped` cell again once, under the key its
 `problem` names.
 

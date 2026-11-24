@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.5</carta-plugin>
 
 # Issue Securities
 
@@ -72,7 +72,8 @@ From raw input to issued securities on a Carta cap table. These nine types, and 
 | Warrant | "A warrant for 20,000 shares to Jane under the Series A warrant block." |
 
 One run issues all nine ([§ The run](#the-run)); the last six only from a typed request. A
-spreadsheet or award document sources certificates, option grants and PIUs, and *"resume draft
+spreadsheet or award document sources certificates, option grants and PIUs (a sheet or
+document for any other type goes to the Drafts UI, as the out-of-scope rule below says), and *"resume draft
 set 472"* re-enters a saved set of any of the nine types. To **fix** or cancel an already-issued
 security, use `carta-manage-securities`.
 
