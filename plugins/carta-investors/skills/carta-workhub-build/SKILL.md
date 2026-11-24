@@ -1,17 +1,17 @@
 ---
 name: carta-workhub-build
 description: >-
-  Opens the Carta Workhub for a GP. The Workhub is an app in the Carta connector, so a request to
-  open, show, build, rebuild, update or set up the Carta Workhub, or its artifact, goes here:
-  call `open_workhub` and do not list or open a Workhub artifact, which is an old copy. Use it
-  for "open the carta workhub", "open the carta workhub artifact", "open my Carta workhub",
-  "show my Carta workhub", "build the carta workhub artifact", "rebuild carta workhub", "update
-  my Carta Workhub artifact", "set up carta workhub", "deploy carta workhub", "rebuild carta
-  tasks", "show my Carta task board" or "pin my Carta requests". So does a request to draft or
-  set up a capital call or distribution ("call $1M pro rata from Fund I investors", "draft a
-  distribution"): open the Workhub and draft it there; when it opens, never reply with a Carta
-  link. A prompt from a Workhub page's
-  KYC card, which names this skill's KYC branch, goes to carta-investors:carta-kyc-fill-form.
+  Opens the Carta Workhub for a GP. The Workhub is an app in the Carta connector that this skill
+  opens, so invoke this skill first for any request to open, show, build, rebuild, update or set up
+  the Carta Workhub or its artifact; do not list or open a Workhub artifact, which is an old copy.
+  Use it for "open the carta workhub", "open the carta workhub artifact", "open my Carta workhub",
+  "build the carta workhub artifact", "rebuild carta workhub", "update my Carta Workhub artifact",
+  "set up carta workhub", "rebuild carta tasks", "show my Carta task board" or "pin my Carta
+  requests". Also invoke it to draft or set up a capital call or distribution ("call $1M pro rata
+  from Fund I investors", "draft a distribution"), which is drafted in the Workhub; when it opens,
+  never reply with a Carta link. NOT FOR: the Carta Home fund dashboard
+  (carta-investors:carta-home-build); a prompt from a Workhub page's KYC card
+  (carta-investors:carta-kyc-fill-form).
 model: inherit
 allowed-tools:
   - mcp__claude_ai_Carta__open_workhub
@@ -22,7 +22,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 # Carta Workhub
 

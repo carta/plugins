@@ -1,7 +1,16 @@
 ---
 name: carta-closings-companion
 description: >-
-  Work a fund's closings from chat: "show closing contacts for {fund}", "who are the prospects on {fund}?", "which LPs have countersigned?", "what have LPs entered so far", "invite {investor} to subscribe", "move {investor} to the data room", "remind the LPs who haven't signed", "change {investor}'s commitment to $1.5M", "add {investor} as a prospect on {fund}", "rename {investor}", or a pasted Carta /closings/ or /closings/overview URL. Reads each investor's state, GP commitment, LP-entered amount and collaborators live from fund-admin. When the client renders MCP apps, opens the Closings view and works it with the view's own tools; otherwise answers with a table in chat. Invites prospects to subscribe, invites contacts to the data room, reminds investors who have not finished, changes a commitment, adds a prospect and edits its name or capital call, each after the user confirms. Not for warehouse metrics such as NAV, TVPI, DPI, IRR, cap tables or booked partner commitments; use carta-explore-data for those.
+  Work a fund's closings from chat: "show closing contacts for {fund}", "who are the prospects on
+  {fund}?", "which LPs have countersigned?", "what have LPs entered so far", "invite {investor} to
+  subscribe", "move {investor} to the data room", "remind the LPs who haven't signed", "change
+  {investor}'s commitment to $1.5M", "add {investor} as a prospect on {fund}", "rename {investor}",
+  or a pasted Carta /closings/ or /closings/overview URL. Reads each investor's state, GP
+  commitment, LP-entered amount and collaborators live from fund-admin, in the Closings view when
+  the client renders MCP apps and as a table in chat otherwise. Invites, reminds, changes a
+  commitment, adds a prospect and edits its name or capital call, each after the user confirms. NOT
+  FOR: warehouse metrics such as NAV, TVPI, DPI, IRR, cap tables or booked partner commitments
+  (carta-explore-data).
 version: 1.0.0
 model: inherit
 allowed-tools:
@@ -24,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

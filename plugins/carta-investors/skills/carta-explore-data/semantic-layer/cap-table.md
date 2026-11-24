@@ -55,7 +55,7 @@ When the active MCP context is a **Firm**, the agent has investor-side access on
 |--------------------------------------------------------|------------------|--------------------------------------------|
 | Share-class breakdown, outstanding/authorized shares   | **Query A**      | `FUND_ADMIN.SUMMARY_CAP_TABLE`             |
 | Firm ownership % / fully-diluted stake                 | `portfolio_holding:list:ownership`; **Query B** only without it | `FUND_ADMIN.FUND_CORPORATION_OWNERSHIP` |
-| Portfolio event history (certificate issuance/transfer, conversions, warrant exercises) | **Query C** | `FUND_ADMIN.NEWSFEED` |
+| Portfolio event history (certificate issuance/transfer, conversions, warrant exercises) | **Query C** | `FUND_ADMIN.PORTFOLIO_EVENTS` |
 | Shareholder / stakeholder list, what a holder owns, per-holder breakdown | **Query D** | `FUND_ADMIN.STAKEHOLDER_CAP_TABLE` |
 | Batch — same intent across multiple companies          | A, C, or D with `IN`; firm ownership: one `portfolio_holding:list:ownership` call (**Query B** with `IN` only without it) | (same as above) |
 | Both — "give me the full picture for [Company]"        | A, then `portfolio_holding:list:ownership` (**Query B** only without it) | Both |
@@ -263,9 +263,9 @@ Notes:
 - **Single-company queries** — do not trigger a split. A 500-row result for one corporation means the firm holds that company through 500 funds (extremely unlikely) and is genuine, not truncation.
 - **Verification rule** — if the sum of the two halves' row counts equals the original 500, the original result was already complete; discard the split.
 
-## Query C — Portfolio Event History (NEWSFEED)
+## Query C — Portfolio Event History (PORTFOLIO_EVENTS)
 
-For "portfolio event history" / "certificate activity" / "warrant exercises" / "share class conversions" questions. `NEWSFEED` covers Carta-administered companies across every firm on the platform (~850K rows total) — it is only small and cheap to query at the per-company scope (a handful to a few dozen events each). **Always filter by `CORPORATION_ID` — never query this table unscoped.**
+For "portfolio event history" / "certificate activity" / "warrant exercises" / "share class conversions" questions. `PORTFOLIO_EVENTS` covers Carta-administered companies across every firm on the platform (~850K rows total) — it is only small and cheap to query at the per-company scope (a handful to a few dozen events each). **Always filter by `CORPORATION_ID` — never query this table unscoped.**
 
 Parameters to substitute:
 - `<CORPORATION_UUIDS>` — one or more corporation IDs as a comma-separated list of quoted UUIDs (same resolution as Query A/B).
@@ -281,7 +281,7 @@ SELECT
     FUND_NAME,
     FIRM_NAME,
     DESCRIPTION
-FROM FUND_ADMIN.NEWSFEED
+FROM FUND_ADMIN.PORTFOLIO_EVENTS
 WHERE CORPORATION_ID IN (<CORPORATION_UUIDS>)
 ORDER BY EVENT_DATE DESC
 LIMIT 500
@@ -296,7 +296,7 @@ SELECT
     COUNT(DISTINCT EVENT_UUID) AS event_count,
     MIN(EVENT_DATE) AS earliest_event_date,
     MAX(EVENT_DATE) AS latest_event_date
-FROM FUND_ADMIN.NEWSFEED
+FROM FUND_ADMIN.PORTFOLIO_EVENTS
 WHERE CORPORATION_ID IN (<CORPORATION_UUIDS>)
 GROUP BY CORPORATION_ID, EVENT_TYPE
 ORDER BY event_count DESC
@@ -462,7 +462,7 @@ One row per financing round per company. Used by Query A (joined on `CORPORATION
 | `SHARES_ISSUED` / `FULLY_DILUTED_SHARES` | Share counts |
 | `POST_MONEY_VALUATION` / `PRE_MONEY_VALUATION` | Round valuations |
 
-### NEWSFEED
+### PORTFOLIO_EVENTS
 One row per portfolio event per corporation. Source for Query C.
 
 > **`EVENT_TYPE` has a narrower live taxonomy than you might expect.** Only 5 values actually occur in the data: `Certificate issuance`, `Certificate transfer`, `Convertible conversion`, `Share class conversion`, `Warrant exercise`. Don't filter/group on other values (e.g. "new priced round", "valuation finalized") — they don't appear in this table.

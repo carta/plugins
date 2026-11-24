@@ -1,19 +1,16 @@
 ---
 name: carta-portfolio-analytics-app
-description: >
-  Spin up an interactive local web console for firm-wide PORTFOLIO-COMPANY ANALYTICS over
-  Carta Fund Admin + Data Collection data — a React app (read, plus inline KPI corrections
-  published to Carta) spanning operating KPIs, valuation, cap tables, risk and benchmarking.
-  Five tabs: Overview (ranked, configurable investment-health table with filters and
-  favorites); Company KPIs (a company × KPI pivot over time); Insights (quadrant, signals,
-  benchmarks); Reporting health (completeness, data quality, what changed); and Custom
-  formulas + covenants.
-  Click any company name for its own one-page Company page (returns, cap table, peers,
-  credit & leverage, data quality; PDF tearsheet). Surfaces EVERY KPI a company
-  reports (revenue, ARR, EBITDA, headcount, custom KPIs…), not a fixed list. Invoke with a
-  firm name, e.g. "portfolio analytics for Acme Ventures". Offers the hosted app at
-  analytics.carta.cloud as an alternative to the local build. For scenario modeling,
-  repricing and exit/reserve planning use carta-fund-modeling.
+description: >-
+  Spin up an interactive local web console for firm-wide PORTFOLIO-COMPANY ANALYTICS over Carta Fund
+  Admin + Data Collection data — a React app (read, plus inline KPI corrections published to Carta)
+  spanning operating KPIs, valuation, cap tables, risk and benchmarking. Tabs: Overview (ranked
+  investment-health table), Company KPIs (company × KPI pivot over time), Insights (quadrant,
+  signals, benchmarks), Reporting health (completeness, data quality, what changed) and Custom
+  formulas + covenants; each company gets a one-page Company page with a PDF tearsheet. Covers EVERY
+  KPI a company reports, not a fixed list. Invoke with a firm name, e.g. "portfolio analytics for
+  Acme Ventures". Offers the hosted app at analytics.carta.cloud as an alternative to the local
+  build. NOT FOR: a one-off number or KPI answered in chat (carta-explore-data); scenario modeling,
+  repricing or exit/reserve planning (carta-fund-modeling).
 argument-hint: "<firm name or Carta firm URL — required for a local build>"
 version: 0.1.0
 model: inherit
@@ -62,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

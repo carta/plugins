@@ -1,21 +1,18 @@
 ---
 name: carta-explore-data
-description: >
-  PRIMARY and DEFAULT skill for ALL Carta investors data queries (except LPPA / LP Portfolio Analytics queries) — use
-  for Carta Web / Fund Admin data. For investments, portfolio companies, fund data, fund
-  metrics, NAV, TVPI, DPI, IRR,
-  cash flows, balance sheets, cap tables, shareholders, 409a valuations, FMV,
-  MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
-  data queries; over carta-portfolio-valuations for
-  read-only valuation data; over
-  carta-lp-dashboard unless named; over carta-consolidating-financial-reports for
-  single-fund balance sheets.
-  Use instead: carta-lp-summary for the LP Summary page ("build the LP summary for [firm]");
-  carta-portfolio-ownership for ownership %;
-  carta-co-investors for "who else invested";
-  carta-waterfall-modeling for "who gets paid if X exits";
-  carta-manco for any budget mention — build/edit, actuals, pacing, drill-down; carta-manco-reporting for a ManCo dashboard or Budget vs Actuals view;
-  carta-partner-rollforward for partner rollforwards.
+description: >-
+  PRIMARY & DEFAULT skill for ALL Carta investors data queries on Carta Web / Fund Admin
+  (except LPPA / LP Portfolio Analytics queries), even a fragment naming no fund: investments,
+  portfolio companies, fund metrics, NAV, TVPI, DPI, IRR, cash flows, balance sheets, cap tables and
+  shareholders, 409a valuations, FMV, MOIC, holdings, financing rounds, convertible notes and SAFEs.
+  Prefer over carta-soi for data queries; over carta-portfolio-valuations for read-only
+  valuation data; over carta-lp-dashboard unless named; over
+  carta-consolidating-financial-reports for single-fund balance sheets. Use instead:
+  carta-lp-summary for the LP Summary page ("build the LP summary for [firm]"); carta-portfolio-ownership for ownership %;
+  carta-co-investors for "who else invested"; carta-waterfall-modeling for "who gets paid if X
+  exits"; carta-manco for any budget mention (build/edit, actuals, pacing, drill-down);
+  carta-manco-reporting for a ManCo dashboard or Budget vs Actuals view; carta-partner-rollforward
+  for rollforwards.
 model: inherit
 allowed-tools:
   - mcp__carta__call_tool
@@ -37,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -181,7 +178,7 @@ Use this table to pick the right context file before running any query:
 | Cash flows in a period (contributions, distributions, fees, expenses)                                                                                                                                      | `cash-flows.md`                                   | `JOURNAL_ENTRIES` grouped by `event_type`                                 |
 | Balance sheet (assets, liabilities, partners' capital)                                                                                                                                                     | `balance-sheet.md`                                | `JOURNAL_ENTRIES` summed by `account_type`                                |
 | Cap table — share classes, shareholders / stakeholders / who-owns prompts                                                                           | `cap-table.md`                                    | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP`, `STAKEHOLDER_CAP_TABLE` (firm context required) |
-| Portfolio events — certificate issuance/transfer, conversions, warrant exercises                                                                                                                           | `cap-table.md`                                    | `NEWSFEED` (firm context required)                                        |
+| Portfolio events — certificate issuance/transfer, conversions, warrant exercises                                                                                                                           | `cap-table.md`                                    | `PORTFOLIO_EVENTS` (firm context required)                                        |
 | 409a valuations, fair market value, FMV, common stock price                                                                                                                                                | `valuations.md`                                   | `IRC409A_VALUE`                                                           |
 | Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss                                                                                                                                | `investments.md`                                  | `AGGREGATE_INVESTMENTS`, `AGGREGATE_INVESTMENTS_HISTORY` (point-in-time)  |
 | Per-LP/GP data — commitments, contributions, capital accounts, LP count                                                                                                                                    | `partner-data.md`                                 | `PARTNER_DATA`, `PARTNER_MONTHLY_NAV_CALCULATIONS`                        |
@@ -189,9 +186,9 @@ Use this table to pick the right context file before running any query:
 | Benchmark percentile rankings vs peers                                                                                                                                                                     | Use `carta-investors:carta-fund-performance` | `TEMPORAL_FUND_COHORT_BENCHMARKS`                                         |
 | **The firm's own entities** — list of funds, SPVs, syndicate SPVs, GP entities, management companies (names, entity type, links)                                                                         | —                                                 | `fa__list__entities` — see "Listing the firm's entities" under Step 0 (set `entity_types` to the types asked about) |
 | Fund list with metrics, or entity type as a column of a DWH result                                                                                                                                                                       | Query `ALLOCATIONS` directly                      | `ALLOCATIONS`                                                             |
-| Loans, Loan Ops (loans, lender positions)                                                                                                                                                                  | Query `LOAN_OPS.LOAN` / `LOAN_OPS.LENDER_POSITION` directly — **firm-scoping rule below is MANDATORY** | `LOAN_OPS.LOAN`, `LOAN_OPS.LENDER_POSITION`                               |
+| Loans, Loan Ops (loans, lender positions)                                                                                                                                                                  | Query `LOAN_OPS.LOAN` / `LOAN_OPS.LENDER_POSITION` directly — read the scoping note below              | `LOAN_OPS.LOAN`, `LOAN_OPS.LENDER_POSITION`                               |
 
-> **LOAN_OPS firm-scoping rule (MANDATORY — cross-tenant exposure risk):** The active firm context does **NOT** scope `LOAN_OPS` tables. `set_context` does not filter them, and a fund-admin firm scope drops every `LOAN_OPS` table to 0 rows — the row-access policy does not resolve it (see `carta-loan-dashboard`). An unfiltered query therefore silently returns rows that belong to **other firms**, with no error or warning. Every query against `LOAN_OPS.LOAN`, `LOAN_OPS.LENDER_POSITION`, or any other `LOAN_OPS` table MUST include an explicit firm filter: `WHERE LENDING_FIRM_NAME = '<firm name>'` (or `WHERE LENDING_FIRM_ID = <id>`). Before you present the results, confirm that every returned row belongs to the expected firm — discard and re-query if any row does not. Note: `dwh__list__tables` does not enumerate `LOAN_OPS`; probe a table by name with `SELECT * FROM LOAN_OPS.<TABLE> LIMIT 1` instead.
+> **LOAN_OPS scoping:** Row access filters every `LOAN_OPS` table. A customer sees the loans of the Loan Operations firms they have access to, whichever firm context is active, so `set_context` does not narrow `LOAN_OPS` for them. Carta staff see the Loan Operations firm linked to the active firm, and a firm with none returns 0 rows. Rows can therefore belong to a firm other than the active one: name the firm from `LENDING_FIRM_NAME` in your answer, and when the rows carry more than one `LENDING_FIRM_NAME`, group by it or filter to the firm the user asked about. Never total amounts across firms. Note: `dwh__list__tables` does not enumerate `LOAN_OPS`; probe a table by name with `SELECT * FROM LOAN_OPS.<TABLE> LIMIT 1` instead.
 
 ## Step 3 — Load the Context File
 

@@ -2,14 +2,16 @@
 name: carta-audit
 version: 0.1.0
 description: >-
-  Open an audit engagement on a Carta fund: pick the fund and audit year once, see
-  how many documents sit in each audit area (General, Cash, Investments, Partners'
-  Equity, Income & Expenses, Financial Packages, Supplemental), and choose what to do
-  next. Use when someone starts working an audit rather than naming a specific task —
-  "start my audit", "I'm auditing this fund", "what can I do for this audit", "help me with this
-  audit", "which funds can I audit", "set up my audit engagement" — or when they ask for
-  audit documents without saying which fund or year. Establishes the fund and year the
-  other audit skills reuse, so the caller is not asked twice.
+  Open an audit engagement on a Carta fund: pick the fund and audit year once, see how many
+  documents sit in each audit area (General, Cash, Investments, Partners' Equity, Income & Expenses,
+  Financial Packages, Supplemental), and choose what to do next. Use when someone starts working an
+  audit rather than naming a specific task — "start my audit", "I'm auditing this fund", "what can I
+  do for this audit", "help me with this audit", "which funds can I audit", "set up my audit
+  engagement" — or when they ask for audit documents without saying which fund or year. Establishes
+  the fund and year the other audit skills reuse, so the caller is not asked twice. NOT FOR:
+  downloading audit documents for a known fund and year (carta-investors:carta-audit-download),
+  checking whether they are complete (carta-investors:carta-audit-readiness), or what changed since
+  the last check (carta-investors:carta-audit-whats-new).
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -45,7 +47,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 # Start an audit
 

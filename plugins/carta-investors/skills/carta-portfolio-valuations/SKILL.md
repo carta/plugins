@@ -1,19 +1,17 @@
 ---
 name: carta-portfolio-valuations
-description: >
-  Portfolio valuations workflow — firm selection, dashboard, bulk-create valuations on
-  one or many companies (refresh, manual EV), and dive-in on a single valuation. TRIGGER
-  in chat or Cowork when the user mentions working on, reviewing, or running portfolio
-  valuations, opens one company's valuation, or updates the EV / company value (e.g.
-  "work on my valuations today", "review our portfolio valuations", "run all my Q2
-  valuations", "which companies need new valuations", "open MangoCart's draft
-  valuation", "set the company value for MangoCart", "batch valuations", "auto-run
-  valuations", "PWERM", "probability-weighted valuation", "weight upside and downside").
-  DO NOT TRIGGER for 409A or cap table valuations, for a read-only valuation, MOIC, FMV
-  or history lookup that changes nothing (carta-explore-data, carta-valuation-history),
-  to goal-seek or tune the EV to a target, or to turn the valuation tool on for a firm
-  (the tool must already be enabled). Use carta-valuations-excel when a workbook is open
-  in Excel.
+description: >-
+  Portfolio valuations workflow — firm selection, dashboard, bulk-create valuations on one or many
+  companies (refresh, manual EV), and dive-in on a single valuation. TRIGGER in chat or Cowork when
+  the user works on, reviews or runs portfolio valuations, opens one company's valuation, reads or
+  edits a valuation's commentary, or updates the EV / company value ("work on my valuations today",
+  "review our portfolio valuations", "run all my Q2 valuations", "which companies need new
+  valuations", "open MangoCart's draft valuation", "set the company value for MangoCart", "batch
+  valuations", "auto-run valuations", "PWERM", "probability-weighted valuation", "weight upside and
+  downside"). DO NOT TRIGGER for 409A or cap table valuations; a read-only valuation, MOIC, FMV or
+  history lookup that changes nothing (carta-explore-data, carta-valuation-history); goal-seeking
+  the EV to a target; or turning the valuation tool on for a firm. Use carta-valuations-excel when a
+  workbook is open in Excel.
 user-invocable: true
 model: inherit
 allowed-tools:
@@ -68,7 +66,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

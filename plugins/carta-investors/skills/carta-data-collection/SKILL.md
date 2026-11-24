@@ -1,18 +1,16 @@
 ---
 name: carta-data-collection
-description: >
+description: >-
   Data collection for an investment firm's portfolio companies — asking them for financials, KPIs
-  and documents, and managing what has been asked. TRIGGER on data
-  collection, collecting financials or KPIs, requesting or chasing portfolio company reporting, or
-  a company's reporting setup — including the roster ("which companies do I collect from"), a send
-  ("send this period's requests"), a schedule ("collect financials every quarter"), standing
-  requirements ("always ask Meetly for a board deck"), changes to either ("push back the due date",
-  "stop the recurring requests"), the fiscal year ("why does Q1 cover the wrong months"), status
-  ("who has not sent their numbers", "who is overdue", "what came in"), reminders ("follow up on
-  those"), reopening an answered request ("let Meetly resubmit"), metrics of the firm's own
-  ("collect monthly active users"), document types of the firm's own ("ask for an insurance
-  certificate"), and contacts — who is asked for the data and who is copied ("add Dana to these
-  companies").
+  and documents, and managing what has been asked. TRIGGER on collecting financials or KPIs, or
+  requesting or chasing portfolio company reporting: the roster ("which companies do I collect
+  from"), a send ("send this period's requests"), a schedule ("collect financials every quarter"),
+  standing requirements ("always ask Meetly for a board deck") and changes to either ("push back the
+  due date", "stop the recurring requests"), the fiscal year ("why does Q1 cover the wrong months"),
+  status ("who is overdue", "what came in"), reminders, reopening an answered request ("let Meetly
+  resubmit"), the firm's own metrics and document types ("collect monthly active users", "ask for an
+  insurance certificate"), and who is asked or copied ("add Dana to these companies"). NOT FOR:
+  entering, extracting or editing numbers a company has already sent; LP or investor contacts.
 user-invocable: true
 model: inherit
 allowed-tools:
@@ -50,7 +48,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 

@@ -2,7 +2,16 @@
 name: carta-consolidating-financial-reports
 model: sonnet
 description: >-
-  Builds multi-entity consolidating financial reports in Excel: consolidating P&L (income statement), balance sheet, and trial balance — individually or all three together. Resolves the firm, entities, reporting period, and target workbook, then builds the chosen report(s). TRIGGER on "consolidating/consolidated financial reports", "consolidating/consolidated P&L", "firm-wide income statement", "P&L for all entities", "P&L by tag", "P&L by department", "consolidating/consolidated balance sheet", "BS by entity", "balance sheet of all entities", "consolidating trial balance", "TB by entity", "all three reports", "full financial package". ALSO fires on a generic ask with no report named — "consolidating financials", "firm-wide financial statements" — and shows the report menu. NOT FOR: single-fund/entity financials, ManCo budgets/actuals/pacing/what-if (carta-manco), consolidating cash flow (not available), SOI, co-investors, Form ADV, LP reporting, cap tables, Fund Admin requests (carta-fund-admin-requests).
+  Builds multi-entity consolidating financial reports in Excel: consolidating P&L (income
+  statement), balance sheet and trial balance — one or all three. TRIGGER on
+  "consolidating/consolidated financial reports", "consolidating/consolidated P&L", "firm-wide
+  income statement", "P&L for all entities", "P&L by tag or department", "consolidating/consolidated
+  balance sheet", "BS by entity", "balance sheet of all entities", "consolidating trial balance",
+  "TB by entity", "all three reports", "full financial package". ALSO a generic ask with no report
+  named ("consolidating financials", "firm-wide financial statements"), which shows the report menu.
+  NOT FOR: single-fund/entity financials, ManCo budgets/actuals/pacing/what-if (carta-manco),
+  consolidating cash flow (not available), SOI, co-investors, Form ADV, LP reporting, cap tables,
+  Fund Admin requests (carta-fund-admin-requests).
 version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool)
@@ -60,7 +69,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.0</carta-plugin>
+<carta-plugin>carta-investors:7.62.3</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
