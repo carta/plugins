@@ -219,6 +219,14 @@ function dirShowSearchBox(show) {
   if (box) box.hidden = !show;
 }
 
+// The directory's skills this firm can use. Gates categories and skills alike: drop either only
+// on an explicit false, so an unknown flag still shows it. A category left with no skills drops out too.
+function dirEntitledSkills() {
+  const entitled = x => !x.requires || _userEntitlements[x.requires] !== false;
+  const openCategories = new Set(DIR_CATEGORIES.filter(entitled).map(c => c.id));
+  return _directorySkills.filter(s => entitled(s) && openCategories.has(s.category));
+}
+
 function renderDirectory() {
   const grid = document.getElementById("dir-grid");
   if (!grid) return;
@@ -232,11 +240,7 @@ function renderDirectory() {
     return;
   }
   dirShowSearchBox(true);
-  // Gates categories and skills alike: drop either only on an explicit false, so an
-  // unknown flag still shows it. A category left with no skills drops out too.
-  const entitled = x => !x.requires || _userEntitlements[x.requires] !== false;
-  const openCategories = new Set(DIR_CATEGORIES.filter(entitled).map(c => c.id));
-  _dirEntries = _directorySkills.filter(s => entitled(s) && openCategories.has(s.category));
+  _dirEntries = dirEntitledSkills();
   _dirFirm = _firmDisplayName;
   dirUpdate();
   dirTrackView();

@@ -2211,3 +2211,82 @@
       border-radius: var(--ink-radius-pill);
       background: var(--ink-color-global-brand-black); color: var(--ink-color-global-brand-white);
     }
+
+/* ── Compact: a phone, or Home shown as a widget in a chat ──
+   Last in the file so it wins the cascade. Page and card padding shrink so the content keeps
+   its width, and Suggested for you goes one across so a prompt is never cut mid-word. */
+@media (max-width: 600px) {
+  .container { padding: 20px 16px 40px; }
+  .topbar { margin-bottom: 16px; }
+  .page-title { font-size: 24px; line-height: 32px; }
+  .page-subtitle { font-size: 14px; margin-bottom: 24px; }
+  .tab-bar { margin-bottom: 28px; }
+  .tab-btn { padding: 10px 16px; }
+  .section-label { margin-bottom: 16px; }
+  .card-grid { gap: 16px; margin-bottom: 40px; }
+  .dash-card { min-height: 0; }
+  .dash-card .card-header { padding: 20px 20px 12px; }
+  .dash-card .card-preview { padding: 0 20px 8px; }
+  .dash-card .card-footer { margin-top: 8px; padding: 12px 20px 16px; }
+  .cap-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 40px; }
+  .cap-card { gap: 8px; }
+  .cap-card-text { min-height: 0; }
+  .dir-tile { padding: 16px; }
+  .dir-tile-ft { margin: 8px -16px 0; padding: 10px 16px 0; }
+  .wn-heading { font-size: 24px; margin-bottom: 20px; }
+  .plugin-news-grid { gap: 20px; }
+}
+
+/* ── Widget view: Home drawn inside the chat (body.home-widget, app/widget-view.js) ──
+   The title and Your dashboards, one row of cards that swipes sideways so the widget stays
+   one card tall, then what else Home holds and the button to the full view. */
+.widget-more, .widget-open { display: none; }
+body.home-widget { min-height: 0; }
+body.home-widget .container { padding: 16px 16px 20px; }
+body.home-widget .topbar,
+body.home-widget .firm-switcher,
+body.home-widget .page-subtitle,
+body.home-widget #update-banner-slot,
+body.home-widget .tab-bar,
+body.home-widget #tab-directory,
+body.home-widget #tab-recommended > :not(#dashboards-section):not(#widget-more):not(#widget-open) { display: none !important; }
+body.home-widget .page-title { font-size: 20px; line-height: 28px; margin-bottom: 12px; }
+body.home-widget .section-label-row { margin-bottom: 12px; }
+body.home-widget .section-label { font-size: 15px; margin-bottom: 0; }
+body.home-widget .card-grid {
+  display: flex; gap: 12px; margin: 0 -16px 16px; padding: 2px 16px 8px;
+  overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 16px;
+}
+body.home-widget .card-grid > * { flex: 1 0 min(300px, 82%); scroll-snap-align: start; }
+body.home-widget .card-grid .tbl-col-gl { display: none; }
+body.home-widget .dash-card { min-height: 0; }
+body.home-widget .dash-card:hover { transform: none; }
+body.home-widget .dash-card .card-header { padding: 16px 16px 8px; }
+body.home-widget .dash-card .card-preview { padding: 0 16px 4px; }
+body.home-widget .dash-card .card-footer { margin-top: 8px; padding: 10px 16px 12px; }
+body.home-widget .widget-more { display: block; margin: 0 0 16px; }
+body.home-widget .widget-more[hidden] { display: none; }
+.widget-more-label {
+  margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-color-global-text-subtle);
+}
+.widget-more-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink-color-global-border-subtle); }
+.widget-more-list button {
+  display: grid; grid-template-columns: minmax(0, 132px) minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  width: 100%; min-height: 40px; padding: 8px 4px; font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  color: var(--ink-color-global-text-default); background: transparent; border: 0;
+  border-bottom: 1px solid var(--ink-color-global-border-subtle);
+}
+.widget-more-list button:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+.widget-more-list button:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: -2px; }
+.widget-more-name { font-weight: 600; }
+.widget-more-peek { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-color-global-text-subtle); }
+.widget-more-go { color: var(--ink-color-global-text-subtle); }
+body.home-widget .widget-open {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  color: var(--ink-color-global-brand-white); background: var(--ink-color-global-brand-black);
+  border: 0; border-radius: var(--ink-size-global-radius-subtle);
+}
+body.home-widget .widget-open:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 2px; }
+.widget-open svg { width: 14px; height: 14px; }

@@ -127,6 +127,7 @@ APP_JS_PARTS = [
     "app/nda-card.js",
     "app/law-only-home.js",
     "app/soi-new-fund.js",
+    "app/widget-view.js",
 ]
 
 MARKERS = {

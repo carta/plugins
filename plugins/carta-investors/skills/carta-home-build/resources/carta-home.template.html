@@ -150,6 +150,11 @@
 
   </section>
 
+  <!-- Shown only in the widget (body.home-widget): what else is in Home, then the way to it.
+       Filled by renderWidgetMore() in app/widget-view.js. -->
+  <nav id="widget-more" class="widget-more" aria-label="More in Carta Home"></nav>
+  <button type="button" class="widget-open" id="widget-open" onclick="openFullHome('home')">Open Carta Home <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 8.5 7.5M6.5 13.5h-4v-4M2.5 13.5l5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+
   <!-- ── Suggested for you ── -->
   <section id="prompts-section">
     <p class="section-label">Suggested for you</p>

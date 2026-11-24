@@ -1853,6 +1853,10 @@ function _tourSeen() {
 
 function tourStart() {
   if (_tourSeen() || _tourIsOpen()) return;
+  // Not on a page load that showed Home as a chat widget (app/widget-view.js): the widget hides
+  // the sections the tour points at, and leaving it opens Home at the section the viewer picked.
+  // A later full-size visit opens it instead.
+  if (document.body?.classList?.contains('home-was-widget')) return;
   // Not over the Skill directory tab, where every Home step would point at a hidden pane, and
   // not while the viewer is typing, since the tour takes focus. A later visit opens it instead.
   if (!document.getElementById('tab-recommended')?.classList.contains('active')) return;

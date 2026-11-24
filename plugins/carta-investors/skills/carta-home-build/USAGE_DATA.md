@@ -44,6 +44,18 @@ arrive only when the host still relays UI events.
 | `CartaHome.FirmSwitcher.Failed` | click | Switching firm failed (`set_context` errored or threw) and the select went back to the previous firm |
 | `CartaHome.Tab.<tab>` | click | Switched tab (Recommended, Directory) |
 
+## Widget view
+
+When a host draws Home inline in the chat it calls `setHomeWidget(true)`: Home shows its title, Your
+dashboards in one swipeable row, a "More in Carta Home" list naming the other sections that have
+content, and Open Carta Home. These answer whether people use Home from the chat and which section
+pulls them into the full view.
+
+| Event | Type | Meaning |
+|---|---|---|
+| `CartaHome.Widget.Shown` | render | Once per page, Home first showed as a widget in the chat |
+| `CartaHome.Widget.Open` | click | The viewer opened the full Home from the widget. `value` = where: `home` (Open Carta Home), `prompts`, `whats-new`, `directory` or `news` (a More in Carta Home line) |
+
 ## Dashboard cards
 
 A card whose query answers with no rows is hidden instead of shown blank. A card whose query fails stays, with a note. Each sends one of these.
