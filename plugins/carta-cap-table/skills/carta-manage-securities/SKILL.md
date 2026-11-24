@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.4</carta-plugin>
 
 # Manage securities
 

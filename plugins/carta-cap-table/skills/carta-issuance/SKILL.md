@@ -21,7 +21,7 @@ allowed-tools:
   # Exact plugin scripts only; anything else (e.g. `ls -t ~/Downloads`) asks the user.
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" *)
-  # No `Bash(find *)`: the app host comes from the tool list, not the disk.
+  # No `Bash(find *)`: the app host comes from issuance_init and the tool list, not the disk.
   # `mcp__carta__*` is literal here; in prose it stands for the session prefix.
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.121.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.4</carta-plugin>
 
 # Issue Securities
 
@@ -147,7 +147,7 @@ and ask its one question before anything else. Anything stated starts the run at
 **Every run follows [references/companion-surface.md](references/companion-surface.md)**, for
 every type, with [references/engine.md](references/engine.md) for the rules it builds on. It may
 cover several security types in one run. On an app host the issuance app shows the draft set
-beside the chat. With no app (Claude Code, or a host that cannot render apps), the same run goes
+beside the chat. With no app host ([companion-surface.md § 1](references/companion-surface.md#1-tools)), the same run goes
 on in the chat: review and issue as [§ 8](references/companion-surface.md#8-issue)'s *Elsewhere*
 says.
 

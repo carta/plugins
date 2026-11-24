@@ -32,8 +32,10 @@ file decides what to do with them.
 [engine.md Step 1](engine.md#step-1--load-every-tool-in-one-toolsearch-call)'s one `ToolSearch`
 loads `view_remote_inline`, `view_remote_next` and the named `cap_table__mutate__apply_plan`.
 
-- An **app host** has `view_remote_next`, renders apps, and `issuance_init` gave
-  `companion.issuance_app`. Only there does the page show ([the issuance app](#the-issuance-app)).
+- An **app host** is one where `issuance_init` gave `companion.issuance_app` and that `ToolSearch`
+  loaded `view_remote_next`. Carta sends `issuance_app` only to a client that renders apps, so
+  never decide from the surface or the session that the host cannot. Only there does the page show
+  ([the issuance app](#the-issuance-app)).
 - A **card host** is a host where that `ToolSearch` loaded `view_remote_inline`: any Claude Desktop
   or claude.ai chat, and Claude Code. There, every item goes in the card. Never decide from the
   surface or the session that the host cannot draw it. Ask in the chat only when the tool did not
@@ -533,8 +535,8 @@ render stays in the chat, so render it only at these times:
 A card message that asks where a document says a value: name the set's tab and the cell to select
 in the app, and save nothing.
 
-**No `view_remote_next` after one `ToolSearch`, the host cannot render apps, or `issuance_init`
-gave no `companion.issuance_app`**: there is no app and no page. Go on in the chat: review and
+**No `view_remote_next` after one `ToolSearch`, or this chat's `issuance_init` answered without
+`companion.issuance_app`**: there is no app and no page. Go on in the chat: review and
 issue as [§ 8](#8-issue)'s *Elsewhere* says. A request to see the page, or where a document says a
 value, gets an answer in the chat: the file, page and quote from the sources you recorded.
 
