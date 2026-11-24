@@ -6,8 +6,9 @@
 
 import argparse
 import json
+import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -72,6 +73,10 @@ def _int(v: Any) -> int:
         return 0
 
 
+def _bool(v: Any) -> bool:
+    return str(v).strip().lower() in ("true", "1", "yes")
+
+
 def _str(v: Any) -> str:
     if v is None:
         return ""
@@ -89,6 +94,21 @@ def _pct(n: int, total: int) -> float:
 
 
 _UNKNOWN_JURIS = {"not captured", "unclear", "unknown", "n/a", "none", ""}
+
+
+_PURPOSE_LEAD = re.compile(
+    r"^(?:for the purpose of\s+|the purpose of\s+)?(?:evaluating|considering|assessing|exploring|discussing|"
+    r"negotiating|pursuing)\s+(?:(?:a|an|the)\s+)?(?:(?:possible|potential|proposed|prospective)\s+)?",
+    re.IGNORECASE)
+
+# A trailing defined-term label: '... portfolio (the "Purpose")'.
+_DEFINED_TERM = re.compile(r'\s*\((?:the\s+)?["\u201c][^)]*["\u201d]\)\s*$', re.IGNORECASE)
+
+
+def _short_purpose(text: str) -> str:
+    """'evaluating a potential minority equity investment in X' -> 'Minority equity investment in X'."""
+    s = _DEFINED_TERM.sub("", _PURPOSE_LEAD.sub("", _str(text))).rstrip(" .;")
+    return s[:1].upper() + s[1:]
 
 
 def _canonical_term(months: int) -> str:
@@ -109,6 +129,7 @@ def main() -> None:
     ap.add_argument("--kpi", required=True)
     ap.add_argument("--expiring", required=True)
     ap.add_argument("--restrictions", required=True)
+    ap.add_argument("--expired", required=True)
     ap.add_argument("--counterparties", required=True)
     ap.add_argument("--firm-name", required=True)
     ap.add_argument("--firm-carta-id", required=True)
@@ -145,13 +166,29 @@ def main() -> None:
         months = _int(r.get("TERM_MONTHS"))
         expiring.append({
             "counterparty": _str(r.get("COUNTERPARTY")),
+            "firmEntity": _str(r.get("FIRM_ENTITY")),
             "deal": _str(r.get("DEAL_NAME")),
+            "purpose": _short_purpose(r.get("PURPOSE")),
             "start": _date10(r.get("START_DATE")),
             "term": _canonical_term(months) or _str(r.get("TERM_TEXT")),
             "termMonths": months,
             "expiry": _date10(r.get("EXPIRY")),
         })
     expiring.sort(key=lambda x: x["expiry"])
+
+    # Expired NDAs whose confidentiality duty still runs
+    expired = []
+    for r in load(args.expired):
+        expired.append({
+            "counterparty": _str(r.get("COUNTERPARTY")),
+            "firmEntity": _str(r.get("FIRM_ENTITY")),
+            "deal": _str(r.get("DEAL_NAME")),
+            "purpose": _short_purpose(r.get("PURPOSE")),
+            "expiry": _date10(r.get("EXPIRY")),
+            "survival": _str(r.get("SURVIVAL_TEXT")),
+            "confidentialUntil": _date10(r.get("CONFIDENTIAL_UNTIL")),
+        })
+    expired.sort(key=lambda x: (x["confidentialUntil"] == "", x["confidentialUntil"]))
 
     # Restrictions (active, per counterparty)
     restrictions = []
@@ -160,6 +197,7 @@ def main() -> None:
             "counterparty": _str(r.get("COUNTERPARTY")),
             "restrictions": _str(r.get("RESTRICTIONS")),
             "bindingUntil": _date10(r.get("BINDING_UNTIL")),
+            "estimated": _bool(r.get("ESTIMATED")),
             "deals": _str(r.get("DEALS")),
             "ndaCount": _int(r.get("NDA_COUNT")),
         })
@@ -176,9 +214,9 @@ def main() -> None:
         })
     counterparties.sort(key=lambda x: -x["ndaCount"])
 
-    has_workflow = any(e["deal"] for e in expiring) or any(c["deals"] for c in counterparties)
+    has_workflow = any(e["deal"] for e in expiring) or any(e["deal"] for e in expired) or any(c["deals"] for c in counterparties)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now().astimezone()
     generated_at = "%s %d, %d" % (now.strftime("%b"), now.day, now.year)
 
     kpis = {
@@ -186,6 +224,7 @@ def main() -> None:
         "counterparties": _int(kpi.get("DISTINCT_COUNTERPARTIES")),
         "restrictedCompanies": _int(kpi.get("RESTRICTED_COMPANIES")),
         "expiringNext2Years": _int(kpi.get("EXPIRING_NEXT_2_YEARS")),
+        "expiredStillConfidential": _int(kpi.get("EXPIRED_STILL_CONFIDENTIAL")),
         "topGovLaw": top_gov_law,
         "withStartDate": with_date,
     }
@@ -204,6 +243,7 @@ def main() -> None:
         "provisionFrequency": provisions,
         "jurisdictions": jurisdictions,
         "expiring": expiring,
+        "expiredConfidential": expired,
         "restrictions": restrictions,
         "counterparties": counterparties,
     }
@@ -212,8 +252,9 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
     size_kb = out_path.stat().st_size / 1024
-    print("Done — %s (%.1f KB); %d NDAs, %d counterparties, %d restricted, %d expiring"
-          % (out_path, size_kb, total, len(counterparties), len(restrictions), len(expiring)),
+    print("Done — %s (%.1f KB); %d NDAs, %d counterparties, %d restricted, %d expiring, %d expired but confidential"
+          % (out_path, size_kb, total, kpis["counterparties"], kpis["restrictedCompanies"],
+             kpis["expiringNext2Years"], kpis["expiredStillConfidential"]),
           flush=True)
 
 

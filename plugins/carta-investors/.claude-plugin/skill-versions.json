@@ -4,7 +4,7 @@
     "headline": "Fund Performance now reads Carta through its current tools. Rebuild it so it keeps loading as Carta's connector changes."
   },
   "carta-home-build": {
-    "version": "1.25.6",
+    "version": "1.25.7",
     "headline": "The Skill directory search is more forgiving: a topic name finds its skills, a half-typed word or a plural still matches, and results narrow as you type. Rebuild to get it."
   },
   "carta-lp-summary": {

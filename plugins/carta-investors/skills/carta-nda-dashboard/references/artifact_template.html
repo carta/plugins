@@ -103,6 +103,8 @@
     tbody tr:hover { background: #FAFAFA; }
     .chip { display: inline-block; background: var(--surface-lightgray); color: var(--text-default); font-size: 11px; padding: 2px 8px; margin: 0 4px 3px 0; border-radius: var(--r-input); white-space: nowrap; }
     .muted { color: var(--text-subtle); }
+    .nw { white-space: nowrap; }
+    .sub-line { font-size: 12px; color: var(--text-subtle); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .note { font-size: 12px; color: var(--text-subtle); margin-top: 14px; }
 
     .brand { position: fixed; bottom: 16px; right: 22px; font-size: 10px; letter-spacing: 0.08em; color: var(--text-subtle); text-transform: uppercase; pointer-events: none; }
@@ -135,10 +137,17 @@
       </div>
     </div>
 
+    <div class="tab-pane" id="tab-expired">
+      <div class="card"><h2>Expired, still confidential</h2><div class="sub" id="expired-sub"></div>
+        <div id="table-expired"></div>
+        <div class="note">The NDA's term has ended, but its confidentiality duty usually continues for the survival period it states, counted from the NDA's end. "Not stated" means the NDA gives no survival period, so the duty may be indefinite; "See NDA" means it gives one the dashboard could not turn into a date. Check the NDA either way.</div>
+      </div>
+    </div>
+
     <div class="tab-pane" id="tab-restrictions">
-      <div class="card"><h2>Active restrictions — non-solicit, no-contact &amp; non-circumvention</h2><div class="sub" id="restrictions-sub"></div>
+      <div class="card"><h2>Active restrictions on your firm</h2><div class="sub" id="restrictions-sub"></div>
         <div id="table-restrictions"></div>
-        <div class="note">"NDA expiry" is the expiration date of the NDA as a whole (start date + the NDA's term), <b>not</b> the duration of the individual provision — a non-solicit and a no-contact in the same NDA can run for different lengths. "Unknown / perpetual" means no NDA expiry could be computed; the restriction may still apply.</div>
+        <div class="note">Only restrictions that bind your firm are listed: a one-way NDA where your firm only discloses restricts the counterparty, not you. "Restricted until" is when the last of these clauses runs out: a non-solicit or standstill for its own stated period, counted from the point the NDA says (signing or termination), other restrictions for the NDA's term. "(est.)" marks a date that rests on an assumption: the NDA doesn't say what a clause's period runs from (signing is assumed), or the NDA's own term doesn't run from its effective date. Check the NDA before relying on it. "Unknown / perpetual" means no end date could be worked out; the restriction may still apply.</div>
       </div>
     </div>
   </div>
@@ -167,15 +176,23 @@
       }).join('');
     }
 
-    // ---- Roll a long ranked list down to top N + "Other" ----
-    function topNWithOther(items, key, valueKey, n) {
-      if (!items || items.length <= n + 1) return items.slice();
-      const top = items.slice(0, n);
-      const rest = items.slice(n);
-      const restCount = rest.reduce((s, d) => s + (d[valueKey] || 0), 0);
-      const restPct = rest.reduce((s, d) => s + (d.pct || 0), 0);
-      const other = {}; other[key] = 'Other (' + rest.length + ')'; other[valueKey] = restCount; other.pct = Math.round(restPct * 10) / 10;
-      return top.concat([other]);
+    // ---- Ranked bars: the top N, with a button that shows the rest (no "Other" bucket) ----
+    function barsWithMore(elId, items, labelKey, valueKey, pctKey, n) {
+      const el = document.getElementById(elId);
+      const holder = document.createElement('div');
+      const more = document.createElement('button');
+      more.type = 'button'; more.className = 'ms-clear';
+      let open = false;
+      function draw() {
+        const shown = open ? items : items.slice(0, n);
+        horizontalBars(holder.id, shown, labelKey, valueKey, pctKey);
+        more.textContent = open ? 'Show fewer' : 'Show ' + (items.length - n) + ' more';
+        more.hidden = items.length <= n;
+      }
+      holder.id = elId + '-bars';
+      more.addEventListener('click', () => { open = !open; draw(); });
+      el.innerHTML = ''; el.appendChild(holder); el.appendChild(more);
+      draw();
     }
 
     // ---- Multi-select dropdown ----
@@ -228,7 +245,7 @@
       const el = document.getElementById(elId);
       const searchKeys = opts.searchKeys || cols.map(c => c.key);
       let refresh = () => {};  // set once drawBody exists; filter changes call this (not a full rebuild)
-      const filters = (opts.filters || []).map(f => {
+      const filters = (opts.filters || []).filter(f => !(f.workflow && !HAS_WF)).map(f => {
         const options = f.options || Array.from(new Set(rows.flatMap(r => f.type === 'contains' ? splitList(r[f.field]) : [r[f.field]]).filter(Boolean))).sort();
         const ms = multiSelect(f.label, options, () => refresh());
         return Object.assign({}, f, { ms });
@@ -290,10 +307,20 @@
 
     const chip = v => v ? splitList(v).map(x => '<span class="chip">' + esc(x) + '</span>').join('') : '<span class="muted">—</span>';
     const orDash = v => v ? esc(v) : '<span class="muted">—</span>';
-    const perpetual = v => v ? esc(v) : '<span class="muted">Unknown / perpetual</span>';
+    const withPurpose = (v, row) => esc(v) + (row.purpose ? '<div class="sub-line" title="' + esc(row.purpose) + '">' + esc(row.purpose) + '</div>' : '');
+    const nowrap = v => v ? '<span class="nw">' + esc(v) + '</span>' : '<span class="muted">—</span>';
+    // The columns and search keys that identify an NDA on the Expiring and Expired tabs.
+    const NDA_ID_COLUMNS = [
+      {key: 'counterparty', label: 'Counterparty', render: withPurpose},
+      {key: 'firmEntity', label: 'Signed by', render: orDash},
+      {key: 'deal', label: 'Deal', workflow: true, render: orDash},
+    ];
+    const NDA_SEARCH_KEYS = ['counterparty', 'firmEntity', 'deal', 'purpose'];
+    const untilOrSee = (v, row) => v ? '<span class="nw">' + esc(v) + '</span>' : (row.survival ? '<span class="muted">See NDA</span>' : '<span class="muted">Not stated</span>');
+    const restrictedUntil = (v, row) => v ? '<span class="nw">' + esc(v) + (row.estimated ? ' <span class="muted" title="An estimate; see the note below the table.">(est.)</span>' : '') + '</span>' : '<span class="muted">Unknown / perpetual</span>';
 
     // ---- Tabs ----
-    const TABS = [{id:'overview',label:'Overview'},{id:'expiring',label:'Expiring'},{id:'restrictions',label:'Restrictions'}];
+    const TABS = [{id:'overview',label:'Overview'},{id:'expiring',label:'Expiring'},{id:'expired',label:'Expired'},{id:'restrictions',label:'Restrictions'}];
     function switchTab(id) { TABS.forEach(t => { document.getElementById('tab-' + t.id).classList.toggle('active', t.id === id); document.getElementById('btn-' + t.id).classList.toggle('active', t.id === id); }); }
     document.getElementById('tab-bar').innerHTML = TABS.map(t => '<button class="tab-btn" id="btn-' + t.id + '">' + t.label + '</button>').join('');
     TABS.forEach(t => document.getElementById('btn-' + t.id).addEventListener('click', () => switchTab(t.id)));
@@ -316,34 +343,41 @@
         (t.s ? '<div class="metric-sub">' + t.s + '</div>' : '') + '</div>').join('');
 
       horizontalBars('chart-provisions', DATA.provisionFrequency, 'provision', 'count', 'pct');
-      horizontalBars('chart-jurisdictions', topNWithOther(DATA.jurisdictions || [], 'jurisdiction', 'count', 8), 'jurisdiction', 'count', 'pct');
+      barsWithMore('chart-jurisdictions', DATA.jurisdictions || [], 'jurisdiction', 'count', 'pct', 8);
       const jCaptured = (DATA.jurisdictions || []).reduce((s, j) => s + j.count, 0);
       const jNotCaptured = (k.totalNdas || 0) - jCaptured;
       if (jNotCaptured > 0) document.getElementById('jurisdiction-note').textContent = 'Excludes ' + fmt(jNotCaptured) + ' NDAs with no governing law captured.';
 
       // Expiring
       document.getElementById('expiring-sub').textContent = fmt((DATA.expiring || []).length) + ' NDAs expire in the next 2 years';
-      makeTable('table-expiring', [
-        {key: 'counterparty', label: 'Counterparty'},
-        {key: 'deal', label: 'Deal', workflow: true, render: orDash},
-        {key: 'start', label: 'Start date'},
-        {key: 'term', label: 'Term', sortKey: 'termMonths', type: 'num'},
-        {key: 'expiry', label: 'Expiry'},
-      ], DATA.expiring || [], {defaultSort: 'expiry', searchKeys: ['counterparty', 'deal']});
+      makeTable('table-expiring', NDA_ID_COLUMNS.concat([
+        {key: 'start', label: 'Start date', render: nowrap},
+        {key: 'term', label: 'Term', sortKey: 'termMonths', type: 'num', render: nowrap},
+        {key: 'expiry', label: 'Expiry', render: nowrap},
+      ]), DATA.expiring || [], {defaultSort: 'expiry', searchKeys: NDA_SEARCH_KEYS});
       document.getElementById('expiring-note').textContent =
-        'Expiry is computed from start date (effective date, else signing date) + term; only NDAs with both are shown (' + fmt(k.withStartDate) + ' of ' + fmt(k.totalNdas) + ' NDAs have a captured start date).';
+        'Expiry is computed from start date (effective date, else signing date) + term; only NDAs with both are shown (' + fmt(k.withStartDate) + ' of ' + fmt(k.totalNdas) + ' NDAs have a captured start date). Expiry ends the NDA\'s term, not its confidentiality duties, which usually survive it.';
+
+      // Expired, still confidential
+      document.getElementById('expired-sub').textContent =
+        fmt(k.expiredStillConfidential) + ' expired NDAs whose confidentiality duty still runs';
+      makeTable('table-expired', NDA_ID_COLUMNS.concat([
+        {key: 'expiry', label: 'NDA ended', render: nowrap},
+        {key: 'survival', label: 'Survives', render: orDash},
+        {key: 'confidentialUntil', label: 'Confidential until', render: untilOrSee},
+      ]), DATA.expiredConfidential || [], {defaultSort: 'confidentialUntil', searchKeys: NDA_SEARCH_KEYS});
 
       // Restrictions
       document.getElementById('restrictions-sub').textContent =
-        fmt((DATA.restrictions || []).length) + ' counterparties under an active non-solicit, no-contact, or non-circumvention provision';
+        fmt((DATA.restrictions || []).length) + ' counterparties your firm is bound by a non-solicit, no-contact, non-circumvention or standstill with right now';
       makeTable('table-restrictions', [
         {key: 'counterparty', label: 'Counterparty'},
         {key: 'restrictions', label: 'Restriction(s)', render: chip},
-        {key: 'bindingUntil', label: 'NDA expiry', render: perpetual},
+        {key: 'bindingUntil', label: 'Restricted until', render: restrictedUntil},
         {key: 'deals', label: 'Deal(s)', workflow: true, render: chip},
       ], DATA.restrictions || [], {
         defaultSort: 'bindingUntil', searchKeys: ['counterparty', 'deals'],
-        filters: [{label: 'Restriction', field: 'restrictions', type: 'contains', options: ['Non-solicitation', 'Contact restrictions', 'Non-circumvention']}],
+        filters: [{label: 'Restriction', field: 'restrictions', type: 'contains', options: ['Non-solicitation', 'Contact restrictions', 'Non-circumvention', 'Standstill']}],
       });
 
       // Counterparties
@@ -357,7 +391,7 @@
         defaultSort: 'ndaCount', defaultDir: -1, searchKeys: ['counterparty', 'deals', 'govLaw'],
         filters: [
           {label: 'Governing law', field: 'govLaw', type: 'equals'},
-          {label: 'Deal', field: 'deals', type: 'contains'},
+          {label: 'Deal', field: 'deals', type: 'contains', workflow: true},
         ],
       });
 

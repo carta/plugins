@@ -3,7 +3,8 @@ name: carta-nda-dashboard
 description: >-
   Interactive NDA insights dashboard from the firm's NDAs in Carta: provision frequency,
   governing law, NDAs expiring in the next two years, counterparties under an active
-  non-solicit, no-contact or non-circumvention restriction, and every counterparty, in
+  non-solicit, no-contact, non-circumvention or standstill restriction, expired NDAs whose
+  confidentiality duty still runs, and every counterparty, in
   sortable, filterable tabs. Use when asked for an NDA dashboard or NDA insights, which NDAs
   expire soon, who we can't solicit or contact right now, our most common NDA counterparties,
   what law governs our NDAs, or how often non-solicit, standstill or other provisions appear.
@@ -43,21 +44,26 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.59.4</carta-plugin>
+<carta-plugin>carta-investors:7.61.8</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
 # NDA insights dashboard
 
-One self-contained page with three tabs, built from the NDAs Carta has read for the firm:
+One self-contained page with four tabs, built from the NDAs Carta has read for the firm:
 
-- **Overview** — KPI tiles, provision frequency, governing law (top 8 + "Other"), and every
+- **Overview** — KPI tiles, provision frequency, governing law (top 8, with a button for the rest), and every
   counterparty with its NDA count and governing law, filterable by governing law and deal.
-- **Expiring** — NDAs whose term ends in the next two years.
-- **Restrictions** — counterparties under an active non-solicit, no-contact or
-  non-circumvention provision, with a Restriction filter.
+- **Expiring** — NDAs whose term ends in the next two years, each with the firm entity that
+  signed it, its deal and what it was signed for.
+- **Expired** — NDAs whose term has ended but whose confidentiality duty still runs, with the
+  date it ends.
+- **Restrictions** — counterparties the firm is barred from soliciting, contacting,
+  circumventing or buying into right now, each until the clause itself runs out, with a
+  Restriction filter.
 
-Deal columns appear only for firms that track NDAs as work items in Carta.
+Deal columns appear only when the firm's NDAs carry a deal: a Carta Law work item's deal name,
+or a project codename in the NDA's title.
 
 When the user asks one specific question ("which NDAs expire soon?", "who can't we
 solicit?"), build the dashboard and answer that question in one or two lines of chat from the
@@ -79,7 +85,7 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
 - **Set firm context first, every invocation, before any query.** Call `list_contexts`, then
   `set_context` to the firm. Context is dropped when a conversation is compacted or resumed,
   so never assume it carried over.
-- Keep the firm name and its Carta id, and derive the firm token (`nda_data_model.md` →
+- Keep the firm name and its Carta id, and derive the firm token and initials (`nda_data_model.md` →
   Counterparty).
 - Locate the workspace (one Bash block; use the printed path as `<WORKDIR>` from here on,
   since shell variables do not survive between Bash calls):
@@ -90,18 +96,18 @@ Each run records each checkpoint at most once, and exactly one of `skill_finishe
   mkdir -p "$WORKDIR" && echo "$WORKDIR"
   ```
 
-### 2. Pre-flight, then the six datasets
+### 2. Pre-flight, then the seven datasets
 
-Run the pre-flight from `nda_data_model.md` rule 3 to pick Path A or Path B, then run the six
+Run the pre-flight from `nda_data_model.md` rule 3 to pick Path A or Path B, then run the seven
 queries in `queries.md` — **kpi**, **provisions**, **jurisdictions**, **expiring**,
-**restrictions**, **counterparties** — in parallel, in one turn. Each is the shared `WITH` block
-plus that dataset's `SELECT`. If `kpi` reports zero NDAs, wait a few seconds and run all six
+**expired**, **restrictions**, **counterparties** — in parallel, in one turn. Each is the shared `WITH` block
+plus that dataset's `SELECT`. If `kpi` reports zero NDAs, wait a few seconds and run all seven
 queries once more in one turn (`nda_data_model.md` rule 6); use only the second set of results.
 
 A result comes back either inline or spilled to a file. Use a spilled file's path as is;
 `Write` an inline result to `<WORKDIR>/<dataset>.ndjson`.
 
-> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-nda-dashboard", checkpoint_label="data_fetched")` once all six datasets are in hand.
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-nda-dashboard", checkpoint_label="data_fetched")` once all seven datasets are in hand.
 
 ### 3. Assemble the data
 
@@ -109,7 +115,7 @@ Run this as one line, with each `<…>` replaced by a literal path or value. `al
 matches the command text, so keep the quotes and the script path as written:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-nda-dashboard/scripts/process.py" --kpi "<kpi file>" --provisions "<provisions file>" --jurisdictions "<jurisdictions file>" --expiring "<expiring file>" --restrictions "<restrictions file>" --counterparties "<counterparties file>" --firm-name "<firm name>" --firm-carta-id "<firm Carta id>" --out "<WORKDIR>/nda-dashboard-data.json"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-nda-dashboard/scripts/process.py" --kpi "<kpi file>" --provisions "<provisions file>" --jurisdictions "<jurisdictions file>" --expiring "<expiring file>" --expired "<expired file>" --restrictions "<restrictions file>" --counterparties "<counterparties file>" --firm-name "<firm name>" --firm-carta-id "<firm Carta id>" --out "<WORKDIR>/nda-dashboard-data.json"
 ```
 
 ### 4. Render
@@ -145,7 +151,7 @@ Artifact({
   file_path: "<path printed in Step 4>",
   url: "<url from the list — omit on a first publish>",
   title: "<firm name> — NDA insights",
-  description: "NDA insights — provisions, governing law, expiring NDAs, active restrictions and counterparties.",
+  description: "NDA insights — provisions, governing law, expiring and expired NDAs, active restrictions and counterparties.",
   icon: "file-text",
   label: "Refreshed for <firm name>"
 })
@@ -154,7 +160,8 @@ Artifact({
 **Without `Artifact`** (Claude Code, Claude Desktop): give the user the HTML path from Step 4
 to open in a browser.
 
-Either way, close with two or three lines: total NDAs, how many expire in the next two years,
+Either way, close with two or three lines, taking every count from the totals the script printed in
+Step 3 (never from the length of a tab's rows): total NDAs, how many expire in the next two years, how many expired NDAs are still under a confidentiality duty,
 how many counterparties are under an active restriction, and the answer to any specific
 question the user asked. The page is a snapshot; ask again to refresh it.
 
@@ -169,4 +176,6 @@ question the user asked. The page is a snapshot; ask again to refresh it.
 - Never show SQL, ids, table names, or the words "Snowflake", "DWH" or "warehouse" in chat.
 - Expiry is best effort: only NDAs with both a start date (effective date, else signing date) and a term have one. Say so when
   you quote an expiry count, and never call an "Unknown / perpetual" restriction lapsed.
+- An NDA's expiry ends its term, not its confidentiality duties, which usually survive it for
+  years. Say so when you quote NDAs that expire soon.
 - Aggregate in SQL; every dataset is already small. Never pull raw NDA rows.
