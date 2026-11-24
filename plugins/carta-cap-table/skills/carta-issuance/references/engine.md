@@ -1,48 +1,32 @@
-# The issuance engine — build the surface yourself
+# The issuance engine — the rules the run builds on
 
-Read this on the **chat surface**: the one path where *you* collect the terms and assemble the
-payload. Every run starts here, and [Step 4](#step-4--run-the-account-level-hard-stops-first)'s
-`issuance_init` can move it to the companion
-([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)).
+Read this with [companion-surface.md](companion-surface.md) at the start of every run. That file
+is the run; this one holds what it builds on: the preflight, the file import, the reference data
+and its gates, row resolution and the payload.
 
-**Being here is not a degraded run.** It needs nothing this session lacks: never report it as
-unavailable, never offer to start a dev server, and never say it is blocked on a CLI, a tool or
-a connection.
+**A run with no issuance app is not a degraded run.** It needs nothing this session lacks: never
+report it as unavailable, never offer to start a dev server, and never say it is blocked on a
+CLI, a tool or a connection.
 
-The engine is this file: resolve `security_type` → fetch reference data → run the gates →
-collect → assemble rows → `save_drafts` / `validate_drafts` / issue preview and apply → recovery.
+Two more reads, each at its own moment:
 
-Four more reads, each at its own moment:
-
-- **[chat-surface.md](chat-surface.md)** — the collect, the review and the confirm, plus the
-  computable defaults you must never ask for. Read it **in parallel with the first Carta
-  fetch**, not before it: [Phase 0.5](#phase-05--configure-the-issuance)'s `issuance_init` has
-  no dependency on it, so reading first only delays it.
 - **[payload-reference.md](payload-reference.md)** — the authoritative field contract: types,
   formats, picklists, autofills, date quirks. Read it **before
   [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes)**. Nothing earlier builds a
-  payload, and it is the largest file this path reads — pulling it in ahead of the collect
-  delays the one thing the user is waiting for.
+  payload, and it is the largest file the run reads.
 - **The type-specific row file waits for `security_type`.** Read
   [option-grant-fields.md](option-grant-fields.md), *or*
-  [certificate-fields.md](certificate-fields.md), *or* [piu-fields.md](piu-fields.md) once that
+  [certificate-fields.md](certificate-fields.md), *or* [piu-fields.md](piu-fields.md), *or*
+  [other-types.md](other-types.md) for the other six types, once that
   resolves — exactly one, and never before. Loading the wrong one is pure cost, and a grant run
   has no use for Rule 144.
-- **[chat-review.md](chat-review.md) and [issue-and-close.md](issue-and-close.md)** — the
-  review's labels and the issue. Read both in one message **once Phase 1.5 is clean**, on every
-  run, before you write the review. A review written without chat-review.md renames and drops
-  columns.
-
-The path ends at the named `apply_plan` call
-([Phase 3](issue-and-close.md#phase-3--on-confirmation-apply-the-plan)). The host's
-confirmation prompt on that call is the final, irreversible gate — never the review gate.
 
 ---
 
 ## Engine hard rules
 
-[SKILL.md § Hard rules](../SKILL.md#hard-rules) binds on every path and still binds here. These
-five bind on **this** path, because they govern building a surface and a payload by hand.
+[SKILL.md § Hard rules](../SKILL.md#hard-rules) binds on every run and still binds here. These
+five bind too, because they govern building the rows and the payload.
 
 1. **The field contract lives in [payload-reference.md](payload-reference.md).** Read it before
    constructing any payload. No invented keys.
@@ -61,14 +45,14 @@ five bind on **this** path, because they govern building a surface and a payload
    incomplete rows without complaint, and at issue time a row with `stakeholder_id=null` slips
    duplicate detection, creates zero securities, and still returns success. That the server
    accepts a row is therefore never a reason to send one — **never offer to save past a missing
-   `always` field, and never describe the server's tolerance to the user as an option**
-   ([save-validate-flow.md § The assertion is not advisory](save-validate-flow.md#the-assertion-is-not-advisory)).
-5. **Never ask who the grantees are before collecting the rest.** A missing recipient is one
-   field inside the batch, never a gating question ahead of it — this is the single most common
+   `always` field, and never describe the server's tolerance to the user as an option**: *"Carta
+   will accept these rows but they'll fail validation"* is not a choice to offer.
+5. **Never ask who the grantees are before the rest.** A missing recipient is one open input
+   among the others, never a gating question ahead of them — this is the single most common
    way this skill goes wrong. Two sub-rules follow from it:
    - **A bare "N \<securities\>" is a quantity, not a headcount.** *"100 option grants"*,
      *"100 certificates"* — the server's `quantity` field counts shares/options for **one**
-     recipient, so with no named people and no plural-**person** language, collect **one** row
+     recipient, so with no named people and no plural-**person** language, build **one** row
      with `quantity` already set to N.
    - **Only open multiple rows when the language counts people** — *"100 employees"*, *"grants
      for 100 new hires"*, or an explicit list of names.
@@ -86,16 +70,9 @@ The incidents behind these rules — including the ones that look redundant — 
 ## Voice & defaults
 
 <!-- No [PATTERN carta-writing-style] block: the rules below are what this skill's
-     user-facing text actually needs (tagged defaults, no raw ids, jargon explained
+     user-facing text actually needs (Carta's date, no raw ids, jargon explained
      on first use), and the shared pattern does not cover them. -->
 
-- **Explain anything the skill chose.** Tag `(default)`, `(from existing record)`, or
-  `(autofill — <so_type> rule)` with a one-line explanation under the review. The review is the
-  user's only chance to reject a default, so an unshown default is one they never got to see.
-- **Silent defaults are computable; prompted fields aren't.** If the skill can stamp it
-  (today's date, the plan's grant term, an autofill rule), stamp it and surface it tagged.
-  Never ask twice. The full table is
-  [chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask).
 - **Today is Carta's date, never the session clock.** Every issue date or board approval date
   that means "today" is `knowns_seed.today_iso` from the `issuance_init` response. The clock
   can be a day ahead of Carta, and Carta refuses a future issue date. When the user names no
@@ -120,9 +97,8 @@ The incidents behind these rules — including the ones that look redundant — 
 [the source question](../SKILL.md#ask-where-the-details-are), before this phase. If it hasn't,
 ask it before Step 1.
 
-Four steps, in order, **all before any user interaction and before gathering any input.** The
-surface is already selected ([SKILL.md](../SKILL.md#pick-the-surface)), and that selection is
-free; only Step 4's companion check changes it. These steps are the only round trips this preflight may spend: one `ToolSearch`, one
+Four steps, in order, **all before any user interaction and before gathering any input.** These
+steps are the only round trips this preflight may spend: one `ToolSearch`, one
 `list_accounts` (plus at most three disambiguation probes), one `issuance_init` that
 doubles as the account-level hard stop and as Phase 0.5's reference-data fetch, and one
 `get_current_user` for `BASE_URL`, in the same message as `issuance_init`.
@@ -144,12 +120,12 @@ no tool ending in `read_tool` / `call_tool` / `list_accounts` / `welcome` exists
 genuinely gone: say so and stop. Everything else that looks like an answer is not one
 ([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
-One call, the complete set for the run. `view_remote_inline` is there for the
-[companion surface](companion-surface.md); `cap_table__get__draft_set_companion` matches only when Carta offers the
-companion, so no match is the normal case, never a connection signal. `cap_table__mutate__apply_plan` is the issue
-([SKILL.md § Issue](../SKILL.md#issue)).
-**`read_tool` and `call_tool` are loaded here, up front**, so Phase 2 never has to load them after the user confirms — that would be serial latency at the worst
-possible moment.
+One call, the complete set for the run. `view_remote_inline`, `view_remote_next` and
+`cap_table__get__draft_set_companion` serve [the run](companion-surface.md): a host with no app
+lists no `view_remote_next`, and that is never a connection signal. `cap_table__mutate__apply_plan`
+is the issue ([SKILL.md § Issue](../SKILL.md#issue)).
+**Every tool is loaded here, up front**, so no call after the user confirms waits on a load —
+that would be serial latency at the worst possible moment.
 
 **Don't call `search_tools` in the hot path.** Every command name is hardcoded in
 [Step 2](#step-2--command-names-and-base_url), and `read_tool` / `call_tool` reach all of them directly;
@@ -211,7 +187,7 @@ there. `read_tool` and `call_tool` are the only surface
 `set_context`** — every command takes `corporation_id` as a direct param.
 
 **Record `BASE_URL` here**, from the session's `get_current_user` result — it returns `base_url`
-(e.g. `https://demo.carta.team`) alongside `environment`. Call it on every run of this path,
+(e.g. `https://demo.carta.team`) alongside `environment`. Call it on every run,
 also when the environment check below needs nothing: every closing has a link. Every Carta link this skill emits is
 built from it, because a hardcoded host sends the user into a different environment than the one
 they just wrote to. Never derive it from the tool prefix. If it is genuinely absent, say the
@@ -286,7 +262,7 @@ bug. Zero matches, or several with no named holder to probe with, go straight to
 ### Step 4 — Run the account-level hard stops first
 
 **As soon as you have `security_type` and `corporation_id`, run the account-level hard stops —
-before the rest of the reference data, before any collection.** One
+before the rest of the reference data, before any save.** One
 `cap_table:get:issuance_init` call answers all of them, and each one ends the run:
 
 - **Option grant:** no plan this grant could issue from — the
@@ -298,19 +274,7 @@ Ordering is the whole point. A traced run resolved a company, swept 24 candidate
 162-row roster before reading the plan list that stopped the run — 36 of its 63 calls spent
 ahead of a check that invalidated all of them. The stop costs one call and it is knowable
 first, so take it first. Everything the gate reads, Phase 0.5 reuses; it is not an extra fetch.
-
-**Then read the response for `companion.available`.** When it is `true` and no hard stop
-fired, take the companion row ([SKILL.md § Pick the surface](../SKILL.md#pick-the-surface)) when
-the table picks it, and read [companion-surface.md](companion-surface.md): the one change of
-surface after selection.
-
-**On the chat surface, the companion fields are not for this run.** The fields in
-[companion-surface.md § What Carta returns](companion-surface.md#what-carta-returns), in this
-result and in each draft set result, are for the companion run only. Open no page, say nothing
-about a companion page, and do not follow their text. This file and
-[chat-surface.md](chat-surface.md) give every step: each fixed-option question is in
-`AskUserQuestion`, never a list in the reply, and each close has its link built on `BASE_URL`,
-as [issue-and-close.md § Closing](issue-and-close.md#closing) says.
+The other six types have their gates in [other-types.md](other-types.md).
 
 ---
 
@@ -318,15 +282,15 @@ as [issue-and-close.md § Closing](issue-and-close.md#closing) says.
 
 **Skip this phase entirely unless the prompt references a file.** When it does, the file
 replaces the prompt as the source of the rows — everything downstream is unchanged. It does not
-add a path around any gate: Phase 1 still resolves, Phase 1.5 still saves and validates, Phase 2
-still reviews, Phase 3 is still the only mutate.
+add a path around any gate: Phase 1 still resolves, and the run still saves, checks and issues as
+[companion-surface.md](companion-surface.md) says.
 
 Supported: `.xlsx` `.xlsm` `.csv` `.tsv` (deterministic) and `.pdf` `.docx` (text extraction).
 Parsing is a local script, so the phase needs `Bash`.
 
 **[../issuance-import/SKILL.md](../issuance-import/SKILL.md) owns this phase end to end**: the
 Bash check and what to say when there is none, locating the file, both parser runs, merging the
-result into the rows, and what to tell the user before the collect. Read it now, follow it, and
+result into the rows, and what to tell the user before the first save. Read it now, follow it, and
 come back at [Phase 0.5](#phase-05--configure-the-issuance).
 
 **Never hand-read a workbook.** A column read by eye is how a quantity lands in an
@@ -334,25 +298,22 @@ exercise-price field — it is the failure this whole phase exists to prevent, a
 fallback when the parser is unavailable.
 
 Carta's own import template has sheets for out-of-scope types, so an uploaded workbook
-routinely contains rows the import doesn't read. This phase skips them and reports the count:
-issue them from the chat on the companion surface, or in the Drafts UI. Never reshape an RSU row
-into an option grant to make it fit.
+routinely contains rows the import doesn't read. This phase skips them with the parser's
+`reason` and reports the count. Never reshape an RSU row into an option grant to make it fit.
 
 ---
 
 ## Phase 0.5 — Configure the issuance
 
-Fetch the reference data, run the gates, then collect. Collect **in one batch** — every open
-field at once, so the user answers once instead of working through a chain of questions, and so
-a single batch can carry genuinely different terms for different people.
-[chat-surface.md § 1](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open) owns
-the collect itself; this section owns what has to be true before it runs.
+Fetch the reference data and run the gates, before the first save. Everything still open after
+them is asked once, as [companion-surface.md § 6](companion-surface.md#6-ask-whats-missing-once)
+says; this section owns what has to be true before the first save.
 
 **One call, and it is the same call Step 4 already made:**
 
 ```
 mcp__carta__read_tool({"name": "cap_table__get__issuance_init", "arguments": {
-  "corporation_id": <corporation_id>, "security_type": "<option_grant|certificate|piu>",
+  "corporation_id": <corporation_id>, "security_type": "<security_type>",
   "stakeholder_names": ["<each person the prompt named>"],
   "include_bootstrap": true, "issue_date": "<YYYY-MM-DD the user named, else omit>"}})
 ```
@@ -363,7 +324,7 @@ mcp__carta__read_tool({"name": "cap_table__get__issuance_init", "arguments": {
   shape as the standalone `cap_table:get:stakeholders` command. **If the prompt named nobody,
   pass no names at all**: there is nobody to resolve yet, and
   [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) resolves whatever names the
-  user gives during the collect.
+  user gives later.
 
   > **Never put two people in one `search=`.** It AND-s its whitespace-separated terms, so it
   > matches **one person only**; two names in one `search` come back an empty list with a
@@ -420,13 +381,13 @@ the rest of this file just says "from the `issuance_init` payload".
 **Read each section under its own name.** Never let one section's `count: 0` stand in for
 another's. Exactly one count may stop the flow — the [account-setup
 gate](#account-setup-gate-option-grant-and-piu) below, on `document_sets.count` read under that
-name and no other. Every other count, zero included, never gates: the collect runs regardless
+name and no other. Every other count, zero included, never gates: the run goes on regardless
 (engine rule 5).
 
 ### Account-setup gate (option grant and PIU)
 
 Runs once, immediately after the `issuance_init` payload is read — before FMV, jurisdiction,
-plan, or any collection ([Step 4](#step-4--run-the-account-level-hard-stops-first)) — and
+plan, or any save ([Step 4](#step-4--run-the-account-level-hard-stops-first)) — and
 skipped entirely for `certificate`.
 
 **Read the count from its section under that exact name.** A real run aborted a valid
@@ -438,15 +399,15 @@ issuance by reading `acceleration_templates`' zero as `document_sets`'
 |---|---|---|
 | `option_grant` | `document_sets` | **Hard stop** — `document_set_id` is an `always` field on every grant row |
 | `piu` | `certificate_share_classes` | **Hard stop** — `prefix` is an `always` field, so the batch could never issue |
-| `piu` | `document_sets` | **Soft** — a PIU needs one only when the issuer's own properties demand it, and no MCP command exposes those. Omit the documents question when the list is empty and say the one-liner below; `validate_drafts` decides ([SKILL.md hard rule 4](../SKILL.md#hard-rules)) |
+| `piu` | `document_sets` | **Soft** — a PIU needs one only when the issuer's own properties demand it, and no MCP command exposes those. Ask no document set when the list is empty and say the one-liner below; `validate_drafts` decides ([SKILL.md hard rule 4](../SKILL.md#hard-rules)) |
 | `certificate` | — | skipped |
 
-Hard stop, before collecting anything:
+Hard stop, before saving anything:
 
 > *"Your corporation doesn't have any option-grant document templates set up yet. Create one in the Carta app, then come back."*
 > *"Your corporation doesn't have any unit classes set up yet. Create one in the Carta app, then come back."*
 
-Soft, one line alongside the collect:
+Soft, one line in the reply:
 
 > *"This company has no profits-interest document templates. Carta will reject the issuance if your company requires a grant agreement — set one up in the Carta app if it does."*
 
@@ -464,8 +425,8 @@ wrong securities:
   cannot honor it. Issuing without it ships a security that reads as complete and is not — a
   PIU with no matching interest in the linked operating company.
 
-**Why stopping here doesn't break engine rule 5.** Rule 5 forbids asking for *collectible
-fields* before the collect. These fields pick **among existing records** and cannot create one,
+**Why stopping here doesn't break engine rule 5.** Rule 5 forbids asking for *fields the user
+can give* ahead of the rest. These fields pick **among existing records** and cannot create one,
 so for an `always` field zero records makes it unfillable from any surface and the batch can
 never issue — an **account-setup blocker**, the same category as an unreachable Carta MCP,
 resolved in the Carta app rather than here. For a *conditional* field (PIU document sets) the
@@ -483,9 +444,9 @@ emitted, so an empty list means clean — never read absence as "old server".**
 
 | Severity | What you do |
 |---|---|
-| `hard_stop` | **Collect nothing.** Stop and tell the user what is wrong, in the blocker's own `message` |
+| `hard_stop` | **Save nothing.** Stop and tell the user what is wrong, in the blocker's own `message` |
 | `needs_decision` | Continue, but put the decision to the human. Never resolve it yourself, and never re-derive a verdict the blocker deliberately withheld |
-| `informational` | Note it in the one line you say alongside the collect. Do not block |
+| `informational` | Note it in one line of the reply. Do not block |
 
 The keys:
 
@@ -508,8 +469,8 @@ exists to prevent.
 
 **Option grants: no live plan is a `hard_stop`.** `equity_plan_id` is required on the first
 mutate, so a corporation with no plan this grant could issue from cannot issue at all — and
-nothing downstream says so. The account-setup gate reads `document_sets` and passes, the collect
-gathers every field, and the run dies at `save_drafts` after the admin has answered everything.
+nothing downstream says so. The account-setup gate reads `document_sets` and passes, the admin
+answers every field, and the run dies at `save_drafts` after that.
 `option_plan.none_selectable` is the mechanism: it catches expired plans **and** plans with no
 available shares. For an expired plan, stop with its message, naming the plan and its date so
 the admin knows what to fix:
@@ -518,8 +479,8 @@ the admin knows what to fix:
 > option grant without a live plan — adopt a new one or extend that one in the Carta app, then
 > come back."*
 
-**If `blockers` is absent** — the bootstrap extras failed, or the flag was omitted — run that
-one check by hand before collecting: count the `option_plans` rows whose `is_expired` is
+**If `blockers` is absent** — the bootstrap extras failed, or `include_bootstrap` was omitted —
+run that one check by hand before the first save: count the `option_plans` rows whose `is_expired` is
 **false**, and stop on zero with the same message. The expiry also caps
 `grant_expiration_date` ([option-grant-fields.md](option-grant-fields.md#option-grant-row)), so
 a plan that expired years ago produces an expiry before the issue date too.
@@ -534,7 +495,7 @@ C-corp** — not the draft-set views, not the validators — so this check exist
 `draft_set_init.isLLC` from the `issuance_init` payload:
 
 - **`true`** → continue.
-- **`false`** → warn once with `AskUserQuestion` before collecting anything: *"\<Company\> isn't
+- **`false`** → warn once with `AskUserQuestion` before the first save: *"\<Company\> isn't
   set up as an LLC or partnership on Carta, and profits interests are normally issued by one.
   Continue anyway, or switch to certificates?"* Continuing is the admin's call; the server will
   accept it either way.
@@ -562,14 +523,14 @@ Read `international_valuations.active` — already filtered to live valuations s
    prices off the plan's common share class, so a live preferred FMV is another class's price
    and is dropped. A corp with an Ordinary share price of 0.75 and a Seed Preferred FMV of 1.00
    must price its options at **0.75**.
-2. **Exactly one row survives** → that price is the exercise-price default. Show it tagged
-   `(default — current <source>)`, where the source is the rows' shared
+2. **Exactly one row survives** → that price is the exercise-price default. Name its source,
+   the rows' shared
    `support_reference_type` — `409A` / `EMI` / `CSOP` / `SHARE_PRICE` (the
    `*_VALUATION_REPORT` wire forms mean the same thing).
 3. **Two or more survive on the same class** → **do not pick.** An HMRC report yields both an
    **AMV** (actual market value, discounted for restrictions) and a **UMV** (unrestricted market
    value); nothing in the payload says which a grant is priced from, and the difference changes
-   the holder's tax position. Put both to the admin in the collect batch and use their answer.
+   the holder's tax position. Put both to the admin as one item and use their answer.
 4. **`active` is empty but `history` isn't** → say when cover ended (the lapsed
    `expiration_date`) rather than just "none on file", and ask for the price.
 
@@ -587,45 +548,38 @@ the precedence order is:
 1. the active valuation's `currency` (`GBP` → UK, `AUD` → AU, `USD` → US);
 2. `option_plans[].scheme_type == "EMI"` → UK;
 3. an `EMI`/`CSOP` `support_reference_type` in the valuations payload → UK;
-4. otherwise `US` — and say so in the review as `(default — assumed US)`, so a wrong guess is
-   visible and correctable rather than silent.
+4. otherwise `US` — and say so in the reply, so a wrong guess is visible and correctable rather
+   than silent.
 
-**Never gate the option-type question to all nine types across US/UK/AU at once.** Three, for
-the resolved jurisdiction. Set the batch `currency` from the same source the jurisdiction came
+**Never offer all nine option types across US/UK/AU at once.** Three, for the resolved
+jurisdiction. Set the batch `currency` from the same source the jurisdiction came
 from, and remember the payload `currency` and `exemption` are ultimately the per-`so_type`
 autofill's ([payload-reference.md](payload-reference.md#so_type-auto-fill-rules)), not this one.
-
-**Then collect** — [chat-surface.md § 1](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open).
-Every value in
-[its § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask) is a default you
-stamp and show, never a question. Once the answers are in, map each row's fields onto a resolved
-row: [row-mapping.md](row-mapping.md). Then go to Phase 1.
 
 ---
 
 ## Phase 1 — Resolve each row + reconcile share classes
 
-Your working set is the rows from Phase 0.5 — one entry per grantee/holder, each already
-carrying its own quantity and full field set. Phase 1 *resolves* each row; it does **not**
-re-collect the person, the quantity, or any field already answered.
+Your working set is the rows from the files and the prompt — one entry per holder, each
+carrying its own quantity and the fields given. Phase 1 *resolves* each row; it does **not** ask
+again for the person, the quantity, or any field already given.
 
 **Read [payload-reference.md](payload-reference.md) first if you haven't** — every run. It is
 the field contract (engine rule 1) and it governs the mapping you are about to do, most sharply
-the per-field date formats. Reading it here rather than before the collect is deliberate:
-nothing earlier in the run constructs a payload.
+the per-field date formats.
 
 **Resolve from what Phase 0.5 already fetched.** Match each row's name case-insensitively
 against the `issuance_init` payload's `stakeholders` section, which carries `full_name`,
 `email`, `id`, `kind` and `event_relationship` per person:
 
 - **Exactly one match** → reuse `email`, `event_relationship`, `kind`, `id`. Stamp
-  `stakeholder_id` to bypass duplicate detection. Tag `(from existing record)`. **No MCP call.**
-- **No match** → the person is new, or was named during the collect after Phase 0.5 fetched
-  (routine). Batch *only these misses* into **one** `cap_table:get:stakeholders`
+  `stakeholder_id` to bypass duplicate detection. **No MCP call.**
+- **No match** → the person is new, or was named after Phase 0.5 fetched (routine). Batch *only these misses* into **one** `cap_table:get:stakeholders`
   (`cap_table__get__stakeholders`) call passing
   `names=` (a list of the missed names), not `search=`. A genuine no-match is a new stakeholder —
   never ask for an email that is already on the cap table.
-- **Multiple matches on one name** → disambiguate with `AskUserQuestion`.
+- **Multiple matches on one name** → a `which_person` item
+  ([companion-surface.md § 6](companion-surface.md#6-ask-whats-missing-once)).
 
 > **`search` matches one person; `names` matches many.** `search` AND-s its whitespace-separated
 > terms across `full_name`/`email`, so two people in one `search` string can never match anything
@@ -640,10 +594,10 @@ against the `issuance_init` payload's `stakeholders` section, which carries `ful
 > concatenating every row's name into one `search` to make that loop look batched is the same bug
 > wearing a disguise, with the added defect that it silently matches nobody.
 
-**Precedence for the two fields the collect can also supply:** a non-empty `relationship`
-stamps `issue_date_relationship`, and `stakeholder_kind` (defaulting to `INDIVIDUAL`) stamps
-itself — but **only when the lookup found no match**. For an existing stakeholder the cap-table
-record always wins. Tag `(from the collect — new stakeholder)`.
+**Precedence for the two fields the files or prompt can also supply:** a non-empty
+`relationship` stamps `issue_date_relationship`, and `stakeholder_kind` (defaulting to
+`INDIVIDUAL`) stamps itself — but **only when the lookup found no match**. For an existing
+stakeholder the cap-table record always wins.
 
 Dropping any of `email`, `issue_date_relationship`, `stakeholder_kind`, or `stakeholder_id`
 from a stamped row is a contract violation (engine rule 4).
@@ -674,10 +628,8 @@ silently changes the pool math. `equity_plan_id` is never passed on a PIU mutate
 
 Use the `option_plans` section from the Phase 0.5 `issuance_init` payload.
 
-- **The collect already answered it** → use that answer. Asking again is a wasted interactive
-  wait on a question the user already saw.
-- **Otherwise** → default silently to the latest non-expired plan with shares left (the
-  highest `id`). Tag `(default — latest active plan)`.
+- **The files or prompt name it** → use that plan.
+- **Otherwise** → default to the latest non-expired plan with shares left (the highest `id`).
 - **Zero non-expired** → you should never arrive here: [Phase 0.5's live-plan
   check](#blockers--act-on-them-first) already stopped the run. If you do, stop now with that
   same message rather than issuing off an expired plan.
@@ -690,40 +642,25 @@ never sent to the mutate.
 
 ---
 
-## Phase 1.5 — Save + validate before review (or save-only)
-
-Reached immediately after Phase 1 resolves every row. Saving and validating *before* the review
-exists is deliberate: `validate_drafts` reports what the issue preview cannot
-([save-validate-flow.md](save-validate-flow.md)), and it needs an existing `draft_set_id`, so validating early means saving early too. Reviewing an unvalidated summary means the user first learns of a
-rejection at the final confirm, after a draft row has already been created.
-
-Full mechanics — the save-only branch, translating server errors into something sayable,
-re-asking, and draft-state bookkeeping: [save-validate-flow.md](save-validate-flow.md).
-
 ## Resume an existing draft set
 
-Loading a set by id or name, re-deriving option-grant review-only display fields, and jumping
-straight to Phase 2: [resume-flow.md](resume-flow.md#resume-an-existing-draft-set).
+Loading a set by id or name, of any of the nine types, and entering the run on it:
+[resume-flow.md](resume-flow.md#resume-an-existing-draft-set).
 
 ---
 
 ## Shared resolution helpers
 
-On this path these are the **primary** collection mechanism — nothing else has gathered legend,
-vesting, acceleration or document set. Put each one in the
-[§ 1 batch](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open) rather than
-asking them one at a time. Picklist source, default posture, and what gets stamped are below.
-
-Dividend accrual start date is the one field with no natural place in the batch: it depends on
-the resolved share class, so it is asked after the class is known.
+The picklist source, default posture and what gets stamped for each field that picks among the
+company's records. Each one the files and prompt leave open is an item in the one ask
+([companion-surface.md § 6](companion-surface.md#6-ask-whats-missing-once)), never a question of
+its own.
 
 ### Vesting resolution
 
-Use the `vesting_templates` section from the Phase 0.5 `issuance_init` payload. Render a
-compact picker (name + `summary_short` + `vesting_type`). `AskUserQuestion`: one option per
-template → `vesting_template: <id>`; `"No vesting"` → leave unset. When set, also collect
-`vesting_start_date` (`MM/DD/YYYY`, default `issue_date`) **unless** the template's
-`vesting_type` is milestone, which the server defaults — skip that prompt.
+Use the `vesting_templates` section from the Phase 0.5 `issuance_init` payload: one option per
+template (name + `summary_short` + `vesting_type`) → `vesting_template: <id>`; `"No vesting"` →
+leave unset.
 
 | Flow | Default posture | "No vesting" |
 |---|---|---|
@@ -734,8 +671,8 @@ template → `vesting_template: <id>`; `"No vesting"` → leave unset. When set,
 ### Acceleration resolution
 
 Only if vesting is set. Use the `acceleration_templates` section from the `issuance_init`
-payload. `AskUserQuestion`: one option per template → `acceleration_template: <id>`;
-`"No acceleration"` → leave unset.
+payload: one option per template → `acceleration_template: <id>`; `"No acceleration"` → leave
+unset.
 
 ### Type-specific helpers
 
@@ -758,7 +695,7 @@ payload. `AskUserQuestion`: one option per template → `acceleration_template: 
 
 ## Row templates
 
-Fill literally. Every slot must hold a value before review; a `None` or empty is a skill bug —
+Fill literally. Every slot must hold a value before the save; a `None` or empty is a skill bug —
 reapply the default, re-call the stakeholder lookup, or ask (engine rule 4). Each file also
 lists the **review-only** fields stamped alongside the payload, which are display-only and
 never sent to the mutate.
@@ -771,14 +708,13 @@ never sent to the mutate.
 
 ## Pre-mutate checklist
 
-Tick before any mutate — Phase 1.5's `save_drafts` / `validate_drafts` included, not just the
-final apply:
+Tick before any mutate — every save included, not just the final apply:
 
 - [ ] `security_type` resolved and passed on every call
-- [ ] Every row's `issue_date_relationship`, `email`, `stakeholder_kind` and `stakeholder_id` came from the `issuance_init` `stakeholders` section (or the Phase 1 `names=` lookup), not from the collect alone
+- [ ] Every row's `issue_date_relationship`, `email`, `stakeholder_kind` and `stakeholder_id` came from the `issuance_init` `stakeholders` section (or the Phase 1 `names=` lookup), not from the files or prompt alone
 - [ ] **Cert:** share class resolved → `prefix`. **Grant:** option plan resolved, `so_type` autofills applied (`currency`, `exemption`). **PIU:** unit class resolved → `prefix`, `threshold_value` and `threshold_value_type` both set, equity plan resolved **or deliberately empty**
 - [ ] Every `always` field populated per the row template; pre-save assertion passed (engine rule 4)
-- [ ] **For the apply only:** the review, with the latest preview's `summary`, was confirmed (Phase 2 → 3). Phase 1.5's calls precede the review by design, so this doesn't apply to them
+- [ ] **For the apply only:** the user confirmed the latest preview's `summary`, as [companion-surface.md § 8](companion-surface.md#the-review) says
 - [ ] If retry: `draft_set_id` + each row's `draft_pk` in the payload ([SKILL.md hard rule 3](../SKILL.md#hard-rules))
 
 ---
@@ -816,39 +752,6 @@ Re-run the pre-save assertion (engine rule 4) on the resolved rows, then mutate.
 
 ---
 
-## Save as draft (escape hatch)
-
-Runs whenever a save-only save is needed: from
-[Phase 1.5](#phase-15--save--validate-before-review-or-save-only), or from the Phase 3 answer
-`"Save as draft"`.
-
-```
-mcp__carta__call_tool({"name": "cap_table__mutate__save_drafts", "arguments": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
-  "drafts": [ ...rows... ],
-  "draft_set_id": <draft_set_id if resuming>, "draft_set_name": <optional, ≤30 chars>,
-  "equity_plan_id": <equity_plan_id>}})   # option-grant only, on first save
-```
-
-Response `{draft_set_id, drafts:[{temp_id, draft_pk, status, error}], error}` — no top-level `validation`
-(`save_drafts` skips it by design), **but each row's `status` still reflects its own save.**
-Check it:
-
-- **All success** → the *Saved as draft* [closing](issue-and-close.md#closing). It always ends
-  with the link `[Drafts UI](<BASE_URL>/drafts/<security_type>/<CORP_ID>/draft/?draftSetPk=<draft_set_id>)`.
-- **Some errored** (a row has `error {code, field, message}`) → surface its `error.message`
-  verbatim per failing `draft_pk`. With an `error.field`, fix it, recover via
-  [mutate-recovery.md](mutate-recovery.md#error-recovery), then re-call `save_drafts` with the
-  same `draft_set_id` + each `draft_pk`; with no `field`, do what the `message` says and never
-  resend that row as it was.
-- **All failed** (every row has an `error`) → surface each `error.message` verbatim and act on
-  each as above; *"No drafts saved."* — no Drafts-UI link, since there is nothing there to open.
-- **A top-level `error`** → no row was saved: surface its `message` verbatim and do not resend
-  the set. No Drafts-UI link.
-
-**Never show the success message when any row failed** — the user would believe a partial set
-is complete.
-
 ## Validate without issuing
 
 `validate_drafts` only checks the draft set and saves nothing. carta-mcp marks it read-only
@@ -860,17 +763,4 @@ mcp__carta__read_tool({"name": "cap_table__mutate__validate_drafts", "arguments"
   "draft_set_id": <draft_set_id>}})
 ```
 
-Returns `{validation, duplicates}` only. Interpret with the branching rules above; stop at the
-report.
-
----
-
-## Phase 2 → Closing
-
-Everything from the review gate to the closing line lives in
-[issue-and-close.md](issue-and-close.md): Phase 2's review and its single confirmation, Phase 3's
-branch table, the preview, the apply and its results, the success rendering,
-draft-row cleanup, and every closing template.
-
-**Read it when you reach Phase 2**, not before — after Phase 1.5 returns clean, or straight
-away on a resume.
+Returns `{validation, duplicates}` only.

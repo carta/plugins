@@ -1,7 +1,7 @@
 # The source question
 
 Read from [SKILL.md § Ask where the details are](../SKILL.md#ask-where-the-details-are),
-before you pick a surface, load a Carta tool or read any reference data. When the request
+before you load a Carta tool or read any reference data. When the request
 states nothing to issue, the source is what's missing, not the recipients. Nothing to issue means: no person, no quantity, no price or other term, no
 attached file, and no pointer to one (an email, a link, a file name). For example,
 *"help me issue options in Carta"*, *"here's a list of options we need issued"* with nothing

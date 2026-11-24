@@ -3,9 +3,7 @@
 Authoritative shape for the `drafts` payload on `save_drafts`. Read this before constructing any payload — no invented keys.
 Unknown keys fail with `Unknown draft field` or are dropped silently.
 
-This is the **final mutate** contract. What the collect gathers is an earlier-stage shape whose
-field names don't all match — [row-mapping.md](row-mapping.md) is the translation, and the keys
-below are what actually goes on the wire.
+This is the **final mutate** contract: the keys below are what actually goes on the wire.
 
 Contents: [Common fields](#common-fields-all-flows) ·
 [Certificate-only](#certificate-only-fields) · [Option-grant-only](#option-grant-only-fields) ·
@@ -68,7 +66,10 @@ ownership (PBO) issuance.
 | `UNIT`, or no key | A positive count of shares or units, as before |
 
 Each row reads its own class, so one draft set can mix `UNIT` and `PERCENT` rows. A
-percentage on any other class: [chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask).
+percentage on any other class goes back to the user: ask for a percentage-based class (on a PIU,
+also to clear a plan whose unit class is not `PERCENT`). With no `PERCENT` class, say issuing a
+percentage needs one, or, when no class carries `quantity_semantics`, that this company does not
+issue by percentage. Never send the percentage as a count.
 Option grants have no share class and are always `UNIT`.
 
 On a `PERCENT` or `INVESTED_CAPITAL` class, `authorized` and `available` do not limit the
@@ -345,9 +346,8 @@ never came back.
   to re-sending the full `drafts` array on a `validate_drafts` retry — that's strictly more
   data for no benefit.
 - **`save_drafts` timeout** — the response never arrived, but some or all rows may have
-  saved anyway. On retry, thread `draft_pk` for every row this phase has already assigned
-  one to (from a prior successful save this session, per [Draft-state
-  bookkeeping](save-validate-flow.md#draft-state-bookkeeping)) — rows with a known
+  saved anyway. On retry, thread `draft_pk` for every row this run has already assigned
+  one to (from a prior successful save this session) — rows with a known
   `draft_pk` update in place instead of creating a duplicate row. Rows that never got a
   `draft_pk` (this is their first save) go in the retry with their full payload, unchanged.
   Never retry a timed-out `save_drafts` by omitting `draft_set_id` — that mints a **second**

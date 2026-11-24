@@ -175,8 +175,8 @@ Board · Performance bonus · Boxcar grant
 ## Out-of-scope security types
 
 A row whose `Type` names one of these is a row the import doesn't read. It is
-**skipped** with a reason: issue them from the chat on the companion surface, or in
-the Drafts UI. It is never coerced into a certificate, grant or profits interest unit:
+**skipped** with the parser's `reason`. It is never coerced into a certificate, grant
+or profits interest unit:
 
 RSU · SAR · CBU · Warrant · RSA · Convertible Note · SAFE
 

@@ -3,7 +3,7 @@ name: carta-cap-table:issuance-import
 description: >-
   Internal file-ingest sub-skill for carta-issuance. Turns an uploaded
   spreadsheet (.xlsx/.xlsm/.csv/.tsv) or document (.pdf/.docx) into the
-  prefilled rows every carta-issuance surface consumes, for certificates,
+  prefilled rows the carta-issuance run consumes, for certificates,
   option grants and profits interest units. Not invocable directly —
   dispatched by carta-issuance Phase 0.25.
 owner: carta-cap-table maintainers (#cap-table-eng)
@@ -11,15 +11,15 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.120.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.0</carta-plugin>
 
 # issuance-import
 
 Reads a file the admin already has — typically the Carta importer template they
 downloaded from the app — and hands `carta-issuance` a prefilled set of rows. The
 file feeds the **front** of the existing pipeline; it does not
-add a path around any gate. Phase 1 still resolves stakeholders, Phase 1.5 still
-saves and validates, Phase 2 still reviews, Phase 3 is still the only mutate.
+add a path around any gate. Phase 1 still resolves stakeholders, and the run still
+saves, checks, reviews and issues as [companion-surface.md](../references/companion-surface.md) says.
 
 **Do not invoke this skill directly.** Dispatched by `carta-issuance`
 [Phase 0.25](../references/engine.md#phase-025--ingest-an-uploaded-file).
@@ -74,7 +74,7 @@ which (`ERROR:` or `AMBIGUOUS:` plus `CANDIDATES=`).
 ## Running the phase — step by step
 
 `carta-issuance` [Phase 0.25](../references/engine.md#phase-025--ingest-an-uploaded-file) hands you the
-whole ingest and hands back the rows the surface starts from. These are its steps; nothing here is repeated in
+whole ingest and hands back the rows the run starts from. These are its steps; nothing here is repeated in
 `SKILL.md`, so work through them in order and return to [Phase
 0.5](../references/engine.md#phase-05--configure-the-issuance) at the end.
 
@@ -156,17 +156,16 @@ comes from the file, so engine rule 5's quantity-vs-headcount heuristic doesn't 
 40-row sheet is unambiguously 40 rows). Surface `batch_errors` alongside the rows, and
 hold `equity_plan_id` for the first mutate only.
 
-Each row may carry `import_notes` — `[{field, raw_value, reason}]`, **display-only**. Whatever
-collects the terms must both **report every note against the field it names** and **leave that
-field unanswered**, so nothing can be submitted until the admin settles it. A marker alone is
-ignorable; the withheld default is what actually prevents a silent wrong issuance
-([chat-surface.md § 1](../references/chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open)).
+Each row may carry `import_notes` — `[{field, raw_value, reason}]`, **display-only**. The run
+must both **report every note against the field it names** and **leave that field unanswered**,
+so nothing can be submitted until the admin settles it. A marker alone is ignorable; the
+withheld default is what actually prevents a silent wrong issuance.
 
 **Strip `import_notes` before any mutate** — same discipline as the review-only fields
 ([Build the mutate payload](../references/engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows)).
 The server rejects unknown keys.
 
-### Step 6 — Say what happened, in one line, before the surface opens
+### Step 6 — Say what happened, in one line, before the first save
 
 Read `_import_report.json` and report totals — never silently drop a column or a row. A dropped
 `Exercise Price` column is a wrong-priced grant the user has no way to notice.
@@ -175,12 +174,11 @@ Read `_import_report.json` and report totals — never silently drop a column or
 > flow sets, and I couldn't match 3 values — I'll ask for those. Everything else is filled in."*
 
 **Name the skipped rows and the unmapped columns, not just their counts.** Rows the import
-doesn't read (RSUs, SARs, CBUs, warrants, RSAs, convertibles) are skipped by the parser with a
-reason: issue them from the chat on the companion surface, or in the Drafts UI — an admin who thinks a 40-row sheet issued 40 securities when it
-issued 37 has been misled. `unmapped_columns` holds the headers this skill has no field for;
+doesn't read (RSUs, SARs, CBUs, warrants, RSAs, convertibles) are skipped with the parser's
+`reason` — an admin who thinks a 40-row sheet issued 40 securities when it issued 37 has been
+misled. `unmapped_columns` holds the headers this skill has no field for;
 several — `state_exemption`, `state_of_residency`, `employee_id`, `cost_center`, `job_title`,
-`salary`, `convertible_note` — are dropped by design
-([chat-review.md](../references/chat-review.md)), and *"2 columns I couldn't map"* leaves an
+`salary`, `convertible_note` — are dropped by design, and *"2 columns I couldn't map"* leaves an
 admin who deliberately filled one in believing it landed. Say which: *"State of Residency and Employee ID aren't fields this flow
 sets — add them on the stakeholder record in Carta."*
 
@@ -217,11 +215,11 @@ Deterministic end to end.
   [payload-reference.md § Picklists](../references/payload-reference.md#picklists).
 - **Out-of-scope rows skipped, not coerced.** An importer sheet can carry RSUs,
   SARs, CBUs, warrants, RSAs, convertibles: rows the import doesn't read. Those rows
-  are skipped with a reason: issue them from the chat on the companion surface, or in
-  the Drafts UI. Never reshape them into a grant of a different type.
+  are skipped with the parser's `reason`. Never reshape them into a grant of a
+  different type.
 - **Multiple equity plans in one sheet** → a `batch_errors` entry. A draft set
-  is locked to one plan server-side, so this has to surface before the terms are
-  collected rather than failing at Phase 1.5.
+  is locked to one plan server-side, so this has to surface before the first save
+  rather than failing at it.
 
 ## Document mode (`.pdf` / `.docx`)
 
@@ -231,7 +229,7 @@ A signed grant doc or board consent has no fixed layout, so turning it into rows
 is a judgement call — doing it in the script would mean guessing silently, which
 is rule 2 inverted. So: read `_import_text.txt`, write the rows yourself **in
 this script's own row schema**, and mark every field you filled this way with an
-`import_notes` entry carrying `"confidence": "low"`. Every surface treats those as
+`import_notes` entry carrying `"confidence": "low"`. The run treats those as
 needs-confirmation, so a misread date is something the admin sees rather than
 something that issues.
 
@@ -253,7 +251,7 @@ Two additions beyond that list:
 
 | Key | Meaning |
 |---|---|
-| `row_key` | Positional `r0`, `r1`, … — the key Phase 1.5 re-matches a row to its `draft_pk` by ([save-validate-flow.md](../references/save-validate-flow.md#draft-state-bookkeeping)) |
+| `row_key` | Positional `r0`, `r1`, … — the key the run re-matches a row to its `draft_pk` by |
 | `import_notes` | `[{field, raw_value, reason}]` — display-only. **Never** send to any mutate; `scripts/serialize_drafts.py` strips it at the payload boundary |
 
 Dates in a row are **always ISO** (`YYYY-MM-DD`) — that is what `<input type="date">` accepts

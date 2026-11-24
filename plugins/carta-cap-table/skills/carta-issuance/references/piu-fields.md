@@ -85,7 +85,7 @@ differences:
 The default rule is the same one, and deliberately so: use the class only when there is one;
 with two or more, ask for `a unit class` and never pre-select. An explicitly named class is still honoured, row-level or via
 the prefix the prompt named, except where a percentage meets a class or plan class that is
-not `PERCENT` ([chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask));
+not `PERCENT` ([payload-reference.md § PBO quantity](payload-reference.md#pbo-quantity));
 carry one in **only when the prompt actually named one.**
 A defaulted class still leaves the plan empty.
 

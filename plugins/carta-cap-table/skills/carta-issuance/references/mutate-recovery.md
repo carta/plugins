@@ -1,8 +1,8 @@
 # Mutate recovery
 
 What to do when a save, a validation, the issue preview or the issue job comes back refused.
-Read this when [issue-and-close.md](issue-and-close.md) or
-[save-validate-flow.md](save-validate-flow.md) sends you here — not on a clean success.
+Read this when [companion-surface.md](companion-surface.md) or
+[issue-and-close.md](issue-and-close.md) sends you here — not on a clean success.
 
 Two rules govern every branch below:
 
@@ -17,8 +17,8 @@ Two rules govern every branch below:
 - **Send only the rows you actually changed.** Recovery is the case where a `drafts` payload is
   right — you are editing values, so they must go back. Rows you did not touch are already
   correct on the server; resending them re-opens the divergence [hard rule
-  6](../SKILL.md#hard-rules) exists to close. Once the set is clean, preview the issue again
-  ([issue-and-close.md § Phase 2](issue-and-close.md#phase-2--the-review-gate)).
+  6](../SKILL.md#hard-rules) exists to close. Once the set is clean, and with no app, preview
+  the issue again ([issue-and-close.md § The preview](issue-and-close.md#the-preview)).
 
 ---
 
@@ -57,7 +57,7 @@ mcp__carta__call_tool({"name": "cap_table__mutate__resolve_duplicate_stakeholder
              {"id": <draft_pk>, "stakeholder_id": null}]}})             # create as new
 ```
 
-Then validate again. On the chat surface, then preview the issue.
+Then validate again. With no app, then preview the issue.
 
 ---
 
@@ -124,5 +124,5 @@ failed row's `error` word for word. Never apply the same plan again.
 | "Draft set not found" | The set is deleted or the id is wrong. Call `cap_table:list:draft_sets` with `security_type` once and ask which set. Never start a new set without telling the user. |
 | "requires security_type" | Send the run's `security_type` for this set and call again once. |
 | `unauthenticated` ("The Carta session is not valid") | The Carta sign-in of this chat ended. This is Carta's answer, not a connection check. Say: *"Your Carta session ended. Reconnect Carta (Settings → Connectors, or `/mcp` in Claude Code), then say 'continue'."* Make no other Carta call in this turn. After the user replies, make the same call once more, with the same `draft_set_id` and each `draft_pk` ([hard rule 3](../SKILL.md#hard-rules)): what is saved stays saved. |
-| Any other `invalid_argument`, `unknown_param` or `ambiguous` | Carta refused a value you sent, not the surface. Fix what its `message`, `field` and `did_you_mean` name; ask the user with `AskUserQuestion` when only they know the value. Then make the same call once more, with the same `draft_set_id` and each `draft_pk` when it has them. Stay on the surface. |
+| Any other `invalid_argument`, `unknown_param` or `ambiguous` | Carta refused a value you sent, not the run. Fix what its `message`, `field` and `did_you_mean` name; ask the user with `AskUserQuestion` when only they know the value. Then make the same call once more, with the same `draft_set_id` and each `draft_pk` when it has them. Stay on this run. |
 | "response too large" on `issuance_init` or `load_drafts` | Do not change the call to retry. Say Carta could not load it for this company, and send the user to the Drafts page in Carta. |

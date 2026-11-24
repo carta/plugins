@@ -15,7 +15,7 @@ when they work.
 
 | Incident | Rule it produced |
 |---|---|
-| The skill shelled out to `find … generate.py` to detect the side-panel renderer. In Cowork that command **always** returns `RENDERER_MISSING` — the sandbox has no such path — so it burned a round trip to learn what the tool list already said. Worse, the old wording ("never assume the panel is unavailable — run the probe") trained the model to distrust its own tool list, so it ran the dead probe *and then* fell back to chat anyway. | Pick the surface from what the user said and what Carta returned, never from the disk. `Bash(find *)` was removed from `allowed-tools` so the capability is gone, not merely discouraged. |
+| The skill shelled out to `find … generate.py` to detect the side-panel renderer. In Cowork that command **always** returns `RENDERER_MISSING` — the sandbox has no such path — so it burned a round trip to learn what the tool list already said. Worse, the old wording ("never assume the panel is unavailable — run the probe") trained the model to distrust its own tool list, so it ran the dead probe *and then* fell back to chat anyway. | Decide what the host can render from its tool list and what Carta returned, never from the disk. `Bash(find *)` was removed from `allowed-tools` so the capability is gone, not merely discouraged. |
 | `set_context` was called on a corporation and **failed**, costing a round trip and changing nothing — the subsequent commands worked purely off their own `corporation_id`. | Never `set_context` for a corporation-scoped command. |
 | `discover` / `search_tools` were called to look up command names the skill already hardcodes. A name-lookup tool is a pure round trip when you know the name. | Command names are hardcoded; call `search_tools` only for a command the skill does not name. |
 | A `ToolSearch` for `mcp__carta__fetch` / `mcp__carta__mutate` resolved nothing, in 23 of 26 traced runs (29 calls, none successful), and the two runs that called `fetch` anyway got *"No such tool available"*. Every run then rediscovered `call_tool` by hand — several by `jq`-ing a 50 KB `search_tools` dump — and had to work out that the wire name swaps `:` for `__` (`src/tool_search.py`, `_tool_name_from_command`). The gateway pair is flag-gated and the flag defaults off, so a skill that names it is naming a tool the session does not have. | Load `call_tool` in Step 2 and address commands by their double-underscore wire names, which [engine.md § Step 2](engine.md#step-2--command-names-and-base_url) tabulates next to the prose form. `search_tools` is for a command the skill does not name. |
@@ -60,7 +60,7 @@ the user off to fix a connection that was already fine.
 | Incident | Rule it produced |
 |---|---|
 | A row reached `issue_securities` with `stakeholder_id=null`. Because name and email were also null it slipped duplicate detection, created **zero securities, and returned success** — so the user was told the batch was "in draft" when it could never issue. | The pre-save assertion: every `always` field holds a non-null value before any `save_drafts` or `issue_securities`. `save_drafts` accepts incomplete rows silently. |
-| A user set an absurd quantity, clicked Review, reviewed an **unvalidated** summary, and only found out at the final **Confirm & Issue** that the server rejected it ("Not enough shares in the option plan") — after a draft row had already been silently created. | Save + validate *before* the review surface renders (Phase 1.5), not after it is confirmed. |
+| A user set an absurd quantity, clicked Review, reviewed an **unvalidated** summary, and only found out at the final **Confirm & Issue** that the server rejected it ("Not enough shares in the option plan") — after a draft row had already been silently created. | Save + validate *before* the review, not after it is confirmed. |
 | A PIU was requested **with** a corresponding interest, on a named unit class. The share-class read returned no `has_corresponding_interest` key — not `false`, absent — because `ShareClassView` then omitted the field for corporations not yet enrolled in corresponding-interest admin issuance. The skill dropped the request, issued the unit anyway, and told the user *"Carta shows no link configured for this unit class"* — an assertion the evidence did not support; the manage-share-classes page showed the link plainly. The holder ended up with **zero records in the linked operating company**: a one-sided grant that reads as complete. | An absent key is **unknown**, never "no" — never report it as a configuration fact. An explicit request is never silently dropped: send it and let `DraftCorrespondingInterestValidator` rule, or block the review and say what you could not see (SECM-5751). |
 
 ---
@@ -82,7 +82,7 @@ the user off to fix a connection that was already fine.
 ## Surfaces that cannot carry a form
 
 Two rendering tools reach this skill's hosts and neither can carry an issuance form. The rule
-in [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) is absolute because each failure
+in [SKILL.md § The run](../SKILL.md#the-run) is absolute because each failure
 below is silent — the run looks like it worked.
 
 | Tool | What went wrong |

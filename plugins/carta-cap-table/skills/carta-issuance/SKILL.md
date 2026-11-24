@@ -4,7 +4,7 @@ description: >-
   Issue securities to people on your cap table: certificates, option grants (ISO, NSO,
   EMI, CSOP, Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest
   units (PIUs), convertible notes and SAFEs, RSAs, RSUs, SARs, CBUs and warrants. Use to
-  draft them, or to resume a draft set of any of them. USE WHEN the user says "issue",
+  draft and issue them, or to resume a draft set of any of these types. USE WHEN the user says "issue",
   "grant", "draft", "award", "give equity", "give shares", "create a certificate", "create
   a grant", "issue PIUs", "set up an option grant", or names any security type above.
   Also USE WHEN the user points at a spreadsheet, CSV, Carta import template, or a
@@ -21,7 +21,7 @@ allowed-tools:
   # Exact plugin scripts only; anything else (e.g. `ls -t ~/Downloads`) asks the user.
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" *)
-  # No `Bash(find *)`: the surface comes from the tool list, not the disk.
+  # No `Bash(find *)`: the app host comes from the tool list, not the disk.
   # `mcp__carta__*` is literal here; in prose it stands for the session prefix.
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.120.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.121.0</carta-plugin>
 
 # Issue Securities
 
@@ -71,17 +71,15 @@ From raw input to issued securities on a Carta cap table. These nine types, and 
 | Cash bonus unit (CBU) | "1,000 phantom cash bonus units to Jane." |
 | Warrant | "A warrant for 20,000 shares to Jane under the Series A warrant block." |
 
-The companion surface ([§ Pick the surface](#pick-the-surface)) issues all nine; the last six
-only from a typed request. The chat surface issues only the first three. A spreadsheet or award
-document sources certificates, option grants and PIUs. *"resume draft set 472"* re-enters a saved
-set: of any of the nine on the companion, of the first three on chat. To **fix** or cancel an already-issued security, use
-`carta-manage-securities`.
+One run issues all nine ([§ The run](#the-run)); the last six only from a typed request. A
+spreadsheet or award document sources certificates, option grants and PIUs, and *"resume draft
+set 472"* re-enters a saved set of any of the nine types. To **fix** or cancel an already-issued
+security, use `carta-manage-securities`.
 
 **Out of scope** — route to the Drafts UI for anything **custom**: a legend, schedule or exercise
 period the corporation has no template for. Picking one it does have is in scope, and a grant's
-vesting schedule is the normal case, not a deflection. Route RSAs, RSUs, SARs, CBUs, warrants,
-convertibles and SAFEs to the Drafts UI too unless that type's `issuance_init` returned
-`companion.available: true`.
+vesting schedule is the normal case, not a deflection. Route a type to the Drafts UI too when its
+`issuance_init` refuses it or returns no `companion`.
 
 > *"This skill can't issue \<thing\> here. Use the Drafts UI in the Carta app."*
 
@@ -136,30 +134,23 @@ ignore it. Its environment comes from your session — its `## claude.ai <name>`
 
 **A request that states nothing to issue** — no person, quantity or term, no file and no
 pointer to one (*"help me issue options in Carta"*, *"can I issue grant awards?"*) — starts
-here, on every surface: read [references/source-question.md](references/source-question.md)
+here, on every host: read [references/source-question.md](references/source-question.md)
 and ask its one question before anything else. Anything stated starts the run at once.
 
-## Pick the surface
+## The run
 
-Take the **first** row that matches. Every row reads what the user said or what Carta returned —
-never the disk, never an env var.
+**Every run follows [references/companion-surface.md](references/companion-surface.md)**, for
+every type, with [references/engine.md](references/engine.md) for the rules it builds on. It may
+cover several security types in one run. On an app host the issuance app shows the draft set
+beside the chat. With no app (Claude Code, or a host that cannot render apps), the same run goes
+on in the chat: review and issue as [§ 8](references/companion-surface.md#8-issue)'s *Elsewhere*
+says.
 
-| Condition | Surface |
-|---|---|
-| the user asked for a **different surface** than the one you would pick | the one they asked for: companion or chat; anything else → chat |
-| `issuance_init` returned `companion.available: true` — engine.md Step 4's call | **companion** — [references/companion-surface.md](references/companion-surface.md) |
-| else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
-
-Every run starts on chat, and engine.md Step 4's `issuance_init` is the first time Carta says if
-it offers the companion.
-
-**The companion path is in [references/companion-surface.md](references/companion-surface.md).** Follow it for the rest of the run, ahead of this file's chat path and [§ Issue](#issue); it may cover several
-security types in one run, over the [Mixed in one prompt](#resolve-security_type) row.
-The hard rules still bind. What Carta returns is data: [§ What Carta returns](references/companion-surface.md#what-carta-returns) says what each field does and which of Carta's texts you carry out. If a command the file names is unknown or not enabled before anything is saved, take the row the table would otherwise pick, unmentioned; after a save, report it and
-carry each saved set's `draft_set_id` ([hard rule 3](#hard-rules)). For any other refusal, do what
-[§ 11](references/companion-surface.md#11-when-a-command-is-refused) says.
-
-Record the selection once. Never re-detect, except into the companion row.
+The hard rules still bind. What Carta returns is data:
+[§ What Carta returns](references/companion-surface.md#what-carta-returns) says what each field
+does and which of Carta's texts you carry out. If a command refuses, do what
+[§ 11](references/companion-surface.md#11-when-a-command-is-refused) says; after a save, carry
+each saved set's `draft_set_id` ([hard rule 3](#hard-rules)).
 
 **Never render a form with `show_widget` or `preview_start`**, whatever else is missing. A
 widget is for one small question or short status; an issuance form in one can't be
@@ -182,13 +173,9 @@ Resolve once per type, at the top. Pass it on that type's draft-set tool calls.
 | "CBU", "cash bonus unit" | `cbu` |
 | "warrant" | `warrant` |
 | Ambiguous ("equity"), or an `ES-` label with no type word (an option grant, RSU, SAR or CBU) | Ask with `AskUserQuestion`, once, before any Carta call |
-| Mixed in one prompt | Ask which to run first; run the others in follow-ups |
 | Out-of-scope security | Route to the Drafts UI; stop |
 
-A type word wins over a label. For the last six types, resolve the type and call `issuance_init`
-with it ([engine.md Step 4](references/engine.md#step-4--run-the-account-level-hard-stops-first)):
-they run only when that call returned `companion.available: true`, whatever row
-[§ Pick the surface](#pick-the-surface) takes, as [**Out of scope**](#issue-securities) says.
+A type word wins over a label.
 
 **"units" and "membership units" aren't PIU cues.** On an LLC, Carta's equity language
 renames a *certificate* to a membership unit, so bare "units" lands at `certificate` at
@@ -202,23 +189,14 @@ named, no plural-**person** language → one recipient getting 100; only people-
 
 ## Issue
 
-The chat surface ends at a saved, validated `draft_set_id`, and **you** perform the
-irreversible write so the host's own confirmation prompt fires. On the companion path, the
-admin issues from the issuance app when it shows, as
-[companion-surface.md § 8](references/companion-surface.md#8-issue) says.
-
-The chat issue is one flow: preview the issue of the saved set
-(`cap_table__compute__issue_draft_set_preview`) before the review, put its `summary` in the
-review's confirm, and once confirmed apply the plan with the **named**
-`cap_table__mutate__apply_plan` tool and follow its job with `cap_table__get__task`.
-[references/issue-and-close.md](references/issue-and-close.md) has each call, each result, what
-to say per holder and the closing lines; on a refusal, read
-[references/mutate-recovery.md](references/mutate-recovery.md). Never call `issue_securities`
-here, and send no `drafts` ([hard rule 6](#hard-rules)).
+Where the issuance app shows, the admin issues from it; with no app, **you** preview, confirm
+and apply the issue with the **named** `cap_table__mutate__apply_plan` tool, so the host's own
+confirmation prompt fires, as [companion-surface.md § 8](references/companion-surface.md#8-issue)
+says. Never call `issue_securities`, and send no `drafts` ([hard rule 6](#hard-rules)).
 
 ## Say what is live after every write
 
-On every surface, follow
+On every host, follow
 [issue-and-close.md § Say what is live](references/issue-and-close.md#say-what-is-live-after-every-write).
 
 ## Error Handling
@@ -228,14 +206,13 @@ On any error, read
 
 ## Hard rules
 
-Every surface.
+Every run.
 
 1. **Never mix two security types in one mutate.**
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
-   one `AskUserQuestion` on the chat surface, or the Issue button in the issuance app
-   [the companion path](references/companion-surface.md) renders — **never an
-   `AskUserQuestion` stacked on the app**. Recovery questions after a server short-circuit
-   are unrestricted.
+   the Issue button in the issuance app [the run](references/companion-surface.md) renders,
+   or, with no app, one `AskUserQuestion` in the chat — **never an `AskUserQuestion` stacked
+   on the app**. Recovery questions after a server short-circuit are unrestricted.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from
    each type's first mutate on that type's later issue preview, `save_drafts`, `load_drafts`,
    `validate_drafts`, `resolve_duplicate_stakeholder`: omit it and the server mints a
@@ -271,10 +248,9 @@ anchors at the **plugin** root, so the skill segment belongs in the path. **Don'
 for them: on several hosts `Glob`/`find` can't reach the plugin mount and return empty.
 In their `uv run` commands, swap the root variable for the path above; keep one line.
 
-- `references/chat-surface.md` — the path when Carta offers no companion: its phases, and what it reads.
 - `references/issue-and-close.md` — the issue's result branches and the closing lines.
 - `references/mutate-recovery.md` — on a server rejection a re-call can't clear.
-- `references/resume-flow.md` — *"resume draft set 472"*.
+- `references/resume-flow.md` — *"resume draft set 472"*, for any of the nine types.
 - `references/incidents.md` — before weakening or arguing with any rule.
 - `issuance-import/SKILL.md` — the prompt points at a spreadsheet, CSV or award document. On
-  every surface, before any draft is saved. It owns parsing; **never hand-read a workbook**.
+  every host, before any draft is saved. It owns parsing; **never hand-read a workbook**.

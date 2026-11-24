@@ -8,11 +8,9 @@
 # ///
 """Turn an uploaded spreadsheet or document into carta-issuance's `knowns.rows`.
 
-The file feeds the FRONT of the existing pipeline: this script's whole output
-contract is the same row shape every carta-issuance surface consumes, so
-the surface that collects the terms starts prefilled and every downstream gate
-(Phase 1 resolve → Phase 1.5 save+validate → Phase 2 review → Phase 3 mutate)
-runs untouched.
+The file feeds the FRONT of the run: this script's whole output contract is
+the row shape the run reads, so the run starts prefilled and each of its gates
+(resolve → save → check → issue) runs untouched.
 Nothing here writes to Carta.
 
 Two modes, picked by extension:
@@ -900,8 +898,8 @@ def parse_file(path: Path, sheet: Optional[str] = None) -> Parsed:
                 "row": line,
                 "name": _text(_cell(record, "name")),
                 "reason": "{} are rows the import doesn't read: issue them "
-                          "from the chat on the companion surface, or in the "
-                          "Drafts UI.".format(out_of_scope),
+                          "in this run from the chat, or in the Drafts "
+                          "UI.".format(out_of_scope),
             })
             continue
         row = build_row(record, security_type)

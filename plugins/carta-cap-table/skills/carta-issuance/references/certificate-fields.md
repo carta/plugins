@@ -24,8 +24,8 @@ unmatched names, build one table (User-supplied / Suggested match / Confidence) 
 never per-row.
 
 **No class named or implied → use the class only when the corp has exactly one** (for a
-quantity given as a percentage, exactly one `PERCENT` class; see the
-[chat-surface.md](chat-surface.md) defaults table). With two or more classes, ask; never
+quantity given as a percentage, exactly one `PERCENT` class; see
+[payload-reference.md § PBO quantity](payload-reference.md#pbo-quantity)). With two or more classes, ask; never
 pre-select. Nothing is ranked:
 which class a holder lands in sets their liquidation preference, their price and their
 economics, so a ranked default hides the decision the field exists to capture — and the
@@ -69,9 +69,8 @@ Certificate only. Read the resolved share class's `dividend` field:
 
 ## Rule 144 difference reason
 
-Certificate only; only when `rule_144_date` ≠ `issue_date`. **On the chat surface**, ask for
-it in the [collect batch](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open):
-`AskUserQuestion`, one option per enum (label → value): "Has determined 144 date" →
+Certificate only; only when `rule_144_date` ≠ `issue_date`. One option per enum (label →
+value): "Has determined 144 date" →
 `has_determined_144_date`; "Non-restricted 144" → `non_restricted_144`; "Relevance provision"
 → `relevance_provision`; "Affiliates" → `affiliates`; "Non-affiliates" → `non_affiliates`.
 

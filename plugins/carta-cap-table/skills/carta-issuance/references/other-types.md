@@ -1,4 +1,4 @@
-# Types only the companion serves
+# The other six types
 
 Convertible notes and SAFEs, RSAs, warrants, RSUs, SARs and CBUs go through the run,
 [companion-surface.md](companion-surface.md), like option grants and certificates. This file adds
@@ -16,7 +16,6 @@ their columns to the run's § 2, gives the block step a note or warrant set need
 | Issue button | **Issue convertibles** | **Issue RSAs** | **Issue warrants** | **Issue RSUs** | **Issue SARs** (**Issue UARs** at an LLC) | **Issue CBUs** |
 | `cap_table:list:securities` `type` | `convertible_note` | `rsa` | `warrant` | `rsu` | `sar` | `cbu` |
 | Ledger path | `debt/list/<CORP_ID>/` | `options/rsa/list/<CORP_ID>/` | `warrants/list/<CORP_ID>/` | `options/list/rsus/<CORP_ID>/` | `options/list/sars/<CORP_ID>/` | `options/list/cbus/<CORP_ID>/` |
-| Drafts page path | `drafts/convertible/<CORP_ID>/` | `drafts/rsa/<CORP_ID>/` | `drafts/warrant/<CORP_ID>/` | `drafts/rsu/<CORP_ID>/` | `drafts/sar/<CORP_ID>/` | `drafts/cbu/<CORP_ID>/` |
 | Library `document_type` | `Convertible Note / SAFE`, `Board Consent` | `Restricted Stock Award`, `Stock Purchase Agreement`, `Board Consent`, `Equity Plan` | `Warrant`, `Board Consent` | `RSU Award Agreement`, `Board Consent`, `Equity Plan` | `Board Consent`, `Equity Plan` | `Board Consent`, `Equity Plan` |
 | Never recommend | a note block, a valuation cap, a discount, an interest rate | a purchase price | a warrant block, a share class, a prefix, an exercise price | a plan, a tax filing status | a plan, a base price | a plan, a share class, a base value or threshold |
 
@@ -82,8 +81,6 @@ place, with the nouns of the type's `set_label`:
 - **Issued**: *"N \<securities\> issued on \<company\> — \<issue date\>. Open \<company\>'s
   securities ledger in Carta — link text *\<company\>'s securities ledger*, href
   `\<BASE_URL\>/\<Ledger path\>` — to see them."*
-- **Saved as draft** and **Canceled** link the Drafts UI at
-  `\<BASE_URL\>/\<Drafts page path\>draft/?draftSetPk=\<draft_set_id\>`.
 
-`BASE_URL` is the one issue-and-close.md names, and the paths are the type's *Ledger path* and
-*Drafts page path* rows above. Never build another path.
+`BASE_URL` is the one issue-and-close.md names, and the path is the type's *Ledger path* row
+above. Never build another path.

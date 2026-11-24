@@ -6,7 +6,7 @@ apply and the closing are in [SKILL.md § Flow](../SKILL.md#flow).
 ## The Change page
 
 Carta keeps an edit as a **thread** of previews: each preview is the next **revision**. For a type
-the page serves, the bootstrap carries `companion` with `available: true`, and each preview result
+the page serves, the bootstrap carries `companion`, and each preview result
 leads with `companion_url` and `how_to_reply`, sometimes after `next_step`. The page shows the
 latest revision, read-only. Every change happens in chat; the page follows. Never build the page's
 address.

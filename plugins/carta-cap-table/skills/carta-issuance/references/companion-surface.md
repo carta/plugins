@@ -1,7 +1,7 @@
-# The companion surface
+# The issuance run
 
-Read this when [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) selects
-**companion**. Carta offers the company an issuance page — an Overview and a tab per draft set.
+Every run follows this file, for all nine types ([SKILL.md § The run](../SKILL.md#the-run)), with
+[engine.md](engine.md) for the rules it builds on. Carta offers the company an issuance page — an Overview and a tab per draft set.
 Each tab shows the Drafts page's set, each value's source, a check and **Issue**. The page takes
 no data input: values change through a save in this chat or on the Drafts page. The page shows
 only as [the issuance app](#the-issuance-app) beside the chat. Never open a Carta address in a
@@ -15,7 +15,6 @@ file decides what to do with them.
 
 | Field | Where | Use |
 |---|---|---|
-| `companion.available` | `issuance_init` | `true` selects this surface |
 | `companion.issuance_url` | `issuance_init` | for a PIU, Carta has its issuance page ([§ PIU](#piu)). Never open it |
 | `companion.issuance_app` | `issuance_init` | the page is [the issuance app](#the-issuance-app) |
 | `field_spec` | `issuance_init` with `include_bootstrap: true` | this company's draft fields, the `cap_table:get:issuable_field_manifest` result: the gaps [§ 5](#5-build-the-draft-set) finds, the choices [§ 6](#6-ask-whats-missing-once) offers and the optional columns [§ 8](#8-issue) offers |
@@ -30,8 +29,8 @@ file decides what to do with them.
 
 **First rule: save what you know, record its sources, then ask.**
 
-Load `view_remote_inline`, `view_remote_next` and the named `cap_table__mutate__apply_plan` with one
-`ToolSearch`.
+[engine.md Step 1](engine.md#step-1--load-every-tool-in-one-toolsearch-call)'s one `ToolSearch`
+loads `view_remote_inline`, `view_remote_next` and the named `cap_table__mutate__apply_plan`.
 
 - An **app host** has `view_remote_next`, renders apps, and `issuance_init` gave
   `companion.issuance_app`. Only there does the page show ([the issuance app](#the-issuance-app)).
@@ -59,7 +58,7 @@ The steps below say "the type's" where these differ.
 | Never recommend; for every type also a jurisdiction or exemption, which person a name means, which company | a share class, a price that follows a valuation | a share class, a price that follows a valuation | a unit class, a plan, a threshold |
 
 For `convertible_note`, `rsa`, `warrant`, `rsu`, `sar` and `cbu`, also read
-[companion-only-types.md](companion-only-types.md): its columns add to this table, its
+[other-types.md](other-types.md): its columns add to this table, its
 § No block yet comes before [§ 5](#5-build-the-draft-set) saves a note or warrant set, and its
 § Close replaces the per-type text of [issue-and-close.md](issue-and-close.md).
 
@@ -158,7 +157,7 @@ Once each:
 
 ## An existing draft set
 
-A PIU with no `companion.issuance_url` runs on the chat surface, as [§ PIU](#piu) says, not here.
+A PIU with no `companion.issuance_url` has no page: at step 4 it goes on in the chat, as [§ PIU](#piu) says.
 
 The user names a draft set of this type ("resume draft set 472", "the Oct 30 board consents
 set"), or gives files and names none.
@@ -400,22 +399,16 @@ issue it from the chat there.
 still issuing. Null: if `status` is `issued`, `partially_issued` or `pending_board_approval`,
 close on it with § 10; otherwise say Issue is not pressed yet.
 
-**Elsewhere**, read `cap_table:get:draft_set_companion`, then call
-`cap_table:compute:issue_draft_set_preview` with `company`, `security_type`, `draft_set_id` and
-`version`: copy the read's `version`, and leave it out only when the read has none. A blocked preview: say each failed check, and issue
-nothing. Else ask one `AskUserQuestion` naming the preview's `revision`: "Issue revision 7?". Its
-Issue option's `preview` holds the review, with `issue_summary`'s agreement, signatories and
-holders to email from the read, and the preview's `summary`. Never print the review as prose
-before the question: the host shows that prose only as a one-line summary. Once confirmed, apply
-the plan as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says. Then read the job with
-`cap_table:get:task` and the apply's `task.task_id` until `done` is true, at most 3 times. The draft set read
-does not show the job state, so never read the set in its place. When the job is done, read
-`cap_table:get:draft_set_companion` one time with `issue_id`, the job's `task_id`, say [What issued](#what-issued), and close on its `status`.
-A job still `running` after 3 `get:task` reads: say these words, *"The issue is
-still running in Carta."*, and never apply again. Not confirmed: say "The draft set is still a draft. Nothing is issued
-yet.", then the close, as [§ 12](#12-end-every-turn-that-wrote) says; outside the turn that
-built the set, add no *What I drafted* block. A save after the preview makes the plan stale:
-preview and confirm again.
+**Elsewhere**, read `cap_table:get:draft_set_companion`, then preview the issue as
+[issue-and-close.md § The preview](issue-and-close.md#the-preview) says. Unless the preview is
+blocked, ask one `AskUserQuestion` naming the preview's `revision`: "Issue revision 7?". Its Issue
+option's `preview` holds the review, with `issue_summary`'s agreement, signatories and holders to
+email from the read, and the preview's `summary`. Never print the review as prose before the
+question: the host shows that prose only as a one-line summary. Once confirmed, apply the plan and
+read its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says. Not
+confirmed: say "The draft set is still a draft. Nothing is issued yet.", then the close, as
+[§ 12](#12-end-every-turn-that-wrote) says; outside the turn that built the set, add no *What I
+drafted* block.
 
 #### What issued
 
@@ -482,13 +475,12 @@ id, say why, preview again, then `cap_table:mutate:apply_plan` once confirmed.
 Carry on silently: `draft_set_sources` refused twice, skip sources, and with
 [the issuance app](#the-issuance-app), for a set a save just gave its `draft_set_id`, render it
 now: one `view_remote_next` with the run's `sets`; a file not filed, its
-sources have no `file_id`; no `view_remote_inline`, ask in the
-chat; no `get:draft_set_companion`, use the chat confirm in § 8. Send a refused
+sources have no `file_id`; no `view_remote_inline`, ask in the chat. Send a refused
 `draft_set_sources` call again once, and each `dropped` cell again once, under the key its
 `problem` names.
 
 A refusal that has a row in [mutate-recovery.md § Errors on any call](mutate-recovery.md#errors-on-any-call)
-is not the companion being unavailable: stay on this surface, and do what its row says.
+is not the issuance page being unavailable: stay on this run, and do what its row says.
 
 A `prepare_drafts` or `save_drafts` row with an `error {code, field, message}` is not saved: say
 its `message`. With a `field`, fix that field and send the row again with its `draft_pk`; with no
@@ -503,7 +495,7 @@ the issuance app shows, end its reply with "The draft set is open beside the cha
 host, end a turn that leaves the set a draft with `When you are ready, say "issue them".`, as
 [issue-and-close.md § Say what is live](issue-and-close.md#say-what-is-live-after-every-write)
 says. At a terminal state, close as [issue-and-close.md § Closing](issue-and-close.md#closing)
-says, or for a type in [companion-only-types.md](companion-only-types.md) as its § Close says.
+says, or for a type in [other-types.md](other-types.md) as its § Close says.
 
 One close per turn, even when the turn made several writes. Only a closing question may follow
 the close: a question at the end of the reply, such as § 8's. The § 6 card comes before the
@@ -545,6 +537,6 @@ approval. No ids in your text except `set_label`.
 ## PIU
 
 A PIU with `companion.issuance_url` runs as every other type, and the admin issues it with
-**Issue PIUs** in the app. A PIU with no `companion.issuance_url` has no issuance page: run it on
-[the chat surface](chat-surface.md), every phase, budget and gate there, as if Carta offered no
-companion. Never open the `companion_url` its draft set results carry.
+**Issue PIUs** in the app. A PIU with no `companion.issuance_url` has no issuance page: run it as
+on a host with no app, and review and issue it in the chat as [§ 8](#8-issue)'s *Elsewhere* says.
+Never render the app for it, and never open the `companion_url` its draft set results carry.
