@@ -37,7 +37,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.62.3</carta-plugin>
+<carta-plugin>carta-investors:7.62.4</carta-plugin>
 
 # Carta Audit Home — build, rebuild, open
 
