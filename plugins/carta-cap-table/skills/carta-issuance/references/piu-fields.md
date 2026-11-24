@@ -26,8 +26,8 @@ holds a value before review, and a `None` or empty is a skill bug.
     "prefix":                  <unit_class.prefix>,               # always — NOT share_class
     "quantity":                <user>,                            # a percentage on a PERCENT class; omitted on INVESTED_CAPITAL (payload-reference.md § PBO quantity)
     "currency":                <corp currency, e.g. "USD">,       # always
-    "threshold_value":         <user>,                            # always — never defaulted
-    "threshold_value_type":    "Unit" | "Overall",                # always — never guessed
+    "threshold_value":         <user | last PIU's, confirmed>,    # always — see § Threshold value and type
+    "threshold_value_type":    "Unit" | "Overall",                # always — the same row as the value
     "issue_date":              <user, YYYY-MM-DD>,                # always
     "exemption":               "Section 4(a)(2)",                  # always — US default
     "option_plan":             <plan.id as str or OMIT>,          # optional — omit = off the unit class
@@ -121,8 +121,23 @@ recompute `available_quantity`.
 
 ### Threshold value and type
 
-**Neither is ever defaulted.** The threshold is a term of the grant: a wrong one is a
-wrong security, and unlike a wrong quantity it looks entirely plausible on the ledger.
+**The default is the last PIU's, and the user confirms it.** The threshold is a term of the
+grant: a wrong one is a wrong security, and unlike a wrong quantity it looks entirely plausible
+on the ledger. It usually tracks the company's value on the grant date, so the last PIU's
+threshold can be stale.
+
+- A value and type the user or the files give always win. When they give only one of the two,
+  ask for the other; never fill it from the last PIU.
+- When they give neither, read `issuance_init`'s `draft_set_init.lastThresholds`: one row per
+  unit class, the newest issued PIU that has a threshold, newest first. Take the row whose
+  `shareClassPrefix` is the row's unit class, else the first row. Take its `thresholdValue` and
+  `thresholdValueType` together, never one without the other.
+- Say where it comes from before the review: *"<Noun>: <currency> <value> <per unit | overall>,
+  from <label> issued <issueDate>. Keep it, or give another?"* The noun is `thresholdNoun`,
+  title-cased; the currency is the row's `currency`; *per unit* is `Unit`, *overall* is
+  `Overall`. Name the PIU by its `label`, never an id. A default the user has not seen is not
+  confirmed. On the companion page, the card's threshold items do this ([companion-surface.md § The card](companion-surface.md#the-card)).
+- No row, or no `lastThresholds`: ask, as for any required field.
 
 - `threshold_value` — a decimal, `>= 0`, at most 12 decimal places. A genuine `0` is
   valid (the unit shares in value from the first dollar) and must survive serialization.

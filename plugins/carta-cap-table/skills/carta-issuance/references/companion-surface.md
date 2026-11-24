@@ -59,7 +59,7 @@ The steps below say "the type's" where these differ.
 | Issue button | **Issue certificates** | **Issue option grants** | **Issue PIUs** |
 | `cap_table:list:securities` `type` | `certificate` | `option` | `piu` |
 | Library `document_type` | `Stock Purchase Agreement`, `Board Consent`, `Equity Agreement` | `Option Agreement`, `Board Consent`, `Equity Plan` | `PIU Award Agreement`, `Board Consent`, `Equity Plan` |
-| Never recommend; for every type also a jurisdiction or exemption, which person a name means, which company | a share class, a price that follows a valuation | a share class, a price that follows a valuation | a unit class, a plan, a threshold |
+| Never recommend; for every type also a jurisdiction or exemption, which person a name means, which company | a share class, a price that follows a valuation | a share class, a price that follows a valuation | a unit class, a plan |
 
 For `convertible_note`, `rsa`, `warrant`, `rsu`, `sar` and `cbu`, also read
 [other-types.md](other-types.md): its columns add to this table, its
@@ -95,6 +95,11 @@ Once each:
    Leave out any unknown value; never guess or wait. Each field that `field_spec`, or one of its
    `conditionalRules`, requires for the row, not `hidden`, with no `default_value` and no
    given value, is a `needs_input` cell; so is the vesting schedule when nothing gives it.
+   A PIU's `threshold_value` and `threshold_value_type` that only `draft_set_init.lastThresholds`
+   gives are `needs_input` cells too, each a [§ 6](#6-ask-whats-missing-once) item as
+   [the card](#the-card)'s threshold row says. The last PIU gives them only together: when the
+   files or prompt give one, the other is an ordinary gap
+   ([piu-fields.md § Threshold value and type](piu-fields.md#threshold-value-and-type)).
    No other field is a gap, except one the type's own reference names (a debt note's maturity
    date): with no given value, leave it out and Carta's default stands (when `field_spec` does not
    require it, a grant with no board approval date waits for the board).
@@ -266,13 +271,15 @@ to the company's. Each `body` says why the item needs the user and what Carta ne
 | a gap with `field_spec` `values` | `pick_one`, options from its `values` and `enum_labels`, the recommended one first |
 | a gap with a `source` | `pick_one`, options from its `issuance_init` section, by `id` and `name` |
 | another gap | `type_value`, with `input` (`text`, `email`, `date` or `number`) from its `type` |
+| a PIU's threshold from `draft_set_init.lastThresholds` | two `pick_one` items, each with `detail` `Issued <issueDate>`. `threshold_value`: one option, recommended, the last PIU's value, labelled `<currency> <value> <per unit \| overall> · from <label>`, worded as [piu-fields.md § Threshold value and type](piu-fields.md#threshold-value-and-type) says; the user may type another. `threshold_value_type`: `Unit` and `Overall`, that row's type recommended |
 | a check warning on a filled cell | `pick_one` on that cell: the value you propose, then `Keep <current value>` with the cell's current value; the `body` gives the check's message |
 | a check error on a filled cell | `pick_one` on that cell with only the values you propose, no `Keep`; the `body` gives the check's message |
 | a name that can be several people | `which_person`, with `term`, the name as the documents give it, and options from the stakeholder search |
 | two documents disagree | `documents_disagree`, with `documents` `[{name, page, value}]`, each `value` as `save_drafts` takes it for that column, and one option per value, labelled with the value. When a board consent gives one, recommend it unless the type's *Never recommend* row lists that field, labelled `<value> · board consent` with `detail` `Board consent p.N approves it`, and label each other `<value> · needs new approval` |
 
 Recommend an option only when a document or the prompt states it, its detail cites the company's
-habit ("Your last 2 grants used it"), or it is the only candidate. Never recommend what the
+habit ("Your last 2 grants used it"), it is the only candidate, or it is a PIU's threshold
+taken from `draft_set_init.lastThresholds`. Never recommend what the
 type's *Never recommend* row lists. A proposed fix follows the same rule: it is an option, and
 recommended only when the rule allows. A check item never offers a value that no document, the
 prompt, the company's data or the check's message gives: with no value to propose, a check error is a `type_value`

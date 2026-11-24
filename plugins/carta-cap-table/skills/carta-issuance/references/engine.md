@@ -355,7 +355,8 @@ standalone command:
   `acceleration_templates`, `document_sets`, `draft_set_init`. **No `legends`, no valuations** —
   a PIU has no legend and no exercise price. Threshold value types are not a section: they are
   the fixed pair `Unit` / `Overall`. `draft_set_init` carries the issuer's `thresholdNoun`
-  (`"hurdle"` on the growth-shares preset) and `isLLC`.
+  (`"hurdle"` on the growth-shares preset), `isLLC` and `lastThresholds`, the threshold of the
+  newest PIU per unit class that the threshold default reads.
 
 Every section is fetched server-side in parallel, so `stakeholder_names` and
 `include_bootstrap` cost no extra wall-clock — they remove round trips rather than adding them.

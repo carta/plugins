@@ -109,7 +109,7 @@ issuance. Do not add percentages to unit counts.
 |---|---|---|---|
 | `prefix` | always | string (1–10 chars) | The **unit class** prefix. **NOT `share_class` / `share_class_id`** |
 | `quantity` | always, except on an `INVESTED_CAPITAL` class | positive number | Read the class's `quantity_semantics` — see [PBO quantity](#pbo-quantity) |
-| `threshold_value` | always | decimal ≥ 0, ≤ 12 dp | The value the unit shares above. **Never defaulted** — a `0` is valid and must survive |
+| `threshold_value` | always | decimal ≥ 0, ≤ 12 dp | The value the unit shares above. Defaults to the last PIU's, shown with its source for the user to confirm ([piu-fields.md § Threshold value and type](piu-fields.md#threshold-value-and-type)) — a `0` is valid and must survive |
 | `threshold_value_type` | always | enum | `Unit` or `Overall` only — see [Picklists](#picklists) |
 | `exemption` | always | enum | Unconditionally required, unlike a certificate's. Default `Section 4(a)(2)` |
 | `option_plan` | **optional** | plan pk **as a string** | Empty issues off the unit class's own authorized total; set issues off the plan's pool. The plan's share class must match `prefix`. See the gotchas below |
