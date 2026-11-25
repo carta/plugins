@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.2</carta-plugin>
 
 # Vesting
 

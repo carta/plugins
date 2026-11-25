@@ -29,22 +29,22 @@ allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__list_accounts
   - mcp__carta__view_remote
-  - mcp__carta__view_remote_next
+  - mcp__carta__view_remote_panel
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__view_remote
-  - mcp__claude_ai_Carta__view_remote_next
+  - mcp__claude_ai_Carta__view_remote_panel
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote
-  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_next
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__view_remote_panel
   - mcp__*__show_widget
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.2</carta-plugin>
 
 # Manage securities
 
@@ -157,9 +157,12 @@ says. You pick no other value.
 ## Calls
 
 Load the Carta tools in one `ToolSearch` before the first Carta call
-(`select:mcp__carta__read_tool,mcp__carta__list_accounts`). For an edit, load `view_remote_next`
-with one `ToolSearch` (`+view_remote_next`) before the first bootstrap. The apply tool is often
-deferred: load it with `ToolSearch` (`+apply_plan`) before the approval.
+(`select:mcp__carta__read_tool,mcp__carta__list_accounts,mcp__carta__view_remote_panel`).
+`mcp__carta__` is a placeholder: use the prefix that the session's Carta tools carry. The names
+after the prefix do not change. Zero matches on the `mcp__carta__` names means the wrong prefix,
+not a lost connection: run the `select:` again with the prefix of the session's Carta tools. A
+host with no app lists no `view_remote_panel`: that is not a connection failure. The apply tool is
+often deferred: load it with `ToolSearch` (`+apply_plan`) before the approval.
 
 Use whichever Carta connector is present. The keys are `name` and `arguments`.
 
@@ -169,7 +172,7 @@ Use whichever Carta connector is present. The keys are `name` and `arguments`.
 | Bootstrap | `read_tool` | `cap_table__get__security_change_bootstrap` |
 | Exercise requests | `read_tool` | `cap_table__list__company_exercise_requests` |
 | Preview | `read_tool` | the preview in [§ Actions](#actions) |
-| Change page app | `view_remote_next` | `cap_table:view:change_page` |
+| Change page app | `view_remote_panel` | `cap_table:view:change_page` |
 | Apply | the **named** `cap_table__mutate__apply_plan` tool | — |
 | Job | `read_tool` | `cap_table__get__task` |
 
@@ -245,7 +248,7 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    between tool calls only as a one-line summary, so the user never sees a table there. Never put
    the table in the option's `description`. When
    step 7 shows the approval card, put the table in your last message, after `view_remote`.
-   Where the app does not render, the chat is the only place that shows the change. Post no link
+   With no app, the chat is the only place that shows the change. Post no link
    to the Change page.
 6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
    Name each one that cannot be undone, such as an email to a holder.
@@ -284,7 +287,7 @@ Quote Carta's `message` word for word in each case ([Hard rule 4](#hard-rules)).
 | `scope_required` | Ask the user to grant access as its `fix` says. Call again only after they confirm. |
 | `workflow_unavailable` | Say to make this change in the Carta web app. Stop. Do not retry, and never use `cap_table__mutate__modify_issuable`. |
 | `out_of_scope` | Say the user's access does not reach these securities or their plan. Stop. Do not retry. |
-| `not_found` on `thread_id` | Preview again with no `thread_id`. That opens a new thread: render the Change page app again with the new `thread_id`. Where it cannot render, show the new preview in the chat as [§ Flow](#flow) step 5 says. |
+| `not_found` on `thread_id` | Preview again with no `thread_id`. That opens a new thread: render the Change page app again with the new `thread_id`. With no app, show the new preview in the chat as [§ Flow](#flow) step 5 says. |
 | `not_found` on `security` or `securities` | Call the bootstrap again to get the ids. Never guess an id. |
 | `not_found` on `recipients[N].stakeholder` | Say this person is not a stakeholder of the company. In your last message, say to add the person in Carta first, and ask for the name or email as Carta shows it if the person is already there. |
 | `invalid_argument` on a file key | Never write a key. Upload the file as [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements) says, then preview again once. |

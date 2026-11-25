@@ -12,9 +12,9 @@ latest revision, read-only. Every change happens in chat; the page follows.
 
 ### The Change page app
 
-The Change page is an app beside the chat. Render it with one `view_remote_next`, `name:
-cap_table:view:change_page`, params `corporation_id` (the `company`) and `thread_id`. Each render
-stays in the chat, so render it only at these times:
+Render the Change page app with one `view_remote_panel`, `name: cap_table:view:change_page`,
+params `corporation_id` (the `company`) and `thread_id`. It opens in the side panel by itself, or
+shows a card in the chat that opens it there. Render it only at these times:
 
 - **A thread opens:** after the `look_first` bootstrap that gives a `thread_id`, and after a
   preview sent with no `thread_id` (also the preview again after `not_found` on `thread_id`).
@@ -36,10 +36,14 @@ While the app shows this edit's thread:
   `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new revision,
   so wait for **Apply** on it.
 - Its **Not now** message says not to apply: apply nothing and say so.
-- Ignore the view's `_terminal_fallback` text: it is for a host with no app.
 
-**No `view_remote_next` after one `ToolSearch`, or the host cannot render apps: there is no
-app.** Then the chat is the only page:
+**There is no app** when one of these is true:
+
+- No tool that ends in `__view_remote_panel` after one `ToolSearch`.
+- The result that opens a thread has no `next_step` that renders the app.
+- The view result carries `_terminal_fallback`.
+
+Then the chat is the only page:
 
 - Show each preview in the chat and ask for approval as
   [SKILL.md § Flow](../SKILL.md#flow) steps 5 and 7 say.
@@ -49,8 +53,8 @@ app.** Then the chat is the only page:
 ## Open the page first
 
 Every edit's first bootstrap sends `look_first: true`, whatever the user said, so the page is up
-before the first preview. The result leads with `next_step` and `how_to_reply`, and carries
-`thread_id`. Render the app as [§ The Change page app](#the-change-page-app) says. Then:
+before the first preview. The result leads with `how_to_reply`, after `next_step` on an app host,
+and carries `thread_id`. Render the app as [§ The Change page app](#the-change-page-app) says. Then:
 
 - **The user named the field and the value:** go on to the preview with that `thread_id`. The
   app turns into the diff. With no app, the preview shows in the chat.
