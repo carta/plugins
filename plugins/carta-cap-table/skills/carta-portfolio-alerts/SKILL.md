@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.8</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -67,7 +67,7 @@ For a full-portfolio scan, call `list_accounts` to get all portfolio companies. 
 
 For each company, these are the relevant checks:
 
-- `read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})` -- 409A expiry check
+- `read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": corporation_id}})` -- 409A expiry check
 - `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool check
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- note maturity check (summary includes `maturity.nearest_date`)
 - `read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": corporation_id}})` -- SAFE exposure check
@@ -82,7 +82,7 @@ If the user asks about a specific check only (e.g. "any expiring 409As?"), read 
 
 ## Key Fields
 
-From 409A: `expiration_date`, `price`, `effective_date`
+From 409A (rows newest first): `expiration_date`, `price` (`{amount, currency}`), `effective_date`, `status`. No rows means no 409A on file
 From cap table option plans: `available_ownership`, `name`
 From convertible notes (summary): `maturity.nearest_date`, `maturity.total_outstanding_debt`, `by_status`, `by_type`
 From 83(b) elections: `summary.not_filed_open`, `summary.next_deadline`; each row's `holder_name`, `label`, `type`, `deadline`
@@ -101,13 +101,13 @@ Issue ALL `read_tool` calls for ALL companies **in a single response** — do NO
 For example, with 5 companies and all 6 checks, issue all 30 `read_tool` calls at once:
 
 ```
-read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": 1}})
 read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__list__83b_elections", "arguments": {"company": 1, "status": "not_filed"}})
 read_tool({"name": "cap_table__get__rule_701", "arguments": {"company": 1}})
-read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 2}})
+read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": 2}})
 read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
 ... (all companies)
 ```
