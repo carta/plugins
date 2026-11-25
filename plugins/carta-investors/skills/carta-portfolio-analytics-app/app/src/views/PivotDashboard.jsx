@@ -9,7 +9,7 @@ import { H2, Dropdown, FilterIcon, Segmented, Toggle, SearchInput, TextInput, Bt
   ddTriggerStyle, ChevronDownIcon, CollapsibleCheckGroups, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW,
   GF_WARM_SURFACE, GF_NAV_ACTIVE_BG, GF_TAG_BORDER, GF_TAG_BG, GF_BUBBLE_BG } from "../ui/components.jsx";
 import { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W } from "../ui/charts.jsx";
-import { metricsFor, metricOptions, metricOf, pointNearMonthsBack, metricCadence,
+import { metricsFor, metricOptions, metricOf, pointNearMonthsBack, CHANGE_LOOKBACK, changeBasisOf,
   seriesPoints, forecastSeriesPoints, forecastPeriods, forecastMetricsFor,
   isQualitative, kindRank, quarterlyMonthlyGap } from "../model/kpi.js";
 import EditableValue, { CELL_INDICATORS } from "../ui/EditableValue.jsx";
@@ -40,6 +40,8 @@ import { groupRows, useRowWindow } from "../ui/rowWindow.js";
 const NEG = "var(--ink-color-global-feedback-negative-strong)";
 const PIVOT_VIEW_HINT = "A view saves your KPI selection and order, fund, companies, tags, favorites, signals, Configure options and conditional formatting.";
 const NO_FORMATS = {};
+// The Basis picker under "Show % change"; MoM is offered only on the monthly grid.
+const BASIS_OPTS = [{ id: "qoq", label: "QoQ" }, { id: "mom", label: "MoM" }, { id: "yoy", label: "YoY" }];
 // Same conditional formatting, ignoring key order — formats are edited one metric at a time.
 const formatsEq = (a, b) => {
   const ka = Object.keys(a), kb = Object.keys(b);
@@ -210,7 +212,7 @@ export default function PivotDashboard({ data, dashboard }) {
   const [showFc, setShowFc] = useState(false);
   const [fullFig, setFullFig] = useState(false);    // show full numbers vs $K/$M/$B
   const [growthMode, setGrowthMode] = useState(false); // show % change annotation under each figure
-  const [growthBasis, setGrowthBasis] = useState("qoq"); // "qoq" (~3mo back) | "yoy" (~12mo back)
+  const [growthBasis, setGrowthBasis] = useState("qoq"); // a CHANGE_LOOKBACK key: "mom" | "qoq" | "yoy"
   // Collapsed company ids; empty (default) = all expanded. Local UI state only —
   // not saved to a view, so a fresh load always opens expanded.
   const [collapsed, setCollapsed] = useState(() => new Set());
@@ -292,7 +294,7 @@ export default function PivotDashboard({ data, dashboard }) {
     setShowFc(!!v.showFc);
     setFullFig(!!v.fullFig);
     setGrowthMode(!!v.growthMode);
-    setGrowthBasis(v.growthBasis === "yoy" ? "yoy" : "qoq");
+    setGrowthBasis(changeBasisOf(v.growthBasis));
     setViewFormats(viewFormatsOf(v));
     setWindow(v.window ?? 8);
     setQOnly(v.qOnly !== false);
@@ -343,7 +345,7 @@ export default function PivotDashboard({ data, dashboard }) {
       !!v.showFc === showFc &&
       !!v.fullFig === fullFig &&
       !!v.growthMode === growthMode &&
-      (v.growthBasis === "yoy" ? "yoy" : "qoq") === growthBasis &&
+      changeBasisOf(v.growthBasis) === growthBasis &&
       formatsEq(viewFormatsOf(v), formats)
     );
   }, [views, viewId, selMetrics, metricOrder, selPos, fund, selCompanies, selTags, window, qOnly, dateOrder, kpiFilters, data, allMetricKeys, allCompanyIds, metrics,
@@ -438,6 +440,11 @@ export default function PivotDashboard({ data, dashboard }) {
   // honest shape — these values don't belong to a quarter at all.
   const showPos = selPos.size > 0;
 
+  // The quarter grid has no previous-month column, so MoM reads as QoQ there; the
+  // stored choice is kept so switching back to the monthly grid restores MoM.
+  const shownBasis = qOnly && growthBasis === "mom" ? "qoq" : growthBasis;
+  const lookback = CHANGE_LOOKBACK[shownBasis];
+
   // Value conditions read each company's latest value on the grid shown, so a
   // "Revenue > 0" view means the latest quarter on quarters and the latest month on months.
   const kpiPredicate = useMemo(() => kpiFilterPredicate(kpiFilters, data, qOnly), [kpiFilters, data, qOnly]);
@@ -485,16 +492,11 @@ export default function PivotDashboard({ data, dashboard }) {
         const full = [...actualPts, ...fcPts.filter((p) => isFc[p.d])].sort((a, b) => (a.d < b.d ? -1 : 1));
         // keep the row only if it has at least one value in-window
         if (!Object.keys(byPeriod).length) return;
-        // Calendar-aware lookback: YoY = ~12mo (±2, like the model's yoyChange); QoQ =
-        // ~3mo on the quarter grid, else the metric's cadence so monthly isn't shown MoM.
-        const CAD_MO = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
-        const stepM = growthBasis === "yoy" ? 12 : (qOnly ? 3 : (CAD_MO[metricCadence(c, m.key)] || 3));
-        const tol = growthBasis === "yoy" ? 2 : Math.max(1, Math.round(stepM * 0.5));
         const growthByP = {};
         // A flag, a date or prose has no percentage change to report.
         const qual = isQualitative(m);
         for (const d of Object.keys(byPeriod)) {
-          const prior = qual ? null : pointNearMonthsBack(full, d, stepM, tol);
+          const prior = qual ? null : pointNearMonthsBack(full, d, lookback.months, lookback.tol);
           growthByP[d] = !prior || prior.v === 0 ? null : (byPeriod[d] - prior.v) / Math.abs(prior.v);
         }
         out.push({ companyId: c.id, companyName: c.name, funds: c.funds, metricKey: m.key,
@@ -525,7 +527,7 @@ export default function PivotDashboard({ data, dashboard }) {
     for (const r of out) { r.firstOfCompany = r.companyId !== prev; prev = r.companyId; }
     return out;
   }, [data, fund, selCompanies, selTags, favOnly, selSignals, kpiPredicate, hitsByCompany, dashDoc, search, selMetrics, metricOrder, periodSet, qOnly, showForecast, futureSet,
-      selPos, posOrder, showPos, growthBasis]);
+      selPos, posOrder, showPos, lookback]);
 
   const companyCount = new Set(rows.map((r) => r.companyId)).size;
   const favTotal = favoriteCount(dashDoc);
@@ -966,9 +968,11 @@ export default function PivotDashboard({ data, dashboard }) {
             Show % change <Toggle small checked={growthMode} onChange={setGrowthMode} labels={["On", "Off"]} />
           </span>
           {growthMode && (
-            <span data-tip="QoQ compares each figure to ~3 months earlier (its own cadence on the as-reported grid). YoY compares to ~12 months earlier."
+            <span data-tip={qOnly
+                ? "QoQ compares each figure to 3 months earlier, YoY to 12 months earlier. Turn off Quarter-ends only to compare month over month."
+                : "MoM compares each figure to the month before, QoQ to 3 months earlier, YoY to 12 months earlier. A company with no figure for that month shows N/A."}
               style={{ ...sans, fontSize: FS.small, color: MICRO, display: "inline-flex", alignItems: "center", gap: 7, cursor: "help" }}>
-              Basis <Segmented small options={[{ id: "qoq", label: "QoQ" }, { id: "yoy", label: "YoY" }]} value={growthBasis} onChange={setGrowthBasis} />
+              Basis <Segmented small options={qOnly ? BASIS_OPTS.filter((o) => o.id !== "mom") : BASIS_OPTS} value={shownBasis} onChange={setGrowthBasis} />
             </span>
           )}
           <Btn onClick={() => setShowFmt((s) => !s)}>Conditional formatting{Object.keys(formats).length ? ` (${Object.keys(formats).length})` : ""}</Btn>
@@ -1810,7 +1814,7 @@ function FormatPanel({ metrics, formats, onSave, onRemove }) {
       <div style={{ ...sans, fontWeight: 600, fontSize: FS.bodyLg }}>Conditional formatting</div>
       <div style={{ ...sans, fontSize: FS.small, color: MICRO, margin: "4px 0 12px" }}>
         Color a KPI’s cells by a gradient (color scale) or by threshold rules (color codes). Applies across the whole pivot.
-        Set <strong>Apply to</strong> to color by each cell’s period-over-period % change (QoQ on the quarter grid, MoM otherwise) instead of the figure.
+        Set <strong>Apply to</strong> to color by each cell’s % change instead of the figure, compared on the basis chosen under <strong>Show % change</strong> (QoQ unless you pick another).
         For a color scale, <strong>Normalize</strong> chooses the gradient’s range: <em>Across portfolio</em> compares every company on one scale, while <em>Per company</em> scales each company’s own row so the colors read as that company’s trend over time.
       </div>
 
@@ -1838,7 +1842,7 @@ function FormatPanel({ metrics, formats, onSave, onRemove }) {
           <Segmented small options={[{ id: "scale", label: "Color scale" }, { id: "rules", label: "Color rules" }]} value={type} onChange={setType} />
         </FieldCol>
         <FieldCol label="Apply to">
-          <Segmented small options={[{ id: "value", label: "Value" }, { id: "growth", label: "% change (QoQ/MoM)" }]} value={basis} onChange={setBasis} />
+          <Segmented small options={[{ id: "value", label: "Value" }, { id: "growth", label: "% change" }]} value={basis} onChange={setBasis} />
         </FieldCol>
         {type === "scale" && (
           <FieldCol label="Scale">

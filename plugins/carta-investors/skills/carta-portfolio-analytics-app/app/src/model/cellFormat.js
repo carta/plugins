@@ -3,8 +3,8 @@
 //   { type: "scale", palette: "gyr" }                     ← gradient across the metric's range
 //   { type: "rules", rules: [{ op, value, color }, …] }   ← first matching rule wins
 // A `basis` picks what the format applies to: "value" (the figure, default) or
-// "growth" (its period-over-period % change — QoQ on the quarter grid, MoM on the
-// as-reported grid). A `scope` (color scales only) picks what the gradient
+// "growth" (its % change on the basis chosen for the grid's % change annotation:
+// MoM, QoQ or YoY). A `scope` (color scales only) picks what the gradient
 // normalizes over: "portfolio" (min/max across every company's cells, default) or
 // "row" (each company's own range, so the colors read as that company's trend).
 // cellFormat is basis/scope-agnostic: the caller feeds it the chosen number and

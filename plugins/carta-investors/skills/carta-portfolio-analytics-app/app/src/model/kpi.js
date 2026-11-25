@@ -217,14 +217,26 @@ export function changeOverMonths(company, key, months, tol) {
   if (!prev || prev.v === 0) return null;
   return { g: (cur.v - prev.v) / Math.abs(prev.v), cur, prev };
 }
+/** How far back each % change basis looks, in months, and how many months off
+ *  the prior point may sit. MoM has no slack: a point two months back is not
+ *  last month's figure. */
+export const CHANGE_LOOKBACK = {
+  mom: { months: 1, tol: 0 },
+  qoq: { months: 3, tol: 1 },
+  yoy: { months: 12, tol: 2 },
+};
+
+/** A stored % change basis, or "qoq" when it is missing or unknown. */
+export const changeBasisOf = (b) => (Object.hasOwn(CHANGE_LOOKBACK, b) ? b : "qoq");
+
 /** QoQ = ~3 months back (±1). Number or null. */
 export function qoqChange(company, key) {
-  const r = changeOverMonths(company, key, 3, 1);
+  const r = changeOverMonths(company, key, CHANGE_LOOKBACK.qoq.months, CHANGE_LOOKBACK.qoq.tol);
   return r ? r.g : null;
 }
 /** YoY = ~12 months back (±2). Number or null. */
 export function yoyChange(company, key) {
-  const r = changeOverMonths(company, key, 12, 2);
+  const r = changeOverMonths(company, key, CHANGE_LOOKBACK.yoy.months, CHANGE_LOOKBACK.yoy.tol);
   return r ? r.g : null;
 }
 
