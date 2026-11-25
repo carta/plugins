@@ -85,9 +85,7 @@ The incidents behind these rules — including the ones that look redundant — 
   `Drafts 2026-11-12 06:18`): say "the draft set".
 - **Explain jargon on first use** (Rule 144 date, Section 4(a)(2), INDIVIDUAL, legend).
 - **No raw ids or payload field names in customer-facing text — ever**
-  ([SKILL.md hard rule 8](../SKILL.md#hard-rules)). Humanize payload keys before surfacing
-  them, server `banner_errors` included: `_` → space, Title Case, with the exceptions listed in
-  [labels.md](labels.md).
+  ([SKILL.md hard rule 8](../SKILL.md#hard-rules)).
 
 ---
 
@@ -197,14 +195,11 @@ environment is unknown rather than assuming production.
 
 The hard stop is
 [SKILL.md § The connected Carta must be the intended Carta](../SKILL.md#the-connected-carta-must-be-the-intended-carta)'s,
-and it binds here too:
-`corporation_id` is not unique across environments, so aiming at the wrong one reads one
-company's cap table and later issues real securities onto it. The connected environment is
+and it binds here too. The connected environment is
 the one behind the `read_tool` and `call_tool` you loaded in Step 1 — a readable prefix names it
 (`…_Carta_Demo__` → demo, a `-test` or sandbox suffix likewise, unsuffixed → production), and
 `get_current_user`'s `environment` settles it, including behind a UUID prefix (its `base_url`
-host when `environment` reads `unknown`). A connector offering only `authenticate` is not
-connected, and no example in this skill names the user's environment. Three cases:
+host when `environment` reads `unknown`). Three cases:
 
 - **The request names no environment** → the connected one is intended. Continue, say nothing.
 - **It names or implies one and that differs** → **hard stop before the first Carta call.**
@@ -214,9 +209,6 @@ connected, and no example in this skill names the user's environment. Three case
 > \<intended\>. Corporation ids don't match across environments, so I'd be reading — and then
 > writing to — the wrong company. Confirm which environment you want, or connect that Carta
 > server."*
-
-**Never settle this yourself** by using the connected server because it is the only one
-present. Being the only option is not the same as being the right one.
 
 #### When a call fails
 
@@ -230,9 +222,8 @@ call**: if `save_drafts` fails twice, a follow-up issue preview against the same
 is not a fresh attempt — it is the third try at the same write, and a traced run burned three
 500s that way. A second failure means waiting: re-running the same call against a 502 cannot
 succeed, and repeated attempts are the inner-loop thrash this skill's budgets exist to prevent.
-Do not vary the call to make a retry look novel, do not fall back to a different tool or a
-`search_tools` probe, and do not treat an HTML error body as a data payload to parse
-— an HTML response to a JSON call is an outage signal, never content.
+Do not vary the call to make a retry look novel, and do not fall back to a different tool or a
+`search_tools` probe.
 
 ### Step 3 — Resolve the corporation by name
 

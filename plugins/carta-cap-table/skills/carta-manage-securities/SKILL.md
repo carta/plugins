@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.4</carta-plugin>
 
 # Manage securities
 
@@ -144,7 +144,8 @@ says. You pick no other value.
    Render the Change page app only as
    [change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says.
    Post a Carta link only from a `cap_table__get__*_link` result. Skip any other step that opens
-   a Carta page in a browser or posts its link. Never build a Carta URL.
+   a Carta page in a browser or posts its link, also when `how_to_reply` says to share
+   a page link. Never build a Carta URL.
 6. **No shell, no local files.** Never call Bash, and write no files. The one exception is the
    file upload in
    [transfer-buyback-exercise.md § Agreements](references/transfer-buyback-exercise.md#agreements)
@@ -214,7 +215,8 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    `security_type` in each item instead.
    - **Edit:** `securities` (a list of ids; the other previews take `security`), or `changes` for
      securities with different values or of several types
-     ([change-flow.md § Several securities](references/change-flow.md#several-securities)). See
+     ([change-flow.md § Several securities](references/change-flow.md#several-securities)).
+     Send the new values in `fields`, each under the field's `name` from the bootstrap. See
      [references/change-flow.md](references/change-flow.md) for fields, reason,
      note, Rule 144 and the Change page. The field formats are in
      [references/field-contract.md](references/field-contract.md). To add files, see

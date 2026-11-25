@@ -27,7 +27,8 @@ file decides what to do with them.
 
 ## 1. Tools
 
-**First rule: save what you know, record its sources, then ask.**
+**First rule: save what you know, record its sources, then ask.** This is true on every host:
+with no app, the set still keeps its sources, also for 100 rows.
 
 [engine.md Step 1](engine.md#step-1--load-every-tool-in-one-toolsearch-call)'s one `ToolSearch`
 loads `view_remote_inline`, `view_remote_panel` and the named `cap_table__mutate__apply_plan`.
@@ -72,7 +73,9 @@ For `convertible_note`, `rsa`, `warrant`, `rsu`, `sar` and `cbu`, also read
 2. `cap_table:get:issuance_init` with `corporation_id`, `security_type`, `stakeholder_names`,
    `include_bootstrap: true` and `issue_date` only when the user named a date other than today
    ([engine.md § Voice & defaults](engine.md#voice--defaults)).
-3. Apply the type's account gate.
+3. A result with no `companion`: the type goes to the Drafts UI, as
+   [SKILL.md](../SKILL.md)'s out-of-scope rule says. Save nothing, and stop.
+4. Apply the type's account gate.
 
 Don't repeat a call whose result brought you here.
 
@@ -92,7 +95,9 @@ again: follow that section in place of this one.
 Once each:
 
 1. Resolve every row from the files and prompt, as [engine.md § Phase 1](engine.md) does.
-   Leave out any unknown value; never guess or wait. Each field that `field_spec`, or one of its
+   Leave out any unknown value; never guess or wait. A value engine.md § Phase 1 pushes back on,
+   such as a non-ZEPO `0` exercise price, goes back to the user before any save, on every host:
+   one `AskUserQuestion` that offers no value of your own. Save nothing until it is valid. Each field that `field_spec`, or one of its
    `conditionalRules`, requires for the row, not `hidden`, with no `default_value` and no
    given value, is a `needs_input` cell; so is the vesting schedule when nothing gives it.
    A PIU's `threshold_value` and `threshold_value_type` that only `draft_set_init.lastThresholds`
@@ -189,8 +194,8 @@ type, so no `prepare_drafts` and no save without its `draft_set_id`.
 4. Show the page once: with [the issuance app](#the-issuance-app),
    `cap_table:get:issuance_companion` with `corporation_id` and `sets`
    `[{security_type, draft_set_id}]`, then render the app as its `next_step` says. With no app
-   there is no page: go on in the chat.
-5. Record sources for every saved value the files at hand give, as [§ 5](#5-build-the-draft-set)
+   there is no page: go on with the next step.
+5. On every host, record sources for every saved value the files at hand give, as [§ 5](#5-build-the-draft-set)
    steps 3 and 4 say: file the files first, then `draft_set_sources` in § 5 step 4's calls. Rows
    pasted in the chat are files here too, with `added_by_you` sources, also when every value
    matches the saved one. Each open input of the read that the files leave empty is a `needs_input` source. A value the
@@ -230,7 +235,8 @@ answers, the reply is these parts, in this order, and no other text:
    matched ("2 existing, 5 new"), what you drafted and the board consent that covers it ("no
    board consent covers it yet" when none does), the type's summary items. A check message on a
    cell is an item, never a line here. A thing that needs the user and is on no cell (a banner error, a
-   possible duplicate stakeholder, a file you could not read) adds one line here.
+   possible duplicate stakeholder, a file you could not read, no live valuation with the link
+   [engine.md § Blockers](engine.md#blockers--act-on-them-first) gives) adds one line here.
 2. "N things need you, in the card above.", with N the number of items. Then look in
    `field_spec` for an empty optional column ([§ 8](#the-optional-columns-once-per-set) step 1:
    a field with `required` false, not `hidden` and with no `default_value`, that no row fills).
@@ -420,8 +426,9 @@ close on it with § 10; otherwise say Issue is not pressed yet.
 blocked, ask one `AskUserQuestion` naming the preview's `revision`: "Issue revision 7?". Its Issue
 option's `preview` holds the review, with `issue_summary`'s agreement, signatories and holders to
 email from the read, and the preview's `summary`. Never print the review as prose before the
-question: the host shows that prose only as a one-line summary. Once confirmed, apply the plan and
-read its job as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says. Not
+question: the host shows that prose only as a one-line summary. Once confirmed, apply the plan,
+read its job with `cap_table:get:task`, and on success read the set with the job's `task_id` as
+`issue_id`, as [issue-and-close.md § Apply the plan](issue-and-close.md#apply-the-plan) says. Not
 confirmed: say "The draft set is still a draft. Nothing is issued yet.", then the close, as
 [§ 12](#12-end-every-turn-that-wrote) says; outside the turn that built the set, add no *What I
 drafted* block.
@@ -541,8 +548,8 @@ render stays in the chat, so render it only at these times:
 A card message that asks where a document says a value: name the set's tab and the cell to select
 in the app, and save nothing.
 
-**No `view_remote_panel` after one `ToolSearch`, or this chat's `issuance_init` answered without
-`companion.issuance_app`**: there is no app and no page. Go on in the chat: review and
+**No `view_remote_panel` after one `ToolSearch`, or this chat's `issuance_init` answered with a
+`companion` that has no `issuance_app`**: there is no app and no page. Go on in the chat: review and
 issue as [§ 8](#8-issue)'s *Elsewhere* says. A request to see the page, or where a document says a
 value, gets an answer in the chat: the file, page and quote from the sources you recorded.
 

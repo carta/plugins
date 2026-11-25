@@ -164,11 +164,10 @@ section is absent, and stamp it on each row as the review-only `threshold_noun`.
 ordering rule** against the issue date (`DraftPIUApprovalDateFieldValidator`; LLC board
 processes differ from a C-corp's).
 
-| Label | `board_approval_date` |
-|---|---|
-| `"Yes — board approved today"` | today (`YYYY-MM-DD`), tagged `(default — today)` |
-| `"Yes — approved on a different date"` | follow-up; `YYYY-MM-DD` or `MM/DD/YYYY` |
-| `"No board approval date"` | **omit the key entirely** |
+A board approval date the files or prompt give: send it as `YYYY-MM-DD` (accept `MM/DD/YYYY`
+input). With none, [companion-surface.md § 5](companion-surface.md#5-build-the-draft-set)
+decides: `field_spec` requires `board_approval_date` → the date is a gap; else **omit the key
+entirely**.
 
 Render the review's Board approval cell as `—` when absent — **never** "Pending", which
 is the grant flow's state and does not exist here.

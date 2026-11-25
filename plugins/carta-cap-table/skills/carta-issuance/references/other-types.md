@@ -59,7 +59,9 @@ sends you here:
      `cap_table:list:share_classes` (a `read_tool` call), never a name; `prefix`; `exercise_price`; and
      `board_approval_date` when the user gives it.
 2. Once every term it needs is known, one `AskUserQuestion` shows every term you will send,
-   defaults included, and confirms them. Confirm the block once.
+   defaults included, and confirms them. Confirm the block once. That question asks only about
+   the block: a row's gap, such as a warrant's expiration date, is not a block term. It is a
+   `needs_input` cell that the run's § 6 asks after the save.
 3. Call the command with `company` and the terms. Its `id` is the note set's `note_block_id`;
    its `prefix` is each warrant row's `prefix`. A refused term (a prefix in use, a share class
    outside the user's scope): ask it again, confirm, and call once more. Refused as not allowed:

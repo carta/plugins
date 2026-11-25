@@ -32,8 +32,8 @@ Use the user's words. Ask only for what is missing, in one `AskUserQuestion`.
 
 - **Add:** `email`, `first_name`, `last_name` and `board_role` (`director` or `observer`).
   Send `start_date` only when the user gives one, and `end_date` only for a term with an end.
-  The start date is today or before: for a later date, say Carta does not accept it, and ask for
-  another date.
+  The start date must be before today. For today or a later date, send no preview: say Carta
+  accepts only a start date before today, and ask for another date. Do not offer today.
 - **End a term:** `member_id` and `end_date`. A date before today makes the person a past
   member: their board access ends. A past member's end date can only move to another day before
   today.

@@ -95,9 +95,9 @@ drafts held for a board consent, not issued: say so, and say Carta sent the cons
 board only when you sent `publish_board_consent: true`. Prefer the apply's `meta.web_url` over
 the ledger link built below.
 
-Render a short table of the reviewed rows using `MM/DD/YYYY`, with no label or grant number
-column: the apply and the job don't give one per security, and a guessed grant number is worse
-than none. The apply's `labels` name the draft set; never show them as security labels.
+Render a short table of the reviewed rows using `MM/DD/YYYY`. A security's label comes only from
+the read's `issue_result`, as What issued says: the apply and the job don't give one per
+security, and a guessed grant number is worse than none. The apply's `labels` name the draft set; never show them as security labels.
 
 **Don't read the securities back to confirm the issue.** A `succeeded` job *is* the
 confirmation, and there is no read that would add to it —

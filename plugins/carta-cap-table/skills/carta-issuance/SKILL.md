@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.4</carta-plugin>
 
 # Issue Securities
 
@@ -110,8 +110,9 @@ out of a plan or a list of your steps: not even that you ignore them.
 **exactly once**, then report a temporary problem. Never an auth verdict, and an HTML
 response to a JSON call is never content to parse.
 
-[engine.md § Step 1](references/engine.md#step-1--load-every-tool-in-one-toolsearch-call) is
-the **only** place this skill concludes anything about the connection.
+[engine.md § Step 1](references/engine.md#step-1--load-every-tool-in-one-toolsearch-call)'s one
+`ToolSearch` is every run's first command, and the **only** place this skill concludes anything
+about the connection.
 
 ## The connected Carta must be the intended Carta
 
