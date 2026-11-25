@@ -213,7 +213,10 @@ call_tool({"name": "reporting__create__report_template", "arguments": { corporat
   #   more than one currency are never saved, and it labels a money group in dollars, so a summary grouped by
   #   money in another currency is never saved either.
   #   Columns, filters and sort are named by `key`, never by header. A per-item column (one per share
-  #   class, plan, currency…) has no key, and Carta refuses `dynamic` (unknown_dynamic_column). For cash
+  #   class, plan, currency…) has no key, and Carta refuses `dynamic` (unknown_dynamic_column). A security
+  #   custom field (`dynamic: "custom_property"`) is the exception: name it `{dynamic: "custom_property",
+  #   source: <its source in the report JSON>}` wherever a key goes; Carta stores it by the field's id, so a
+  #   rename keeps it, and its values are today's at every as-of date. For cash
   #   raised per currency, a cap table with a report_currency has a keyed total instead, when some cash was
   #   raised in another currency.
   #   Merged sheets are saved as one sheet whose `from` matches every merged sheet by a common start or

@@ -108,13 +108,29 @@ AGGREGATION_REFUSALS = {
 # Carta's custom report labels a money group in dollars, whatever currency its amounts are in.
 GROUP_LABEL_CURRENCY = "USD"
 MAX_SUMMARY_HEADER = 60  # also the limit of a summary value's id
-# Custom-field columns exist only at some dates. A definition names a column by key only, so no
-# dynamic column (one per share class, equity plan, currency...) can be saved either.
-CUSTOM_FIELD_KINDS = frozenset({"custom_event", "custom_property"})
+# Custom event columns exist only at some dates and have no key, so none can be saved; nor can any
+# other dynamic column (one per share class, equity plan, currency...). A security custom field
+# (custom_property) is saved by its name, as the report JSON names it, and Carta stores its id.
+CUSTOM_FIELD_KINDS = frozenset({"custom_event"})
+CUSTOM_PROPERTY_KIND = "custom_property"
 # Cash raised per currency: a report currency gives the cap table one keyed total instead.
 CURRENCY_KIND = "currency"
 # Of those, the ones the config can also set for a single sheet.
 UNSUPPORTED_PER_SHEET = ("formulas",)
+
+
+class FieldRef(dict):
+    """A security custom field as a definition names it, {"dynamic": "custom_property", "source": <name>},
+    wherever a key goes. Hashable, so it is counted and compared like a key."""
+
+    def __init__(self, source):
+        super().__init__(dynamic=CUSTOM_PROPERTY_KIND, source=source)
+
+    def __hash__(self):
+        return hash((CUSTOM_PROPERTY_KIND, self["source"]))
+
+    def __str__(self):
+        return self["source"]
 
 
 class TemplateRefused(Exception):
@@ -221,6 +237,8 @@ def _column_key(sheet_name, column, reasons):
     # appear at every as-of date.
     if column.get("key") and not kind:
         return column["key"]
+    if kind == CUSTOM_PROPERTY_KIND and isinstance(column.get("source"), str) and not column.get("key"):
+        return FieldRef(column["source"])
     if kind in CUSTOM_FIELD_KINDS:
         reasons.append(
             f'"{header}" in "{sheet_name}" is a custom column that exists only at some dates, '
@@ -299,12 +317,12 @@ def _sheet_definition(sheet_name, sheet, transforms, headers_elsewhere, stats, r
         reasons.append(f'"{sheet_name}" has no column to save.')
     if len(saved_keys) > MAX_COLUMNS:
         reasons.append(f'"{sheet_name}" has {len(saved_keys)} columns; a template keeps at most {MAX_COLUMNS} per sheet.')
-    repeated = sorted({key for key in saved_keys if saved_keys.count(key) > 1})
+    repeated = sorted({key for key in saved_keys if saved_keys.count(key) > 1}, key=str)
     if repeated:
-        reasons.append(f'"{sheet_name}" names the same column more than once ({", ".join(repeated)}).')
+        reasons.append(f'"{sheet_name}" names the same column more than once ({", ".join(map(str, repeated))}).')
 
     if not is_summary:
-        definition["columns"] = [{"key": key} for key in saved_keys]
+        definition["columns"] = [key if isinstance(key, FieldRef) else {"key": key} for key in saved_keys]
 
     # report_processor filters before it selects columns, so a filter may name any column.
     saved_filters = []
