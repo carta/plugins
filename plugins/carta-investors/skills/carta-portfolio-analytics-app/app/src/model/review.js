@@ -1,6 +1,6 @@
 // Review analytics — the three questions an analyst asks about a KPI pack before
 // trusting anything in it:
-//   whatChanged        what moved since last quarter, and who stopped reporting
+//   whatChanged        what moved since last quarter (or month), and who stopped reporting
 //   reportingHealth    who is overdue, judged against their OWN cadence
 //   dataQualityIssues  do the reported statements actually tie out
 // Pure functions over the kpi.json shapes. No I/O.
@@ -16,9 +16,21 @@ const isQuarterEnd = (d) => ["-03-", "-06-", "-09-", "-12-"].some((q) => String(
  *  reporters alike. Lifted out of views/Coverage.jsx so the grid, the digest and
  *  the health table can never drift apart on what "reported" means. */
 export function coversQuarter(pts, qd) {
+  return coversPeriod(pts, qd, "quarter");
+}
+
+const CADENCE_MONTHS = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
+
+/** How many months one reporting period spans, by grain. */
+const GRAIN_MONTHS = { quarter: CADENCE_MONTHS.quarterly, month: CADENCE_MONTHS.monthly };
+
+/** Any point landing in the period ending at `d`: its three months for a quarter,
+ *  its own calendar month for a month. */
+export function coversPeriod(pts, d, grain = "quarter") {
   const months = monthIndexes(pts);
-  const q = monthIndex(qd);
-  return months.has(q) || months.has(q - 1) || months.has(q - 2);
+  const end = monthIndex(d);
+  for (let i = 0; i < GRAIN_MONTHS[grain]; i++) if (months.has(end - i)) return true;
+  return false;
 }
 
 // "YYYY-MM-DD" -> absolute month number, parsed exactly as monthsBetween does so a
@@ -47,26 +59,57 @@ function monthIndexes(pts) {
 
 /** Every quarter-end in the dataset, ascending. */
 export function quartersOf(data) {
-  return (data.dimensions?.periods || []).slice().sort().filter(isQuarterEnd);
+  return periodsOf(data, "quarter");
 }
 
-// Per-dataset cache of coverageAt by quarter: the Overview and Reporting health ask
-// for the same quarters on every render, and the walk is companies x series x points.
+/** Every period of a grain in the dataset, ascending: quarter-ends, or one date
+ *  per calendar month. */
+export function periodsOf(data, grain = "quarter") {
+  const ps = (data.dimensions?.periods || []).slice().sort();
+  if (grain === "quarter") return ps.filter(isQuarterEnd);
+  const byMonth = new Map();
+  for (const p of ps) byMonth.set(monthIndex(p), p);
+  return [...byMonth.values()];
+}
+
+// The companies a monthly view judges: only a monthly reporter has a "previous
+// month" to compare with, and a quarterly reporter would otherwise read as gone
+// dark two months in three. Cached per dataset so coverageAt's cache keeps working.
+const monthlyCache = new WeakMap();
+
+/** The dataset narrowed to companies that report any KPI monthly, and its periods
+ *  to the dates those companies reported, so a month view never offers or compares
+ *  against a month only the excluded companies filed. */
+export function monthlyReporters(data) {
+  let out = monthlyCache.get(data);
+  if (!out) {
+    const companies = (data.companies || []).filter((c) =>
+      Object.keys(c.series || {}).some((k) => metricCadence(c, k) === "monthly"));
+    const kept = new Set(companies.flatMap((c) => Object.values(c.series || {}).flat().map((p) => p.d)));
+    const periods = (data.dimensions?.periods || []).filter((p) => kept.has(p));
+    monthlyCache.set(data, (out = { ...data, dimensions: { ...data.dimensions, periods }, companies }));
+  }
+  return out;
+}
+
+// Per-dataset cache of coverageAt by period: the Overview and Reporting health ask
+// for the same periods on every render, and the walk is companies x series x points.
 const coverageCache = new WeakMap();
 
-/** How many companies reported anything at all in a given quarter. */
-export function coverageAt(data, qd) {
-  let byQuarter = coverageCache.get(data);
-  if (!byQuarter) coverageCache.set(data, (byQuarter = new Map()));
-  if (!byQuarter.has(qd)) byQuarter.set(qd, countCovering(data, qd));
-  return byQuarter.get(qd);
+/** How many companies reported anything at all in a given period (default: quarter). */
+export function coverageAt(data, d, grain = "quarter") {
+  let byPeriod = coverageCache.get(data);
+  if (!byPeriod) coverageCache.set(data, (byPeriod = new Map()));
+  const key = `${grain}:${d}`;
+  if (!byPeriod.has(key)) byPeriod.set(key, countCovering(data, d, grain));
+  return byPeriod.get(key);
 }
 
-function countCovering(data, qd) {
+function countCovering(data, d, grain) {
   let n = 0;
   for (const c of data.companies || []) {
     const series = c.series || {};
-    for (const k in series) if (coversQuarter(series[k], qd)) { n++; break; }
+    for (const k in series) if (coversPeriod(series[k], d, grain)) { n++; break; }
   }
   return n;
 }
@@ -78,45 +121,44 @@ const median = (a) => {
   return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
 };
 
-/** The newest quarter whose coverage has SETTLED.
+/** The newest period (default: quarter) whose coverage has SETTLED.
  *
- *  A quarter that just closed is always under-reported — companies haven't filed
+ *  A period that just closed is always under-reported — companies haven't filed
  *  yet. On one test firm the newest quarter covers 47 of 106 companies versus 63
  *  the quarter before, purely because of filing lag. Defaulting a "what changed"
- *  digest to the newest quarter would therefore manufacture a wave of false
+ *  digest to the newest period would therefore manufacture a wave of false
  *  "went dark" alerts every single time it's opened.
  *
- *  So: walk back from the newest quarter and take the first one whose coverage is
- *  at least 80% of the median coverage of the four quarters before it. Returns
- *  { quarter, latest, settled } — `settled` is false when the caller is looking at
- *  a quarter that is still filling up, so the view can say so instead of crying wolf.
+ *  So: walk back from the newest period and take the first one whose coverage is
+ *  at least 80% of the median coverage of the four periods before it. Returns
+ *  { period, latest, settled } — `settled` is false when the caller is looking at
+ *  a period that is still filling up, so the view can say so instead of crying wolf.
  */
-export function settledQuarter(data) {
-  const qs = quartersOf(data);
-  if (!qs.length) return { quarter: null, latest: null, settled: true };
-  const latest = qs[qs.length - 1];
-  for (let i = qs.length - 1; i >= 1; i--) {
-    const prior = qs.slice(Math.max(0, i - 4), i).map((q) => coverageAt(data, q));
-    const base = median(prior);
-    if (base == null || base === 0) continue;
-    if (coverageAt(data, qs[i]) >= 0.8 * base) return { quarter: qs[i], latest, settled: qs[i] === latest };
+export function settledPeriod(data, grain = "quarter") {
+  const ps = periodsOf(data, grain);
+  if (!ps.length) return { period: null, latest: null, settled: true };
+  const latest = ps[ps.length - 1];
+  for (let i = ps.length - 1; i >= 1; i--) {
+    if (belowSettledAt(data, ps, i, grain) === false) return { period: ps[i], latest, settled: ps[i] === latest };
   }
-  return { quarter: qs[qs.length - 1], latest, settled: true };
+  return { period: latest, latest, settled: true };
 }
 
-/** Is a given quarter still filling up (i.e. below the settled threshold)? */
-export function isStillFiling(data, qd) {
-  const qs = quartersOf(data);
-  const i = qs.indexOf(qd);
-  if (i < 1) return false;
-  const base = median(qs.slice(Math.max(0, i - 4), i).map((q) => coverageAt(data, q)));
-  if (base == null || base === 0) return false;
-  return coverageAt(data, qd) < 0.8 * base;
+/** Is a given period (default: quarter) still filling up (i.e. below the settled threshold)? */
+export function isStillFiling(data, d, grain = "quarter") {
+  const ps = periodsOf(data, grain);
+  const i = ps.indexOf(d);
+  return i >= 1 && belowSettledAt(data, ps, i, grain) === true;
+}
+
+/** THE settled rule: is ps[i]'s coverage under 80% of the median of the four
+ *  periods before it? null when there is no baseline to judge against. */
+function belowSettledAt(data, ps, i, grain) {
+  const base = median(ps.slice(Math.max(0, i - 4), i).map((p) => coverageAt(data, p, grain)));
+  return base == null || base === 0 ? null : coverageAt(data, ps[i], grain) < 0.8 * base;
 }
 
 /* ---------- Reporting health ---------- */
-
-const CADENCE_MONTHS = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
 
 /** Which bucket a company falls into, and by how much. Lateness is measured
  *  against the company's OWN cadence — an annual reporter is not late at six
@@ -274,43 +316,67 @@ function quarterCurrency(data, company, key) {
   const qp = quarterlyPoints(company, key, metricOf(data, key));
   return qp.length ? qp[qp.length - 1].cur : undefined;
 }
+/** A company+metric's figure for one calendar month, with its currency, or null. */
+function monthPoint(company, key, d) {
+  const m = monthIndex(d);
+  const hit = pointsFor(company, key).find((p) => monthIndex(p.d) === m && p.v != null);
+  return hit ? { v: hit.v, cur: hit.cur } : null;
+}
 
-/** Everything that moved between `quarter` and the quarter before it.
+/** The period ending one step before `d`: the prior quarter-end, or any date in
+ *  the prior calendar month (month lookups match by month, not by day). */
+function priorPeriod(d, grain) {
+  if (grain === "quarter") return shiftQuarters(d, -1);
+  const m = monthIndex(d) - 2; // 0-based index of the prior month
+  return `${Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, "0")}-01`;
+}
+
+/** Everything that moved between `period` and the period before it, at a grain:
+ *  "quarter" (default) or "month". Pass monthlyReporters(data) for a month view.
  *
  *  Movers are returned with BOTH the absolute and percentage change. Callers
  *  should rank by absolute by default: on a real portfolio the top percentage
  *  mover is some company going from $400 to $60K of revenue (+15,217%), which is
  *  noise, while the largest dollar swings are what actually move a fund.
  */
-export function whatChanged(data, { quarter, metricKey } = {}) {
-  const qs = quartersOf(data);
-  const qd = quarter || settledQuarter(data).quarter;
-  const prior = qd ? shiftQuarters(qd, -1) : null;
+export function whatChanged(data, { period, grain = "quarter", metricKey } = {}) {
+  const ps = periodsOf(data, grain);
+  const d = period || settledPeriod(data, grain).period;
+  const prior = d ? priorPeriod(d, grain) : null;
   const key = metricKey || metricKeyByLabel(data, /^revenue$/i);
   const metric = key ? metricOf(data, key) : null;
-  const out = { quarter: qd, prior, metricKey: key, metric, movers: [], wentDark: [], started: [], forecastMisses: [] };
-  if (!qd || !key) return out;
+  const out = { period: d, prior, grain, metricKey: key, metric, movers: [], wentDark: [], started: [], forecastMisses: [] };
+  if (!d || !key) return out;
 
   for (const c of data.companies || []) {
     const pts = pointsFor(c, key);
     const anyPts = Object.values(c.series || {});
-    const here = anyPts.some((s) => coversQuarter(s, qd));
-    const there = prior ? anyPts.some((s) => coversQuarter(s, prior)) : false;
+    const here = anyPts.some((s) => coversPeriod(s, d, grain));
+    const there = prior ? anyPts.some((s) => coversPeriod(s, prior, grain)) : false;
 
     if (there && !here) {
       const last = anyPts.flat().reduce((m, p) => (p.d > m ? p.d : m), "0000-00-00");
       out.wentDark.push({ id: c.id, name: c.name, last });
     }
     if (here) {
-      const first = qs.find((q) => anyPts.some((s) => coversQuarter(s, q)));
-      if (first === qd) out.started.push({ id: c.id, name: c.name, metricCount: Object.keys(c.series || {}).length });
+      const first = ps.find((p) => anyPts.some((s) => coversPeriod(s, p, grain)));
+      if (first === d) out.started.push({ id: c.id, name: c.name, metricCount: Object.keys(c.series || {}).length });
     }
     if (!pts.length) continue;
-    const cur = quarterValue(data, c, key, qd);
-    const prev = prior ? quarterValue(data, c, key, prior) : null;
+    let cur, prev, curCode;
+    if (grain === "quarter") {
+      cur = quarterValue(data, c, key, d);
+      prev = prior ? quarterValue(data, c, key, prior) : null;
+      curCode = quarterCurrency(data, c, key);
+    } else {
+      const now = monthPoint(c, key, d), before = monthPoint(c, key, prior);
+      cur = now ? now.v : null;
+      prev = before ? before.v : null;
+      curCode = now ? now.cur : undefined;
+    }
     if (cur != null && prev != null) {
       out.movers.push({ id: c.id, name: c.name, cur, prev, abs: cur - prev,
-        pct: prev === 0 ? null : (cur - prev) / Math.abs(prev), curCode: quarterCurrency(data, c, key) });
+        pct: prev === 0 ? null : (cur - prev) / Math.abs(prev), curCode });
     }
   }
   out.movers.sort((a, b) => Math.abs(b.abs) - Math.abs(a.abs));

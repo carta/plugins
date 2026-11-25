@@ -29,7 +29,7 @@ import { rulesOf } from "../model/rules.js";
 import { Heatmap } from "../ui/charts.jsx";
 import { metricOptions, metricOf, pointsFor, cartaFirmUrl } from "../model/kpi.js";
 import {
-  coversQuarter, settledQuarter, reportingHealth, BUCKET_LABEL, dataQualityIssues, CHECKS,
+  coversQuarter, settledPeriod, reportingHealth, BUCKET_LABEL, dataQualityIssues, CHECKS,
 } from "../model/review.js";
 import { openCompany } from "../state/focus.js";
 
@@ -201,7 +201,7 @@ function Completeness({ data, dashboard }) {
   // all quarter-ends ever (for each company's first-covered quarter), and the
   // visible window (trailing `win` quarters, newest-first for display).
   const allQ = useMemo(() => (data.dimensions?.periods || []).slice().sort().filter(isQuarterEnd), [data]);
-  const { quarter: settledQ, settled: newestSettled } = settledQuarter(data);
+  const { period: settledQ, settled: newestSettled } = settledPeriod(data);
   const periods = useMemo(() => {
     let ps = allQ.filter((q) => includeFiling || settledQ == null || q <= settledQ);
     if (win !== "all" && ps.length > win) ps = ps.slice(ps.length - win);

@@ -1,29 +1,34 @@
-// "What changed" quarterly scan — the opening section of the Overview page.
+// "What changed" scan — the opening section of the Overview page, by quarter or,
+// for firms collecting monthly, by month.
 import { useMemo, useState } from "react";
 import { FS, sans, mono, MICRO } from "../../ui/theme.js";
 import { withCommas } from "../../ui/format.js";
 import { Dropdown, Segmented, Badge, SectionHeader, Modal } from "../../ui/components.jsx";
-import { fmtVal } from "../../ui/charts.jsx";
+import { fmtVal, shortDate } from "../../ui/charts.jsx";
 import { metricOptions, metricOf, metricKeyByLabel, numericMetrics } from "../../model/kpi.js";
-import { settledQuarter, isStillFiling, quartersOf, coverageAt, whatChanged } from "../../model/review.js";
+import { settledPeriod, isStillFiling, periodsOf, coverageAt, whatChanged, monthlyReporters } from "../../model/review.js";
 import { portfolioSignals } from "../../model/signals.js";
 import { customPortfolioSignals, rulesOf } from "../../model/rules.js";
 import { openCompany } from "../../state/focus.js";
 
 const QT = { "03": "Q1", "06": "Q2", "09": "Q3", "12": "Q4" };
 export const qLabel = (p) => `${QT[String(p).slice(5, 7)] || String(p).slice(5, 7)} '${String(p).slice(2, 4)}`;
+const mLabel = (p) => shortDate(p, false);
+const GRAIN_OPTS = [{ id: "quarter", label: "Quarterly" }, { id: "month", label: "Monthly" }];
 
 const nameBtn = { ...sans, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontWeight: 400, fontSize: FS.value, color: "var(--ink-color-global-link-default)", textAlign: "left" };
 const GAP_FG = "var(--ink-color-global-feedback-negative-strong)";
 const OK_FG = "var(--ink-color-global-feedback-positive-strong)";
 
 const GLOSS_CHANGED = [
-  { term: "Why not the newest quarter?", short: "it hasn't finished filing yet",
-    body: "A quarter that just closed is always under-reported — companies simply haven't submitted yet. This view therefore defaults to the newest quarter whose coverage has settled. Pick the newest quarter yourself and you'll see a warning: on this data it would report several times more companies as having 'gone dark' than actually did, purely because of filing lag." },
+  { term: "Why not the newest quarter or month?", short: "it hasn't finished filing yet",
+    body: "A period that just closed is always under-reported — companies simply haven't submitted yet. This view therefore defaults to the newest period whose coverage has settled. Pick the newest one yourself and you'll see a warning: on this data it would report several times more companies as having 'gone dark' than actually did, purely because of filing lag." },
   { term: "Ranked by size of change, not %", short: "a % swing on a tiny base is noise",
     body: "The biggest percentage mover in a portfolio is almost always a company going from near-zero to a small number — technically +15,000%, practically irrelevant. Ranking by the absolute change surfaces what actually moves the fund. Switch to % if you want the fast-growers regardless of size." },
-  { term: "Went dark", short: "reported last quarter, silent this one",
-    body: "The company had reported something in the prior quarter and nothing in this one. This is the list to chase. A company that has been silent for years shows up in Reporting health instead, not here." },
+  { term: "Monthly view", short: "only companies that report monthly",
+    body: "Monthly compares each month with the month before, across the companies that report monthly. Companies that report quarterly stay on the Quarterly view: they have no previous month to compare with, and would otherwise look as if they had gone dark two months in three." },
+  { term: "Went dark", short: "reported last period, silent this one",
+    body: "The company had reported something in the prior period and nothing in this one. This is the list to chase. A company that has been silent for years shows up in Reporting health instead, not here." },
 ];
 
 const CARD_BORDER = "1px solid var(--ink-color-global-border-subtle)";
@@ -76,14 +81,26 @@ function HoverRow({ style, children }) {
 
 export default function WhatChanged({ data, dashboard }) {
   const metrics = numericMetrics(data.metrics);
-  const sq = useMemo(() => settledQuarter(data), [data]);
-  const [quarter, setQuarter] = useState(sq.quarter);
+  const monthly = useMemo(() => monthlyReporters(data), [data]);
+  const hasMonthly = monthly.companies.length > 0;
+  const [grain, setGrain] = useState("quarter");
+  // A month view judges monthly reporters only (see monthlyReporters).
+  const scope = grain === "month" ? monthly : data;
+  const isMonth = grain === "month";
+  const unitWord = isMonth ? "month" : "quarter";
+  const label = isMonth ? mLabel : qLabel;
+  const sq = useMemo(() => settledPeriod(scope, grain), [scope, grain]);
+  // The period picked on each grain; unpicked opens on that grain's settled period.
+  const [picked, setPicked] = useState({});
+  const period = picked[grain] ?? sq.period;
+  const setPeriod = (p) => setPicked((prev) => ({ ...prev, [grain]: p }));
   const [metricKey, setMetricKey] = useState(() => metricKeyByLabel(data, /^revenue$/i) || (metrics[0] || {}).key);
   const [rankBy, setRankBy] = useState("abs");
+  const [signalsOpen, setSignalsOpen] = useState(false);
 
-  const qs = useMemo(() => quartersOf(data), [data]);
-  const res = useMemo(() => whatChanged(data, { quarter, metricKey }), [data, quarter, metricKey]);
-  const stillFiling = useMemo(() => quarter && isStillFiling(data, quarter), [data, quarter]);
+  const ps = useMemo(() => periodsOf(scope, grain), [scope, grain]);
+  const res = useMemo(() => whatChanged(scope, { period, grain, metricKey }), [scope, period, grain, metricKey]);
+  const stillFiling = useMemo(() => period && isStillFiling(scope, period, grain), [scope, period, grain]);
   const windowed = !!data.source?.since;
   const unit = (metricOf(data, metricKey) || {}).unit || "Number";
 
@@ -105,21 +122,23 @@ export default function WhatChanged({ data, dashboard }) {
   const wentDark = res.wentDark;
   const started = res.started;
 
-  const qOpts = qs.slice().reverse().map((q) => ({ id: q, label: qLabel(q) + (isStillFiling(data, q) ? " · still filing" : "") }));
+  const periodOpts = ps.slice().reverse().map((p) => ({ id: p, label: label(p) + (isStillFiling(scope, p, grain) ? " · still filing" : "") }));
   const pct = (g) => (g == null ? "—" : (g >= 0 ? "+" : "−") + withCommas(Math.abs(g * 100).toFixed(0)) + "%");
   const [glossOpen, setGlossOpen] = useState(false);
 
   const stats = [
-    { label: "Companies reporting", value: coverageAt(data, quarter), sub: `of ${(data.companies || []).length}`,
-      hint: "How many companies reported anything at all in the selected quarter." },
+    { label: "Companies reporting", value: coverageAt(scope, period, grain), sub: `of ${(scope.companies || []).length}`,
+      hint: isMonth
+        ? "How many of the companies that report monthly reported anything at all in the selected month."
+        : "How many companies reported anything at all in the selected quarter." },
     { label: "Moved up", value: movers.filter((m) => m.abs > 0).length,
-      hint: "Companies whose value rose versus the prior quarter, on the selected metric." },
+      hint: `Companies whose value rose versus the prior ${unitWord}, on the selected metric.` },
     { label: "Moved down", value: movers.filter((m) => m.abs < 0).length,
-      hint: "Companies whose value fell versus the prior quarter, on the selected metric." },
+      hint: `Companies whose value fell versus the prior ${unitWord}, on the selected metric.` },
     { label: "Went dark", value: wentDark.length,
-      hint: "Reported in the prior quarter, silent in this one. The list to chase." },
+      hint: `Reported in the prior ${unitWord}, silent in this one. The list to chase.` },
     ...(windowed ? [] : [{ label: "Started reporting", value: started.length,
-      hint: "Companies whose first-ever reported quarter is this one." }]),
+      hint: `Companies whose first-ever reported ${unitWord} is this one.` }]),
   ];
 
   return (
@@ -128,13 +147,15 @@ export default function WhatChanged({ data, dashboard }) {
         <h2 style={{ ...sans, margin: 0, fontSize: FS.h2, lineHeight: "28px", fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)" }}>Overview</h2>
         <p style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-text-subtle)", lineHeight: "20px", margin: 0 }}>
           What moved, who stopped reporting, and who just started. Defaults to{" "}
-          <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{qLabel(sq.quarter)}</strong> — the most recent quarter whose reporting has settled — compared against
-          the quarter before it.
+          <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{label(sq.period)}</strong> — the most recent {unitWord} whose reporting has settled — compared against
+          the {unitWord} before it.
+          {isMonth && ` Covers the ${monthly.companies.length} ${monthly.companies.length === 1 ? "company that reports" : "companies that report"} monthly.`}
         </p>
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <Dropdown options={qOpts} value={quarter} onChange={setQuarter} triggerLabel="Quarter" minWidth={168} />
+        {hasMonthly && <Segmented options={GRAIN_OPTS} value={grain} onChange={setGrain} />}
+        <Dropdown options={periodOpts} value={period} onChange={setPeriod} triggerLabel={isMonth ? "Month" : "Quarter"} minWidth={168} />
         <Dropdown options={metricOptions(metrics)} value={metricKey} onChange={setMetricKey} triggerLabel="Metric" minWidth={190} />
         <Segmented options={[{ id: "abs", label: "By size" }, { id: "pct", label: "By %" }]} value={rankBy} onChange={setRankBy} />
         <button onClick={() => setGlossOpen(true)}
@@ -160,27 +181,27 @@ export default function WhatChanged({ data, dashboard }) {
         <p style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-text-default)", lineHeight: 1.6, margin: 0,
           maxWidth: 920, background: "var(--ink-color-global-feedback-notice-subtle, rgba(255,196,0,.12))",
           border: `1px solid var(--ink-color-global-feedback-notice-strong, #B58100)`, borderRadius: 6, padding: "9px 12px" }}>
-          ⚠ <strong>{qLabel(quarter)} is still filing.</strong> Only {coverageAt(data, quarter)} companies have reported
-          so far, against {coverageAt(data, qs[qs.indexOf(quarter) - 1])} the previous quarter. The "went dark" list
-          below is <em>not</em> reliable for this quarter — most of those companies are simply late, not gone.
+          ⚠ <strong>{label(period)} is still filing.</strong> Only {coverageAt(scope, period, grain)} companies have reported
+          so far, against {coverageAt(scope, ps[ps.indexOf(period) - 1], grain)} the previous {unitWord}. The "went dark" list
+          below is <em>not</em> reliable for this {unitWord} — most of those companies are simply late, not gone.
         </p>
       )}
 
       <StatGrid stats={stats} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 20 }}>
-        <MoverCard title="Biggest increases" rows={ups} unit={unit} rankBy={rankBy} pct={pct} tone={OK_FG} />
-        <MoverCard title="Biggest decreases" rows={downs} unit={unit} rankBy={rankBy} pct={pct} tone={GAP_FG} />
-        <ListCard title="Went dark" empty="Nobody stopped reporting this quarter."
-          note="Reported in the prior quarter, nothing in this one."
+        <MoverCard title="Biggest increases" rows={ups} unit={unit} rankBy={rankBy} pct={pct} tone={OK_FG} unitWord={unitWord} />
+        <MoverCard title="Biggest decreases" rows={downs} unit={unit} rankBy={rankBy} pct={pct} tone={GAP_FG} unitWord={unitWord} />
+        <ListCard title="Went dark" empty={`Nobody stopped reporting this ${unitWord}.`}
+          note={`Reported in the prior ${unitWord}, nothing in this one.`}
           rows={wentDark.map((r) => ({ id: r.id, name: r.name, right: `last: ${r.last}` }))} />
         {windowed ? (
           <ListCard title="Started reporting" rows={[]}
             note={`Not shown — only history from ${data.source.since} was fetched.`}
             empty="A company that first reported before the cutoff would look new here, so this is withheld. Re-run the skill and choose to load everything to see it." />
         ) : (
-          <ListCard title="Started reporting" empty="No first-time reporters this quarter."
-            note="Their first-ever reported quarter."
+          <ListCard title="Started reporting" empty={`No first-time reporters this ${unitWord}.`}
+            note={`Their first-ever reported ${unitWord}.`}
             rows={started.map((r) => ({ id: r.id, name: r.name, right: `${r.metricCount} KPIs` }))} />
         )}
       </div>
@@ -195,7 +216,7 @@ export default function WhatChanged({ data, dashboard }) {
           </p>
           <table className="ledger sheet" style={{ width: "100%", borderCollapse: "collapse", ...sans }}>
             <tbody>
-              {breaches.slice(0, 25).map((s) => (
+              {(signalsOpen ? breaches : breaches.slice(0, PAGE)).map((s) => (
                 <tr key={s.id} style={{ borderTop: CARD_BORDER }}>
                   <td style={{ padding: "9px 14px", width: 220 }}>
                     <button onClick={() => openCompany(s.companyId)} style={nameBtn}>{s.company}</button>
@@ -206,6 +227,8 @@ export default function WhatChanged({ data, dashboard }) {
               ))}
             </tbody>
           </table>
+          {!signalsOpen && breaches.length > PAGE && toggleBtn(() => setSignalsOpen(true), `Show ${breaches.length - PAGE} more`)}
+          {signalsOpen && toggleBtn(() => setSignalsOpen(false), "Show less")}
         </div>
       )}
     </section>
@@ -222,7 +245,7 @@ const toggleBtn = (onClick, label) => (
   </button>
 );
 
-function MoverCard({ title, rows, unit, rankBy, pct, tone }) {
+function MoverCard({ title, rows, unit, rankBy, pct, tone, unitWord }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? rows : rows.slice(0, PAGE);
   const hidden = rows.length - PAGE;
@@ -230,7 +253,7 @@ function MoverCard({ title, rows, unit, rankBy, pct, tone }) {
     <div style={CARD_STYLE}>
       <div style={CARD_HEADER_BASE}>{title}</div>
       {rows.length === 0 ? (
-        <div style={{ ...sans, fontSize: FS.small, color: MICRO, padding: "12px 16px" }}>Nothing to show for this metric and quarter.</div>
+        <div style={{ ...sans, fontSize: FS.small, color: MICRO, padding: "12px 16px" }}>Nothing to show for this metric and {unitWord}.</div>
       ) : (
         <>
           {visible.map((r) => (
