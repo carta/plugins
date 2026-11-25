@@ -1,17 +1,17 @@
 ---
 name: carta-workhub-build
 description: >-
-  Opens the Carta Workhub, the Carta task board and list of open requests; a built Workhub
-  artifact is an old copy, and the Workhub opens from the Carta connector. Invoke it first to open,
-  show, build, rebuild or set up the Workhub or its artifact ("open the carta workhub", "open the
-  carta workhub artifact", "open my Carta workhub", "build the carta workhub artifact", "rebuild
-  carta workhub", "rebuild carta tasks", "show my Carta task board", "pin my Carta requests",
-  "what requests do I have open"). Also to draft a capital call or distribution ("call $1M pro
-  rata from Fund I investors"), and to review, approve or send back work the Workhub hosts (expense
-  payment, financial package, management fees, SOI, tax return, Form 1099, cash rec: "approve
-  the Fund II expense payment"). NOT FOR: one Fund Admin request, to follow up, reply or check on
-  (carta-fund-admin-requests); the Carta Home fund dashboard (carta-investors:carta-home-build); a
-  Workhub page's KYC card prompt (carta-investors:carta-kyc-fill-form).
+  Opens the Carta Workhub, the Carta task board and list of open requests; a built Workhub artifact
+  is an old copy, and the Workhub opens from the Carta connector. Invoke it first to open, show,
+  build, rebuild or set up the Workhub or its artifact ("open the carta workhub", "open the carta
+  workhub artifact", "open my Carta workhub", "build the carta workhub artifact", "rebuild carta
+  workhub", "rebuild carta tasks", "show my Carta task board", "pin my Carta requests", "what
+  requests do I have open"). Also to draft a capital call or distribution ("call $1M pro rata from
+  Fund I investors"), and to review, approve or send back work the Workhub hosts (expense payment,
+  financial package, management fees, SOI, tax return, Form 1099, cash rec: "approve the Fund II
+  expense payment"). NOT FOR: Fund Admin requests by name, or one request to check on, follow up or
+  reply to (carta-fund-admin-requests); the Carta Home fund dashboard (carta-home-build); a Workhub
+  page's KYC card prompt (carta-kyc-fill-form).
 model: inherit
 allowed-tools:
   - mcp__claude_ai_Carta__open_workhub
@@ -23,7 +23,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.63.3</carta-plugin>
+<carta-plugin>carta-investors:7.64.1</carta-plugin>
 
 # Carta Workhub
 
