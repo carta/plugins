@@ -2,7 +2,7 @@
 name: carta-fund-admin-requests
 model: sonnet
 description: >-
-  Send work to your Carta Fund Admin team and track it. Opens a request the team reads, acts on, and replies to — the off-ramp for anything no other Carta skill or command can do. TRIGGER: "ask Carta to", "have Carta do", "send this to my fund admin", "ask my fund admin team", "can Carta do this for me", "check on my request", "did Carta reply", "what Fund Admin requests do I have open", "reply to Carta", "follow up on my request", plus ANY action request (create/change/send/restate/reconcile/split/fix) that no other skill or Carta command covers. NOT FOR: reporting a bug or feature request about this plugin (call fa:create:feedback directly); questions answerable from Carta data (use carta-explore-data); capital call reminders to LPs (that is a Carta command, not a Fund Admin request); drafting capital calls or distributions (carta-workhub-build); cap table access requests to portfolio companies (not Fund Admin work); fund closings and LP invites (carta-crm:fund-closings).
+  Send work to your Carta Fund Admin team and track it. Opens a request the team reads, acts on and replies to, for anything no other Carta skill or command can do. TRIGGER: "ask Carta to", "have Carta do", "send this to my fund admin", "ask my fund admin team", "can Carta do this for me", "check on my request", "did Carta reply", "what Fund Admin requests do I have open", "reply to Carta", "follow up on my request", plus ANY action request (create/change/send/restate/reconcile/split/fix) that no other skill or Carta command covers. NOT FOR: plugin bugs or feature requests (fa:create:feedback); Carta data questions (carta-explore-data); capital call reminders to LPs (a Carta command); drafting capital calls or distributions (carta-workhub-build); reviewing or approving work the Workhub hosts, such as expense payments, financial packages, management fees or cash reconciliation (carta-workhub-build); cap table access requests (not Fund Admin work); fund closings and LP invites (carta-crm:fund-closings).
 version: 1.0.0
 allowed-tools:
   # Production
@@ -58,7 +58,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.63.2</carta-plugin>
+<carta-plugin>carta-investors:7.63.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
