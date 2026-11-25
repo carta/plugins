@@ -99,7 +99,7 @@
     "order": 10,
     "prompts": [
       "**Ask my fund admin team** to [describe the task]",
-      "What **Fund Admin requests** do I have open?"
+      "Did Carta **reply to my request**?"
     ],
     "whatsNewCopy": {
       "headline": "Hand any task to your Carta Fund Admin team",

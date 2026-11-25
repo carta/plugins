@@ -11,7 +11,7 @@ description: >-
   named ("consolidating financials", "firm-wide financial statements"), which shows the report menu.
   NOT FOR: single-fund/entity financials, ManCo budgets/actuals/pacing/what-if (carta-manco),
   consolidating cash flow (not available), SOI, co-investors, Form ADV, LP reporting, cap tables,
-  Fund Admin requests (carta-fund-admin-requests).
+  sending Fund Admin requests (carta-workhub-build) or tracking them (carta-fund-admin-requests).
 version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool)
@@ -69,7 +69,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.64.1</carta-plugin>
+<carta-plugin>carta-investors:7.64.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
