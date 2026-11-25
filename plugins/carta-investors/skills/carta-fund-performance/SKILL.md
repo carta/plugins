@@ -47,7 +47,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.68.0</carta-plugin>
+<carta-plugin>carta-investors:7.68.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -55,7 +55,7 @@ allowed-tools:
 
 ## Start of every run
 
-> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to; record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
+> **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="skill_started")` before proceeding. `<CHECKPOINT_SERVER>` is the one Carta MCP server, of those `allowed-tools` grants `skill_checkpoint` on, that this session is connected to — or, when that list has none, any connected Carta MCP server with `skill_checkpoint`. When Carta Home's first-open message started this build ("Carta Home started these builds"), it is the Carta server that message or prompt names. Record every checkpoint of this run on that same server, even if a later step picks another server for reads. If the tool is deferred, load it first with `ToolSearch(query: "select:mcp__<CHECKPOINT_SERVER>__skill_checkpoint")`. If it is still unavailable, or any checkpoint call fails, carry on: checkpoints never stop a run. A run that has not recorded `skill_started` records no other checkpoint.
 
 Each run records each checkpoint at most once, and exactly one of `skill_finished` or `skill_failed`. A step reached again later in the same run (a second invocation to get this skill's file paths, a follow-up benchmark question, a re-render, a re-publish) does not checkpoint again.
 
@@ -119,7 +119,7 @@ script. `<CWD>` is the session's current directory:
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/scripts/render-artifact.py" "<CWD>/fund-performance.html"
 ```
 
-When Carta Home is building this page, it gives you its own URL. Append
+When Carta Home gives you its own URL, append
 `--home-url "<carta_home_url>"` so the page's "Back to Home" link points there. Without it
 the link stays hidden.
 
@@ -133,7 +133,7 @@ publish the template itself: its Home link is a placeholder.
 Publish the rendered file with the Artifact tool. The artifact calls `read_tool` (`dwh__execute__query`, `fa__get__fund-irr` for a fund family's Net IRR, and `plugin__get__version` for the update banner),
 `list_contexts` and `set_context`, so grant exactly those, plus `track_ui_event` for the page's usage analytics. Set `server` to the viewer's
 Carta connector display name from `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md`
-(the plugin's `references/`, not this skill's); the page looks that name up at runtime.
+(the plugin's `references/`, not this skill's); the page looks that name up at runtime. On a Carta Home build, including one its first-open message started ("Carta Home started these builds", in the conversation or in the prompt you were invoked with), set `server` to the connector name of the Carta server that message or prompt names instead.
 
 ```python
 Artifact(
@@ -145,8 +145,10 @@ Artifact(
 )
 ```
 
-To update a dashboard published earlier, pass `url="<existing artifact URL>"` so the
+To update a dashboard published earlier, read it first (`Artifact({action: "read", url})`; the read that keep-customizations below makes counts, so don't read it twice), then pass `url="<existing artifact URL>"` so the
 link stays the same. Without it a second artifact is created.
+
+If the host refuses the publish (a safety check declines it), don't retry it or republish over another page: tell the user in one line that the dashboard couldn't be published, and record `skill_failed` with `notes="publish_refused"`.
 
 **Before republishing over an existing page, keep the user's changes.** Users
 customize this dashboard by asking Claude to edit it, and republishing a fresh render would
@@ -174,7 +176,7 @@ reference.
 
 ## Step 3 — Respond
 
-Say in one sentence that the dashboard is ready, and that clicking a fund opens its
+On a Carta Home build, including one its first-open message started, reply with only the URL, plus the kept-changes lines when Carta Home asked for them (Step 2). Otherwise say in one sentence that the dashboard is ready, and that clicking a fund opens its
 chart against its peers. Do not restate the metrics.
 
 > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-fund-performance", checkpoint_label="skill_finished")` once the publish in Step 2 has succeeded and you have responded, or, when another skill (Carta Home) invoked this one for the page, once the URL is handed back to it. The page has no `data_fetched` checkpoint: it fetches its own data after your turn ends. If the call fails, carry on.

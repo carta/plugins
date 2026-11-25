@@ -56,7 +56,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.68.0</carta-plugin>
+<carta-plugin>carta-investors:7.68.4</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -94,8 +94,8 @@ Rules the page applies:
 
 ## When Carta Home builds this page
 
-Carta Home may invoke this skill with the firm already resolved (name and firm UUID) and, on a rebuild, the URL of the existing page. Then:
-- Skip `list_contexts` and use the firm you were given; still call `welcome` and `set_context` (Step 2).
+Carta Home may invoke this skill with the firm already resolved (name and firm UUID) and, on a rebuild, the URL of the existing page. This also covers a build that Carta Home's first-open message started ("Carta Home started these builds", in the conversation or in the prompt you were invoked with): use the active firm, record every checkpoint on the Carta server that message or prompt names, and publish against that server's connector. Then:
+- Skip `list_contexts` when Carta Home gave you the firm; on a first-open build, call it and take the firm whose id is `active_firm_id` (name and UUID). Either way still call `welcome` and `set_context` (Step 2).
 - Redeploy to the URL you were given instead of searching for one (Step 5e).
 - Reply with only the published artifact URL.
 - Write `origin: "home"` in the config (Step 4); any other invocation writes `"chat"`. It labels the page-open analytics event with where the request came from.
@@ -332,6 +332,7 @@ Once `skill_started` is sent, every stop before `skill_finished`, whether or not
 
 | Symptom | Cause | Tell user |
 |---|---|---|
+| Publish refused (5e) | The host's safety check declined the Artifact call | That the page couldn't be published, in one line. Don't retry; record `skill_failed` with `notes="publish_refused"` |
 | No connector found (Step 1) | No `call_tool`/`welcome` pair in the conversation's tool list | No Carta connector is available; connect one via claude.ai connector settings |
 | `welcome` fails (Step 2) | Carta session not live, or identity/firm context unresolved | What `welcome` returned; retry once the session is confirmed live |
 | Named firm not found (Step 2) | The name matches none of the firms the user can access | Which name was searched, which firms they can access, and to try again with one of those |
