@@ -1,12 +1,11 @@
 # The issuance run
 
 Every run follows this file, for all nine types ([SKILL.md § The run](../SKILL.md#the-run)), with
-[engine.md](engine.md) for the rules it builds on. Carta offers the company an issuance page — an Overview and a tab per draft set.
-Each tab shows the Drafts page's set, each value's source, a check and **Issue**. The page takes
+[engine.md](engine.md) for the rules it builds on. Carta offers the company an issuance page: an Overview, and a tab per draft set with its values,
+their sources, a check and **Issue**. The page takes
 no data input: values change through a save in this chat or on the Drafts page. The page shows
 only as [the issuance app](#the-issuance-app) beside the chat. Never open a Carta address in a
-browser pane or a Chrome tab, and never post a link to the page. With no app, the run goes on in
-the chat. The skill's [hard rules](../SKILL.md#hard-rules) still bind.
+browser pane or a Chrome tab, and never post a link to the page. The skill's [hard rules](../SKILL.md#hard-rules) still bind.
 
 ## What Carta returns
 
@@ -210,8 +209,7 @@ type, so no `prepare_drafts` and no save without its `draft_set_id`.
    list of the gaps in text and never "send me the values". With no open input, go on to
    [§ 8](#8-issue).
 7. The reply is § 6's, with "Picked up <`set_label`>, saved earlier." as the first line of
-   *What I drafted*. As there, no sentence after the count line names a holder, field or value
-   the card asks about.
+   *What I drafted*.
 
 Answers then re-save this set as [§ 7](#7-answers) says. `load_drafts` and the read take the
 place of the save and its check in [§ 1](#1-tools)'s call count, and the
@@ -237,8 +235,7 @@ answers, the reply is these parts, in this order, and no other text:
 
 1. **What I drafted**: that heading, then 4 short lines or fewer: the files read, the holders
    matched ("2 existing, 5 new"), what you drafted and the board consent that covers it ("no
-   board consent covers it yet" when none does), the type's summary items. A check message on a
-   cell is an item, never a line here. A thing that needs the user and is on no cell (a banner error, a
+   board consent covers it yet" when none does), the type's summary items. A thing that needs the user and is on no cell (a banner error, a
    possible duplicate stakeholder, a file you could not read, no live valuation with the link
    [engine.md § Blockers](engine.md#blockers--act-on-them-first) gives) adds one line here.
 2. "N things need you, in the card above.", with N the number of items. Then look in
@@ -263,9 +260,6 @@ answers, the reply is these parts, in this order, and no other text:
 
 <the close, as § 12 says>
 ```
-
-In this example, every `field_spec` field is required or has a default, so the count line ends
-at "in the card above.".
 
 With no item, there is no card: go on to [§ 8](#8-issue); its optional columns decide the reply.
 
@@ -311,15 +305,14 @@ nothing for that item, and it stays open. Write no text before the first questio
 list the items in text. After the answers, save the real answers as § 7 says. The reply then is
 these parts, in this order, and no other text:
 
-1. The *What I drafted* block of [The reply](#the-reply). A check warning is an item, so it is
-   never a line there.
+1. The *What I drafted* block of [The reply](#the-reply).
 2. "Saved your N answers.", with N the saved answers only. With none, leave the line out.
 3. While items are open, this line word for word, with only N changed: "N things still need
    you. Say when, and I'll ask again." Nothing goes between its two sentences. Else § 8.
 4. The close.
 
-Outside § 8's review, the reply names no item: the user just saw them in the questions. So no
-list of the open items, no field, no value, no check message.
+Outside § 8's review, the reply names no item, field, value or check message: the user just saw
+them in the questions.
 
 ```
 **What I drafted**
@@ -331,6 +324,31 @@ list of the open items, no field, no value, no check message.
 
 <the close, as § 12 says>
 ```
+
+### Asked again
+
+The card above stays open: the build draws it once and a card save draws none. On a later turn on
+this set, draw it again only when the message turns to its open questions ("I already answered
+them", what's left, what you need, review, issue or carry on), or the set's last read this turn
+(after any save or check it makes, else § 8's) has an `open_inputs` entry no card on this set has
+asked. Then:
+
+1. Save each answer the message gives ([§ 7](#7-answers)).
+2. Read `cap_table:get:draft_set_companion`. With no `open_inputs`, go on to [§ 8](#8-issue).
+3. One `need_input` card ([The card](#the-card)) with that read's `revision`, one item per
+   `open_inputs` entry and no other. Then reply with only: the answer if the message asked about
+   something else, "We still need these N answers before we can continue.", word for word with N
+   the number of items in the card, and the close if the turn wrote
+   ([§ 12](#12-end-every-turn-that-wrote)), naming no item, field or value.
+   With no card host, ask them as [No card host](#no-card-host) says.
+
+A message about something else, such as a value you used, the vesting or the page, gets its
+answer and no card, and the answer names no open item: the card above still stands. A `Saved in
+the card` context is never a reason on its own.
+
+After the turn's last save or check, read the set again before you reply. For an unasked
+`open_inputs` entry, such as one a change in Carta made, answer the message as the paragraph above
+says, then draw the card and add its line as step 3 says.
 
 ### Possible duplicate stakeholders
 
@@ -348,8 +366,8 @@ for it.
 **Saved in the card.** Card context that starts `Saved in the card (draft set N, revision R):`
 comes with the user's next message. It lists values the card already saved, with their
 sources. Don't save those values and don't call `draft_set_sources` for them: make one
-`cap_table:mutate:validate_drafts` call, keep the revision it returns, then go on to the other
-items and § 8.
+`cap_table:mutate:validate_drafts` call and keep the revision it returns. Then read the set and
+answer as [Asked again](#asked-again) says: the answer names none of the open items.
 
 **Any other answer re-saves the same set**: an answer in the chat, or a card message that lists
 values the card did not save, one line per value with its row, column key and save key. Card
@@ -377,9 +395,7 @@ still ends as [§ 12](#12-end-every-turn-that-wrote) says.
 
 ### The optional columns, once per set
 
-The first time no input is open on a set (after the build, after a `Saved in the card` context,
-or after the last answer in the chat), offer the set's empty
-optional columns, one time per set:
+The first time no input is open on a set, offer its empty optional columns once:
 
 1. The **empty optional columns** are the `field_spec` fields with `required` false, not
    `hidden` and with no `default_value`, that no row of the set has a value for. With none, reply
@@ -389,7 +405,7 @@ optional columns, one time per set:
    columns in `field_spec` order as options, each labelled with its `label` (the column's title
    on the page), then `No, review and issue`. Sets that reach this point in the same turn share
    one `AskUserQuestion`, one question per set, each starting with its `set_label`. The
-   suggestions card is for after the issue, so it never asks this.
+   suggestions card never asks this.
 3. `No, review and issue`, or no column picked: go on to the review below, then the close.
    A reply in the turn that built the set starts with part 1 of [The reply](#the-reply), one
    time; § 8 adds it in no later turn. A free-text answer picks the empty optional columns whose
@@ -449,8 +465,8 @@ can create it. Where the issuance app shows, the app shows it; elsewhere link it
 **Each turn on this set**, before any write, read `cap_table:get:draft_set_companion`. Its
 `status`: `issued` or `partially_issued`, close; `pending_board_approval`, say the set is held
 for board approval; `draft`, carry on. For each `edited_in_drafts` value, say once "I saw you
-changed <title> for <holder> in Carta", and keep it. Ask its new `open_inputs` as § 6 does, and
-save the answers by `payload_key`.
+changed <title> for <holder> in Carta", and keep it. Ask its `open_inputs` as § 6
+[Asked again](#asked-again) says, and save the answers by `payload_key`.
 
 ## 9. Several types in one run
 
@@ -532,6 +548,10 @@ reply's text, so the close stays the last line of that text. An `AskUserQuestion
 back in the same turn, so the close goes at the end of what you write after it.
 
 A turn whose writes all failed changed nothing: end it with no close and no address.
+
+No `wrap_up` action, or any other next-step button, answers, opens or points at the card, such as
+"Answer in the card": a button only sends its label as a chat message. The user answers in the
+card.
 
 ## The issuance app
 

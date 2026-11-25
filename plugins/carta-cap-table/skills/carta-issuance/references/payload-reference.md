@@ -23,7 +23,7 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `issue_date` | always, except a pending-board option grant | `YYYY-MM-DD` or `MM/DD/YYYY` | **Omit the key entirely when `needs_board_approval` is `true`.** `DraftOptionsIssueDateFieldValidator` rejects it: *"Issue date is not applicable for grants that are not board approved."* A grant takes its issue date from the board's approval, so there is none to send yet |
 | `board_approval_date` | certs: always. Grants: when `needs_board_approval = false`. **PIU: optional** | `YYYY-MM-DD` or `MM/DD/YYYY` | Usually ≤ `issue_date`. Grants: omit entirely when pending — server rejects empty string. **PIU has no ordering rule against `issue_date` and no pending state** — omit the key to issue with no date on record. |
 | `currency` | always | ISO 4217 | `USD` for US; per-`so_type` autofills for grants |
-| `state_of_residency` | optional | 2-letter US state OR 3-letter ISO country | Server doesn't enforce. **Not collected by carta-issuance** (dropped from this skill's surfaces entirely — design feedback; remains valid server-side for other callers) |
+| `state_of_residency` | optional | 2-letter US state OR 3-letter ISO country | Server doesn't enforce. **Not collected by carta-issuance** |
 | `notes` | optional | string | |
 | `draft_pk` | retry | int | Pk of existing draft row — updates in place |
 | `stakeholder_id` | optional | int | Bypasses duplicate detection |
@@ -42,7 +42,7 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `prefix_number` | optional | int or `<letters>-<digits>` | Server auto-numbers if omitted. Free-form strings raise `ValueError` |
 | `cash_paid` | optional | decimal ≥ 0 | |
 | `debt_canceled` | optional | decimal ≥ 0 | |
-| `convertible_note` | optional | string ≤ 256 | Pk or label — no server FK validation. **Not collected by carta-issuance** (dropped from this skill's surfaces entirely — design feedback; remains valid server-side for other callers) |
+| `convertible_note` | optional | string ≤ 256 | Pk or label — no server FK validation. **Not collected by carta-issuance** |
 | `rule_144_date` | US restricted | `MM/DD/YYYY` only (CharField) | Optional at save; enforced at issue |
 | `rule_144_difference_reason` | if `rule_144_date` ≠ `issue_date` | enum | |
 | `vesting_template` | opt-in | int | |
@@ -87,7 +87,7 @@ issuance. Do not add percentages to unit counts.
 | `acceleration_template` | optional | int | |
 | `grant_expiration_date` | always | `MM/DD/YYYY` only (`CharField`) | Default is the **plan's** term — see [Grant expiration](#grant-expiration-follows-the-plan). Required for ISO. ISO `YYYY-MM-DD` is rejected with `Date is invalid` — see [Date format quirks](#date-format-quirks) |
 | `exemption` | US issuers | enum | Autofilled by `so_type` — but **omit on US grants**; the server defaults to `Rule 701`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
-| `state_exemption` | US, optional | string | Free-form; don't default. **Not collected by carta-issuance** (dropped from this skill's surfaces entirely — design feedback; remains valid server-side for other callers) |
+| `state_exemption` | US, optional | string | Free-form; don't default. **Not collected by carta-issuance** |
 | `document_set_id` | always | int | |
 | `custom_label` | optional | string | Server auto-generates `ES-{n}`. Unique per corp |
 | `early_exercise` | optional | bool | **Rejected for ZEPO** |

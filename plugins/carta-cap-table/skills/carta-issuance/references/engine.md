@@ -18,8 +18,7 @@ Two more reads, each at its own moment:
   [option-grant-fields.md](option-grant-fields.md), *or*
   [certificate-fields.md](certificate-fields.md), *or* [piu-fields.md](piu-fields.md), *or*
   [other-types.md](other-types.md) for the other six types, once that
-  resolves — exactly one, and never before. Loading the wrong one is pure cost, and a grant run
-  has no use for Rule 144.
+  resolves — exactly one, and never before. A grant run has no use for Rule 144.
 
 ---
 
@@ -41,15 +40,13 @@ five bind too, because they govern building the rows and the payload.
    If one is missing, recover **before** the call, in order: (a) the row template's documented
    default; (b) re-run the stakeholder lookup (`detail=full`) and re-stamp
    `issue_date_relationship` / `email` / `stakeholder_kind`; (c) `AskUserQuestion`.
-   This is load-bearing because both failure modes are **silent**: `save_drafts` accepts
-   incomplete rows without complaint, and at issue time a row with `stakeholder_id=null` slips
-   duplicate detection, creates zero securities, and still returns success. That the server
-   accepts a row is therefore never a reason to send one — **never offer to save past a missing
+   Both failures are **silent**: `save_drafts` accepts incomplete rows, and at issue time a row
+   with `stakeholder_id=null` slips duplicate detection and creates zero securities, yet returns
+   success. That the server accepts a row is never a reason to send one — **never offer to save past a missing
    `always` field, and never describe the server's tolerance to the user as an option**: *"Carta
    will accept these rows but they'll fail validation"* is not a choice to offer.
 5. **Never ask who the grantees are before the rest.** A missing recipient is one open input
-   among the others, never a gating question ahead of them — this is the single most common
-   way this skill goes wrong. Two sub-rules follow from it:
+   among the others, never a gating question ahead of them. Two sub-rules follow from it:
    - **A bare "N \<securities\>" is a quantity, not a headcount.** *"100 option grants"*,
      *"100 certificates"* — the server's `quantity` field counts shares/options for **one**
      recipient, so with no named people and no plural-**person** language, build **one** row
@@ -219,9 +216,8 @@ gateway error, HTML body or timeout is transient and gets **one** retry
 
 **The retry cap is one, and it is a hard cap.** It counts **the failing operation, not the
 call**: if `save_drafts` fails twice, a follow-up issue preview against the same draft set
-is not a fresh attempt — it is the third try at the same write, and a traced run burned three
-500s that way. A second failure means waiting: re-running the same call against a 502 cannot
-succeed, and repeated attempts are the inner-loop thrash this skill's budgets exist to prevent.
+is not a fresh attempt — it is the third try at the same write. A second failure means waiting: re-running the same call against a 502 cannot
+succeed.
 Do not vary the call to make a retry look novel, and do not fall back to a different tool or a
 `search_tools` probe.
 
@@ -234,10 +230,8 @@ name lookup; don't substitute a `search_tools` guess for it. Its `id` reads
 `corporation_pk:<n>`: send only the number `<n>` as `corporation_id`. Carta refuses the
 prefixed string.
 
-**Several exact name matches: probe at most three, then ask.** A real run got **25
-corporations named exactly "Meetly"**, re-ran the lookup at `detail="full"` for nothing (it
-carries no extra distinguishing field), then swept the list corp by corp — twice — spending 57%
-of its calls before any issuance work began. Instead:
+**Several exact name matches: probe at most three, then ask.** A re-run at `detail="full"`
+carries no extra distinguishing field.
 
 1. If the prompt named a holder, probe **at most three** candidates with
    `cap_table:get:stakeholders` — wire `cap_table__get__stakeholders` —
@@ -261,9 +255,7 @@ before the rest of the reference data, before any save.** One
 - **Option grant:** `document_sets.count == 0`, and **PIU:** `certificate_share_classes.count
   == 0` — the [account-setup gate](#account-setup-gate-option-grant-and-piu).
 
-Ordering is the whole point. A traced run resolved a company, swept 24 candidates and fetched a
-162-row roster before reading the plan list that stopped the run — 36 of its 63 calls spent
-ahead of a check that invalidated all of them. The stop costs one call and it is knowable
+Ordering is the whole point. The stop costs one call and it is knowable
 first, so take it first. Everything the gate reads, Phase 0.5 reuses; it is not an extra fetch.
 The other six types have their gates in [other-types.md](other-types.md).
 
@@ -383,8 +375,7 @@ Runs once, immediately after the `issuance_init` payload is read — before FMV,
 plan, or any save ([Step 4](#step-4--run-the-account-level-hard-stops-first)) — and
 skipped entirely for `certificate`.
 
-**Read the count from its section under that exact name.** A real run aborted a valid
-issuance by reading `acceleration_templates`' zero as `document_sets`'
+**Read the count from its section under that exact name**
 ([incidents.md § Reading server data wrong](incidents.md#reading-server-data-wrong)).
 `count >= 1` always passes, and no other section's zero ever gates.
 
