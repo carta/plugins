@@ -52,7 +52,6 @@ is false (see the table above).
   `why_not.code: documents`: send the user to Carta.
 - **`dividend_accrual_start_date`** is share-class gated: Carta rejects a value that does not fit
   a certificate's share class. Quote the check.
-- **`returned_invested_capital`** shows only for an LLC with that setting on.
 - **Threshold pair.** A non-zero `threshold_value` needs a `threshold_value_type` (PIUs, and CBUs
   whose form has the type). When the user gives the value but no type and the type's `current` is
   empty for any security, ask the type from that field's `options` before the preview ("per unit"

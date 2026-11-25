@@ -87,7 +87,6 @@ entry, not a per-row value.
 | Rule 144 Date · 144 Date | `rule_144_date` |
 | Cash Paid · Total Cash Paid | `cash_paid` |
 | Debt Canceled · Debt Cancelled | `debt_canceled` |
-| Returned Invested Capital | `returned_invested_capital` |
 
 `Certificate ID` in the template is a prefix plus a number (`CS-1`), but only
 the number is a payload field — the prefix comes from the resolved share class.

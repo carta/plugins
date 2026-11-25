@@ -113,7 +113,7 @@ ROW_KEYS = {
     # certificate
     "share_class_prefix", "price_per_share", "legend_id", "prefix_number",
     "rule_144_mode", "rule_144_date", "rule_144_reason", "cash_paid",
-    "debt_canceled", "returned_invested_capital",
+    "debt_canceled",
     # profits interest unit
     "option_plan", "threshold_value", "threshold_value_type",
     "corresponding_interest",
@@ -198,7 +198,6 @@ _syn("prefix_number", "Certificate ID", "Certificate Number", "Cert ID",
 _syn("rule_144_date", "Rule 144 Date", "144 Date")
 _syn("cash_paid", "Cash Paid", "Total Cash Paid")
 _syn("debt_canceled", "Debt Canceled", "Debt Cancelled")
-_syn("returned_invested_capital", "Returned Invested Capital")
 
 # profits interest unit. "Threshold equity value" is the header the PIU import
 # template ships; its own help cell is off by one and names the wrong choices.
@@ -216,8 +215,7 @@ _syn("_currency", "Currency")
 GRANT_SIGNALS = {"option_type", "exercise_price", "document_set_id",
                  "_equity_plan", "is_hmrc_notified", "ato_notified"}
 CERT_SIGNALS = {"share_class_prefix", "legend_id", "price_per_share",
-                "rule_144_date", "prefix_number", "cash_paid", "debt_canceled",
-                "returned_invested_capital"}
+                "rule_144_date", "prefix_number", "cash_paid", "debt_canceled"}
 # A threshold column appears on no other importable sheet, so it decides
 # outright. The PIU template also trips two GRANT_SIGNALS (equity plan,
 # document set), which would tie the grant/cert comparison below.
@@ -680,8 +678,7 @@ def _build_cert_fields(record: Dict[str, Any], row: Dict[str, Any]) -> None:
             row["price_per_share"] = value
 
     for field, label in (("cash_paid", "cash paid"),
-                         ("debt_canceled", "debt canceled"),
-                         ("returned_invested_capital", "returned invested capital")):
+                         ("debt_canceled", "debt canceled")):
         raw = _cell(record, field)
         if not _text(raw):
             continue

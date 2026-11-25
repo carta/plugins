@@ -43,7 +43,6 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `cash_paid` | optional | decimal ≥ 0 | |
 | `debt_canceled` | optional | decimal ≥ 0 | |
 | `convertible_note` | optional | string ≤ 256 | Pk or label — no server FK validation. **Not collected by carta-issuance** (dropped from this skill's surfaces entirely — design feedback; remains valid server-side for other callers) |
-| `returned_invested_capital` | optional — LLC only | decimal ≥ 0 | **Not collected by carta-issuance** (no MCP command can confirm LLC status, so the field is dropped from this skill's surfaces entirely; remains valid server-side for other callers) |
 | `rule_144_date` | US restricted | `MM/DD/YYYY` only (CharField) | Optional at save; enforced at issue |
 | `rule_144_difference_reason` | if `rule_144_date` ≠ `issue_date` | enum | |
 | `vesting_template` | opt-in | int | |
@@ -126,9 +125,8 @@ issuance. Do not add percentages to unit counts.
 **Not on a PIU at all.** No `exercise_price`, `so_type`, `grant_expiration_date`,
 `law_firm_price`/price-per-share, `legend_id`/`legend`, `rule_144_date`,
 `rule_144_difference_reason`. And a sharper distinction worth keeping straight:
-`dividend_accrual_start_date` and `returned_invested_capital` are declared on
-`DraftCertificate` only — they are **absent from the model**, not merely uncollected, so
-they are not reachable even by another caller.
+`dividend_accrual_start_date` is declared on `DraftCertificate` only — it is **absent
+from the model**, not merely uncollected, so it is not reachable even by another caller.
 
 ## Never emit
 
@@ -318,7 +316,7 @@ Mixing formats across a payload is fine — each field is parsed independently. 
 
 ## camelCase and snake_case
 
-The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `atoNotified` → `ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `returnedInvestedCapital` → `returned_invested_capital`, `employmentRelated` → `employment_related`, `fundStructure` → `fund_structure`, `optionPlan` → `option_plan`,
+The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `atoNotified` → `ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `employmentRelated` → `employment_related`, `fundStructure` → `fund_structure`, `optionPlan` → `option_plan`,
 `vestingAccelerationName` → `vesting_acceleration_name`, `correspondingInterest` →
 `corresponding_interest`).
 
