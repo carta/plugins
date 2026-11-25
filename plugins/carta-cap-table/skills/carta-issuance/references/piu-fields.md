@@ -28,7 +28,7 @@ holds a value before review, and a `None` or empty is a skill bug.
     "currency":                <corp currency, e.g. "USD">,       # always
     "threshold_value":         <user | last PIU's, confirmed>,    # always — see § Threshold value and type
     "threshold_value_type":    "Unit" | "Overall",                # always — the same row as the value
-    "issue_date":              <user, YYYY-MM-DD>,                # always
+    "issue_date":              <file/user, else knowns_seed.today_iso, YYYY-MM-DD>,  # always
     "exemption":               "Section 4(a)(2)",                  # always — US default
     "option_plan":             <plan.id as str or OMIT>,          # optional — omit = off the unit class
     "board_approval_date":     <user, YYYY-MM-DD, or omit>,       # optional — no pending state

@@ -34,7 +34,7 @@ holds a value before review, and a `None` or empty is a skill bug.
     "currency":                <autofill per so_type>,            # always
     "needs_board_approval":    <bool>,                            # always — true=pending, false=approved
     "board_approval_date":     <user, YYYY-MM-DD>,                # omit when needs_board_approval=true
-    "issue_date":              <user, YYYY-MM-DD>,                # always — OMIT when needs_board_approval is true
+    "issue_date":              <file/user, else knowns_seed.today_iso, YYYY-MM-DD>,  # always — OMIT when needs_board_approval is true
     "vesting_template":        <template.id | null>,              # always — null only after explicit "No vesting"
     "vesting_start_date":      <issue_date as MM/DD/YYYY>,        # non-milestone template (CharField)
     # A pending grant has no issue date: the server refuses one before the board approves.

@@ -95,7 +95,7 @@ holds a value before review, and a `None` or empty is a skill bug.
     "quantity":                <user>,                            # a percentage on a PERCENT class; omitted on INVESTED_CAPITAL (payload-reference.md § PBO quantity)
     "law_firm_price":          <user>,                            # paid issuances; 0 only for LLC corps
     "board_approval_date":     <user, YYYY-MM-DD>,                # always
-    "issue_date":              <user, YYYY-MM-DD>,                # always
+    "issue_date":              <file/user, else knowns_seed.today_iso, YYYY-MM-DD>,  # always
     "rule_144_date":           <user as MM/DD/YYYY, or omit>,     # US restricted (CharField — MM/DD/YYYY only); never the issue date; a gap: companion-surface.md § 5
     "legend_id":               <legend.id>,                       # US — NEVER body
     "exemption":               "Section 4(a)(2)",                 # US — default

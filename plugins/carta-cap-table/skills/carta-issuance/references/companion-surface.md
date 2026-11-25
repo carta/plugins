@@ -95,7 +95,9 @@ again: follow that section in place of this one.
 Once each:
 
 1. Resolve every row from the files and prompt, as [engine.md § Phase 1](engine.md) does.
-   Leave out any unknown value; never guess or wait. A value engine.md § Phase 1 pushes back on,
+   Leave out any unknown value; never guess or wait. An `issue_date` no file or the prompt gives
+   is `knowns_seed.today_iso`, a `company_setup` source, never asked (none on a row waiting for
+   the board). A value engine.md § Phase 1 pushes back on,
    such as a non-ZEPO `0` exercise price, goes back to the user before any save, on every host:
    one `AskUserQuestion` that offers no value of your own. Save nothing until it is valid. Each field that `field_spec`, or one of its
    `conditionalRules`, requires for the row, not `hidden`, with no `default_value` and no
@@ -128,37 +130,38 @@ Once each:
    one `cap_table:mutate:save_drafts` with every row, never `is_bulk_import` (it returns no
    `draft_pk`), then `cap_table:mutate:validate_drafts`. Keep `draft_set_id`, each row's
    `draft_pk` and the `revision`.
-3. File each source file the user gave with no `file_id`, attached or on disk, once per run, in
-   the company's document library, so the page shows it. One `cap_table:create:library_document`
-   per file with `corporation_id`, `name` (its file name), `document_type` (the type the file is:
-   one of the type's [§ 2](#2-per-type-values) Library `document_type` values, or `Document` when
-   none fits) and one of these. The result's `document` is the file's `file_id`.
-   - First try `file_key`: `cap_table:mutate:upload_url` with `filename`, then send the file in
-     one shell command, each of its `fields` first, then `Content-Type` (the file's type, as
-     `application/pdf`), then the file:
-     `curl -sS -o /dev/null -w '%{http_code}' --form-string '<field>=<value>' --form-string 'Content-Type=<file type>' -F 'file=@<path>' '<url>'`.
-     S3 answers `204`; with any other answer, or no network, that POST can't run.
-   - Only when that POST can't run, and the file is under 100 KB (`wc -c <path>`), `filename`
-     and `file_content_base64`: encode it with a command (`base64 -w0 <path>`) and paste its
-     whole output unchanged; never type or rebuild the bytes yourself. A larger file stays
-     unfiled.
-4. `cap_table:mutate:draft_set_sources`, a source for every value you set, in calls of 50 rows
-   (1–50, 51–100, …) until all rows are covered. Record them on every host, also with no app: the
-   set keeps them for any app that opens it later. Each call has `files: {<key>: {name, file_id}}`,
-   each source file of those rows once by a short key; `shared.row_columns`, the columns one
+3. `cap_table:mutate:draft_set_sources`, a source for every value you set, in calls of 50 rows
+   (1–50, 51–100, …) until all rows are covered, on every host, also with no app. Each call has
+   `files: {<key>: {...}}`, each source file of those rows once by a short key; `shared.row_columns`, the columns one
    quote on each row's page holds (a table's row: name, email, quantity, type, start date; a
    letter's equity sentence: quantity, type); and `rows: [{draft_pk, source, fields}]` with every
    row: `source` quoting those words, and `fields` (`{<column or save key>: source}`), each with
-   its own quote, for any other value or source. The first call also has `shared.fields`
+   its own quote, for any other value or source. The first rows call also has `shared.fields`
    (`{<column or save key>: source}`), recorded on every row of the set: each source whose page
    and quote are the same on every row (plan, price, vesting, the consent's date), never a
-   `needs_input`. A document
-   source is `{file: <key>, page, quote}`, with `alternatives` `[{file, page, quote, value}]` when
-   documents disagree; any other source is `{kind, label, note}`. Leave out empty keys. Ask a gap
-   with no Drafts column in the chat, with no source. Record them also when step 3 filed nothing:
-   a source needs no `file_id`, and rows pasted in the chat take `added_by_you` sources, each
-   row's `source` with that row's line as its `note`. A big set is never a reason to skip a
-   source: 100 rows is two calls. Kinds:
+   `needs_input`.
+   They also file each source file in the company's library, for the page. Each `files` entry
+   is `{name, document_type, …}`: its file name, its type (one of the type's
+   [§ 2](#2-per-type-values) Library `document_type` values, else `Document`), and one of these:
+   - A file with a `file_id`: `file_id`.
+   - A file under 10 KB (`wc -c` below `10240`): before the rows, a `draft_set_sources`
+     call of its own with only that entry in `files`: `file_content_base64` the whole output of
+     `base64 < <path> | tr -d '\n'` pasted unchanged, never retyped or shortened, and
+     `sha256` from `shasum -a 256 <path>`. One file's bytes per call (more come through cut).
+     Its result's `filed` gives the `file_id` later calls send.
+   - A file of 10 KB or more, before the rows: `cap_table:mutate:upload_url` with `filename`,
+     then send the file, `fields` first:
+     `curl -sS -o /dev/null -w '%{http_code}' --form-string '<field>=<value>' --form-string 'Content-Type=<file type>' -F 'file=@<path>' '<url>'`.
+     S3 answers `204`; then one `cap_table:create:library_document` with `corporation_id`,
+     `name`, `document_type` and `file_key`, whose `document` is the `file_id`.
+   A file neither way can file (no command reads it, or the upload is not `204`)
+   has `{name}` alone ([§ 10](#10-follow-through) names it). A `not_filed` file is
+   sent again, up to twice, as its `reason` says.
+   A document source is `{file: <key>, page, quote}`, with `alternatives` `[{file, page, quote,
+   value}]` when documents disagree; any other source is `{kind, label, note}`. Leave out empty
+   keys. Ask a gap with no Drafts column in the chat, with no source. Rows pasted in the chat take
+   `added_by_you` sources, each row's `source` with that row's line as its `note`. A big set is
+   never a reason to skip a source: 100 rows is two calls. Kinds:
    - `document`: `quote` is the file's exact words that give the value, copied as they are on
      the page, never a summary: the page finds and marks them in the file. Every document and
      alternative has one (a call without is refused): in a letter, the sentence with the value;
@@ -168,7 +171,8 @@ Once each:
    - `added_by_you`: the user said it in this chat, with a `note` holding their words that
      gave the value, up to 200 characters and no other chat text;
    - `needs_input`: still missing, with a `note` saying why.
-5. Reply as [§ 6](#6-ask-whats-missing-once) says.
+4. Reply as [§ 6](#6-ask-whats-missing-once) says.
+
 
 ## An existing draft set
 
@@ -196,7 +200,7 @@ type, so no `prepare_drafts` and no save without its `draft_set_id`.
    `[{security_type, draft_set_id}]`, then render the app as its `next_step` says. With no app
    there is no page: go on with the next step.
 5. Before the card, on every host, record sources for every saved value the files at hand give, as [§ 5](#5-build-the-draft-set)
-   steps 3 and 4 say: file the files first, then `draft_set_sources` in § 5 step 4's calls. Rows
+   step 3 says. Rows
    pasted in the chat are files here too, with `added_by_you` sources, also when every value
    matches the saved one. Each open input of the read that the files leave empty is a `needs_input` source. A value the
    files give that differs from the saved one is not saved over it: it is a
@@ -355,7 +359,7 @@ apply it anyway. Then:
 1. One `cap_table:mutate:save_drafts` on the same `draft_set_id`, rows by `draft_pk`.
 2. `cap_table:mutate:validate_drafts`.
 3. `cap_table:mutate:draft_set_sources` for changed values, in [§ 5](#5-build-the-draft-set)
-   step 4's calls of 50 rows, each value in its row's `fields` as `added_by_you`, with no
+   step 3's calls of 50 rows, each value in its row's `fields` as `added_by_you`, with no
    `shared` and no row `source`, each `note` the user's words for it.
 
 After either path, a check warning on a value the user just gave, in the card or in the chat, is
@@ -454,7 +458,7 @@ When the files and prompt hold two or more of the types with an issuance page, b
 this run, not one type with the others as follow-ups.
 
 1. `cap_table:get:issuance_init` once per type, with that type's `security_type`.
-2. Build one draft set per type with that type's § 5 steps 1 to 4. Never start a second set of
+2. Build one draft set per type with that type's § 5 steps 1 to 3. Never start a second set of
    one type.
 3. One card per set that has items, one after the other with no text between them, then one
    reply for every set, as § 6 says: one *What I drafted* block, its lines for each set
@@ -478,7 +482,7 @@ With no app host, confirm and issue one set at a time, each with its own revisio
 
 Close as the skill does, and say where the files went: "the 5 source files are in Issuance
 documents", adding "and corporate documents" when one was filed as `Document`. Name any file not
-filed and ask the user to upload it to Issuance documents. On a card host, one `view_remote_inline`
+filed, say in one line why, and ask the user to upload it to Issuance documents. On a card host, one `view_remote_inline`
 with `name: cap_table:view:draft_set_card`, params `corporation_id`, `card: suggestions` and 2 or
 3 of the `items` ({id, title}) below. Elsewhere, one line naming them. A tap is only a chat
 message; act on it:
