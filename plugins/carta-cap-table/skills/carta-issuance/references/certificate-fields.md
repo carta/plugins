@@ -69,7 +69,9 @@ Certificate only. Read the resolved share class's `dividend` field:
 
 ## Rule 144 difference reason
 
-Certificate only; only when `rule_144_date` ≠ `issue_date`. One option per enum (label →
+Certificate only; only when `rule_144_date` ≠ `issue_date`. When `rule_144_date` is a
+`needs_input` cell, ask it as [companion-surface.md § 5](companion-surface.md#5-build-the-draft-set)
+step 1 says for a field that depends on it. One option per enum (label →
 value): "Has determined 144 date" →
 `has_determined_144_date`; "Non-restricted 144" → `non_restricted_144`; "Relevance provision"
 → `relevance_provision`; "Affiliates" → `affiliates`; "Non-affiliates" → `non_affiliates`.

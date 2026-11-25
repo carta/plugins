@@ -195,7 +195,7 @@ type, so no `prepare_drafts` and no save without its `draft_set_id`.
    `cap_table:get:issuance_companion` with `corporation_id` and `sets`
    `[{security_type, draft_set_id}]`, then render the app as its `next_step` says. With no app
    there is no page: go on with the next step.
-5. On every host, record sources for every saved value the files at hand give, as [§ 5](#5-build-the-draft-set)
+5. Before the card, on every host, record sources for every saved value the files at hand give, as [§ 5](#5-build-the-draft-set)
    steps 3 and 4 say: file the files first, then `draft_set_sources` in § 5 step 4's calls. Rows
    pasted in the chat are files here too, with `added_by_you` sources, also when every value
    matches the saved one. Each open input of the read that the files leave empty is a `needs_input` source. A value the
@@ -206,8 +206,8 @@ type, so no `prepare_drafts` and no save without its `draft_set_id`.
    list of the gaps in text and never "send me the values". With no open input, go on to
    [§ 8](#8-issue).
 7. The reply is § 6's, with "Picked up <`set_label`>, saved earlier." as the first line of
-   *What I drafted*. As there, its count line names no holder, field or value the card asks
-   about.
+   *What I drafted*. As there, no sentence after the count line names a holder, field or value
+   the card asks about.
 
 Answers then re-save this set as [§ 7](#7-answers) says. `load_drafts` and the read take the
 place of the save and its check in [§ 1](#1-tools)'s call count, and the
@@ -244,7 +244,8 @@ answers, the reply is these parts, in this order, and no other text:
    optional details." to that line: the card never posts when it is done, so the user may go
    straight to Issue. When every field has `required` true or a `default_value`, you can name
    none: the line ends at "in the card above.", with no other words. The text names no item,
-   no field of an item and no value an item asks about: the card holds them, once.
+   no field of an item and no value an item asks about, also in a sentence after the count line:
+   the card holds them, once.
 3. The close, as [§ 12](#12-end-every-turn-that-wrote) says. It is the last line of the reply.
 
 ```
