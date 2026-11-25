@@ -156,7 +156,7 @@ way; `arguments`, never `params`. Names this skill once got wrong are marked.
 | `cap_table:get:document_sets` | `cap_table__get__document_sets` |
 | `cap_table:get:legends` | `cap_table__get__legends` |
 | `cap_table:get:vesting_templates` | `cap_table__get__vesting_templates` |
-| `cap_table:get:acceleration_templates` | `cap_table__get__acceleration_templates` |
+| `cap_table:list:acceleration_templates` | `cap_table__list__acceleration_templates` |
 | `cap_table:get:409a_valuations` — **not** `valuations_409a` | `cap_table__get__409a_valuations` |
 | `cap_table:get:valuations` — the international ones; **not** `international_valuations` | `cap_table__get__valuations` |
 | `cap_table:get:load_drafts` | `cap_table__get__load_drafts` |
@@ -363,14 +363,15 @@ Every section is fetched server-side in parallel, so `stakeholder_names` and
 
 **Partial failure is non-fatal.** A section that failed comes back `null` and is named in the
 top-level `errors` array (`[{section, message}]`); fall back to that section's own standalone
-command. **The command name is not always the section name** — two of them differ, and both
+command. **The command name is not always the section name** — three of them differ, and all
 sit on this fallback path, so they fail exactly when the run is already degraded:
 
 | Failed section | Fallback command | Wire name |
 |---|---|---|
 | `valuations_409a` | `cap_table:get:409a_valuations` | `cap_table__get__409a_valuations` |
 | `international_valuations` | `cap_table:get:valuations` | `cap_table__get__valuations` |
-| `option_plans`, `document_sets`, `vesting_templates`, `acceleration_templates`, `legends`, `certificate_share_classes`, `stakeholders` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
+| `acceleration_templates` | `cap_table:list:acceleration_templates` | `cap_table__list__acceleration_templates` |
+| `option_plans`, `document_sets`, `vesting_templates`, `legends`, `certificate_share_classes`, `stakeholders` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
 
 `draft_set_init` has **no** standalone command — it arrives only as a section of this response.
 When it is missing, treat its fields as unknown ([PIU eligibility](#piu-check-issuer-eligibility)
