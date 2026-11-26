@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.3</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -68,7 +68,7 @@ of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is
   ownership the rows hold in place of the share tiles and the meter — never the empty
   state. It carries no card chrome and nothing to click, because it summarizes
   rather than drills in. Amount raised carries its own currency when
-  `cap_table:list:financing_history` resolves to exactly one, one tile per currency when
+  `cap_table:list:financings` resolves to exactly one, one tile per currency when
   it resolves to more than one, and stays unitless when it can't be determined — never
   assumed USD.
 - **Dashboards** — five tiles. **Every one behaves the same way**: a preview in the tile,
@@ -209,7 +209,7 @@ the full file in context. Edit the small source file for what you're changing:
 | `resources/app/option-pool.js` | Option pool tile (one meter per plan) + its full-page per-plan table | change option-pool rendering |
 | `resources/app/stakeholders.js` | Stakeholders tile (total stat tile + bar per type) + its full-page by-type table | change the stakeholder count/breakdown rendering |
 | `resources/app/drafts.js` | Drafts tile + full-page table; merges the two `draft_sets` calls | change how merged drafts render |
-| `resources/app/dashboards.js` | the Cap table and Round history tiles, `openDashboardPage`/`closeDashboardPage` and every `open*Page()` entry point, plus the one `financing_history` fetch that feeds both the round history and the FD summary's currency | change the cap-table or round-history dashboards, or how any drill-down page opens |
+| `resources/app/dashboards.js` | the Cap table and Round history tiles, `openDashboardPage`/`closeDashboardPage` and every `open*Page()` entry point, plus the one paged `financings` read that feeds both the round history and the FD summary's currency | change the cap-table or round-history dashboards, or how any drill-down page opens |
 | `resources/app/capabilities.js` | Suggested for you — editable prompt cards, category chips, typing-in blanks, copy; and the page's one `get_current_user` call (`fetchUserEnrichment`) that feeds this row and What's new | change how prompt cards are chosen or rendered |
 | `resources/app/whats-new.js` | What's new — carousel engine, item selection, microapp and skill previews | change how the carousel picks, orders or renders items (edit the microapp and fallback cards in the config) |
 | `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"` shows the Microapp pill), `whatsNew` (`false` keeps the skill out of What's new) and `whatsNewCopy` (the headline and body What's new shows for the skill); `null` opts a skill out of both | change which skills show or their example prompts — no rebuild needed once published |
@@ -538,7 +538,7 @@ change, update the sketch and the text together and bump the date.
 | Card | Backing command |
 |------|------------------|
 | Cap table dashboard (tile, stacked bar and table) | `cap_table_chart` — one call, held in `_capTableChartData`, feeding all three plus the FD summary's share counts |
-| Round history dashboard | `cap_table:list:financing_history` — one row per share class, already aggregated and date-sorted, carrying `closing_date`, `original_issue_price`, `shares_issued`, `post_money`, and `cash_raised_by_currency`. |
+| Round history dashboard | `cap_table:list:financings` with `size` 100, read page by page (`after` = `next`) while `has_next` is true, at most 5 pages; past the cap the tile and the page say "Showing the latest rounds only." — one row per share class or note block, latest `closing_date` first, carrying `closing_date`, `original_issue_price`, `shares_issued`, `post_money`, `cash_raised` (one amount per currency) and `summary.total_cash_raised`. |
 | Suggested for you | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
 | What's new | the same `get_current_user` profile (`has_ctc` unlocks the microapp, `has_cap_table` gates the skills), plus `marketing:list:content` with `content_type: pluginPrompt`, `space: prompts`, newest `goLiveDate` first |
 | Update banner | `plugin:get:version` via `read_tool`, with `plugin` + `skill` arguments |
@@ -546,7 +546,7 @@ change, update the sketch and the text together and bump the date.
 | Skill Directory | baked from `.claude-plugin/skill-directory.json` at build time, then `plugin:list:skills` via `read_tool` with `plugin` — entries at the plugin's stable tag, only for published skills. `skills: null` or an unusable list keeps the baked one |
 | Plugin news | `marketing:list:content` (tag `NEWS_TAG`, `tag_source: "metadata"`) then `marketing:get:asset_data` per image. Images must arrive as `data:` URIs — the sandbox CSP is `img-src 'self' data:`, so a remote asset URL renders nothing |
 | Ownership composition bar (on the Cap table page) | `cap_table_chart` — `chart_data.share_classes` and `chart_data.warrant_blocks` by `fully_diluted_ownership`, `chart_data.option_plans` by `outstanding_ownership + available_ownership`, largest first and capped at six segments, plus "Rest of the company" when `chart_data.totals.total_fully_diluted_ownership` is less than the whole |
-| Fully diluted summary | `cap_table_chart` — `chart_data.totals` for share counts, or `total_fully_diluted_ownership` when every share class row's `quantity_semantics` is `PERCENT` or `INVESTED_CAPITAL` (same call again, no extra fetch), upgraded by the Round history dashboard's `cap_table:list:financing_history` response, which the dashboard hands over via `applyAmountRaised` — one currency renders plainly, more than one renders a per-currency breakdown (never summed), none/failure keeps the unitless fallback |
+| Fully diluted summary | `cap_table_chart` — `chart_data.totals` for share counts, or `total_fully_diluted_ownership` when every share class row's `quantity_semantics` is `PERCENT` or `INVESTED_CAPITAL` (same call again, no extra fetch), upgraded by the Round history dashboard's `cap_table:list:financings` response, which the dashboard hands over via `applyAmountRaised` — one currency renders plainly, more than one renders a per-currency breakdown (never summed), none/failure keeps the unitless fallback |
 | Option pool | `cap_table:get:option_plans` (403 for non-staff users falls back to a plain "not available for your role" state, not an error banner) |
 | Stakeholders | `cap_table:list:stakeholders` with `size: 1` and `fields: ["id"]` — no `search` param, no names/PII; the card reads only `summary.count` and `summary.by_relationship`. Relationship names vary per corporation, so they are always iterated, never matched against a hardcoded enum |
 | Drafts | `cap_table:list:draft_sets` called **twice** — once per required `security_type` (`certificate`, `option_grant`) — and merged; one call can fail without blocking the other |

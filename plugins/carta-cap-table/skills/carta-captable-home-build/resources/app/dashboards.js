@@ -2,6 +2,7 @@
 
 let _roundHistory = null;      // [{round, date, pricePerShare, priceCurrency, shares, postMoney, cashByCurrency}]
 let _roundHistoryChart = null;
+let _roundHistoryPartial = false; // true when the page cap left older rounds unread
 
 function setDashboardBody(id, html) {
   const el = document.getElementById(id);
@@ -137,26 +138,35 @@ function fmtPricePerShare(value, currencyCode) {
   return String(value);
 }
 
-// One row per share class, already aggregated and date-sorted by the post-money
-// endpoint. Cash stays keyed by currency and is never added across currencies, so a
-// company that raised in two shows two figures rather than one meaningless sum.
+// One row per share class or note block, oldest first: the financings read answers latest
+// first. Cash stays keyed by currency and is never added across currencies, so a company
+// that raised in two shows two figures rather than one meaningless sum.
 function buildFinancingRounds(financings) {
-  return financings.map(f => {
+  return financings.slice().reverse().map(f => {
     const cashByCurrency = new Map();
-    Object.keys(f.cash_raised_by_currency || {}).forEach(code => {
-      const amount = numOrZero(f.cash_raised_by_currency[code]);
+    Object.entries(moneyByCurrency(f.cash_raised)).forEach(([code, amount]) => {
       if (amount > 0) cashByCurrency.set(code, amount);
     });
+    const priced = f.original_issue_price || f.post_money;
     return {
       round: f.name || "Unnamed round",
       date: f.closing_date || null,
-      pricePerShare: f.original_issue_price == null ? null : parseFloat(f.original_issue_price),
-      priceCurrency: f.currency || null,
+      pricePerShare: f.original_issue_price == null ? null : parseFloat(f.original_issue_price.amount),
+      priceCurrency: priced ? priced.currency : null,
       shares: numOrZero(f.shares_issued),
-      postMoney: f.post_money == null ? null : parseFloat(f.post_money),
+      postMoney: f.post_money == null ? null : parseFloat(f.post_money.amount),
       cashByCurrency,
     };
   });
+}
+
+// [{amount, currency}] -> {currency: amount}
+function moneyByCurrency(amounts) {
+  const byCurrency = {};
+  (amounts || []).forEach(m => {
+    if (m && m.currency && m.amount != null) byCurrency[m.currency] = numOrZero(m.amount);
+  });
+  return byCurrency;
 }
 
 function roundCashLabel(cashByCurrency) {
@@ -188,8 +198,12 @@ function renderRoundHistoryTile() {
     renderRoundHistoryTileTable(funded);
     return;
   }
-  setDashboardBody("rounds-dash-body", `<div class="chart-wrap"><canvas id="rounds-chart"></canvas></div>`);
+  setDashboardBody("rounds-dash-body", `<div class="chart-wrap"><canvas id="rounds-chart"></canvas></div>${roundHistoryPartialNote()}`);
   drawRoundHistoryChart(funded, currency);
+}
+
+function roundHistoryPartialNote() {
+  return _roundHistoryPartial ? `<div class="empty-row">Showing the latest rounds only.</div>` : "";
 }
 
 // Fallback for a mixed-currency cap table (or no Chart.js): the newest rounds as rows,
@@ -204,7 +218,7 @@ function renderRoundHistoryTileTable(rounds) {
     <div class="tbl-row">
       <div class="tbl-col-name">${escHtml(r.round)}</div>
       <div class="tbl-col-val">${escHtml(roundCashLabel(r.cashByCurrency))}</div>
-    </div>`).join(""));
+    </div>`).join("") + roundHistoryPartialNote());
 }
 
 function drawRoundHistoryChart(rounds, currency) {
@@ -248,6 +262,7 @@ function renderRoundHistoryPage() {
     return;
   }
   body.innerHTML = `
+    ${roundHistoryPartialNote()}
     <table class="fp-table">
       <thead>
         <tr><th>Round</th><th>Close date</th><th class="num">Price / share</th><th class="num">Shares issued</th><th class="num">Post-money</th><th class="num">Cash raised</th></tr>
@@ -267,17 +282,42 @@ function renderRoundHistoryPage() {
     ${fullPagePrompt("rounds-page")}`;
 }
 
-// The post-money list is authoritative for round totals and matches the Carta UI.
-// It also carries the currency the Fully diluted summary needs, so one call feeds both.
+// Pages of the financings read, at most this many: the rounds tile is a summary, and a
+// company with more rounds than that gets the latest ones and says so.
+const ROUND_HISTORY_MAX_PAGES = 5;
+
+// Every page of the financings read, newest row first. `partial` is true when the page cap
+// stopped the read with rows left; `error` is an in-band error the transport resolved with.
+async function readFinancingPages(corporationId) {
+  const rows = [];
+  let summary = null;
+  let after = null;
+  for (let page = 0; page < ROUND_HISTORY_MAX_PAGES; page++) {
+    const args = { corporation_id: corporationId, size: 100 };
+    if (after) args.after = after;
+    const res = await _mcp("call_tool", { name: "cap_table__list__financings", arguments: args });
+    const candidates = _mcpResultCandidates(res);
+    const error = _mcpErrorMessage(res, candidates);
+    if (error) return { error };
+    const withData = candidates.find(c => c && Array.isArray(c.results));
+    if (!withData) break;
+    rows.push(...withData.results);
+    summary = summary || withData.summary || null;
+    if (!withData.has_next || !withData.next) return { rows, summary, partial: false };
+    after = withData.next;
+  }
+  return { rows, summary, partial: after !== null && rows.length > 0 };
+}
+
+// The financings read is authoritative for round totals and matches the Carta UI.
+// Its summary carries the currency the Fully diluted summary needs, so one read feeds both.
 async function fetchRoundHistory(corporationId) {
   _roundHistory = null;
+  _roundHistoryPartial = false;
   setDashboardBody("rounds-dash-body", `<div class="loading-row">Loading the round history…</div>`);
-  let res;
+  let read;
   try {
-    res = await _mcp("call_tool", {
-      name: "cap_table__list__financing_history",
-      arguments: { corporation_id: corporationId },
-    });
+    read = await readFinancingPages(corporationId);
   } catch (e) {
     if (corporationId !== _selectedCorporationId) return;
     setDashboardBody("rounds-dash-body", `<div class="error-row">Couldn't load the round history.</div>`);
@@ -285,23 +325,20 @@ async function fetchRoundHistory(corporationId) {
     return;
   }
   if (corporationId !== _selectedCorporationId) return;
-  const candidates = _mcpResultCandidates(res);
-  const errText = _mcpErrorMessage(res, candidates);
-  if (errText) {
+  if (read.error) {
     // A role gap is an explanation, not a broken connection — it never raises the banner.
-    if (_isPermissionError(errText)) {
+    if (_isPermissionError(read.error)) {
       setDashboardBody("rounds-dash-body", `<div class="empty-row">You don't have access to the financing history for this company.</div>`);
       return;
     }
     setDashboardBody("rounds-dash-body", `<div class="error-row">Couldn't load the round history.</div>`);
-    reportCardFailure(errText);
+    reportCardFailure(read.error);
     return;
   }
-  const withData = candidates.find(c => c && Array.isArray(c.share_class_financings));
-  const financings = withData ? withData.share_class_financings : [];
-  _roundHistory = buildFinancingRounds(financings);
+  _roundHistory = buildFinancingRounds(read.rows);
+  _roundHistoryPartial = read.partial;
   renderRoundHistoryTile();
-  applyAmountRaised(withData ? withData.total_cash_raised_by_currency : null);
+  applyAmountRaised(read.summary ? moneyByCurrency(read.summary.total_cash_raised) : null);
 }
 
 // ── Full-page views ──
@@ -346,6 +383,7 @@ function renderDashboardTiles() {
 
 function resetDashboardState() {
   _roundHistory = null;
+  _roundHistoryPartial = false;
   _optionPlans = null;
   _stakeholderSummary = null;
   _draftSets = null;

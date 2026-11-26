@@ -1,6 +1,6 @@
 {
   "carta-captable-home-build": {
-    "version": "0.16.11",
+    "version": "0.16.12",
     "headline": "Carta Home builds in seconds from the Carta connector: a small page gets its code from Carta when it opens."
   },
   "carta-compensation-benchmarks": {

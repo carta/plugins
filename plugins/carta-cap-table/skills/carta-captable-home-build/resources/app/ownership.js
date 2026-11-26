@@ -294,7 +294,7 @@ function renderFdSummaryFromState() {
     ${dilutionMeter(numOrZero(_fdShareTotals.total_outstanding), numOrZero(_fdShareTotals.total_fully_diluted))}`;
 }
 
-// Fed by the round-history fetch, which owns the one financing_history call.
+// Fed by the round-history fetch, which owns the one financings call.
 // Never sums across currencies — a mixed-currency company gets one tile per currency.
 function applyAmountRaised(totalsByCurrency) {
   const totals = totalsByCurrency || {};

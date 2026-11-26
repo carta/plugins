@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -69,7 +69,7 @@ For each company, the relevant commands are:
 
 - `read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": corporation_id, "size": 100}})` -- option pool data (rows by share class, plan and block)
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes min/max/average price_cap, avg_discount, by_type)
-- `read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (one row per share class with closing_date and cash_raised_by_currency)
+- `read_tool({"name": "cap_table__list__financings", "arguments": {"size": 100, "corporation_id": corporation_id}})` -- round sizes (one row per share class or note block, latest `closing_date` first)
 
 The convertible-notes call defaults to `detail=summary`, and the other two return aggregates — no individual records are needed.
 
@@ -89,10 +89,11 @@ From convertible notes (summary):
 - `by_type`: instrument counts keyed by type (`SAFE`, `Convertible Note`, `Convertible Equity`, `ASA`)
 - `total_dollar_amount`: total invested across all instruments
 
-From financing history (`share_class_financings[]`, one row per share class):
+From financing history (`results[]`, one row per share class or note block):
+- `kind`: `share_class` (a priced round) or `note_block` (SAFEs or notes)
 - `name`: share class (the round)
 - `closing_date`: when the round closed
-- `cash_raised_by_currency`: `{currency: amount}` — `{}` for classes that raised no cash (e.g. common stock)
+- `cash_raised`: a list of `{amount, currency}`, one per currency, amounts as decimal strings — `[]` for classes that raised no cash (e.g. common stock)
 
 ## Workflow
 
@@ -109,10 +110,10 @@ For example, with 5 companies and all 3 data types, issue all 15 calls at once:
 ```
 read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": 1, "size": 100}})
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
-read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__list__financings", "arguments": {"size": 100, "corporation_id": 1}})
 read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": 2, "size": 100}})
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 2}})
-read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 2}})
+read_tool({"name": "cap_table__list__financings", "arguments": {"size": 100, "corporation_id": 2}})
 ... (all companies)
 ```
 
@@ -128,8 +129,8 @@ Then from the results:
 - Use `by_type` to count instruments by type per company
 
 **Financing history**:
-- Last priced round = the row with the latest `closing_date` whose `cash_raised_by_currency` is not empty
-- Its size = that row's `cash_raised_by_currency` amount. Benchmark round sizes within one currency only (the most common one across the portfolio), and name the companies left out because they raised in another currency — never add or compare amounts across currencies
+- Last priced round = the `share_class` row with the latest `closing_date` whose `cash_raised` is not empty
+- Its size = that row's `cash_raised` amount. Benchmark round sizes within one currency only (the most common one across the portfolio), and name the companies left out because they raised in another currency — never add or compare amounts across currencies
 
 ### Step 3 — Compute Summary Statistics
 

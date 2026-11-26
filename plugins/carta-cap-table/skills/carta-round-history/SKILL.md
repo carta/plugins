@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -63,26 +63,26 @@ Do not call `list_accounts` or ask which company before the first read: Carta fi
 ## Data Retrieval
 
 ```
-read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__list__financings", "arguments": {"corporation_id": corporation_id, "size": 100}})
 ```
 
-This tool takes only `corporation_id` — there is no `detail`, `ordering`, or paging argument. It returns every share class in one call, already aggregated and sorted by `closing_date`, with the same totals as the in-app "Financing History" tab.
+It returns the rows of the in-app "Financing History" tab, latest `closing_date` first. While `has_next` is true, call it again with `after` set to `next`, at most 5 pages. If `has_next` is still true after 5 pages, show what you read and say the list is partial: it holds the latest rounds only.
 
 ## Key Fields
 
-Each entry in `share_class_financings[]`:
+Each entry in `results[]`:
 
+- `kind`: `share_class` (a priced round) or `note_block` (SAFEs or convertible notes, with no price)
+- `id`: the share class id or the note block id
 - `name`: share class, i.e. the round (e.g. "Series A Preferred")
 - `closing_date`: when the round closed
-- `original_issue_price`: price per share
+- `original_issue_price`: price per share, `{amount, currency}`
 - `shares_issued`: shares issued in the round
-- `cash_raised_by_currency`: `{currency: amount}` — `{}` when the class raised no cash (e.g. common stock)
-- `post_money`: post-money valuation
+- `cash_raised`: a list of `{amount, currency}`, one per currency — `[]` when the class raised no cash (e.g. common stock)
+- `post_money`: post-money valuation, `{amount, currency}`
 - `fully_diluted`: fully diluted shares after the round
-- `currency`: the share class's currency
-- `note_block_id`: set only on a row of SAFEs or convertible notes, not a priced round
 
-Top level: `total_cash_raised_by_currency` — the per-currency totals across all rows.
+Amounts and share counts are decimal strings. `summary.total_cash_raised` is the cash raised by every row on all pages, one `{amount, currency}` per currency.
 
 Any numeric field can be `null`, meaning Carta has no value for it. `null` is not `0` — show it as "—", never as 0.
 
@@ -90,11 +90,11 @@ Any numeric field can be `null`, meaning Carta has no value for it. `null` is no
 
 ### Step 1 — Fetch Financing History
 
-Call `cap_table__list__financing_history` once. It answers overview, per-round cash, price per share, and post-money questions on its own.
+Read `cap_table__list__financings` as above. It answers overview, per-round cash, price per share, and post-money questions on its own.
 
 ### Step 2 — Investors in a Round (only when asked)
 
-`cap_table__list__financing_history` has no investor names. For *"who invested in the Series A?"* or *"list investors by round"*, read the share certificates and keep the ones whose `share_class_name` matches the round's `name`:
+`cap_table__list__financings` has no investor names. For *"who invested in the Series A?"* or *"list investors by round"*, read the share certificates and keep the ones whose `share_class_name` matches the round's `name`:
 
 ```
 read_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_id": corporation_id, "ordering": "-quantity", "page_size": 25, "page": 1}})
@@ -114,20 +114,20 @@ read_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_i
 
 **Format**: Table + ASCII bar chart
 
-**BLUF lead**: Lead with the number of priced rounds that raised cash and the total raised, from `total_cash_raised_by_currency`.
+**BLUF lead**: Lead with the number of priced rounds that raised cash and the total raised, from `summary.total_cash_raised`.
 
-**Sort order**: By `closing_date` ascending (the order the tool returns).
+**Sort order**: By `closing_date` ascending: reverse the rows, which the tool returns latest first.
 
 **Date format**: MMM d, yyyy (e.g. "Jan 15, 2026").
 
-**Currency**: Label every amount with its own currency. When `total_cash_raised_by_currency` has more than one key, show one total per currency — never add amounts across currencies, and never assume USD. Put the ISO code before every amount (`USD 383,380`), also when all rows are in USD. Do not use a currency symbol such as `$`.
+**Currency**: Label every amount with its own currency. When `summary.total_cash_raised` has more than one currency, show one total per currency — never add amounts across currencies, and never assume USD. Put the ISO code before every amount (`USD 383,380`), also when all rows are in USD. Do not use a currency symbol such as `$`.
 
 | Round | Close Date | Price/Share | Shares Issued | Cash Raised | Post-Money |
 |-------|-----------|-------------|---------------|-------------|------------|
 | Series Seed Preferred | Jun 30, 2013 | USD 0.27 | 1,602,438 | USD 383,380 | USD 4.0M |
 | Series A Preferred | Nov 15, 2013 | USD 0.44 | 3,697,191 | USD 1,645,250 | USD 12.0M |
 
-After the table, render an ASCII bar chart of cash raised per round (chronological order). Scale bars to max width 40 chars. Leave out rows whose `cash_raised_by_currency` is empty (e.g. common stock). If the company raised in more than one currency, draw one chart per currency.
+After the table, render an ASCII bar chart of cash raised per round (chronological order). Scale bars to max width 40 chars. Leave out rows whose `cash_raised` is empty (e.g. common stock). If the company raised in more than one currency, draw one chart per currency.
 
 ```
 Cash Raised by Round
@@ -143,12 +143,12 @@ Each bar width = (cash_raised / max_cash_raised) * 40, rounded to nearest intege
 
 | Situation | What to do |
 |---|---|
-| `share_class_financings` is empty | Say the company has no financing history recorded in Carta. Do not call other tools looking for rounds. |
+| `results` is empty | Say the company has no financing history recorded in Carta. Do not call other tools looking for rounds. |
 | 403, `role_required` or access denied | Say the user's role can't see this company's financing history. Do not retry. |
 | Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 
 ## Caveats
 
 - Rows are per share class. A round that issued more than one class (e.g. Series A and Series A-1) appears as separate rows — present them as Carta reports them.
-- A row with `note_block_id` is a block of SAFEs or convertible notes, not a priced round: it has no price, post-money or fully diluted, and `shares_issued` is 0. Label it as SAFEs/notes and do not count it as a round. `total_cash_raised_by_currency` includes its cash. For the instruments, prefer the matching instrument-list skill.
-- `cash_raised_by_currency` is new cash only. When investors paid for a class by converting SAFEs or notes, that class shows less cash or none, because the converted money stays on the SAFE/notes row. Say this when a class shows less than the user expects, and do not call it an error. When the user compares with signed round documents, sum `debt_canceled` of the class's certificates, read as in Step 2, as its converted amount. If the sweep is partial, say the converted amount is partial too. A preferred class (not common stock) that shows no cash and no converted amount has no consideration recorded in Carta: tell the user to check the certificates in Carta.
+- A row with `kind` `note_block` is a block of SAFEs or convertible notes, not a priced round: it has no price, post-money or fully diluted, and `shares_issued` is 0. Label it as SAFEs/notes and do not count it as a round. `summary.total_cash_raised` includes its cash. For the instruments, prefer the matching instrument-list skill.
+- `cash_raised` is new cash only. When investors paid for a class by converting SAFEs or notes, that class shows less cash or none, because the converted money stays on the SAFE/notes row. Say this when a class shows less than the user expects, and do not call it an error. When the user compares with signed round documents, sum `debt_canceled` of the class's certificates, read as in Step 2, as its converted amount. If the sweep is partial, say the converted amount is partial too. A preferred class (not common stock) that shows no cash and no converted amount has no consideration recorded in Carta: tell the user to check the certificates in Carta.
