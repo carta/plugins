@@ -1,20 +1,47 @@
-# Rendering — corp vesting schedule (`grant_vesting` / `certificate_vesting` shape)
+# Rendering — corp vesting schedule (`get:security` / `certificate_vesting` shape)
 
 Column/row spec for a single security's per-tranche vesting schedule on a corp cap table —
-`cap_table:get:grant_vesting` (options) and `cap_table:get:certificate_vesting`
-(certificates / RSAs / PIUs). Both share this layout. Rendered **on request only**, in chat, after a
+`cap_table:get:security` (options, phantom) and `cap_table:get:certificate_vesting`
+(certificates / RSAs / PIUs). Both print this layout; § Options read from get:security maps its
+keys. Rendered **on request only**, in chat, after a
 holder drill (see `references/cap-table.corp.md` §Vesting schedule for the fetch + dispatch). Number
 formatting is `SKILL.md` §Formatting rules.
 
-## Response shape (both commands)
+## Options read from get:security
+
+`cap_table:get:security` answers in its own shape. Read each key below as the
+`certificate_vesting` key it stands for, then render as the rest of this file says:
+
+| This file says | Read from `get:security` |
+| --- | --- |
+| `total_shares` | `quantity` |
+| `vested_shares` | `vesting.vested_quantity` |
+| `unvested_shares` | `vesting.unvested_outstanding_quantity` |
+| `exercise_price` | `grant.exercise_price` (`{amount, currency}`) |
+| `base_value` | `grant.base_value` |
+| `threshold_value`, `threshold_value_type` | `grant.threshold_value`, `grant.threshold_value_type` |
+| `cliff_summary` | `vesting.schedule.cliff_summary` |
+| `vesting_events[]` | `vesting.tranches[]` |
+| event `date` | `vest_date` (null for a milestone that is not met) |
+| event `amount` (the Nominal column), event `target_amount` | `quantity` (the target) |
+| the Vested column | `vested_quantity` (a performance tranche can vest less than its target) |
+| event `has_vested` | `vested` |
+| event `cumulative` | `cumulative_vested_quantity` |
+| event `performance_condition_title` | `performance_condition.name` |
+| event `payout_percentage` | `performance_condition.payout_multiplier` (1 is 100%) |
+| event `evaluation_date` | `performance_condition.evaluated_on` |
+| event `vesting_type` | performance when the tranche has a `performance_condition`, else time |
+| `has_performance_condition` | true when any tranche has a `performance_condition` |
+
+It has no vesting start date: say so when asked.
+
+## Response shape (certificate_vesting)
 
 ```
 { total_shares, vested_shares, unvested_shares,
   has_performance_condition, cliff_summary, vesting_start_date,
-  exercise_price,            // grant_vesting (options) — strike; null on certificates
-  base_value,                // grant_vesting (CBU / phantom) — strike analog; null otherwise
-  threshold_value, threshold_value_type,   // hurdle (CBU / phantom / SAR / PIU); null otherwise
-  // invested-capital / preferred-return (certificate_vesting only; null otherwise):
+  threshold_value, threshold_value_type,   // hurdle (PIU); null otherwise
+  // invested-capital / preferred-return (null when the security has none):
   unreturned_invested_capital, initial_invested_capital, returned_invested_capital,
   unpaid_preferred_return, paid_preferred_return, preferred_return_accrued_all_time,
   dividend_accrual_start_date,

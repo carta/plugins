@@ -18,7 +18,7 @@ doc. The list grows as new corp readers ship.
 - `cap_table:get:phantom` — phantom units, auto-printed beneath the summary when the corp has phantom units (§Phantom units).
 - `cap_table:get:rights_and_preferences` — the rights & preferences companion, rendered on request (§Rights & preferences).
 - `cap_table_by_stakeholder` — the by-stakeholder ownership view + single-holder drill (§Ownership by stakeholder, §Holder drill).
-- `cap_table:get:grant_vesting` / `cap_table:get:certificate_vesting` — a drilled security's vesting schedule, rendered on request after a holder drill (§Vesting schedule).
+- `cap_table:get:security` / `cap_table:get:certificate_vesting` — a drilled security's vesting schedule, rendered on request after a holder drill (§Vesting schedule).
 
 ## Fetch once per batch, not per scenario
 
@@ -212,7 +212,7 @@ render the drill straight from the response in hand — **never re-fetch a holde
 
    When the user picks a holder from the list, **render the drill from that data — do not re-fetch.**
 4. **After the drill renders, gate the vesting offer** on each drilled security's type — dispatch by
-   `(security_type, id)`: **Option / Phantom** → `grant_vesting`; **Certificate / RSA / PIU** →
+   `(security_type, id)`: **Option / Phantom** → `get:security`; **Certificate / RSA / PIU** →
    `certificate_vesting`; **RSU** → no schedule via this drill.
    - **Any drilled security has a schedule** → **offer the vesting schedule** via `AskUserQuestion`
      (`Show vesting schedule` · `Back to menu`) — see **§Vesting schedule** below.
@@ -235,9 +235,9 @@ picker; **more than 4** → list them compactly and take a **free-text** name ma
 
 ```
 // Option / Phantom
-read_tool({"name": "cap_table__get__grant_vesting", "arguments": {
+read_tool({"name": "cap_table__get__security", "arguments": {
   "corporation_id": "<root cap table>",
-  "grant_id":       "<securities[].id for an Option, phantom_securities[].id for a Phantom>"
+  "security":       "<securities[].label for an Option, phantom_securities[].label for a Phantom>"
 }})
 ```
 ```
@@ -248,8 +248,11 @@ read_tool({"name": "cap_table__get__certificate_vesting", "arguments": {
 }})
 ```
 
-- The `id` is the **drilled security's** `securities[].id` (`phantom_securities[].id` for a Phantom) — ids
-  are unique only within a type, so the `(security_type, id)` pair picks the command.
+- Ids are unique only within a type, so the `(security_type, id)` pair picks the command. For a
+  Certificate / RSA / PIU, send the **drilled security's** `securities[].id`. For an Option or a Phantom,
+  send its **label** (`securities[].label`, or `phantom_securities[].label`), not its id: the drill's
+  `security_type` (`OptionGrant`) does not say whether the grant is an option, a SAR or a CBU, so
+  `cap_table__get__security` cannot be given a type, and a label names one security.
 - The caption's security label comes from that same drilled security (`securities[].label`, or
   `phantom_securities[].label`).
 - Render the tranche table + caption per the render doc, in chat. Return to the menu after.

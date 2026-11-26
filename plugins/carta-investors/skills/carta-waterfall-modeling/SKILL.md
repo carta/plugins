@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.68.4</carta-plugin>
+<carta-plugin>carta-investors:7.69.10</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -75,7 +75,7 @@ are added):
 | `cap_table:get:rights_and_preferences` | `references/rendering.rights_and_preferences.md` |
 | `cap_table:get:note_blocks` | `references/rendering.note_blocks.md` |
 | `cap_table:get:phantom` | `references/rendering.phantom.md` |
-| `cap_table:get:grant_vesting` | `references/rendering.corp_vesting_schedule.md` |
+| `cap_table:get:security` | `references/rendering.corp_vesting_schedule.md` |
 | `cap_table:get:certificate_vesting` | `references/rendering.corp_vesting_schedule.md` |
 
 If the user wants a different format, honor it, but read the spec first.
