@@ -1,19 +1,19 @@
 # Cap table (share-class reader) — Waterfall Modeling
 
-Step 6a.5 detail for the cap table read by the `cap_table_by_share_class` noun — matched for
-a corporation or deal-group target. It doesn't assume which results shape follows: after the
+Step 6a.5 detail for the cap table read by the `ownership` or `cap_table_by_share_class` noun —
+matched for a corporation or deal-group target. Both nouns read `cap_table:list:ownership`. It doesn't assume which results shape follows: after the
 cap table it hands off to the generic results step (`SKILL.md` §Step 6), which dispatches on
 the `get_command` noun. Column/row layout is the command-matched render doc
-([`references/rendering.cap_table_by_share_class.md`](rendering.cap_table_by_share_class.md));
+([`references/rendering.ownership.md`](rendering.ownership.md));
 number formatting is `SKILL.md` §Formatting rules.
 
 ## Commands available via this doc
 
 These are the only cap-table-family commands in scope while this doc is active (noun
-`cap_table_by_share_class`). **Call only the commands listed here** — never one owned by another detail
+`ownership` or `cap_table_by_share_class`). **Call only the commands listed here** — never one owned by another detail
 doc. The list grows as new corp readers ship.
 
-- `cap_table_by_share_class` — the share-class summary reader (this doc).
+- `cap_table:list:ownership` — the share-class summary reader (this doc).
 - `cap_table:get:note_blocks` — round-grouped convertibles, auto-printed beneath the summary when the corp has notes (§Convertibles).
 - `cap_table:get:phantom` — phantom units, auto-printed beneath the summary when the corp has phantom units (§Phantom units).
 - `cap_table:get:rights_and_preferences` — the rights & preferences companion, rendered on request (§Rights & preferences).
@@ -22,37 +22,42 @@ doc. The list grows as new corp readers ship.
 
 ## Fetch once per batch, not per scenario
 
-Keyed by `corporation_id` + `as_of_date` — equity value never enters it, so a batch of same-date
+Keyed by `corporation_id` + the as-of date — equity value never enters it, so a batch of same-date
 runs (`SKILL.md` §Step 5) shares **one** cap table: fetch and show it once, then print only each
-scenario's results. A different `as_of_date` is its own fetch; a separately initiated run
+scenario's results. A different as-of date is its own fetch; a separately initiated run
 re-fetches. The convertibles (§Convertibles) and phantom units (§Phantom units) fetches share the
 same batch.
 
 ## Fetch
 
 Show the cap table the run used for the root issuer **as of the waterfall date, before any allocations
-table**. Fetched by corporation + date:
+table**. Fetched by corporation + date. Call `cap_table__list__ownership` by this name, whatever
+corp noun `cap_table_command` has:
 
 ```
-read_tool({"name": "<cap_table_command with all ':' replaced by '__'>", "arguments": {
+read_tool({"name": "cap_table__list__ownership", "arguments": {
   "corporation_id": "<root cap table>",
-  "as_of_date":     "<WATERFALL_DATE from Step 4, as YYYY-MM-DD>"
+  "size":           100,
+  "as_of":          "<WATERFALL_DATE from Step 4, as YYYY-MM-DD>"
 }})
-→ { share_classes[], option_plans[], warrant_blocks[], totals }
+→ { results[], next, summary }
 ```
 
-`as_of_date` is a bare date (`YYYY-MM-DD`) — no time component. `corporation_id` is the
+One page holds at most 100 rows. While the answer has a non-null `next`, send it as `after` (same
+other arguments) and read the next page; render only after the last page.
+
+`as_of` is a bare date (`YYYY-MM-DD`) — no time component. `corporation_id` is the
 **root cap table**: the `CAP_TABLE_ID` sent in Step 4's `CAP_TABLES` for the row whose `id` is
 `root.issuer_id` (a pro forma), otherwise `root.issuer_id` from Step 3. Every fetch in this doc uses
 that same id. When it's a pro forma, its `{label}` is the `label` of the root row's `choices` entry
 (the `CAP_TABLES` row whose `id` is `root.issuer_id`) whose `value` is the sent id; §Chat rendering
 and §Excel show it. Response shape
 + column mapping:
-[`references/rendering.cap_table_by_share_class.md`](rendering.cap_table_by_share_class.md).
+[`references/rendering.ownership.md`](rendering.ownership.md).
 
 ## Convertibles (auto-printed when the corp has notes)
 
-Alongside the share-class summary (same `corporation_id` + `as_of_date`, once per batch), fetch the
+Alongside the share-class summary (same `corporation_id` + date, once per batch), fetch the
 round-grouped convertibles:
 
 ```
@@ -70,7 +75,7 @@ notes), **print nothing and never mention it**, on either surface.
 
 ## Phantom units (auto-printed when the corp has phantom units)
 
-Alongside the share-class summary and convertibles (same `corporation_id` + `as_of_date`, once per
+Alongside the share-class summary and convertibles (same `corporation_id` + date, once per
 batch), fetch the phantom units:
 
 ```
@@ -122,7 +127,7 @@ On **"Show the allocation results"** → the results fetch (`SKILL.md` §Step 6)
 waterfall export"** → read and follow `follow-up.md` §Download Carta's waterfall export, then repeat this prompt. On
 **"Explore the cap table"** → the **Explore the cap table** sub-menu below, then repeat this prompt. On **"Cap table as
 of a different date"** → ask for the date, re-fetch with the same `corporation_id` and the new
-`as_of_date` (share-class + convertibles + phantom units), render again, and repeat this prompt. This
+date (share-class + convertibles + phantom units), render again, and repeat this prompt. This
 changes only the cap table, so also **suggest** in one line: _"Want me to re-run the waterfall as of
 that date too, with the same options?"_ — on yes, restart from Step 5 with the new date.
 

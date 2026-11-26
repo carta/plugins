@@ -245,7 +245,7 @@ A 4-row text band in **column B**, rows 1–4 (row 5 blank):
   for the active `cap_table_command` noun). Sub-entity / consolidated cap tables are out of scope.
 - **Lay out per the `cap_table_command` noun's render doc** (rendering map, top of `SKILL.md`) —
   its column list, row order, and `colType`s. Header shape follows the doc:
-  - **Flat column list** (e.g. `cap_table_by_share_class` — share-class / warrant / option-pool
+  - **Flat column list** (e.g. `ownership` — share-class / warrant / option-pool
     rows + Total) → a single header row (`headerRows: 1`), no column-group merges (only the B2
     title merge).
   - **Grouped matrix** (e.g. `llc_cap_table_summary`) → the two-row **merged + centered** header
