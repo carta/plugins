@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.13</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -80,19 +80,19 @@ Use this skill for vesting questions scoped to a **single grant or holder**:
 
 You need:
 1. The company — do not call `list_accounts` before the first read (Step 0)
-2. The grant — its label or id as `security` for an option grant, SAR or CBU, and its numeric `grant_id` for an RSU; find it with the list command for the grant type (see below)
+2. The grant — its label or id, sent as `security`; find it with the list command for the grant type (see below)
 3. **Grant type** — required to pick the right list and detail commands. If unstated, infer from the user's wording ("options", "ISO", "NSO" → options; "RSU"; "SAR"; "CBU"). If still unclear, ask via `AskUserQuestion` before searching.
 
 ## Data Retrieval
 
 > The server defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "minimal"` is passed explicitly.
 
-Two commands give vesting detail, and they have different shapes:
+`cap_table:get:security` gives the vesting detail of every grant type:
 
 | Grant type | List command | Vesting detail command |
 |------------|--------------|------------------------|
 | Options (ISO/NSO) | `cap_table:list:grants` | `cap_table:get:security` |
-| RSUs | `cap_table:list:rsus` | `cap_table:get:rsu_vesting` |
+| RSUs | `cap_table:list:rsus` | `cap_table:get:security` |
 | SARs | `cap_table:list:sars` | `cap_table:get:security` |
 | CBUs | `cap_table:list:cbus` | `cap_table:get:security` |
 
@@ -100,34 +100,19 @@ Two commands give vesting detail, and they have different shapes:
 read_tool({"name": "<list tool>", "arguments": {"corporation_id": corporation_id, "search": "<holder name>", "detail": "minimal"}})
 ```
 
-Then, for an option grant, SAR or CBU, send the grant's label or id as `security`, and its type from the list you read (`cap_table:list:grants` → `option_grant`, `cap_table:list:sars` → `sar`, `cap_table:list:cbus` → `cbu`):
+Then send the grant's label or id as `security`, and its type from the list you read (`cap_table:list:grants` → `option_grant`, `cap_table:list:rsus` → `rsu`, `cap_table:list:sars` → `sar`, `cap_table:list:cbus` → `cbu`):
 
 ```
-read_tool({"name": "cap_table__get__security", "arguments": {"corporation_id": corporation_id, "security": "<grant label or id>", "type": "<option_grant|sar|cbu>"}})
-```
-
-For an RSU:
-
-```
-read_tool({"name": "cap_table__get__rsu_vesting", "arguments": {"corporation_id": corporation_id, "grant_id": grant_id}})
+read_tool({"name": "cap_table__get__security", "arguments": {"corporation_id": corporation_id, "security": "<grant label or id>", "type": "<option_grant|rsu|sar|cbu>"}})
 ```
 
 ## Key Fields
 
-The vesting detail commands return slightly different shapes:
-
-**`cap_table:get:security` (options, SARs, CBUs):**
+**`cap_table:get:security`:**
 - `quantity`, `issue_date`, `holder_name`, `label`
-- `grant` — `option_type`, `exercise_price` and `base_value` (`{amount, currency}`), `expiration_date`, `vested_quantity`, `exercised_quantity`, `outstanding_quantity`
-- `vesting` — `vested_quantity`, `unvested_outstanding_quantity`; `schedule` with `name`, `type`, `cliff_summary`, `acceleration`
-- `vesting.tranches[]` — each with `vest_date`, `quantity` (the target), `vested`, `vested_quantity` (what vested), `cumulative_vested_quantity` and `performance_condition` (`name`, `evaluated_on`, `payout_multiplier`, where 1 is 100%); a milestone that is not met has a null `vest_date`
-
-**`cap_table:get:rsu_vesting` (RSUs):**
-- `awarded`, `vested_shares`, `unvested_shares`, `settled`, `eligible_for_settlement`
-- `vesting_start_date`, `vesting_type`, `primary_vesting_title`/`description`
-- `has_additional_condition`, `additional_vesting_title`/`description`
-- `acceleration_terms`, `termination_date`
-- `tranches[]` — each with `vest_date`, `awarded`, `eligible_for_settlement`, `settled`, `status`, `vesting_status`, `milestone_name`, `additional_condition_*`, `vesting_type`
+- `grant` — `option_type`, `exercise_price` and `base_value` (`{amount, currency}`), `expiration_date`, `vested_quantity`, `exercised_quantity` (for an RSU, the settled units), `outstanding_quantity`
+- `vesting` — `vested_quantity`, `vested_outstanding_quantity` (for an RSU, the vested units that are not settled yet), `unvested_outstanding_quantity`; `schedule` with `name`, `type`, `cliff_summary`, `acceleration`
+- `vesting.tranches[]` — each with `vest_date`, `quantity` (the target), `vested`, `time_vested` (the vest date has passed, whether or not its condition is met), `vested_quantity` (what vested), `cumulative_vested_quantity` and `performance_condition` (`name`, `evaluated_on`, `payout_multiplier`, where 1 is 100%); a milestone that is not met has a null `vest_date`. An RSU's second condition, such as a liquidity event, is its tranches' `performance_condition`: a tranche with `time_vested` true and `vested` false waits for that condition
 
 ## Workflow
 
@@ -154,7 +139,7 @@ If multiple grants are returned, ask the user which one, or pick the most releva
 
 #### Branch — "All grants" / multiple grants
 
-If the user asks about **"all grants"**, **"each grant"**, multiple grants, or every grant for a holder, **do NOT fan out to one `cap_table:get:security` (or `rsu_vesting`) call per grant.** A holder or company can have dozens-to-hundreds of grants, and N detail fetches is slow and wasteful. Instead:
+If the user asks about **"all grants"**, **"each grant"**, multiple grants, or every grant for a holder, **do NOT fan out to one `cap_table:get:security` call per grant.** A holder or company can have dozens-to-hundreds of grants, and N detail fetches is slow and wasteful. Instead:
 
 1. List the grants once (the summary list already includes `vested`/`unvested`/`quantity` signals) and present that summary table.
 2. Either **ask the user to narrow** to a specific grant before pulling the full vesting detail, or **present the summary totals** (per grant, never summing across currencies) and **offer to drill into** a single grant's event-level schedule.
@@ -163,10 +148,9 @@ Only fetch the per-grant vesting detail (Step 2) once the user has narrowed to a
 
 ### Step 2 — Fetch Vesting Data
 
-Pick the detail command based on grant type:
+Read the grant with its type (`option_grant`, `rsu`, `sar` or `cbu`):
 
-- **Options (ISO/NSO), SARs, CBUs** → `read_tool({"name": "cap_table__get__security", "arguments": {"corporation_id": ..., "security": ..., "type": ...}})`
-- **RSUs** → `read_tool({"name": "cap_table__get__rsu_vesting", "arguments": {"corporation_id": ..., "grant_id": ...}})`
+- `read_tool({"name": "cap_table__get__security", "arguments": {"corporation_id": ..., "security": ..., "type": ...}})`
 
 ### Step 3 — Present with Context
 
@@ -174,7 +158,7 @@ Lead with a one-sentence plain-English summary before showing the table (see Pre
 
 ## Gates
 
-**Required inputs**: the grant (its label or id; a numeric `grant_id` for an RSU) and grant type (options, RSU, SAR, or CBU). The company is not an input to ask for: it comes from Step 0 (omitted, a name, or `meta.company.id`).
+**Required inputs**: the grant (its label or id) and grant type (options, RSU, SAR, or CBU). The company is not an input to ask for: it comes from Step 0 (omitted, a name, or `meta.company.id`).
 If grant type is missing or ambiguous, call `AskUserQuestion` before proceeding.
 If the grant is unknown, use Step 1 of the Workflow to search by holder name.
 
@@ -203,7 +187,7 @@ Flag anything time-sensitive:
 - **Already-expired grant with forfeit exposure** (options/SARs): if `grant.expiration_date < today` AND `grant.vested_quantity > grant.exercised_quantity`, flag it prominently — the holder has vested-but-expired-unexercised shares that may already be forfeited. This is distinct from (and more urgent than) the "expiring soon" flag above, which warns about a future date; here the window has already closed.
 - Large unvested block concentrated at a future date
 - **Deep in-the-money grants** (options only — ISO/NSO): if the current 409A FMV is available and the spread between exercise price and FMV exceeds 10x, flag it. Note that holders face significant ordinary income (NSO) or AMT (ISO) exposure at exercise, and recommend the company consider a tender offer, early exercise program, or liquidity event planning. Skip this flag for RSUs, SARs, and CBUs.
-- **RSU settlement window** (RSUs only): if `eligible_for_settlement` exceeds `settled`, note how many shares are awaiting settlement and flag if a `termination_date` is imminent — RSUs typically have a hard window to settle after termination.
+- **RSU settlement window** (RSUs only): if `vesting.vested_outstanding_quantity` is more than 0, note how many shares are awaiting settlement, and when `status` is `exercisable_until`, flag that the holder was terminated and `grant.expiration_date` is the last day to settle.
 
 Then show the formatted table from the tool.
 
@@ -218,9 +202,8 @@ Then show the formatted table from the tool.
 
 ## Caveats
 
-- Options, SARs and CBUs: send the grant's label or id as `security`. RSUs: resolve the numeric `grant_id` with `cap_table:list:rsus` first. If the user gives a holder name, search the list command for the grant type (see Data Retrieval).
+- Send the grant's label or id as `security`, with its `type`. If the user gives a holder name, search the list command for the grant type (see Data Retrieval).
 - `cap_table:list:grants` excludes RSUs, SARs, and CBUs. A "not found" result there does **not** mean the grant has no vesting data — check the other three list commands.
-- For an RSU, use `cap_table:get:rsu_vesting`: it gives the settlement fields that `cap_table:get:security` does not.
 - The exercise-price / 409A FMV spread flag applies to options (ISO/NSO) only. RSUs, SARs, and CBUs do not have an exercise price in the same sense — skip that flag for non-option grants.
 - Vesting schedules reflect the original grant terms; any modifications (e.g., acceleration clauses, leaves of absence) may not be captured in the data.
 - The 10x in-the-money flag requires a current 409A FMV — if no valuation data is available, skip the flag rather than guessing.

@@ -25,17 +25,14 @@ Never render it for a later preview on the same thread: the app shows each new r
 
 While the app shows this edit's thread:
 
-- For the latest revision with status `draft`, the app shows **Apply** and **Not now**. Ask no
-  approval question and render no `cap_table:view:plan_approval` card.
-- Its **Apply** sends the approval card's message, *"Sent from the Carta card: Apply revision N
-  (plan <plan_id>)."* When that `plan_id` is the latest preview's, apply it as
+- The app shows the change and has no **Apply**. For the latest revision with status `draft`,
+  ask for the approval in the chat as [SKILL.md § Flow](../SKILL.md#flow) step 7 says, and render
+  no `cap_table:view:plan_approval` card.
+- A message *"Sent from the Carta card: Apply revision N (plan <plan_id>)."* approves that
+  revision. When that `plan_id` is the latest preview's, apply it as
   [SKILL.md § Flow](../SKILL.md#flow) step 8 says. When it is not, apply nothing: say a newer
-  revision is in the app, and ask the user to **Apply** it there.
-- When the plan sends more emails than holders, ask **"Send these N emails?"** before you apply.
-  An **Apply** sent before the answer waits for it: on **"Send"**, apply that plan when its
-  `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new revision,
-  so wait for **Apply** on it.
-- Its **Not now** message says not to apply: apply nothing and say so.
+  revision is in the app, and ask for the approval of that revision.
+- **"Not now"**, as the answer or as a card's message, applies nothing: say so.
 
 **There is no app** when one of these is true:
 

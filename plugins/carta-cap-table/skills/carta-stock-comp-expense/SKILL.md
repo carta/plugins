@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.13</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -98,8 +98,7 @@ One row per report, from every Financial Reporting scenario, latest period first
 
 Call `cap_table__list__expense_reports` first, for every question this skill covers, before any
 other read. Do not read grants, RSUs, vesting or valuations (`cap_table__list__grants`,
-`cap_table__list__rsus`, `cap_table__get__security`, `cap_table__get__rsu_vesting`,
-`cap_table__get__valuations`) to answer an expense question.
+`cap_table__list__rsus`, `cap_table__get__security`, `cap_table__get__valuations`) to answer an expense question.
 
 When the period asked isn't on the page and the response has a `next`, send it as `after` and
 read the next page before saying no report covers it.

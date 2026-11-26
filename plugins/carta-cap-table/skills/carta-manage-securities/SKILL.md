@@ -7,8 +7,8 @@ description: >-
   warrant; transferring shares, an RSA, a PIU, a warrant or a note; buying back shares;
   recording an option exercise; and approving or rejecting exercise requests. For a
   post-termination exercise period, it says where to change it in the Carta web app and what it
-  can edit on the grant. Not for a
-  departure: someone who left and loses their unvested equity is a termination.
+  can edit on the grant. Also shows one security, or a list of one security type, in an app.
+  Not for a departure: someone who left and loses their unvested equity is a termination.
 when_to_use: >-
   Use when the user asks to change a security that is already on the cap table, often to
   match the signed documents: "fix the dates in Carta to match the paperwork", "change the
@@ -16,9 +16,9 @@ when_to_use: >-
   "fix the SAFE's cap or discount", "correct CS-12", "something looks wrong on CS-12, show me
   first", "I need to fix something on ES-12", "cancel ES-12", "cancel part of this grant",
   "transfer CS-12 to her trust", "gift shares to my brother", "buy back the founder's unvested
-  shares", "repurchase CS-3", "record the
-  exercise of 5,000 options on ES-12", "approve the pending exercise requests". To issue new
-  equity, use carta-issuance. Not for a holder who exercises their own options.
+  shares", "repurchase CS-3", "record the exercise of 5,000 options on ES-12", "approve the
+  pending exercise requests"; or to see them: "show ES-54", "list Jane Doe's option grants". To
+  issue new equity, use carta-issuance. Not for a holder who exercises their own options.
 owner: carta-cap-table maintainers (#cap-table-eng)
 model: inherit
 allowed-tools:
@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.13</carta-plugin>
 
 # Manage securities
 
@@ -175,11 +175,41 @@ Use whichever Carta connector is present. The keys are `name` and `arguments`.
 | Exercise requests | `read_tool` | `cap_table__list__company_exercise_requests` |
 | Preview | `read_tool` | the preview in [§ Actions](#actions) |
 | Change page app | `view_remote_panel` | `cap_table:view:change_page` |
+| Securities table app | `view_remote_panel` | `cap_table:view:securities` |
+| Security details app | `view_remote_panel` | `cap_table:view:security` |
 | Apply | the **named** `cap_table__mutate__apply_plan` tool | — |
 | Job | `read_tool` | `cap_table__get__task` |
 
 `list_accounts` returns `id: "corporation_pk:<n>"`; send `<n>` as `company`. With no Carta tool,
 stop: *"I can't reach Carta. Connect Carta in your connector settings, then try again."*
+
+## Show securities
+
+When the user asks to see or list one type of security ("list the option grants", "show Kira's
+option grants") or one security ("show me ES-54"), show them in an app, not in a table in the
+chat. When the user wants to change the security, or asks to see it before a change ("show me
+first", "something looks wrong"), go to [§ Flow](#flow) step 1 instead: the Change page app
+shows it.
+
+- **A list:** one `view_remote_panel` with `name: cap_table:view:securities` and params
+  `corporation_id` (the `company`), `type` (a `security_type` from [§ Actions](#actions), such as
+  `option_grant` or `certificate`) and only the other filters the user named: `status`, `holder`
+  (a list) and `label` (a list). The table shows one type at a time. When the user named no type,
+  ask which one in one `AskUserQuestion`, then render that type. For another type, render again.
+- **One security:** one `view_remote_panel` with `name: cap_table:view:security`, params
+  `corporation_id` and `security` (its label or id), and `type` only when the label matches more
+  than one type.
+
+The app opens in the side panel by itself, or shows a card in the chat that opens it there. It
+reads the rows itself, pages them, and opens a security's details from its label: read nothing
+first. Keep the chat to one line, such as *"Meetly's option grants are open beside the chat."*
+Render no app for a read that only finds an id for a preview.
+
+There is no app as
+[change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says (no
+`view_remote_panel`, or `_terminal_fallback`). Then read `cap_table__list__securities` for the
+`type` the user named, asked as above when they named none, or `cap_table__get__security` for one
+security, and show one table in the chat.
 
 ## Flow
 
@@ -257,17 +287,15 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
    Name each one that cannot be undone, such as an email to a holder.
 7. **Approval.** When the email side effect counts more emails than holders, first ask **"Send these N
    emails?"** as [change-flow.md § Several securities](references/change-flow.md#several-securities)
-   **Emails** says, also before an approval card or the app's **Apply**. An **Apply** sent
+   **Emails** says, also before the approval question or an approval card. An **Apply** sent
    before the answer waits for it: on **"Send"**, apply that plan when
    its `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new
-   revision, so wait for **Apply** on it. Then:
-   - **An edit whose thread the Change page app shows:** ask no approval question and show no
-     card. End with one line that says to approve with **Apply** in the app beside the chat, as
-     [change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says.
-   - **Else** (no app, or an action other than an edit): ask one `AskUserQuestion`: **"Apply this change?"**, options **"Apply"** (first,
-     with the step 5 table in its `preview`) and **"Not now"**. For an edit, name the latest
-     preview's `revision` in the question: **"Apply this change (revision N)?"**. When
-     `how_to_reply` names an approval card, show that card with `view_remote` instead.
+   revision, so ask for the approval of that revision. Then ask one `AskUserQuestion`: **"Apply
+   this change?"** (for an edit, name the latest preview's `revision`: **"Apply this change
+   (revision N)?"**), options **"Apply"** (first) and **"Not now"**. In the Apply option's
+   `preview`, put the one line of step 5 while the Change page app shows the edit's thread (the
+   app has no **Apply**), else the step 5 table. When `how_to_reply` names an approval card and no
+   Change page app shows the thread, show that card with `view_remote` instead.
 
    On "Not now", apply nothing and say so.
 8. **Apply.** Call the named `cap_table__mutate__apply_plan` tool with `company`, the latest

@@ -35,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.13</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -90,6 +90,8 @@ read_tool({"name": "cap_table__list__grants", "arguments": {"corporation_id": <c
   then call the command it returns with the arguments its input schema names. Do not
   guess command names or arguments.
 - For every row of a list, a table, a report or a file, load carta-reporting.
+- To show one security, or list one type of security ("show ES-54", "list Jane Doe's option
+  grants"), load carta-manage-securities: it shows them in an app.
 - To compare the user's spreadsheet, HR export or register with Carta, call `read_tool`
   with `cap_table__compute__reconciliation` once per security type with all the rows. Do
   not page through holders to compare them yourself. The company goes in `company` as a
