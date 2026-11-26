@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.11</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.12</carta-plugin>
 
 # Vesting
 
@@ -85,7 +85,7 @@ quantity for an acceleration, the quantities of a custom schedule from the user'
 5. **Never hand this skill to a background agent.** It needs the user at each approval.
 6. **Plain words.** No ids in the text. Show dates as `MM/DD/YYYY`. Use the type as the unit:
    options, RSUs, shares or units.
-7. **Only these vesting reads.** Never call `cap_table__get__grant_vesting`,
+7. **Only these vesting reads.** Never call `cap_table__get__security`,
    `cap_table__get__rsu_vesting` or `cap_table__get__certificate_vesting`.
 
 ## Calls
