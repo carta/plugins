@@ -272,8 +272,9 @@ round (below) as the path to unlocking it.
 
 If the user replies **yes** to checking for more recent rounds:
 
-1. Call `cap_table:list:financing_history` for the company and filter for
-   priced rounds whose `closing_date` is strictly after `backsolveDate`.
+1. Call `cap_table:list:financings` for the company and filter for
+   priced rounds (`kind` `share_class`) whose `closing_date` is strictly after
+   `backsolveDate`. Rows come latest `closing_date` first.
 
    `closing_date` is the share class's **last activity date** (its latest
    issuance), not when the round closed — never call it the round's
