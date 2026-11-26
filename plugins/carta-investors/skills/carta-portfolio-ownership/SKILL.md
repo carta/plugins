@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.69.15</carta-plugin>
+<carta-plugin>carta-investors:7.69.16</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -126,8 +126,11 @@ A future date isn't possible: say so in one sentence and use today. When the dat
    > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="data_fetched")` once the last page has returned.
 2. Each entry of `companies` is one company, with its funds and SPVs in `funds`. A name in `unmatched_companies` matched no holding of these funds: say so in one line.
 3. **Company row:** use the company's `shares_held`, `outstanding_ownership`, `outstanding_shares`, `fully_diluted_ownership` and `fully_diluted_shares` as given. They are the funds' summed shares ÷ the company's own totals, so the funds add up to them. Never add percentages together, and never add the totals across funds.
-4. Show a table with up to 6 columns: **Investment | Shares held | Outstanding ownership % | Outstanding | Fully diluted ownership % | Fully diluted shares**. Put each company in bold, with its funds indented beneath it. Write percentages to three decimals, as `X.XXX%`, like the web app. Always write share counts as the full number with commas, never abbreviated (1,240,000, not 1.2M). Use `—` for any blank value. Mark a company whose `has_cap_table` is false *No cap table on Carta*. For a one-company question, answer in one sentence first, e.g. *"As of Nov 3, 2026 you own 12.400% of Globex fully diluted (1,240,000 of 10,000,000 shares), through Fund II and Fund III."*, then show the table.
-5. End by saying the date. Mention any company whose `cap_table_as_of`, or any fund row whose `ownership_as_of`, is more than a quarter older than that date. If Step 2 kept `incomplete_entities`, say which kind of entity (fund or SPV) may be missing and that the totals may be understated. Then follow the build-the-page rule in Step 4.
+4. **No outstanding ownership in the read.** When `outstanding_ownership` is blank for every company (the answer's `ownership_bases`, when it has one, then leaves outstanding out), the read gives ownership on the fully diluted basis only. Leave the **Outstanding ownership %** column out of the table in the next step, never show it empty, and say in one line that Carta works out outstanding ownership for the firm as a whole, not fund by fund. Never work one out from `shares_held` and `outstanding_shares`: `shares_held` is a fully diluted count.
+   - **The user asked for outstanding ownership, as of today:** read it for the firm with `read_tool({"name": "portfolio_holding__list__investments", "arguments": {"owner_id": <organization_pk>}})`, where `<organization_pk>` is the firm's `carta_id` in `list_contexts`. Send `"page"` while the answer's `page` is below its `pages`, and stop once every company asked about has a row, or after 20 pages in all; say so if it stops there. Show a second table, **Investment | Outstanding ownership %**, for the companies asked about, with `—` where a row has no `outstanding_ownership`, and say it is the firm's ownership as a whole. If the call answers that it is not enabled, or `Unknown tool`, say Carta shows outstanding ownership on each company's page in Carta, and add no table.
+   - **The user asked for outstanding ownership as of a past date:** say Carta has no outstanding ownership as of that date. Never give today's figure under a past date.
+5. Show a table with up to 6 columns: **Investment | Shares held | Outstanding ownership % | Outstanding | Fully diluted ownership % | Fully diluted shares**. Put each company in bold, with its funds indented beneath it. Write percentages to three decimals, as `X.XXX%`, like the web app. Always write share counts as the full number with commas, never abbreviated (1,240,000, not 1.2M). Use `—` for any blank value. Mark a company whose `has_cap_table` is false *No cap table on Carta*. For a one-company question, answer in one sentence first, e.g. *"As of Nov 3, 2026 you own 12.400% of Globex fully diluted (1,240,000 of 10,000,000 shares), through Fund II and Fund III."*, then show the table.
+6. End by saying the date. Mention any company whose `cap_table_as_of`, or any fund row whose `ownership_as_of`, is more than a quarter older than that date. If Step 2 kept `incomplete_entities`, say which kind of entity (fund or SPV) may be missing and that the totals may be understated. Then follow the build-the-page rule in Step 4.
 
 > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_finished")` once the chat answer has been shown.
 
@@ -209,14 +212,14 @@ Add *"I couldn't load every **<fund / SPV>** for **<Firm Name>**, so some may be
 Use these to answer follow-up questions:
 
 - **Shares held** is the fund's position on the company's Carta cap table, counted the way the cap table counts fully diluted shares (as-converted, including warrants the fund holds).
-- **Outstanding ownership %** is shares held ÷ the company's outstanding shares. No outstanding-only position per fund exists, so when a fund holds warrants or options this reads slightly high. Point the user to the company's cap table in Carta for the exact outstanding figure.
+- **Outstanding ownership %** is shares held ÷ the company's outstanding shares. No outstanding-only position per fund exists, so when a fund holds warrants or options this reads slightly high. Point the user to the company's cap table in Carta for the exact outstanding figure. When the read leaves it blank for every company, Carta gives it for the firm as a whole only: "Answer in chat" says how.
 - **Fully diluted ownership %** is shares held ÷ the company's fully diluted shares (all share classes, options, warrants and the option pool; notes and SAFEs that haven't converted are left out).
 - **Company totals** come from the company's cap table snapshot on or before the as-of date, so every fund of one company divides by the same total. That is why fund rows add up to the company row. A company's totals can be older than the as-of date when its cap table hasn't been updated since; say so using `cap_table_as_of`; the page also shows each company's snapshot date on hover.
 - **Shares held can be older than the totals.** Each fund's position is its latest ownership snapshot on or before the as-of date (`ownership_as_of`), and funds of one company can have different dates.
 - **Pro forma cap tables are left out.** Zero-share links show `—`, not 0%. A percentage above 100% is a data fault and shows `—`.
 - **No cap table on Carta:** a company the fund holds on its books whose cap table isn't on Carta. It is listed so the portfolio is complete, with no ownership.
 - **Never across firms.** Every figure is for one firm, its funds and SPVs only.
-- **Large firms:** a chat answer stops after 20 pages; say so if it does, and suggest narrowing to some funds or companies.
+- **Large firms:** in a chat answer each read stops after 20 pages, the ownership read and the firm's outstanding ownership alike; say so if one does, and suggest narrowing to some funds or companies.
 
 ## Caveats
 
