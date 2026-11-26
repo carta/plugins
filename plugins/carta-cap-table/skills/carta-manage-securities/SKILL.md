@@ -19,7 +19,7 @@ when_to_use: >-
   shares", "repurchase CS-3", "record the exercise of 5,000 options on ES-12", "approve the
   pending exercise requests"; or to see them: "show ES-54", "list Jane Doe's option grants". To
   issue new equity, use carta-issuance. Not for a holder who exercises their own options.
-owner: carta-cap-table maintainers (#cap-table-eng)
+owner: carta-cap-table maintainers
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
 
 # Manage securities
 

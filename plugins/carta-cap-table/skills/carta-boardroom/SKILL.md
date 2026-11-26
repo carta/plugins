@@ -13,7 +13,7 @@ when_to_use: >-
   "end Bob's board term", "remove a director", "resend the board invite". To issue grants, also
   grants that need board approval, use carta-issuance. Not for stockholder consents, or for
   spousal or witness signatures on a security.
-owner: carta-cap-table maintainers (#cap-table-eng)
+owner: carta-cap-table maintainers
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
 
 # Boardroom
 

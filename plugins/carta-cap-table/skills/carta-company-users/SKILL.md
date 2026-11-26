@@ -11,7 +11,7 @@ when_to_use: >-
   lawyer to Carta", "make Priya an admin", "change Lee's title on our Carta account", "John left, remove his Carta
   access", "resend Maria's Carta invite". Not for a stakeholder's invitation to accept a grant
   or its reminder, or terminating someone's equity. For board members, use carta-boardroom.
-owner: carta-cap-table maintainers (#cap-table-eng)
+owner: carta-cap-table maintainers
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
 
 # Company users and roles
 

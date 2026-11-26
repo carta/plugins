@@ -6,12 +6,12 @@ description: >-
   prefilled rows the carta-issuance run consumes, for certificates,
   option grants and profits interest units. Not invocable directly —
   dispatched by carta-issuance Phase 0.25.
-owner: carta-cap-table maintainers (#cap-table-eng)
+owner: carta-cap-table maintainers
 allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
 
 # issuance-import
 

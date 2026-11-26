@@ -16,7 +16,7 @@ when_to_use: >-
   vesting schedules, acceleration terms and performance conditions. Not for totals across the
   whole company, not to issue equity, not for edits of other fields, and not to stop the vesting
   of someone who left (that is a termination).
-owner: carta-cap-table maintainers (#cap-table-eng)
+owner: carta-cap-table maintainers
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.2</carta-plugin>
 
 # Vesting
 
