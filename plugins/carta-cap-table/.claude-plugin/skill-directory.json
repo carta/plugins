@@ -251,6 +251,20 @@
       "Show ASC 718 expense for each period this year from our Carta reports"
     ]
   },
+  "carta-terminate-stakeholder": {
+    "category": "setup",
+    "name": "Terminate a stakeholder",
+    "order": 20,
+    "prompts": [
+      "Terminate [employee name] at {{COMPANY}}; their last day was [date]",
+      "Offboard [employee name] from {{COMPANY}} and show what happens to each of their grants",
+      "These people left {{COMPANY}} on [date]: [names]. Terminate all of them."
+    ],
+    "whatsNewCopy": {
+      "headline": "Offboard someone who left, right from chat",
+      "body": "Reads each departing holder's grants and certificates on your Carta cap table, then stops vesting and sets every exercise deadline after you approve a preview."
+    }
+  },
   "carta-valuation-history": {
     "category": "governance",
     "name": "Valuation & FMV history",
