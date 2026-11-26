@@ -1,4 +1,4 @@
-// Stakeholders card: summary mode only, no names — avoids exposing PII.
+// Stakeholders card: the summary counts only. One row of ids is read, so no name or email reaches the page.
 
 // Kept so the drill-down page can render on open without a second fetch.
 let _stakeholderSummary = null;
@@ -16,7 +16,7 @@ function renderStakeholdersEmpty() {
   if (el) el.innerHTML = `<div class="empty-row">No stakeholders for this company.</div>`;
 }
 
-// by_type keys are dynamic per corporation — never hardcode an enum, just iterate.
+// Relationship names are dynamic per corporation — never hardcode an enum, just iterate.
 // One measure across nominal categories, so every bar wears the same hue: bar length
 // already carries the magnitude, and a per-category color would double-encode it.
 function renderStakeholders(count, byType) {
@@ -34,6 +34,16 @@ function renderStakeholders(count, byType) {
         <span class="bar-track"><span class="bar-fill" style="width:${max > 0 ? (t.value / max * 100).toFixed(1) : 0}%"></span></span>
         <span class="bar-value">${escHtml(new Intl.NumberFormat("en-US").format(t.value))}</span>
       </div>`).join("")}</div>` : ""}`;
+}
+
+// A stakeholder with no relationship has `relationship: null`; the card names it "Other".
+function countsByRelationship(rows) {
+  const byType = {};
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const type = row && row.relationship ? row.relationship : "Other";
+    byType[type] = (byType[type] || 0) + numOrZero(row && row.count);
+  }
+  return byType;
 }
 
 function stakeholderTypeRows(byType) {
@@ -79,7 +89,10 @@ async function fetchStakeholders(corporationId) {
   renderStakeholdersLoading();
   let res;
   try {
-    res = await _mcp("call_tool", { name: "cap_table__get__stakeholders", arguments: { corporation_id: corporationId } });
+    res = await _mcp("call_tool", {
+      name: "cap_table__list__stakeholders",
+      arguments: { corporation_id: corporationId, size: 1, fields: ["id"] },
+    });
   } catch (e) {
     if (corporationId !== _selectedCorporationId) return;
     renderStakeholdersError();
@@ -90,13 +103,14 @@ async function fetchStakeholders(corporationId) {
   const candidates = _mcpResultCandidates(res);
   const errText = _mcpErrorMessage(res, candidates);
   if (errText) { renderStakeholdersError(); reportCardFailure(errText); return; }
-  const withCount = candidates.find(c => c && typeof c.count === "number");
-  if (!withCount) {
+  const withSummary = candidates.find(c => c && c.summary && typeof c.summary.count === "number");
+  if (!withSummary) {
     renderStakeholdersError();
-    reportCardFailure("cap_table__get__stakeholders returned no stakeholder count.");
+    reportCardFailure("cap_table__list__stakeholders returned no stakeholder count.");
     return;
   }
-  if (withCount.count === 0) { renderStakeholdersEmpty(); return; }
-  _stakeholderSummary = { count: withCount.count, byType: withCount.by_type || {} };
+  const { count, by_relationship: byRelationship } = withSummary.summary;
+  if (count === 0) { renderStakeholdersEmpty(); return; }
+  _stakeholderSummary = { count, byType: countsByRelationship(byRelationship) };
   renderStakeholders(_stakeholderSummary.count, _stakeholderSummary.byType);
 }

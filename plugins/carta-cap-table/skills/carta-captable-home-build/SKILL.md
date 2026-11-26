@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -548,7 +548,7 @@ change, update the sketch and the text together and bump the date.
 | Ownership composition bar (on the Cap table page) | `cap_table_chart` — `chart_data.share_classes` and `chart_data.warrant_blocks` by `fully_diluted_ownership`, `chart_data.option_plans` by `outstanding_ownership + available_ownership`, largest first and capped at six segments, plus "Rest of the company" when `chart_data.totals.total_fully_diluted_ownership` is less than the whole |
 | Fully diluted summary | `cap_table_chart` — `chart_data.totals` for share counts, or `total_fully_diluted_ownership` when every share class row's `quantity_semantics` is `PERCENT` or `INVESTED_CAPITAL` (same call again, no extra fetch), upgraded by the Round history dashboard's `cap_table:list:financing_history` response, which the dashboard hands over via `applyAmountRaised` — one currency renders plainly, more than one renders a per-currency breakdown (never summed), none/failure keeps the unitless fallback |
 | Option pool | `cap_table:get:option_plans` (403 for non-staff users falls back to a plain "not available for your role" state, not an error banner) |
-| Stakeholders | `cap_table:get:stakeholders` (summary mode — no `search` param, no names/PII). `by_type` keys vary per corporation, so they are always iterated, never matched against a hardcoded enum |
+| Stakeholders | `cap_table:list:stakeholders` with `size: 1` and `fields: ["id"]` — no `search` param, no names/PII; the card reads only `summary.count` and `summary.by_relationship`. Relationship names vary per corporation, so they are always iterated, never matched against a hardcoded enum |
 | Drafts | `cap_table:list:draft_sets` called **twice** — once per required `security_type` (`certificate`, `option_grant`) — and merged; one call can fail without blocking the other |
 | The company itself | none at runtime — baked in at build time. The **skill** resolves it once with `list_accounts` in Step 0 (see there) |
 

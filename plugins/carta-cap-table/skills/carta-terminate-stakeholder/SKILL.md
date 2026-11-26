@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -163,7 +163,7 @@ ToolSearch: "select:mcp__carta__read_tool,mcp__carta__welcome,mcp__carta__list_a
 
 Every command below goes through `read_tool` — including the preview, which saves a plan but
 changes nothing on the cap table. Its argument keys are **`name`** and **`arguments`**, and the
-`name` is the command with **double underscores** (`cap_table__get__stakeholders`); the colon
+`name` is the command with **double underscores** (`cap_table__list__stakeholders`); the colon
 form below is prose, never the argument. These commands are hidden from `tools/list`, so load
 `read_tool`, never the command names, in the `ToolSearch` above.
 
@@ -176,7 +176,7 @@ the write ([errors.md](references/errors.md#the-apply-tool-is-not-available)).
 | Purpose | Command | Tool |
 |---|---|---|
 | List the companies on the account | — | `list_accounts` |
-| Resolve a name to a stakeholder | `cap_table:get:stakeholders` | `read_tool` |
+| Resolve a name to a stakeholder | `cap_table:list:stakeholders` | `read_tool` |
 | Per-stakeholder defaults (relationship, HRIS date, exercise windows) | `cap_table:get:stakeholder_bootstrap` | `read_tool` |
 | Stage the termination: the securities it ends, and a plan | `cap_table:compute:terminate_stakeholders_preview` | `read_tool` |
 | What else the holder holds (warrants, notes, SAFEs) | `cap_table:list:securities` | `read_tool` |
@@ -209,7 +209,7 @@ fall outside their scope. Surface that as-is rather than retrying.
 ### 1a — The company
 
 Every later call needs this company's id, so settle it first — and **never go hunting for one
-on your own initiative**. Send it as `corporation_id` to `cap_table:get:stakeholders`, and as
+on your own initiative**. Send it as `corporation_id` to `cap_table:list:stakeholders`, and as
 `company` to every other command here. It is the same id; only the key differs.
 
 ```
@@ -239,7 +239,7 @@ user or to act on silently; never present *"corporation 2456"* as a choice.
 Resolve every name to a Carta record before collecting anything else.
 
 ```
-mcp__carta__read_tool({"name": "cap_table__get__stakeholders", "arguments": {
+mcp__carta__read_tool({"name": "cap_table__list__stakeholders", "arguments": {
   "corporation_id": <corporation_id>, "search": "Jamie Chen"}})
 ```
 
@@ -252,7 +252,7 @@ mcp__carta__read_tool({"name": "cap_table__get__stakeholders", "arguments": {
   match proceeds without asking.
 - **Several matches** — present a small disambiguation table (name · relationship · email
   domain) and ask which. Never pick for the user.
-- **Already terminated** — the search row's `event_relationship` starts with `Ex-`. Don't
+- **Already terminated** — the search row's `relationship` starts with `Ex-`. Don't
   terminate them again; it can't fix anything ([Reversal](#reversal)). Alone, stop: *"Jamie
   Chen is already terminated on Acme. Changing a recorded termination needs Carta Support —
   see below."* In a batch, drop only that person, name them, and carry on with the rest.

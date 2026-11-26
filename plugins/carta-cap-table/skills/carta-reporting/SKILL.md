@@ -61,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.1</carta-plugin>
 
 # Custom Reports
 
@@ -324,14 +324,14 @@ Run each script only in the one-line form shown below, as its own command: write
 
    **Infer company size from the stakeholder count.** After resolving `corporation_id` in Step 1, call:
    ```
-   read_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
+   read_tool({"name": "cap_table__list__stakeholders", "arguments": { corporation_id, size: 1 }})
    ```
-   The default (summary) response shape is `{ count: N, by_type: {...} }`. Use `count` as the size signal. If a stakeholder call without a `search` filter was already made this session, reuse the cached `count` rather than calling again.
+   `summary.count` is the number of stakeholders on the cap table (the top-level `count` is only the rows on this page). Use `summary.count` as the size signal. If a stakeholder list call without a `search` filter was already made this session, reuse its `summary.count` rather than calling again.
 
-   Branch the message based on `count`:
+   Branch the message based on `summary.count`:
 
-   - **Fast path (`count` < 50):** "Fetching your **{Report Type}** for {Company} — this usually takes under 30 seconds. I'll show a preview as soon as it's available, then load the full dataset once it's ready."
-   - **Slow path (`count` ≥ 50):** "Fetching your **{Report Type}** for {Company} — this may take a minute or more for larger cap tables. I'll show a preview as soon as it's available, then load the full dataset once it's ready."
+   - **Fast path (`summary.count` < 50):** "Fetching your **{Report Type}** for {Company} — this usually takes under 30 seconds. I'll show a preview as soon as it's available, then load the full dataset once it's ready."
+   - **Slow path (`summary.count` ≥ 50):** "Fetching your **{Report Type}** for {Company} — this may take a minute or more for larger cap tables. I'll show a preview as soon as it's available, then load the full dataset once it's ready."
 
    Do not skip this message. Emit it as your last output before any `Agent` tool call in step 4.
 

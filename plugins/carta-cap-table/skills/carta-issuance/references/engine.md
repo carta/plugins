@@ -145,7 +145,7 @@ way; `arguments`, never `params`. Names this skill once got wrong are marked.
 | `cap_table:get:issuance_bootstrap` | `cap_table__get__issuance_bootstrap` |
 | `cap_table:get:issuance_init` | `cap_table__get__issuance_init` |
 | `cap_table:get:issuable_field_manifest` | `cap_table__get__issuable_field_manifest` |
-| `cap_table:get:stakeholders` | `cap_table__get__stakeholders` |
+| `cap_table:list:stakeholders` | `cap_table__list__stakeholders` |
 | `cap_table:get:option_plans` | `cap_table__get__option_plans` |
 | `cap_table:get:certificate_share_classes` | `cap_table__get__certificate_share_classes` |
 | `cap_table:get:document_sets` | `cap_table__get__document_sets` |
@@ -234,7 +234,7 @@ prefixed string.
 carries no extra distinguishing field.
 
 1. If the prompt named a holder, probe **at most three** candidates with
-   `cap_table:get:stakeholders` — wire `cap_table__get__stakeholders` —
+   `cap_table:list:stakeholders` — wire `cap_table__list__stakeholders` —
    with `{"corporation_id": <id>, "search": "<that person>"}`.
 2. **Stop at the first hit** and use that corporation.
 3. If more than one hits, or none does inside three probes, **stop and ask which company**
@@ -303,17 +303,14 @@ mcp__carta__read_tool({"name": "cap_table__get__issuance_init", "arguments": {
 
 - **`stakeholder_names`** resolves the people the prompt named alongside the reference data, in
   one round trip. They come back as the payload's `stakeholders` section, at `detail=full`,
-  carrying `id`, `full_name`, `email`, `event_relationship` and `kind` per person — the same
-  shape as the standalone `cap_table:get:stakeholders` command. **If the prompt named nobody,
+  carrying `id`, `full_name`, `email`, `event_relationship` and `kind` per person. **If the prompt named nobody,
   pass no names at all**: there is nobody to resolve yet, and
   [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) resolves whatever names the
   user gives later.
 
-  > **Never put two people in one `search=`.** It AND-s its whitespace-separated terms, so it
-  > matches **one person only**; two names in one `search` come back an empty list with a
-  > perfectly healthy `200`. Several people go through `stakeholder_names` (here) or `names=`
-  > ([Phase 1](#phase-1--resolve-each-row--reconcile-share-classes), which carries the full
-  > rule and what it costs when broken).
+  > **Never put two people in one `search=`.** It matches within one name or email: **one person
+  > only**; two names come back an empty list with a healthy `200`. Several people go through `stakeholder_names` (here) or `stakeholder=`
+  > ([Phase 1](#phase-1--resolve-each-row--reconcile-share-classes)).
 
 - **`include_bootstrap: true`** adds [`blockers`](#blockers--act-on-them-first),
   `blockers_summary` and a `knowns_seed` to the same response for no extra round trip. The seed
@@ -355,7 +352,12 @@ sit on this fallback path, so they fail exactly when the run is already degraded
 | `valuations_409a` | `cap_table:list:valuations` with `type: "409a"` | `cap_table__list__valuations` |
 | `international_valuations` | `cap_table:list:valuations` without `type` | `cap_table__list__valuations` |
 | `acceleration_templates` | `cap_table:list:acceleration_templates` | `cap_table__list__acceleration_templates` |
-| `option_plans`, `document_sets`, `vesting_templates`, `legends`, `certificate_share_classes`, `stakeholders` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
+| `stakeholders` | `cap_table:list:stakeholders`, `stakeholder` = the `stakeholder_names` you sent | `cap_table__list__stakeholders` |
+| `option_plans`, `document_sets`, `vesting_templates`, `legends`, `certificate_share_classes` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
+
+Its rows give `name` (`full_name`), `relationship` (`event_relationship`) and `kind`: `individual` →
+`INDIVIDUAL`, `organization` → `ORGANIZATION`; ask about any other kind, never send it. A
+`not_found` is handled as [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) says.
 
 `draft_set_init` has **no** standalone command — it arrives only as a section of this response.
 When it is missing, treat its fields as unknown ([PIU eligibility](#piu-check-issuer-eligibility)
@@ -568,20 +570,19 @@ against the `issuance_init` payload's `stakeholders` section, which carries `ful
 
 - **Exactly one match** → reuse `email`, `event_relationship`, `kind`, `id`. Stamp
   `stakeholder_id` to bypass duplicate detection. **No MCP call.**
-- **No match** → the person is new, or was named after Phase 0.5 fetched (routine). Batch *only these misses* into **one** `cap_table:get:stakeholders`
-  (`cap_table__get__stakeholders`) call passing
-  `names=` (a list of the missed names), not `search=`. A genuine no-match is a new stakeholder —
-  never ask for an email that is already on the cap table.
+- **No match** → the person is new, or was named after Phase 0.5 fetched (routine). Batch *only these misses* into **one** `cap_table:list:stakeholders`
+  (`cap_table__list__stakeholders`) call passing
+  `stakeholder=` (the missed names), not `search=`; rows map as the
+  [fallback table](#phase-05--configure-the-issuance) says. A `not_found` fails the whole call and
+  names each new stakeholder: call once more with the other names. `ambiguous` is a `which_person`
+  item. Never ask for an email already on the cap table.
 - **Multiple matches on one name** → a `which_person` item
   ([companion-surface.md § 6](companion-surface.md#6-ask-whats-missing-once)).
 
-> **`search` matches one person; `names` matches many.** `search` AND-s its whitespace-separated
-> terms across `full_name`/`email`, so two people in one `search` string can never match anything
-> — it returns an empty list with a `200`, which looks exactly like "nobody here". **A
-> zero-result `search` that contained more than one name is a malformed query, not an absent
-> person.** Never conclude "these are all new stakeholders" from one; re-issue it as `names=`.
-> Creating a duplicate stakeholder for someone already on the cap table is silent, wrong, and
-> lands on a real cap table.
+> **`search` matches one person; `stakeholder` matches many.** Two people in one `search` match
+> nothing and look like "nobody here". **A zero-result `search` with more than one name is a
+> malformed query, not an absent person**: re-issue it as `stakeholder=`, else you duplicate
+> stakeholders.
 
 > **The number of stakeholder calls is bounded by roster misses, never by row count.** A
 > per-name `search` loop is the serial round-trip pattern this skill was slow for — and
@@ -705,7 +706,7 @@ never sent to the mutate.
 Tick before any mutate — every save included, not just the final apply:
 
 - [ ] `security_type` resolved and passed on every call
-- [ ] Every row's `issue_date_relationship`, `email`, `stakeholder_kind` and `stakeholder_id` came from the `issuance_init` `stakeholders` section (or the Phase 1 `names=` lookup), not from the files or prompt alone
+- [ ] Every row's `issue_date_relationship`, `email`, `stakeholder_kind` and `stakeholder_id` came from the `issuance_init` `stakeholders` section (or the Phase 1 `stakeholder=` lookup), not from the files or prompt alone
 - [ ] **Cert:** share class resolved → `prefix`. **Grant:** option plan resolved, `so_type` autofills applied (`currency`, `exemption`). **PIU:** unit class resolved → `prefix`, `threshold_value` and `threshold_value_type` both set, equity plan resolved **or deliberately empty**
 - [ ] Every `always` field populated per the row template; pre-save assertion passed (engine rule 4)
 - [ ] **For the apply only:** the user confirmed the latest preview's `summary`, as [companion-surface.md § 8](companion-surface.md#the-review) says

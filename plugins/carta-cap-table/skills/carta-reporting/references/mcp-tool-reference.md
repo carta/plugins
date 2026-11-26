@@ -94,15 +94,15 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   #     show_events_ledger_sheet     — true | false (REQUIRED)
 
 # Filter ID lookup commands:
-read_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
-  → { count: N, by_type: { employee: N, investor: N, ... } }
-  # Summary mode (no search param) — returns total stakeholder count and breakdown by type.
-  # Use count to infer company size for status message branching (Step 4).
+read_tool({"name": "cap_table__list__stakeholders", "arguments": { corporation_id, size: 1 }})
+  → { results: [...], summary: { count: N, by_relationship: [{ relationship, count }] } }
+  # summary.count is every stakeholder; the top-level count is only the rows on this page.
+  # Use summary.count to infer company size for status message branching (Step 4).
 
-read_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id, search: "<name>" }})
-  → { results: [{ id, full_name, email, event_relationship }] }
-  # Search mode — resolves a stakeholder name to its numeric id for use in stakeholder_ids.
-  # search matches full_name and email. Available to all users.
+read_tool({"name": "cap_table__list__stakeholders", "arguments": { corporation_id, search: "<name>" }})
+  → { results: [{ id, name, email, kind, relationship, address }] }
+  # Resolves a stakeholder name to its numeric id for use in stakeholder_ids.
+  # search matches part of the name or email.
 
 read_tool({"name": "cap_table__get__certificate_share_classes", "arguments": { corporation_id }})
   → { results: [{ id, name, prefix }] }
