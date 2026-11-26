@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.13</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.14</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -64,23 +64,21 @@ Do not call `list_accounts` or ask which company before the first read: Carta fi
 ## Data Retrieval
 
 ```
-read_tool({"name": "cap_table__get__valuations", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__list__valuations", "arguments": {"corporation_id": corporation_id, "size": 100}})
 ```
 
-Optional `valuation_source` filters to one or more of `EMI`, `CSOP`, `409A`, `SHARE_PRICE`. Omit it — the point of this command is that it covers every source at once.
+Do not send `type` or `status`: the point of this read is every source and every row at once. When `has_next` is true, call again with `after` set to `next` for the older rows.
 
 ## Key Fields
 
-The response is `{count, active: [...], history: [...]}`. `history` holds every row including expired ones; `active` is the subset the server considers live. Each row has:
+The rows are in `results`, newest `effective_date` first. Each row has:
 
-- `price`: FMV per share, a high-precision decimal string (e.g. `"0.500000000000"`) — parse it and trim trailing zeros before display
-- `currency`: ISO code for **this row** — read it per row, never assume
-- `valuation_type`: `AMV`, `UMV`, `FMV`, or `SHARE_PRICE`
-- `support_reference_type`: which instrument the row came from (409A / EMI / CSOP / share price)
+- `price`: `{amount, currency}`. `amount` is the FMV per share, a decimal string (e.g. `"0.500000000000"`): parse it and trim trailing zeros before display. `currency` is the ISO code for **this row**: read it per row, never assume
+- `source`: the instrument the row came from: `409a`, `emi`, `csop` or `share_price`
+- `price_type`: `fmv` (409A), `amv` or `umv` (an HMRC EMI or CSOP report), `share_price` or `asc718`. An `asc718` row is an expense-accounting value: never give it as an exercise (strike) price
 - `effective_date` / `expiration_date`: ISO `YYYY-MM-DD`
-- `status`: `ACTIVE` or `EXPIRED`, computed server-side
-- `share_class_name`: e.g. "Common", "Ordinary"
-- `share_class_type`: `COMMON` or `PREFERRED`. An option's exercise (strike) price comes from a `COMMON` row
+- `status`: `active` or `expired`, computed server-side. A row is still `active` on its `expiration_date`
+- `share_class_name`: e.g. "Common", "Ordinary". A 409A report is one row, its common FMV; the other common classes it prices are in `other_share_class_names`
 
 **AMV and UMV.** A single HMRC valuation produces **two** prices, both live at once: **AMV** (actual market value, discounted for restrictions on the shares) and **UMV** (unrestricted market value). They are not duplicates and one is not "the real one". Show both, labelled. If asked which applies to a specific grant, say that depends on the grant's terms and point the user to their equity advisor — the data does not record it, and the two carry different tax outcomes.
 
@@ -88,13 +86,13 @@ The response is `{count, active: [...], history: [...]}`. `history` holds every 
 
 ### Step 1 — Fetch Valuations
 
-Call `cap_table__get__valuations` once, as in Data Retrieval.
+Call `cap_table__list__valuations` as in Data Retrieval.
 
 ### Step 2 — Identify the Current Valuation
 
-Use `active`. Do **not** re-derive live-vs-expired from dates: the server applies per-source rules (a share-price report has its own state; a null expiration means open-ended) that a date comparison gets wrong. Where you do sort, sort on **parsed dates**, never raw strings.
+Use the rows with `status: "active"`. Do **not** re-derive live-vs-expired from dates: the server applies per-source rules (a share-price report has its own state; a null expiration means open-ended) that a date comparison gets wrong. Where you do sort, sort on **parsed dates**, never raw strings.
 
-If `active` holds more than one row, they are all current — an AMV/UMV pair, or several share classes. Present them all rather than picking one. If `active` is empty, say there is no current valuation, and lead with the latest expired row, flagged as expired.
+If more than one row is active, they are all current — an AMV/UMV pair, or several share classes. Present them all rather than picking one. If no row is active, say there is no current valuation, and lead with the latest expired row, flagged as expired.
 
 ### Step 3 — Check Expiration
 
@@ -133,14 +131,13 @@ Drop the Type and Source columns when every row shares the same values (a US-onl
 Do not make a chart, also when the user asks for one: no text bars, no script and no file. FMV values in mature companies cluster near the maximum, so every bar looks the same. When the user asks for a chart, show the table and say in one sentence that this skill shows FMV history as a table. After the table, add a one-line trend summary:
 > FMV has grown **Nx since YYYY**, with [acceleration/steady growth] since [year].
 
-**Only compare like with like.** A growth multiple across two currencies, or one that mixes an AMV with a UMV, is meaningless. Compute the trend within a single currency *and* a single `valuation_type`; if the series spans more than one, give a line for each or omit the trend.
+**Only compare like with like.** A growth multiple across two currencies, or one that mixes an AMV with a UMV, is meaningless. Compute the trend within a single currency *and* a single `price_type`; if the series spans more than one, give a line for each or omit the trend.
 
 ## Error Handling
 
 | Situation | What to do |
 |---|---|
-| 403, `role_required` or access denied | Say the user's role can't see this company's valuations. Do not retry, and do not call the 409A-only fallback. |
-| `Unknown tool` or a server error for `cap_table__get__valuations` | Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-valuation-history/references/409a-fallback.md` (this skill's own `references/`; read it by that path, do not search for it) and follow it. |
+| 403, `role_required` or access denied | Say the user's role can't see this company's valuations. Do not retry. |
 | Response too large on a grants, notes or data warehouse read | This skill needs only the valuations command. For a list of grants or notes, use carta-reporting. |
 | Company error | Follow *Company errors* in `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md`. |
 

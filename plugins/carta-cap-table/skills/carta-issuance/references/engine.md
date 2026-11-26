@@ -153,7 +153,7 @@ way; `arguments`, never `params`. Names this skill once got wrong are marked.
 | `cap_table:get:vesting_templates` | `cap_table__get__vesting_templates` |
 | `cap_table:list:acceleration_templates` | `cap_table__list__acceleration_templates` |
 | `cap_table:list:valuations` with `type: "409a"` — **not** `valuations_409a` | `cap_table__list__valuations` |
-| `cap_table:get:valuations` — the international ones; **not** `international_valuations` | `cap_table__get__valuations` |
+| `cap_table:list:valuations` without `type` — every source; **not** `international_valuations` | `cap_table__list__valuations` |
 | `cap_table:get:load_drafts` | `cap_table__get__load_drafts` |
 | `cap_table:list:draft_sets` — resume by name | `cap_table__list__draft_sets` |
 | `cap_table:get:cap_table_by_share_class` — context math only | `cap_table__get__cap_table_by_share_class` |
@@ -327,7 +327,8 @@ mcp__carta__read_tool({"name": "cap_table__get__issuance_init", "arguments": {
   ignored** — send `YYYY-MM-DD` or omit the key.
 
 **The sections it returns, per type** — each in the same shape as its
-standalone command, except `valuations_409a`, which is `{count, current_409a, history}`:
+standalone command, except `valuations_409a`, which is `{count, current_409a, history}`, and
+`international_valuations`, which is `{count, active, history}`:
 
 - *Option grant* — `vesting_templates`, `acceleration_templates`, `document_sets`,
   `valuations_409a`, `international_valuations`, `option_plans`.
@@ -352,7 +353,7 @@ sit on this fallback path, so they fail exactly when the run is already degraded
 | Failed section | Fallback command | Wire name |
 |---|---|---|
 | `valuations_409a` | `cap_table:list:valuations` with `type: "409a"` | `cap_table__list__valuations` |
-| `international_valuations` | `cap_table:get:valuations` | `cap_table__get__valuations` |
+| `international_valuations` | `cap_table:list:valuations` without `type` | `cap_table__list__valuations` |
 | `acceleration_templates` | `cap_table:list:acceleration_templates` | `cap_table__list__acceleration_templates` |
 | `option_plans`, `document_sets`, `vesting_templates`, `legends`, `certificate_share_classes`, `stakeholders` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
 
@@ -521,9 +522,16 @@ Read `international_valuations.active` — already filtered to live valuations s
 **If the section is missing** — a US-only corp can be refused it, since it is permissioned
 separately, in which case it comes back `null` in `errors`. Fall back to the `valuations_409a`
 section: use `current_409a` when its `is_expired` is false, and treat `is_expired: true` as the
-expired case. When that section failed too, read `cap_table:list:valuations` with
-`type: "409a"`: rows are newest first; use the first row with `status: "active"` and its
-`price.amount`. When no row is active, it is the expired case.
+expired case. When that section failed too, read only the `international_valuations` fallback
+below, never with `type`.
+
+**The `international_valuations` fallback, `cap_table:list:valuations` without `type`**, puts
+rows in `results`, newest first. Apply the steps above: live rows have `status: "active"`; with
+none, the newest row is the expired case. The price is `price.amount` in `price.currency`.
+`price_type` replaces `valuation_type` (drop `asc718` rows: they never price a grant), and
+`source` replaces `support_reference_type`. Narrow by matching `share_class_name` or
+`other_share_class_names` to the plan's `common_share_class_name`. If `has_next` is true, call
+again with `after: next`.
 
 **Derive the jurisdiction too** — it gates which three `so_type`s the option-type question may
 offer ([payload-reference.md § Picklists](payload-reference.md#picklists)), and offering a UK
