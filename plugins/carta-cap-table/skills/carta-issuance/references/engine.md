@@ -156,7 +156,7 @@ way; `arguments`, never `params`. Names this skill once got wrong are marked.
 | `cap_table:list:valuations` without `type` — every source; **not** `international_valuations` | `cap_table__list__valuations` |
 | `cap_table:get:load_drafts` | `cap_table__get__load_drafts` |
 | `cap_table:list:draft_sets` — resume by name | `cap_table__list__draft_sets` |
-| `cap_table:get:cap_table_by_share_class` — context math only | `cap_table__get__cap_table_by_share_class` |
+| `cap_table:list:ownership` — context math only | `cap_table__list__ownership` |
 | `cap_table:mutate:save_drafts` | `cap_table__mutate__save_drafts` |
 | `cap_table:mutate:validate_drafts` | `cap_table__mutate__validate_drafts` |
 | `cap_table:compute:issue_draft_set_preview` | `cap_table__compute__issue_draft_set_preview` |
@@ -168,9 +168,9 @@ reach for either; both were invented on a fallback path, so they failed exactly 
 was already degraded. `draft_set_init` is a **section** of `issuance_init`'s response, not a
 command of its own.
 
-> **The totals source has a breakdown-sounding name.** `cap_table:get:cap_table_by_share_class`
-> — `corporation_id` alone — returns authorized, outstanding, fully diluted, and ownership %.
-> Context math only (e.g. percent-of-fully-diluted for a grant), never a payload source.
+> **The totals are in `summary`.** `cap_table:list:ownership` (`corporation_id`, `size: 100`)
+> gives a row per class, plan and block, and `summary` totals, as decimal strings. Context math
+> only (e.g. percent-of-fully-diluted for a grant), never a payload source.
 
 **`mcp__carta__` is a placeholder** — here, in every code block below, and in every reference
 file. The real prefix is environment-dependent (`mcp__claude_ai_Carta__call_tool`, plugin-scoped and

@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.15</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -67,7 +67,7 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 
 For each company, the relevant commands are:
 
-- `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool data
+- `read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": corporation_id, "size": 100}})` -- option pool data (rows by share class, plan and block)
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes min/max/average price_cap, avg_discount, by_type)
 - `read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (one row per share class with closing_date and cash_raised_by_currency)
 
@@ -77,9 +77,10 @@ The convertible-notes call defaults to `detail=summary`, and the other two retur
 
 ## Key Fields
 
-From cap table (option pool):
-- `option_plans[].authorized_shares`: shares authorized per plan
-- `totals.total_fully_diluted`: total fully diluted share count
+From cap table (option pool), numbers as decimal strings:
+- `results[]` rows with `kind` `"option_plan"`, field `authorized_shares`: shares authorized per plan
+- `summary.total_fully_diluted`: total fully diluted share count
+- A non-null `next` means more rows: send it as `after` and read the next page
 
 From convertible notes (summary):
 - `min_price_cap`, `max_price_cap`: lowest and highest valuation cap
@@ -106,10 +107,10 @@ Issue ALL calls for ALL companies **in a single response** — do NOT loop compa
 For example, with 5 companies and all 3 data types, issue all 15 calls at once:
 
 ```
-read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": 1, "size": 100}})
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 1}})
-read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
+read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": 2, "size": 100}})
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 2}})
 read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 2}})
 ... (all companies)
@@ -118,8 +119,8 @@ read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporat
 Then from the results:
 
 **Cap table by share class** (for option pool %):
-- From `option_plans[]`: sum `authorized_shares` across all plans
-- From `totals.total_fully_diluted`: compute option pool % = option_pool_authorized / total_fully_diluted
+- From the `results[]` rows with `kind` `"option_plan"`: sum `authorized_shares` across all plans
+- From `summary.total_fully_diluted`: compute option pool % = option_pool_authorized / total_fully_diluted
 
 **SAFE / convertible note terms** (summary):
 - Use each company's `median_price_cap` as its **average** cap, and `min_price_cap` / `max_price_cap` for the range

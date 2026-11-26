@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.15</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -66,7 +66,7 @@ You need:
 > The server defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
 
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})` — SAFEs + convertible notes
-- `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` — current fully diluted count
+- `read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": corporation_id, "size": 100}})` — current fully diluted count
 - `read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": corporation_id}})` — current FMV (for reference)
 
 ## Key Fields
@@ -93,7 +93,7 @@ Fetch all three data sources **in a single turn** (parallel tool calls) — do N
 
 ```
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})
-read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": corporation_id, "size": 100}})
 read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": corporation_id}})
 ```
 
@@ -102,7 +102,7 @@ read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", 
   read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full", "page": <next.page>, "page_size": <next.page_size>}})
   ```
   `count`, `active_count`, `total_invested`, `by_status` and `by_type` cover only one page. Calculate totals from the rows of all pages.
-- Cap table by share class: get current fully diluted share count from `totals.total_fully_diluted`
+- Ownership by share class: get current fully diluted share count from `summary.total_fully_diluted` (a decimal string; it covers all pages)
 - 409A valuations: current FMV for context. Rows are newest first; the current FMV is the first row with `status: "active"`, and `price` is `{amount, currency}`
 
 ### Step 2: Conversion Math

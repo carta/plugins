@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.15</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -68,13 +68,13 @@ For a full-portfolio scan, call `list_accounts` to get all portfolio companies. 
 For each company, these are the relevant checks:
 
 - `read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": corporation_id}})` -- 409A expiry check
-- `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool check
+- `read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": corporation_id, "size": 100}})` -- option pool check (the `results[]` rows with `kind` `"option_plan"`)
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- note maturity check (summary includes `maturity.nearest_date`)
 - `read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": corporation_id}})` -- SAFE exposure check
 - `read_tool({"name": "cap_table__list__83b_elections", "arguments": {"company": corporation_id, "status": "not_filed"}})` -- 83(b) deadline check
 - `read_tool({"name": "cap_table__get__rule_701", "arguments": {"company": corporation_id}})` -- Rule 701 limit check (last 12 months)
 
-The server defaults to `detail=summary` for list commands. The first four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes. The 83(b) list always returns its `summary` with the rows: `not_filed_open` and `next_deadline` count only deadlines today or later.
+The server defaults to `detail=summary` for list commands. The 409A, convertible notes and SAFE reads use summary mode, and the option pool read gives one row per share class, plan and block — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes. The 83(b) list always returns its `summary` with the rows: `not_filed_open` and `next_deadline` count only deadlines today or later.
 
 If the user asks about a specific check only (e.g. "any expiring 409As?"), read only the relevant command per company.
 
@@ -102,13 +102,13 @@ For example, with 5 companies and all 6 checks, issue all 30 `read_tool` calls a
 
 ```
 read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": 1}})
-read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": 1, "size": 100}})
 read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": 1}})
 read_tool({"name": "cap_table__list__83b_elections", "arguments": {"company": 1, "status": "not_filed"}})
 read_tool({"name": "cap_table__get__rule_701", "arguments": {"company": 1}})
 read_tool({"name": "cap_table__list__valuations", "arguments": {"type": "409a", "corporation_id": 2}})
-read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
+read_tool({"name": "cap_table__list__ownership", "arguments": {"corporation_id": 2, "size": 100}})
 ... (all companies)
 ```
 
@@ -131,6 +131,8 @@ Companies with no 409A data should never be silently skipped — always include 
 | Check | Critical | Warning | Info | Rationale |
 |-------|----------|---------|------|-----------|
 | Option pool | available_ownership < 2% | available_ownership < 5% | available_ownership < 10% | 5% is industry floor for meaningful hiring capacity; <2% is effectively exhausted |
+
+Read `available_ownership` from each `"option_plan"` row. It is a decimal string and a fraction (0.05 is 5%). For more than one plan, add the plans of the company. While the answer has a non-null `next`, call it again with the same arguments and `after` set to `next`, and add the plans of every page.
 
 #### 3. SAFEs/Notes Approaching Maturity
 

@@ -35,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.122.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.122.15</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -62,7 +62,7 @@ Call `read_tool` with one command. One call answers most questions.
 | Question | Command | Useful arguments |
 |---|---|---|
 | Who owns what, ownership % per holder | `cap_table__get__cap_table_by_stakeholder` | |
-| Outstanding and fully diluted, by share class | `cap_table__get__cap_table_by_share_class` | |
+| Outstanding and fully diluted, by share class | `cap_table__list__ownership` | `size: 100`; totals in `summary` |
 | A stakeholder's id, email or role | `cap_table__get__stakeholders` | `search` (one person), `names` (several) |
 | Option grants (ISO/NSO) | `cap_table__list__grants` | `search`, `detail`, `ordering`, `page_size` |
 | Share certificates | `cap_table__list__certificates` | `search`, `ordering`, `page_size` |
