@@ -14,7 +14,6 @@ These are the only cap-table-family commands in scope while this doc is active (
 doc. The list grows as new corp readers ship.
 
 - `cap_table:list:ownership` — the share-class summary reader (this doc).
-- `cap_table:get:note_blocks` — round-grouped convertibles, auto-printed beneath the summary when the corp has notes (§Convertibles).
 - `cap_table:get:phantom` — phantom units, auto-printed beneath the summary when the corp has phantom units (§Phantom units).
 - `cap_table:get:rights_and_preferences` — the rights & preferences companion, rendered on request (§Rights & preferences).
 - `cap_table_by_stakeholder` — the by-stakeholder ownership view + single-holder drill (§Ownership by stakeholder, §Holder drill).
@@ -25,8 +24,7 @@ doc. The list grows as new corp readers ship.
 Keyed by `corporation_id` + the as-of date — equity value never enters it, so a batch of same-date
 runs (`SKILL.md` §Step 5) shares **one** cap table: fetch and show it once, then print only each
 scenario's results. A different as-of date is its own fetch; a separately initiated run
-re-fetches. The convertibles (§Convertibles) and phantom units (§Phantom units) fetches share the
-same batch.
+re-fetches. The phantom units fetch (§Phantom units) shares the same batch.
 
 ## Fetch
 
@@ -57,21 +55,13 @@ and §Excel show it. Response shape
 
 ## Convertibles (auto-printed when the corp has notes)
 
-Alongside the share-class summary (same `corporation_id` + date, once per batch), fetch the
-round-grouped convertibles:
+The convertibles are the `cap_table:list:ownership` rows (§Fetch, every page) whose `kind` is
+`"note_block"`: one per round. There is no other fetch.
 
-```
-read_tool({"name": "cap_table__get__note_blocks", "arguments": {
-  "corporation_id": "<root cap table>",
-  "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>"
-}})
-→ { note_blocks[], totals }
-```
-
-If `note_blocks` is **non-empty**, render it beneath the share-class summary — in chat, and in
+If there are such rows, render them beneath the share-class summary — in chat, and in
 `excel` as a block beneath the Cap Table block (§Excel) — per
-[`references/rendering.note_blocks.md`](rendering.note_blocks.md). If empty (most corps have no
-notes), **print nothing and never mention it**, on either surface.
+[`references/rendering.ownership_note_blocks.md`](rendering.ownership_note_blocks.md). If there are
+none (most corps have no notes), **print nothing and never mention it**, on either surface.
 
 ## Phantom units (auto-printed when the corp has phantom units)
 

@@ -252,17 +252,25 @@ A 4-row text band in **column B**, rows 1–4 (row 5 blank):
     per that doc's Excel form (`headerRows: 2` + `merges`).
 
   Same generic `write(block)` helper either way — the block differs only in `headerRows` / `merges`.
+- **Money-list cells.** Every `currency` cell of this tab that comes from a money list
+  (`{amount, currency}` entries: Capital contributed, and the convertibles' Principal, Interest,
+  Amount and Cash paid) is written per entry's currency. One entry → the number, with the USD
+  accounting format when its `currency` is `USD`, else `#,##0.00" <currency>"` with the entry's
+  code (`#,##0.00" EUR"`). Several entries → text: each entry formatted in its own currency, joined
+  by `; ` (`500,000.00 USD; 250,000.00 EUR`). An empty list → `—`. These cells are the one exception
+  to the per-column 1×1 format broadcast: after the column broadcast, set `numberFormat` on each
+  single-entry cell whose `currency` is not `USD` (a 1×1 range per cell).
 - When you write the Cap Table block, **cache `cap_table_end_row = 6 + capTableBlock.values.length`** —
   the convertibles and phantom units blocks (below) and the on-request liquidation-preference
   augmentation position themselves from this cached integer, never a sheet read.
 - **Convertibles (corp cap tables) — a default block beneath the cap-table block.** When the corp's
-  `note_blocks` fetch (`cap-table.corp.md` §Convertibles) returns a **non-empty** `note_blocks`, build
-  the block from `references/rendering.note_blocks.md` and stack it under the cap-table block on the
+  `cap_table:list:ownership` answer (`cap-table.corp.md` §Convertibles) has rows with `kind`
+  `"note_block"`, build the block from `references/rendering.ownership_note_blocks.md` and stack it under the cap-table block on the
   **Cap Table** tab, **in the same first `execute_office_js`** — it's a default companion, not an
   on-request drill. One block with its own sub-header row (`headerRows: 1`, `merges: []`), starting at
   `cap_table_end_row + 2` (one blank row below); `colTypes` per that render doc's column list (Round
-  `text`, the four money columns `currency`); number formats and widths come from the existing lookup
-  maps. Provenance range: `CartaTab__Cap_Table_Convertibles`. Empty `note_blocks` → write nothing.
+  `text`, the four money columns `currency`, written by the money-list rule above); widths come from
+  the existing lookup map. Provenance range: `CartaTab__Cap_Table_Convertibles`. No `note_block` rows → write nothing.
   Corp-only — never coexists with the LLC liquidation-preference append. When you write it, **cache
   `convertibles_end_row = cap_table_end_row + 1 + convertiblesBlock.values.length`**.
 - **Phantom units (corp cap tables) — a default block beneath the convertibles block.** When the corp's

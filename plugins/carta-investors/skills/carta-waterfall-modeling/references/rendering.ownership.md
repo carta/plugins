@@ -30,7 +30,7 @@ Never add amounts in different currencies. An empty list → `—`.
 
 The rows are in `results`, one row for each `kind`. Order: share classes → warrants → option pools →
 total. Rows with `kind` `"note_block"` are not part of this table: the convertibles table
-(`cap-table.corp.md` §Convertibles) shows the notes.
+(`cap-table.corp.md` §Convertibles, `references/rendering.ownership_note_blocks.md`) shows them.
 
 **Per row with `kind` `"share_class"`:** Share class `name`, Stock type `stock_type`, Authorized units
 `authorized_shares`, Outstanding `outstanding_shares`, Ownership `outstanding_ownership`, Fully
