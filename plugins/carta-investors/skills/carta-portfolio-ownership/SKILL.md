@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.69.28</carta-plugin>
+<carta-plugin>carta-investors:7.69.33</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -129,6 +129,8 @@ A future date isn't possible: say so in one sentence and use today. When the dat
 
    > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="data_fetched")` once the last page has returned.
 2. Each entry of `companies` is one company, with its funds and SPVs in `funds`. A name in `unmatched_companies` matched no holding of these funds: say so in one line.
+   - **Entries that share a name stay separate rows**, each named as the read names it, with nothing added to the name. The read does not say how such entries relate, so the reply does not either: it has no sentence about them, and it never drops, merges or adds them.
+   - **Held today, with no ownership on record by the date asked.** A company in the answer's `snapshot_after_as_of` is one the firm holds today whose earliest ownership snapshot is later than the Step 3 date. Say Carta has no ownership for it as of that date, and give the date of that earliest snapshot (its `ownership_as_of`). Never call it not held, and never give a later figure under the date asked. That is all the reply says about that company: no read says where else the position is recorded, so the reply names no other place to look. The other companies in the answer follow steps 3 to 7 as usual.
 3. **Company row:** use the company's `shares_held`, `outstanding_ownership`, `outstanding_shares`, `fully_diluted_ownership` and `fully_diluted_shares` as given. They are the funds' summed shares ÷ the company's own totals, so the funds add up to them. Never add percentages together, and never add the totals across funds.
 4. **Pick the table's columns from the read.** Write the headers exactly as they are here; **Outstanding** is the company's outstanding shares.
    - **The read gives outstanding ownership** (a company has an `outstanding_ownership`): six columns, **Investment | Shares held | Outstanding ownership % | Outstanding | Fully diluted ownership % | Fully diluted shares**.
