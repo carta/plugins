@@ -55,7 +55,7 @@ and carries `thread_id`. Render the app as [§ The Change page app](#the-change-
 
 - **The user named the field and the value:** go on to the preview with that `thread_id`. The
   app turns into the diff. With no app, the preview shows in the chat.
-- **They did not** ("show me first", "something is wrong", only a person or securities): say in
+- **They did not** (only a person or securities, such as "update ES-9"): say in
   one line what the page shows, or with no app, what the bootstrap shows. Then ask which field
   to change as **No field named** in [§ Fields and values](#fields-and-values) says, never in
   free text.

@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.6</carta-plugin>
 
 # Manage securities
 
@@ -120,7 +120,8 @@ common or preferred units), `piu`, `cbu` and `rsu`. Send only the type the user 
 
 **Required inputs**: the company, the security (label, id or holder) or the exercise request,
 and the action. Each
-action's own inputs are in [§ Flow](#flow) step 3. Ask only for what is missing.
+action's own inputs are in [§ Flow](#flow) step 3. Ask only for what is missing. With no
+security named, show the table of the type, as [§ Show securities](#show-securities) says.
 
 **AI computation**: No. Carta computes every before and after value in the preview. For an
 edit, you choose only the `reason` and write the note from the user's words, and you show both.
@@ -185,25 +186,30 @@ stop: *"I can't reach Carta. Connect Carta in your connector settings, then try 
 
 ## Show securities
 
-When the user asks to see or list one type of security ("list the option grants", "show Kira's
-option grants") or one security ("show me ES-54"), show them in an app, not in a table in the
-chat. When the user wants to change the security, or asks to see it before a change ("show me
-first", "something looks wrong"), go to [§ Flow](#flow) step 1 instead: the Change page app
-shows it.
+Show securities in an app, not in a table in the chat:
 
-- **A list:** one `view_remote_panel` with `name: cap_table:view:securities` and params
-  `corporation_id` (the `company`), `type` (a `security_type` from [§ Actions](#actions), such as
-  `option_grant` or `certificate`) and only the other filters the user named: `status`, `holder`
-  (a list) and `label` (a list). The table shows one type at a time. When the user named no type,
-  ask which one in one `AskUserQuestion`, then render that type. For another type, render again.
-- **One security:** one `view_remote_panel` with `name: cap_table:view:security`, params
+- **A list** ("list the option grants", "show Kira's option grants"): one `view_remote_panel`
+  with `name: cap_table:view:securities` and params `corporation_id` (the `company`), `type` (a
+  `security_type` from [§ Actions](#actions), such as `option_grant` or `certificate`) and only
+  the other filters the user named: `status`, `holder` (a list) and `label` (a list). The table
+  shows one type at a time. When the user named no type, ask which one in one `AskUserQuestion`,
+  then render that type. For another type, render again.
+- **One security** ("show me ES-54", "what are the terms of ES-54", "something looks wrong on
+  ES-54, show me first"): one `view_remote_panel` with `name: cap_table:view:security`, params
   `corporation_id` and `security` (its label or id), and `type` only when the label matches more
   than one type.
+- **A change with no security named** ("I want to update an option grant"): render the table
+  of that type as **A list** says, then ask in your last message, in one line, which security to
+  change and what to change on it: *"Meetly's option grants are open beside the chat. Which one do
+  you want to change, and what should change?"* The table is the list to pick from: make no
+  bootstrap and no `AskUserQuestion` with securities to pick. When the user names a security
+  ("update ES-9"), go to [§ Flow](#flow) step 1 with it. Only then does the Change page app open.
 
 The app opens in the side panel by itself, or shows a card in the chat that opens it there. It
 reads the rows itself, pages them, and opens a security's details from its label: read nothing
 first. Keep the chat to one line, such as *"Meetly's option grants are open beside the chat."*
-Render no app for a read that only finds an id for a preview.
+Render no app for a read that only finds an id for a preview. Never call the bootstrap to show
+securities: send it only the securities the user wants to change.
 
 There is no app as
 [change-flow.md § The Change page app](references/change-flow.md#the-change-page-app) says (no
@@ -215,15 +221,16 @@ security, and show one table in the chat.
 
 1. **Bootstrap.** For an exercise request, read the requests instead
    ([transfer-buyback-exercise.md § Exercise requests](references/transfer-buyback-exercise.md#exercise-requests)).
-   Else call the bootstrap once per change and type (twice only for the label retry in
-   [§ Actions](#actions)), after any earlier apply, with `company`, `security_type` and `label` (a
-   list), `security` (ids) or `holder` (the name exactly as the user wrote it). To reverse a
-   cancellation or undo a termination, send `label` or `security`: `holder` finds only
-   securities held now. For an
-   edit, and when the user asks to see the security before a change ("show me first", "something
-   looks wrong"), always send `look_first: true` on the first type's bootstrap, so the Change page
-   opens before the first preview. With no field named, bootstrap each type first, then ask which
-   field in one `AskUserQuestion`, with one question for each type
+   With no security and no holder named, show the table first as
+   [§ Show securities](#show-securities) says. Else call the bootstrap once per change and type
+   (twice only for the label retry in [§ Actions](#actions)), after any earlier apply, with
+   `company`, `security_type` and `label` (a list), `security` (ids) or `holder` (the name exactly
+   as the user wrote it). Send only the securities the user named, never every security of a
+   list. To reverse a cancellation or undo a termination, send `label` or `security`: `holder`
+   finds only securities held now. For an edit, always send `look_first: true` on the first
+   type's bootstrap, so the Change page opens before the first preview. With no field named,
+   bootstrap each type first, then ask which field in one `AskUserQuestion`, with one question
+   for each type
    ([change-flow.md § Open the page first](references/change-flow.md#open-the-page-first)), never
    in text. Which
    preview takes this bootstrap's `thread_id` is in step 4.
