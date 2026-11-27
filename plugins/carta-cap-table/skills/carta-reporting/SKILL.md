@@ -61,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.4</carta-plugin>
 
 # Custom Reports
 
@@ -208,7 +208,7 @@ Run each script only in the one-line form shown below, as its own command: write
    ```
    The `detail: "minimal"` response shape is `{ data: { count, results: [...], ... }, meta }`. If `data.results` is empty or the call fails with an error that is not a company error, set `_phantom_label_<corporation_id>` to `null` — the corporation has no CBUs; step 1 takes the id from `meta.company`, or from its `list_accounts` fallback when the response has none.
 
-   If `data.results` is non-empty, call `read_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
+   If `data.results` is non-empty, call `read_tool({"name": "cap_table__list__equity_plans", "arguments": { corporation_id, size: 100 }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
 
    Key per-corporation using `_phantom_label_<corporation_id>` (e.g. `_phantom_label_12345`) so multi-corporation flows each have their own label without collision.
 

@@ -111,12 +111,11 @@ read_tool({"name": "cap_table__get__certificate_share_classes", "arguments": { c
   # admins. A read-only company viewer IS rejected (403) — fall back to AskUserQuestion.
   # For a scoped admin the result is already narrowed to their share classes.
 
-read_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})
-  → { results: [{ id, name, common_share_class_id, size, available_quantity, is_expired }] }
+read_tool({"name": "cap_table__list__equity_plans", "arguments": { corporation_id, size: 100 }})
+  → { results: [{ id, name, share_class_id, share_class_name, reserved_quantity, available_quantity, is_expired }] }
   # Returns equity plans with their numeric id and linked share class id.
-  # Not staff-only: same admission as certificate_share_classes above, and likewise pre-narrowed
-  # for a share-class-scoped admin. A read-only company viewer IS rejected (403).
-  # common_share_class_id links a plan to its share class — use to resolve equity_plan_ids
+  # Not staff-only: admits company viewers, HR admins and in-scope share-class-scoped admins.
+  # share_class_id links a plan to its share class — use to resolve equity_plan_ids
   # when the user filters by share class.
 
 # security_ids — resolve label to TYPE:ID (all available to non-staff users):

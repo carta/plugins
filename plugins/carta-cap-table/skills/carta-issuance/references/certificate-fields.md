@@ -44,8 +44,8 @@ Unit-class reconciliation](piu-fields.md#unit-class-reconciliation).
 
 ## Legend resolution (certificate)
 
-Use the `legends` section from the Phase 0.5 `issuance_init` payload (fall back to
-`cap_table:get:legends`, wire `cap_table__get__legends`, only if init named it in `errors`). One legend → default silently;
+Use the `legends` section from the Phase 0.5 `issuance_init` payload (if init named it in
+`errors`, use its fallback in [engine.md § Phase 0.5](engine.md#phase-05--configure-the-issuance)). One legend → default silently;
 multiple → `AskUserQuestion`, one
 option per template. Stamp the chosen `id` as `legend_id`; **never send `legend` body** (the
 server resolves it). **Also stamp the chosen legend's full body text onto the row as

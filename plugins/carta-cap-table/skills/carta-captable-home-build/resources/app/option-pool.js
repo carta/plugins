@@ -19,15 +19,22 @@ function renderOptionPoolEmpty() {
   if (el) el.innerHTML = `<div class="empty-row">No option plans for this company.</div>`;
 }
 
+// An unknown available amount stays null, so no figure that depends on it is shown.
+function planFigures(plan) {
+  const size = numOrZero(plan.reserved_quantity);
+  const available = plan.available_quantity == null ? null : numOrZero(plan.available_quantity);
+  const granted = available == null ? null : size - available;
+  const usedPct = granted != null && size > 0 ? Math.max(0, Math.min(100, (granted / size) * 100)) : null;
+  return { size, available, granted, usedPct };
+}
+
 // Utilization is a ratio against a fixed pool, so each plan reads as a meter: the
 // fill is what's granted, the track is the whole pool.
 function renderOptionPool(plans) {
   const el = document.getElementById("option-pool-card-body");
   if (!el) return;
   el.innerHTML = plans.map(plan => {
-    const size = numOrZero(plan.size);
-    const available = numOrZero(plan.available_quantity);
-    const utilizedPct = size > 0 ? Math.max(0, Math.min(100, ((size - available) / size) * 100)) : null;
+    const { size, available, usedPct: utilizedPct } = planFigures(plan);
     const expiredTag = plan.is_expired
       ? ` <span class="neg">(expired${plan.expiration_date ? " " + escHtml(fmtDate(plan.expiration_date)) : ""})</span>`
       : "";
@@ -58,10 +65,7 @@ function renderOptionPoolPage() {
       </thead>
       <tbody>
         ${_optionPlans.map(plan => {
-          const size = numOrZero(plan.size);
-          const available = numOrZero(plan.available_quantity);
-          const granted = size - available;
-          const usedPct = size > 0 ? Math.max(0, Math.min(100, (granted / size) * 100)) : null;
+          const { size, available, granted, usedPct } = planFigures(plan);
           return `
           <tr>
             <td>${escHtml(plan.name || "Option plan")}${plan.is_expired ? ` <span class="neg">(expired)</span>` : ""}</td>
@@ -82,7 +86,7 @@ async function fetchOptionPool(corporationId) {
   renderOptionPoolLoading();
   let res;
   try {
-    res = await _mcp("call_tool", { name: "cap_table__get__option_plans", arguments: { corporation_id: corporationId } });
+    res = await _mcp("call_tool", { name: "cap_table__list__equity_plans", arguments: { corporation_id: corporationId, size: 100 } });
   } catch (e) {
     if (corporationId !== _selectedCorporationId) return;
     const message = e && e.message;
@@ -104,7 +108,7 @@ async function fetchOptionPool(corporationId) {
   const withResults = candidates.find(c => c && Array.isArray(c.results));
   if (!withResults) {
     renderOptionPoolError("error");
-    reportCardFailure("cap_table__get__option_plans returned no results list.");
+    reportCardFailure("cap_table__list__equity_plans returned no results list.");
     return;
   }
   if (!withResults.results.length) { renderOptionPoolEmpty(); return; }

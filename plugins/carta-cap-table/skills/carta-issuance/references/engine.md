@@ -146,11 +146,12 @@ way; `arguments`, never `params`. Names this skill once got wrong are marked.
 | `cap_table:get:issuance_init` | `cap_table__get__issuance_init` |
 | `cap_table:get:issuable_field_manifest` | `cap_table__get__issuable_field_manifest` |
 | `cap_table:list:stakeholders` | `cap_table__list__stakeholders` |
-| `cap_table:get:option_plans` | `cap_table__get__option_plans` |
+| `cap_table:list:equity_plans` | `cap_table__list__equity_plans` |
+| `cap_table:get:equity_plan` | `cap_table__get__equity_plan` |
 | `cap_table:get:certificate_share_classes` | `cap_table__get__certificate_share_classes` |
 | `cap_table:get:document_sets` | `cap_table__get__document_sets` |
-| `cap_table:get:legends` | `cap_table__get__legends` |
-| `cap_table:get:vesting_templates` | `cap_table__get__vesting_templates` |
+| `cap_table:list:legends` | `cap_table__list__legends` |
+| `cap_table:list:vesting_templates` | `cap_table__list__vesting_templates` |
 | `cap_table:list:acceleration_templates` | `cap_table__list__acceleration_templates` |
 | `cap_table:list:valuations` with `type: "409a"` — **not** `valuations_409a` | `cap_table__list__valuations` |
 | `cap_table:list:valuations` without `type` — every source; **not** `international_valuations` | `cap_table__list__valuations` |
@@ -163,10 +164,8 @@ way; `arguments`, never `params`. Names this skill once got wrong are marked.
 | `cap_table:get:task` | `cap_table__get__task` |
 | `cap_table:mutate:resolve_duplicate_stakeholder` | `cap_table__mutate__resolve_duplicate_stakeholder` |
 
-There is no `cap_table:get:cap_table_summary` and no `cap_table:get:draft_set_init`. Don't
-reach for either; both were invented on a fallback path, so they failed exactly when the run
-was already degraded. `draft_set_init` is a **section** of `issuance_init`'s response, not a
-command of its own.
+There is no `cap_table:get:cap_table_summary` and no `cap_table:get:draft_set_init`. Do not
+call either.
 
 > **The totals are in `summary`.** `cap_table:list:ownership` (`corporation_id`, `size: 100`)
 > gives a row per class, plan and block, and `summary` totals, as decimal strings. Context math
@@ -344,20 +343,29 @@ Every section is fetched server-side in parallel, so `stakeholder_names` and
 
 **Partial failure is non-fatal.** A section that failed comes back `null` and is named in the
 top-level `errors` array (`[{section, message}]`); fall back to that section's own standalone
-command. **The command name is not always the section name** — three of them differ, and all
-sit on this fallback path, so they fail exactly when the run is already degraded:
+command. **The command name is not always the section name:**
 
 | Failed section | Fallback command | Wire name |
 |---|---|---|
 | `valuations_409a` | `cap_table:list:valuations` with `type: "409a"` | `cap_table__list__valuations` |
 | `international_valuations` | `cap_table:list:valuations` without `type` | `cap_table__list__valuations` |
 | `acceleration_templates` | `cap_table:list:acceleration_templates` | `cap_table__list__acceleration_templates` |
+| `option_plans` | `cap_table:list:equity_plans` | `cap_table__list__equity_plans` |
 | `stakeholders` | `cap_table:list:stakeholders`, `stakeholder` = the `stakeholder_names` you sent | `cap_table__list__stakeholders` |
-| `option_plans`, `document_sets`, `vesting_templates`, `legends`, `certificate_share_classes` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
+| `vesting_templates`, `legends` | `cap_table:list:<section name>` | `cap_table__list__<section name>` |
+| `document_sets`, `certificate_share_classes` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
 
-Its rows give `name` (`full_name`), `relationship` (`event_relationship`) and `kind`: `individual` →
-`INDIVIDUAL`, `organization` → `ORGANIZATION`; ask about any other kind, never send it. A
-`not_found` is handled as [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) says.
+Page a `list:` fallback with `size: 100` and `after: next` while `has_next`. Its fields map to
+the section's: plan `reserved_quantity`, `share_class_id`, `share_class_name` are `size`,
+`common_share_class_id`, `common_share_class_name`; the class's `certificate_share_classes`
+`prefix` is `common_share_class_prefix`; `cap_table:get:equity_plan` `terms.grant_expiration`,
+`terms.minus_one_day` are `expiration_years`, `minus_one_day`. Template `summary`,
+`is_prebuilt`, `is_custom` are `summary_short`, `is_prebuilt_schedule`, `is_custom_template`.
+Legend `is_default` is `default`.
+
+Stakeholder rows give `name` (`full_name`), `relationship` (`event_relationship`) and `kind`:
+`individual` → `INDIVIDUAL`, `organization` → `ORGANIZATION`; ask about any other kind, never
+send it. A `not_found` is handled as [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) says.
 
 `draft_set_init` has **no** standalone command — it arrives only as a section of this response.
 When it is missing, treat its fields as unknown ([PIU eligibility](#piu-check-issuer-eligibility)

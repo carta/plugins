@@ -35,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.4</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -69,7 +69,7 @@ Call `read_tool` with one command. One call answers most questions.
 | RSUs, SARs, CBUs | `cap_table__list__rsus`, `cap_table__list__sars`, `cap_table__list__cbus` | `search`, `detail` |
 | SAFEs, convertible notes | `cap_table__list__safes`, `cap_table__list__convertible_notes` | |
 | What one holder owns, every type | `cap_table__list__securities` | `type` (one per call), `holder` |
-| Option plans and pool | `cap_table__get__option_plans` | |
+| Option plans and pool | `cap_table__list__equity_plans`; one plan's terms and pour-overs: `cap_table__get__equity_plan` | `size` (up to 100) |
 | Rights and preferences | `cap_table__get__rights_and_preferences` | |
 | Total, indirect or look-through ownership through a holding entity | `cap_table__list__ownership`, once per entity | see "Total, indirect or look-through ownership" |
 
