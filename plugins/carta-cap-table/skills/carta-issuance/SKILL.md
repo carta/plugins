@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.7</carta-plugin>
 
 # Issue Securities
 
@@ -71,10 +71,10 @@ From raw input to issued securities on a Carta cap table. These nine types, and 
 | Cash bonus unit (CBU) | "1,000 phantom cash bonus units to Jane." |
 | Warrant | "A warrant for 20,000 shares to Jane under the Series A warrant block." |
 
-One run issues all nine ([§ The run](#the-run)); the last six only from a typed request. A
-spreadsheet or award document sources certificates, option grants and PIUs (a sheet or
-document for any other type goes to the Drafts UI, as the out-of-scope rule below says), and *"resume draft
-set 472"* re-enters a saved set of any of the nine types. To **fix** or cancel an already-issued
+One run issues all nine ([§ The run](#the-run)), from a typed request or an award document
+or board consent (`.pdf`, `.docx`). A spreadsheet sources certificates, option grants and PIUs
+(a sheet for any other type goes to the Drafts UI, as the out-of-scope rule below says), and
+*"resume draft set 472"* re-enters a saved set of any of the nine types. To **fix** or cancel an already-issued
 security, use `carta-manage-securities`.
 
 **Out of scope** — route to the Drafts UI for anything **custom**: a legend, schedule or exercise

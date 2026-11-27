@@ -3,15 +3,16 @@ name: carta-cap-table:issuance-import
 description: >-
   Internal file-ingest sub-skill for carta-issuance. Turns an uploaded
   spreadsheet (.xlsx/.xlsm/.csv/.tsv) or document (.pdf/.docx) into the
-  prefilled rows the carta-issuance run consumes, for certificates,
-  option grants and profits interest units. Not invocable directly —
+  prefilled rows the carta-issuance run consumes: a spreadsheet for
+  certificates, option grants and profits interest units, a document
+  for any of the nine types. Not invocable directly —
   dispatched by carta-issuance Phase 0.25.
 owner: carta-cap-table maintainers
 allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.7</carta-plugin>
 
 # issuance-import
 
@@ -185,7 +186,8 @@ sets — add them on the stakeholder record in Carta."*
 ### Documents (`.pdf` / `.docx`)
 
 Build the rows yourself per [Document mode](#document-mode-pdf--docx) below, then continue
-from Step 3.
+from Step 3. A document for any of the other six types follows the order Document mode gives
+it instead.
 
 ---
 
@@ -236,6 +238,22 @@ something that issues.
 If the text comes back empty the file is a scan — the script exits 2 saying so.
 Route the admin to OCR it or give the values directly; never infer values
 from a filename.
+
+**A document for an RSA, RSU, SAR, CBU, warrant or convertible note** builds no rows in this
+schema: `ROW_KEYS` holds only certificate, option grant and PIU fields. Never reshape them into
+an option grant. In this order:
+
+1. Read `_import_text.txt` and name the `security_type` from the document, as carta-issuance's
+   *Resolve `security_type`* table does; reconcile it with the prompt as Step 2 says.
+2. Run Step 3 with that type and the names the document contains. Its `field_spec` is what the
+   rows are built from, and the type's account gate in
+   [other-types.md](../references/other-types.md#per-type-values) applies: stop where it stops.
+3. Build the rows as
+   [companion-surface.md § 5](../references/companion-surface.md#5-build-the-draft-set) builds a
+   typed request's. Every value read from the document's prose is a `needs_input` cell, its
+   source's `note` holding the document's exact words for it, so § 6 asks the admin to confirm
+   it: the same guard the `"confidence": "low"` note gives the three types above.
+4. Skip Step 4: the parser resolves nothing for these types. Then Step 6.
 
 **Take only what the document states.** A grant agreement rarely names a vesting template by
 the company's own template name, so leave `vesting_template_id` unset rather than inferring it
