@@ -1122,6 +1122,19 @@
 
         // ── Ownership read ──
 
+        // Carta can show the viewer none of the firm's funds while the firm holds plenty. The
+        // read marks that empty page with empty_because, or refuses the page's funds and lists
+        // the firm's funds as none.
+        const NO_FUNDS_VISIBLE = 'no_funds_visible';
+        const FUNDS_LISTED_AS_NONE = /Its funds: none/;
+
+        function noFundsVisibleError() {
+            const err = new Error(`Carta isn't showing any funds for ${STATE.firm_name} right now, so this page can't tell what the firm owns. That doesn't mean the firm holds nothing. Try again in a little while.`);
+            err.userFacing = true;
+            err.noFundsVisible = true;
+            return err;
+        }
+
         // The tool's answer as an object. FastMCP may wrap a JSON result as {"result": "<json>"}.
         function parseToolJson(result) {
             if (!result || typeof result !== 'object') {
@@ -1129,6 +1142,7 @@
             }
             if (result.isError) {
                 const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
+                if (FUNDS_LISTED_AS_NONE.test(msg)) throw noFundsVisibleError();
                 throw new Error('ownership read failed: ' + msg);
             }
             const text = Array.isArray(result.content) && result.content[0] && result.content[0].text;
@@ -1137,6 +1151,7 @@
             if (!body || !Array.isArray(body.companies)) {
                 throw new Error('Could not find companies in the ownership response');
             }
+            if (body.empty_because === NO_FUNDS_VISIBLE) throw noFundsVisibleError();
             return body;
         }
 
@@ -1261,6 +1276,15 @@
             }
 
             return await callCartaTool(toolName, args);
+        }
+
+        // Points the viewer's Carta session at this page's firm.
+        async function pinFirm() {
+            const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
+            if (contextResult && contextResult.isError) {
+                const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
+                throw new Error(msg);
+            }
         }
 
         // ── Loading / error / empty states ──
@@ -1840,6 +1864,18 @@
 
         // ── Load ──
 
+        // Pinning the firm again is what brings its funds back, so the page does it once and
+        // reads again before it tells the viewer.
+        async function fetchOwnershipRowsPinningAgain(asOfDate) {
+            try {
+                return await fetchOwnershipRows(asOfDate);
+            } catch (error) {
+                if (!error.noFundsVisible) throw error;
+                await pinFirm();
+                return await fetchOwnershipRows(asOfDate);
+            }
+        }
+
         async function loadAsOf(date) {
             asOf = date;
             syncAsOfButton();
@@ -1851,7 +1887,7 @@
             }
             showLoading(`Loading ownership as of ${fmtDate(date)}…`);
             try {
-                const rows = await fetchOwnershipRows(date);
+                const rows = await fetchOwnershipRowsPinningAgain(date);
                 ownershipCache.set(date, rows);
                 if (seq !== loadSeq) return;
                 loadedRows = rows;
@@ -1931,15 +1967,11 @@
                 return;
             }
             populateFundFilter();
-            // Pinned once for the page's lifetime: the page is firm-scoped, so neither a
-            // fund filter nor a new as-of date needs it again.
+            // Pinned on load: the page is firm-scoped, so neither a fund filter nor a new
+            // as-of date pins it again. Only a read that sees none of the firm's funds does.
             showLoading('Connecting to Carta…');
             try {
-                const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
-                if (contextResult && contextResult.isError) {
-                    const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
-                    throw new Error(msg);
-                }
+                await pinFirm();
             } catch (error) {
                 console.error('Ownership: pinning firm context failed', error);
                 showError(error && error.userFacing ? error.message : "Couldn't connect to Carta.", () => bootstrap());

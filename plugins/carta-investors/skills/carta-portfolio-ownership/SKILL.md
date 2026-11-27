@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.69.16</carta-plugin>
+<carta-plugin>carta-investors:7.69.18</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -122,6 +122,7 @@ A future date isn't possible: say so in one sentence and use today. When the dat
 ### Answer in chat
 
 1. Read ownership once with the Carta MCP (a call that fails with an error mentioning `welcome` gets the recovery in Caveats first): `read_tool({"name": "portfolio_holding__list__ownership", "arguments": {"funds": "<Step 2 UUIDs, comma-separated>", "as_of": "<Step 3 date>", "companies": "<the companies the user asked about, comma-separated>"}})`. Send each name without its legal suffix or any comma (`Globex`, not "Globex, Inc."): the read splits `companies` on commas and matches part of a name. Leave out `companies` to read every company. When the answer has `next`, call again with the same arguments plus `"after": "<next>"`, up to 20 pages in all. If the call fails, show the error in plain words and stop. Don't query the data warehouse instead.
+   - **Carta shows none of the firm's funds.** An answer whose `empty_because` is `no_funds_visible`, or a failure that says `Its funds: none`, means Carta is showing this person none of the firm's funds right now. The firm may hold plenty, and no fund is missing. Call `set_context` with the firm's UUID again and repeat the read, once. If it answers the same way, say *"Carta isn't showing me any of **<Firm Name>**'s funds right now, so I can't tell what the firm owns. That doesn't mean the firm holds nothing. Try again in a little while."*, and stop. Never say a fund doesn't exist or that the firm owns nothing, and never repeat the read a third time.
 
    > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="data_fetched")` once the last page has returned.
 2. Each entry of `companies` is one company, with its funds and SPVs in `funds`. A name in `unmatched_companies` matched no holding of these funds: say so in one line.
@@ -205,7 +206,7 @@ Add *"I couldn't load every **<fund / SPV>** for **<Firm Name>**, so some may be
 
 ## If something goes wrong
 
-> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That covers a failed ownership read, a failed render, and a failed publish. `skill_finished` means an answer or a page reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the `welcome` call and single retry in Caveats, a further page of ownership results, a future date replaced by today, a missing `Artifact` tool or a failed artifact check that falls back to a chat answer, an incomplete entity list) do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
+> **Checkpoint on every stop before this run has recorded `skill_finished`**, once this run has recorded `skill_started`: call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. That covers a failed ownership read, a failed render, and a failed publish. `skill_finished` means an answer or a page reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Cases that recover and continue (the `welcome` call and single retry in Caveats, the single repeat after Carta showed none of the firm's funds, a further page of ownership results, a future date replaced by today, a missing `Artifact` tool or a failed artifact check that falls back to a chat answer, an incomplete entity list) do not checkpoint. Plugin files still unavailable after the second invocation (the note at the top of this file) is a `skill_failed` stop too.
 
 ## How the numbers work
 
