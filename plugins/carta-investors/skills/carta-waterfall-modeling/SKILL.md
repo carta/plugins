@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.69.25</carta-plugin>
+<carta-plugin>carta-investors:7.69.28</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -71,7 +71,6 @@ are added):
 | `portfolio_valuations:get:llc_liquidation_preferences` | `references/rendering.llc_liquidation_preferences.md` |
 | `portfolio_valuations:get:llc_interest_vesting_schedule` | `references/rendering.llc_interest_vesting_schedule.md` |
 | `cap_table:list:ownership` | `references/rendering.ownership.md` |
-| `cap_table:get:cap_table_by_share_class` | `references/rendering.ownership.md` (read with `cap_table:list:ownership`, see `cap-table.corp.md`) |
 | `cap_table:get:cap_table_by_stakeholder` | `references/rendering.cap_table_by_stakeholder.md` |
 | `cap_table:get:rights_and_preferences` | `references/rendering.rights_and_preferences.md` |
 | `cap_table:get:phantom` | `references/rendering.phantom.md` |
@@ -451,7 +450,7 @@ this step**:
 | `cap_table_command` noun | Detail doc |
 | --- | --- |
 | `llc_cap_table_summary` | [`references/cap-table.llc.md`](references/cap-table.llc.md) |
-| `ownership` or `cap_table_by_share_class` | [`references/cap-table.corp.md`](references/cap-table.corp.md) |
+| `ownership` | [`references/cap-table.corp.md`](references/cap-table.corp.md) |
 
 **Scope guard:** each detail doc opens with a **Commands available via this doc** list — the only
 cap-table-family commands in scope for that noun. Call only the commands the matched doc lists; never

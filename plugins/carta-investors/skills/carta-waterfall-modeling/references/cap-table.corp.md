@@ -1,7 +1,7 @@
 # Cap table (share-class reader) — Waterfall Modeling
 
-Step 6a.5 detail for the cap table read by the `ownership` or `cap_table_by_share_class` noun —
-matched for a corporation or deal-group target. Both nouns read `cap_table:list:ownership`. It doesn't assume which results shape follows: after the
+Step 6a.5 detail for the cap table read by the `ownership` noun —
+matched for a corporation or deal-group target. It reads `cap_table:list:ownership`. It doesn't assume which results shape follows: after the
 cap table it hands off to the generic results step (`SKILL.md` §Step 6), which dispatches on
 the `get_command` noun. Column/row layout is the command-matched render doc
 ([`references/rendering.ownership.md`](rendering.ownership.md));
@@ -10,7 +10,7 @@ number formatting is `SKILL.md` §Formatting rules.
 ## Commands available via this doc
 
 These are the only cap-table-family commands in scope while this doc is active (noun
-`ownership` or `cap_table_by_share_class`). **Call only the commands listed here** — never one owned by another detail
+`ownership`). **Call only the commands listed here** — never one owned by another detail
 doc. The list grows as new corp readers ship.
 
 - `cap_table:list:ownership` — the share-class summary reader (this doc).
