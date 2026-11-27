@@ -1,7 +1,7 @@
 ---
 name: carta-portfolio-ownership
 description: >-
-  Show investment firms their ownership by portfolio company and by underlying fund: shares held, outstanding and fully diluted ownership %, and share counts, as of today or a past date. Answers in chat, or builds a live ownership table in Cowork with each company expanded into its funds. Use for "how much do we own of X", our stake or FD% in a company, shares held, ownership across funds and SPVs, every company in a fund, or adding ownership to a spreadsheet. Do NOT use for an LP's share of a fund, a company's cap table, shareholders or option pool (use carta-explore-data), modelling a new round, or cost, FMV and IRR (use carta-soi, or carta-explore-data when the question also asks for ownership).
+  Show investment firms their ownership by portfolio company and by underlying fund: shares held, outstanding and fully diluted ownership %, and share counts, as of today or a past date. Answers in chat, or builds a live ownership table in Cowork with each company expanded into its funds. Use for "how much do we own of X", our stake or FD% in a company, shares held, ownership across funds and SPVs, every company in a fund, or adding ownership to a spreadsheet. Takes ownership asked on its own: a request to see or open a company, even with an ownership question, goes to a skill that opens the company's page when one is installed. Do NOT use for an LP's share of a fund, a company's cap table, shareholders or option pool (use carta-explore-data), modelling a new round, or cost, FMV and IRR (use carta-soi, or carta-explore-data when the question also asks for ownership).
 version: 0.3.0
 model: inherit
 allowed-tools:
@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.69.18</carta-plugin>
+<carta-plugin>carta-investors:7.69.19</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
