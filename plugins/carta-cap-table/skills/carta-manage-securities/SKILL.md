@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.123.5</carta-plugin>
 
 # Manage securities
 
@@ -292,7 +292,9 @@ security, and show one table in the chat.
    its `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new
    revision, so ask for the approval of that revision. Then ask one `AskUserQuestion`: **"Apply
    this change?"** (for an edit, name the latest preview's `revision`: **"Apply this change
-   (revision N)?"**), options **"Apply"** (first) and **"Not now"**. In the Apply option's
+   (revision N)?"**), options **"Apply"** (first) and **"Not now"**. When it is the first question
+   of several changes, start it with the split sentence of [§ Several changes](#several-changes).
+   In the Apply option's
    `preview`, put the one line of step 5 while the Change page app shows the edit's thread (the
    app has no **Apply**), else the step 5 table. When `how_to_reply` names an approval card and no
    Change page app shows the thread, show that card with `view_remote` instead.
