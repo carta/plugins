@@ -46,7 +46,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:7.69.21</carta-plugin>
+<carta-plugin>carta-investors:7.69.22</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -60,7 +60,8 @@ warrants and the unissued pool). It answers a single question in chat, or builds
 ownership table in Cowork: one row per company, expanded into one row per fund or SPV.
 
 The numbers come from one Carta MCP read, `portfolio_holding:list:ownership`. The live page
-reads the same tool, so a chat answer and the page always agree.
+reads the same tool. It covers the firm's funds and SPVs, and a chat answer about the whole firm
+covers every entity of the firm, so the two differ only when another kind of entity holds a company.
 
 ## When to use
 
@@ -95,9 +96,11 @@ If the user's accessible firms are already in the conversation (from a `welcome`
 
 ## Step 2: Funds and SPVs
 
+This step is for a request that names funds or SPVs, and for building the page. A chat answer about the whole firm skips it: the Step 4 read is then sent no funds and covers every entity of the firm that holds a company, a GP entity or a management company included, which the list below leaves out.
+
 Fetch the firm's `fund` and `spv` entities by reading `${CLAUDE_PLUGIN_ROOT}/references/list-firm-entities.md` (the plugin's own `references/`, not this skill's; do not search for it) and following it with those two types, as two calls in parallel. If that file says the list is incomplete, keep `incomplete_entities` for the answer. Keep each entity's `uuid`, `name` and `fund_family_name`. Use every fund and SPV in the list, whether or not Carta still services it: ownership is a property of the holding, not of the service.
 
-**Scope.** If the user named funds or SPVs, match those names against the list; the read covers the matches. Otherwise it covers every fund and SPV in the list. Ownership is per fund and SPV, so *"we"* and *"the firm"* mean all of them combined.
+**Scope.** If the user named funds or SPVs, match those names against the list; the read covers the matches. Otherwise the page covers every fund and SPV in the list, and a chat answer covers the whole firm. Ownership is per entity, so *"we"* and *"the firm"* mean all of the firm's entities combined.
 
 ## Step 3: As-of date
 
@@ -121,7 +124,7 @@ A future date isn't possible: say so in one sentence and use today. When the dat
 
 ### Answer in chat
 
-1. Read ownership once with the Carta MCP (a call that fails with an error mentioning `welcome` gets the recovery in Caveats first): `read_tool({"name": "portfolio_holding__list__ownership", "arguments": {"funds": "<Step 2 UUIDs, comma-separated>", "as_of": "<Step 3 date>", "companies": "<the companies the user asked about, comma-separated>"}})`. Send each name without its legal suffix or any comma (`Globex`, not "Globex, Inc."): the read splits `companies` on commas and matches part of a name. Leave out `companies` to read every company. When the answer has `next`, call again with the same arguments plus `"after": "<next>"`, up to 20 pages in all. If the call fails, show the error in plain words and stop. Don't query the data warehouse instead.
+1. Read ownership once with the Carta MCP (a call that fails with an error mentioning `welcome` gets the recovery in Caveats first): `read_tool({"name": "portfolio_holding__list__ownership", "arguments": {"funds": "<Step 2 UUIDs of the funds and SPVs the user named, comma-separated>", "as_of": "<Step 3 date>", "companies": "<the companies the user asked about, comma-separated>"}})`. Leave out `funds` when the user named none: the read then covers the whole firm. Send each name without its legal suffix or any comma (`Globex`, not "Globex, Inc."): the read splits `companies` on commas and matches part of a name. Leave out `companies` to read every company. When the answer has `next`, call again with the same arguments plus `"after": "<next>"`, up to 20 pages in all. If the call fails, show the error in plain words and stop. Don't query the data warehouse instead.
    - **Carta shows none of the firm's funds.** An answer whose `empty_because` is `no_funds_visible`, or a failure that says `Its funds: none`, means Carta is showing this person none of the firm's funds right now. The firm may hold plenty, and no fund is missing. Call `set_context` with the firm's UUID again and repeat the read, once. If it answers the same way, say *"Carta isn't showing me any of **<Firm Name>**'s funds right now, so I can't tell what the firm owns. That doesn't mean the firm holds nothing. Try again in a little while."*, and stop. Never say a fund doesn't exist or that the firm owns nothing, and never repeat the read a third time.
 
    > **Checkpoint**: Call `mcp__<CHECKPOINT_SERVER>__skill_checkpoint(skill_name="carta-investors:carta-portfolio-ownership", checkpoint_label="data_fetched")` once the last page has returned.
@@ -137,7 +140,7 @@ A future date isn't possible: say so in one sentence and use today. When the dat
 
 ### Build the page
 
-Follow Steps 5–8.
+Follow Steps 5–8, with every fund and SPV from Step 2. If a chat answer skipped Step 2, run it now.
 
 ## Step 5: Checks before building
 
@@ -219,7 +222,7 @@ Use these to answer follow-up questions:
 - **Shares held can be older than the totals.** Each fund's position is its latest ownership snapshot on or before the as-of date (`ownership_as_of`), and funds of one company can have different dates.
 - **Pro forma cap tables are left out.** Zero-share links show `—`, not 0%. A percentage above 100% is a data fault and shows `—`.
 - **No cap table on Carta:** a company the fund holds on its books whose cap table isn't on Carta. It is listed so the portfolio is complete, with no ownership.
-- **Never across firms.** Every figure is for one firm, its funds and SPVs only.
+- **Never across firms.** Every figure is for one firm, its entities only.
 - **Large firms:** in a chat answer each read stops after 20 pages, the ownership read and the firm's outstanding ownership alike; say so if one does, and suggest narrowing to some funds or companies.
 
 ## Caveats
