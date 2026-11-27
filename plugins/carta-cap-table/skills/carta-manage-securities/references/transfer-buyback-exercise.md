@@ -94,6 +94,18 @@ For an exercise that the holder paid in cash outside Carta. Bootstrap with `secu
 A net or cashless exercise goes to the `exercise_link` page (see the rules above). This action is
 for the company: a holder who exercises their own options does it in Carta.
 
+## Exercise a warrant
+
+For a cash exercise that the holder paid outside Carta. Bootstrap with `security_type` `warrant`.
+The action is `warrant:exercise`. Send `security`, `exercise_date`, `quantity` (the shares
+exercised) and `exercise_agreement_file_key` ([§ Agreements](#agreements)). Carta issues the
+shares on a new certificate of the warrant's share class. Send `share_class` (its name or prefix)
+only when the user names another class for the new shares.
+
+Carta records only a cash exercise of a warrant. When the user did not say how the holder paid,
+ask cash or net before the preview. For a net or cashless exercise, say that Carta cannot record
+it here and make no preview.
+
 ## Exercise requests
 
 Requests that holders make in Carta. There is no bootstrap: call
@@ -124,16 +136,16 @@ file name or a path as a key. This upload is for the actions in this file and fo
 edit adds ([change-flow.md § Documents](change-flow.md#documents)). Any other document change on an
 issued security goes to Carta.
 
-A key is needed for a warrant or note transfer, for a recorded exercise, and for a share, RSA or
-PIU transfer when a failed check asks for it. When a key is needed, preview only after the
+A key is needed for a warrant or note transfer, for an option or warrant exercise, and for a
+share, RSA or PIU transfer when a failed check asks for it. When a key is needed, preview only after the
 upload gives it. A buyback goes on with no agreement.
 
 1. Bootstrap the security first ([SKILL.md § Flow](../SKILL.md#flow) step 1): a blocker or an
    action that is not available comes before the file. Then ask for the signed agreement as a
    file. When a key is needed and this chat has no shell, or
    the user has no file, apply nothing. For shares, an RSA or a PIU, give the `transfer_link`
-   page; for an exercise, the `exercise_link` page (see the rules above). For a warrant or a note,
-   say to transfer it in the Carta web app. Then stop.
+   page; for an option exercise, the `exercise_link` page (see the rules above). For a warrant
+   transfer or exercise, or a note transfer, say to do it in the Carta web app. Then stop.
 2. Call `read_tool` with `cap_table__mutate__upload_url`, `corporation_id` (the same number as
    `company`) and the file's `filename`. It returns `url`, `fields` and `key`.
 3. Send the file in one shell command. Put every item of `fields` first with `--form-string`,

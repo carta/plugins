@@ -143,8 +143,8 @@
       "Transfer certificate [certificate label] to [stakeholder name] on {{COMPANY}}"
     ],
     "whatsNewCopy": {
-      "headline": "Transfer, buy back and exercise issued equity",
-      "body": "Transfers or buys back shares, records option exercises, and approves or rejects exercise requests. Shows a preview of every change before saving."
+      "headline": "Exercise warrants and change exercise periods",
+      "body": "Records warrant exercises and changes the post-termination exercise periods of option grants, RSUs, SARs and CBUs. Shows a preview of every change before saving."
     }
   },
   "carta-market-benchmarks": {

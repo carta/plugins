@@ -5,9 +5,9 @@ description: >-
   anything changes. Covers fixing, correcting, amending, cancelling, partly cancelling, uncancelling or
   undoing the termination of a certificate, option grant, SAFE, note, RSU, RSA, SAR, CBU, PIU or
   warrant; transferring shares, an RSA, a PIU, a warrant or a note; buying back shares;
-  recording an option exercise; and approving or rejecting exercise requests. For a
-  post-termination exercise period, it says where to change it in the Carta web app and what it
-  can edit on the grant. Also shows one security, or a list of one security type, in an app.
+  recording an option exercise or a warrant exercise; changing the post-termination exercise
+  periods of option grants, RSUs, SARs or CBUs; and approving or rejecting exercise requests.
+  Also shows one security, or a list of one security type, in an app.
   Not for a departure: someone who left and loses their unvested equity is a termination.
 when_to_use: >-
   Use when the user asks to change a security that is already on the cap table, often to
@@ -16,8 +16,9 @@ when_to_use: >-
   "fix the SAFE's cap or discount", "correct CS-12", "something looks wrong on CS-12, show me
   first", "I need to fix something on ES-12", "cancel ES-12", "cancel part of this grant",
   "transfer CS-12 to her trust", "gift shares to my brother", "buy back the founder's unvested
-  shares", "repurchase CS-3", "record the exercise of 5,000 options on ES-12", "approve the
-  pending exercise requests"; or to see them: "show ES-54", "list Jane Doe's option grants". To
+  shares", "repurchase CS-3", "record the exercise of 5,000 options on ES-12", "W-3 exercised
+  1,000 shares", "extend the exercise window on ES-12 to 12 months", "give Jane until 06/30/2027
+  to exercise", "approve the pending exercise requests"; or to see them: "show ES-54", "list Jane Doe's option grants". To
   issue new equity, use carta-issuance. Not for a holder who exercises their own options.
 owner: carta-cap-table maintainers
 model: inherit
@@ -44,17 +45,19 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.124.0</carta-plugin>
 
 # Manage securities
 
 Edit, cancel, partly cancel, uncancel, transfer or buy back an issued security, undo its termination, record an
-option exercise, or approve or reject an exercise request. Carta checks each change in a
+option or warrant exercise, change post-termination exercise periods, or approve or reject an exercise request.
+Carta checks each change in a
 **preview** and saves it as a plan; nothing changes until the user approves and you apply it. To
 issue new equity, use `carta-issuance`. This skill is not for a departure: when someone left and
 the user wants to stop their vesting, cancel their unvested equity or set exercise deadlines, that
-is a termination. Say so, send the user to the termination flow in the Carta app, and do not
-cancel their securities one by one here.
+is a termination. Say so, send the user to `carta-terminate-stakeholder`, and do not
+cancel their securities one by one here. A grant whose holder is already terminated in Carta can
+get a new exercise period here.
 
 Send `_instrumentation_v2: {"surface": "<surface>"}` with every Carta tool call, as a parameter
 of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is the closest of
@@ -75,25 +78,28 @@ of the tool next to `name` and `arguments`, never in `arguments`. `<surface>` is
 | Transfer a warrant or a convertible note | `cap_table__compute__transfer_other_security_preview` |
 | Buy back shares, an RSA or a PIU | `cap_table__compute__repurchase_security_preview` |
 | Record an option exercise | `cap_table__compute__record_exercise_preview` |
+| Exercise a warrant | `cap_table__compute__exercise_warrant_preview` |
+| Change post-termination exercise periods | `cap_table__compute__change_exercise_window_preview` |
 | Approve an exercise request | `cap_table__compute__approve_exercise_request_preview` |
 | Reject an exercise request | `cap_table__compute__reject_exercise_request_preview` |
 
 The inputs of the transfer, buyback, exercise and exercise request previews are in
-[references/transfer-buyback-exercise.md](references/transfer-buyback-exercise.md).
+[references/transfer-buyback-exercise.md](references/transfer-buyback-exercise.md). The inputs of
+the exercise period change are in [references/exercise-periods.md](references/exercise-periods.md).
 
 Run only the actions in this table. An edit can add signed files to one security, as
 [change-flow.md § Documents](references/change-flow.md#documents) says. Any other document change,
 such as a replaced or removed stock purchase agreement, is not one of them: make no bootstrap, no
 preview and no upload. The bootstrap can offer other
-actions, such as a change to the post-termination exercise periods: make no preview for them, and
-never find their tools with `search_tools`. Say in one line that this skill does not make that
-change and that it is made in the Carta web app (a post-termination exercise period, on the
-grant), and offer the fields the bootstrap marks `eligible`. Then stop.
+actions, such as an RSU settlement: make no preview for them, and never find their tools with
+`search_tools`. Say in one line that this skill does not make that change and that it is made in
+the Carta web app, and offer the fields the bootstrap marks `eligible`. Then stop.
 
 `security_type` is one of `certificate`, `option_grant`, `convertible_note`, `rsu`, `rsa`, `sar`,
 `cbu`, `piu` or `warrant`. The action narrows it: a transfer or buyback of shares is
-`certificate`, `rsa` or `piu`, a warrant or note transfer is `warrant` or `convertible_note`, and
-a recorded exercise is `option_grant`. Offer only those types for that action. Take it from the
+`certificate`, `rsa` or `piu`, a warrant or note transfer is `warrant` or `convertible_note`, a
+recorded exercise is `option_grant`, a warrant exercise is `warrant`, and an exercise period change
+is `option_grant`, `rsu`, `sar` or `cbu`. Offer only those types for that action. Take it from the
 user's words first: "RSU" or "restricted stock unit" is
 `rsu`, "RSA" or "restricted stock award" is `rsa`, "SAR", "UAR" or "stock appreciation right" is
 `sar`, "CBU", "cash bonus unit" or "phantom equity" is `cbu`, "PIU", "profits interest" or
@@ -127,6 +133,8 @@ security named, show the table of the type, as [§ Show securities](#show-securi
 edit, you choose only the `reason` and write the note from the user's words, and you show both.
 For a buyback priced per share, you work out `cost` as
 [transfer-buyback-exercise.md § Buy back](references/transfer-buyback-exercise.md#buy-back-shares-an-rsa-or-a-piu)
+says. For a new last day to exercise, you count the window in days as
+[exercise-periods.md § Last day to exercise](references/exercise-periods.md#last-day-to-exercise)
 says. You pick no other value.
 
 **Confirmation**: see [Hard rule 1](#hard-rules).
@@ -226,7 +234,8 @@ security, and show one table in the chat.
    (twice only for the label retry in [§ Actions](#actions)), after any earlier apply, with
    `company`, `security_type` and `label` (a list), `security` (ids) or `holder` (the name exactly
    as the user wrote it). Send only the securities the user named, never every security of a
-   list. To reverse a cancellation or undo a termination, send `label` or `security`: `holder`
+   list, unless the user named a group for an exercise period change
+   ([exercise-periods.md § Inputs](references/exercise-periods.md#inputs)). To reverse a cancellation or undo a termination, send `label` or `security`: `holder`
    finds only securities held now. For an edit, always send `look_first: true` on the first
    type's bootstrap, so the Change page opens before the first preview. With no field named,
    bootstrap each type first, then ask which field in one `AskUserQuestion`, with one question
@@ -247,8 +256,9 @@ security, and show one table in the chat.
    sentence in [§ Several changes](#several-changes). Edits of several securities with one reason
    are one change, also when the types are different. Do not say the split sentence for them. Send dates as `YYYY-MM-DD`. Turn a relative date ("last Friday") into a date from
    the bootstrap's `today`, and show it. Every preview takes
-   `company`. The modify, cancel, partial cancel, reverse cancel, undo termination and
-   `transfer_other_security_preview` previews also take `security_type`, the same as the
+   `company`. The modify, cancel, partial cancel, reverse cancel, undo termination,
+   `transfer_other_security_preview` and `change_exercise_window_preview` previews also take
+   `security_type`, the same as the
    bootstrap that found the security. The other previews refuse it. A preview with `changes` sends
    `security_type` in each item instead.
    - **Edit:** `securities` (a list of ids; the other previews take `security`), or `changes` for
@@ -266,8 +276,9 @@ security, and show one table in the chat.
    - **Reverse cancel:** `security` and `reason`. `notes` is required when the reason is
      `Other - describe below`.
    - **Undo termination:** `security` only.
-   - **Transfer, buy back, record an exercise, or an exercise request:** see
+   - **Transfer, buy back, record an option or warrant exercise, or an exercise request:** see
      [references/transfer-buyback-exercise.md](references/transfer-buyback-exercise.md).
+   - **Change exercise periods:** see [references/exercise-periods.md](references/exercise-periods.md).
 4. **Preview.** Every change goes through the preview in [§ Actions](#actions), never
    `cap_table__mutate__modify_issuable`, which keeps no Change page. Send the bootstrap's
    `thread_id` only to `modify_securities_preview`. Every other preview sends no `thread_id` on
@@ -282,8 +293,8 @@ security, and show one table in the chat.
    reason, any problem, the full text of a legend that changes, and each side effect that cannot
    be undone, such as an email to a holder. Else show a table with the header
    `| Security | Field | Before | After |`
-   (for a partial cancel, the tranches; for the actions in transfer-buyback-exercise.md, the
-   preview's `summary` word for word). Put the table in the `preview` of the **Apply** option
+   (for a partial cancel, the tranches; for an exercise period change, the preview's `grants`; for
+   the actions in transfer-buyback-exercise.md, the preview's `summary` word for word). Put the table in the `preview` of the **Apply** option
    in step 7, never in the question and never as text before the question: the host shows text
    between tool calls only as a one-line summary, so the user never sees a table there. Never put
    the table in the option's `description`. When
@@ -292,7 +303,7 @@ security, and show one table in the chat.
    to the Change page.
 6. **List the side effects.** Show every `side_effects` label with the table, before the approval.
    Name each one that cannot be undone, such as an email to a holder.
-7. **Approval.** When the email side effect counts more emails than holders, first ask **"Send these N
+7. **Approval.** For an edit, when the email side effect counts more emails than holders, first ask **"Send these N
    emails?"** as [change-flow.md § Several securities](references/change-flow.md#several-securities)
    **Emails** says, also before the approval question or an approval card. An **Apply** sent
    before the answer waits for it: on **"Send"**, apply that plan when
@@ -352,8 +363,10 @@ One approval applies one change: one action and one reason. An edit can change s
 several types, each with its own values, in one preview with `changes`, up to
 `limits.max_securities` securities
 ([change-flow.md § Several securities](references/change-flow.md#several-securities)). Cancels,
-partial cancels, reverse cancels, undone terminations, transfers, buybacks and recorded exercises
-take one security each, and an approval or a rejection one exercise request. Different
+partial cancels, reverse cancels, undone terminations, transfers, buybacks and option and warrant
+exercises take one security each, and an approval or a rejection one exercise request. An exercise
+period change takes grants of one type, up to the cap in
+[exercise-periods.md § Inputs](references/exercise-periods.md#inputs). Different
 reasons are separate changes. Run each change as its own pass through steps 1 to 8, and say the
 split first, with the type of each security: *"These are two changes, an edit of certificate CS-1
 and a cancel of option grant ES-12. I'll apply them one at a time, starting with CS-1."* Put this
@@ -371,7 +384,8 @@ End the run with one short message and nothing after it:
   such as *"Two changes on Meetly: 1 applied, 1 not applied."*
 - One bullet per security that changed: label, field, before → after. For a transfer, buyback
   or exercise: label, what happened and the quantity, for example `CS-12 · 100 shares
-  transferred to the Smith Family Trust`. For an exercise request: the holder, the grant label
+  transferred to the Smith Family Trust`. For an exercise period change: label, termination
+  reason, before → after, for example `ES-12 · Voluntary termination 3 months → 12 months`. For an exercise request: the holder, the grant label
   and approved or rejected.
 - One bullet per change that was not applied.
 - One line only for something that cannot be undone or is still running, such as an email to a

@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.124.0</carta-plugin>
 
 # Company users and roles
 

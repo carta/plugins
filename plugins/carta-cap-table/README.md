@@ -49,7 +49,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-compensation-benchmarks` | Carta Total Comp market benchmarks (salary, equity, total cash) for a role |
 | `carta-compensation-rolematcher` | Classify a job title into the CTC compensation taxonomy |
 | `carta-issuance` | Issue certificates, option grants, profits interest units, convertible notes and SAFEs, RSAs, RSUs, SARs, CBUs and warrants; draft and issue them, or resume a draft set of any of these types |
-| `carta-manage-securities` | Edit, cancel, partly cancel, reverse the cancellation of, transfer or buy back an issued security, record an option exercise, and approve or reject exercise requests, with a preview first |
+| `carta-manage-securities` | Edit, cancel, partly cancel, reverse the cancellation of, transfer or buy back an issued security, record an option or warrant exercise, change post-termination exercise periods, and approve or reject exercise requests, with a preview first |
 | `carta-boardroom` | Board consents and who signed, and board members, with a preview before each change |
 | `carta-company-users` | Company users and their access levels: invite, change access or title, remove access, resend the invite |
 | `carta-start` | Get started: shows your company, what your role can do and three prompts to try, then sets up Carta Home |

@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.123.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.124.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -76,7 +76,8 @@ to update the cap table."*
 - **Warrants, convertible notes and SAFEs** — not part of the termination flow at all. Step 3
   reads what the stakeholder holds of each and reports it; nothing here changes them.
 - **Editing a grant's terms or vesting schedule** outside a termination — that's
-  `carta-manage-securities` / the Carta app. A PTEP policy change is the Carta app.
+  `carta-manage-securities` / the Carta app. A PTEP change on grants outside a termination is
+  `carta-manage-securities` too.
 - **Cancelling or repurchasing a single security** without terminating the person. That is
   `carta-manage-securities`.
 - **Performing a share transfer** (to an estate, a trust, or a new holder) — that is
