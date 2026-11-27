@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.124.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.124.1</carta-plugin>
 
 # CTC RoleMatcher
 

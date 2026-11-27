@@ -1,11 +1,12 @@
 ---
 name: carta-grant-vesting
 description: >-
-  See how much one person or grant has vested, and when the rest vests. Fetches the
-  vesting schedule for one grant or holder: options (ISO/NSO), RSUs, SARs or CBUs. Use
-  for "how much has [name] vested", "when does [name]'s cliff hit", "vesting progress
-  for [name]", cliff dates, "how many shares are eligible for settlement", or unvested
-  shares. NOT for portfolio-level / all-employees aggregate vesting.
+  See how much one person or grant has vested today, and when the rest vests. Reads one
+  option grant (ISO/NSO), RSU, SAR or CBU, or one holder's grants of those types. Use for
+  "how much has [name] vested", "when does [name]'s cliff hit", "vesting progress for
+  [name]", cliff dates, "how many shares are eligible for settlement", or unvested shares.
+  NOT for vesting changes, certificates, RSAs, warrants or another date (carta-vesting),
+  or aggregate vesting across all employees.
 when_to_use: >-
   Use when asked, for a single named grant or holder, about the vesting
   schedule, when the cliff hits, how many shares have vested or remain
@@ -17,6 +18,9 @@ when_to_use: >-
   scoped to ONE grant or holder. Do NOT use for aggregate vesting across
   all employees or the full option pool ("how much of my employees'
   equity has vested") — defer to a stakeholder/portfolio skill instead.
+  Do NOT use to change vesting, for the vesting of a share certificate, RSA,
+  warrant or PIU, for vesting on a past or future date, or for the company's
+  vesting schedules — use carta-vesting.
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -38,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.124.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.124.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -75,6 +79,8 @@ Use this skill for vesting questions scoped to a **single grant or holder**:
 - "How much of Jane's grant is still locked up?" → unvested shares
 
 **Do NOT use for portfolio-level / all-employees aggregate vesting.** These triggers stay scoped to one grant or holder ("for [name]", "for this grant", "for grant #"). Questions like "how much of my employees' equity has vested" or "total vested across the whole option pool" are portfolio-level — defer to a stakeholder/portfolio/ownership skill instead. If a request spans more than one grant, see the "Multiple grants" branch under Workflow before fetching anything.
+
+**Load carta-vesting instead** to change vesting (schedule, start date, removal, acceleration, performance condition), for the vesting of a share certificate, RSA, warrant or PIU, for vesting on a past or future date, or for the company's vesting schedules.
 
 ## Prerequisites
 

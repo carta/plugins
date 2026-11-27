@@ -45,7 +45,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.124.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.124.1</carta-plugin>
 
 # Manage securities
 
@@ -124,8 +124,8 @@ common or preferred units), `piu`, `cbu` and `rsu`. Send only the type the user 
 
 ## Gates
 
-**Required inputs**: the company, the security (label, id or holder) or the exercise request,
-and the action. Each
+**Required inputs**: the security (label, id or holder) or the exercise request, and the
+action. Carta finds the company, and when to ask for it, as [§ Calls](#calls) says. Each
 action's own inputs are in [§ Flow](#flow) step 3. Ask only for what is missing. With no
 security named, show the table of the type, as [§ Show securities](#show-securities) says.
 
@@ -179,7 +179,6 @@ Use whichever Carta connector is present. The keys are `name` and `arguments`.
 
 | Step | Tool | `name` |
 |---|---|---|
-| Company | `list_accounts(search="<company name>")` | — |
 | Bootstrap | `read_tool` | `cap_table__get__security_change_bootstrap` |
 | Exercise requests | `read_tool` | `cap_table__list__company_exercise_requests` |
 | Preview | `read_tool` | the preview in [§ Actions](#actions) |
@@ -189,8 +188,16 @@ Use whichever Carta connector is present. The keys are `name` and `arguments`.
 | Apply | the **named** `cap_table__mutate__apply_plan` tool | — |
 | Job | `read_tool` | `cap_table__get__task` |
 
-`list_accounts` returns `id: "corporation_pk:<n>"`; send `<n>` as `company`. With no Carta tool,
-stop: *"I can't reach Carta. Connect Carta in your connector settings, then try again."*
+The company: follow `${CLAUDE_PLUGIN_ROOT}/references/find-the-company.md` (the plugin's own
+`references/`, not this skill's; read it by that path, do not search for it). The first read
+(the bootstrap, the exercise requests or a securities read) sends the id or name the user gave
+as `company`, or no `company`. Each later read, preview and apply sends that read's
+`meta.company.id`; the approval question names `meta.company.name`, or the company `label` the
+user picked when that name is empty. With neither, call `list_accounts` once and take the `name`
+of the row whose `id` is `corporation_pk:<meta.company.id>`. With no name, ask the user to name
+the company, and ask no approval.
+
+With no Carta tool, stop: *"I can't reach Carta. Connect Carta in your connector settings, then try again."*
 
 ## Show securities
 
@@ -215,7 +222,10 @@ Show securities in an app, not in a table in the chat:
 
 The app opens in the side panel by itself, or shows a card in the chat that opens it there. It
 reads the rows itself, pages them, and opens a security's details from its label: read nothing
-first. Keep the chat to one line, such as *"Meetly's option grants are open beside the chat."*
+first. The one exception: the app takes only a numeric company id. With no id from the user or
+from an earlier read, first read with the `company` the user gave (or none):
+`cap_table__list__securities` with `type` and `size: 1` for a list, `cap_table__get__security`
+with `security` for one. Send its `meta.company.id` as `corporation_id`. Keep the chat to one line, such as *"Meetly's option grants are open beside the chat."*
 Render no app for a read that only finds an id for a preview. Never call the bootstrap to show
 securities: send it only the securities the user wants to change.
 
@@ -309,8 +319,9 @@ security, and show one table in the chat.
    before the answer waits for it: on **"Send"**, apply that plan when
    its `plan_id` is still the latest preview's; on **"No emails"**, the new preview is a new
    revision, so ask for the approval of that revision. Then ask one `AskUserQuestion`: **"Apply
-   this change?"** (for an edit, name the latest preview's `revision`: **"Apply this change
-   (revision N)?"**), options **"Apply"** (first) and **"Not now"**. When it is the first question
+   this change on <company name>?"** (for an edit, name the latest preview's `revision`: **"Apply
+   this change on <company name> (revision N)?"**), with the company name of [§ Calls](#calls),
+   options **"Apply"** (first) and **"Not now"**. When it is the first question
    of several changes, start it with the split sentence of [§ Several changes](#several-changes).
    In the Apply option's
    `preview`, put the one line of step 5 while the Change page app shows the edit's thread (the

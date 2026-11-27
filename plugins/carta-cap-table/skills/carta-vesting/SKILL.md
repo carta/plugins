@@ -1,21 +1,22 @@
 ---
 name: carta-vesting
 description: >-
-  What a security or holder has vested and what vests next, and vesting changes with a preview
-  first: schedules, start dates, removal, acceleration, performance conditions met or missed.
-  Not for issuing equity or edits of other fields.
+  Vesting changes with a preview first (schedules, start dates, removal, acceleration,
+  performance conditions), and vesting of certificates, RSAs, warrants or PIUs or on another
+  date. Not for today's vesting of one person's options, RSUs, SARs or CBUs.
 when_to_use: >-
-  Use when the user asks about vesting for a named security or holder ("how much has Jane
-  vested", "when does ES-12's cliff hit", "what will CS-3 have vested on 06/30/2027", "vesting for
-  all of Jane's grants") or asks to change it: "put ES-12 on the 4-year monthly schedule with a
+  Use when the user asks to change vesting: "put ES-12 on the 4-year monthly schedule with a
   1-year cliff", "change Jane's vesting start date", "give RSU-4 a custom schedule", "remove
   vesting from CS-9", "accelerate 10,000 of Sam's unvested options", "the board approved full
   acceleration for ES-7 when he left", "the Series B milestone was met", "mark the revenue
-  target as missed", "create a new vesting schedule", "archive the old 3-year schedule". Covers
-  option grants, RSUs, RSAs, SARs, CBUs, PIUs, warrants and certificates, and the company's
-  vesting schedules, acceleration terms and performance conditions. Not for totals across the
-  whole company, not to issue equity, not for edits of other fields, and not to stop the vesting
-  of someone who left (that is a termination).
+  target as missed", "create a new vesting schedule", "archive the old 3-year schedule". Also
+  use for the vesting reads that carta-grant-vesting does not do: a share certificate, RSA,
+  warrant or PIU ("how much of CS-3 has vested"), vesting on another date ("what will ES-12
+  have vested on 06/30/2027"), and the company's vesting schedules, acceleration terms and
+  performance conditions. For today's vesting of one person's or grant's options, RSUs, SARs
+  or CBUs ("how much has Jane vested", "when does Jane's cliff hit"), use carta-grant-vesting.
+  Not for totals across the whole company, not to issue equity, not for edits of other fields,
+  and not to stop the vesting of someone who left (that is a termination).
 owner: carta-cap-table maintainers
 model: inherit
 allowed-tools:
@@ -34,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.124.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.124.1</carta-plugin>
 
 # Vesting
 
